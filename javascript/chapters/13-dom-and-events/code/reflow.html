@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Layout thrashing benchmark</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; background: #f6f7f9; color: #1d2330; margin: 24px; }
+  #stage { position: absolute; left: -9999px; width: 600px; }   /* laid out, but off-screen */
+  #stage div { height: 2px; width: 100px; }
+  table { border-collapse: collapse; background: #fff; }
+  td, th { border: 1px solid #d9dde5; padding: 6px 12px; text-align: left; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  code { font: 13px ui-monospace, Menlo, monospace; }
+</style></head>
+<body>
+<h3 style="margin:0 0 10px">Resize 2,000 boxes to 10 px wider than they are (median of 7 runs)</h3>
+<table id="t"><tr><th>Strategy</th><th>Pattern</th><th>Time</th></tr></table>
+<p id="ratio"></p>
+<div id="stage"></div>
+<script>
+  const N = 2000, stage = document.getElementById('stage');
+  function reset() {
+    stage.replaceChildren(...Array.from({ length: N }, (_, i) => {
+      const d = document.createElement('div'); d.style.width = (100 + (i % 50)) + 'px'; return d;
+    }));
+    stage.offsetWidth;                               // flush pending layout before timing
+  }
+  const strategies = {
+    'Interleaved (thrashing)': {
+      code: 'for each box: read offsetWidth, then write style.width',
+      run(boxes) { for (const b of boxes) { const w = b.offsetWidth; b.style.width = (w + 10) + 'px'; } },
+    },
+    'Batched reads, then writes': {
+      code: 'widths = boxes.map(read); boxes.forEach(write)',
+      run(boxes) { const ws = boxes.map((b) => b.offsetWidth); boxes.forEach((b, i) => { b.style.width = (ws[i] + 10) + 'px'; }); },
+    },
+  };
+  const results = {};
+  for (const [name, s] of Object.entries(strategies)) {
+    const times = [];
+    for (let r = 0; r < 7; r++) {
+      reset();
+      const boxes = [...stage.children];
+      const t0 = performance.now();
+      s.run(boxes);
+      stage.offsetWidth;                             // include the final layout in the timing
+      times.push(performance.now() - t0);
+    }
+    times.sort((a, b) => a - b);
+    results[name] = times[3];
+    document.getElementById('t').insertAdjacentHTML('beforeend',
+      `<tr><td>${name}</td><td><code>${s.code}</code></td><td class="num">${times[3].toFixed(1)} ms</td></tr>`);
+  }
+  const [slow, fast] = Object.values(results);
+  document.getElementById('ratio').textContent =
+    `Interleaving forced ${N} synchronous layouts; batching needed one. Here that was about ${Math.round(slow / fast)}x slower (Chrome, this machine - your numbers will differ).`;
+  // correctness check: both strategies produce the same widths
+  reset(); const boxes = [...stage.children];
+  strategies['Batched reads, then writes'].run(boxes);
+  document.getElementById('ratio').insertAdjacentHTML('beforeend', ` First box: ${boxes[0].offsetWidth}px (was 100px).`);
+</script>
+</body></html>

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colour contrast, color-mix() and relative colours</title>
+<style>
+  :root { --brand: oklch(55% 0.2 260); }   /* one brand colour; everything else derived from it */
+  body { margin: 12px; font: 15px/1.4 system-ui, sans-serif; color: #1f2937; }
+  h3 { font: 700 12px ui-monospace, monospace; color: #7c3aed; margin: 12px 0 4px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sw { width: 190px; padding: 8px; border-radius: 6px; border: 1px solid #0002; }
+  .sw b { display: block; font-size: 16px; }
+  .sw small { font: 600 11px ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<h3>1. Text/background pairs with their WCAG 2 contrast ratio (computed in the page)</h3>
+<div class="row">
+  <div class="sw" data-css="#000 on #fff" style="color:#000;background:#fff"><b>Body text</b><small></small></div>
+  <div class="sw" data-css="#767676 on #fff" style="color:#767676;background:#fff"><b>Grey text</b><small></small></div>
+  <div class="sw" data-css="#fff on #3b82f6" style="color:#fff;background:#3b82f6"><b>Button label</b><small></small></div>
+  <div class="sw" data-css="#fcd34d on #fff" style="color:#fcd34d;background:#fff"><b>Yellow text</b><small></small></div>
+</div>
+<h3>2. Colours derived from --brand: oklch(55% 0.2 260)</h3>
+<div class="row">
+  <div class="sw" data-css="#fff on var(--brand)" style="color:#fff;background:var(--brand)"><b>brand</b><small></small></div>
+  <div class="sw" data-css="#fff on color-mix(in oklch, brand 70%, black)" style="color:#fff;background:color-mix(in oklch, var(--brand) 70%, black)"><b>color-mix → darker</b><small></small></div>
+  <div class="sw" data-css="brand on oklch(from brand 95% 0.03 h)" style="color:var(--brand);background:oklch(from var(--brand) 95% 0.03 h)"><b>relative → tint</b><small></small></div>
+  <div class="sw" data-css="#000 on oklch(from brand l c calc(h + 180))" style="color:#000;background:oklch(from var(--brand) l c calc(h + 180))"><b>relative → complement</b><small></small></div>
+</div>
+<script>
+  // Same WCAG formula as contrast.mjs, applied to the colours the browser computed.
+  // (getComputedStyle may return rgb() or, for oklch/color-mix, a colour in another space; a 1×1 canvas converts to sRGB bytes.)
+  const ctx = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true });
+  const rgb = css => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = css; ctx.fillRect(0, 0, 1, 1); return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3); };
+  const lin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  const grade = r => r >= 7 ? 'AAA' : r >= 4.5 ? 'AA' : r >= 3 ? 'large/UI only' : 'FAIL';
+  for (const el of document.querySelectorAll('.sw')) {
+    const cs = getComputedStyle(el), r = ratio(rgb(cs.color), rgb(cs.backgroundColor));
+    el.querySelector('small').textContent = `${r.toFixed(2)}:1 ${grade(r)}`;
+  }
+</script>
+</body>
+</html>

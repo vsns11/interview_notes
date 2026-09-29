@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Grid alignment</title>
+<style>
+  body { font: 12px/1.3 system-ui, sans-serif; margin: 12px; color: #222; }
+  h2 { font-size: 13px; margin: 8px 0 4px; }
+  code { font: 11px ui-monospace, monospace; display: block; margin-bottom: 3px; }
+  .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; width: 860px; }
+  .g { display: grid; border: 2px dashed #9333ea; position: relative; }
+  /* the grid AREAS (cells) are drawn by a background pattern so you can see how an item sits inside its cell */
+  .cells { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 56px); gap: 6px;
+           background:
+             linear-gradient(90deg, transparent calc(50% - 3px), #fff calc(50% - 3px) calc(50% + 3px), transparent 0),
+             linear-gradient(transparent 56px, #fff 56px 62px, transparent 0), #ede9fe; }
+  .g > div { background: rgba(59,130,246,.40); outline: 1px solid #1d4ed8; outline-offset: -1px;
+             padding: 3px 6px; font: 700 11px ui-monospace, monospace; }
+  /* content alignment: tracks are smaller than the container, so the whole grid moves */
+  .small { grid-template-columns: repeat(3, 50px); grid-template-rows: repeat(2, 30px); gap: 6px; height: 110px;
+           background: #faf5ff; }
+</style>
+</head>
+<body>
+<h2>justify-items / align-items — each item inside its own cell (cells = light purple)</h2>
+<div class="row">
+  <div><code>stretch (default)</code><div class="g cells"><div>A</div><div>B</div><div>C</div><div>D</div></div></div>
+  <div><code>justify-items: start</code><div class="g cells" style="justify-items:start"><div>A</div><div>B</div><div>C</div><div>D</div></div></div>
+  <div><code>place-items: center</code><div class="g cells" style="place-items:center"><div>A</div><div>B</div><div>C</div><div>D</div></div></div>
+  <div><code>align-items: end; B: place-self</code><div class="g cells" style="align-items:end"><div>A</div><div style="place-self:start end">B</div><div>C</div><div>D</div></div></div>
+</div>
+<h2>justify-content / align-content — the whole set of tracks inside the container</h2>
+<div class="row">
+  <div><code>start (default)</code><div class="g small"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div></div></div>
+  <div><code>place-content: center</code><div class="g small" style="place-content:center"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div></div></div>
+  <div><code>justify-content: space-between</code><div class="g small" style="justify-content:space-between"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div></div></div>
+  <div><code>place-content: end space-evenly</code><div class="g small" style="place-content:end space-evenly"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div></div></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,30 @@
+resilience4j:
+  circuitbreaker:
+    instances:
+      inventory:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 4                 # judge the last 4 calls
+        minimum-number-of-calls: 4             # ... but only once 4 calls were recorded
+        failure-rate-threshold: 50             # open when >= 50 % of them failed
+        wait-duration-in-open-state: 300ms     # stay OPEN this long, then allow trial calls
+        permitted-number-of-calls-in-half-open-state: 2
+        automatic-transition-from-open-to-half-open-enabled: false
+        record-exceptions: ch16.resilience.RemoteCallException
+  retry:
+    instances:
+      inventory-retry:
+        max-attempts: 3                        # total attempts, including the first call
+        wait-duration: 20ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2      # 20 ms, then 40 ms
+        retry-exceptions: ch16.resilience.RemoteCallException
+  ratelimiter:
+    instances:
+      search:
+        limit-for-period: 3                    # 3 permits ...
+        limit-refresh-period: 10s              # ... per 10-second cycle
+        timeout-duration: 0                    # don't wait for a permit: reject immediately
+management:
+  health:
+    circuitbreakers:
+      enabled: true

@@ -1,0 +1,3 @@
+shop:
+  name: Corner Shop (DEV)
+  checkout-timeout: 5m

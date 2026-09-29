@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="520" viewBox="0 0 1240 520" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Two attack families, and the defenses differ">
+  <defs>
+    <marker id="m6l5b-mpink" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#DB2777"/>
+    </marker>
+    <filter id="m6l5b-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m6l5b-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m6l5b-k1"><rect x="50" y="64" width="540" height="90" rx="12"/></clipPath>
+    <clipPath id="m6l5b-k2"><rect x="650" y="64" width="540" height="90" rx="12"/></clipPath>
+    <clipPath id="m6l5b-k3"><rect x="620" y="266" width="400" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="520" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#DB2777" stroke-width="2"><path d="M920,212 V256" marker-end="url(#m6l5b-mpink)"/></g>
+  <g filter="url(#m6l5b-soft)">
+    <rect x="50" y="64" width="540" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="50" y="64" width="6" height="90" fill="#D97706" clip-path="url(#m6l5b-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">Direct injection</text>
+  <text x="320" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">the user attacks the model in plain language</text>
+  <text x="320" y="202" font-size="15.5" text-anchor="middle" fill="#94A3B8">attacker is the user: rate limits apply</text>
+  <g filter="url(#m6l5b-lift)">
+    <rect x="650" y="64" width="540" height="90" rx="12" fill="#FCE7F3" stroke="#DB2777" stroke-width="2"/>
+    <rect x="650" y="64" width="9" height="90" fill="#DB2777" clip-path="url(#m6l5b-k2)"/>
+  </g>
+  <circle cx="688" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(677.56,98.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></g>
+  <text x="714" y="116" font-size="18.5" font-weight="600" fill="#111827">Indirect injection</text>
+  <text x="920" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">hidden in content ingested for the user</text>
+  <text x="920" y="202" font-size="15.5" text-anchor="middle" fill="#94A3B8">the user is the victim, not the attacker</text>
+  <g filter="url(#m6l5b-lift)">
+    <rect x="620" y="266" width="400" height="90" rx="12" fill="#FCE7F3" stroke="#DB2777" stroke-width="2"/>
+    <rect x="620" y="266" width="9" height="90" fill="#DB2777" clip-path="url(#m6l5b-k3)"/>
+  </g>
+  <circle cx="658" cy="311" r="18" fill="#FFFFFF"/>
+  <g transform="translate(647.56,300.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.5 13.2h6.2L10 22l8.5-11.2h-6.2z"/></g>
+  <text x="684" y="318" font-size="18.5" font-weight="600" fill="#111827">Dangerous once tools exist</text>
+  <text x="820" y="381" font-size="15.5" text-anchor="middle" fill="#6B7280">a hidden instruction can trigger a real action</text>
+  <rect x="40" y="400" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="445" text-anchor="middle" font-size="16" fill="#475569">Explain how external permissions prevent unauthorized actions.</text>
+</svg>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="470" viewBox="0 0 1240 470" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Autonomy is a spectrum; say where your design sits">
+  <defs>
+    <marker id="m7l1b-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <filter id="m7l1b-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m7l1b-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m7l1b-k1"><rect x="50" y="64" width="224" height="90" rx="12"/></clipPath>
+    <clipPath id="m7l1b-k2"><rect x="279" y="64" width="286" height="90" rx="12"/></clipPath>
+    <clipPath id="m7l1b-k3"><rect x="570" y="64" width="296" height="90" rx="12"/></clipPath>
+    <clipPath id="m7l1b-k4"><rect x="871" y="64" width="317" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="470" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M274,109 L279,109" marker-end="url(#m7l1b-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M565,109 L570,109" marker-end="url(#m7l1b-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M866,109 L871,109" marker-end="url(#m7l1b-mslate)"/></g>
+  <g filter="url(#m7l1b-soft)">
+    <rect x="50" y="64" width="224" height="90" rx="12" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5"/>
+    <rect x="50" y="64" width="6" height="90" fill="#64748B" clip-path="url(#m7l1b-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#64748B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">Fixed workflow</text>
+  <text x="162" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">no decisions at runtime</text>
+  <g filter="url(#m7l1b-soft)">
+    <rect x="279" y="64" width="286" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="279" y="64" width="6" height="90" fill="#2563EB" clip-path="url(#m7l1b-k2)"/>
+  </g>
+  <circle cx="317" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(306.56,98.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="5" r="2.2"/><circle cx="7" cy="19" r="2.2"/><circle cx="17" cy="12" r="2.2"/><path d="M7 7.2v9.6M9.2 12H14.8"/></g>
+  <text x="343" y="116" font-size="18.5" font-weight="600" fill="#111827">Model picks a branch</text>
+  <text x="422" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">route to path A or B</text>
+  <g filter="url(#m7l1b-soft)">
+    <rect x="570" y="64" width="296" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="570" y="64" width="6" height="90" fill="#D97706" clip-path="url(#m7l1b-k3)"/>
+  </g>
+  <circle cx="608" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(597.56,98.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></g>
+  <text x="634" y="116" font-size="18.5" font-weight="600" fill="#111827">Human approves writes</text>
+  <text x="718" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">it chooses, you confirm</text>
+  <g filter="url(#m7l1b-soft)">
+    <rect x="871" y="64" width="317" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="871" y="64" width="6" height="90" fill="#7C3AED" clip-path="url(#m7l1b-k4)"/>
+  </g>
+  <circle cx="909" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(898.56,98.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.5 13.2h6.2L10 22l8.5-11.2h-6.2z"/></g>
+  <text x="935" y="116" font-size="18.5" font-weight="600" fill="#111827">Bounded, reviewed after</text>
+  <text x="1029.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">acts inside its limits</text>
+  <text x="620" y="230" font-size="15.5" text-anchor="middle" fill="#94A3B8">less autonomous                                                       more autonomous</text>
+  <rect x="40" y="260" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="305" text-anchor="middle" font-size="16" fill="#475569">Choose autonomy based on the task, permissions, and cost of an incorrect action.</text>
+</svg>

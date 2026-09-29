@@ -1,0 +1,24 @@
+# Built PDFs are published as GitHub Release assets, not committed (rebuild with <book>/tools/regen_pdfs.sh)
+*.pdf
+
+# Tool environments and dependencies
+.venv-books/
+.web-books/*
+!.web-books/package.json
+!.web-books/package-lock.json
+.java-books/
+node_modules
+.claude/
+
+# Build outputs
+target/
+build/
+.gradle/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.class
+
+# OS / iCloud noise
+.DS_Store
+*.icloud

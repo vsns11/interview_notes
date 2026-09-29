@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Aggregator only: builds the three modules together in one Maven reactor. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example.greeting</groupId>
+  <artifactId>greeting-build</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <modules>
+    <module>modules/greeting-spring-boot</module>          <!-- auto-configuration code -->
+    <module>modules/greeting-spring-boot-starter</module>  <!-- empty jar: just dependencies -->
+    <module>modules/greeting-demo-app</module>             <!-- an app that uses the starter -->
+  </modules>
+</project>

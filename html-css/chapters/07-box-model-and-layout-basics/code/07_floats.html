@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Floats</title>
+<style>
+  body { font: 13px/1.45 system-ui, sans-serif; margin: 12px; color: #222; width: 790px; }
+  h3 { font: 600 12px ui-monospace, monospace; margin: 12px 0 4px; }
+  .wrap { border: 2px dashed #9333ea; padding: 6px; }             /* the parent, drawn so you see its height */
+  .pic { float: left; width: 110px; height: 80px; margin: 0 12px 4px 0;
+         background: #93c5fd; outline: 1px solid #1d4ed8; display: grid; place-items: center; }
+  .pic.right { float: right; margin: 0 0 4px 12px; }
+  p { margin: 0; }
+  .flow-root { display: flow-root; }
+  .clear { clear: both; background: #fde68a; outline: 1px solid #b45309; margin-top: 4px; }
+</style>
+</head>
+<body>
+<h3>1. float: left — text wraps around the floated box</h3>
+<div class="wrap" id="w1"><div class="pic">float: left</div>
+  <p>Floats were designed for exactly this: an image or pull quote pushed to one side while the
+  surrounding lines of text flow around it like water around a rock. The line boxes shorten
+  to make room, but the paragraph's own box still starts at the left edge underneath the float.
+  Once the text passes the bottom of the float, lines return to full width, as this sentence
+  shows when it wraps below the blue box on a narrow enough page. Here it does: this last line runs under the float, all the way from the left edge to the right edge of the dashed parent box.</p></div>
+
+<h3>2. The parent collapses: floats are out of flow, so the dashed parent is only as tall as the short text</h3>
+<div class="wrap" id="w2"><div class="pic">float: left</div><div class="pic right">float: right</div>
+  <p>Short text.</p></div>
+<div style="height:60px"></div>
+
+<h3>3. Fix: display: flow-root on the parent contains its floats</h3>
+<div class="wrap flow-root" id="w3"><div class="pic">float: left</div><div class="pic right">float: right</div>
+  <p>Short text.</p></div>
+
+<h3>4. clear: both — this block moves below any earlier floats</h3>
+<div class="wrap flow-root" id="w4"><div class="pic">float: left</div><p>Short text.</p>
+  <div class="clear">clear: both</div></div>
+</body>
+</html>

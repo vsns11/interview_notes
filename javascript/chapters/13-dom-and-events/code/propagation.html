@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Capture and bubble</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; background: #f6f7f9; color: #1d2330; margin: 24px; display: flex; gap: 24px; align-items: flex-start; }
+  .box { border: 2px solid; border-radius: 10px; padding: 18px; }
+  #outer { border-color: #5b6ee1; background: #eef0fd; width: 260px; }
+  #inner { border-color: #d9822b; background: #fdf3e8; }
+  button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 2px solid #2e9e5b; background: #e8f7ee; }
+  .label { font-weight: 600; margin-bottom: 8px; }
+  ol { margin: 0; padding-left: 22px; font: 13px/1.6 ui-monospace, Menlo, monospace; background: #fff; border: 1px solid #d9dde5; border-radius: 8px; padding: 10px 10px 10px 34px; }
+  .CAPTURE { color: #5b6ee1; } .TARGET { color: #2e9e5b; font-weight: 700; } .BUBBLE { color: #d9822b; }
+</style></head>
+<body>
+<div id="outer" class="box"><div class="label">#outer</div>
+  <div id="inner" class="box"><div class="label">#inner</div><button id="btn">button#btn</button></div>
+</div>
+<div><div class="label">Listener calls for one click on the button</div><ol id="log"></ol></div>
+<script>
+  const PHASE = { 1: 'CAPTURE', 2: 'TARGET', 3: 'BUBBLE' };
+  const log = document.getElementById('log');
+  const nameOf = (el) => el === window ? 'window' : el === document ? 'document' : '#' + el.id;
+  for (const el of [window, document, outer, inner, btn]) {
+    for (const capture of [true, false]) {
+      el.addEventListener('click', (e) => {
+        if (e.target !== btn) return;
+        log.insertAdjacentHTML('beforeend',
+          `<li class="${PHASE[e.eventPhase]}">${nameOf(el)} &mdash; ${PHASE[e.eventPhase]} (listener capture:${capture})</li>`);
+      }, { capture });
+    }
+  }
+  btn.click();
+</script>
+</body></html>

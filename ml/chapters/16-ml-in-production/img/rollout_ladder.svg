@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="452" viewBox="0 0 1240 452" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="The staged rollout ladder for a new model version">
+  <defs>
+    <marker id="m2l4b-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <marker id="m2l4b-mpink" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#DB2777"/>
+    </marker>
+    <filter id="m2l4b-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m2l4b-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m2l4b-k1"><rect x="50" y="100" width="235" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l4b-k2"><rect x="380" y="100" width="183" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l4b-k3"><rect x="658" y="100" width="245" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l4b-k4"><rect x="998" y="100" width="170" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="452" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M285,145 L380,145" marker-end="url(#m2l4b-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M563,145 L658,145" marker-end="url(#m2l4b-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M903,145 L998,145" marker-end="url(#m2l4b-mslate)"/></g>
+  <g fill="none" stroke="#DB2777" stroke-width="2"><path d="M1083,100 V80 Q1083,68 1071,68 H483 Q471,68 471,80 V100" marker-end="url(#m2l4b-mpink)"/></g>
+  <g font-size="15.5" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7"><text x="777" y="62" fill="#BE185D">rollback: repoint at the previous version</text></g>
+  <g filter="url(#m2l4b-soft)">
+    <rect x="50" y="100" width="235" height="90" rx="12" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5"/>
+    <rect x="50" y="100" width="6" height="90" fill="#64748B" clip-path="url(#m2l4b-k1)"/>
+  </g>
+  <circle cx="88" cy="145" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,134.56) scale(0.87)" fill="none" stroke="#64748B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></g>
+  <text x="114" y="152" font-size="18.5" font-weight="600" fill="#111827">1. Offline eval</text>
+  <text x="167.5" y="215" font-size="15.5" text-anchor="middle" fill="#6B7280">already passed at registration</text>
+  <g filter="url(#m2l4b-soft)">
+    <rect x="380" y="100" width="183" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="380" y="100" width="6" height="90" fill="#7C3AED" clip-path="url(#m2l4b-k2)"/>
+  </g>
+  <circle cx="418" cy="145" r="18" fill="#FFFFFF"/>
+  <g transform="translate(407.56,134.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3L21 21"/></g>
+  <text x="444" y="152" font-size="18.5" font-weight="600" fill="#111827">2. Shadow</text>
+  <text x="471.5" y="215" font-size="15.5" text-anchor="middle" fill="#6B7280">a copy of live traffic, logged only</text>
+  <text x="471.5" y="238" font-size="15.5" text-anchor="middle" fill="#94A3B8">costs double inference</text>
+  <g filter="url(#m2l4b-soft)">
+    <rect x="658" y="100" width="245" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="658" y="100" width="6" height="90" fill="#D97706" clip-path="url(#m2l4b-k3)"/>
+  </g>
+  <circle cx="696" cy="145" r="18" fill="#FFFFFF"/>
+  <g transform="translate(685.56,134.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="5" r="2.2"/><circle cx="7" cy="19" r="2.2"/><circle cx="17" cy="12" r="2.2"/><path d="M7 7.2v9.6M9.2 12H14.8"/></g>
+  <text x="722" y="152" font-size="18.5" font-weight="600" fill="#111827">3. Sticky canary</text>
+  <text x="780.5" y="215" font-size="15.5" text-anchor="middle" fill="#6B7280">same user, same version</text>
+  <g filter="url(#m2l4b-lift)">
+    <rect x="998" y="100" width="170" height="90" rx="12" fill="#D1FAE5" stroke="#059669" stroke-width="2"/>
+    <rect x="998" y="100" width="9" height="90" fill="#059669" clip-path="url(#m2l4b-k4)"/>
+  </g>
+  <circle cx="1036" cy="145" r="18" fill="#FFFFFF"/>
+  <g transform="translate(1025.56,134.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></g>
+  <text x="1062" y="152" font-size="18.5" font-weight="600" fill="#111827">4. Ramp</text>
+  <text x="1083" y="215" font-size="15.5" text-anchor="middle" fill="#6B7280">1 to 50 to 100 percent</text>
+  <text x="1083" y="238" font-size="15.5" text-anchor="middle" fill="#94A3B8">rollback on a named metric</text>
+  <rect x="40" y="336" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="381" text-anchor="middle" font-size="16" fill="#475569">Set rollout limits, monitor them, and test rollback with compatible models and features.</text>
+</svg>

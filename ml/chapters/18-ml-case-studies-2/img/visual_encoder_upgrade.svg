@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="650" viewBox="0 0 1240 650" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="An encoder upgrade is a migration, not a deploy">
+  <defs>
+    <marker id="m8l4c-mpink" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#DB2777"/>
+    </marker>
+    <marker id="m8l4c-memerald" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#059669"/>
+    </marker>
+    <filter id="m8l4c-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m8l4c-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m8l4c-k1"><rect x="50" y="70" width="500" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l4c-k2"><rect x="690" y="70" width="500" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l4c-k3"><rect x="50" y="240" width="500" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l4c-k4"><rect x="690" y="240" width="500" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="650" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#DB2777" stroke-width="2"><path d="M550,115 L690,115" marker-end="url(#m8l4c-mpink)"/></g>
+  <g fill="none" stroke="#059669" stroke-width="2"><path d="M550,285 L690,285" marker-end="url(#m8l4c-memerald)"/></g>
+  <g filter="url(#m8l4c-soft)">
+    <rect x="50" y="70" width="500" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="50" y="70" width="6" height="90" fill="#7C3AED" clip-path="url(#m8l4c-k1)"/>
+  </g>
+  <circle cx="88" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,104.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3L21 21"/></g>
+  <text x="114" y="122" font-size="18.5" font-weight="600" fill="#111827">Query on encoder v2</text>
+  <text x="300" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">the new model embeds the photo</text>
+  <g filter="url(#m8l4c-soft)">
+    <rect x="690" y="70" width="500" height="90" rx="12" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5"/>
+    <rect x="690" y="70" width="6" height="90" fill="#64748B" clip-path="url(#m8l4c-k2)"/>
+  </g>
+  <circle cx="728" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(717.56,104.56) scale(0.87)" fill="none" stroke="#64748B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></g>
+  <text x="754" y="122" font-size="18.5" font-weight="600" fill="#111827">Index built on v1</text>
+  <text x="940" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">vectors from last week, a different meaning</text>
+  <g font-size="15.5" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7"><text x="620" y="106" fill="#BE185D">incompatible pair</text></g>
+  <g filter="url(#m8l4c-soft)">
+    <rect x="50" y="240" width="500" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="50" y="240" width="6" height="90" fill="#D97706" clip-path="url(#m8l4c-k3)"/>
+  </g>
+  <circle cx="88" cy="285" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,274.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 1.5v3M15 1.5v3M9 19.5v3M15 19.5v3M1.5 9h3M1.5 15h3M19.5 9h3M19.5 15h3"/></g>
+  <text x="114" y="292" font-size="18.5" font-weight="600" fill="#111827">Re-embed all 100M listings</text>
+  <text x="300" y="355" font-size="15.5" text-anchor="middle" fill="#6B7280">a planned, budgeted, scheduled job</text>
+  <g font-size="15.5" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7"><text x="620" y="276" fill="#047857">then promote</text></g>
+  <g filter="url(#m8l4c-lift)">
+    <rect x="690" y="240" width="500" height="90" rx="12" fill="#D1FAE5" stroke="#059669" stroke-width="2"/>
+    <rect x="690" y="240" width="9" height="90" fill="#059669" clip-path="url(#m8l4c-k4)"/>
+  </g>
+  <circle cx="728" cy="285" r="18" fill="#FFFFFF"/>
+  <g transform="translate(717.56,274.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></g>
+  <text x="754" y="292" font-size="18.5" font-weight="600" fill="#111827">Swap model and index together</text>
+  <text x="940" y="355" font-size="15.5" text-anchor="middle" fill="#6B7280">versioned and promoted atomically</text>
+  <rect x="40" y="396" width="1160" height="152" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="430" font-size="16" fill="#475569">When the vector space changes, budget for re-embedding and a compatible index.</text>
+  <rect x="64" y="456" width="200" height="32" rx="9" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.2"/>
+  <text x="164" y="478" text-anchor="middle" font-size="15.5" font-weight="600" fill="#BE185D">The reason</text>
+  <text x="288" y="478" font-size="15.5" fill="#475569">check query and index encoder compatibility before rollout</text>
+  <rect x="64" y="500" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="522" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">The discipline</text>
+  <text x="288" y="522" font-size="15.5" fill="#475569">the registry treats model and index as one artifact, never two</text>
+</svg>

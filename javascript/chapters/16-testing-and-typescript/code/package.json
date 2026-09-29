@@ -1,0 +1,10 @@
+{
+  "name": "ch16-testing-and-typescript",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "coverage": "node --test --experimental-test-coverage",
+    "typecheck": "tsc --noEmit"
+  }
+}

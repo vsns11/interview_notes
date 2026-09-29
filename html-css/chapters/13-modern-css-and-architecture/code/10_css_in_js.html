@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Card — runtime CSS-in-JS</title>
+<style>body { font: 15px/1.4 system-ui, sans-serif; margin: 16px; display: flex; gap: 12px; color: #0f172a; }</style>
+<script src="10_mini_css_in_js.js"></script>
+<script src="10_card_component.js"></script>
+<body>
+<script>
+  document.body.append(Card({ name: 'Trail shoes', price: '$89' }), Card({ name: 'Rain jacket', price: '$129', featured: true }));
+</script>
+</body>
+</html>

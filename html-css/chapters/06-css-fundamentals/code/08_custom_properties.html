@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Custom properties</title>
+  <style>
+    /* 1. Define design tokens on :root so every element inherits them */
+    :root {
+      --brand: #5b4bc4;
+      --radius: 8px;
+      --space: 12px;
+      --surface: #ffffff;
+      --text: #222222;
+    }
+    /* 2. A theme is just a different set of values */
+    [data-theme="dark"] {
+      --surface: #1e1b3a;
+      --text: #eceaff;
+      --brand: #a99cff;
+    }
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; }
+    .panel { background: var(--surface); color: var(--text); padding: var(--space);
+             border-radius: var(--radius); border: 1px solid #ccc; }
+    .row { display: flex; gap: var(--space); flex-wrap: wrap; }
+    .card { border: 2px solid var(--brand); border-radius: var(--radius); padding: var(--space);
+            width: 170px; }
+    .card h3 { margin: 0 0 4px; color: var(--brand); font-size: 15px; }
+    /* 3. Override locally: only this card and its children see the new value */
+    .card.danger { --brand: #c0392b; }
+    /* 4. Fallback when the variable isn't defined */
+    .card.fallback { border-color: var(--not-defined, orange); }
+    /* 5. Maths with calc() */
+    .card.big { padding: calc(var(--space) * 2); }
+    /* 6. Invalid at computed-value time: --space is a length, not a colour */
+    .card.bad { color: var(--space); }        /* -> color falls back to its inherited value */
+    code { font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <div class="panel" data-theme="light">
+      <div class="row">
+        <div class="card"><h3>Default</h3><code>--brand</code> from :root</div>
+        <div class="card danger"><h3>Danger</h3><code>--brand</code> overridden on .danger</div>
+        <div class="card fallback"><h3>Fallback</h3><code>var(--not-defined, orange)</code></div>
+        <div class="card big"><h3>calc()</h3><code>calc(var(--space) * 2)</code></div>
+        <div class="card bad"><h3>Invalid</h3><code>color: var(--space)</code> → inherits</div>
+        <div class="card" id="js"><h3>Set by JS</h3><code>style.setProperty()</code></div>
+      </div>
+    </div>
+    <div class="panel" data-theme="dark">
+      <div class="row">
+        <div class="card"><h3>Default</h3>same CSS, dark theme values</div>
+        <div class="card danger"><h3>Danger</h3>local override still wins</div>
+      </div>
+    </div>
+  </div>
+  <p id="out" style="font: 12px ui-monospace, monospace"></p>
+  <script>
+    const card = document.getElementById('js');
+    card.style.setProperty('--brand', '#0a7d55');               // write
+    const root = getComputedStyle(document.documentElement);
+    out.textContent = `getPropertyValue('--radius') on :root = "${root.getPropertyValue('--radius')}"  |  ` +
+      `--brand on #js = "${getComputedStyle(card).getPropertyValue('--brand')}"`;   // read
+  </script>
+</body>
+</html>

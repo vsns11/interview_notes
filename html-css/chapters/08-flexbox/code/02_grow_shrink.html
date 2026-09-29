@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>flex-grow, flex-shrink, flex-basis</title>
+<style>
+  body { font: 12px/1.3 system-ui, sans-serif; margin: 12px; color: #222; }
+  h3 { font: 600 12px ui-monospace, monospace; margin: 12px 0 3px; }
+  /* container: exact content width, dashed frame; room at the bottom for the width labels */
+  .fc { display: flex; border: 2px dashed #9333ea; padding-bottom: 18px; margin-bottom: 2px; position: relative; }
+  /* items: no padding or border, so their border box = their flex size. Outline doesn't take space. */
+  .fc > div { height: 30px; background: rgba(59,130,246,.30); outline: 1px solid #1d4ed8; outline-offset: -1px;
+              position: relative; display: flex; align-items: center; padding: 0; white-space: nowrap;
+              font: 11px ui-monospace, monospace; }
+  .fc > div:nth-child(2) { background: rgba(34,197,94,.30); }
+  .fc > div:nth-child(3) { background: rgba(249,115,22,.30); }
+  /* the measured width, written in by the script at the bottom. It is an absolutely positioned
+     child of the CONTAINER, so it takes no part in the flex layout it is reporting on */
+  .w { position: absolute; top: 31px; color: #b91c1c; font: 700 11px ui-monospace, monospace; }
+
+  #g1 { width: 600px; }                          /* grow */
+  #g1 .a { flex: 1 1 100px; } #g1 .b { flex: 2 1 150px; } #g1 .c { flex: 1 1 50px; }
+  #g2 { width: 400px; }                          /* shrink */
+  #g2 .a { flex: 0 1 300px; } #g2 .b { flex: 0 1 200px; } #g2 .c { flex: 0 2 100px; min-width: 0; }
+  #g3 { width: 600px; gap: 20px; }               /* grow with gap */
+  #g3 .a { flex: 1 1 100px; } #g3 .b { flex: 2 1 150px; } #g3 .c { flex: 1 1 50px; }
+  #g4 { width: 600px; }                          /* max-width freezes an item */
+  #g4 > div { flex: 1 1 0; } #g4 .a { max-width: 100px; }
+  #g5a, #g5b { width: 600px; }                   /* flex: 1 vs flex: auto */
+  #g5a > div { flex: 1; } #g5b > div { flex: auto; }
+  #g6a, #g6b { width: 300px; }                   /* the min-width: auto trap */
+  #g6a > div, #g6b > div { flex: 1; } #g6b > div { min-width: 0; overflow: hidden; }
+  #g7 { width: 600px; }                          /* grow factors below 1 */
+  #g7 > div { flex: 0.25 1 100px; }
+</style>
+</head>
+<body>
+<h3>G1 grow — 600px; flex: 1 1 100px | 2 1 150px | 1 1 50px</h3>
+<div class="fc" id="g1"><div class="a">A grow 1</div><div class="b">B grow 2</div><div class="c">C grow 1</div></div>
+
+<h3>G2 shrink — 400px; flex: 0 1 300px | 0 1 200px | 0 2 100px</h3>
+<div class="fc" id="g2"><div class="a">A shrink 1</div><div class="b">B shrink 1</div><div class="c">C</div></div>
+
+<h3>G3 grow with gap: 20px — same items as G1</h3>
+<div class="fc" id="g3"><div class="a">A</div><div class="b">B</div><div class="c">C</div></div>
+
+<h3>G4 flex: 1 1 0 on all, A has max-width: 100px</h3>
+<div class="fc" id="g4"><div class="a">A max 100</div><div class="b">B</div><div class="c">C</div></div>
+
+<h3>G5 flex: 1 (basis 0) — equal widths whatever the content</h3>
+<div class="fc" id="g5a"><div>Short</div><div>A much longer label</div><div>Mid label</div></div>
+<h3>G5 flex: auto (basis = content) — free space shared, content differences kept</h3>
+<div class="fc" id="g5b"><div>Short</div><div>A much longer label</div><div>Mid label</div></div>
+
+<h3>G6 flex: 1 with a long URL — min-width: auto stops it shrinking</h3>
+<div class="fc" id="g6a"><div>https://example.com/a/really/long/path</div><div>B</div></div>
+<h3>G6 same + min-width: 0; overflow: hidden — now 150 / 150</h3>
+<div class="fc" id="g6b"><div>https://example.com/a/really/long/path</div><div>B</div></div>
+
+<h3>G7 flex: 0.25 1 100px on both — factors sum to 0.5, so only half the free space is used</h3>
+<div class="fc" id="g7"><div>A grow .25</div><div>B grow .25</div></div>
+
+<script>
+  // write each item's real width (as the browser laid it out) under it
+  const labels = [...document.querySelectorAll('.fc > div')].map(el =>
+    [el.parentElement, el.offsetLeft, el.getBoundingClientRect().width]);   // measure everything first
+  for (const [fc, left, w] of labels)
+    fc.insertAdjacentHTML('beforeend', `<span class="w" style="left:${left + 2}px">${+w.toFixed(3)}px</span>`);
+</script>
+</body>
+</html>

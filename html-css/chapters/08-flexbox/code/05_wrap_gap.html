@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>flex-wrap and gap</title>
+<style>
+  body { font: 12px/1.3 system-ui, sans-serif; margin: 12px; color: #222; }
+  h3 { font: 600 12px ui-monospace, monospace; margin: 12px 0 4px; }
+  .f { display: flex; border: 2px dashed #9333ea; background: #faf5ff; width: 640px; }
+  .f > div { background: rgba(59,130,246,.35); outline: 1px solid #1d4ed8; outline-offset: -1px;
+             padding: 8px; font-weight: 700; box-sizing: border-box; }
+  .nowrap > div { flex: 0 0 150px; }                        /* can't shrink: they overflow */
+  .shrinky > div { flex: 0 1 150px; }                       /* default shrink: squeezed */
+  .wrap { flex-wrap: wrap; gap: 12px; }
+  .wrap > div { flex: 1 1 180px; }                          /* grow, shrink, start at 180px */
+  .row-gap { flex-wrap: wrap; gap: 20px 8px; }              /* row-gap 20, column-gap 8 */
+  .row-gap > div { flex: 0 0 120px; }
+</style>
+</head>
+<body>
+<h3>flex-wrap: nowrap (default) + flex: 0 0 150px — 5 × 150 = 750 &gt; 640, so they overflow</h3>
+<div class="f nowrap"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div></div>
+
+<h3>nowrap + flex: 0 1 150px — allowed to shrink: all squeezed to 128px</h3>
+<div class="f shrinky"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div></div>
+
+<h3>flex-wrap: wrap; gap: 12px; items flex: 1 1 180px — 3 per line, the lonely 7th stretches</h3>
+<div class="f wrap" id="cards"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div><div>7</div></div>
+
+<h3>gap: 20px 8px (row-gap column-gap) with fixed 120px items</h3>
+<div class="f row-gap"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div></div>
+</body>
+</html>

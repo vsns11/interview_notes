@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D transforms: perspective, preserve-3d, backface-visibility</title>
+<style>
+  body { margin: 12px; font: 13px/1.3 system-ui, sans-serif; color: #1f2937; }
+  .row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { font: 600 11px/1.3 ui-monospace, monospace; color: #7c3aed; margin-top: 6px; max-width: 150px; }
+
+  /* A flip card: the scene gives depth, the card holds two faces in 3D, the back face is pre-rotated */
+  .scene { width: 120px; height: 150px; perspective: 600px; }          /* distance from viewer to the z=0 plane */
+  .card  { position: relative; width: 100%; height: 100%; transform-style: preserve-3d;
+           transition: rotate 600ms ease-in-out; }
+  .face  { position: absolute; inset: 0; border-radius: 10px; display: grid; place-items: center;
+           font: 800 20px system-ui; backface-visibility: hidden; }   /* hide a face when it points away */
+  .front { background: #2563eb; color: #fff; }
+  .back  { background: #f59e0b; color: #1f2937; rotate: y 180deg; }
+  .scene:hover .card, .card.flipped { rotate: y 180deg; }
+
+  /* perspective strength: the same rotateY(50deg) seen from near and far */
+  .p { width: 120px; height: 90px; background: #f8fafc; border: 1px solid #e2e8f0; display: grid; place-items: center; }
+  .p > div { width: 80px; height: 60px; background: #22c55e; transform: rotateY(50deg); }
+</style>
+</head>
+<body>
+<div class="row">
+  <figure><div class="scene"><div class="card" style="rotate: y 0deg"><div class="face front">FRONT</div><div class="face back">BACK</div></div></div><figcaption>rotate: y 0deg</figcaption></figure>
+  <figure><div class="scene"><div class="card" style="rotate: y 60deg"><div class="face front">FRONT</div><div class="face back">BACK</div></div></div><figcaption>60deg</figcaption></figure>
+  <figure><div class="scene"><div class="card" style="rotate: y 120deg"><div class="face front">FRONT</div><div class="face back">BACK</div></div></div><figcaption>120deg: front hidden, back shows</figcaption></figure>
+  <figure><div class="scene"><div class="card" style="rotate: y 180deg"><div class="face front">FRONT</div><div class="face back">BACK</div></div></div><figcaption>180deg (flipped)</figcaption></figure>
+  <figure><div class="scene"><div class="card" style="rotate: y 120deg"><div class="face front" style="backface-visibility: visible">FRONT</div><div class="face back" style="backface-visibility: visible">BACK</div></div></div><figcaption>120deg without backface-visibility: hidden</figcaption></figure>
+</div>
+<div class="row" style="margin-top:14px">
+  <figure><div class="p" style="perspective: 150px"><div></div></div><figcaption>perspective: 150px (close)</figcaption></figure>
+  <figure><div class="p" style="perspective: 600px"><div></div></div><figcaption>perspective: 600px</figcaption></figure>
+  <figure><div class="p"><div></div></div><figcaption>no perspective (flat)</figcaption></figure>
+</div>
+</body>
+</html>

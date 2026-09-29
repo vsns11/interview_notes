@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="500" viewBox="0 0 1240 500" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Function calling, stage by stage">
+  <defs>
+    <marker id="m7l2a-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <filter id="m7l2a-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m7l2a-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m7l2a-k1"><rect x="50" y="64" width="235" height="90" rx="12"/></clipPath>
+    <clipPath id="m7l2a-k2"><rect x="318" y="64" width="265" height="90" rx="12"/></clipPath>
+    <clipPath id="m7l2a-k3"><rect x="616" y="64" width="286" height="90" rx="12"/></clipPath>
+    <clipPath id="m7l2a-k4"><rect x="935" y="64" width="255" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="500" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M285,109 L318,109" marker-end="url(#m7l2a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M583,109 L616,109" marker-end="url(#m7l2a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M902,109 L935,109" marker-end="url(#m7l2a-mslate)"/></g>
+  <g filter="url(#m7l2a-soft)">
+    <rect x="50" y="64" width="235" height="90" rx="12" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5"/>
+    <rect x="50" y="64" width="6" height="90" fill="#64748B" clip-path="url(#m7l2a-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#64748B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">Menu in context</text>
+  <text x="167.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">name, description, schema</text>
+  <g filter="url(#m7l2a-soft)">
+    <rect x="318" y="64" width="265" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="318" y="64" width="6" height="90" fill="#7C3AED" clip-path="url(#m7l2a-k2)"/>
+  </g>
+  <circle cx="356" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(345.56,98.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12c0 4.1-3.8 7.4-8.5 7.4a10 10 0 0 1-2.6-.34L4.5 21l1.3-3.6A6.9 6.9 0 0 1 3.5 12C3.5 7.9 7.3 4.6 12 4.6s8.5 3.3 8.5 7.4z"/></g>
+  <text x="382" y="116" font-size="18.5" font-weight="600" fill="#111827">Structured request</text>
+  <text x="450.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">generation pauses here</text>
+  <g filter="url(#m7l2a-lift)">
+    <rect x="616" y="64" width="286" height="90" rx="12" fill="#D1FAE5" stroke="#059669" stroke-width="2"/>
+    <rect x="616" y="64" width="9" height="90" fill="#059669" clip-path="url(#m7l2a-k3)"/>
+  </g>
+  <circle cx="654" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(643.56,98.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10v-6z"/></g>
+  <text x="680" y="116" font-size="18.5" font-weight="600" fill="#111827">Validate and execute</text>
+  <text x="759" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">the runtime, not the model</text>
+  <g filter="url(#m7l2a-soft)">
+    <rect x="935" y="64" width="255" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="935" y="64" width="6" height="90" fill="#2563EB" clip-path="url(#m7l2a-k4)"/>
+  </g>
+  <circle cx="973" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(962.56,98.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12h7M12.8 8.8L16 12l-3.2 3.2"/></g>
+  <text x="999" y="116" font-size="18.5" font-weight="600" fill="#111827">Result as context</text>
+  <text x="1062.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">ready for the next step</text>
+  <rect x="40" y="250" width="1160" height="152" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="284" font-size="16" fill="#475569">The model emits a request like {"tool": "lookup_order", "args": {"order_id": "4711"}}.</text>
+  <rect x="64" y="310" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="332" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">The separation</text>
+  <text x="288" y="332" font-size="15.5" fill="#475569">the model proposes; the runtime decides. That is the architecture.</text>
+  <rect x="64" y="354" width="200" height="32" rx="9" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.2"/>
+  <text x="164" y="376" text-anchor="middle" font-size="15.5" font-weight="600" fill="#475569">Portability</text>
+  <text x="288" y="376" font-size="15.5" fill="#475569">protocols like MCP make tool menus portable across models</text>
+</svg>

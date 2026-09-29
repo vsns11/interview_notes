@@ -1,0 +1,4 @@
+/* 01_styles.css -- an external stylesheet, linked from 01_adding_css.html */
+body { font: 16px/1.5 system-ui, sans-serif; margin: 16px; color: #222; }
+.box { padding: 10px 14px; margin: 8px 0; border-radius: 6px; border: 2px solid #999; }
+.external { background: #e8f4ff; border-color: #2b7cd3; }   /* comes from this file */

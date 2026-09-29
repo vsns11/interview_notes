@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="456" viewBox="0 0 1240 456" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Decode dominates the total time, even though prefill runs first">
+  <defs>
+
+    <filter id="m4l1b-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m4l1b-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m4l1b-k1"><rect x="410" y="56" width="420" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="456" fill="#FFFFFF"/>
+
+
+  <g filter="url(#m4l1b-lift)">
+    <rect x="410" y="56" width="420" height="90" rx="12" fill="#E2E8F0" stroke="#64748B" stroke-width="2"/>
+    <rect x="410" y="56" width="9" height="90" fill="#64748B" clip-path="url(#m4l1b-k1)"/>
+  </g>
+  <circle cx="448" cy="101" r="18" fill="#FFFFFF"/>
+  <g transform="translate(437.56,90.56) scale(0.87)" fill="none" stroke="#64748B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></g>
+  <text x="474" y="108" font-size="18.5" font-weight="600" fill="#111827">3,000 tokens in, 500 tokens out</text>
+  <rect x="70" y="200" width="35" height="54" rx="8" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.5"/>
+  <rect x="105" y="200" width="1065" height="54" rx="8" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="637.5" y="233" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">decode: 500 sequential steps</text>
+  <text x="140" y="296" font-size="15.5" font-weight="600" text-anchor="middle" fill="#4338CA">prefill about 0.5 s</text>
+  <text x="637" y="296" font-size="15.5" font-weight="600" text-anchor="middle" fill="#5B21B6">decode about 15 s</text>
+  <rect x="40" y="340" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="385" text-anchor="middle" font-size="16" fill="#475569">Illustrative timings: stream suitable output and choose useful length limits.</text>
+</svg>

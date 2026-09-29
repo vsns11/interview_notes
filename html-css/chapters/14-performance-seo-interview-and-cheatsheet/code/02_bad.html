@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Core Web Vitals — bad</title>
+  <link rel="stylesheet" href="02_styles.css">
+  <script src="02_bad.js"></script>                      <!-- sync script in <head> -->
+</head>
+<body>
+  <header><strong>Trail Shop</strong></header>
+  <div id="promo-slot"></div>                            <!-- empty: a banner will be injected later -->
+  <main>
+    <h1>Summer trail guide</h1>
+    <div class="hero" id="hero"></div>                   <!-- the hero image is added by JavaScript -->
+    <p>Our favourite routes for long evenings, with maps and gear lists.</p>
+    <button id="save">Save to favourites</button> <span id="status"></span>
+    <h2>Ridge loop, 12 km</h2>
+    <p>Start at the north car park, climb through the pines and follow the ridge west for views over both valleys.</p>
+  </main>
+</body>
+</html>

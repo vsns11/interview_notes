@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="660" viewBox="0 0 1240 660" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="The three tier-one findings, said first and said calmly">
+  <defs>
+    <marker id="m8l9b-memerald" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#059669"/>
+    </marker>
+    <filter id="m8l9b-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m8l9b-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m8l9b-k1"><rect x="50" y="70" width="360" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l9b-k2"><rect x="440" y="70" width="360" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l9b-k3"><rect x="830" y="70" width="360" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="660" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#059669" stroke-width="2"><path d="M230,232 L230,258" marker-end="url(#m8l9b-memerald)"/></g>
+  <g fill="none" stroke="#059669" stroke-width="2"><path d="M620,232 L620,258" marker-end="url(#m8l9b-memerald)"/></g>
+  <g fill="none" stroke="#059669" stroke-width="2"><path d="M1010,232 L1010,258" marker-end="url(#m8l9b-memerald)"/></g>
+  <g filter="url(#m8l9b-lift)">
+    <rect x="50" y="70" width="360" height="90" rx="12" fill="#FCE7F3" stroke="#DB2777" stroke-width="2"/>
+    <rect x="50" y="70" width="9" height="90" fill="#DB2777" clip-path="url(#m8l9b-k1)"/>
+  </g>
+  <circle cx="88" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,104.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10v-6z"/></g>
+  <text x="114" y="122" font-size="18.5" font-weight="600" fill="#111827">No permission filter</text>
+  <text x="230" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">top-10 by similarity ignores ACLs</text>
+  <text x="230" y="208" font-size="15.5" text-anchor="middle" fill="#94A3B8">restricted pages leak from day one</text>
+  <g filter="url(#m8l9b-lift)">
+    <rect x="440" y="70" width="360" height="90" rx="12" fill="#FCE7F3" stroke="#DB2777" stroke-width="2"/>
+    <rect x="440" y="70" width="9" height="90" fill="#DB2777" clip-path="url(#m8l9b-k2)"/>
+  </g>
+  <circle cx="478" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(467.56,104.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></g>
+  <text x="504" y="122" font-size="18.5" font-weight="600" fill="#111827">Model-written SQL</text>
+  <text x="620" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">the model decides authorization</text>
+  <text x="620" y="208" font-size="15.5" text-anchor="middle" fill="#94A3B8">it must never be the one to do that</text>
+  <g filter="url(#m8l9b-lift)">
+    <rect x="830" y="70" width="360" height="90" rx="12" fill="#FCE7F3" stroke="#DB2777" stroke-width="2"/>
+    <rect x="830" y="70" width="9" height="90" fill="#DB2777" clip-path="url(#m8l9b-k3)"/>
+  </g>
+  <circle cx="868" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(857.56,104.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></g>
+  <text x="894" y="122" font-size="18.5" font-weight="600" fill="#111827">No injection posture</text>
+  <text x="1010" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">wiki pages are untrusted input</text>
+  <text x="1010" y="208" font-size="15.5" text-anchor="middle" fill="#94A3B8">and the model holds a database tool</text>
+  <rect x="50" y="258" width="360" height="54" rx="8" fill="#D1FAE5" stroke="#059669" stroke-width="1.5"/>
+  <text x="230" y="291" text-anchor="middle" font-size="17" font-weight="600" fill="#047857">ACLs in the index query</text>
+  <rect x="440" y="258" width="360" height="54" rx="8" fill="#D1FAE5" stroke="#059669" stroke-width="1.5"/>
+  <text x="620" y="291" text-anchor="middle" font-size="17" font-weight="600" fill="#047857">get_my_record(fields)</text>
+  <rect x="830" y="258" width="360" height="54" rx="8" fill="#D1FAE5" stroke="#059669" stroke-width="1.5"/>
+  <text x="1010" y="291" text-anchor="middle" font-size="17" font-weight="600" fill="#047857">Input and action gates</text>
+  <rect x="40" y="346" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="380" font-size="16" fill="#475569">Say these three first, calmly, with a consequence and a fix attached to each, and the interview changes.</text>
+  <rect x="64" y="406" width="200" height="32" rx="9" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.2"/>
+  <text x="164" y="428" text-anchor="middle" font-size="15.5" font-weight="600" fill="#BE185D">The single worst line</text>
+  <text x="288" y="428" font-size="15.5" fill="#475569">HR data plus free-form SQL, in one sentence of the question</text>
+  <rect x="64" y="450" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="472" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">Scoped, not clever</text>
+  <text x="288" y="472" font-size="15.5" fill="#475569">a task-shaped tool that runs under the credentials of the person asking</text>
+  <rect x="64" y="494" width="200" height="32" rx="9" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.2"/>
+  <text x="164" y="516" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">Fail closed</text>
+  <text x="288" y="516" font-size="15.5" fill="#475569">enforce current access before context or data exposure</text>
+</svg>

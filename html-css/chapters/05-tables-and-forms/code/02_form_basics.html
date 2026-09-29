@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Form basics</title>
+  <style>
+    body { font: 15px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    form { max-width: 420px; display: grid; gap: 12px; }
+    label { display: grid; gap: 4px; font-weight: 600; }
+    input, button { font: inherit; font-weight: 400; padding: 6px 8px; }
+    .inline { display: flex; gap: 8px; align-items: center; font-weight: 400; }
+    .actions { display: flex; gap: 8px; }
+    button[type=submit] { background: #2d2a5a; color: #fff; border: 0; border-radius: 6px; padding: 8px 16px; }
+    #result { font: 13px ui-monospace, monospace; background: #f3f3f8; padding: 8px; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <!-- action = where the data goes, method = how (GET puts it in the URL) -->
+  <form action="02_form_basics.html" method="get">
+    <!-- explicit label: for="id" -->
+    <div style="display:grid;gap:4px">
+      <label for="name">Full name</label>
+      <input id="name" name="name" autocomplete="name" value="Ada Lovelace">
+    </div>
+    <!-- implicit label: the input is inside the label -->
+    <label>Email
+      <input type="email" name="email" autocomplete="email" value="ada@example.com">
+    </label>
+    <label class="inline"><input type="checkbox" name="newsletter" value="yes" checked> Send me the newsletter</label>
+    <input type="hidden" name="source" value="chapter5">
+    <div class="actions">
+      <button type="submit">Sign up</button>
+      <button type="reset">Reset</button>
+      <button type="button" id="preview">Preview data</button>
+    </div>
+  </form>
+  <p>What a GET submission would add to the URL:</p>
+  <div id="result"></div>
+  <script>
+    const form = document.querySelector('form');
+    const show = () => result.textContent = '?' + new URLSearchParams(new FormData(form));
+    show();                                        // show once on load
+    preview.addEventListener('click', show);
+  </script>
+</body>
+</html>

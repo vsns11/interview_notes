@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>subgrid</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font: 13px/1.35 system-ui, sans-serif; margin: 12px; color: #222; }
+  h3 { font: 600 12px ui-monospace, monospace; margin: 12px 0 4px; }
+  .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; width: 880px; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .card { border: 2px solid #1d4ed8; border-radius: 8px; padding: 8px; background: #eff6ff; }
+  .card h4 { margin: 0; font-size: 14px; background: rgba(249,115,22,.25); outline: 1px dashed #c2410c; }
+  .card p  { margin: 0; background: rgba(34,197,94,.20); outline: 1px dashed #15803d; }
+  .card a  { justify-self: start; align-self: start; background: #2563eb; color: #fff; padding: 3px 8px;
+             border-radius: 4px; text-decoration: none; }
+
+  /* without subgrid: each card is its own grid, so its rows only know about its own content */
+  .plain .card { display: grid; grid-template-rows: auto 1fr auto; gap: 6px; }
+
+  /* with subgrid: the card spans 3 rows of the PARENT grid and reuses those rows */
+  .sub { grid-template-rows: auto auto auto; row-gap: 10px; }
+  .sub .card { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div><h3>Without subgrid — paragraphs don't line up</h3>
+    <div class="cards plain" id="plain">
+      <article class="card"><h4>Basic</h4><p>For one person.</p><a href="#">Choose</a></article>
+      <article class="card"><h4>Professional plan for growing teams</h4><p>Everything in Basic plus reports, audit logs and priority support.</p><a href="#">Choose</a></article>
+      <article class="card"><h4>Team</h4><p>Up to ten seats.</p><a href="#">Choose</a></article>
+    </div></div>
+  <div><h3>grid-template-rows: subgrid — rows shared across cards</h3>
+    <div class="cards sub" id="sub">
+      <article class="card"><h4>Basic</h4><p>For one person.</p><a href="#">Choose</a></article>
+      <article class="card"><h4>Professional plan for growing teams</h4><p>Everything in Basic plus reports, audit logs and priority support.</p><a href="#">Choose</a></article>
+      <article class="card"><h4>Team</h4><p>Up to ten seats.</p><a href="#">Choose</a></article>
+    </div></div>
+</div>
+</body>
+</html>

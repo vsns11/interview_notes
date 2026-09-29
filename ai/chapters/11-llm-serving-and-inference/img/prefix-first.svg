@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="600" viewBox="0 0 1240 600" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Put the shared, static part of the prompt first so it stays reusable">
+  <defs>
+
+    <filter id="m4l4c-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m4l4c-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+
+  </defs>
+  <rect x="0" y="0" width="1240" height="600" fill="#FFFFFF"/>
+
+
+  <text x="50" y="90" font-size="16.5" font-weight="600" text-anchor="start" fill="#111827">Request 1</text>
+  <rect x="230" y="64" width="620" height="54" rx="8" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.5"/>
+  <text x="540" y="97" text-anchor="middle" font-size="15.5" font-weight="600" fill="#4338CA">system prompt and shared document</text>
+  <rect x="850" y="64" width="340" height="54" rx="8" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="1020" y="97" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">this user’s question</text>
+  <text x="540" y="142" font-size="15.5" font-weight="600" text-anchor="middle" fill="#4338CA">prefill computed in full</text>
+  <text x="50" y="216" font-size="16.5" font-weight="600" text-anchor="start" fill="#111827">Request 2</text>
+  <rect x="230" y="190" width="620" height="54" rx="8" fill="#D1FAE5" stroke="#059669" stroke-width="1.5"/>
+  <text x="540" y="223" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">the same shared prefix</text>
+  <rect x="850" y="190" width="340" height="54" rx="8" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="1020" y="223" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">a different question</text>
+  <text x="540" y="268" font-size="15.5" font-weight="600" text-anchor="middle" fill="#047857">shared prefix reused from cache</text>
+  <text x="50" y="342" font-size="16.5" font-weight="600" text-anchor="start" fill="#111827">Wrong order</text>
+  <rect x="230" y="316" width="200" height="54" rx="8" fill="#FCE7F3" stroke="#DB2777" stroke-width="1.5"/>
+  <text x="330" y="349" text-anchor="middle" font-size="15.5" font-weight="600" fill="#BE185D">a per-request field</text>
+  <rect x="430" y="316" width="620" height="54" rx="8" fill="#E2E8F0" stroke="#64748B" stroke-width="1.5"/>
+  <text x="740" y="349" text-anchor="middle" font-size="15.5" font-weight="600" fill="#475569">the shared prefix, now unreachable</text>
+  <rect x="1050" y="316" width="140" height="54" rx="8" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="540" y="394" font-size="15.5" font-weight="600" text-anchor="middle" fill="#BE185D">one volatile token at the front, and every later hit is lost</text>
+  <rect x="40" y="430" width="1160" height="152" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="464" font-size="16" fill="#475569">The engine caches the already-computed state of a shared prefix and skips redoing its prefill.</text>
+  <rect x="64" y="490" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="512" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">The design rule</text>
+  <text x="288" y="512" font-size="15.5" fill="#475569">keep eligible shared prefixes stable; enforce user isolation</text>
+  <rect x="64" y="534" width="200" height="32" rx="9" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.2"/>
+  <text x="164" y="556" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">Hosted APIs</text>
+  <text x="288" y="556" font-size="15.5" fill="#475569">cached-input terms and discounts vary by provider</text>
+</svg>

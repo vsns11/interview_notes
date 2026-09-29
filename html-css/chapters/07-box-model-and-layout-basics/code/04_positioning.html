@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>position: static, relative, absolute, fixed, sticky</title>
+<style>
+  body { font: 13px/1.4 system-ui, sans-serif; margin: 12px; color: #222; }
+  code, .lbl { font: 11px ui-monospace, monospace; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 780px; }
+  .lbl { color: #555; }
+  .b { width: 170px; padding: 6px 8px; background: rgba(59,130,246,.35); outline: 1px solid #1d4ed8; }
+
+  /* the containing block for the absolute child: position: relative, drawn with a dashed border */
+  .container { position: relative; height: 230px; border: 2px dashed #9333ea; padding: 10px; }
+  .container::after { content: "position: relative (containing block)"; position: absolute; left: 6px; bottom: 4px;
+                      font: 11px ui-monospace, monospace; color: #9333ea; }
+  .slot { width: 186px; outline: 1px dashed #888; margin-top: 12px; }     /* where the relative box WOULD be */
+  .rel  { position: relative; top: 14px; left: 30px; background: rgba(34,197,94,.4); outline-color: #15803d; }
+  .abs  { position: absolute; top: 10px; right: 10px; background: rgba(249,115,22,.45); outline-color: #c2410c; }
+
+  /* sticky: header sticks to the top of its scroll container */
+  .scroller { height: 180px; overflow: auto; border: 2px solid #0f766e; }
+  .scroller h4 { position: sticky; top: 0; margin: 0; padding: 4px 8px; background: #99f6e4; outline: 1px solid #0f766e; }
+  .scroller p { margin: 4px 8px; }
+
+  .fixed { position: fixed; right: 12px; bottom: 12px; background: #fde68a; outline: 1px solid #b45309;
+           padding: 4px 8px; }
+</style>
+</head>
+<body>
+<div class="cols">
+  <div>
+    <div class="container" id="cont">
+      <div class="b" id="stat">static (normal flow)</div>
+      <div class="slot"><div class="b rel" id="rel">relative: top 14, left 30</div></div>
+      <div class="lbl" style="margin-top:22px">dashed grey = the space the relative box still reserves</div>
+      <div class="b abs" id="abs">absolute: top 10, right 10</div>
+      <div class="b" id="after">static sibling — ignores the absolute box</div>
+    </div>
+  </div>
+  <div>
+    <div class="scroller" id="scroller">
+      <h4 id="sh">Section A — sticky; top: 0</h4>
+      <p>Line 1</p><p>Line 2</p><p>Line 3</p><p>Line 4</p><p>Line 5</p><p>Line 6</p><p>Line 7</p><p>Line 8</p>
+      <p>Line 9</p><p>Line 10</p><p>Line 11</p><p>Line 12</p>
+    </div>
+    <div class="lbl">scroll box above is scrolled 90px: the heading stays pinned while its section scrolls under it</div>
+  </div>
+</div>
+<div class="fixed" id="fix">position: fixed — bottom-right of the viewport</div>
+<script>document.getElementById('scroller').scrollTop = 90;</script>
+</body>
+</html>

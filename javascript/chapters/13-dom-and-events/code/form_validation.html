@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Form validation</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; background: #f6f7f9; color: #1d2330; margin: 24px; }
+  form { max-width: 380px; background: #fff; border: 1px solid #d9dde5; border-radius: 10px; padding: 16px 18px; display: grid; gap: 4px; }
+  label { font-weight: 600; margin-top: 8px; }
+  input { padding: 7px 9px; border: 1px solid #b9c0cc; border-radius: 6px; font: inherit; }
+  input[aria-invalid="true"] { border-color: #c62828; background: #fff5f5; }
+  .error { color: #c62828; font-size: 13px; min-height: 1em; }
+  button { margin-top: 12px; font: inherit; padding: 8px; border-radius: 6px; border: 0; background: #3558d4; color: #fff; }
+  .status { margin-top: 10px; font-size: 13px; }
+</style></head>
+<body>
+<form id="f" novalidate>
+  <label for="email">Work email</label>
+  <input id="email" name="email" type="email" required aria-describedby="email-err">
+  <div class="error" id="email-err"></div>
+  <label for="age">Age</label>
+  <input id="age" name="age" type="number" min="13" max="120" required aria-describedby="age-err">
+  <div class="error" id="age-err"></div>
+  <label for="pw">Password (8+ chars)</label>
+  <input id="pw" name="pw" type="password" minlength="8" required aria-describedby="pw-err">
+  <div class="error" id="pw-err"></div>
+  <button>Create account</button>
+  <div class="status" id="status"></div>
+</form>
+<script>
+  const form = document.getElementById('f');
+  function check(input) {
+    const v = input.validity;
+    input.setCustomValidity(input.name === 'email' && /@(gmail|yahoo)\./.test(input.value) ? 'x' : '');
+    let msg = '';
+    if (v.valueMissing) msg = 'This field is required.';
+    else if (v.typeMismatch) msg = 'Enter an email address like name@company.com.';
+    else if (v.customError) msg = 'Please use your work email, not a personal one.';
+    else if (v.rangeUnderflow) msg = `You must be at least ${input.min}.`;
+    else if (v.tooShort) msg = `Use at least ${input.minLength} characters (you have ${input.value.length}).`;
+    input.setAttribute('aria-invalid', String(!input.validity.valid));
+    document.getElementById(input.id + '-err').textContent = msg;
+    return input.validity.valid;
+  }
+  form.addEventListener('input', (e) => check(e.target));        // live feedback (delegated)
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const ok = [...form.querySelectorAll('input')].map(check).every(Boolean);
+    document.getElementById('status').textContent = ok ? 'Valid - would send with fetch()' : 'Fix the highlighted fields.';
+  });
+  // Scripted interaction for the screenshot
+  form.email.value = 'ada@gmail.com';
+  form.age.value = '9';
+  form.requestSubmit();
+</script>
+</body></html>

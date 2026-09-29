@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2D transforms</title>
+<style>
+  body { margin: 12px; font: 13px/1.3 system-ui, sans-serif; color: #1f2937; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 12px; }
+  figure { margin: 0; }
+  figcaption { font: 600 11px/1.3 ui-monospace, monospace; color: #7c3aed; margin-top: 6px; }
+  /* The dashed "ghost" shows where the box is in the LAYOUT; the blue box is where it is PAINTED */
+  .stage { position: relative; height: 110px; background: #f8fafc; border: 1px solid #e2e8f0; }
+  .ghost, .box { position: absolute; left: 50px; top: 30px; width: 90px; height: 50px; }
+  .ghost { outline: 2px dashed #94a3b8; }
+  .box { background: rgb(37 99 235 / .8); color: #fff; display: grid; place-items: center; font-weight: 700; }
+  .origin { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: #dc2626; }
+
+  .t1 { transform: translate(40px, 20px); }
+  .t2 { transform: rotate(30deg); }
+  .t3 { transform: scale(1.4, 0.6); }
+  .t4 { transform: skewX(-20deg); }
+  .t5 { transform: rotate(30deg); transform-origin: 0 0; }          /* rotate around the top-left corner */
+  .t6 { transform: translate(60px, 0) rotate(45deg); }               /* read right to left: rotate, then move */
+  .t7 { transform: rotate(45deg) translate(60px, 0); }               /* rotate the axes, then move along them */
+  .t8 { translate: 20px 10px; rotate: 15deg; scale: 1.2; }            /* individual properties (Baseline 2022) */
+</style>
+</head>
+<body>
+<div class="grid">
+  <figure><div class="stage"><div class="ghost"></div><div class="box t1">A</div></div><figcaption>translate(40px, 20px)</figcaption></figure>
+  <figure><div class="stage"><div class="ghost"></div><div class="box t2">B</div><div class="origin" style="left:95px;top:55px"></div></div><figcaption>rotate(30deg) (origin: centre)</figcaption></figure>
+  <figure><div class="stage"><div class="ghost"></div><div class="box t3">C</div></div><figcaption>scale(1.4, 0.6)</figcaption></figure>
+  <figure><div class="stage"><div class="ghost"></div><div class="box t4">D</div></div><figcaption>skewX(-20deg)</figcaption></figure>
+  <figure><div class="stage"><div class="ghost"></div><div class="box t5">E</div><div class="origin" style="left:50px;top:30px"></div></div><figcaption>rotate(30deg); transform-origin: 0 0</figcaption></figure>
+  <figure><div class="stage"><div class="ghost"></div><div class="box t6">F</div></div><figcaption>translate(60px) rotate(45deg)</figcaption></figure>
+  <figure><div class="stage"><div class="ghost"></div><div class="box t7">G</div></div><figcaption>rotate(45deg) translate(60px)</figcaption></figure>
+  <figure><div class="stage"><div class="ghost"></div><div class="box t8">H</div></div><figcaption>translate / rotate / scale properties</figcaption></figure>
+</div>
+</body>
+</html>

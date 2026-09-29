@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>overflow</title>
+<style>
+  body { font: 13px/1.4 system-ui, sans-serif; margin: 12px; color: #222; }
+  .row { display: flex; gap: 22px; align-items: flex-start; height: 190px; }
+  .col code { font: 11px ui-monospace, monospace; display: block; margin-bottom: 4px; }
+  /* every box: 130 x 90, same too-long content */
+  .box { width: 130px; height: 90px; border: 2px solid #1d4ed8; background: #dbeafe; padding: 4px; }
+  .visible { overflow: visible; } .hidden { overflow: hidden; } .clip { overflow: clip; }
+  .scroll  { overflow: scroll; }  .auto   { overflow: auto; }
+  /* macOS draws overlay scrollbars that vanish in screenshots, so paint them explicitly */
+  .box::-webkit-scrollbar { width: 10px; height: 10px; }
+  .box::-webkit-scrollbar-track { background: #bfdbfe; }
+  .box::-webkit-scrollbar-thumb { background: #1d4ed8; border-radius: 5px; }
+  .one-line { width: 330px; border: 2px solid #1d4ed8; padding: 4px;
+              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="col"><code>visible (default)</code><div class="box visible">Seven lines of text do not fit a 90px-tall box. What happens to the part that overflows depends on the overflow value.</div></div>
+  <div class="col"><code>hidden</code><div class="box hidden">Seven lines of text do not fit a 90px-tall box. What happens to the part that overflows depends on the overflow value.</div></div>
+  <div class="col"><code>clip</code><div class="box clip">Seven lines of text do not fit a 90px-tall box. What happens to the part that overflows depends on the overflow value.</div></div>
+  <div class="col"><code>scroll</code><div class="box scroll">Seven lines of text do not fit a 90px-tall box. What happens to the part that overflows depends on the overflow value.</div></div>
+  <div class="col"><code>auto</code><div class="box auto">Seven lines of text do not fit a 90px-tall box. What happens to the part that overflows depends on the overflow value.</div></div>
+</div>
+<code style="font:11px ui-monospace,monospace">white-space: nowrap; overflow: hidden; text-overflow: ellipsis</code>
+<div class="one-line">A long product title that does not fit on one line gets an ellipsis at the end</div>
+</body>
+</html>

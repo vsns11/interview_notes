@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>:is() and :where()</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 16px; }
+
+  /* 1. Shorter selectors: one rule instead of 3 x 3 = 9 combinations */
+  :is(article, section, aside) :is(h1, h2, h3) { color: rebeccapurple; }
+
+  /* 2. Forgiving list: the unknown pseudo-class is ignored, the rule survives */
+  :is(.promo, :unknown-thing) { font-weight: 700; }
+  .promo, :unknown-thing { text-decoration: underline; }     /* normal list: WHOLE rule dropped */
+
+  /* 3. Specificity: :where() = 0, :is() = its most specific argument */
+  :where(.content) a  { color: gray; }        /* (0,0,1)  easy to override               */
+  a                   { color: teal; }        /* (0,0,1)  later -> wins over :where()    */
+  :is(#nav, .content) b { color: gray; }      /* (1,0,1)  the #nav counts even here      */
+  .content b.hot      { color: teal; }        /* (0,2,1)  still loses to (1,0,1)         */
+</style>
+<body>
+  <article><h2 id="h">Heading inside article</h2></article>
+  <p class="promo" id="promo">Promo text</p>
+  <div class="content"><a id="a" href="#">link</a> and <b class="hot" id="b">bold</b></div>
+</body>
+</html>

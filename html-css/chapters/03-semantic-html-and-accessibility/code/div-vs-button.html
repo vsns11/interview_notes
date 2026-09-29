@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>div vs button</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1.5rem; }
+  .btn { display: inline-block; font: 600 16px system-ui, sans-serif; padding: .5rem 1rem; border-radius: 6px;
+         border: 0; background: #2563eb; color: #fff; cursor: pointer; margin-right: 1rem; }
+  .btn:focus-visible { outline: 3px solid #c2410c; outline-offset: 2px; }
+  p { color: #475569; }
+</style>
+</head>
+<body>
+  <p>All three look identical. Only the middle one is a real button.</p>
+  <div class="btn" onclick="save()">Save (div)</div>
+  <button class="btn" type="button" onclick="save()">Save (button)</button>
+  <div class="btn" role="button" tabindex="0" onclick="save()">Save (div + role + tabindex)</div>
+  <p id="out" role="status"></p>
+  <script>
+    function save() { document.getElementById('out').textContent = 'Saved!'; }
+  </script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluid typography with clamp()</title>
+<style>
+  :root {
+    /* body text: 16px at a 320px viewport  ->  24px at 1200px, never smaller or larger */
+    --step-0: clamp(1rem, 0.818rem + 0.909vw, 1.5rem);
+    /* heading:   28px at 320px  ->  48px at 1200px */
+    --step-3: clamp(1.75rem, 1.296rem + 2.273vw, 3rem);
+    /* space that grows with the screen too */
+    --space: clamp(0.75rem, 0.341rem + 2.045vw, 1.875rem);   /* 12px -> 30px */
+  }
+  body { margin: 0; font-family: system-ui, sans-serif; color: #1f2937; }
+  main { padding: var(--space); }
+  h1 { font-size: var(--step-3); line-height: 1.1; margin: 0 0 var(--space); }
+  p { font-size: var(--step-0); line-height: 1.5; margin: 0; max-width: 60ch; }
+  .size { font: 700 13px ui-monospace, monospace; color: #b91c1c; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Fluid headline</h1>
+  <p>Text size and spacing grow smoothly with the viewport between two limits, with no breakpoints.</p>
+  <p class="size"></p>
+</main>
+<script>
+  const px = s => parseFloat(getComputedStyle(document.querySelector(s)).fontSize).toFixed(2);
+  document.querySelector('.size').textContent =
+    `viewport ${innerWidth}px: h1 ${px('h1')}px, p ${px('p')}px`;
+</script>
+</body>
+</html>

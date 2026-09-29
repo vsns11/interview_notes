@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>IndexedDB demo</title>
+<style>body { font: 14px/1.45 system-ui, sans-serif; background: #f6f7f9; color: #1d2330; margin: 22px; }
+  .card { background: #fff; border: 1px solid #d9dde5; border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; max-width: 760px; }
+  code, pre { font: 12.5px/1.5 ui-monospace, Menlo, monospace; }
+  pre { margin: 0; white-space: pre-wrap; }
+  .ok { color: #1f7a45; font-weight: 600; } .bad { color: #b3261e; font-weight: 600; }
+  h3 { margin: 0 0 8px; font-size: 16px; }</style></head>
+<body>
+<h3>IndexedDB: a notes database in the browser</h3>
+<pre id="out" class="card"></pre>
+<script>
+  const out = (s) => (document.getElementById('out').textContent += s + '\n');
+  // Tiny promise wrapper around IDBRequest (libraries like "idb" do this for you)
+  const req2p = (req) => new Promise((resolve, reject) => { req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); });
+
+  (async () => {
+    await req2p(indexedDB.deleteDatabase('notes-demo'));        // start fresh for a repeatable demo
+    const open = indexedDB.open('notes-demo', 1);
+    open.onupgradeneeded = () => {                              // runs when the version number increases
+      const db = open.result;
+      const store = db.createObjectStore('notes', { keyPath: 'id', autoIncrement: true });
+      store.createIndex('byTag', 'tag');
+      out('upgradeneeded: created store "notes" + index "byTag"');
+    };
+    const db = await req2p(open);
+
+    // Write in one read-write transaction
+    const tx = db.transaction('notes', 'readwrite');
+    const notes = tx.objectStore('notes');
+    for (const n of [
+      { title: 'Buy milk', tag: 'home', created: new Date('2026-09-01') },
+      { title: 'Ship chapter 14', tag: 'work', created: new Date('2026-09-20') },
+      { title: 'Fix bike', tag: 'home', created: new Date('2026-09-25') },
+    ]) notes.add(n);
+    await new Promise((r) => (tx.oncomplete = r));
+    out('added 3 notes (Dates are stored as real Date objects - structured clone)');
+
+    const ro = db.transaction('notes').objectStore('notes');
+    out('count      : ' + await req2p(ro.count()));
+    const one = await req2p(ro.get(2));
+    out('get(2)     : ' + one.title + ' | created is a Date: ' + (one.created instanceof Date));
+    const home = await req2p(ro.index('byTag').getAll('home'));
+    out('tag="home" : ' + home.map((n) => n.title).join(', '));
+    const range = await req2p(ro.getAll(IDBKeyRange.bound(2, 3)));
+    out('ids 2..3   : ' + range.map((n) => n.id + ':' + n.title).join(', '));
+
+    const est = await navigator.storage.estimate();
+    out('storage.estimate(): quota is about ' + (est.quota / 1e9).toFixed(0) + ' GB for this origin (varies by browser and disk)');
+    db.close();
+  })().catch((e) => out('ERROR ' + e));
+</script>
+</body></html>

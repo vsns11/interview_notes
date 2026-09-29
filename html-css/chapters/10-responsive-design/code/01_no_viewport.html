@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- NO viewport meta tag: a phone lays this page out as if it were ~980px wide, then shrinks it -->
+<title>Without the viewport meta tag</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 12px; color: #222; }
+  h1 { font-size: 1.6rem; margin: 0 0 8px; }
+  .bar { background: #bfdbfe; padding: 8px; border-radius: 6px; }
+  #info { font: 600 14px ui-monospace, monospace; color: #b91c1c; }
+</style>
+</head>
+<body>
+<h1>Hello, phone!</h1>
+<p class="bar">This paragraph is 16px text. On a phone it should be readable without zooming.</p>
+<p id="info"></p>
+<script>
+  // Print what the page thinks the viewport is (read by the .mjs script too).
+  addEventListener("load", () =>
+    info.textContent = `layout viewport: ${document.documentElement.clientWidth}px wide`);
+</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Margin collapsing</title>
+<style>
+  body { font: 13px/1.3 system-ui, sans-serif; margin: 12px; color: #222; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  /* each case sits in a grey "frame" with a border, so margins can't escape the frame */
+  .frame { border: 1px dashed #999; background: #f4f4f4; padding: 0 8px 8px; }
+  .frame h3 { font-size: 12px; margin: 6px 0; font-weight: 600; }
+  .item { background: #93c5fd; outline: 1px solid #1d4ed8; padding: 4px 6px; }
+  .parent { background: #fcd34d; }                  /* no border, no padding */
+  .note { font: 11px ui-monospace, monospace; color: #555; margin-top: 6px; }
+
+  #a1 { margin-bottom: 30px; }  #a2 { margin-top: 20px; }                /* siblings */
+  #b1 > .item { margin-top: 24px; }                                         /* parent/child */
+  #c1 { display: flow-root; } #c1 > .item { margin-top: 24px; }            /* fix: new BFC */
+  #d0 { margin: 20px 0; }                                                   /* empty block */
+  #e1 { margin-bottom: 30px; }  #e2 { margin-top: -10px; }                 /* negative */
+  .flex { display: flex; flex-direction: column; }
+  #f1 { margin-bottom: 30px; }  #f2 { margin-top: 20px; }                  /* flex: no collapse */
+</style>
+</head>
+<body>
+<div class="grid">
+  <div class="frame"><h3>A. Adjacent siblings</h3>
+    <div class="item" id="a1">margin-bottom: 30px</div>
+    <div class="item" id="a2">margin-top: 20px</div>
+    <div class="note">gap = max(30, 20) = 30</div></div>
+
+  <div class="frame"><h3>B. Parent and first child</h3>
+    <div class="parent" id="b1"><div class="item">child margin-top: 24px</div></div>
+    <div class="note">no yellow shows: the margin leaked<br>out above the parent</div></div>
+
+  <div class="frame"><h3>C. Fix: parent is display: flow-root</h3>
+    <div class="parent" id="c1"><div class="item">child margin-top: 24px</div></div>
+    <div class="note">margin stays inside the parent</div></div>
+
+  <div class="frame"><h3>D. Empty block (margin 20px 0)</h3>
+    <div class="item" id="d1">above</div><div id="d0"></div><div class="item" id="d2">below</div>
+    <div class="note">its top and bottom margins<br>collapse: gap = 20, not 40</div></div>
+
+  <div class="frame"><h3>E. Positive + negative</h3>
+    <div class="item" id="e1">margin-bottom: 30px</div>
+    <div class="item" id="e2">margin-top: -10px</div>
+    <div class="note">gap = 30 + (−10) = 20</div></div>
+
+  <div class="frame"><h3>F. Inside a flex container</h3>
+    <div class="flex"><div class="item" id="f1">margin-bottom: 30px</div>
+    <div class="item" id="f2">margin-top: 20px</div></div>
+    <div class="note">no collapsing: gap = 30 + 20 = 50</div></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,17 @@
+/* A small modern reset (in the spirit of Andy Bell's and Josh Comeau's), wrapped in a low layer
+   so ANY later rule overrides it without a specificity fight. Each line fixes one real annoyance. */
+@layer reset {
+  *, *::before, *::after { box-sizing: border-box; }           /* width includes padding + border (7.2) */
+  * { margin: 0; }                                              /* remove UA margins; add spacing on purpose */
+  html { -webkit-text-size-adjust: none; text-size-adjust: none; }  /* stop iOS inflating text in landscape */
+  body { min-height: 100dvh; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  img, picture, video, canvas, svg { display: block; max-width: 100%; }   /* no baseline gap, never overflow */
+  input, button, textarea, select { font: inherit; }           /* form controls don't inherit font by default */
+  p, h1, h2, h3, h4, h5, h6 { overflow-wrap: break-word; }     /* long URLs/words don't overflow */
+  h1, h2, h3, h4, h5, h6 { text-wrap: balance; }               /* even line lengths in headings */
+  p { text-wrap: pretty; }                                      /* avoid a lonely last word (where supported) */
+  :where(ul, ol)[role="list"] { list-style: none; padding: 0; } /* strip bullets only when you say so */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
+}

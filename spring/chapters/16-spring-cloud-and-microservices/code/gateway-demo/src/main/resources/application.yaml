@@ -1,0 +1,21 @@
+services:
+  orders:
+    url: http://localhost:8081       # overridden by the test
+  inventory:
+    url: http://localhost:8082
+spring:
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+            # Route 1, in YAML: /api/orders/** -> orders service
+            - id: orders
+              uri: ${services.orders.url}
+              predicates:
+                - Path=/api/orders/**
+                - Method=GET,POST
+              filters:
+                - StripPrefix=1                          # /api/orders/7 -> /orders/7
+                - AddRequestHeader=X-Gateway, ch16-gateway
+                - AddResponseHeader=X-Served-Via, gateway

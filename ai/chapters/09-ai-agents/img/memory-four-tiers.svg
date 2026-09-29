@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="500" viewBox="0 0 1240 500" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Four tiers of agent memory">
+  <defs>
+    <marker id="m7l4a-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <filter id="m7l4a-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m7l4a-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m7l4a-k1"><rect x="50" y="64" width="183" height="90" rx="12"/></clipPath>
+    <clipPath id="m7l4a-k2"><rect x="348" y="64" width="183" height="90" rx="12"/></clipPath>
+    <clipPath id="m7l4a-k3"><rect x="646" y="64" width="183" height="90" rx="12"/></clipPath>
+    <clipPath id="m7l4a-k4"><rect x="944" y="64" width="245" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="500" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M233,109 L348,109" marker-end="url(#m7l4a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M531,109 L646,109" marker-end="url(#m7l4a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M829,109 L944,109" marker-end="url(#m7l4a-mslate)"/></g>
+  <g filter="url(#m7l4a-soft)">
+    <rect x="50" y="64" width="183" height="90" rx="12" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <rect x="50" y="64" width="6" height="90" fill="#059669" clip-path="url(#m7l4a-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">The window</text>
+  <text x="141.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">recent steps, verbatim</text>
+  <g filter="url(#m7l4a-soft)">
+    <rect x="348" y="64" width="183" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="348" y="64" width="6" height="90" fill="#D97706" clip-path="url(#m7l4a-k2)"/>
+  </g>
+  <circle cx="386" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(375.56,98.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h19l-7.5 8.5V20l-4 2v-9.5z"/></g>
+  <text x="412" y="116" font-size="18.5" font-weight="600" fill="#111827">Compaction</text>
+  <text x="439.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">older history, summarized</text>
+  <g filter="url(#m7l4a-lift)">
+    <rect x="646" y="64" width="183" height="90" rx="12" fill="#E0E7FF" stroke="#4F46E5" stroke-width="2"/>
+    <rect x="646" y="64" width="9" height="90" fill="#4F46E5" clip-path="url(#m7l4a-k3)"/>
+  </g>
+  <circle cx="684" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(673.56,98.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></g>
+  <text x="710" y="116" font-size="18.5" font-weight="600" fill="#111827">Scratchpad</text>
+  <text x="737.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">files outside the context</text>
+  <g filter="url(#m7l4a-soft)">
+    <rect x="944" y="64" width="245" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="944" y="64" width="6" height="90" fill="#7C3AED" clip-path="url(#m7l4a-k4)"/>
+  </g>
+  <circle cx="982" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(971.56,98.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></g>
+  <text x="1008" y="116" font-size="18.5" font-weight="600" fill="#111827">Long-term memory</text>
+  <text x="1066.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">retrieval across tasks</text>
+  <rect x="40" y="250" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="284" font-size="16" fill="#475569">Hot, warm, and cold tiers, like any cache hierarchy. The payload is the agent’s own state.</text>
+  <rect x="64" y="310" width="200" height="32" rx="9" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.2"/>
+  <text x="164" y="332" text-anchor="middle" font-size="15.5" font-weight="600" fill="#BE185D">Compaction is lossy</text>
+  <text x="288" y="332" font-size="15.5" fill="#475569">a discarded error becomes a repeated mistake, silently</text>
+  <rect x="64" y="354" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="376" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">So preserve</text>
+  <text x="288" y="376" font-size="15.5" fill="#475569">decisions, constraints, failures, open questions; not narrative prose</text>
+  <rect x="64" y="398" width="200" height="32" rx="9" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.2"/>
+  <text x="164" y="420" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">Governance</text>
+  <text x="288" y="420" font-size="15.5" fill="#475569">long-term memory stays user-visible, editable, and deletable</text>
+</svg>

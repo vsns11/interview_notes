@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transitions and timing functions: a race</title>
+<style>
+  body { margin: 10px; font: 12px/1.2 ui-monospace, monospace; color: #1f2937; }
+  .lane { position: relative; height: 26px; border-bottom: 1px dashed #cbd5e1; }
+  .lane span { position: absolute; left: 0; top: 7px; color: #7c3aed; font-weight: 700; }
+  .ball { position: absolute; left: 150px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: #2563eb;
+          /* the transition: property, duration, timing function */
+          transition: translate 1000ms var(--ease); }
+  .finish { position: absolute; left: 330px; top: 0; bottom: 0; border-left: 2px solid #dc2626; }
+  body.go .ball { translate: 160px 0; }       /* adding the class starts every transition */
+</style>
+</head>
+<body>
+<div class="lane"><span>linear</span><div class="ball" style="--ease: linear"></div><div class="finish"></div></div>
+<div class="lane"><span>ease</span><div class="ball" style="--ease: ease"></div><div class="finish"></div></div>
+<div class="lane"><span>ease-in</span><div class="ball" style="--ease: ease-in"></div><div class="finish"></div></div>
+<div class="lane"><span>ease-out</span><div class="ball" style="--ease: ease-out"></div><div class="finish"></div></div>
+<div class="lane"><span>ease-in-out</span><div class="ball" style="--ease: ease-in-out"></div><div class="finish"></div></div>
+<div class="lane"><span>back-out</span><div class="ball" style="--ease: cubic-bezier(.34, 1.56, .64, 1)"></div><div class="finish"></div></div>
+<div class="lane"><span>steps(4)</span><div class="ball" style="--ease: steps(4)"></div><div class="finish"></div></div>
+<div class="lane"><span>linear(bounce)</span><div class="ball" style="--ease: linear(0, 0.36 30%, 1 45%, 0.8 55%, 1 65%, 0.95 75%, 1)"></div><div class="finish"></div></div>
+</body>
+</html>

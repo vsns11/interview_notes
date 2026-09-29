@@ -1,0 +1,8 @@
+/* CSS Module: every class name here is LOCAL to the file that imports it. */
+.card { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; }
+.title { margin: 0 0 4px; font-size: 18px; }
+.role { margin: 0 0 12px; color: #57606a; }
+.button { font: inherit; padding: 6px 14px; border-radius: 8px; border: 0; background: #0969da; color: #fff; cursor: pointer; }
+.button:hover { background: #0550ae; }
+.primary { composes: button; font-weight: 600; }       /* reuse another class */
+:global(.sr-only) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } /* escape hatch */

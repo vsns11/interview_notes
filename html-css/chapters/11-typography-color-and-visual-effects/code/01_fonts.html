@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Font stacks, @font-face and a variable font</title>
+<style>
+  /* One variable font file covers every weight from 100 to 900 (Inter, SIL Open Font License) */
+  @font-face {
+    font-family: "Inter Var";
+    src: url("media/inter-latin-wght-normal.woff2") format("woff2");
+    font-weight: 100 900;          /* the range this ONE file supports */
+    font-style: normal;
+    font-display: swap;            /* show fallback text at once, swap when the font arrives */
+  }
+  body { margin: 12px; color: #1f2937; font: 15px/1.4 system-ui, sans-serif; }
+  h3 { font: 700 12px ui-monospace, monospace; color: #7c3aed; margin: 12px 0 4px; }
+  .row { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline; }
+  .stack { font-size: 20px; }
+  .inter { font-family: "Inter Var", system-ui, sans-serif; font-size: 22px; }
+  .tag { font: 600 11px ui-monospace, monospace; color: #b91c1c; display: block; }
+</style>
+</head>
+<body>
+<h3>1. Generic families (what this computer maps them to)</h3>
+<div class="row stack">
+  <span style="font-family: serif">serif Ag</span>
+  <span style="font-family: sans-serif">sans-serif Ag</span>
+  <span style="font-family: monospace">monospace Ag</span>
+  <span style="font-family: system-ui">system-ui Ag</span>
+  <span style="font-family: cursive">cursive Ag</span>
+  <span style="font-family: Georgia, 'Times New Roman', serif">Georgia stack Ag</span>
+</div>
+
+<h3>2. One variable font file, any weight: font-weight 100 → 900</h3>
+<div class="row inter">
+  <span style="font-weight: 100">Aa<span class="tag">100</span></span>
+  <span style="font-weight: 250">Aa<span class="tag">250</span></span>
+  <span style="font-weight: 400">Aa<span class="tag">400</span></span>
+  <span style="font-weight: 550">Aa<span class="tag">550</span></span>
+  <span style="font-weight: 700">Aa<span class="tag">700</span></span>
+  <span style="font-weight: 900">Aa<span class="tag">900</span></span>
+  <span style="font-variation-settings: 'wght' 650">Aa<span class="tag">'wght' 650</span></span>
+</div>
+
+<h3>3. Real italic vs synthesized ("faux") italic and bold</h3>
+<div class="row stack">
+  <span style="font-family: Georgia, serif; font-style: italic">Georgia italic (real)</span>
+  <span class="inter" style="font-style: italic; font-size: 20px">Inter slanted by the browser</span>
+  <span class="inter" style="font-style: italic; font-synthesis: none; font-size: 20px">font-synthesis: none</span>
+</div>
+</body>
+</html>

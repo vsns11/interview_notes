@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Focus styles</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 3.5rem 1rem 1rem; }
+  .skip { position: absolute; left: 1rem; top: -3rem; background: #1e3a8a; color: #fff; padding: .5rem .8rem; border-radius: 0 0 6px 6px; }
+  .skip:focus { top: 0; }
+  a, button { font: inherit; }
+  button { padding: .4rem .8rem; border-radius: 6px; border: 1px solid #334155; background: #f8fafc; margin-right: .5rem; }
+  :focus-visible { outline: 3px solid #c2410c; outline-offset: 2px; }
+  .bad:focus { outline: none; }      /* never do this without a replacement */
+</style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to main content</a>
+  <p>The skip link is normally off-screen and slides in when it receives keyboard focus (shown focused here, with a :focus-visible ring).</p>
+  <button type="button" id="b1">Tab here: ring shows</button>
+  <button type="button" class="bad">.bad: outline removed — focus is invisible</button>
+  <main id="main" tabindex="-1"><h1>Main content</h1></main>
+  <script>document.querySelector('.skip').focus();</script>
+</body>
+</html>

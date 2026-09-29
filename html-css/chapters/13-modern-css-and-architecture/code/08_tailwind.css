@@ -1,0 +1,8 @@
+/* Tailwind CSS v4 input file. No tailwind.config.js: configuration is CSS. */
+@import "tailwindcss" source(none);    /* source(none): don't auto-scan the folder ...        */
+@source "./08_tailwind.html";           /* ... scan exactly this file for class names          */
+
+@theme {                                /* design tokens -> CSS variables AND utility classes  */
+  --color-brand: #2563eb;               /* enables bg-brand, text-brand, border-brand, ...     */
+  --color-brand-dark: #1d4ed8;
+}

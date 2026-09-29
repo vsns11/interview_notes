@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Pseudo-classes and pseudo-elements</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; }
+    section { border: 1px solid #ddd; border-radius: 6px; padding: 6px 10px; }
+    h2 { font: 700 13px ui-monospace, monospace; margin: 0 0 4px; color: #5b4bc4; }
+    ul.chips { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; flex-wrap: wrap; }
+    ul.chips li { padding: 2px 8px; border: 1px solid #bbb; border-radius: 4px; }
+    .hit, #p-first li:first-child, #p-last li:last-child, #p-odd li:nth-child(odd),
+    #p-3n li:nth-child(3n), #p-of li:nth-child(2 of .item), #p-type span:nth-of-type(2),
+    #p-not li:not(.skip), #p-empty li:empty, #p-is :is(h3, h4) em,
+    #p-has .card:has(img), #p-checked input:checked + label, #p-disabled input:disabled
+      { background: #ffe066; outline: 2px solid #e0a800; }
+    #p-where :where(h3, h4) em { background: #ffe066; }
+    #p-where h3 em { background: #cfe8ff; }            /* (0,0,2) beats :where(...) em = (0,0,1) */
+    .card { display: inline-block; border: 1px solid #bbb; padding: 4px 8px; border-radius: 4px; }
+    #p-empty li:empty { min-width: 30px; }
+
+    /* ---- pseudo-elements ---- */
+    .quote::before { content: "\201C"; font-size: 28px; color: #5b4bc4; vertical-align: -8px; }
+    .quote::after  { content: "\201D"; font-size: 28px; color: #5b4bc4; vertical-align: -8px; }
+    .required::after { content: " *"; color: #c0392b; }
+    .dropcap::first-letter { font-size: 2.6em; float: left; line-height: 1; margin-right: 4px; color: #5b4bc4; font-weight: 700; }
+    .firstline::first-line { font-weight: 700; color: #1e6f5c; }
+    ol.fancy li::marker { color: #e67e22; font-weight: 700; }
+    input.ph::placeholder { color: #9b59b6; font-style: italic; }
+    .sel::selection { background: #2d2a5a; color: #fff; }
+    a.ext[href^="http"]::after { content: " \2197"; }
+  </style>
+</head>
+<body>
+  <div class="cols">
+    <section id="p-first"><h2>li:first-child</h2><ul class="chips"><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li></ul></section>
+    <section id="p-last"><h2>li:last-child</h2><ul class="chips"><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li></ul></section>
+    <section id="p-odd"><h2>li:nth-child(odd)  = 2n+1</h2><ul class="chips"><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li></ul></section>
+    <section id="p-3n"><h2>li:nth-child(3n)</h2><ul class="chips"><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li></ul></section>
+    <section id="p-of"><h2>li:nth-child(2 of .item)</h2><ul class="chips"><li>x</li><li class="item">item</li><li>x</li><li class="item">item</li><li class="item">item</li></ul></section>
+    <section id="p-type"><h2>span:nth-of-type(2)</h2><div style="display:flex;gap:6px"><b>b</b><span>span 1</span><b>b</b><span>span 2</span><span>span 3</span></div></section>
+    <section id="p-not"><h2>li:not(.skip)</h2><ul class="chips"><li>a</li><li class="skip">skip</li><li>c</li><li class="skip">skip</li></ul></section>
+    <section id="p-empty"><h2>li:empty</h2><ul class="chips"><li>a</li><li></li><li>c</li><li> </li></ul></section>
+    <section id="p-is"><h2>:is(h3, h4) em</h2><h3 style="margin:0;font-size:14px">h3 <em>em</em></h3><h4 style="margin:0">h4 <em>em</em></h4><p style="margin:0">p <em>em</em></p></section>
+    <section id="p-where"><h2>:where(h3, h4) em  vs  h3 em</h2><h3 style="margin:0;font-size:14px">h3 <em>blue: h3 em wins</em></h3><h4 style="margin:0">h4 <em>yellow: only :where matches</em></h4></section>
+    <section id="p-has"><h2>.card:has(img)  (parent selector)</h2><div class="card">text only</div> <div class="card"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Ccircle cx='7' cy='7' r='6' fill='%236c5ce7'/%3E%3C/svg%3E" alt="" width="14" height="14"> with image</div></section>
+    <section id="p-checked"><h2>input:checked + label</h2><input type="checkbox" id="c1" checked><label for="c1">checked</label> <input type="checkbox" id="c2"><label for="c2">unchecked</label></section>
+    <section id="p-disabled"><h2>input:disabled</h2><input value="enabled"> <input value="disabled" disabled></section>
+    <section><h2>::before / ::after (content)</h2><span class="quote">Simple is better.</span> &nbsp; <label class="required">Email</label> &nbsp; <a class="ext" href="https://example.com">external</a></section>
+    <section><h2>::first-letter (drop cap)</h2><p class="dropcap" style="margin:0">Once upon a time, a stylesheet met a document and they rendered happily ever after.</p></section>
+    <section><h2>::first-line</h2><p class="firstline" style="margin:0">Only the first rendered line of this paragraph is bold and green; the rest keeps the normal style, wherever the line happens to wrap.</p></section>
+    <section><h2>::marker</h2><ol class="fancy" style="margin:0"><li>First</li><li>Second</li></ol></section>
+    <section><h2>::placeholder / ::selection</h2><input class="ph" placeholder="type your name"> <span class="sel" id="sel">this text is selected</span></section>
+  </div>
+  <script>
+    // Select some text so ::selection is visible in the screenshot.
+    getSelection().selectAllChildren(document.getElementById('sel'));
+  </script>
+</body>
+</html>

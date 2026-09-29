@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="640" viewBox="0 0 1240 640" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="The fleet math, done out loud before defending any box">
+  <defs>
+    <marker id="m8l7a-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <filter id="m8l7a-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m8l7a-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m8l7a-k1"><rect x="50" y="64" width="235" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l7a-k2"><rect x="317" y="64" width="255" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l7a-k3"><rect x="604" y="64" width="276" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l7a-k4"><rect x="912" y="64" width="276" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l7a-k5"><rect x="50" y="236" width="540" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l7a-k6"><rect x="650" y="236" width="540" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="640" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M285,109 L317,109" marker-end="url(#m8l7a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M572,109 L604,109" marker-end="url(#m8l7a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M880,109 L912,109" marker-end="url(#m8l7a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M590,281 L650,281" marker-end="url(#m8l7a-mslate)"/></g>
+  <g filter="url(#m8l7a-soft)">
+    <rect x="50" y="64" width="235" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="50" y="64" width="6" height="90" fill="#2563EB" clip-path="url(#m8l7a-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">2M images a day</text>
+  <text x="167.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">the stated volume</text>
+  <g filter="url(#m8l7a-soft)">
+    <rect x="317" y="64" width="255" height="90" rx="12" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.5"/>
+    <rect x="317" y="64" width="6" height="90" fill="#4F46E5" clip-path="url(#m8l7a-k2)"/>
+  </g>
+  <circle cx="355" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(344.56,98.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 6.5V12l3.5 2.5"/></g>
+  <text x="381" y="116" font-size="18.5" font-weight="600" fill="#111827">about 23.1 a second</text>
+  <text x="444.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">and traffic is spiky</text>
+  <g filter="url(#m8l7a-soft)">
+    <rect x="604" y="64" width="276" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="604" y="64" width="6" height="90" fill="#7C3AED" clip-path="url(#m8l7a-k3)"/>
+  </g>
+  <circle cx="642" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(631.56,98.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 1.5v3M15 1.5v3M9 19.5v3M15 19.5v3M1.5 9h3M1.5 15h3M19.5 9h3M19.5 15h3"/></g>
+  <text x="668" y="116" font-size="18.5" font-weight="600" fill="#111827">10 GPU-seconds each</text>
+  <text x="742" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">flagship model, full steps</text>
+  <g filter="url(#m8l7a-soft)">
+    <rect x="912" y="64" width="276" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="912" y="64" width="6" height="90" fill="#D97706" clip-path="url(#m8l7a-k4)"/>
+  </g>
+  <circle cx="950" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(939.56,98.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.5 13.2h6.2L10 22l8.5-11.2h-6.2z"/></g>
+  <text x="976" y="116" font-size="18.5" font-weight="600" fill="#111827">about 231 GPUs busy</text>
+  <text x="1050" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">at the average moment</text>
+  <g filter="url(#m8l7a-soft)">
+    <rect x="50" y="236" width="540" height="90" rx="12" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.5"/>
+    <rect x="50" y="236" width="6" height="90" fill="#DB2777" clip-path="url(#m8l7a-k5)"/>
+  </g>
+  <circle cx="88" cy="281" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,270.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="114" y="288" font-size="18.5" font-weight="600" fill="#111827">Size for measured peaks</text>
+  <text x="320" y="351" font-size="15.5" text-anchor="middle" fill="#6B7280">and you pay for the fleet that covers peaks</text>
+  <g filter="url(#m8l7a-lift)">
+    <rect x="650" y="236" width="540" height="90" rx="12" fill="#D1FAE5" stroke="#059669" stroke-width="2"/>
+    <rect x="650" y="236" width="9" height="90" fill="#059669" clip-path="url(#m8l7a-k6)"/>
+  </g>
+  <circle cx="688" cy="281" r="18" fill="#FFFFFF"/>
+  <g transform="translate(677.56,270.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4.5h12l-2.5 4 2.5 4H5"/></g>
+  <text x="714" y="288" font-size="18.5" font-weight="600" fill="#111827">500 GPUs: $24K–$48K/day</text>
+  <text x="920" y="351" font-size="15.5" text-anchor="middle" fill="#6B7280">at $2 to $4 per GPU-hour</text>
+  <rect x="40" y="392" width="1160" height="152" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="426" font-size="16" fill="#475569">This is the envelope drill performed live, and it is the move this case study is really testing.</text>
+  <rect x="64" y="452" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="474" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">What this number is</text>
+  <text x="288" y="474" font-size="15.5" fill="#475569">the design brief: every box in the diagram now has to answer to it</text>
+  <rect x="64" y="496" width="200" height="32" rx="9" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.2"/>
+  <text x="164" y="518" text-anchor="middle" font-size="15.5" font-weight="600" fill="#475569">Per-job, not per-fleet</text>
+  <text x="288" y="518" font-size="15.5" fill="#475569">steps and resolution are settings, and that one line carries the whole pricing model</text>
+</svg>

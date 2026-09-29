@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Easing curves, sampled from the browser</title>
+<style>
+  body { margin: 10px; font: 600 11px ui-monospace, monospace; color: #1f2937; display: flex; flex-wrap: wrap; gap: 12px; }
+  figure { margin: 0; text-align: center; color: #7c3aed; }
+  svg { width: 130px; height: 130px; background: #f8fafc; border: 1px solid #cbd5e1; display: block; }
+</style>
+</head>
+<body>
+<script>
+  // For each easing, animate a dummy element's width 0 -> 1000px with the Web Animations API, pause it at
+  // 101 moments and read the computed width back: the curve drawn IS the browser's timing function.
+  const easings = ['linear', 'ease', 'ease-in', 'ease-out', 'ease-in-out', 'cubic-bezier(.34, 1.56, .64, 1)',
+                   'steps(4)', 'steps(4, jump-start)', 'linear(0, 0.36 30%, 1 45%, 0.8 55%, 1 65%, 0.95 75%, 1)'];
+  const probe = document.body.appendChild(document.createElement('div'));
+  probe.style.position = 'absolute';                      // out of the flex layout, so its width is never squeezed
+  for (const easing of easings) {
+    // a length, not opacity, so values above 100% (overshoot) are not clamped
+    const anim = probe.animate([{ width: '0px' }, { width: '1000px' }], { duration: 1000, easing, fill: 'both' });   // fill: keep the end value at t = 1000
+    anim.pause();
+    const pts = [];
+    for (let i = 0; i <= 100; i++) { anim.currentTime = i * 10; pts.push([i, parseFloat(getComputedStyle(probe).width) / 10]); }
+    anim.cancel();
+    const X = x => 10 + x * 1.1, Y = y => 120 - y * 0.9;     // plot area: progress -10%…120%
+    const path = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${X(x).toFixed(1)},${Y(y).toFixed(1)}`).join(' ');
+    document.body.insertAdjacentHTML('beforeend', `<figure><svg viewBox="0 0 130 130">
+      <line x1="10" y1="120" x2="120" y2="120" stroke="#94a3b8"/><line x1="10" y1="120" x2="10" y2="10" stroke="#94a3b8"/>
+      <line x1="10" y1="30" x2="120" y2="30" stroke="#cbd5e1" stroke-dasharray="3 3"/>
+      <path d="${path}" fill="none" stroke="#2563eb" stroke-width="2.5"/></svg>
+      <figcaption>${easing.length > 22 ? easing.split('(')[0] + '(…)' : easing}</figcaption></figure>`);
+  }
+  probe.remove();
+</script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="560" viewBox="0 0 1240 560" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="A click is instant; the conversion it may cause is not">
+  <defs>
+
+    <filter id="m3l4c-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m3l4c-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+
+  </defs>
+  <rect x="0" y="0" width="1240" height="560" fill="#FFFFFF"/>
+  <g stroke="#94A3B8" stroke-width="1.5" fill="none"><path d="M120,200 H1160"/></g>
+
+  <circle cx="220" cy="200" r="8" fill="#2563EB"/><circle cx="900" cy="200" r="8" fill="#7C3AED"/>
+  <text x="220" y="112" font-size="15.5" font-weight="600" text-anchor="middle" fill="#1D4ED8">seconds</text>
+  <text x="220" y="156" font-size="18.5" font-weight="600" text-anchor="middle" fill="#111827">Click</text>
+  <text x="220" y="244" font-size="15.5" text-anchor="middle" fill="#6B7280">label arrives at once</text>
+  <text x="900" y="112" font-size="15.5" font-weight="600" text-anchor="middle" fill="#5B21B6">days later</text>
+  <text x="900" y="156" font-size="18.5" font-weight="600" text-anchor="middle" fill="#111827">Conversion</text>
+  <text x="900" y="244" font-size="15.5" text-anchor="middle" fill="#6B7280">if it ever arrives at all</text>
+  <text x="560" y="244" font-size="15.5" font-weight="600" text-anchor="middle" fill="#BE185D">the conversion outcome may still be unresolved</text>
+  <rect x="40" y="310" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="344" font-size="16" fill="#475569">Treating unresolved examples as final negatives can underestimate conversion rates.</text>
+  <rect x="64" y="370" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="392" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">Wait-windows</text>
+  <text x="288" y="392" font-size="15.5" fill="#475569">train on mature outcomes within a defined window</text>
+  <rect x="64" y="414" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="436" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">Importance weighting</text>
+  <text x="288" y="436" font-size="15.5" fill="#475569">estimate delay effects; validate the weights</text>
+  <rect x="64" y="458" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="480" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">Two-stage modelling</text>
+  <text x="288" y="480" font-size="15.5" fill="#475569">separate predictions still need delay correction</text>
+</svg>

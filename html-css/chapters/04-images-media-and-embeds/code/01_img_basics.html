@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>img basics</title>
+  <style>
+    body { font: 15px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    .row { display: flex; gap: 16px; align-items: flex-start; }
+    img { max-width: 100%; height: auto; border: 1px solid #ccc; }  /* responsive-image basics */
+    figure { margin: 0; flex: 1; }
+    figcaption { font-size: 13px; color: #555; }
+    .broken { width: 200px; height: 120px; }
+  </style>
+</head>
+<body>
+  <h3>1. A content image with alt, width and height</h3>
+  <div class="row">
+    <figure>
+      <img src="media/hills-800.jpg" alt="Two green hills under a blue sky with a yellow sun"
+           width="800" height="533">
+      <figcaption>Figure 1 — JPEG, 800x533. width/height reserve the space before it loads.</figcaption>
+    </figure>
+    <figure>
+      <img src="media/logo.png" alt="HC" width="80" height="80">
+      <img src="media/logo.svg" alt="" width="80" height="80">
+      <figcaption>PNG with transparency (alt="HC") and the same logo as SVG (alt="" because it repeats the PNG next to it).</figcaption>
+    </figure>
+  </div>
+
+  <h3>2. What the user sees when the file is missing</h3>
+  <div class="row">
+    <figure><img class="broken" src="media/does-not-exist.jpg" alt="Sales chart: revenue up 12% in Q3" width="200" height="120">
+      <figcaption>Good alt: the message survives.</figcaption></figure>
+    <figure><img class="broken" src="media/does-not-exist.jpg" alt="image123.jpg" width="200" height="120">
+      <figcaption>Bad alt: tells the user nothing.</figcaption></figure>
+    <figure><img class="broken" src="media/does-not-exist.jpg" width="200" height="120">
+      <figcaption>No alt at all: screen readers may read the file name.</figcaption></figure>
+  </div>
+</body>
+</html>

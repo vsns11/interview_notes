@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Audio and video</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    .row { display: flex; gap: 16px; align-items: flex-start; }
+    video { width: 400px; height: auto; background: #000; }
+    figure { margin: 0; }
+    figcaption { font-size: 13px; color: #555; }
+  </style>
+</head>
+<body>
+  <h3>&lt;audio&gt; with controls and a fallback</h3>
+  <audio controls preload="metadata">
+    <source src="media/tone.wav" type="audio/wav">
+    <p>Your browser cannot play this audio. <a href="media/tone.wav">Download the WAV</a>.</p>
+  </audio>
+
+  <h3>&lt;video&gt; with poster, source list and captions</h3>
+  <div class="row">
+    <figure>
+      <video controls preload="none" poster="media/poster.jpg" width="640" height="360">
+        <source src="media/clip.webm" type="video/webm">
+        <track kind="captions" src="media/captions.vtt" srclang="en" label="English" default>
+        <p>Your browser cannot play this video. <a href="media/clip.webm">Download it</a>.</p>
+      </video>
+      <figcaption>Before playback: the poster image is shown.</figcaption>
+    </figure>
+    <figure>
+      <video id="seeked" controls muted width="640" height="360">
+        <source src="media/clip.webm" type="video/webm">
+      </video>
+      <figcaption>Seeked to 2.0 s by JS; the caption cue was added with the TextTrack API.</figcaption>
+    </figure>
+  </div>
+  <script>
+    // Browsers refuse to load <track> files on file:// pages (tracks must be same-origin),
+    // so for this local demo we create the same cues in JS. Over http(s) the <track> above works.
+    const v = document.getElementById('seeked');
+    const track = v.addTextTrack('captions', 'English', 'en');
+    track.addCue(new VTTCue(0, 1.4, 'The sun rises on the left.'));
+    track.addCue(new VTTCue(1.4, 3.0, '[soft wind] It drifts to the right.'));
+    track.mode = 'showing';
+    v.addEventListener('loadedmetadata', () => { v.currentTime = 2.0; });
+  </script>
+</body>
+</html>

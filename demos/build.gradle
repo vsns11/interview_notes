@@ -1,0 +1,148 @@
+/*
+ * Microservices Design Patterns — runnable demos (Groovy DSL).
+ *
+ * Layout:
+ *   chapters/02-strangler-fig/          ── source set "ch02"
+ *   chapters/03-api-gateway/            ── source set "ch03"
+ *   ...
+ *   chapters/13-config-externalization/ ── source set "ch13"
+ *
+ * Each chapter gets:
+ *   - its own source set (default-package classes never collide)
+ *   - its own compile task (compileCh02Java, ...)
+ *   - its own JavaExec task with the main class already wired:
+ *         ./gradlew runCh06
+ *
+ * Aggregate tasks:
+ *   - ./gradlew compileAll   compile every chapter
+ *   - ./gradlew runAll       run every demo in chapter order
+ *   - ./gradlew listDemos    list chapters, classes and what each shows
+ *
+ * Notes for each pattern live in ../microservices-patterns/NN-name.md
+ */
+
+plugins {
+    id 'java'
+}
+
+group = 'com.study.microservices'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+// ---------------------------------------------------------------------------
+// The demos deliberately use only the JDK — no Resilience4j, no Spring, no
+// Kafka. Each pattern's notes have a "Production" section showing the real
+// library configuration; these programs exist to make the mechanism visible.
+//
+// Java 17 is the floor (records, sealed interfaces, switch patterns).
+// ---------------------------------------------------------------------------
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:all', '-Xlint:-serial', '-Xlint:-this-escape']
+}
+
+// ---------------------------------------------------------------------------
+// Per-chapter wiring: source-set id -> [folder, main class, one-line summary]
+// ---------------------------------------------------------------------------
+ext.chapters = [
+    ch02: ['02-strangler-fig',            'StranglerFigDemo',
+           'Consistent per-user routing; instant rollback by feature flag'],
+    ch03: ['03-api-gateway',              'ApiGatewayDemo',
+           'Sequential vs parallel aggregation (279ms -> 129ms)'],
+    ch04: ['04-bff',                      'BffDemo',
+           'Over-fetching: mobile receives 7% of the shared payload'],
+    ch05: ['05-service-discovery',        'ServiceDiscoveryDemo',
+           'Heartbeat eviction; cached clients survive a registry outage'],
+    ch06: ['06-circuit-breaker',          'CircuitBreakerDemo',
+           'CLOSED/OPEN/HALF_OPEN; zero real calls while OPEN'],
+    ch07: ['07-bulkhead',                 'BulkheadDemo',
+           'Thread starvation: shipping 0/5 shared vs 5/5 bulkheaded'],
+    ch08: ['08-retry',                    'RetryDemo',
+           'Thundering herd: 1000/1000 in one bucket vs ~208 with jitter'],
+    ch09: ['09-sidecar',                  'SidecarDemo',
+           'Retry and mTLS outside the app; the resource multiplier'],
+    ch10: ['10-saga',                     'SagaDemo',
+           'Reverse-order compensation; ledger proves it is not a rollback'],
+    ch11: ['11-event-driven',             'EventDrivenDemo',
+           'Producer blocked 114ms -> 0ms; new consumer, producer untouched'],
+    ch12: ['12-cqrs',                     'CqrsDemo',
+           'The consistency window; rebuilding a read model by replay'],
+    ch13: ['13-config-externalization',   'ConfigExternalizationDemo',
+           'Refresh without restart; cache survives a config server outage'],
+]
+
+// Groovy 4 removed String#capitalize()
+def cap = { String s -> s ? s[0].toUpperCase() + s.substring(1) : s }
+
+sourceSets {
+    chapters.each { id, spec ->
+        create(id) {
+            java {
+                srcDirs = ["chapters/${spec[0]}"]
+                include '**/*.java'
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// One run task per chapter. The main class is already known, so there is
+// nothing to pass:   ./gradlew runCh06
+// ---------------------------------------------------------------------------
+chapters.each { id, spec ->
+    def (folder, mainClassName, summary) = spec
+    def ss = sourceSets[id]
+
+    tasks.register("run${cap(id)}", JavaExec) {
+        group = 'demos'
+        description = "${folder}: ${summary}"
+        classpath = ss.runtimeClasspath
+        mainClass = mainClassName
+        standardInput = System.in
+        dependsOn "compile${cap(id)}Java"
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Aggregate tasks
+// ---------------------------------------------------------------------------
+tasks.register('compileAll') {
+    group = 'demos'
+    description = 'Compile every chapter'
+    dependsOn chapters.keySet().collect { "compile${cap(it)}Java" }
+}
+
+tasks.register('runAll') {
+    group = 'demos'
+    description = 'Run every demo, in chapter order'
+    dependsOn chapters.keySet().sort().collect { "run${cap(it)}" }
+}
+
+tasks.register('listDemos') {
+    group = 'demos'
+    description = 'List every chapter, its main class and what it demonstrates'
+    doLast {
+        println ''
+        println 'Microservices Design Patterns — runnable demos'
+        println '─'.multiply(78)
+        chapters.sort().each { id, spec ->
+            def (folder, mainClassName, summary) = spec
+            println String.format('  %-8s %-28s %s', "./gradlew run${cap(id)}", mainClassName, '')
+            println String.format('  %-8s %-28s %s', '', "chapters/${folder}", '')
+            println "           ${summary}"
+            println ''
+        }
+        println 'Notes for each pattern: ../microservices-patterns/NN-name.md'
+        println ''
+    }
+}

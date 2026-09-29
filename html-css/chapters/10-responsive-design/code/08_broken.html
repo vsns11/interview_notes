@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Three classic mobile overflow bugs</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 12px; }
+  .promo { width: 500px; background: #fee2e2; padding: 8px; }          /* bug 1: fixed width */
+  /* bug 2: an image with no max-width (see the <img> below) */
+  /* bug 3: a long unbreakable string; fix with overflow-wrap: anywhere */
+</style>
+</head>
+<body>
+<div class="promo">Summer sale: 20% off all tents.</div>
+<img src="media/hills-800.jpg" width="480" height="240" alt="Hills">
+<p>Docs: https://example.com/a/really/long/path/that/never/breaks/because/it/has/no/spaces</p>
+</body>
+</html>

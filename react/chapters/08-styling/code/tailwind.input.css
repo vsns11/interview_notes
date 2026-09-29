@@ -1,0 +1,3 @@
+/* Tailwind v4 entry file: one import; the CLI/Vite plugin scans your source files for class names. */
+@import "tailwindcss";
+@source "./cards.jsx";

@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="486" viewBox="0 0 1240 486" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="The four feature groups and the compute path each one needs">
+  <defs>
+
+    <filter id="m2l2a-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m2l2a-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m2l2a-k1"><rect x="50" y="64" width="173" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l2a-k2"><rect x="308" y="64" width="327" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l2a-k3"><rect x="720" y="64" width="214" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l2a-k4"><rect x="1019" y="64" width="170" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="486" fill="#FFFFFF"/>
+
+
+  <g filter="url(#m2l2a-soft)">
+    <rect x="50" y="64" width="173" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="50" y="64" width="6" height="90" fill="#D97706" clip-path="url(#m2l2a-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">1. Entity</text>
+  <text x="136.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">restaurant's average prep time</text>
+  <text x="136.5" y="202" font-size="15.5" text-anchor="middle" fill="#94A3B8">nightly batch</text>
+  <g filter="url(#m2l2a-lift)">
+    <rect x="308" y="64" width="327" height="90" rx="12" fill="#E0E7FF" stroke="#4F46E5" stroke-width="2"/>
+    <rect x="308" y="64" width="9" height="90" fill="#4F46E5" clip-path="url(#m2l2a-k2)"/>
+  </g>
+  <circle cx="346" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(335.56,98.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 6.5V12l3.5 2.5"/></g>
+  <text x="372" y="116" font-size="18.5" font-weight="600" fill="#111827">2. Behavioral aggregates</text>
+  <text x="471.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">orders in the last 30 minutes</text>
+  <text x="471.5" y="202" font-size="15.5" text-anchor="middle" fill="#94A3B8">streaming, seconds</text>
+  <g filter="url(#m2l2a-soft)">
+    <rect x="720" y="64" width="214" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="720" y="64" width="6" height="90" fill="#2563EB" clip-path="url(#m2l2a-k3)"/>
+  </g>
+  <circle cx="758" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(747.56,98.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></g>
+  <text x="784" y="116" font-size="18.5" font-weight="600" fill="#111827">3. Contextual</text>
+  <text x="827" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">time of day, weather, distance</text>
+  <text x="827" y="202" font-size="15.5" text-anchor="middle" fill="#94A3B8">computed at request time</text>
+  <g filter="url(#m2l2a-soft)">
+    <rect x="1019" y="64" width="170" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="1019" y="64" width="6" height="90" fill="#D97706" clip-path="url(#m2l2a-k4)"/>
+  </g>
+  <circle cx="1057" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(1046.56,98.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="5" r="2.2"/><circle cx="7" cy="19" r="2.2"/><circle cx="17" cy="12" r="2.2"/><path d="M7 7.2v9.6M9.2 12H14.8"/></g>
+  <text x="1083" y="116" font-size="18.5" font-weight="600" fill="#111827">4. Cross</text>
+  <text x="1104" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">this courier at this restaurant</text>
+  <text x="1104" y="202" font-size="15.5" text-anchor="middle" fill="#94A3B8">nightly batch</text>
+  <rect x="40" y="250" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="284" font-size="16" fill="#475569">Choose computation paths using each feature's source, freshness, and cost.</text>
+  <rect x="64" y="310" width="200" height="32" rx="9" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.2"/>
+  <text x="164" y="332" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">Nightly batch</text>
+  <text x="288" y="332" font-size="15.5" fill="#475569">slow properties, computed ahead of time for every entity</text>
+  <rect x="64" y="354" width="200" height="32" rx="9" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.2"/>
+  <text x="164" y="376" text-anchor="middle" font-size="15.5" font-weight="600" fill="#4338CA">Streaming</text>
+  <text x="288" y="376" font-size="15.5" fill="#475569">windowed aggregates that update within seconds</text>
+  <rect x="64" y="398" width="200" height="32" rx="9" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.2"/>
+  <text x="164" y="420" text-anchor="middle" font-size="15.5" font-weight="600" fill="#1D4ED8">At request time</text>
+  <text x="288" y="420" font-size="15.5" fill="#475569">only knowable at the moment the request arrives</text>
+</svg>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<title>Theming with tokens and light-dark()</title>
+<script>
+  /* Runs BEFORE first paint (blocking, in <head>) so a saved choice never flashes the wrong theme */
+  try { const t = localStorage.getItem('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}
+</script>
+<style>
+  @layer tokens, base, components;
+
+  @layer tokens {
+    :root {
+      /* 1. Primitive tokens: the raw palette (never used directly by components) */
+      --blue-600: #2563eb;  --blue-300: #93c5fd;
+      --slate-50: #f8fafc;  --slate-200: #e2e8f0; --slate-700: #334155; --slate-900: #0f172a; --slate-800: #1e293b;
+
+      /* 2. Semantic tokens: meaning, with a light AND dark value each */
+      color-scheme: light dark;                          /* follow the OS by default */
+      --color-bg:      light-dark(var(--slate-50), var(--slate-900));
+      --color-surface: light-dark(#fff, var(--slate-800));
+      --color-text:    light-dark(var(--slate-900), var(--slate-200));
+      --color-muted:   light-dark(var(--slate-700), #94a3b8);
+      --color-accent:  light-dark(var(--blue-600), var(--blue-300));
+      --color-border:  light-dark(var(--slate-200), var(--slate-700));
+      --radius: 10px;
+    }
+    /* 3. The user's explicit choice overrides the OS: just pin color-scheme */
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"]  { color-scheme: dark; }
+    /* 4. A second axis: brand themes only swap the accent */
+    [data-brand="green"] { --color-accent: light-dark(#15803d, #86efac); }
+  }
+
+  @layer base {
+    body { margin: 0; padding: 16px; font: 15px/1.5 system-ui, sans-serif; background: var(--color-bg); color: var(--color-text); }
+  }
+  @layer components {
+    .card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); padding: 14px; max-width: 360px; margin-bottom: 12px; }
+    .card p { color: var(--color-muted); margin: 4px 0 10px; }
+    .card a { color: var(--color-accent); }
+    .btn { background: var(--color-accent); color: var(--color-surface); border: 0; border-radius: 8px; padding: 6px 12px; font: inherit; }
+  }
+</style>
+<body>
+  <div class="card" id="card">
+    <strong>Account</strong>
+    <p>Semantic tokens decide every colour on this card.</p>
+    <a href="#" id="link">Manage plan</a> <button class="btn" id="btn">Upgrade</button>
+    <p><label>Theme <select id="theme"><option value="system">System</option><option>light</option><option>dark</option></select></label></p>
+  </div>
+  <div class="card" data-brand="green" id="card2">
+    <strong>Green brand</strong><p>Same components, one token overridden.</p>
+    <a href="#" id="link2">Link</a> <button class="btn">Button</button>
+  </div>
+  <script>
+    const sel = document.getElementById('theme');
+    sel.value = document.documentElement.dataset.theme ?? 'system';
+    sel.addEventListener('change', () => {
+      const v = sel.value, root = document.documentElement;
+      if (v === 'system') delete root.dataset.theme; else root.dataset.theme = v;
+      try { v === 'system' ? localStorage.removeItem('theme') : localStorage.setItem('theme', v); } catch {}
+    });
+  </script>
+</body>
+</html>

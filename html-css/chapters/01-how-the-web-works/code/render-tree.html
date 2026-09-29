@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>display vs visibility vs opacity</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1.5rem; }
+  .row { display: flex; gap: .5rem; align-items: center; margin-bottom: 1rem; }
+  .row > span { font: 600 14px ui-monospace, monospace; width: 170px; }
+  .box { width: 90px; height: 50px; background: #3b82f6; color: white; display: grid; place-items: center; border-radius: 6px; }
+  .none  { display: none; }
+  .ghost { visibility: hidden; }
+  .faded { opacity: 0; }
+  .track { outline: 2px dashed #94a3b8; display: flex; gap: .5rem; padding: .5rem; }
+</style>
+</head>
+<body>
+  <div class="row"><span>all visible</span>        <div class="track"><div class="box">A</div><div class="box">B</div><div class="box">C</div></div></div>
+  <div class="row"><span>B: display:none</span>    <div class="track"><div class="box">A</div><div class="box none">B</div><div class="box">C</div></div></div>
+  <div class="row"><span>B: visibility:hidden</span><div class="track"><div class="box">A</div><div class="box ghost">B</div><div class="box">C</div></div></div>
+  <div class="row"><span>B: opacity:0</span>       <div class="track"><div class="box">A</div><div class="box faded">B</div><div class="box">C</div></div></div>
+</body>
+</html>

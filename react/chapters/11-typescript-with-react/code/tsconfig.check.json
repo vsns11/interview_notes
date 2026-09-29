@@ -1,0 +1,22 @@
+{
+  // Type-checks this folder's .tsx files:  ../../../../.web-books/node_modules/.bin/tsc --noEmit -p tsconfig.check.json
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": [],
+    // Book-specific: packages live in ROOT/.web-books, so bare imports are mapped there. (Named
+    // tsconfig.check.json, not tsconfig.json, so the esbuild-based runner does not pick up this mapping.)
+    "paths": {
+      "*": ["../../../../.web-books/node_modules/@types/*", "../../../../.web-books/node_modules/*"]
+    }
+  },
+  "include": ["*.tsx", "*.ts"],
+  "exclude": ["bad_*.tsx"]
+}

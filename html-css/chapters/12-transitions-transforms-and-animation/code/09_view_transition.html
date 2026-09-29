@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Same-document view transition: grid to list</title>
+<style>
+  body { margin: 10px; font: 14px/1.3 system-ui, sans-serif; color: #1f2937; }
+  button { font: inherit; padding: 6px 12px; margin-bottom: 10px; }
+  .items { display: grid; grid-template-columns: repeat(3, 100px); gap: 10px; }
+  .items.list { grid-template-columns: 330px; gap: 6px; }
+  .item { border-radius: 8px; padding: 10px; color: #fff; font-weight: 700; height: 70px; box-sizing: border-box; }
+  .items.list .item { height: 36px; padding: 8px 10px; }
+  .item:nth-child(1) { background: #2563eb; view-transition-name: item-1; }
+  .item:nth-child(2) { background: #16a34a; view-transition-name: item-2; }
+  .item:nth-child(3) { background: #ea580c; view-transition-name: item-3; }
+  .item { view-transition-class: item; }            /* one selector for all three groups (Baseline Oct 2025) */
+
+  /* Slow the default morph down and give it an easing (the default is 250ms ease) */
+  ::view-transition-group(*.item) { animation-duration: 500ms; animation-timing-function: ease-in-out; }
+  /* The old and new snapshots have different aspect ratios (70px tall box vs 36px row). By default each keeps
+     its own ratio at the group's width, so mid-way they overflow and blur. Stretch both to the group instead: */
+  ::view-transition-old(*.item), ::view-transition-new(*.item) { height: 100%; }
+  /* Users who asked for less motion get no morph at all */
+  @media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
+</style>
+</head>
+<body>
+<button id="toggle">Grid / list</button>
+<div class="items"><div class="item">One</div><div class="item">Two</div><div class="item">Three</div></div>
+<script>
+  const items = document.querySelector('.items');
+  const update = () => items.classList.toggle('list');     // the actual DOM change
+  toggle.addEventListener('click', () => {
+    if (!document.startViewTransition) return update();     // unsupported browser: change instantly
+    document.startViewTransition(update);                   // snapshot, update, animate old -> new
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Alt text</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1rem; display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+  figure, .card { margin: 0; border: 1px solid #cbd5e1; border-radius: 8px; padding: .6rem; }
+  code { font-size: .8rem; background: #f1f5f9; display: block; margin-top: .4rem; padding: .3rem; white-space: pre-wrap; }
+  h2 { font-size: .95rem; margin: 0 0 .4rem; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2>Informative</h2>
+    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='90'%3E%3Crect width='220' height='90' fill='%23bae6fd'/%3E%3Cpath d='M0 90 L70 25 L120 70 L160 40 L220 90Z' fill='%2364748b'/%3E%3Ccircle cx='185' cy='22' r='12' fill='%23facc15'/%3E%3C/svg%3E"
+         alt="Rocky ridge trail under a clear sky, late afternoon" width="220" height="90">
+    <code>alt="Rocky ridge trail under a clear sky, late afternoon"</code>
+  </div>
+  <div class="card">
+    <h2>Decorative</h2>
+    <p><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='12'%3E%3Cpath d='M0 6 Q15 0 30 6 T60 6 T90 6 T120 6' stroke='%2394a3b8' fill='none' stroke-width='2'/%3E%3C/svg%3E" alt="" width="120" height="12"></p>
+    <code>alt=""   (empty: screen readers skip it)</code>
+  </div>
+  <div class="card">
+    <h2>Functional (image is the link)</h2>
+    <a href="/"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='40'%3E%3Crect width='120' height='40' rx='6' fill='%231e3a8a'/%3E%3Ctext x='60' y='26' font-family='sans-serif' font-size='14' fill='white' text-anchor='middle'%3EMountain%3C/text%3E%3C/svg%3E" alt="Mountain Club home" width="120" height="40"></a>
+    <code>alt="Mountain Club home"   (where it goes, not "logo")</code>
+  </div>
+  <figure>
+    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='80'%3E%3Crect x='10' y='50' width='40' height='30' fill='%2393c5fd'/%3E%3Crect x='60' y='30' width='40' height='50' fill='%2393c5fd'/%3E%3Crect x='110' y='10' width='40' height='70' fill='%232563eb'/%3E%3Crect x='160' y='40' width='40' height='40' fill='%2393c5fd'/%3E%3C/svg%3E"
+         alt="Bar chart of club members per season" width="220" height="80">
+    <figcaption>Complex image: members per season — winter 30, spring 50, summer 70 (peak), autumn 40.</figcaption>
+    <code>short alt + the data in text</code>
+  </figure>
+</body>
+</html>

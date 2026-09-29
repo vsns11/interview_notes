@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Flexbox alignment</title>
+<style>
+  body { font: 12px/1.2 system-ui, sans-serif; margin: 12px; color: #222; width: 880px; }
+  h2 { font-size: 13px; margin: 10px 0 4px; }
+  code, .lbl { font: 11px ui-monospace, monospace; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 16px; }
+  .f { display: flex; border: 2px dashed #9333ea; background: #faf5ff; }
+  .f > div { background: rgba(59,130,246,.35); outline: 1px solid #1d4ed8; outline-offset: -1px;
+             padding: 4px 8px; font-weight: 700; }
+  .jc > div { width: 40px; text-align: center; padding: 4px 0; }
+  .ai { height: 90px; }
+  .ai > div:nth-child(1) { font-size: 12px; }
+  .ai > div:nth-child(2) { font-size: 22px; padding-top: 14px; }
+  .ai > div:nth-child(3) { font-size: 16px; }
+  /* align-content: several wrapped lines inside a tall container */
+  .ac { flex-wrap: wrap; height: 110px; }
+  .ac > div { width: 56px; }                       /* 3 fit per line, so 5 items make 2 lines */
+</style>
+</head>
+<body>
+<h2>justify-content — distributes free space along the MAIN axis</h2>
+<div class="grid">
+  <div><code>flex-start</code>   <div class="f jc" style="justify-content:flex-start"><div>1</div><div>2</div><div>3</div></div></div>
+  <div><code>center</code>       <div class="f jc" style="justify-content:center"><div>1</div><div>2</div><div>3</div></div></div>
+  <div><code>flex-end</code>     <div class="f jc" style="justify-content:flex-end"><div>1</div><div>2</div><div>3</div></div></div>
+  <div><code>space-between</code><div class="f jc" style="justify-content:space-between"><div>1</div><div>2</div><div>3</div></div></div>
+  <div><code>space-around</code> <div class="f jc" style="justify-content:space-around"><div>1</div><div>2</div><div>3</div></div></div>
+  <div><code>space-evenly</code> <div class="f jc" style="justify-content:space-evenly"><div>1</div><div>2</div><div>3</div></div></div>
+</div>
+
+<h2>align-items — positions items on the CROSS axis within their line</h2>
+<div class="grid">
+  <div><code>stretch (default)</code><div class="f ai" style="align-items:stretch"><div>Ag</div><div>Ag</div><div>Ag</div></div></div>
+  <div><code>flex-start</code><div class="f ai" style="align-items:flex-start"><div>Ag</div><div>Ag</div><div>Ag</div></div></div>
+  <div><code>center</code><div class="f ai" style="align-items:center"><div>Ag</div><div>Ag</div><div>Ag</div></div></div>
+  <div><code>flex-end</code><div class="f ai" style="align-items:flex-end"><div>Ag</div><div>Ag</div><div>Ag</div></div></div>
+  <div><code>baseline</code> — text bottoms line up<div class="f ai" style="align-items:baseline"><div>Ag</div><div>Ag</div><div>Ag</div></div></div>
+  <div><code>center + align-self / margin auto</code>
+    <div class="f" style="align-items:center; height:90px">
+      <div>Ag</div><div style="align-self:flex-start">align-self: flex-start</div><div style="margin-left:auto">margin-left: auto</div></div></div>
+</div>
+
+<h2>align-content — distributes the LINES of a wrapping container on the cross axis</h2>
+<div class="grid" style="grid-template-columns:repeat(4, 1fr)">
+  <div><code>normal (≈ stretch)</code><div class="f ac"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div></div></div>
+  <div><code>flex-start</code><div class="f ac" style="align-content:flex-start"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div></div></div>
+  <div><code>center</code><div class="f ac" style="align-content:center"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div></div></div>
+  <div><code>space-between</code><div class="f ac" style="align-content:space-between"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div></div></div>
+</div>
+</body>
+</html>

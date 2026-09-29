@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filters, blend modes, clip-path and masks</title>
+<style>
+  body { margin: 12px; font: 14px/1.4 system-ui, sans-serif; color: #1f2937; }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px 10px; }
+  figure { margin: 0; }
+  figcaption { font: 600 10.5px/1.3 ui-monospace, monospace; color: #7c3aed; margin-top: 4px; }
+  img { width: 100%; aspect-ratio: 2 / 1; object-fit: cover; display: block; border-radius: 6px; }
+
+  /* filter: applied to the element itself (and its children) */
+  .blur { filter: blur(3px); }                 .bright { filter: brightness(1.4); }
+  .contrast { filter: contrast(1.8); }         .gray { filter: grayscale(1); }
+  .hue { filter: hue-rotate(120deg); }         .invert { filter: invert(1); }
+  .sat { filter: saturate(3); }                .sepia { filter: sepia(1); }
+  .chain { filter: grayscale(1) contrast(1.4) brightness(1.1); }
+
+  /* backdrop-filter: blurs what is BEHIND a translucent element ("frosted glass") */
+  .stage { position: relative; }
+  .glass { position: absolute; inset: 20% 12%; border-radius: 8px; display: grid; place-items: center;
+           background: rgb(255 255 255 / .3); backdrop-filter: blur(6px) saturate(1.4); font-weight: 700; }
+
+  /* mix-blend-mode: how an element's pixels combine with what is under it */
+  .blend { position: absolute; inset: 0; display: grid; place-items: center; font: 900 30px system-ui; }
+  .multiply { mix-blend-mode: multiply; color: #ef4444; }
+  .screen   { mix-blend-mode: screen;   color: #ef4444; }
+  .difference { mix-blend-mode: difference; color: #fff; }
+  /* background-blend-mode: blends an element's OWN background layers */
+  .duotone { aspect-ratio: 2 / 1; border-radius: 6px;
+             background: url("media/hills-800.jpg") center / cover, #7c3aed; background-blend-mode: luminosity; }
+
+  /* clip-path and mask: hide parts of an element */
+  .clip-circle { clip-path: circle(40% at 50% 50%); }
+  .clip-poly   { clip-path: polygon(0 0, 100% 0, 100% 75%, 0 100%); }
+  .mask-fade   { mask-image: linear-gradient(to right, #000 40%, transparent); }
+</style>
+</head>
+<body>
+<div class="grid">
+  <figure><img src="media/hills-800.jpg" alt=""><figcaption>original</figcaption></figure>
+  <figure><img class="blur" src="media/hills-800.jpg" alt=""><figcaption>blur(3px)</figcaption></figure>
+  <figure><img class="bright" src="media/hills-800.jpg" alt=""><figcaption>brightness(1.4)</figcaption></figure>
+  <figure><img class="contrast" src="media/hills-800.jpg" alt=""><figcaption>contrast(1.8)</figcaption></figure>
+  <figure><img class="gray" src="media/hills-800.jpg" alt=""><figcaption>grayscale(1)</figcaption></figure>
+  <figure><img class="hue" src="media/hills-800.jpg" alt=""><figcaption>hue-rotate(120deg)</figcaption></figure>
+  <figure><img class="invert" src="media/hills-800.jpg" alt=""><figcaption>invert(1)</figcaption></figure>
+  <figure><img class="sat" src="media/hills-800.jpg" alt=""><figcaption>saturate(3)</figcaption></figure>
+  <figure><img class="sepia" src="media/hills-800.jpg" alt=""><figcaption>sepia(1)</figcaption></figure>
+  <figure><img class="chain" src="media/hills-800.jpg" alt=""><figcaption>grayscale contrast brightness</figcaption></figure>
+
+  <figure><div class="stage"><img src="media/hills-800.jpg" alt=""><div class="glass">Glass</div></div><figcaption>backdrop-filter: blur(6px)</figcaption></figure>
+  <figure><div class="stage"><img src="media/hills-800.jpg" alt=""><div class="blend multiply">HILLS</div></div><figcaption>mix-blend-mode: multiply</figcaption></figure>
+  <figure><div class="stage"><img src="media/hills-800.jpg" alt=""><div class="blend screen">HILLS</div></div><figcaption>mix-blend-mode: screen</figcaption></figure>
+  <figure><div class="stage"><img src="media/hills-800.jpg" alt=""><div class="blend difference">HILLS</div></div><figcaption>mix-blend-mode: difference</figcaption></figure>
+  <figure><div class="duotone"></div><figcaption>background-blend-mode: luminosity</figcaption></figure>
+
+  <figure><img class="clip-circle" src="media/hills-800.jpg" alt=""><figcaption>clip-path: circle(40%)</figcaption></figure>
+  <figure><img class="clip-poly" src="media/hills-800.jpg" alt=""><figcaption>clip-path: polygon(…)</figcaption></figure>
+  <figure><img class="mask-fade" src="media/hills-800.jpg" alt=""><figcaption>mask-image: gradient fade</figcaption></figure>
+</div>
+</body>
+</html>

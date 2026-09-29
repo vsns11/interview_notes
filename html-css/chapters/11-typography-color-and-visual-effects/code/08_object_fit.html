@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>object-fit and object-position</title>
+<style>
+  body { margin: 12px; font: 14px/1.4 system-ui, sans-serif; color: #1f2937; }
+  .row { display: flex; flex-wrap: wrap; gap: 14px; }
+  figure { margin: 0; }
+  figcaption { font: 600 11px/1.3 ui-monospace, monospace; color: #7c3aed; margin-top: 4px; }
+  /* Every box is 150×150; the photo is 800×533 (3:2) */
+  img { width: 150px; height: 150px; background: repeating-conic-gradient(#e5e7eb 0 25%, #fff 0 50%) 0 0 / 16px 16px;
+        outline: 2px dashed #9333ea; outline-offset: -1px; }
+  .fill { object-fit: fill; }         .contain { object-fit: contain; }   .cover { object-fit: cover; }
+  .none { object-fit: none; }         .down { object-fit: scale-down; }
+  .cover-left { object-fit: cover; object-position: left center; }
+  .cover-right { object-fit: cover; object-position: 90% 50%; }
+</style>
+</head>
+<body>
+<div class="row">
+  <figure><img class="fill" src="media/hills-800.jpg" alt=""><figcaption>fill (default): stretched</figcaption></figure>
+  <figure><img class="contain" src="media/hills-800.jpg" alt=""><figcaption>contain: letterboxed</figcaption></figure>
+  <figure><img class="cover" src="media/hills-800.jpg" alt=""><figcaption>cover: cropped</figcaption></figure>
+  <figure><img class="none" src="media/hills-800.jpg" alt=""><figcaption>none: natural size</figcaption></figure>
+  <figure><img class="down" src="media/hills-800.jpg" alt=""><figcaption>scale-down</figcaption></figure>
+  <figure><img class="cover-left" src="media/hills-800.jpg" alt=""><figcaption>cover + position: left</figcaption></figure>
+  <figure><img class="cover-right" src="media/hills-800.jpg" alt=""><figcaption>cover + position: 90% 50%</figcaption></figure>
+</div>
+</body>
+</html>

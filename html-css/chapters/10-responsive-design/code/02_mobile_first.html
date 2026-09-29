@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mobile-first page with two breakpoints</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font: 15px/1.45 system-ui, sans-serif; margin: 0; color: #1f2937; }
+  img { max-width: 100%; height: auto; display: block; }           /* flexible media */
+
+  /* ---------- Base styles = the phone layout (no media query needed) ---------- */
+  .badge { font: 700 12px ui-monospace, monospace; color: #fff; background: #b91c1c;
+           padding: 4px 8px; display: inline-block; }
+  .badge::after { content: "base styles: 1 column (< 640px)"; }
+  header { background: #1e3a8a; color: #fff; padding: 10px 14px; }
+  header .logo { font-weight: 800; font-size: 18px; }
+  nav ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  nav a { color: #bfdbfe; }
+  .layout { display: grid; gap: 14px; padding: 14px; }
+  .cards { display: grid; gap: 10px; }
+  .card { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px; }
+  .card h2 { font-size: 15px; margin: 0 0 4px; }
+  .card p { margin: 0; font-size: 13px; }
+  aside { background: #fef3c7; border-radius: 8px; padding: 10px; font-size: 13px; }
+
+  /* ---------- Medium screens: two card columns, nav beside the logo ---------- */
+  @media (width >= 40em) {                       /* 40em = 640px at the default 16px font size */
+    .badge::after { content: "@media (width >= 40em): 2 columns"; }
+    header { display: flex; justify-content: space-between; align-items: center; }
+    nav ul { margin: 0; }
+    .cards { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* ---------- Large screens: sidebar next to the content, three card columns ---------- */
+  @media (width >= 64em) {                       /* 64em = 1024px */
+    .badge::after { content: "@media (width >= 64em): 3 columns + sidebar"; }
+    .layout { grid-template-columns: 1fr 240px; max-width: 1200px; margin-inline: auto; }
+    .cards { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+<span class="badge"></span>
+<header>
+  <span class="logo">Trailhead</span>
+  <nav aria-label="Main"><ul><li><a href="#">Trips</a></li><li><a href="#">Gear</a></li><li><a href="#">Guides</a></li><li><a href="#">About</a></li></ul></nav>
+</header>
+<div class="layout">
+  <main class="cards">
+    <article class="card"><h2>Coastal walk</h2><p>12 km along the cliffs, easy.</p></article>
+    <article class="card"><h2>Ridge loop</h2><p>18 km, 900 m of climbing.</p></article>
+    <article class="card"><h2>Lake circuit</h2><p>8 km, family friendly.</p></article>
+    <article class="card"><h2>Forest trail</h2><p>10 km under old oaks.</p></article>
+    <article class="card"><h2>Summit day</h2><p>22 km, start early.</p></article>
+    <article class="card"><h2>River path</h2><p>6 km, flat and shaded.</p></article>
+  </main>
+  <aside><strong>Weather</strong><br>Sunny, 18 °C. Trails dry.</aside>
+</div>
+</body>
+</html>

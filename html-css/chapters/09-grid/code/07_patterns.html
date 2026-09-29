@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grid patterns: holy grail and responsive cards</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font: 13px/1.35 system-ui, sans-serif; margin: 12px; color: #222; }
+  h3 { font: 600 12px ui-monospace, monospace; margin: 10px 0 4px; }
+  .show > * { outline: 1px solid #1d4ed8; outline-offset: -1px; }       /* draw every grid item */
+  .show { outline: 2px dashed #9333ea; outline-offset: 2px; }             /* and the container */
+
+  /* 1. Holy grail: header, nav, main, aside, footer. Mobile first: one column... */
+  .page { display: grid; gap: 8px; min-height: 260px;
+          grid-template-areas: "header" "nav" "main" "aside" "footer";
+          grid-template-rows: auto auto 1fr auto auto; }
+  .page > header { grid-area: header; background: #bfdbfe; }
+  .page > nav    { grid-area: nav;    background: #bbf7d0; }
+  .page > main   { grid-area: main;   background: #fef9c3; }
+  .page > aside  { grid-area: aside;  background: #fed7aa; }
+  .page > footer { grid-area: footer; background: #e9d5ff; }
+  .page > * { padding: 8px; }
+  /* ...three columns once there is room */
+  @media (min-width: 640px) {
+    .page { grid-template-columns: 150px 1fr 170px;
+            grid-template-rows: auto 1fr auto;
+            grid-template-areas:
+              "header header header"
+              "nav    main   aside"
+              "footer footer footer"; }
+  }
+
+  /* 2. Responsive card grid with no media query ("RAM": repeat, auto-fit, minmax) */
+  .cards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); }
+  .cards > article { background: #eff6ff; padding: 10px; border-radius: 6px; min-height: 60px; font-weight: 600; }
+</style>
+</head>
+<body>
+<h3>1. Holy grail with grid-template-areas (3 columns at ≥ 640px, 1 column below)</h3>
+<div class="page show">
+  <header>header</header>
+  <nav>nav</nav>
+  <main>main — grows to fill the height (row 1fr)</main>
+  <aside>aside</aside>
+  <footer>footer</footer>
+</div>
+<h3>2. repeat(auto-fit, minmax(min(160px, 100%), 1fr)) — columns appear as space allows</h3>
+<div class="cards show">
+  <article>Card 1</article><article>Card 2</article><article>Card 3</article>
+  <article>Card 4</article><article>Card 5</article>
+</div>
+</body>
+</html>

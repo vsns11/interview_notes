@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>XSS demo</title>
+<style>body { font: 14px/1.45 system-ui, sans-serif; background: #f6f7f9; color: #1d2330; margin: 22px; }
+  .card { background: #fff; border: 1px solid #d9dde5; border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; max-width: 760px; }
+  code, pre { font: 12.5px/1.5 ui-monospace, Menlo, monospace; }
+  pre { margin: 0; white-space: pre-wrap; }
+  .ok { color: #1f7a45; font-weight: 600; } .bad { color: #b3261e; font-weight: 600; }
+  h3 { margin: 0 0 8px; font-size: 16px; }
+  #safe { overflow-wrap: anywhere; font-size: 13px; }
+  #banner { padding: 8px 12px; border-radius: 8px; background: #e8f7ee; margin-bottom: 12px; max-width: 730px; }
+</style></head>
+<body>
+<div id="banner" class="ok">Page is safe (the attack changes this banner)</div>
+<div class="card"><b>Comment rendered with <code>textContent</code></b><div id="safe"></div></div>
+<div class="card"><b>Same comment rendered with <code>innerHTML</code></b><div id="unsafe"></div></div>
+<script>
+  // Pretend this came from another user via the API
+  const comment = 'Nice post! <img src="does-not-exist.png" onerror="document.getElementById(\'banner\').textContent=\'XSS: attacker code ran and could read your data\';document.getElementById(\'banner\').className=\'bad\';document.getElementById(\'banner\').style.background=\'#fde8e8\'">';
+  document.getElementById('safe').textContent = comment;   // shown as text
+  document.getElementById('unsafe').innerHTML = comment;   // parsed: the onerror handler runs
+</script>
+</body></html>

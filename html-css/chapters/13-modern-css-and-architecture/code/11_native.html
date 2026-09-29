@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Sass features in native CSS</title>
+<style>
+  :root {
+    --brand: #2563eb;                                   /* $brand  -> custom property (live, can change at runtime) */
+    --radius: 8px;
+  }
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 16px; }
+
+  .card {
+    border: 2px solid #cbd5e1;
+    border-radius: var(--radius);
+    padding: calc(24px / 2);                            /* math.div  -> calc()                     */
+    .card-title { font-size: 20px; margin: 0; }         /* nesting works, but no "&__title" joining */
+    &.is-featured {                                     /* color.adjust(... lightness -10%) ->      */
+      border-color: oklch(from var(--brand) calc(l - 0.1) c h);          /* relative colour syntax  */
+    }
+  }
+  .button {
+    border: 0; font: inherit; color: white; padding: 8px 14px; border-radius: var(--radius);
+    background: var(--brand);
+    &:hover { background: color-mix(in oklch, var(--brand), black 15%); }  /* darken via color-mix */
+  }
+  .theme-green { --brand: #16a34a; }                    /* runtime re-theming: impossible with $vars */
+</style>
+<body>
+  <div class="card is-featured" id="card"><h2 class="card-title">Card</h2>
+    <button class="button" id="b1">Blue</button>
+    <span class="theme-green"><button class="button" id="b2">Green (same CSS)</button></span>
+  </div>
+</body>
+</html>

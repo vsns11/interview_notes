@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CSS units</title>
+  <style>
+    html { font-size: 16px; }                      /* 1rem = 16px */
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    .case { border: 1px solid #ddd; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; }
+    h2 { font: 700 13px ui-monospace, monospace; margin: 0 0 4px; color: #5b4bc4; }
+    .v { font: 12px ui-monospace, monospace; color: #0a7d55; }
+
+    /* em compounds, rem does not */
+    .em  li { font-size: 1.2em; }                   /* each level: 1.2 x its parent */
+    .rem li { font-size: 1.2rem; }                  /* always 1.2 x the root = 19.2px */
+    ul { margin: 0; }
+
+    /* em on other properties = the element's OWN font-size */
+    .btn { font-size: 20px; padding: 0.5em 1em; border: 0; border-radius: 0.3em; background: #5b4bc4; color: #fff; }
+
+    /* percentages depend on the property */
+    .outer { width: 400px; background: #eef; }
+    .pct   { width: 50%; padding-top: 10%; background: #cdf; }  /* both relative to the parent's WIDTH */
+
+    /* viewport units and ch */
+    .vw { width: 50vw; background: #fde2c4; }
+    .measure { max-width: 40ch; background: #f4f4f4; }
+  </style>
+</head>
+<body>
+  <div class="case"><h2>em compounds (nested li with font-size: 1.2em)  vs  rem (1.2rem)</h2>
+    <div style="display:flex; gap:40px">
+      <ul class="em"><li data-show>level 1<ul><li data-show>level 2<ul><li data-show>level 3</li></ul></li></ul></li></ul>
+      <ul class="rem"><li data-show>level 1<ul><li data-show>level 2<ul><li data-show>level 3</li></ul></li></ul></li></ul>
+    </div>
+  </div>
+  <div class="case"><h2>em for padding = own font-size (20px): padding 0.5em 1em</h2>
+    <button class="btn" data-show="padding">Button</button></div>
+  <div class="case"><h2>% : width 50% and padding-top 10% of a 400px-wide parent</h2>
+    <div class="outer"><div class="pct" data-show="size">child</div></div></div>
+  <div class="case"><h2>vw : width 50vw (viewport is 900px)   |   ch : max-width 40ch</h2>
+    <div class="vw" data-show="width">50vw</div>
+    <p class="measure" data-show="width" style="margin:6px 0 0">A line length of about 40 characters: 40ch uses the width of the "0" glyph, so real text fits slightly more or fewer letters.</p></div>
+  <script>
+    // Print the values the browser computed (always in px) next to each element.
+    for (const el of document.querySelectorAll('[data-show]')) {
+      const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+      const what = el.dataset.show;
+      const text = what === 'padding' ? `padding: ${cs.paddingTop} ${cs.paddingRight}`
+                 : what === 'size'    ? `width: ${r.width}px, padding-top: ${cs.paddingTop}`
+                 : what === 'width'   ? `width: ${r.width.toFixed(1)}px`
+                 : `font-size: ${cs.fontSize}`;
+      const tag = `<span class="v"> → ${text}</span>`;
+      el.tagName === 'LI' ? el.firstChild.after(document.createRange().createContextualFragment(tag))
+                          : el.insertAdjacentHTML('afterend', tag);
+    }
+  </script>
+</body>
+</html>

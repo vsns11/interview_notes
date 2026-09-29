@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Canvas intro</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    canvas { border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <!-- width/height attributes = drawing-buffer size; CSS width would only stretch it -->
+  <canvas id="chart" width="420" height="220" role="img"
+          aria-label="Bar chart of visits: Mon 12, Tue 19, Wed 7, Thu 15, Fri 22">
+    Visits: Mon 12, Tue 19, Wed 7, Thu 15, Fri 22.
+  </canvas>
+  <script>
+    const data = { Mon: 12, Tue: 19, Wed: 7, Thu: 15, Fri: 22 };
+    const canvas = document.getElementById('chart');
+    // Sharp on high-DPI screens: enlarge the buffer, keep the CSS size, scale the drawing.
+    const dpr = window.devicePixelRatio || 1;
+    canvas.style.width = canvas.width + 'px'; canvas.style.height = canvas.height + 'px';
+    canvas.width *= dpr; canvas.height *= dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const max = Math.max(...Object.values(data)), barW = 50, gap = 25, base = 190;
+    ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    Object.entries(data).forEach(([day, v], i) => {
+      const x = 30 + i * (barW + gap), h = (v / max) * 150;
+      ctx.fillStyle = '#6c5ce7';
+      ctx.fillRect(x, base - h, barW, h);              // bar
+      ctx.fillStyle = '#222';
+      ctx.fillText(v, x + barW / 2, base - h - 6);     // value above bar
+      ctx.fillText(day, x + barW / 2, base + 18);      // label under bar
+    });
+    ctx.beginPath(); ctx.moveTo(20, base); ctx.lineTo(410, base); ctx.stroke();   // axis
+  </script>
+</body>
+</html>

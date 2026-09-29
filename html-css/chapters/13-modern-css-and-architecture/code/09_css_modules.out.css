@@ -1,0 +1,48 @@
+.card_14He7q {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  width: 170px;
+  padding: 14px;
+}
+
+.title_14He7q {
+  margin: 0;
+  font-size: 16px;
+}
+
+.price_14He7q {
+  color: #475569;
+  margin: 4px 0 12px;
+}
+
+.button_14He7q {
+  color: #fff;
+  width: 100%;
+  font: inherit;
+  background: #2563eb;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.button_14He7q:hover {
+  background: #1d4ed8;
+}
+
+.featured_14He7q {
+  background: #fffbeb;
+  border: 2px solid #f59e0b;
+}
+
+.featured_14He7q .button_14He7q {
+  background: #d97706;
+}
+
+body {
+  color: #0f172a;
+  gap: 12px;
+  margin: 16px;
+  font: 15px / 1.4 system-ui, sans-serif;
+  display: flex;
+}

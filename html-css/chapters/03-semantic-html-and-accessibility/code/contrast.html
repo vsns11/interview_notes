@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Contrast samples</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1rem; }
+  .s { display: flex; align-items: center; justify-content: space-between; padding: .45rem .8rem; margin-bottom: .35rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 16px; }
+  .r { font: 600 13px ui-monospace, monospace; background: #fff; color: #000; padding: 2px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+  <div id="list"></div>
+  <script>
+    // Same formula as 05_contrast.mjs, run in the browser so each swatch shows its own ratio.
+    const lum = hex => { const [r, g, b] = hex.slice(1).match(/../g).map(h => parseInt(h, 16) / 255)
+      .map(c => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    const pairs = [['#000000','#ffffff'],['#767676','#ffffff'],['#999999','#ffffff'],['#ffffff','#3b82f6'],
+                   ['#ffffff','#1d4ed8'],['#b91c1c','#ffffff'],['#ffffff','#f59e0b']];
+    for (const [fg, bg] of pairs) {
+      const r = ratio(fg, bg), tag = r >= 7 ? 'AAA' : r >= 4.5 ? 'AA' : r >= 3 ? 'large text only' : 'fail';
+      document.getElementById('list').insertAdjacentHTML('beforeend',
+        `<div class="s" style="color:${fg};background:${bg}">Sample text ${fg} on ${bg}<span class="r">${r.toFixed(2)}:1 ${tag}</span></div>`);
+    }
+  </script>
+</body>
+</html>

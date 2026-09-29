@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: config-demo
+  config:
+    # pull in more files; "optional:" means "don't fail if it's missing"
+    import:
+      - classpath:owner.properties
+      - optional:file:./local-overrides.yaml
+  profiles:
+    group:
+      production: [prod, metrics]     # --spring.profiles.active=production turns on both
+
+shop:
+  name: Corner Shop
+  checkout-timeout: 45s               # kebab-case in files; binds to checkoutTimeout
+  max-upload: 10MB
+  currencies: [USD, EUR]
+  discounts:
+    gold: 15
+    silver: 5
+  payment:
+    retries: 2
+
+---
+# a second document inside the same file, used only when "prod" is active
+spring:
+  config:
+    activate:
+      on-profile: prod
+shop:
+  payment:
+    gateway-url: https://pay.prod.example.test
+    retries: 5

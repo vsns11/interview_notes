@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Todo with event delegation</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; background: #f6f7f9; color: #1d2330; margin: 24px; }
+  .app { max-width: 420px; background: #fff; border: 1px solid #d9dde5; border-radius: 10px; padding: 16px 18px; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  form { display: flex; gap: 8px; margin-bottom: 12px; }
+  input { flex: 1; padding: 6px 8px; border: 1px solid #b9c0cc; border-radius: 6px; font: inherit; }
+  button { font: inherit; border: 1px solid #b9c0cc; background: #eef1f6; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; border-top: 1px solid #eceff3; }
+  li.done span { text-decoration: line-through; color: #8a93a3; }
+  .log { margin-top: 14px; font: 12px/1.5 ui-monospace, Menlo, monospace; background: #1d2330; color: #d6f5d6; padding: 8px 10px; border-radius: 6px; }
+</style></head>
+<body>
+<div class="app">
+  <h1>Today</h1>
+  <form id="new"><input name="title" placeholder="New task" required><button>Add</button></form>
+  <ul id="todos">
+    <li data-id="1"><span>Buy milk</span><button class="del" aria-label="Delete">✕</button></li>
+    <li data-id="2"><span>Write chapter 13</span><button class="del" aria-label="Delete">✕</button></li>
+  </ul>
+  <div class="log" id="log"></div>
+</div>
+<script>
+  const list = document.getElementById('todos');
+  const log = (msg) => document.getElementById('log').insertAdjacentHTML('beforeend', `<div>${msg}</div>`);
+  let nextId = 3;
+
+  // ONE listener for every item, present and future
+  list.addEventListener('click', (e) => {
+    const li = e.target.closest('li');
+    if (!li) return;
+    if (e.target.closest('.del')) { li.remove(); log(`delete #${li.dataset.id} (target: ${e.target.tagName})`); return; }
+    li.classList.toggle('done');
+    log(`toggle #${li.dataset.id} (target: ${e.target.tagName}, currentTarget: ${e.currentTarget.id})`);
+  });
+
+  document.getElementById('new').addEventListener('submit', (e) => {
+    e.preventDefault();                                   // no page reload
+    const title = e.target.elements.title.value.trim();
+    const li = document.createElement('li');
+    li.dataset.id = nextId++;
+    const span = document.createElement('span');
+    span.textContent = title;                             // textContent: user text is never parsed as HTML
+    const del = Object.assign(document.createElement('button'), { className: 'del', textContent: '✕' });
+    del.setAttribute('aria-label', 'Delete');
+    li.append(span, del);
+    list.append(li);
+    e.target.reset();
+    log(`add #${li.dataset.id} "${title.replace(/</g, '&lt;')}"`);
+  });
+
+  // Scripted interaction for the screenshot
+  const form = document.getElementById('new');
+  form.elements.title.value = 'Walk the dog';  form.requestSubmit();
+  form.elements.title.value = 'Call <b>mom</b>'; form.requestSubmit();
+  list.querySelector('[data-id="1"] span').click();
+  list.querySelector('[data-id="3"] span').click();
+  list.querySelector('[data-id="2"] .del').click();
+</script>
+</body></html>

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enter and exit transitions: @starting-style and allow-discrete</title>
+<style>
+  body { margin: 10px; font: 14px/1.4 system-ui, sans-serif; color: #1f2937; height: 150px; }
+  [popover] { margin: 0; border: 0; border-radius: 10px; padding: 12px 16px; width: 170px;
+              box-shadow: 0 8px 24px rgb(0 0 0 / .2); font-weight: 600; inset: auto; top: 40px; }
+  #a { left: 10px;  background: #dbeafe; }
+  #b { left: 240px; background: #fee2e2; }
+  .label { position: absolute; top: 10px; font: 600 11px ui-monospace, monospace; color: #7c3aed; }
+
+  /* A: animated in AND out */
+  #a { opacity: 0; translate: 0 -16px;                       /* the "closed" look (also the exit end state) */
+       transition: opacity 300ms ease-out, translate 300ms ease-out,
+                   display 300ms allow-discrete, overlay 300ms allow-discrete; }   /* keep it visible while leaving */
+  #a:popover-open { opacity: 1; translate: 0 0; }
+  @starting-style { #a:popover-open { opacity: 0; translate: 0 -16px; } }   /* where the ENTER transition starts */
+
+  /* B: the same transition but no @starting-style and no allow-discrete: it just appears and disappears */
+  #b { opacity: 0; translate: 0 -16px; transition: opacity 300ms ease-out, translate 300ms ease-out; }
+  #b:popover-open { opacity: 1; translate: 0 0; }
+</style>
+</head>
+<body>
+<span class="label" style="left:10px">A: with @starting-style</span>
+<span class="label" style="left:240px">B: plain transition</span>
+<div id="a" popover="manual">Saved! (A)</div>
+<div id="b" popover="manual">Saved! (B)</div>
+</body>
+</html>

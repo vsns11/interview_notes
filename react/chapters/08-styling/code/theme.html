@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>theme demo</title>
+<script>
+  // Runs BEFORE React and before first paint: apply the saved/system theme to avoid a flash of the wrong theme.
+  try {
+    const saved = localStorage.getItem('theme') || 'system';
+    const dark = saved === 'dark' || (saved === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  } catch {}
+</script>
+<link rel="stylesheet" href="theme.bundle.css"></head>
+<body><div id="root"></div><script src="theme.bundle.js"></script></body></html>

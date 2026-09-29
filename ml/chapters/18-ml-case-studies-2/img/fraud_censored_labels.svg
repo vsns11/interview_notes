@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="560" viewBox="0 0 1240 560" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Blocked transactions never produce an outcome">
+  <defs>
+    <marker id="m3l5b-mpink" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#DB2777"/>
+    </marker>
+    <marker id="m3l5b-memerald" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#059669"/>
+    </marker>
+    <filter id="m3l5b-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m3l5b-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m3l5b-k1"><rect x="60" y="70" width="370" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l5b-k2"><rect x="610" y="70" width="400" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l5b-k3"><rect x="60" y="220" width="370" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l5b-k4"><rect x="610" y="220" width="400" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="560" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#DB2777" stroke-width="2"><path d="M430,115 L610,115" marker-end="url(#m3l5b-mpink)"/></g>
+  <g fill="none" stroke="#059669" stroke-width="2"><path d="M430,265 L610,265" marker-end="url(#m3l5b-memerald)"/></g>
+  <g filter="url(#m3l5b-soft)">
+    <rect x="60" y="70" width="370" height="90" rx="12" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.5"/>
+    <rect x="60" y="70" width="6" height="90" fill="#DB2777" clip-path="url(#m3l5b-k1)"/>
+  </g>
+  <circle cx="98" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(87.56,104.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10v-6z"/></g>
+  <text x="124" y="122" font-size="18.5" font-weight="600" fill="#111827">Blocked transactions</text>
+  <g filter="url(#m3l5b-soft)">
+    <rect x="610" y="70" width="400" height="90" rx="12" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.5"/>
+    <rect x="610" y="70" width="6" height="90" fill="#DB2777" clip-path="url(#m3l5b-k2)"/>
+  </g>
+  <circle cx="648" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(637.56,104.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></g>
+  <text x="674" y="122" font-size="18.5" font-weight="600" fill="#111827">Payment outcome is unobserved</text>
+  <text x="810" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">counterfactual labels are missing</text>
+  <g filter="url(#m3l5b-lift)">
+    <rect x="60" y="220" width="370" height="90" rx="12" fill="#D1FAE5" stroke="#059669" stroke-width="2"/>
+    <rect x="60" y="220" width="9" height="90" fill="#059669" clip-path="url(#m3l5b-k3)"/>
+  </g>
+  <circle cx="98" cy="265" r="18" fill="#FFFFFF"/>
+  <g transform="translate(87.56,254.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></g>
+  <text x="124" y="272" font-size="18.5" font-weight="600" fill="#111827">Use audited investigations</text>
+  <g filter="url(#m3l5b-soft)">
+    <rect x="610" y="220" width="400" height="90" rx="12" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <rect x="610" y="220" width="6" height="90" fill="#059669" clip-path="url(#m3l5b-k4)"/>
+  </g>
+  <circle cx="648" cy="265" r="18" fill="#FFFFFF"/>
+  <g transform="translate(637.56,254.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="674" y="272" font-size="18.5" font-weight="600" fill="#111827">Add verified label sources</text>
+  <text x="810" y="335" font-size="15.5" text-anchor="middle" fill="#6B7280">selection bias still remains</text>
+  <rect x="40" y="400" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="445" text-anchor="middle" font-size="16" fill="#475569">Do not approve suspected fraud just to obtain labels. Any policy experiment needs explicit risk controls.</text>
+</svg>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>CORS demo</title>
+<style>
+  body { font: 14px/1.45 system-ui, sans-serif; background: #f6f7f9; color: #1d2330; margin: 22px; }
+  table { border-collapse: collapse; background: #fff; margin-bottom: 12px; }
+  td, th { border: 1px solid #d9dde5; padding: 6px 10px; text-align: left; vertical-align: top; }
+  code { font: 12.5px ui-monospace, Menlo, monospace; }
+  .ok { color: #1f7a45; font-weight: 600; } .bad { color: #b3261e; font-weight: 600; }
+  h3 { margin: 0 0 8px; font-size: 16px; }
+</style></head>
+<body>
+<h3>Page origin <code>http://localhost:4101</code> calling API origin <code>http://localhost:4102</code></h3>
+<table id="t"><tr><th>Request from the page</th><th>What JavaScript got</th></tr></table>
+<h3>What the API server actually received</h3>
+<table id="log"><tr><th>#</th><th>Request</th></tr></table>
+<script>
+  const API = 'http://localhost:4102';
+  const cases = [
+    ['GET /public (server sends Access-Control-Allow-Origin)', () => fetch(API + '/public')],
+    ['GET /private (no CORS header)', () => fetch(API + '/private')],
+    ['POST /data with JSON body (needs preflight)', () => fetch(API + '/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"a":1}' })],
+    ['PUT /data (preflight does not allow PUT)', () => fetch(API + '/data', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '{}' })],
+    ['GET /private with mode: "no-cors"', () => fetch(API + '/private', { mode: 'no-cors' })],
+  ];
+  (async () => {
+    for (const [label, run] of cases) {
+      let result;
+      try {
+        const r = await run();
+        result = r.type === 'opaque'
+          ? `<span class="bad">opaque response</span>: status ${r.status}, body hidden`
+          : `<span class="ok">${r.status} OK</span> <code>${await r.text()}</code>`;
+      } catch (e) {
+        result = `<span class="bad">${e.name}: ${e.message}</span> (details only in the DevTools console)`;
+      }
+      document.getElementById('t').insertAdjacentHTML('beforeend', `<tr><td>${label}</td><td>${result}</td></tr>`);
+    }
+    const seen = await (await fetch(API + '/log')).json();
+    seen.forEach((line, i) => document.getElementById('log').insertAdjacentHTML('beforeend', `<tr><td>${i + 1}</td><td><code>${line}</code></td></tr>`));
+  })();
+</script>
+</body></html>

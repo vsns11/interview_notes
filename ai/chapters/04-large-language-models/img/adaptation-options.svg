@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="496" viewBox="0 0 1240 496" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="What the model does not know, and the three ways to fix it">
+  <defs>
+    <marker id="m4l1c-memerald" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#059669"/>
+    </marker>
+    <filter id="m4l1c-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m4l1c-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m4l1c-k1"><rect x="370" y="56" width="500" height="90" rx="12"/></clipPath>
+    <clipPath id="m4l1c-k2"><rect x="50" y="212" width="296" height="90" rx="12"/></clipPath>
+    <clipPath id="m4l1c-k3"><rect x="461" y="212" width="296" height="90" rx="12"/></clipPath>
+    <clipPath id="m4l1c-k4"><rect x="872" y="212" width="317" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="496" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#059669" stroke-width="2"><path d="M620,146 V158 Q620,170 608,170 H210 Q198,170 198,182 V212" marker-end="url(#m4l1c-memerald)"/></g>
+  <g fill="none" stroke="#059669" stroke-width="2"><path d="M620,146 V158 Q620,170 608,170 H621 Q609,170 609,182 V212" marker-end="url(#m4l1c-memerald)"/></g>
+  <g fill="none" stroke="#059669" stroke-width="2"><path d="M620,146 V158 Q620,170 632,170 H1018.5 Q1030.5,170 1030.5,182 V212" marker-end="url(#m4l1c-memerald)"/></g>
+  <text x="620" y="40" font-size="15.5" text-anchor="middle" fill="#6B7280">current, private, or user-specific information may be missing or unreliable</text>
+  <g filter="url(#m4l1c-lift)">
+    <rect x="370" y="56" width="500" height="90" rx="12" fill="#FCE7F3" stroke="#DB2777" stroke-width="2"/>
+    <rect x="370" y="56" width="9" height="90" fill="#DB2777" clip-path="url(#m4l1c-k1)"/>
+  </g>
+  <circle cx="408" cy="101" r="18" fill="#FFFFFF"/>
+  <g transform="translate(397.56,90.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></g>
+  <text x="434" y="108" font-size="18.5" font-weight="600" fill="#111827">Information to supply or verify</text>
+  <g filter="url(#m4l1c-soft)">
+    <rect x="50" y="212" width="296" height="90" rx="12" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <rect x="50" y="212" width="6" height="90" fill="#059669" clip-path="url(#m4l1c-k2)"/>
+  </g>
+  <circle cx="88" cy="257" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,246.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></g>
+  <text x="114" y="264" font-size="18.5" font-weight="600" fill="#111827">Put it in the context</text>
+  <text x="198" y="327" font-size="15.5" text-anchor="middle" fill="#6B7280">instructions and examples</text>
+  <g filter="url(#m4l1c-soft)">
+    <rect x="461" y="212" width="296" height="90" rx="12" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <rect x="461" y="212" width="6" height="90" fill="#059669" clip-path="url(#m4l1c-k3)"/>
+  </g>
+  <circle cx="499" cy="257" r="18" fill="#FFFFFF"/>
+  <g transform="translate(488.56,246.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3L21 21"/></g>
+  <text x="525" y="264" font-size="18.5" font-weight="600" fill="#111827">Retrieve it on demand</text>
+  <text x="609" y="327" font-size="15.5" text-anchor="middle" fill="#6B7280">fetched per request</text>
+  <g filter="url(#m4l1c-soft)">
+    <rect x="872" y="212" width="317" height="90" rx="12" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <rect x="872" y="212" width="6" height="90" fill="#059669" clip-path="url(#m4l1c-k4)"/>
+  </g>
+  <circle cx="910" cy="257" r="18" fill="#FFFFFF"/>
+  <g transform="translate(899.56,246.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 1.5v3M15 1.5v3M9 19.5v3M15 19.5v3M1.5 9h3M1.5 15h3M19.5 9h3M19.5 15h3"/></g>
+  <text x="936" y="264" font-size="18.5" font-weight="600" fill="#111827">Train it into the model</text>
+  <text x="1030.5" y="327" font-size="15.5" text-anchor="middle" fill="#6B7280">fine-tuning, a new variant</text>
+  <rect x="40" y="380" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="425" text-anchor="middle" font-size="16" fill="#475569">Choosing among these three is the adaptation lesson later in this module.</text>
+</svg>

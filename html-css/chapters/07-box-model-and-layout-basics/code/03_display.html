@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>display: block, inline, inline-block, none</title>
+<style>
+  body { font: 14px/1.6 system-ui, sans-serif; margin: 12px; color: #222; width: 760px; }
+  h3 { font-size: 13px; margin: 14px 0 4px; font-family: ui-monospace, monospace; }
+  p { margin: 0; background: #f4f4f4; }
+  /* every demo box gets the same declarations; only display changes */
+  .x { width: 180px; height: 40px; padding: 10px; margin: 8px;
+       background: rgba(59,130,246,.35); outline: 1px solid #1d4ed8; }
+  .block        { display: block; }
+  .inline       { display: inline; }
+  .inline-block { display: inline-block; }
+  .none         { display: none; }
+</style>
+</head>
+<body>
+<h3>display: block — own line; width/height apply (with width: auto it would fill the line)</h3>
+<p>Text before <span class="x block" id="blk">block span</span> text after.</p>
+
+<h3>display: inline — flows inside the line; width/height ignored; vertical padding overlaps neighbours</h3>
+<p>Text before the inline span <span class="x inline" id="inl">inline span with padding</span> and the text keeps going on the same line, wrapping
+naturally at the edge of the paragraph like ordinary words, while its vertical padding spills over the lines around it.</p>
+
+<h3>display: inline-block — sits in the line like a word, but width/height/padding all push things away</h3>
+<p>Text before <span class="x inline-block" id="ib">inline-block span</span> text after, on the same line.</p>
+
+<h3>display: none — no box at all (the space closes up)</h3>
+<p>Text before <span class="x none" id="non">you can't see me</span>text after.</p>
+</body>
+</html>

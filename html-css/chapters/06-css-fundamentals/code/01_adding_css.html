@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Three ways to add CSS</title>
+  <!-- 1. External stylesheet: best for real sites (cached, shared across pages) -->
+  <link rel="stylesheet" href="01_styles.css">
+  <!-- 2. Internal (embedded) stylesheet: fine for one-off pages and demos -->
+  <style>
+    .internal { background: #eafbea; border-color: #2e9d49; }
+    /* A rule has a selector and a declaration block; each declaration is property: value; */
+    h1 { font-size: 22px; margin: 0 0 6px; }
+  </style>
+</head>
+<body>
+  <h1>Three ways to add CSS</h1>
+  <div class="box external">1. Styled by an <b>external</b> file: &lt;link rel="stylesheet" href="01_styles.css"&gt;</div>
+  <div class="box internal">2. Styled by an <b>internal</b> &lt;style&gt; element in the &lt;head&gt;</div>
+  <!-- 3. Inline style attribute: only for one element; hard to override and to reuse -->
+  <div class="box" style="background: #fff3e0; border-color: #e67e22;">3. Styled by an <b>inline</b> style="" attribute</div>
+  <div class="box external" style="border-style: dashed;">External class + inline style: both apply (the inline one only changes the border style)</div>
+</body>
+</html>

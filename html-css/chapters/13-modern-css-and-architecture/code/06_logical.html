@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Logical properties</title>
+<style>
+  body { font: 15px/1.45 system-ui, sans-serif; margin: 16px; display: flex; gap: 16px; align-items: flex-start; color: #0f172a; }
+  .note {
+    position: relative;
+    inline-size: 220px;                    /* width in horizontal text, height in vertical text */
+    padding-inline-start: 36px;            /* space BEFORE the text starts                      */
+    padding-block: 10px;
+    padding-inline-end: 48px;             /* room for the badge at the end edge */
+    border-inline-start: 6px solid #2563eb;/* the "start" edge gets the accent bar              */
+    background: #eff6ff;
+    text-align: start;
+    margin-block-end: 12px;
+  }
+  .note .badge {
+    position: absolute; inset-inline-end: 6px; inset-block-start: 6px;   /* top-right in LTR */
+    background: #f59e0b; color: #fff; font-size: 12px; padding-inline: 6px; border-radius: 999px;
+  }
+  .vertical { writing-mode: vertical-rl; block-size: auto; }
+  .vertical .note { inline-size: 200px; }
+  h2 { font-size: 13px; margin: 0 0 6px; color: #64748b; font-family: ui-monospace, monospace; }
+</style>
+<body>
+  <section><h2>dir="ltr"</h2>
+    <div class="note" id="ltr"><span class="badge">new</span>Logical properties follow the text direction.</div></section>
+  <section dir="rtl" lang="ar"><h2 dir="ltr">dir="rtl"</h2>
+    <div class="note" id="rtl"><span class="badge">جديد</span>الخصائص المنطقية تتبع اتجاه النص.</div></section>
+  <section class="vertical" lang="ja"><h2>vertical-rl</h2>
+    <div class="note" id="vrl"><span class="badge">新</span>論理プロパティは書字方向に従う。</div></section>
+</body>
+</html>

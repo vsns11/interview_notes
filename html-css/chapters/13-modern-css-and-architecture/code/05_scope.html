@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>@scope</title>
+<style>
+  body { font: 15px/1.45 system-ui, sans-serif; margin: 16px; color: #0f172a; }
+  .card { border: 2px solid #94a3b8; border-radius: 8px; padding: 10px; margin: 8px 0; }
+
+  /* 1. Donut scope: style the card's own parts, but STOP at .content (the "hole") */
+  @scope (.card) to (.content) {
+    :scope { background: #f8fafc; }          /* :scope = the .card itself          */
+    img    { border: 3px solid #2563eb; width: 48px; height: 48px; object-fit: cover; }
+    p      { font-weight: 600; color: #1d4ed8; }
+  }
+
+  /* 2. Proximity: nested light/dark themes - the NEAREST scope root wins, not source order */
+  @scope (.dark)  { a { color: #fbbf24; } :scope { background: #1e293b; color: #e2e8f0; } }
+  @scope (.light) { a { color: #1d4ed8; } :scope { background: #fff; color: #0f172a; } }
+  .theme { padding: 8px 12px; border-radius: 8px; margin: 6px 0; }
+</style>
+<body>
+  <div class="card" id="card">
+    <img src="../../11-typography-color-and-visual-effects/code/media/hills-800.jpg" alt="" id="cardImg">
+    <p id="cardP">Card's own paragraph (in scope)</p>
+    <div class="content">
+      <p id="contentP">User content paragraph (in the hole — untouched)</p>
+      <img src="../../11-typography-color-and-visual-effects/code/media/hills-800.jpg" alt="" id="contentImg" width="48" height="48">
+    </div>
+  </div>
+
+  <div class="theme light" id="t1">light › <a href="#" id="a1">link</a>
+    <div class="theme dark" id="t2">dark › <a href="#" id="a2">link</a>
+      <div class="theme light" id="t3">light › <a href="#" id="a3">link</a></div>
+    </div>
+  </div>
+
+  <div id="inline">
+    <style>
+      @scope { :scope { outline: 2px dashed #16a34a; padding: 4px; } b { color: #16a34a; } }  /* no prelude: scoped to the parent of this <style> */
+    </style>
+    <b id="inB">styled by an inline, prelude-less @scope</b>
+  </div>
+  <b id="outB">same &lt;b&gt;, outside that div</b>
+</body>
+</html>

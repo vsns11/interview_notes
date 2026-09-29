@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="620" viewBox="0 0 1240 620" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Radio prefetches the queue, so a skip re-ranks instantly">
+  <defs>
+    <marker id="m8l2c-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <marker id="m8l2c-mamber" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#D97706"/>
+    </marker>
+    <filter id="m8l2c-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m8l2c-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m8l2c-k1"><rect x="50" y="70" width="224" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l2c-k2"><rect x="362" y="70" width="204" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l2c-k3"><rect x="654" y="70" width="265" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l2c-k4"><rect x="1007" y="70" width="183" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="620" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M274,115 L362,115" marker-end="url(#m8l2c-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M566,115 L654,115" marker-end="url(#m8l2c-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M919,115 L1007,115" marker-end="url(#m8l2c-mslate)"/></g>
+  <g fill="none" stroke="#D97706" stroke-width="2"><path d="M1098.5,205 L1098.5,238 L464,238 L464,205" marker-end="url(#m8l2c-mamber)"/></g>
+  <g filter="url(#m8l2c-soft)">
+    <rect x="50" y="70" width="224" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="50" y="70" width="6" height="90" fill="#2563EB" clip-path="url(#m8l2c-k1)"/>
+  </g>
+  <circle cx="88" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,104.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 6.5V12l3.5 2.5"/></g>
+  <text x="114" y="122" font-size="18.5" font-weight="600" fill="#111827">Session so far</text>
+  <text x="162" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">what was played, saved, skipped</text>
+  <g filter="url(#m8l2c-soft)">
+    <rect x="362" y="70" width="204" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="362" y="70" width="6" height="90" fill="#7C3AED" clip-path="url(#m8l2c-k2)"/>
+  </g>
+  <circle cx="400" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(389.56,104.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="426" y="122" font-size="18.5" font-weight="600" fill="#111827">Rank a queue</text>
+  <text x="464" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">online, 100 to 200 ms budget</text>
+  <g filter="url(#m8l2c-lift)">
+    <rect x="654" y="70" width="265" height="90" rx="12" fill="#D1FAE5" stroke="#059669" stroke-width="2"/>
+    <rect x="654" y="70" width="9" height="90" fill="#059669" clip-path="url(#m8l2c-k3)"/>
+  </g>
+  <circle cx="692" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(681.56,104.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l9 4.5-9 4.5-9-4.5z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5l9 4.5 9-4.5"/></g>
+  <text x="718" y="122" font-size="18.5" font-weight="600" fill="#111827">Prefetched: 2 to 3</text>
+  <text x="786.5" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">ready before they are needed</text>
+  <g filter="url(#m8l2c-soft)">
+    <rect x="1007" y="70" width="183" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="1007" y="70" width="6" height="90" fill="#D97706" clip-path="url(#m8l2c-k4)"/>
+  </g>
+  <circle cx="1045" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(1034.56,104.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.5 13.2h6.2L10 22l8.5-11.2h-6.2z"/></g>
+  <text x="1071" y="122" font-size="18.5" font-weight="600" fill="#111827">User skips</text>
+  <text x="1098.5" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">re-rank the rest immediately</text>
+  <g font-size="15.5" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7"><text x="620" y="222" fill="#B45309">a skip is the product</text></g>
+  <rect x="40" y="262" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="296" font-size="16" fill="#475569">Three points earn the architecture minutes here. Skip-responsiveness is the radio product itself.</text>
+  <rect x="64" y="322" width="200" height="32" rx="9" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.2"/>
+  <text x="164" y="344" text-anchor="middle" font-size="15.5" font-weight="600" fill="#1D4ED8">Weekly batch</text>
+  <text x="288" y="344" font-size="15.5" fill="#475569">runs on weekly-active users only, not all 400 million accounts</text>
+  <rect x="64" y="366" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="388" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">Why prefetch</text>
+  <text x="288" y="388" font-size="15.5" fill="#475569">the latency budget is almost never user-visible, because the track is already chosen</text>
+  <rect x="64" y="410" width="200" height="32" rx="9" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.2"/>
+  <text x="164" y="432" text-anchor="middle" font-size="15.5" font-weight="600" fill="#475569">Rules stay outside</text>
+  <text x="288" y="432" font-size="15.5" fill="#475569">artist spacing, explicit filters, market licensing: business constraints, not model ones</text>
+  <rect x="40" y="478" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="523" text-anchor="middle" font-size="16" fill="#475569">Scoring all 400 million users when 250 million are active is real money, at this scale.</text>
+</svg>

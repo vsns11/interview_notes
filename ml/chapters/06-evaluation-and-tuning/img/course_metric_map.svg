@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="660" viewBox="0 0 1240 660" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="The problem family picks the metric family">
+  <defs>
+    <marker id="m2l4ba-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <marker id="m2l4ba-mpink" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#DB2777"/>
+    </marker>
+    <marker id="m2l4ba-mindigo" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#4F46E5"/>
+    </marker>
+    <marker id="m2l4ba-mblue" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#2563EB"/>
+    </marker>
+    <filter id="m2l4ba-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m2l4ba-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m2l4ba-k1"><rect x="472" y="56" width="296" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l4ba-k2"><rect x="93" y="210" width="224" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l4ba-k3"><rect x="535" y="210" width="170" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l4ba-k4"><rect x="943" y="210" width="183" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l4ba-k5"><rect x="62" y="360" width="286" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l4ba-k6"><rect x="482" y="360" width="276" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l4ba-k7"><rect x="933" y="360" width="204" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="660" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M620,146 V158 Q620,170 608,170 H217 Q205,170 205,182 V210" marker-end="url(#m2l4ba-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M620,146 V210" marker-end="url(#m2l4ba-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M620,146 V158 Q620,170 632,170 H1023 Q1035,170 1035,182 V210" marker-end="url(#m2l4ba-mslate)"/></g>
+  <g fill="none" stroke="#DB2777" stroke-width="2"><path d="M205,300 V360" marker-end="url(#m2l4ba-mpink)"/></g>
+  <g fill="none" stroke="#4F46E5" stroke-width="2"><path d="M620,300 V360" marker-end="url(#m2l4ba-mindigo)"/></g>
+  <g fill="none" stroke="#2563EB" stroke-width="2"><path d="M1035,300 V360" marker-end="url(#m2l4ba-mblue)"/></g>
+  <g filter="url(#m2l4ba-lift)">
+    <rect x="472" y="56" width="296" height="90" rx="12" fill="#E2E8F0" stroke="#64748B" stroke-width="2"/>
+    <rect x="472" y="56" width="9" height="90" fill="#64748B" clip-path="url(#m2l4ba-k1)"/>
+  </g>
+  <circle cx="510" cy="101" r="18" fill="#FFFFFF"/>
+  <g transform="translate(499.56,90.56) scale(0.87)" fill="none" stroke="#64748B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="5" r="2.2"/><circle cx="7" cy="19" r="2.2"/><circle cx="17" cy="12" r="2.2"/><path d="M7 7.2v9.6M9.2 12H14.8"/></g>
+  <text x="536" y="108" font-size="18.5" font-weight="600" fill="#111827">What kind of problem?</text>
+  <g filter="url(#m2l4ba-soft)">
+    <rect x="93" y="210" width="224" height="90" rx="12" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.5"/>
+    <rect x="93" y="210" width="6" height="90" fill="#DB2777" clip-path="url(#m2l4ba-k2)"/>
+  </g>
+  <circle cx="131" cy="255" r="18" fill="#FFFFFF"/>
+  <g transform="translate(120.56,244.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></g>
+  <text x="157" y="262" font-size="18.5" font-weight="600" fill="#111827">Classification</text>
+  <g filter="url(#m2l4ba-soft)">
+    <rect x="535" y="210" width="170" height="90" rx="12" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.5"/>
+    <rect x="535" y="210" width="6" height="90" fill="#4F46E5" clip-path="url(#m2l4ba-k3)"/>
+  </g>
+  <circle cx="573" cy="255" r="18" fill="#FFFFFF"/>
+  <g transform="translate(562.56,244.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h19l-7.5 8.5V20l-4 2v-9.5z"/></g>
+  <text x="599" y="262" font-size="18.5" font-weight="600" fill="#111827">Ranking</text>
+  <g filter="url(#m2l4ba-soft)">
+    <rect x="943" y="210" width="183" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="943" y="210" width="6" height="90" fill="#2563EB" clip-path="url(#m2l4ba-k4)"/>
+  </g>
+  <circle cx="981" cy="255" r="18" fill="#FFFFFF"/>
+  <g transform="translate(970.56,244.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 6.5V12l3.5 2.5"/></g>
+  <text x="1007" y="262" font-size="18.5" font-weight="600" fill="#111827">Regression</text>
+  <g filter="url(#m2l4ba-soft)">
+    <rect x="62" y="360" width="286" height="90" rx="12" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.5"/>
+    <rect x="62" y="360" width="6" height="90" fill="#DB2777" clip-path="url(#m2l4ba-k5)"/>
+  </g>
+  <circle cx="100" cy="405" r="18" fill="#FFFFFF"/>
+  <g transform="translate(89.56,394.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="126" y="412" font-size="18.5" font-weight="600" fill="#111827">Precision and recall</text>
+  <text x="205" y="475" font-size="15.5" text-anchor="middle" fill="#6B7280">PR-AUC when positives are rare</text>
+  <text x="205" y="498" font-size="15.5" text-anchor="middle" fill="#94A3B8">do not rely on accuracy alone</text>
+  <g filter="url(#m2l4ba-soft)">
+    <rect x="482" y="360" width="276" height="90" rx="12" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.5"/>
+    <rect x="482" y="360" width="6" height="90" fill="#4F46E5" clip-path="url(#m2l4ba-k6)"/>
+  </g>
+  <circle cx="520" cy="405" r="18" fill="#FFFFFF"/>
+  <g transform="translate(509.56,394.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="546" y="412" font-size="18.5" font-weight="600" fill="#111827">recall@k, then NDCG</text>
+  <text x="620" y="475" font-size="15.5" text-anchor="middle" fill="#6B7280">recall@k first, NDCG for order</text>
+  <text x="620" y="498" font-size="15.5" text-anchor="middle" fill="#94A3B8">MRR for the first relevant result</text>
+  <g filter="url(#m2l4ba-soft)">
+    <rect x="933" y="360" width="204" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="933" y="360" width="6" height="90" fill="#2563EB" clip-path="url(#m2l4ba-k7)"/>
+  </g>
+  <circle cx="971" cy="405" r="18" fill="#FFFFFF"/>
+  <g transform="translate(960.56,394.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="997" y="412" font-size="18.5" font-weight="600" fill="#111827">MAE or RMSE</text>
+  <text x="1035" y="475" font-size="15.5" text-anchor="middle" fill="#6B7280">RMSE when big misses hurt more</text>
+  <text x="1035" y="498" font-size="15.5" text-anchor="middle" fill="#94A3B8">always add p90 and cohorts</text>
+  <rect x="40" y="545" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="590" text-anchor="middle" font-size="16" fill="#475569">Choose metrics using the task, base rate, error costs, and intended operating point.</text>
+</svg>

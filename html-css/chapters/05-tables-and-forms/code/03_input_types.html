@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Input types</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 18px; }
+    label { display: grid; gap: 3px; }
+    code { font-size: 12px; color: #6c3; color: #5b4bc4; }
+    input { font: inherit; }
+  </style>
+</head>
+<body>
+  <form class="grid">
+    <label><code>text</code><input type="text" name="t" placeholder="Any text"></label>
+    <label><code>email</code><input type="email" name="e" value="me@example.com"></label>
+    <label><code>password</code><input type="password" name="p" value="secret"></label>
+    <label><code>tel</code><input type="tel" name="tel" value="+1 555 0100"></label>
+    <label><code>url</code><input type="url" name="u" value="https://example.com"></label>
+    <label><code>search</code><input type="search" name="q" value="flexbox"></label>
+    <label><code>number</code><input type="number" name="n" min="0" max="10" value="3"></label>
+    <label><code>range</code><input type="range" name="r" min="0" max="10" value="7"></label>
+    <label><code>color</code><input type="color" name="c" value="#6c5ce7"></label>
+    <label><code>date</code><input type="date" name="d" value="2026-09-28"></label>
+    <label><code>time</code><input type="time" name="tm" value="14:30"></label>
+    <label><code>datetime-local</code><input type="datetime-local" name="dt" value="2026-09-28T14:30"></label>
+    <label><code>month</code><input type="month" name="mo" value="2026-09"></label>
+    <label><code>week</code><input type="week" name="w" value="2026-W40"></label>
+    <label><code>file</code><input type="file" name="f" accept="image/*"></label>
+    <label><code>checkbox</code><span><input type="checkbox" name="cb" checked> Remember me</span></label>
+    <label><code>radio</code><span><input type="radio" name="size" value="s"> S <input type="radio" name="size" value="m" checked> M</span></label>
+    <label><code>submit / reset / button</code><span><input type="submit" value="Send"> <input type="reset"> <input type="button" value="Click"></span></label>
+  </form>
+</body>
+</html>

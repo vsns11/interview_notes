@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Native CSS nesting</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 16px; }
+
+  .card {
+    padding: 16px;
+    border: 2px solid #cbd5e1;
+    border-radius: 8px;
+    margin-block-end: 12px;
+
+    .title { font-size: 20px; margin: 0; }          /* = .card .title (descendant)        */
+    > p { margin: 4px 0 0; color: #334155; }         /* = .card > p (relative selector)    */
+    &:hover { border-color: #2563eb; }               /* = .card:hover (no space)           */
+    &.featured { border-color: #f59e0b; }            /* = .card.featured (same element)    */
+    .dark-page & { background: #0f172a; }            /* = .dark-page .card (& at the end)  */
+    @media (width >= 600px) { padding: 24px; }       /* nested at-rule: applies to .card   */
+    &__body { color: red; }                          /* NOT Sass: means  __body.card       */
+  }
+
+  /* & behaves like :is() -> the parent list's HIGHEST specificity is used */
+  #main, .sidebar {
+    .link { color: crimson; }                         /* = :is(#main, .sidebar) .link  (1,1,0) */
+  }
+  .sidebar .link.plain { color: green; }              /* (0,3,0) -- still loses!               */
+</style>
+<body>
+  <div class="dark-page">
+    <article class="card featured" id="c1">
+      <h2 class="title">Nested card</h2>
+      <p>Styles for this card live in one nested block.</p>
+      <div class="card__body" id="body">BEM-style child</div>
+    </article>
+  </div>
+  <aside class="sidebar"><a class="link plain" id="l1" href="#">sidebar link</a></aside>
+</body>
+</html>

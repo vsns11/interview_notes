@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="906" viewBox="0 0 1240 906" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="The full ETA prediction platform, offline and online">
+  <defs>
+    <marker id="m2l6a-mamber" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#D97706"/>
+    </marker>
+    <marker id="m2l6a-mblue" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#2563EB"/>
+    </marker>
+    <marker id="m2l6a-mviolet" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#7C3AED"/>
+    </marker>
+    <marker id="m2l6a-memerald" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#059669"/>
+    </marker>
+    <marker id="m2l6a-mpink" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#DB2777"/>
+    </marker>
+    <filter id="m2l6a-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m2l6a-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m2l6a-k1"><rect x="560" y="110" width="255" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l6a-k2"><rect x="170" y="110" width="224" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l6a-k3"><rect x="70" y="430" width="170" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l6a-k4"><rect x="300" y="430" width="245" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l6a-k5"><rect x="635" y="430" width="193" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l6a-k6"><rect x="888" y="430" width="265" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l6a-k7"><rect x="305" y="640" width="235" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="906" fill="#FFFFFF"/>
+  <rect x="40" y="56" width="1160" height="200" rx="14" fill="#FFFBEB" stroke="#FCD34D" stroke-width="1.5"/>
+  <text x="64" y="86" font-size="16.5" font-weight="600" fill="#B45309">Offline: nightly batch, labels within the hour</text>
+  <rect x="40" y="376" width="1160" height="220" rx="14" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.5"/>
+  <text x="64" y="406" font-size="16.5" font-weight="600" fill="#1D4ED8">Online: one checkout, under 100 ms</text>
+  <g fill="none" stroke="#D97706" stroke-width="2"><path d="M940,155 L815,155" marker-end="url(#m2l6a-mamber)"/></g>
+  <g fill="none" stroke="#D97706" stroke-width="2"><path d="M560,155 L394,155" marker-end="url(#m2l6a-mamber)"/></g>
+  <g fill="none" stroke="#2563EB" stroke-width="2"><path d="M240,475 L300,475" marker-end="url(#m2l6a-mblue)"/></g>
+  <g fill="none" stroke="#2563EB" stroke-width="2"><path d="M545,475 L635,475" marker-end="url(#m2l6a-mblue)"/></g>
+  <g fill="none" stroke="#2563EB" stroke-width="2"><path d="M828,475 L888,475" marker-end="url(#m2l6a-mblue)"/></g>
+  <g fill="none" stroke="#7C3AED" stroke-width="2"><path d="M282,200 V290 Q282,302 294,302 H719 Q731,302 731,314 V430" marker-end="url(#m2l6a-mviolet)"/></g>
+  <g fill="none" stroke="#059669" stroke-width="2"><path d="M1153,475 H1176 Q1188,475 1188,463 V344 Q1188,332 1176,332 H1062 Q1050,332 1050,320 V200" marker-end="url(#m2l6a-memerald)"/></g>
+  <g fill="none" stroke="#DB2777" stroke-width="2"><path d="M305,685 H288 Q276,685 276,673 V487 Q276,475 288,475 H300" marker-end="url(#m2l6a-mpink)"/></g>
+  <g font-size="15.5" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7"><text x="500" y="296" fill="#5B21B6">the model file</text></g>
+  <g font-size="15.5" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7"><text x="900" y="322" fill="#047857">prediction + features logged</text></g>
+  <g font-size="15.5" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7"><text x="276" y="580" fill="#BE185D">route distance</text></g>
+  <g stroke="#D97706" stroke-width="1.5">
+    <path d="M940,110 L940,184 A110,16 0 0 0 1160,184 L1160,110" fill="#FEF3C7"/>
+    <ellipse cx="1050" cy="110" rx="110" ry="16" fill="#FFFBEB"/>
+  </g>
+  <text x="1050" y="162" text-anchor="middle" font-size="18.5" font-weight="600" fill="#111827">Event warehouse</text>
+  <g filter="url(#m2l6a-soft)">
+    <rect x="560" y="110" width="255" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="560" y="110" width="6" height="90" fill="#D97706" clip-path="url(#m2l6a-k1)"/>
+  </g>
+  <circle cx="598" cy="155" r="18" fill="#FFFFFF"/>
+  <g transform="translate(587.56,144.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l9 4.5-9 4.5-9-4.5z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5l9 4.5 9-4.5"/></g>
+  <text x="624" y="162" font-size="18.5" font-weight="600" fill="#111827">Training pipeline</text>
+  <g filter="url(#m2l6a-soft)">
+    <rect x="170" y="110" width="224" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="170" y="110" width="6" height="90" fill="#7C3AED" clip-path="url(#m2l6a-k2)"/>
+  </g>
+  <circle cx="208" cy="155" r="18" fill="#FFFFFF"/>
+  <g transform="translate(197.56,144.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5A2 2 0 0 1 6 3h13v16H6a2 2 0 0 0-2 2z"/><path d="M19 15.5H6"/></g>
+  <text x="234" y="162" font-size="18.5" font-weight="600" fill="#111827">Model registry</text>
+  <g filter="url(#m2l6a-soft)">
+    <rect x="70" y="430" width="170" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="70" y="430" width="6" height="90" fill="#2563EB" clip-path="url(#m2l6a-k3)"/>
+  </g>
+  <circle cx="108" cy="475" r="18" fill="#FFFFFF"/>
+  <g transform="translate(97.56,464.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></g>
+  <text x="134" y="482" font-size="18.5" font-weight="600" fill="#111827">Checkout</text>
+  <text x="155" y="545" font-size="15.5" text-anchor="middle" fill="#6B7280">the estimate renders here</text>
+  <g filter="url(#m2l6a-soft)">
+    <rect x="300" y="430" width="245" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="300" y="430" width="6" height="90" fill="#2563EB" clip-path="url(#m2l6a-k4)"/>
+  </g>
+  <circle cx="338" cy="475" r="18" fill="#FFFFFF"/>
+  <g transform="translate(327.56,464.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></g>
+  <text x="364" y="482" font-size="18.5" font-weight="600" fill="#111827">Feature assembly</text>
+  <text x="422.5" y="545" font-size="15.5" text-anchor="middle" fill="#6B7280">one batched online-store read</text>
+  <g filter="url(#m2l6a-lift)">
+    <rect x="635" y="430" width="193" height="90" rx="12" fill="#DBEAFE" stroke="#2563EB" stroke-width="2"/>
+    <rect x="635" y="430" width="9" height="90" fill="#2563EB" clip-path="url(#m2l6a-k5)"/>
+  </g>
+  <circle cx="673" cy="475" r="18" fill="#FFFFFF"/>
+  <g transform="translate(662.56,464.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 1.5v3M15 1.5v3M9 19.5v3M15 19.5v3M1.5 9h3M1.5 15h3M19.5 9h3M19.5 15h3"/></g>
+  <text x="699" y="482" font-size="18.5" font-weight="600" fill="#111827">GBDT model</text>
+  <text x="731.5" y="545" font-size="15.5" text-anchor="middle" fill="#6B7280">benchmark CPU latency</text>
+  <g filter="url(#m2l6a-soft)">
+    <rect x="888" y="430" width="265" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="888" y="430" width="6" height="90" fill="#2563EB" clip-path="url(#m2l6a-k6)"/>
+  </g>
+  <circle cx="926" cy="475" r="18" fill="#FFFFFF"/>
+  <g transform="translate(915.56,464.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12h7M12.8 8.8L16 12l-3.2 3.2"/></g>
+  <text x="952" y="482" font-size="18.5" font-weight="600" fill="#111827">Calibration buffer</text>
+  <text x="1020.5" y="545" font-size="15.5" text-anchor="middle" fill="#6B7280">a product setting, not model logic</text>
+  <g filter="url(#m2l6a-soft)">
+    <rect x="305" y="640" width="235" height="90" rx="12" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.5"/>
+    <rect x="305" y="640" width="6" height="90" fill="#DB2777" clip-path="url(#m2l6a-k7)"/>
+  </g>
+  <circle cx="343" cy="685" r="18" fill="#FFFFFF"/>
+  <g transform="translate(332.56,674.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3L21 21"/></g>
+  <text x="369" y="692" font-size="18.5" font-weight="600" fill="#111827">Routing service</text>
+  <text x="422.5" y="755" font-size="15.5" text-anchor="middle" fill="#6B7280">15 ms budget, cached zone fallback</text>
+  <rect x="40" y="790" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="835" text-anchor="middle" font-size="16" fill="#475569">Use online inference for current inputs. Test fallback quality and estimate prediction traffic separately.</text>
+</svg>

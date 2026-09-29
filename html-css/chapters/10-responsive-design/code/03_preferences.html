@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Tells the browser before any CSS loads that both schemes are supported (avoids a white flash) -->
+<meta name="color-scheme" content="light dark">
+<title>Responding to user preferences</title>
+<style>
+  :root {
+    color-scheme: light dark;              /* built-in UI (form controls, scrollbars) follows the OS */
+    /* Colour tokens. Light values first… */
+    --bg: #ffffff;  --text: #1f2937;  --card: #eff6ff;  --accent: #1d4ed8;  --border: #bfdbfe;
+  }
+  /* …then override them when the user's OS is in dark mode */
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f172a;  --text: #e2e8f0;  --card: #1e293b;  --accent: #93c5fd;  --border: #334155; }
+  }
+  /* Users who asked the OS for more contrast get stronger borders */
+  @media (prefers-contrast: more) {
+    :root { --border: currentColor; }
+  }
+
+  body { background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; margin: 14px; }
+  .card { background: var(--card); border: 2px solid var(--border); border-radius: 10px; padding: 12px; max-width: 360px; }
+  a { color: var(--accent); }
+  /* light-dark(light, dark): picks one value from the used color-scheme, no media query needed */
+  .note { color: light-dark(#92400e, #fcd34d); font-weight: 600; }
+  #mode { font: 700 13px ui-monospace, monospace; }
+  #mode::after { content: "prefers-color-scheme: light"; }
+  @media (prefers-color-scheme: dark) { #mode::after { content: "prefers-color-scheme: dark"; } }
+</style>
+</head>
+<body>
+<p id="mode"></p>
+<div class="card">
+  <h2 style="margin:0 0 6px;font-size:17px">Account settings</h2>
+  <p style="margin:0 0 8px">Colours come from custom properties; <a href="#">links</a> use the accent token.</p>
+  <p class="note" style="margin:0 0 8px">This line uses light-dark().</p>
+  <label>Nickname <input value="trail_runner"></label>
+  <label><input type="checkbox" checked> Email me</label>
+</div>
+</body>
+</html>

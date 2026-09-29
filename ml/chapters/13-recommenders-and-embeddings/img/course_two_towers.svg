@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="770" viewBox="0 0 1240 770" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="The two towers meet only at the dot product">
+  <defs>
+    <marker id="m2l3d-mblue" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#2563EB"/>
+    </marker>
+    <marker id="m2l3d-mviolet" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#7C3AED"/>
+    </marker>
+    <filter id="m2l3d-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m2l3d-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m2l3d-k1"><rect x="250" y="70" width="183" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l3d-k2"><rect x="810" y="70" width="183" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l3d-k3"><rect x="245" y="290" width="193" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l3d-k4"><rect x="805" y="290" width="193" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l3d-k5"><rect x="524" y="500" width="193" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="770" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#2563EB" stroke-width="2"><path d="M341,160 V290" marker-end="url(#m2l3d-mblue)"/></g>
+  <g fill="none" stroke="#7C3AED" stroke-width="2"><path d="M901,160 V290" marker-end="url(#m2l3d-mviolet)"/></g>
+  <g fill="none" stroke="#2563EB" stroke-width="2"><path d="M341,380 V440 Q341,452 353,452 H608 Q620,452 620,464 V500" marker-end="url(#m2l3d-mblue)"/></g>
+  <g fill="none" stroke="#7C3AED" stroke-width="2"><path d="M901,380 V440 Q901,452 889,452 H632 Q620,452 620,464 V500" marker-end="url(#m2l3d-mviolet)"/></g>
+  <text x="341" y="48" font-size="15.5" text-anchor="middle" fill="#6B7280">watch history, clicks, device, hour</text>
+  <text x="901" y="48" font-size="15.5" text-anchor="middle" fill="#6B7280">id, category, title, image</text>
+  <g filter="url(#m2l3d-soft)">
+    <rect x="250" y="70" width="183" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="250" y="70" width="6" height="90" fill="#2563EB" clip-path="url(#m2l3d-k1)"/>
+  </g>
+  <circle cx="288" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(277.56,104.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></g>
+  <text x="314" y="122" font-size="18.5" font-weight="600" fill="#111827">User tower</text>
+  <g filter="url(#m2l3d-soft)">
+    <rect x="810" y="70" width="183" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="810" y="70" width="6" height="90" fill="#7C3AED" clip-path="url(#m2l3d-k2)"/>
+  </g>
+  <circle cx="848" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(837.56,104.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l9 4.5-9 4.5-9-4.5z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5l9 4.5 9-4.5"/></g>
+  <text x="874" y="122" font-size="18.5" font-weight="600" fill="#111827">Item tower</text>
+  <g filter="url(#m2l3d-soft)">
+    <rect x="245" y="290" width="193" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="245" y="290" width="6" height="90" fill="#2563EB" clip-path="url(#m2l3d-k3)"/>
+  </g>
+  <circle cx="283" cy="335" r="18" fill="#FFFFFF"/>
+  <g transform="translate(272.56,324.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.5 13.2h6.2L10 22l8.5-11.2h-6.2z"/></g>
+  <text x="309" y="342" font-size="18.5" font-weight="600" fill="#111827">User vector</text>
+  <g filter="url(#m2l3d-soft)">
+    <rect x="805" y="290" width="193" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="805" y="290" width="6" height="90" fill="#7C3AED" clip-path="url(#m2l3d-k4)"/>
+  </g>
+  <circle cx="843" cy="335" r="18" fill="#FFFFFF"/>
+  <g transform="translate(832.56,324.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.5 13.2h6.2L10 22l8.5-11.2h-6.2z"/></g>
+  <text x="869" y="342" font-size="18.5" font-weight="600" fill="#111827">Item vector</text>
+  <text x="620" y="345" font-size="16" text-anchor="middle" fill="#475569">both are 64 to 256 floats, in one shared space</text>
+  <g filter="url(#m2l3d-lift)">
+    <rect x="524" y="500" width="193" height="90" rx="12" fill="#D1FAE5" stroke="#059669" stroke-width="2"/>
+    <rect x="524" y="500" width="9" height="90" fill="#059669" clip-path="url(#m2l3d-k5)"/>
+  </g>
+  <circle cx="562" cy="545" r="18" fill="#FFFFFF"/>
+  <g transform="translate(551.56,534.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="588" y="552" font-size="18.5" font-weight="600" fill="#111827">Dot product</text>
+  <text x="620.5" y="615" font-size="15.5" text-anchor="middle" fill="#6B7280">one similarity score</text>
+  <rect x="40" y="655" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="700" text-anchor="middle" font-size="16" fill="#475569">The item tower never sees the user and the user tower never sees the item. They meet only at the very end.</text>
+</svg>

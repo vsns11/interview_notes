@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="470" viewBox="0 0 1240 470" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="One message’s journey, with its time budget">
+  <defs>
+    <marker id="m6l1b-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <filter id="m6l1b-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m6l1b-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m6l1b-k1"><rect x="50" y="64" width="170" height="90" rx="12"/></clipPath>
+    <clipPath id="m6l1b-k2"><rect x="231" y="64" width="245" height="90" rx="12"/></clipPath>
+    <clipPath id="m6l1b-k3"><rect x="487" y="64" width="245" height="90" rx="12"/></clipPath>
+    <clipPath id="m6l1b-k4"><rect x="743" y="64" width="170" height="90" rx="12"/></clipPath>
+    <clipPath id="m6l1b-k5"><rect x="924" y="64" width="265" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="470" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M220,109 L231,109" marker-end="url(#m6l1b-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M476,109 L487,109" marker-end="url(#m6l1b-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M732,109 L743,109" marker-end="url(#m6l1b-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M913,109 L924,109" marker-end="url(#m6l1b-mslate)"/></g>
+  <g filter="url(#m6l1b-soft)">
+    <rect x="50" y="64" width="170" height="90" rx="12" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5"/>
+    <rect x="50" y="64" width="6" height="90" fill="#64748B" clip-path="url(#m6l1b-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#64748B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10v-6z"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">Gateway</text>
+  <text x="135" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">milliseconds</text>
+  <g filter="url(#m6l1b-soft)">
+    <rect x="231" y="64" width="245" height="90" rx="12" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.5"/>
+    <rect x="231" y="64" width="6" height="90" fill="#DB2777" clip-path="url(#m6l1b-k2)"/>
+  </g>
+  <circle cx="269" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(258.56,98.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h19l-7.5 8.5V20l-4 2v-9.5z"/></g>
+  <text x="295" y="116" font-size="18.5" font-weight="600" fill="#111827">Input moderation</text>
+  <text x="353.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">10 to 50 ms</text>
+  <g filter="url(#m6l1b-soft)">
+    <rect x="487" y="64" width="245" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="487" y="64" width="6" height="90" fill="#D97706" clip-path="url(#m6l1b-k3)"/>
+  </g>
+  <circle cx="525" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(514.56,98.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l9 4.5-9 4.5-9-4.5z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5l9 4.5 9-4.5"/></g>
+  <text x="551" y="116" font-size="18.5" font-weight="600" fill="#111827">Context assembly</text>
+  <text x="609.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">single-digit ms</text>
+  <g filter="url(#m6l1b-soft)">
+    <rect x="743" y="64" width="170" height="90" rx="12" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.5"/>
+    <rect x="743" y="64" width="6" height="90" fill="#4F46E5" clip-path="url(#m6l1b-k4)"/>
+  </g>
+  <circle cx="781" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(770.56,98.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="5" r="2.2"/><circle cx="7" cy="19" r="2.2"/><circle cx="17" cy="12" r="2.2"/><path d="M7 7.2v9.6M9.2 12H14.8"/></g>
+  <text x="807" y="116" font-size="18.5" font-weight="600" fill="#111827">Router</text>
+  <text x="828" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">picks a tier</text>
+  <g filter="url(#m6l1b-lift)">
+    <rect x="924" y="64" width="265" height="90" rx="12" fill="#EDE9FE" stroke="#7C3AED" stroke-width="2"/>
+    <rect x="924" y="64" width="9" height="90" fill="#7C3AED" clip-path="url(#m6l1b-k5)"/>
+  </g>
+  <circle cx="962" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(951.56,98.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.9L18.8 9.8l-4.9 1.9L12 16.6l-1.9-4.9L5.2 9.8l4.9-1.9z"/><path d="M18.5 15.5l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9z"/></g>
+  <text x="988" y="116" font-size="18.5" font-weight="600" fill="#111827">Streamed inference</text>
+  <text x="1056.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">TTFT 300 to 800 ms</text>
+  <rect x="40" y="250" width="1160" height="152" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="284" font-size="16" fill="#475569">Example budgets: measure every stage at the target load and percentile.</text>
+  <rect x="64" y="310" width="200" height="32" rx="9" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.2"/>
+  <text x="164" y="332" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">Output moderation</text>
+  <text x="288" y="332" font-size="15.5" fill="#475569">check buffered content before releasing it</text>
+  <rect x="64" y="354" width="200" height="32" rx="9" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.2"/>
+  <text x="164" y="376" text-anchor="middle" font-size="15.5" font-weight="600" fill="#475569">Async, off to the side</text>
+  <text x="288" y="376" font-size="15.5" fill="#475569">optional telemetry; required state writes stay durable</text>
+</svg>

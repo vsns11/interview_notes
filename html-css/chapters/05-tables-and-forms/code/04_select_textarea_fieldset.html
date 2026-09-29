@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Select, textarea, fieldset</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; max-width: 860px; align-items: start; }
+    label { display: grid; gap: 4px; font-weight: 600; align-content: start; }
+    fieldset { border: 1px solid #bbb; border-radius: 6px; }
+    legend { font-weight: 700; padding: 0 4px; }
+    fieldset label { display: flex; gap: 6px; font-weight: 400; }
+    select, textarea, input { font: inherit; font-weight: 400; }
+    .hint { font-weight: 400; font-size: 12px; color: #555; }
+  </style>
+</head>
+<body>
+  <form>
+    <label>Country
+      <select name="country" autocomplete="country">
+        <option value="">-- choose --</option>
+        <optgroup label="Europe">
+          <option value="DE">Germany</option><option value="FR">France</option>
+        </optgroup>
+        <optgroup label="Asia">
+          <option value="IN" selected>India</option><option value="JP">Japan</option>
+        </optgroup>
+      </select>
+    </label>
+
+    <label>Skills <span class="hint">(Ctrl/Cmd-click for several)</span>
+      <select name="skills" multiple size="4">
+        <option selected>HTML</option><option selected>CSS</option><option>JavaScript</option><option>SQL</option>
+      </select>
+    </label>
+
+    <label>Favourite browser <span class="hint">(datalist = suggestions, free text allowed)</span>
+      <input name="browser" list="browsers" value="Fire">
+      <datalist id="browsers"><option value="Chrome"><option value="Firefox"><option value="Safari"><option value="Edge"></datalist>
+    </label>
+
+    <label>Message
+      <textarea name="message" rows="4" maxlength="200" placeholder="Up to 200 characters">Hello!
+Line two keeps its line break.</textarea>
+    </label>
+
+    <fieldset>
+      <legend>Delivery speed</legend>
+      <label><input type="radio" name="speed" value="standard" checked> Standard (free)</label>
+      <label><input type="radio" name="speed" value="express"> Express (+$5)</label>
+    </fieldset>
+
+    <fieldset disabled>
+      <legend>Gift options (disabled fieldset)</legend>
+      <label><input type="checkbox" name="wrap"> Gift wrap</label>
+      <label><input type="checkbox" name="card"> Add a card</label>
+    </fieldset>
+
+    <label>Upload progress <progress max="100" value="70">70%</progress></label>
+    <label>Disk usage <meter min="0" max="100" low="60" high="85" optimum="20" value="91">91%</meter></label>
+
+    <label>Quantity x price = total
+      <span><input type="number" id="qty" name="qty" value="3" style="width:4em"> x $12 =
+        <output name="total" for="qty">$36</output></span>
+    </label>
+  </form>
+  <script>
+    // <output> shows a calculation result; recompute whenever any field changes
+    const form = document.querySelector('form');
+    form.addEventListener('input', () => { form.total.value = '$' + form.qty.value * 12; });
+  </script>
+</body>
+</html>

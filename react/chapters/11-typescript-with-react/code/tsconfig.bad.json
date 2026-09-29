@@ -1,0 +1,6 @@
+{
+  // Shows the errors in bad_types.tsx:  tsc --noEmit -p tsconfig.bad.json
+  "extends": "./tsconfig.check.json",
+  "include": ["bad_types.tsx"],
+  "exclude": []
+}

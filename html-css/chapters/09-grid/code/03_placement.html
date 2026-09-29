@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Placing grid items: lines, spans, areas</title>
+<style>
+  body { font: 12px/1.3 system-ui, sans-serif; margin: 12px 12px 12px 26px; color: #222; }
+  h3 { font: 600 12px ui-monospace, monospace; margin: 14px 0 20px; }
+  .g { display: grid; border: 2px dashed #9333ea; background: #faf5ff; position: relative; }
+  .g > div { background: rgba(59,130,246,.30); outline: 1px solid #1d4ed8; outline-offset: -1px; padding: 6px;
+             font: 11px ui-monospace, monospace; }
+  .line { position: absolute; background: #dc2626; color: #fff; font: 700 10px ui-monospace, monospace;
+          padding: 0 4px; border-radius: 3px; }
+  .cols { display: grid; grid-template-columns: 430px 1fr; gap: 30px; width: 850px; }
+
+  /* A. line-based placement on a 4 x 3 grid */
+  #lines { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 50px); gap: 8px; }
+  #lines .a { grid-column: 1 / 3; }                         /* from line 1 to line 3 */
+  #lines .b { grid-column: 3 / -1; grid-row: 1 / span 2; background: rgba(34,197,94,.35); }  /* -1 = last line */
+  #lines .c { grid-column: span 2; background: rgba(249,115,22,.35); }  /* auto-placed, 2 columns wide */
+  #lines .d { grid-area: 3 / 2 / 4 / 5; background: rgba(234,179,8,.35); }  /* row-start / col-start / row-end / col-end */
+
+  /* B. named template areas */
+  #areas { grid-template-columns: 110px 1fr; grid-template-rows: 36px 90px 30px; gap: 6px;
+           grid-template-areas:
+             "header  header"
+             "sidebar main"
+             "footer  footer"; }
+  #areas .h { grid-area: header; } #areas .s { grid-area: sidebar; background: rgba(34,197,94,.35); }
+  #areas .m { grid-area: main; background: rgba(234,179,8,.30); } #areas .f { grid-area: footer; }
+
+  /* C. overlap: two items in the same cell */
+  #overlap { grid-template-columns: 1fr; width: 100%; }
+  #overlap > * { grid-area: 1 / 1; }                        /* both in row 1, column 1 */
+  #overlap .img { height: 120px; background: linear-gradient(135deg, #60a5fa, #1e3a8a); }
+  #overlap .cap { align-self: end; justify-self: start; margin: 8px; background: rgba(255,255,255,.9);
+                  z-index: 1; }
+</style>
+</head>
+<body>
+<div class="cols">
+  <div>
+    <h3>A. Lines: grid-column / grid-row / span / -1</h3>
+    <div class="g" id="lines">
+      <div class="a">a: grid-column 1 / 3</div>
+      <div class="b">b: grid-column 3 / -1<br>grid-row 1 / span 2</div>
+      <div class="c">c: grid-column: span 2<br>(auto-placed)</div>
+      <div class="d">d: grid-area: 3 / 2 / 4 / 5</div>
+    </div>
+  </div>
+  <div>
+    <h3>B. grid-template-areas</h3>
+    <div class="g" id="areas">
+      <div class="h">header</div><div class="s">sidebar</div><div class="m">main</div><div class="f">footer</div>
+    </div>
+    <h3>C. Overlap — both items: grid-area: 1 / 1</h3>
+    <div class="g" id="overlap"><div class="img"></div><div class="cap">Caption over the image (z-index: 1)</div></div>
+  </div>
+</div>
+<script>
+  // numbered badges on the column lines (top) and row lines (left) of grid A
+  const g = document.getElementById('lines'), cs = getComputedStyle(g);
+  const badge = (n, css) => g.insertAdjacentHTML('beforeend', `<span class="line" style="${css}">${n}</span>`);
+  for (const [prop, gapProp, side] of [['gridTemplateColumns', 'columnGap', 'col'], ['gridTemplateRows', 'rowGap', 'row']]) {
+    const tracks = cs[prop].split(' ').map(parseFloat), gap = parseFloat(cs[gapProp]);
+    let p = 0;
+    for (let i = 0; i <= tracks.length; i++) {
+      const at = i === 0 ? 0 : i === tracks.length ? p - gap : p - gap / 2;
+      badge(i + 1, side === 'col' ? `top:-17px;left:${at}px;transform:translateX(-50%)` : `left:-22px;top:${at}px;transform:translateY(-50%)`);
+      p += (tracks[i] ?? 0) + gap;
+    }
+  }
+</script>
+</body>
+</html>

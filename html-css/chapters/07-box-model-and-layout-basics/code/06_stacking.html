@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>z-index and stacking contexts</title>
+<style>
+  body { font: 12px/1.3 system-ui, sans-serif; margin: 12px; color: #111; }
+  .cols { display: grid; grid-template-columns: repeat(3, 250px); gap: 20px; }
+  h3 { font-size: 12px; margin: 0 0 6px; }
+  .stage { position: relative; height: 190px; border: 1px dashed #999; background: #fafafa; }
+  .card { position: absolute; width: 130px; height: 80px; padding: 5px; border: 2px solid rgba(0,0,0,.6); }
+  .red { background: #fca5a5; } .green { background: #86efac; } .blue { background: #93c5fd; } .gold { background: #fde047; }
+
+  /* 1. z-index orders positioned siblings (higher = in front) */
+  #s1 .red   { left: 10px;  top: 10px;  z-index: 3; }
+  #s1 .green { left: 50px;  top: 50px;  z-index: 2; }
+  #s1 .blue  { left: 90px;  top: 90px;  z-index: 1; }
+  #s1 .green, #s1 .blue { display: flex; align-items: flex-end; }   /* labels at the bottom, where they show */
+
+  /* 2. the trap: child z-index 999 is trapped inside its parent's stacking context (z-index: 1) */
+  #s2 .parent { left: 10px; top: 10px; width: 160px; height: 150px; z-index: 1; background: #fecaca; }
+  #s2 .parent .child { left: 40px; top: 60px; z-index: 999; background: #fde047; }
+  #s2 .blue { left: 100px; top: 40px; z-index: 2; }
+
+  /* 3. a child with z-index: -1 escapes to the nearest stacking context and paints BEHIND its parent card.
+        isolation: isolate turns the card into a stacking context, so the child stays in front of the card's background */
+  #s3 .stage { background: none; height: 100px; margin-bottom: 8px; }
+  #s3 .card { left: 10px; top: 8px; width: 150px; height: 60px; background: #bbf7d0; }
+  #s3 .under { position: absolute; z-index: -1; left: 90px; top: 38px; width: 110px; height: 36px;
+               background: #fde047; border: 2px solid #a16207; padding: 3px; }
+  #s3 .iso { isolation: isolate; }
+</style>
+</head>
+<body>
+<div class="cols">
+  <div><h3>1. z-index 3 / 2 / 1 on positioned siblings</h3>
+    <div class="stage" id="s1">
+      <div class="card red"   id="r1">red — z-index: 3</div>
+      <div class="card green" id="g1">green — z-index: 2</div>
+      <div class="card blue"  id="b1"><br><br><br>blue — z-index: 1</div>
+    </div></div>
+
+  <div><h3>2. z-index: 999 still loses</h3>
+    <div class="stage" id="s2">
+      <div class="card parent">parent — z-index: 1<br>(stacking ctx)
+        <div class="card child" id="c2">child<br>z-index:<br>999</div></div>
+      <div class="card blue" id="b2"><br><br><br>sibling — z-index: 2</div>
+    </div></div>
+
+  <div id="s3"><h3>3. child z-index: −1, without / with isolation</h3>
+    <div class="stage"><div class="card">no isolation:<br>child slides behind the card
+        <div class="under" id="u1">child z −1</div></div></div>
+    <div class="stage"><div class="card iso">isolation: isolate:<br>child stays on the card
+        <div class="under" id="u2">child z −1</div></div></div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="500" viewBox="0 0 1240 500" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Context assembly builds the model input fresh on every request">
+  <defs>
+    <marker id="m6l0b-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <filter id="m6l0b-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m6l0b-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m6l0b-k1"><rect x="70" y="110" width="276" height="90" rx="12"/></clipPath>
+    <clipPath id="m6l0b-k2"><rect x="425" y="110" width="170" height="90" rx="12"/></clipPath>
+    <clipPath id="m6l0b-k3"><rect x="674" y="110" width="224" height="90" rx="12"/></clipPath>
+    <clipPath id="m6l0b-k4"><rect x="977" y="110" width="193" height="90" rx="12"/></clipPath>
+    <clipPath id="m6l0b-k5"><rect x="450" y="300" width="340" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="500" fill="#FFFFFF"/>
+  <rect x="40" y="50" width="1160" height="210" rx="14" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="64" y="80" font-size="16.5" font-weight="600" fill="#475569">Gathered per request, packed into a token budget</text>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M620,260 V300" marker-end="url(#m6l0b-mslate)"/></g>
+  <g filter="url(#m6l0b-soft)">
+    <rect x="70" y="110" width="276" height="90" rx="12" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.5"/>
+    <rect x="70" y="110" width="6" height="90" fill="#4F46E5" clip-path="url(#m6l0b-k1)"/>
+  </g>
+  <circle cx="108" cy="155" r="18" fill="#FFFFFF"/>
+  <g transform="translate(97.56,144.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></g>
+  <text x="134" y="162" font-size="18.5" font-weight="600" fill="#111827">System instructions</text>
+  <g filter="url(#m6l0b-soft)">
+    <rect x="425" y="110" width="170" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="425" y="110" width="6" height="90" fill="#2563EB" clip-path="url(#m6l0b-k2)"/>
+  </g>
+  <circle cx="463" cy="155" r="18" fill="#FFFFFF"/>
+  <g transform="translate(452.56,144.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12c0 4.1-3.8 7.4-8.5 7.4a10 10 0 0 1-2.6-.34L4.5 21l1.3-3.6A6.9 6.9 0 0 1 3.5 12C3.5 7.9 7.3 4.6 12 4.6s8.5 3.3 8.5 7.4z"/></g>
+  <text x="489" y="162" font-size="18.5" font-weight="600" fill="#111827">History</text>
+  <g filter="url(#m6l0b-soft)">
+    <rect x="674" y="110" width="224" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="674" y="110" width="6" height="90" fill="#7C3AED" clip-path="url(#m6l0b-k3)"/>
+  </g>
+  <circle cx="712" cy="155" r="18" fill="#FFFFFF"/>
+  <g transform="translate(701.56,144.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></g>
+  <text x="738" y="162" font-size="18.5" font-weight="600" fill="#111827">Retrieved text</text>
+  <g filter="url(#m6l0b-soft)">
+    <rect x="977" y="110" width="193" height="90" rx="12" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <rect x="977" y="110" width="6" height="90" fill="#059669" clip-path="url(#m6l0b-k4)"/>
+  </g>
+  <circle cx="1015" cy="155" r="18" fill="#FFFFFF"/>
+  <g transform="translate(1004.56,144.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></g>
+  <text x="1041" y="162" font-size="18.5" font-weight="600" fill="#111827">Preferences</text>
+  <g filter="url(#m6l0b-lift)">
+    <rect x="450" y="300" width="340" height="90" rx="12" fill="#E2E8F0" stroke="#64748B" stroke-width="2"/>
+    <rect x="450" y="300" width="9" height="90" fill="#64748B" clip-path="url(#m6l0b-k5)"/>
+  </g>
+  <circle cx="488" cy="345" r="18" fill="#FFFFFF"/>
+  <g transform="translate(477.56,334.56) scale(0.87)" fill="none" stroke="#64748B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 1.5v3M15 1.5v3M9 19.5v3M15 19.5v3M1.5 9h3M1.5 15h3M19.5 9h3M19.5 15h3"/></g>
+  <text x="514" y="352" font-size="18.5" font-weight="600" fill="#111827">One model input</text>
+  <text x="620" y="415" font-size="15.5" text-anchor="middle" fill="#6B7280">select relevant information within the token budget</text>
+  <rect x="40" y="424" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="469" text-anchor="middle" font-size="16" fill="#475569">Different products need different context, permissions, and latency budgets.</text>
+</svg>

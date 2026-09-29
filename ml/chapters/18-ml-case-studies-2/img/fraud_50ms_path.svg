@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="620" viewBox="0 0 1240 620" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Fifty milliseconds inside the payment authorization call">
+  <defs>
+    <marker id="m3l5c-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <filter id="m3l5c-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m3l5c-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m3l5c-k1"><rect x="50" y="64" width="204" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l5c-k2"><rect x="331" y="64" width="245" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l5c-k3"><rect x="653" y="64" width="193" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l5c-k4"><rect x="923" y="64" width="265" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l5c-k5"><rect x="370" y="370" width="500" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="620" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M254,109 L331,109" marker-end="url(#m3l5c-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M576,109 L653,109" marker-end="url(#m3l5c-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M846,109 L923,109" marker-end="url(#m3l5c-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M1055.5,154 V300 Q1055.5,312 1043.5,312 H632 Q620,312 620,324 V370" marker-end="url(#m3l5c-mslate)"/></g>
+  <g filter="url(#m3l5c-soft)">
+    <rect x="50" y="64" width="204" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="50" y="64" width="6" height="90" fill="#D97706" clip-path="url(#m3l5c-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">Rules engine</text>
+  <text x="152" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">early policy checks</text>
+  <g filter="url(#m3l5c-soft)">
+    <rect x="331" y="64" width="245" height="90" rx="12" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.5"/>
+    <rect x="331" y="64" width="6" height="90" fill="#4F46E5" clip-path="url(#m3l5c-k2)"/>
+  </g>
+  <circle cx="369" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(358.56,98.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></g>
+  <text x="395" y="116" font-size="18.5" font-weight="600" fill="#111827">Feature assembly</text>
+  <text x="453.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">online store + velocity</text>
+  <g filter="url(#m3l5c-soft)">
+    <rect x="653" y="64" width="193" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="653" y="64" width="6" height="90" fill="#7C3AED" clip-path="url(#m3l5c-k3)"/>
+  </g>
+  <circle cx="691" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(680.56,98.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 1.5v3M15 1.5v3M9 19.5v3M15 19.5v3M1.5 9h3M1.5 15h3M19.5 9h3M19.5 15h3"/></g>
+  <text x="717" y="116" font-size="18.5" font-weight="600" fill="#111827">Model score</text>
+  <text x="749.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">about 10 ms</text>
+  <g filter="url(#m3l5c-soft)">
+    <rect x="923" y="64" width="265" height="90" rx="12" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <rect x="923" y="64" width="6" height="90" fill="#059669" clip-path="url(#m3l5c-k4)"/>
+  </g>
+  <circle cx="961" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(950.56,98.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="5" r="2.2"/><circle cx="7" cy="19" r="2.2"/><circle cx="17" cy="12" r="2.2"/><path d="M7 7.2v9.6M9.2 12H14.8"/></g>
+  <text x="987" y="116" font-size="18.5" font-weight="600" fill="#111827">Three-way decision</text>
+  <text x="1055.5" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">approve / check / block</text>
+  <g font-size="15.5" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7"><text x="860" y="306" fill="#475569">three separate label streams</text></g>
+  <g filter="url(#m3l5c-soft)">
+    <rect x="370" y="370" width="500" height="90" rx="12" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5"/>
+    <rect x="370" y="370" width="6" height="90" fill="#64748B" clip-path="url(#m3l5c-k5)"/>
+  </g>
+  <circle cx="408" cy="415" r="18" fill="#FFFFFF"/>
+  <g transform="translate(397.56,404.56) scale(0.87)" fill="none" stroke="#64748B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></g>
+  <text x="434" y="422" font-size="18.5" font-weight="600" fill="#111827">Investigations, verification, delayed reports</text>
+  <rect x="40" y="500" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="545" text-anchor="middle" font-size="16" fill="#475569">That last arrow is not a response to the user. It is the training loop, and its labels arrive at three different speeds.</text>
+</svg>

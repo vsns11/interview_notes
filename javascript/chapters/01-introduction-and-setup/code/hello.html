@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Hello from JavaScript</title>
+  <style>
+    body { font: 18px/1.5 system-ui, sans-serif; margin: 24px; background: #fff; color: #222; }
+    #out { padding: 12px 16px; border: 2px solid #f0db4f; border-radius: 8px; background: #fffbe6; }
+    code { background: #eee; padding: 1px 4px; border-radius: 4px; }
+  </style>
+  <!-- defer: download now, run after the HTML is parsed, so the #out element exists -->
+  <script src="hello.js" defer></script>
+</head>
+<body>
+  <h1>My first page with JavaScript</h1>
+  <p>The box below is empty in the HTML file. The script fills it in:</p>
+  <div id="out"></div>
+  <script>
+    // An inline script runs as soon as the parser reaches it.
+    console.log("inline script ran");   // visible in DevTools > Console
+  </script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Accessible error messages</title>
+  <style>
+    body { font: 15px/1.45 system-ui, sans-serif; margin: 16px; color: #222; max-width: 560px; }
+    .field { display: grid; gap: 4px; margin-bottom: 14px; }
+    label { font-weight: 600; }
+    .help { font-size: 13px; color: #555; }
+    input { font: inherit; padding: 6px 8px; border: 2px solid #888; border-radius: 5px; }
+    input[aria-invalid="true"] { border-color: #b3261e; }
+    .error { color: #b3261e; font-size: 14px; font-weight: 600; }
+    .error:empty { display: none; }
+    .error::before { content: "\26A0\FE0F  "; }            /* warning sign: not colour alone */
+    #summary { border: 3px solid #b3261e; border-radius: 6px; padding: 8px 14px; margin-bottom: 16px; }
+    #summary[hidden] { display: none; }
+    #summary h2 { font-size: 17px; margin: 0 0 4px; }
+    #summary a { color: #b3261e; }
+    button { font: inherit; padding: 8px 16px; }
+  </style>
+</head>
+<body>
+  <!-- novalidate: turn off the browser bubbles, we render our own messages -->
+  <form id="f" novalidate>
+    <div id="summary" tabindex="-1" hidden>
+      <h2>There are 2 problems with your details</h2>
+      <ul></ul>
+    </div>
+
+    <div class="field">
+      <label for="email">Email address</label>
+      <span class="help" id="email-help">We'll send the receipt here.</span>
+      <input id="email" name="email" type="email" required autocomplete="email"
+             aria-describedby="email-help email-err" value="ada@">
+      <span class="error" id="email-err"></span>
+    </div>
+
+    <div class="field">
+      <label for="zip">Postcode <span class="help">(required)</span></label>
+      <input id="zip" name="zip" required autocomplete="postal-code" inputmode="numeric"
+             pattern="[0-9]{5}" aria-describedby="zip-err" value="">
+      <span class="error" id="zip-err"></span>
+    </div>
+
+    <div class="field">
+      <label for="name">Name on card</label>
+      <input id="name" name="name" required autocomplete="cc-name" value="Ada Lovelace">
+      <span class="error" id="name-err"></span>
+    </div>
+    <button>Pay now</button>
+  </form>
+
+  <script>
+    const form = document.getElementById('f');
+    const messages = {                       // our own wording, per field and per failure
+      email: v => v.valueMissing ? 'Enter your email address.'
+                : 'Enter an email address like name@example.com.',
+      zip:   v => v.valueMissing ? 'Enter your postcode.' : 'Postcode must be 5 digits.',
+      name:  v => 'Enter the name shown on your card.',
+    };
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const problems = [];
+      for (const input of form.querySelectorAll('input')) {
+        const err = document.getElementById(input.id + '-err');
+        if (input.checkValidity()) {         // constraint API still works with novalidate
+          input.removeAttribute('aria-invalid'); err.textContent = '';
+        } else {
+          const msg = messages[input.name](input.validity);
+          input.setAttribute('aria-invalid', 'true');
+          err.textContent = msg;             // read out via aria-describedby
+          problems.push(`<li><a href="#${input.id}">${msg}</a></li>`);
+        }
+      }
+      const summary = document.getElementById('summary');
+      summary.hidden = problems.length === 0;
+      summary.querySelector('h2').textContent =
+        `There ${problems.length === 1 ? 'is 1 problem' : `are ${problems.length} problems`} with your details`;
+      summary.querySelector('ul').innerHTML = problems.join('');
+      if (problems.length) summary.focus();  // move focus so screen readers announce it
+      else alert('Submitted!');
+    });
+
+    form.requestSubmit();                    // demo: show the state after one failed submit
+  </script>
+</body>
+</html>

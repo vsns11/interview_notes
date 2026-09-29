@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Flex axes and direction</title>
+<style>
+  body { font: 13px/1.3 system-ui, sans-serif; margin: 12px; color: #222; }
+  .demos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; width: 860px; }
+  h3 { font: 600 12px ui-monospace, monospace; margin: 0 0 6px; }
+  /* the flex container: dashed purple frame */
+  .flex { display: flex; border: 2px dashed #9333ea; padding: 22px 8px 8px 22px; height: 150px;
+          position: relative; box-sizing: border-box; }
+  /* flex items: blue with a solid outline, numbered in DOM order */
+  .flex > div { width: 44px; height: 34px; background: #93c5fd; outline: 1px solid #1d4ed8;
+                display: grid; place-items: center; font-weight: 700; }
+  /* axis arrows drawn with pseudo-elements: red = main axis, green = cross axis */
+  .flex::before, .flex::after { position: absolute; font: 700 10px ui-monospace, monospace; }
+  .row::before    { content: "main axis →";  top: 4px;  left: 22px; color: #dc2626; }
+  .row::after     { content: "cross →";      top: 50px; left: 2px; color: #16a34a; writing-mode: vertical-rl; }
+  .rowrev::before { content: "← main axis";  top: 4px;  right: 8px; color: #dc2626; }
+  .rowrev::after  { content: "cross →";      top: 50px; left: 2px; color: #16a34a; writing-mode: vertical-rl; }
+  .col::before    { content: "main →";       top: 40px; left: 2px; color: #dc2626; writing-mode: vertical-rl; }
+  .col::after     { content: "cross axis →"; top: 4px;  left: 22px; color: #16a34a; }
+  .row    { flex-direction: row; }
+  .rowrev { flex-direction: row-reverse; }
+  .col    { flex-direction: column; }
+  .order .c { order: -1; }                                /* item 3 moved to the front visually */
+  .note { font-size: 11px; color: #555; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="demos">
+  <div><h3>flex-direction: row</h3>
+    <div class="flex row"><div>1</div><div>2</div><div>3</div></div>
+    <div class="note">default: items line up along the inline direction</div></div>
+  <div><h3>row-reverse</h3>
+    <div class="flex rowrev"><div>1</div><div>2</div><div>3</div></div>
+    <div class="note">main-start is now on the right</div></div>
+  <div><h3>column</h3>
+    <div class="flex col"><div>1</div><div>2</div><div>3</div></div>
+    <div class="note">main axis runs down; width now = cross size</div></div>
+  <div><h3>row + order: -1 on item 3</h3>
+    <div class="flex row order"><div>1</div><div>2</div><div class="c">3</div></div>
+    <div class="note">visual order 3 1 2, but Tab and screen readers still go 1 2 3</div></div>
+</div>
+</body>
+</html>

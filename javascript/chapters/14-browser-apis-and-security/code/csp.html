@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>CSP demo</title>
+<style>body { font: 14px/1.45 system-ui, sans-serif; background: #f6f7f9; color: #1d2330; margin: 22px; }
+  .card { background: #fff; border: 1px solid #d9dde5; border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; max-width: 760px; }
+  code, pre { font: 12.5px/1.5 ui-monospace, Menlo, monospace; }
+  pre { margin: 0; white-space: pre-wrap; }
+  .ok { color: #1f7a45; font-weight: 600; } .bad { color: #b3261e; font-weight: 600; }
+  h3 { margin: 0 0 8px; font-size: 16px; }</style></head>
+<body>
+<h3>Served with <code>Content-Security-Policy: default-src 'self'; script-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'</code></h3>
+<div class="card"><b>Inline script:</b> <span id="inline" class="ok">blocked (this text was never replaced)</span></div>
+<div class="card"><b>Injected comment (simulated XSS):</b> <div id="comment"></div></div>
+<div class="card"><b>Violations reported by the browser</b> (<code>securitypolicyviolation</code> events):<pre id="log"></pre></div>
+<script>
+  document.getElementById('inline').textContent = 'RAN - CSP did not block it';
+  document.getElementById('inline').className = 'bad';
+</script>
+<script src="csp_app.js"></script>
+</body></html>

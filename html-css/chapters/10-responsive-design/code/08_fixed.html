@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The same page, fixed</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 12px; }
+  .promo { max-width: 500px; background: #fee2e2; padding: 8px; }      /* fix 1: max-width, not width */
+  img { max-width: 100%; height: auto; }                                /* fix 2: flexible media */
+  p { overflow-wrap: anywhere; }                                        /* fix 3: allow breaks anywhere if needed */
+</style>
+</head>
+<body>
+<div class="promo">Summer sale: 20% off all tents.</div>
+<img src="media/hills-800.jpg" width="480" height="240" alt="Hills">
+<p>Docs: https://example.com/a/really/long/path/that/never/breaks/because/it/has/no/spaces</p>
+</body>
+</html>

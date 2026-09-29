@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="500" viewBox="0 0 1240 500" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Three loops running at three different speeds">
+  <defs>
+
+    <filter id="m3l2c-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m3l2c-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m3l2c-k1"><rect x="50" y="64" width="300" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l2c-k2"><rect x="470" y="64" width="300" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l2c-k3"><rect x="890" y="64" width="260" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="500" fill="#FFFFFF"/>
+
+
+  <g filter="url(#m3l2c-soft)">
+    <rect x="50" y="64" width="300" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="50" y="64" width="6" height="90" fill="#2563EB" clip-path="url(#m3l2c-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.5 13.2h6.2L10 22l8.5-11.2h-6.2z"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">In-session state</text>
+  <text x="200" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">what you already saw, and just tapped</text>
+  <g filter="url(#m3l2c-soft)">
+    <rect x="470" y="64" width="300" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="470" y="64" width="6" height="90" fill="#D97706" clip-path="url(#m3l2c-k2)"/>
+  </g>
+  <circle cx="508" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(497.56,98.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 6.5V12l3.5 2.5"/></g>
+  <text x="534" y="116" font-size="18.5" font-weight="600" fill="#111827">Per-post features</text>
+  <text x="620" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">engagement counts fill in</text>
+  <g filter="url(#m3l2c-soft)">
+    <rect x="890" y="64" width="260" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="890" y="64" width="6" height="90" fill="#7C3AED" clip-path="url(#m3l2c-k3)"/>
+  </g>
+  <circle cx="928" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(917.56,98.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 1.5v3M15 1.5v3M9 19.5v3M15 19.5v3M1.5 9h3M1.5 15h3M19.5 9h3M19.5 15h3"/></g>
+  <text x="954" y="116" font-size="18.5" font-weight="600" fill="#111827">Model retrain</text>
+  <text x="1020" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">the full event menu, negatives included</text>
+  <rect x="40" y="280" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="314" font-size="16" fill="#475569">These are example update intervals. Choose them to match the feed's freshness requirements.</text>
+  <rect x="64" y="340" width="200" height="32" rx="9" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.2"/>
+  <text x="164" y="362" text-anchor="middle" font-size="15.5" font-weight="600" fill="#1D4ED8">Seconds</text>
+  <text x="288" y="362" font-size="15.5" fill="#475569">in-session state, so the next page already reflects this one</text>
+  <rect x="64" y="384" width="200" height="32" rx="9" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.2"/>
+  <text x="164" y="406" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">Minutes to an hour</text>
+  <text x="288" y="406" font-size="15.5" fill="#475569">per-post engagement features, as the first-hour data lands</text>
+  <rect x="64" y="428" width="200" height="32" rx="9" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.2"/>
+  <text x="164" y="450" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">Daily</text>
+  <text x="288" y="450" font-size="15.5" fill="#475569">the model, retrained on validated event data</text>
+</svg>

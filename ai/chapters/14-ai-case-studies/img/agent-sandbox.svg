@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="660" viewBox="0 0 1240 660" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="The sandbox boundary: what is inside and what is deliberately not">
+  <defs>
+
+    <filter id="m8l8b-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m8l8b-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+
+  </defs>
+  <rect x="0" y="0" width="1240" height="660" fill="#FFFFFF"/>
+  <rect x="40" y="48" width="570" height="300" rx="14" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.5"/>
+  <text x="64" y="78" font-size="16.5" font-weight="600" fill="#047857">Inside the ephemeral container</text>
+  <rect x="630" y="48" width="570" height="300" rx="14" fill="#FDF2F8" stroke="#F9A8D4" stroke-width="1.5"/>
+  <text x="654" y="78" font-size="16.5" font-weight="600" fill="#BE185D">Deliberately absent</text>
+
+  <rect x="68" y="92" width="514" height="50" rx="8" fill="#D1FAE5" stroke="#059669" stroke-width="1.5"/>
+  <text x="325" y="123" text-anchor="middle" font-size="17" font-weight="600" fill="#047857">The repo, checked out</text>
+  <rect x="68" y="154" width="514" height="50" rx="8" fill="#D1FAE5" stroke="#059669" stroke-width="1.5"/>
+  <text x="325" y="185" text-anchor="middle" font-size="17" font-weight="600" fill="#047857">Dependencies installed</text>
+  <rect x="68" y="216" width="514" height="50" rx="8" fill="#D1FAE5" stroke="#059669" stroke-width="1.5"/>
+  <text x="325" y="247" text-anchor="middle" font-size="17" font-weight="600" fill="#047857">A test runner</text>
+  <rect x="68" y="278" width="514" height="50" rx="8" fill="#D1FAE5" stroke="#059669" stroke-width="1.5"/>
+  <text x="325" y="309" text-anchor="middle" font-size="17" font-weight="600" fill="#047857">Allowlisted egress only</text>
+  <rect x="658" y="92" width="514" height="50" rx="8" fill="#FCE7F3" stroke="#DB2777" stroke-width="1.5"/>
+  <text x="915" y="123" text-anchor="middle" font-size="17" font-weight="600" fill="#BE185D">No production credentials</text>
+  <rect x="658" y="154" width="514" height="50" rx="8" fill="#FCE7F3" stroke="#DB2777" stroke-width="1.5"/>
+  <text x="915" y="185" text-anchor="middle" font-size="17" font-weight="600" fill="#BE185D">No deploy access</text>
+  <rect x="658" y="216" width="514" height="50" rx="8" fill="#FCE7F3" stroke="#DB2777" stroke-width="1.5"/>
+  <text x="915" y="247" text-anchor="middle" font-size="17" font-weight="600" fill="#BE185D">No database tools</text>
+  <rect x="658" y="278" width="514" height="50" rx="8" fill="#FCE7F3" stroke="#DB2777" stroke-width="1.5"/>
+  <text x="915" y="309" text-anchor="middle" font-size="17" font-weight="600" fill="#BE185D">No cloud consoles</text>
+  <rect x="40" y="372" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="406" font-size="16" fill="#475569">Least privilege, expressed as infrastructure rather than as instructions to the model.</text>
+  <rect x="64" y="432" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="454" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">Tools are task-shaped</text>
+  <text x="288" y="454" font-size="15.5" fill="#475569">read code, search code, edit files, run tests, run shell inside the sandbox, open a PR</text>
+  <rect x="64" y="476" width="200" height="32" rx="9" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.2"/>
+  <text x="164" y="498" text-anchor="middle" font-size="15.5" font-weight="600" fill="#1D4ED8">Code search</text>
+  <text x="288" y="498" font-size="15.5" fill="#475569">runs over the repo index: a symbol graph plus embeddings, maintained in the background</text>
+  <rect x="64" y="520" width="200" height="32" rx="9" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.2"/>
+  <text x="164" y="542" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">The worst case</text>
+  <text x="288" y="542" font-size="15.5" fill="#475569">assess exfiltration, escape, dependencies, and CI abuse</text>
+</svg>

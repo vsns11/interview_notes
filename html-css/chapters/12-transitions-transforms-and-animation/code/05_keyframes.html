@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keyframe animations</title>
+<style>
+  body { margin: 10px; font: 600 11px/1.2 ui-monospace, monospace; color: #1f2937; }
+  .row { display: flex; align-items: center; gap: 10px; height: 44px; border-bottom: 1px dashed #e2e8f0; }
+  .row > span { width: 120px; color: #7c3aed; }
+  .dot { width: 22px; height: 22px; border-radius: 50%; background: #2563eb; }
+
+  /* 1. Bounce: keyframes with per-keyframe easing (falls speeding up, rises slowing down) */
+  @keyframes bounce {
+    0%, 100% { translate: 0 -12px; animation-timing-function: ease-in; }
+    50%      { translate: 0 12px;  animation-timing-function: ease-out; }
+  }
+  .bounce { animation: bounce 1000ms infinite; }
+
+  /* 2. Spinner: one full turn, forever, constant speed */
+  @keyframes spin { to { rotate: 1turn; } }       /* "from" defaults to the element's current value */
+  .spinner { width: 22px; height: 22px; border: 4px solid #cbd5e1; border-top-color: #2563eb; border-radius: 50%;
+             animation: spin 1000ms linear infinite; }
+
+  /* 3. Slide: moves right over 1 s, direction alternate (back and forth) */
+  @keyframes slide { from { translate: 0; } to { translate: 160px; } }
+  .slide { animation: slide 1000ms ease-in-out infinite alternate; }
+
+  /* 4. fill-mode: a 500ms delay, then 500ms from red to green. Which colour before and after? */
+  @keyframes paint { from { background: #dc2626; } to { background: #16a34a; } }
+  .fm { width: 60px; height: 22px; background: #cbd5e1; animation: paint 500ms linear 500ms 1; }
+  .fm.none      { animation-fill-mode: none; }
+  .fm.forwards  { animation-fill-mode: forwards; }
+  .fm.backwards { animation-fill-mode: backwards; }
+  .fm.both      { animation-fill-mode: both; }
+</style>
+</head>
+<body>
+<div class="row"><span>bounce</span><div class="dot bounce"></div></div>
+<div class="row"><span>spin (linear)</span><div class="spinner"></div></div>
+<div class="row"><span>slide alternate</span><div class="dot slide"></div></div>
+<div class="row"><span>fill-mode none</span><div class="fm none"></div></div>
+<div class="row"><span>fill-mode forwards</span><div class="fm forwards"></div></div>
+<div class="row"><span>fill-mode backwards</span><div class="fm backwards"></div></div>
+<div class="row"><span>fill-mode both</span><div class="fm both"></div></div>
+</body>
+</html>

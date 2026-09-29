@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Observers demo</title>
+<style>body { font: 14px/1.45 system-ui, sans-serif; background: #f6f7f9; color: #1d2330; margin: 22px; }
+  .card { background: #fff; border: 1px solid #d9dde5; border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; max-width: 760px; }
+  code, pre { font: 12.5px/1.5 ui-monospace, Menlo, monospace; }
+  pre { margin: 0; white-space: pre-wrap; }
+  .ok { color: #1f7a45; font-weight: 600; } .bad { color: #b3261e; font-weight: 600; }
+  h3 { margin: 0 0 8px; font-size: 16px; }
+  #scroller { height: 150px; overflow: auto; border: 1px solid #b9c0cc; border-radius: 8px; background: #fff; width: 260px; flex: none; }
+  .row { display: flex; gap: 18px; align-items: flex-start; }
+  .item { height: 60px; margin: 8px; border-radius: 6px; background: #e3e7ef; display: flex; align-items: center; justify-content: center; }
+  .item.loaded { background: #cfeedd; }
+  #box { width: 160px; height: 60px; background: #e8ecff; border: 2px solid #5b6ee1; border-radius: 8px; padding: 6px; box-sizing: border-box; margin-bottom: 8px; }
+</style></head>
+<body>
+<h3>IntersectionObserver (lazy loading) and ResizeObserver</h3>
+<div class="row"><div id="scroller"></div>
+<div><div id="box">resizable box</div>
+<pre id="log" class="card"></pre></div></div>
+<script>
+  const log = (s) => (document.getElementById('log').textContent += s + '\n');
+  const scroller = document.getElementById('scroller');
+  for (let i = 1; i <= 12; i++) scroller.insertAdjacentHTML('beforeend', '<div class="item" data-i="' + i + '">item ' + i + ' (placeholder)</div>');
+
+  // Load each item the first time it comes within 20px of the visible area of the scroller
+  const io = new IntersectionObserver((entries, obs) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      e.target.classList.add('loaded');
+      e.target.textContent = 'item ' + e.target.dataset.i + ' loaded';
+      obs.unobserve(e.target);                    // load once
+    }
+    const loaded = [...scroller.querySelectorAll('.loaded')].map((el) => el.dataset.i);
+    log('IO callback: loaded so far [' + loaded.join(',') + ']');
+  }, { root: scroller, rootMargin: '20px' });
+  scroller.querySelectorAll('.item').forEach((el) => io.observe(el));
+
+  const ro = new ResizeObserver((entries) => {
+    for (const e of entries) {
+      const { inlineSize, blockSize } = e.contentBoxSize[0];
+      log('RO callback: content box ' + Math.round(inlineSize) + ' x ' + Math.round(blockSize) + ' px');
+    }
+  });
+  const box = document.getElementById('box');
+  ro.observe(box);
+
+  // Scripted interaction: scroll the list twice, resize the box once
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  (async () => {
+    await wait(100); scroller.scrollTop = 300;
+    await wait(100); scroller.scrollTop = 600;
+    await wait(100); box.style.width = '240px';
+  })();
+</script>
+</body></html>

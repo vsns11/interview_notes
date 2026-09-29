@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Flexbox patterns</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font: 13px/1.4 system-ui, sans-serif; margin: 12px; color: #222; width: 880px; }
+  h3 { font: 600 12px ui-monospace, monospace; margin: 14px 0 4px; }
+  /* every flex container in the demos gets a dashed purple outline so you can see it */
+  .show { outline: 2px dashed #9333ea; outline-offset: -2px; }
+  button { font: inherit; padding: 6px 12px; border: 1px solid #1d4ed8; background: #2563eb; color: white; border-radius: 6px; }
+
+  /* 1. navbar: logo | links | push the button to the far right with margin-left: auto */
+  .nav { display: flex; align-items: center; gap: 16px; padding: 8px 12px; background: #0f172a; color: white; }
+  .nav a { color: #cbd5e1; text-decoration: none; }
+  .nav .logo { font-weight: 800; color: white; }
+  .nav .push { margin-left: auto; }
+
+  /* 2. centring anything */
+  .center { display: flex; justify-content: center; align-items: center; height: 120px; background: #f1f5f9; }
+  .center .dialog { background: white; border: 1px solid #94a3b8; padding: 10px 16px; border-radius: 8px; }
+
+  /* 3. cards: equal height (stretch) + button pinned to the bottom with margin-top: auto */
+  .cards { display: flex; gap: 12px; }
+  .card { flex: 1; display: flex; flex-direction: column; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; }
+  .card h4 { margin: 0 0 4px; }
+  .card p { margin: 0 0 8px; }
+  .card button { margin-top: auto; align-self: flex-start; }
+
+  /* 4. sticky footer: page is a column at least as tall as its box; main grows */
+  .page { display: flex; flex-direction: column; min-height: 200px; border: 1px solid #cbd5e1; }
+  .page header, .page footer { background: #e2e8f0; padding: 6px 10px; }
+  .page main { flex: 1; padding: 6px 10px; }
+
+  /* 5. media object: fixed image + flexible text */
+  .media { display: flex; gap: 12px; align-items: flex-start; }
+  .media .avatar { flex: none; width: 56px; height: 56px; border-radius: 50%; background: #fca5a5; }
+  .media .body { flex: 1; min-width: 0; }
+
+  /* 6. input group: input grows, button keeps its size */
+  .group { display: flex; }
+  .group input { flex: 1; min-width: 0; font: inherit; padding: 6px 10px; border: 1px solid #94a3b8; border-right: 0; border-radius: 6px 0 0 6px; }
+  .group button { border-radius: 0 6px 6px 0; }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+</style>
+</head>
+<body>
+<h3>1. Navbar — gap between items, margin-left: auto pushes the last one right</h3>
+<nav class="nav show"><a class="logo" href="#">Acme</a><a href="#">Products</a><a href="#">Pricing</a><a href="#">Docs</a>
+  <button class="push">Sign in</button></nav>
+
+<div class="two">
+<div>
+  <h3>2. Centring — justify-content + align-items: center</h3>
+  <div class="center show"><div class="dialog">Perfectly centred</div></div>
+
+  <h3>4. Sticky footer — column, main { flex: 1 }</h3>
+  <div class="page show"><header>Header</header><main>Short content — the footer still sits at the bottom.</main><footer>Footer</footer></div>
+</div>
+<div>
+  <h3>3. Cards — equal heights, button pinned with margin-top: auto</h3>
+  <div class="cards show">
+    <div class="card show"><h4>Basic</h4><p>One line.</p><button>Choose</button></div>
+    <div class="card show"><h4>Pro</h4><p>A much longer description that wraps over several lines, making this card the tallest.</p><button>Choose</button></div>
+    <div class="card show"><h4>Team</h4><p>Two short lines of text here.</p><button>Choose</button></div>
+  </div>
+
+  <h3>5. Media object — flex: none image, flexible body</h3>
+  <div class="media show"><div class="avatar"></div>
+    <div class="body"><b>Sam Lee</b> · 2h<br>The avatar never shrinks; the text takes the remaining width and wraps.</div></div>
+
+  <h3>6. Input group — input { flex: 1; min-width: 0 }</h3>
+  <form class="group show" role="search" onsubmit="return false">
+    <input id="q" type="search" aria-label="Search docs" placeholder="Search docs"><button>Search</button></form>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="672" viewBox="0 0 1240 672" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="The precompute then rerank hybrid">
+  <defs>
+    <marker id="m2l3c-mamber" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#D97706"/>
+    </marker>
+    <marker id="m2l3c-mblue" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#2563EB"/>
+    </marker>
+    <marker id="m2l3c-mviolet" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#7C3AED"/>
+    </marker>
+    <filter id="m2l3c-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m2l3c-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m2l3c-k1"><rect x="430" y="110" width="235" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l3c-k2"><rect x="90" y="380" width="170" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l3c-k3"><rect x="330" y="380" width="214" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l3c-k4"><rect x="620" y="380" width="235" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l3c-k5"><rect x="950" y="380" width="170" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="672" fill="#FFFFFF"/>
+  <rect x="40" y="56" width="1160" height="190" rx="14" fill="#FFFBEB" stroke="#FCD34D" stroke-width="1.5"/>
+  <text x="64" y="86" font-size="16.5" font-weight="600" fill="#B45309">Offline, nightly</text>
+  <rect x="40" y="326" width="1160" height="190" rx="14" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.5"/>
+  <text x="64" y="356" font-size="16.5" font-weight="600" fill="#1D4ED8">Online, per request</text>
+  <g fill="none" stroke="#D97706" stroke-width="2"><path d="M330,155 L430,155" marker-end="url(#m2l3c-mamber)"/></g>
+  <g fill="none" stroke="#D97706" stroke-width="2"><path d="M665,155 L730,155" marker-end="url(#m2l3c-mamber)"/></g>
+  <g fill="none" stroke="#2563EB" stroke-width="2"><path d="M260,425 L330,425" marker-end="url(#m2l3c-mblue)"/></g>
+  <g fill="none" stroke="#2563EB" stroke-width="2"><path d="M544,425 L620,425" marker-end="url(#m2l3c-mblue)"/></g>
+  <g fill="none" stroke="#2563EB" stroke-width="2"><path d="M855,425 L950,425" marker-end="url(#m2l3c-mblue)"/></g>
+  <g fill="none" stroke="#7C3AED" stroke-width="2"><path d="M890,200 V250 Q890,262 878,262 H449 Q437,262 437,274 V380" marker-end="url(#m2l3c-mviolet)"/></g>
+  <g font-size="15.5" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7"><text x="663" y="256" fill="#5B21B6">yesterday's candidates</text></g>
+  <g stroke="#D97706" stroke-width="1.5">
+    <path d="M90,110 L90,184 A120,16 0 0 0 330,184 L330,110" fill="#FEF3C7"/>
+    <ellipse cx="210" cy="110" rx="120" ry="16" fill="#FFFBEB"/>
+  </g>
+  <text x="210" y="162" text-anchor="middle" font-size="18.5" font-weight="600" fill="#111827">Full catalog</text>
+  <g filter="url(#m2l3c-soft)">
+    <rect x="430" y="110" width="235" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="430" y="110" width="6" height="90" fill="#7C3AED" clip-path="url(#m2l3c-k1)"/>
+  </g>
+  <circle cx="468" cy="155" r="18" fill="#FFFFFF"/>
+  <g transform="translate(457.56,144.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 1.5v3M15 1.5v3M9 19.5v3M15 19.5v3M1.5 9h3M1.5 15h3M19.5 9h3M19.5 15h3"/></g>
+  <text x="494" y="162" font-size="18.5" font-weight="600" fill="#111827">Expensive model</text>
+  <g stroke="#D97706" stroke-width="1.5">
+    <path d="M730,110 L730,184 A160,16 0 0 0 1050,184 L1050,110" fill="#FEF3C7"/>
+    <ellipse cx="890" cy="110" rx="160" ry="16" fill="#FFFBEB"/>
+  </g>
+  <text x="890" y="162" text-anchor="middle" font-size="18.5" font-weight="600" fill="#111827">Top 500 per user</text>
+  <g filter="url(#m2l3c-soft)">
+    <rect x="90" y="380" width="170" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="90" y="380" width="6" height="90" fill="#2563EB" clip-path="url(#m2l3c-k2)"/>
+  </g>
+  <circle cx="128" cy="425" r="18" fill="#FFFFFF"/>
+  <g transform="translate(117.56,414.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></g>
+  <text x="154" y="432" font-size="18.5" font-weight="600" fill="#111827">Request</text>
+  <text x="175" y="495" font-size="15.5" text-anchor="middle" fill="#6B7280">user opens the app</text>
+  <g filter="url(#m2l3c-soft)">
+    <rect x="330" y="380" width="214" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="330" y="380" width="6" height="90" fill="#2563EB" clip-path="url(#m2l3c-k3)"/>
+  </g>
+  <circle cx="368" cy="425" r="18" fill="#FFFFFF"/>
+  <g transform="translate(357.56,414.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></g>
+  <text x="394" y="432" font-size="18.5" font-weight="600" fill="#111827">Fetch the 500</text>
+  <text x="437" y="495" font-size="15.5" text-anchor="middle" fill="#6B7280">one KV read, ~1 ms</text>
+  <g filter="url(#m2l3c-lift)">
+    <rect x="620" y="380" width="235" height="90" rx="12" fill="#DBEAFE" stroke="#2563EB" stroke-width="2"/>
+    <rect x="620" y="380" width="9" height="90" fill="#2563EB" clip-path="url(#m2l3c-k4)"/>
+  </g>
+  <circle cx="658" cy="425" r="18" fill="#FFFFFF"/>
+  <g transform="translate(647.56,414.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h19l-7.5 8.5V20l-4 2v-9.5z"/></g>
+  <text x="684" y="432" font-size="18.5" font-weight="600" fill="#111827">Light re-ranker</text>
+  <text x="737.5" y="495" font-size="15.5" text-anchor="middle" fill="#6B7280">adds time of day, last click, stock</text>
+  <g filter="url(#m2l3c-soft)">
+    <rect x="950" y="380" width="170" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="950" y="380" width="6" height="90" fill="#2563EB" clip-path="url(#m2l3c-k5)"/>
+  </g>
+  <circle cx="988" cy="425" r="18" fill="#FFFFFF"/>
+  <g transform="translate(977.56,414.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12h7M12.8 8.8L16 12l-3.2 3.2"/></g>
+  <text x="1014" y="432" font-size="18.5" font-weight="600" fill="#111827">The page</text>
+  <text x="1035" y="495" font-size="15.5" text-anchor="middle" fill="#6B7280">20 items</text>
+  <rect x="40" y="556" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="601" text-anchor="middle" font-size="16" fill="#475569">Prepare candidates in advance, then rerank using live context. Measure freshness and total cost.</text>
+</svg>

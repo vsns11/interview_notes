@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SVG basics</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    .row { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+    .box { border: 1px dashed #aaa; }
+    button { font: inherit; display: inline-flex; gap: 6px; align-items: center; padding: 6px 12px;
+             border: 0; border-radius: 6px; color: white; background: #0a7d55; }
+    button.danger { background: #c0392b; }
+    .icon { width: 1.2em; height: 1.2em; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <!-- 1. Basic shapes. viewBox defines the coordinate system: 0..200 x 0..120 -->
+    <svg class="box" width="200" height="120" viewBox="0 0 200 120" role="img" aria-labelledby="t1">
+      <title id="t1">Basic SVG shapes</title>
+      <rect x="10" y="10" width="60" height="40" rx="6" fill="#6c5ce7"/>
+      <circle cx="110" cy="30" r="20" fill="#fdcb6e" stroke="#e17055" stroke-width="4"/>
+      <line x1="150" y1="10" x2="190" y2="50" stroke="#2d3436" stroke-width="3"/>
+      <polygon points="10,110 40,70 70,110" fill="#00b894"/>
+      <path d="M90 80 Q 120 40 150 80 T 190 80" fill="none" stroke="#0984e3" stroke-width="3"/>
+      <text x="90" y="116" font-size="10">path: M, Q, T</text>
+    </svg>
+
+    <!-- 2. Same drawing scaled: it stays sharp because it is vector -->
+    <svg class="box" width="100" height="60" viewBox="0 0 200 120" aria-hidden="true">
+      <rect x="10" y="10" width="60" height="40" rx="6" fill="#6c5ce7"/>
+      <circle cx="110" cy="30" r="20" fill="#fdcb6e" stroke="#e17055" stroke-width="4"/>
+      <polygon points="10,110 40,70 70,110" fill="#00b894"/>
+    </svg>
+
+    <!-- 3. Reusable icon with <symbol>/<use>; fill="currentColor" follows the CSS color -->
+    <svg width="0" height="0" style="position:absolute">
+      <symbol id="check" viewBox="0 0 24 24"><path d="M4 12l5 5L20 6" fill="none" stroke="currentColor" stroke-width="3"/></symbol>
+      <symbol id="cross" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="3"/></symbol>
+    </svg>
+    <button><svg class="icon" aria-hidden="true"><use href="#check"/></svg>Save</button>
+    <button class="danger"><svg class="icon" aria-hidden="true"><use href="#cross"/></svg>Delete</button>
+
+    <!-- 4. An SVG file used as an ordinary image -->
+    <img src="media/logo.svg" alt="HC logo" width="60" height="60">
+  </div>
+</body>
+</html>

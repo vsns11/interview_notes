@@ -1,0 +1,11 @@
+/* A CSS Module: plain CSS with SHORT class names. The build renames them so they can't clash. */
+.card   { width: 170px; padding: 14px; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; }
+.title  { margin: 0; font-size: 16px; }
+.price  { margin: 4px 0 12px; color: #475569; }
+.button { width: 100%; padding: 8px; border: 0; border-radius: 8px; background: #2563eb; color: #fff; font: inherit; }
+.button:hover { background: #1d4ed8; }
+
+.featured { composes: card; border: 2px solid #f59e0b; background: #fffbeb; }   /* reuse .card's rules */
+.featured .button { background: #d97706; }
+
+:global(body) { font: 15px/1.4 system-ui, sans-serif; margin: 16px; display: flex; gap: 12px; color: #0f172a; }

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="500" viewBox="0 0 1240 500" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Ranking well and telling the truth are different properties">
+  <defs>
+
+    <filter id="m3l4a-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m3l4a-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m3l4a-k1"><rect x="50" y="64" width="520" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l4a-k2"><rect x="670" y="64" width="520" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="500" fill="#FFFFFF"/>
+
+
+  <g filter="url(#m3l4a-soft)">
+    <rect x="50" y="64" width="520" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="50" y="64" width="6" height="90" fill="#2563EB" clip-path="url(#m3l4a-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h19l-7.5 8.5V20l-4 2v-9.5z"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">Ranking quality (AUC)</text>
+  <text x="310" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">is ad A above ad B? Good ordering.</text>
+  <g filter="url(#m3l4a-lift)">
+    <rect x="670" y="64" width="520" height="90" rx="12" fill="#D1FAE5" stroke="#059669" stroke-width="2"/>
+    <rect x="670" y="64" width="9" height="90" fill="#059669" clip-path="url(#m3l4a-k2)"/>
+  </g>
+  <circle cx="708" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(697.56,98.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="734" y="116" font-size="18.5" font-weight="600" fill="#111827">Calibration</text>
+  <text x="930" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">do observed rates match predicted rates?</text>
+  <rect x="40" y="260" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="294" font-size="16" fill="#475569">The auction consumes probabilities directly, so ads need both properties.</text>
+  <rect x="64" y="320" width="200" height="32" rx="9" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.2"/>
+  <text x="164" y="342" text-anchor="middle" font-size="15.5" font-weight="600" fill="#BE185D">The trap</text>
+  <text x="288" y="342" font-size="15.5" fill="#475569">good ordering does not ensure accurate probabilities</text>
+  <rect x="64" y="364" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="386" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">The fix</text>
+  <text x="288" y="386" font-size="15.5" fill="#475569">a post-hoc layer: Platt scaling or isotonic regression</text>
+  <rect x="64" y="408" width="200" height="32" rx="9" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.2"/>
+  <text x="164" y="430" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">Where it hides</text>
+  <text x="288" y="430" font-size="15.5" fill="#475569">in one segment: new advertisers, or mobile traffic</text>
+</svg>

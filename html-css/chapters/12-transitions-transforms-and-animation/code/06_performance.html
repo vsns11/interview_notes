@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Animating layout properties vs compositor-only properties</title>
+<style>
+  body { margin: 10px; font: 13px system-ui, sans-serif; }
+  .track { position: relative; height: 40px; }
+  .box { position: absolute; left: 0; width: 40px; height: 30px; background: #2563eb; }
+  @keyframes move-left      { to { left: 300px; } }                 /* layout property: layout + paint every frame */
+  @keyframes move-transform { to { transform: translateX(300px); } } /* compositor-only: no layout, no paint */
+  @keyframes grow-width     { to { width: 340px; } }
+  @keyframes fade           { to { opacity: 0.2; } }
+  body[data-anim] .box { animation: var(--anim) 1000ms linear forwards; }
+</style>
+</head>
+<body>
+<div class="track"><div class="box"></div></div>
+<p>Filler text so the page has something else to lay out.</p>
+</body>
+</html>

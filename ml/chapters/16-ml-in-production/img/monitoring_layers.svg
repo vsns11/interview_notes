@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="662" viewBox="0 0 1240 662" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="The four monitoring layers and the lag of each">
+  <defs>
+    <marker id="m2l5a-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <filter id="m2l5a-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m2l5a-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m2l5a-k1"><rect x="300" y="56" width="520" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l5a-k2"><rect x="300" y="176" width="520" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l5a-k3"><rect x="300" y="296" width="520" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l5a-k4"><rect x="300" y="416" width="520" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="662" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M220,470 V70" marker-end="url(#m2l5a-mslate)"/></g>
+  <text x="220" y="50" font-size="15.5" font-weight="600" text-anchor="middle" fill="#475569">more direct, often delayed</text>
+  <text x="220" y="496" font-size="15.5" font-weight="600" text-anchor="middle" fill="#475569">fastest, cheapest</text>
+  <g filter="url(#m2l5a-soft)">
+    <rect x="300" y="56" width="520" height="90" rx="12" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <rect x="300" y="56" width="6" height="90" fill="#059669" clip-path="url(#m2l5a-k1)"/>
+  </g>
+  <circle cx="338" cy="101" r="18" fill="#FFFFFF"/>
+  <g transform="translate(327.56,90.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="364" y="108" font-size="18.5" font-weight="600" fill="#111827">4. Outcome quality</text>
+  <text x="850" y="107" font-size="15.5" fill="#6B7280">the real metric, as late as the labels arrive</text>
+  <g filter="url(#m2l5a-soft)">
+    <rect x="300" y="176" width="520" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="300" y="176" width="6" height="90" fill="#7C3AED" clip-path="url(#m2l5a-k2)"/>
+  </g>
+  <circle cx="338" cy="221" r="18" fill="#FFFFFF"/>
+  <g transform="translate(327.56,210.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3L21 21"/></g>
+  <text x="364" y="228" font-size="18.5" font-weight="600" fill="#111827">3. Prediction distributions</text>
+  <text x="850" y="227" font-size="15.5" fill="#6B7280">minutes to hours, the early warning</text>
+  <g filter="url(#m2l5a-soft)">
+    <rect x="300" y="296" width="520" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="300" y="296" width="6" height="90" fill="#D97706" clip-path="url(#m2l5a-k3)"/>
+  </g>
+  <circle cx="338" cy="341" r="18" fill="#FFFFFF"/>
+  <g transform="translate(327.56,330.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l9 4.5-9 4.5-9-4.5z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5l9 4.5 9-4.5"/></g>
+  <text x="364" y="348" font-size="18.5" font-weight="600" fill="#111827">2. Input distributions</text>
+  <text x="850" y="347" font-size="15.5" fill="#6B7280">minutes to hours, catches broken pipelines</text>
+  <g filter="url(#m2l5a-soft)">
+    <rect x="300" y="416" width="520" height="90" rx="12" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5"/>
+    <rect x="300" y="416" width="6" height="90" fill="#64748B" clip-path="url(#m2l5a-k4)"/>
+  </g>
+  <circle cx="338" cy="461" r="18" fill="#FFFFFF"/>
+  <g transform="translate(327.56,450.56) scale(0.87)" fill="none" stroke="#64748B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.5 13.2h6.2L10 22l8.5-11.2h-6.2z"/></g>
+  <text x="364" y="468" font-size="18.5" font-weight="600" fill="#111827">1. System health</text>
+  <text x="850" y="467" font-size="15.5" fill="#6B7280">seconds</text>
+  <rect x="40" y="546" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="591" text-anchor="middle" font-size="16" fill="#475569">Use several signals while outcomes are delayed; no single monitor detects every failure.</text>
+</svg>

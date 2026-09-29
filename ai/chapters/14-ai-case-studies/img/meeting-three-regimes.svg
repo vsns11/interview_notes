@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="660" viewBox="0 0 1240 660" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Three latency regimes, one shared data path">
+  <defs>
+    <marker id="m8l6a-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <filter id="m8l6a-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m8l6a-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m8l6a-k1"><rect x="50" y="70" width="360" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l6a-k2"><rect x="440" y="70" width="360" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l6a-k3"><rect x="830" y="70" width="360" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="660" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M410,115 L440,115" marker-end="url(#m8l6a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M800,115 L830,115" marker-end="url(#m8l6a-mslate)"/></g>
+  <g filter="url(#m8l6a-soft)">
+    <rect x="50" y="70" width="360" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="50" y="70" width="6" height="90" fill="#2563EB" clip-path="url(#m8l6a-k1)"/>
+  </g>
+  <circle cx="88" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,104.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.5 13.2h6.2L10 22l8.5-11.2h-6.2z"/></g>
+  <text x="114" y="122" font-size="18.5" font-weight="600" fill="#111827">Live: transcription</text>
+  <text x="230" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">streaming ASR and diarization</text>
+  <text x="230" y="208" font-size="15.5" text-anchor="middle" fill="#94A3B8">budget in milliseconds</text>
+  <g filter="url(#m8l6a-lift)">
+    <rect x="440" y="70" width="360" height="90" rx="12" fill="#E0E7FF" stroke="#4F46E5" stroke-width="2"/>
+    <rect x="440" y="70" width="9" height="90" fill="#4F46E5" clip-path="url(#m8l6a-k2)"/>
+  </g>
+  <circle cx="478" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(467.56,104.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l9 4.5-9 4.5-9-4.5z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5l9 4.5 9-4.5"/></g>
+  <text x="504" y="122" font-size="18.5" font-weight="600" fill="#111827">Async: summaries</text>
+  <text x="620" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">a workflow, not an agent</text>
+  <text x="620" y="208" font-size="15.5" text-anchor="middle" fill="#94A3B8">budget in minutes</text>
+  <g filter="url(#m8l6a-soft)">
+    <rect x="830" y="70" width="360" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="830" y="70" width="6" height="90" fill="#7C3AED" clip-path="url(#m8l6a-k3)"/>
+  </g>
+  <circle cx="868" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(857.56,104.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3L21 21"/></g>
+  <text x="894" y="122" font-size="18.5" font-weight="600" fill="#111827">Archive: ask later</text>
+  <text x="1010" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">enterprise RAG over conversations</text>
+  <text x="1010" y="208" font-size="15.5" text-anchor="middle" fill="#94A3B8">budget in seconds</text>
+  <rect x="40" y="268" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="302" font-size="16" fill="#475569">Saying "three subsystems in one product" hands the interviewer a map with three regions to pick from.</text>
+  <rect x="64" y="328" width="200" height="32" rx="9" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.2"/>
+  <text x="164" y="350" text-anchor="middle" font-size="15.5" font-weight="600" fill="#1D4ED8">Graded separately</text>
+  <text x="288" y="350" font-size="15.5" fill="#475569">word error rate and speaker attribution for the live lane</text>
+  <rect x="64" y="372" width="200" height="32" rx="9" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.2"/>
+  <text x="164" y="394" text-anchor="middle" font-size="15.5" font-weight="600" fill="#4338CA">Graded separately</text>
+  <text x="288" y="394" font-size="15.5" fill="#475569">judge plus human anchor for summaries, with edit-rate as the online proxy</text>
+  <rect x="64" y="416" width="200" height="32" rx="9" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.2"/>
+  <text x="164" y="438" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">Graded separately</text>
+  <text x="288" y="438" font-size="15.5" fill="#475569">retrieval recall and faithfulness for the archive</text>
+  <rect x="40" y="528" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="573" text-anchor="middle" font-size="16" fill="#475569">Action items assigned to the wrong person are the most visible failure this product has.</text>
+</svg>

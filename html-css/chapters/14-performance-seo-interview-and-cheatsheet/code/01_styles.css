@@ -1,0 +1,6 @@
+/* The "full" stylesheet: everything, including below-the-fold components */
+body { font: 16px/1.6 system-ui, sans-serif; margin: 0; color: #0f172a; }
+header { background: #1e3a8a; color: #fff; padding: 16px 24px; }
+main { max-width: 640px; margin: 24px auto; padding: 0 16px; }
+.footer-widgets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.comments { border-top: 1px solid #cbd5e1; margin-top: 32px; }

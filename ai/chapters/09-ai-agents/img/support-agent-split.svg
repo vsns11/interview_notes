@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="500" viewBox="0 0 1240 500" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Only the open-ended part gets an agent">
+  <defs>
+    <marker id="m7l7a-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <filter id="m7l7a-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m7l7a-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m7l7a-k1"><rect x="50" y="64" width="340" height="90" rx="12"/></clipPath>
+    <clipPath id="m7l7a-k2"><rect x="450" y="64" width="340" height="90" rx="12"/></clipPath>
+    <clipPath id="m7l7a-k3"><rect x="850" y="64" width="340" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="500" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M390,109 L450,109" marker-end="url(#m7l7a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M790,109 L850,109" marker-end="url(#m7l7a-mslate)"/></g>
+  <g filter="url(#m7l7a-soft)">
+    <rect x="50" y="64" width="340" height="90" rx="12" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5"/>
+    <rect x="50" y="64" width="6" height="90" fill="#64748B" clip-path="url(#m7l7a-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#64748B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h19l-7.5 8.5V20l-4 2v-9.5z"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">Intake</text>
+  <text x="220" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">identify and classify</text>
+  <text x="220" y="202" font-size="15.5" text-anchor="middle" fill="#94A3B8">a workflow</text>
+  <g filter="url(#m7l7a-soft)">
+    <rect x="450" y="64" width="340" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="450" y="64" width="6" height="90" fill="#2563EB" clip-path="url(#m7l7a-k2)"/>
+  </g>
+  <circle cx="488" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(477.56,98.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3L21 21"/></g>
+  <text x="514" y="116" font-size="18.5" font-weight="600" fill="#111827">FAQ answers</text>
+  <text x="620" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">RAG over policy docs</text>
+  <text x="620" y="202" font-size="15.5" text-anchor="middle" fill="#94A3B8">no agent needed</text>
+  <g filter="url(#m7l7a-lift)">
+    <rect x="850" y="64" width="340" height="90" rx="12" fill="#EDE9FE" stroke="#7C3AED" stroke-width="2"/>
+    <rect x="850" y="64" width="9" height="90" fill="#7C3AED" clip-path="url(#m7l7a-k3)"/>
+  </g>
+  <circle cx="888" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(877.56,98.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="5" r="2.2"/><circle cx="7" cy="19" r="2.2"/><circle cx="17" cy="12" r="2.2"/><path d="M7 7.2v9.6M9.2 12H14.8"/></g>
+  <text x="914" y="116" font-size="18.5" font-weight="600" fill="#111827">Resolution loop</text>
+  <text x="1020" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">diagnose and act</text>
+  <text x="1020" y="202" font-size="15.5" text-anchor="middle" fill="#94A3B8">assume 40% of contacts</text>
+  <rect x="40" y="270" width="1160" height="128" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <rect x="64" y="300" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="322" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">Say it early</text>
+  <text x="288" y="322" font-size="15.5" fill="#475569">example: 60 percent use workflows or RAG</text>
+  <rect x="64" y="344" width="200" height="32" rx="9" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.2"/>
+  <text x="164" y="366" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">Why it matters</text>
+  <text x="288" y="366" font-size="15.5" fill="#475569">the split governs both cost and risk; it is part of the design</text>
+</svg>

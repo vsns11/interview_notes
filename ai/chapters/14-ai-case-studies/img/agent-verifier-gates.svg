@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="660" viewBox="0 0 1240 660" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Three gates: tests inside, CI outside, humans at the end">
+  <defs>
+    <marker id="m8l8c-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <marker id="m8l8c-memerald" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#059669"/>
+    </marker>
+    <filter id="m8l8c-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m8l8c-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m8l8c-k1"><rect x="50" y="70" width="360" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l8c-k2"><rect x="440" y="70" width="360" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l8c-k3"><rect x="830" y="70" width="360" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="660" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M410,115 L440,115" marker-end="url(#m8l8c-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M800,115 L830,115" marker-end="url(#m8l8c-mslate)"/></g>
+  <g fill="none" stroke="#059669" stroke-width="2"><path d="M1010,232 L1010,262 L230,262 L230,232" marker-end="url(#m8l8c-memerald)"/></g>
+  <g filter="url(#m8l8c-soft)">
+    <rect x="50" y="70" width="360" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="50" y="70" width="6" height="90" fill="#2563EB" clip-path="url(#m8l8c-k1)"/>
+  </g>
+  <circle cx="88" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,104.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 1.5v3M15 1.5v3M9 19.5v3M15 19.5v3M1.5 9h3M1.5 15h3M19.5 9h3M19.5 15h3"/></g>
+  <text x="114" y="122" font-size="18.5" font-weight="600" fill="#111827">Edit and run tests</text>
+  <text x="230" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">the inner gate, run by the agent</text>
+  <text x="230" y="208" font-size="15.5" text-anchor="middle" fill="#94A3B8">edit, run, fix, until green</text>
+  <g filter="url(#m8l8c-soft)">
+    <rect x="440" y="70" width="360" height="90" rx="12" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.5"/>
+    <rect x="440" y="70" width="6" height="90" fill="#4F46E5" clip-path="url(#m8l8c-k2)"/>
+  </g>
+  <circle cx="478" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(467.56,104.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></g>
+  <text x="504" y="122" font-size="18.5" font-weight="600" fill="#111827">CI on the pull request</text>
+  <text x="620" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">the outer machine gate</text>
+  <text x="620" y="208" font-size="15.5" text-anchor="middle" fill="#94A3B8">the same bar as humans, no agent lane</text>
+  <g filter="url(#m8l8c-lift)">
+    <rect x="830" y="70" width="360" height="90" rx="12" fill="#D1FAE5" stroke="#059669" stroke-width="2"/>
+    <rect x="830" y="70" width="9" height="90" fill="#059669" clip-path="url(#m8l8c-k3)"/>
+  </g>
+  <circle cx="868" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(857.56,104.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></g>
+  <text x="894" y="122" font-size="18.5" font-weight="600" fill="#111827">Human review</text>
+  <text x="1010" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">the approval gate</text>
+  <text x="1010" y="208" font-size="15.5" text-anchor="middle" fill="#94A3B8">comments re-enter the loop as instructions</text>
+  <g font-size="15.5" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7"><text x="620" y="246" fill="#047857">review comments go back in</text></g>
+  <rect x="40" y="292" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="326" font-size="16" fill="#475569">The verifier structure is the real engine of this design, and the domain supplies every part of it.</text>
+  <rect x="64" y="352" width="200" height="32" rx="9" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.2"/>
+  <text x="164" y="374" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">Bounds</text>
+  <text x="288" y="374" font-size="15.5" fill="#475569">step, cost, and time budgets, each sized to the ticket class</text>
+  <rect x="64" y="396" width="200" height="32" rx="9" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.2"/>
+  <text x="164" y="418" text-anchor="middle" font-size="15.5" font-weight="600" fill="#BE185D">On exhaustion</text>
+  <text x="288" y="418" font-size="15.5" fill="#475569">a partial artifact: a draft PR or a findings comment, never silence</text>
+  <rect x="64" y="440" width="200" height="32" rx="9" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.2"/>
+  <text x="164" y="462" text-anchor="middle" font-size="15.5" font-weight="600" fill="#475569">Adoption advantage</text>
+  <text x="288" y="462" font-size="15.5" fill="#475569">the PR conversation is the interface, so the team learns no new workflow</text>
+  <rect x="40" y="552" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="597" text-anchor="middle" font-size="16" fill="#475569">"Here is where I got stuck" is acceptable behavior, for a junior engineer and for an agent.</text>
+</svg>

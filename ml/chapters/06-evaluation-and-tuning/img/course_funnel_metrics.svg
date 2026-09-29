@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="366" viewBox="0 0 1240 366" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Each funnel stage earns its own metric">
+  <defs>
+    <marker id="m2l4bc-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <filter id="m2l4bc-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m2l4bc-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m2l4bc-k1"><rect x="110" y="64" width="170" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l4bc-k2"><rect x="535" y="64" width="170" height="90" rx="12"/></clipPath>
+    <clipPath id="m2l4bc-k3"><rect x="960" y="64" width="170" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="366" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M280,109 L535,109" marker-end="url(#m2l4bc-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M705,109 L960,109" marker-end="url(#m2l4bc-mslate)"/></g>
+  <g filter="url(#m2l4bc-soft)">
+    <rect x="110" y="64" width="170" height="90" rx="12" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.5"/>
+    <rect x="110" y="64" width="6" height="90" fill="#4F46E5" clip-path="url(#m2l4bc-k1)"/>
+  </g>
+  <circle cx="148" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(137.56,98.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3L21 21"/></g>
+  <text x="174" y="116" font-size="18.5" font-weight="600" fill="#111827">Retrieval</text>
+  <text x="195" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">a million down to 500</text>
+  <g filter="url(#m2l4bc-soft)">
+    <rect x="535" y="64" width="170" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="535" y="64" width="6" height="90" fill="#2563EB" clip-path="url(#m2l4bc-k2)"/>
+  </g>
+  <circle cx="573" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(562.56,98.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h19l-7.5 8.5V20l-4 2v-9.5z"/></g>
+  <text x="599" y="116" font-size="18.5" font-weight="600" fill="#111827">Ranking</text>
+  <text x="620" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">order the 500 properly</text>
+  <g filter="url(#m2l4bc-soft)">
+    <rect x="960" y="64" width="170" height="90" rx="12" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <rect x="960" y="64" width="6" height="90" fill="#059669" clip-path="url(#m2l4bc-k3)"/>
+  </g>
+  <circle cx="998" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(987.56,98.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12h7M12.8 8.8L16 12l-3.2 3.2"/></g>
+  <text x="1024" y="116" font-size="18.5" font-weight="600" fill="#111827">The page</text>
+  <text x="1045" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">the top 20 the user sees</text>
+  <text x="195" y="208" font-size="16.5" font-weight="600" text-anchor="middle" fill="#4338CA">recall@k</text>
+  <text x="620" y="208" font-size="16.5" font-weight="600" text-anchor="middle" fill="#1D4ED8">NDCG, or MRR</text>
+  <rect x="40" y="250" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="295" text-anchor="middle" font-size="16" fill="#475569">Evaluate candidate coverage, then ordering. Check any truncation between stages.</text>
+</svg>

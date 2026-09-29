@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Text properties</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 12px; color: #1f2937; font: 15px/1.5 system-ui, sans-serif; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }  /* minmax(0,…): see §9.10 */
+  .cell { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; }
+  h3 { font: 700 11.5px ui-monospace, monospace; color: #7c3aed; margin: 0 0 4px; }
+  p { margin: 0; }
+
+  .tight { line-height: 1; }      .loose { line-height: 1.6; }
+  .caps  { text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; font-weight: 700; }
+  .deco  { text-decoration: underline wavy #dc2626; text-decoration-thickness: 1.5px; text-underline-offset: 4px; }
+  .link  { color: #1d4ed8; text-decoration-thickness: 2px; text-underline-offset: 0.2em; }
+  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .balance { text-wrap: balance; font-size: 19px; font-weight: 700; line-height: 1.25; }
+  .plain   { font-size: 19px; font-weight: 700; line-height: 1.25; }
+  .narrow { width: 170px; }
+  .hyph { hyphens: auto; text-align: justify; }
+  .nums-prop { font-variant-numeric: proportional-nums; }
+  .nums-tab  { font-variant-numeric: tabular-nums; }
+  .indent { text-indent: 2em; }
+</style>
+</head>
+<body>
+<div class="grid">
+  <div class="cell"><h3>line-height: 1 (too tight)</h3>
+    <p class="tight">Long paragraphs set this tightly are tiring to read because the lines crowd each other.</p></div>
+  <div class="cell"><h3>line-height: 1.6 (unitless)</h3>
+    <p class="loose">Long paragraphs set this tightly are tiring to read because the lines crowd each other.</p></div>
+
+  <div class="cell"><h3>text-transform + letter-spacing</h3>
+    <p class="caps">Section label</p></div>
+  <div class="cell"><h3>text-decoration: underline wavy, offset</h3>
+    <p><span class="deco">speling</span> mistake and a <a class="link" href="#">thick offset link</a></p></div>
+
+  <div class="cell"><h3>text-overflow: ellipsis (one line)</h3>
+    <p class="ellipsis">A very long product name that does not fit in one line of the card</p></div>
+  <div class="cell"><h3>line-clamp: 2</h3>
+    <p class="clamp">A long description that goes on for several lines, but the card should show only the first two of them and hide the rest.</p></div>
+
+  <div class="cell narrow"><h3>text-wrap: wrap (default)</h3>
+    <p class="plain">Ten tips for your first mountain hike</p></div>
+  <div class="cell narrow"><h3>text-wrap: balance</h3>
+    <p class="balance">Ten tips for your first mountain hike</p></div>
+
+  <div class="cell narrow" lang="en"><h3>hyphens: auto + justify</h3>
+    <p class="hyph">Internationalization considerations complicate typographical decisions.</p></div>
+  <div class="cell"><h3>font-variant-numeric</h3>
+    <p class="nums-prop">proportional: 1111.11<br>proportional: 8888.88</p>
+    <p class="nums-tab">tabular:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1111.11<br>tabular:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;8888.88</p></div>
+</div>
+</body>
+</html>

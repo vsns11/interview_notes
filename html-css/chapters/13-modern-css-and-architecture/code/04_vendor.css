@@ -1,0 +1,2 @@
+/* Pretend this is a third-party library with very specific selectors */
+#app .btn.btn-primary { background: #6b7280; color: white; padding: 12px 20px; border-radius: 0; }

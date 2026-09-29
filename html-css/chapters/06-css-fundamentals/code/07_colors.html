@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CSS colours</title>
+  <style>
+    body { font: 13px/1.35 system-ui, sans-serif; margin: 16px; color: #222; }
+    h2 { font: 700 13px ui-monospace, monospace; margin: 10px 0 4px; color: #5b4bc4; }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .sw { width: 128px; height: 58px; border-radius: 6px; display: flex; align-items: flex-end;
+          padding: 4px 6px; box-sizing: border-box; font: 11px ui-monospace, monospace; color: #fff;
+          text-shadow: 0 0 2px #000; }
+    .checker { background: repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 0 0 / 16px 16px; border-radius: 6px; }
+    .strip .sw { width: 108px; color: #000; text-shadow: none; }
+    .btn { color: #0a7d55; border: 2px solid currentColor; padding: 6px 10px; border-radius: 6px; background: none; font: inherit; }
+    .btn.red { color: #c0392b; }
+  </style>
+</head>
+<body>
+  <h2>Same purple, six notations</h2>
+  <div class="row">
+    <div class="sw" style="background: rebeccapurple">rebeccapurple</div>
+    <div class="sw" style="background: #663399">#663399</div>
+    <div class="sw" style="background: #639">#639</div>
+    <div class="sw" style="background: rgb(102 51 153)">rgb(102 51 153)</div>
+    <div class="sw" style="background: hsl(270 50% 40%)">hsl(270 50% 40%)</div>
+    <div class="sw" style="background: oklch(44.03% 0.1603 303.37)">oklch(44% .16 303)</div>
+  </div>
+
+  <h2>Alpha (transparency) over a checkerboard</h2>
+  <div class="row">
+    <div class="checker"><div class="sw" style="background: #66339980">#66339980</div></div>
+    <div class="checker"><div class="sw" style="background: rgb(102 51 153 / 50%)">rgb(… / 50%)</div></div>
+    <div class="checker"><div class="sw" style="background: hsl(270 50% 40% / 0.25)">hsl(… / 0.25)</div></div>
+    <div class="checker"><div class="sw" style="background: transparent">transparent</div></div>
+  </div>
+
+  <h2>Same lightness, different hues: HSL (L=50%) vs OKLCH (L=70%, C=0.15)</h2>
+  <div class="row strip">
+    <div class="sw" style="background: hsl(60 100% 50%)">hsl yellow</div>
+    <div class="sw" style="background: hsl(120 100% 50%)">hsl green</div>
+    <div class="sw" style="background: hsl(180 100% 50%)">hsl cyan</div>
+    <div class="sw" style="background: hsl(240 100% 50%); color:#fff">hsl blue</div>
+    <div class="sw" style="background: hsl(300 100% 50%)">hsl magenta</div>
+  </div>
+  <div class="row strip" style="margin-top:6px">
+    <div class="sw" style="background: oklch(70% 0.15 100)">oklch yellow</div>
+    <div class="sw" style="background: oklch(70% 0.15 145)">oklch green</div>
+    <div class="sw" style="background: oklch(70% 0.15 195)">oklch cyan</div>
+    <div class="sw" style="background: oklch(70% 0.15 265)">oklch blue</div>
+    <div class="sw" style="background: oklch(70% 0.15 330)">oklch magenta</div>
+  </div>
+
+  <h2>color-mix() and currentColor</h2>
+  <div class="row">
+    <div class="sw" style="background: color-mix(in oklch, #663399 50%, white)">mix 50% white</div>
+    <div class="sw" style="background: color-mix(in oklch, #663399 70%, black)">mix 30% black</div>
+    <div class="sw" style="background: color-mix(in srgb, red, blue)">srgb red+blue</div>
+    <div class="sw" style="background: color-mix(in oklch, red, blue)">oklch red+blue</div>
+    <button class="btn">currentColor border</button>
+    <button class="btn red">same rule, red</button>
+  </div>
+</body>
+</html>

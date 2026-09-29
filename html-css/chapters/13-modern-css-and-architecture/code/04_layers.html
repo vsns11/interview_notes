@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Cascade layers</title>
+<style>
+  /* 1. Declare the order ONCE, first. Later in this list = stronger. */
+  @layer reset, vendor, base, components, utilities;
+
+  /* 2. A whole third-party file goes into a low layer - its #id selectors no longer matter */
+  @import url("04_vendor.css") layer(vendor);
+
+  @layer reset {
+    * { margin: 0; }
+    button { font: inherit; }
+  }
+  @layer base {
+    body { font: 16px/1.5 system-ui, sans-serif; padding: 16px; }
+    a { color: #1d4ed8; }
+  }
+  @layer components {
+    .btn { background: #2563eb; border-radius: 8px; }      /* (0,1,0) beats vendor's (1,2,0) */
+    .card a { color: #7c3aed; }                             /* (0,1,1) */
+  }
+  @layer utilities {
+    .text-red { color: #dc2626; }                           /* (0,1,0) beats components' (0,1,1) */
+    .no-radius { border-radius: 0 !important; }             /* important in a LATE layer ...      */
+  }
+  @layer reset {
+    .keep-radius { border-radius: 999px !important; }       /* ... loses to important in an EARLY layer */
+  }
+
+  /* 3. Unlayered CSS beats every layer (normal declarations) */
+  p { color: #065f46; }
+
+  /* 4. revert-layer: "use what the previous layers said" */
+  @layer utilities {
+    .plain-link { color: revert-layer; }                    /* falls back to components/base */
+  }
+
+  /* 5. Nested layers get dotted names */
+  @layer components {
+    @layer dialog { .dlg { color: #b45309; } }
+  }
+</style>
+<body id="app">
+  <p><button class="btn btn-primary" id="b1">Layered button</button></p>
+  <div class="card"><a href="#" id="a1">card link</a> · <a href="#" id="a2" class="text-red">red utility</a> · <a href="#" id="a3" class="text-red plain-link">revert-layer</a></div>
+  <p id="p1">unlayered paragraph</p>
+  <button class="btn no-radius keep-radius" id="b2">!important fight</button>
+  <span class="dlg" id="d1">dialog text</span>
+</body>
+</html>

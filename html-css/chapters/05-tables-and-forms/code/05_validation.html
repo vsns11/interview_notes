@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Built-in validation</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 16px; }
+    label { display: grid; gap: 3px; font-weight: 600; }
+    input { font: inherit; padding: 5px 7px; border: 2px solid #aaa; border-radius: 5px; }
+    /* Only after the user interacted (or tried to submit): */
+    input:user-invalid { border-color: #c0392b; background: #fdeeee; }
+    input:user-valid   { border-color: #1e8449; }
+    table { border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+    th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
+    td.bad { color: #c0392b; } td.ok { color: #1e8449; }
+  </style>
+</head>
+<body>
+  <form id="signup">
+    <label>Username (3-12 letters/digits)
+      <input name="username" required pattern="[a-z0-9]{3,12}" value="Ada!"></label>
+    <label>Email
+      <input name="email" type="email" required value="ada@"></label>
+    <label>Age (18-120)
+      <input name="age" type="number" min="18" max="120" value="16"></label>
+    <label>Website
+      <input name="site" type="url" value="https://ada.dev"></label>
+    <label>Password (min 8)
+      <input name="pw" type="password" required minlength="8" value="correcthorse"></label>
+    <label>Confirm password
+      <input name="pw2" type="password" required value="correcthors"></label>
+    <label>Coupon (optional, 6 chars)
+      <input name="coupon" pattern=".{6}" placeholder="optional"></label>
+    <label>Terms
+      <span><input name="terms" type="checkbox" required> I agree</span></label>
+    <button>Create account</button>
+  </form>
+  <table id="report"><thead><tr><th>field</th><th>valid?</th><th>failing flags</th><th>validationMessage (Chrome)</th></tr></thead><tbody></tbody></table>
+
+  <script>
+    const form = document.getElementById('signup');
+    // Custom rule the attributes can't express: the two passwords must match.
+    function checkMatch() {
+      form.pw2.setCustomValidity(form.pw2.value === form.pw.value ? '' : 'Passwords do not match.');
+    }
+    form.pw.addEventListener('input', checkMatch);
+    form.pw2.addEventListener('input', checkMatch);
+    checkMatch();
+
+    form.addEventListener('submit', e => { e.preventDefault(); alert('valid!'); });
+    form.requestSubmit();            // same as clicking the button: runs validation, marks fields user-invalid
+
+    const flags = ['valueMissing','typeMismatch','patternMismatch','tooLong','tooShort',
+                   'rangeUnderflow','rangeOverflow','stepMismatch','badInput','customError'];
+    for (const el of form.querySelectorAll('input')) {
+      const bad = flags.filter(f => el.validity[f]);
+      report.tBodies[0].insertAdjacentHTML('beforeend',
+        `<tr><td>${el.name}</td><td class="${el.validity.valid ? 'ok' : 'bad'}">${el.validity.valid}</td>
+         <td>${bad.join(', ')}</td><td>${el.validationMessage}</td></tr>`);
+    }
+  </script>
+</body>
+</html>

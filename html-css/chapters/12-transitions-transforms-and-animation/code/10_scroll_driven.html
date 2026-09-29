@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scroll-driven animations: progress bar and reveal</title>
+<style>
+  body { margin: 0; font: 15px/1.6 system-ui, sans-serif; color: #1f2937; }
+  article { max-width: 60ch; margin: 0 auto; padding: 20px 16px 40px; }
+  p { margin: 0 0 14px; }
+  .progress { position: fixed; top: 0; left: 0; right: 0; height: 8px; background: #2563eb; transform-origin: 0 50%; }
+  .reveal { padding: 12px; border-radius: 8px; background: #fef3c7; margin: 24px 0; font-weight: 700; }
+
+  /* Only where supported (not Baseline in 2026) — otherwise the bar is simply hidden and the boxes shown */
+  .progress { display: none; }
+  @supports (animation-timeline: scroll()) {
+    @keyframes grow { from { scale: 0 1; } to { scale: 1 1; } }
+    .progress { display: block; animation: grow linear both; animation-timeline: scroll(root block); }
+
+    @keyframes fade-up { from { opacity: 0; translate: 0 40px; } to { opacity: 1; translate: 0 0; } }
+    .reveal { animation: fade-up linear both; animation-timeline: view(); animation-range: entry 0% entry 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) { .reveal { animation: none; } }
+</style>
+</head>
+<body>
+<div class="progress"></div>
+<article>
+  <h1 style="margin-top:6px">A long read</h1>
+  <p>The blue bar at the very top grows as you scroll: its animation is driven by the page's scroll position instead of by time.</p>
+  <p>Paragraph 2. Lorem-free filler: trails, weather, gear, maps, water, snacks, sunscreen, a friend who knows the way.</p>
+  <p>Paragraph 3. More filler text to make the page long enough to scroll.</p>
+  <p>Paragraph 4. The yellow boxes fade and slide up as they enter the viewport, driven by a view timeline.</p>
+  <div class="reveal" id="r1">Revealed box 1</div>
+  <p>Paragraph 5. Filler.</p><p>Paragraph 6. Filler.</p><p>Paragraph 7. Filler.</p><p>Paragraph 8. Filler.</p>
+  <div class="reveal" id="r2">Revealed box 2</div>
+  <p>Paragraph 9. Filler.</p><p>Paragraph 10. Filler.</p><p>Paragraph 11. Filler.</p><p>Paragraph 12. Filler.</p>
+  <p>Paragraph 13. Filler.</p><p>Paragraph 14. Filler.</p><p>Paragraph 15. The end.</p>
+</article>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Responsive layouts without media queries</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 0; color: #1f2937; }
+  h3 { font: 700 12px ui-monospace, monospace; color: #7c3aed; margin: 12px 0 4px; }
+  .box { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 6px; padding: 8px; }
+
+  /* 1. A centred column that is never wider than 60ch and always keeps 1rem gutters */
+  .wrapper { width: min(100% - 2rem, 60ch); margin-inline: auto; }
+
+  /* 2. Sidebar that drops below the content when the content would get narrower than 60% */
+  .with-sidebar { display: flex; flex-wrap: wrap; gap: 10px; }
+  .with-sidebar > .side { flex: 1 1 150px; background: #fef3c7; border-color: #fcd34d; }   /* ideal width 150px */
+  .with-sidebar > .content { flex: 999 1 0; min-inline-size: 60%; }                         /* takes all the rest */
+
+  /* 3. Card grid: as many 140px+ columns as fit (Chapter 9, "RAM") */
+  .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <h3>1. width: min(100% - 2rem, 60ch)</h3>
+  <p class="box">This column is at most 60 characters wide and keeps a 1rem gap to the screen edge on phones.</p>
+
+  <h3>2. flex-wrap sidebar (content keeps ≥ 60%)</h3>
+  <div class="with-sidebar">
+    <div class="box side">Sidebar</div>
+    <div class="box content">Main content. When there is no room for both side by side, the sidebar wraps above it.</div>
+  </div>
+
+  <h3>3. repeat(auto-fit, minmax(min(140px, 100%), 1fr))</h3>
+  <div class="grid"><div class="box">A</div><div class="box">B</div><div class="box">C</div><div class="box">D</div></div>
+</div>
+</body>
+</html>

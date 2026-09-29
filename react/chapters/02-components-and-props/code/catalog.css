@@ -1,0 +1,13 @@
+body { margin: 0; font-family: system-ui, sans-serif; background: #f4f6fb; color: #1d2433; }
+.section { padding: 16px 24px; }
+.section h2 { margin: 0 0 12px; font-size: 1.3rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+.product { background: #fff; border-radius: 12px; padding: 14px 16px; box-shadow: 0 2px 10px rgba(20,30,60,.10); }
+.product h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.badges { min-height: 22px; display: flex; gap: 6px; }
+.badge { font-size: .75rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+.badge-blue { background: #dde6ff; color: #2a47b8; } .badge-green { background: #d9f5e3; color: #17753d; }
+.badge-red { background: #ffe0e0; color: #b3261e; } .badge-amber { background: #fff1cc; color: #8a5a00; }
+.price { font-weight: 700; }
+.product button { width: 100%; padding: 8px; border: 0; border-radius: 8px; background: #3355cc; color: #fff; font-size: .95rem; }
+.product button:disabled { background: #c5cad6; color: #555; }

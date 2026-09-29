@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Selectors</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    section { border: 1px solid #ddd; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; }
+    h2 { font: 700 13px ui-monospace, monospace; margin: 0 0 4px; color: #5b4bc4; }
+    .row > * { display: inline-block; padding: 2px 8px; margin: 2px; border: 1px solid #bbb; border-radius: 4px; }
+    ul { margin: 0; padding-left: 20px; }
+
+    /* Every rule paints its matches with the same highlight so you can see what it selects */
+    #s-type   em,
+    #s-class  .tag,
+    #s-id     #special,
+    #s-univ   .row > *,
+    #s-attr1  a[title],
+    #s-attr2  a[href^="https"],
+    #s-attr3  a[href$=".pdf"],
+    #s-attr4  a[href*="example"],
+    #s-attr5  [data-tags~="new"],
+    #s-attr6  [lang|="en"],
+    #s-attr7  a[href$=".PDF" i],
+    #s-desc   div span,
+    #s-child  div > span,
+    #s-next   h3 + p,
+    #s-sibs   h3 ~ p,
+    #s-group  b, #s-group i            { background: #ffe066; outline: 2px solid #e0a800; }
+  </style>
+</head>
+<body>
+  <section id="s-type"><h2>em  (type selector)</h2>
+    <div class="row"><span>span</span><em>em</em><b>b</b><em>em</em></div></section>
+  <section id="s-class"><h2>.tag  (class selector)</h2>
+    <div class="row"><span class="tag">.tag</span><span>none</span><span class="tag big">.tag.big</span></div></section>
+  <section id="s-id"><h2>#special  (ID selector)</h2>
+    <div class="row"><span>a</span><span id="special">#special</span><span>c</span></div></section>
+  <section id="s-univ"><h2>.row > *  (universal selector: every child)</h2>
+    <div class="row"><span>span</span><em>em</em><b>b</b></div></section>
+  <section id="s-attr1"><h2>a[title]  (has the attribute)</h2>
+    <div class="row"><a title="tip">has title</a><a>no title</a></div></section>
+  <section id="s-attr2"><h2>a[href^="https"]  (value starts with)</h2>
+    <div class="row"><a href="https://x.org">https://x.org</a><a href="http://x.org">http://x.org</a><a href="/docs">/docs</a></div></section>
+  <section id="s-attr3"><h2>a[href$=".pdf"]  (value ends with)</h2>
+    <div class="row"><a href="cv.pdf">cv.pdf</a><a href="cv.PDF">cv.PDF</a><a href="cv.doc">cv.doc</a></div></section>
+  <section id="s-attr7"><h2>a[href$=".PDF" i]  (case-insensitive flag)</h2>
+    <div class="row"><a href="cv.pdf">cv.pdf</a><a href="cv.PDF">cv.PDF</a><a href="cv.doc">cv.doc</a></div></section>
+  <section id="s-attr4"><h2>a[href*="example"]  (value contains)</h2>
+    <div class="row"><a href="https://example.com">example.com</a><a href="https://test.org">test.org</a></div></section>
+  <section id="s-attr5"><h2>[data-tags~="new"]  (space-separated list contains the word)</h2>
+    <div class="row"><span data-tags="new sale">"new sale"</span><span data-tags="newest">"newest"</span></div></section>
+  <section id="s-attr6"><h2>[lang|="en"]  (exactly "en" or starts with "en-")</h2>
+    <div class="row"><span lang="en">en</span><span lang="en-GB">en-GB</span><span lang="eng">eng</span><span lang="fr">fr</span></div></section>
+  <section id="s-desc"><h2>div span  (descendant: any depth)</h2>
+    <div class="row"><span>child</span><b><span>grandchild</span></b></div></section>
+  <section id="s-child"><h2>div > span  (child: direct only)</h2>
+    <div class="row"><span>child</span><b><span>grandchild</span></b></div></section>
+  <section id="s-next"><h2>h3 + p  (next sibling: the one immediately after)</h2>
+    <div class="row"><h3 style="font-size:14px;margin:0">h3</h3><p style="margin:0">p</p><p style="margin:0">p</p></div></section>
+  <section id="s-sibs"><h2>h3 ~ p  (subsequent siblings: all later ones)</h2>
+    <div class="row"><p style="margin:0">p before</p><h3 style="font-size:14px;margin:0">h3</h3><p style="margin:0">p</p><span>span</span><p style="margin:0">p</p></div></section>
+  <section id="s-group"><h2>b, i  (selector list: either)</h2>
+    <div class="row"><b>b</b><i>i</i><u>u</u></div></section>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Responsive images</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    .row { display: flex; gap: 14px; align-items: flex-start; }
+    .row > figure { margin: 0; }
+    img { max-width: 100%; height: auto; display: block; border: 1px solid #ccc; }
+    code { background: #f1f1f5; padding: 0 3px; }
+    .pick { font-size: 12px; color: #0a5; }
+  </style>
+</head>
+<body>
+  <p>Viewport: <b id="vp"></b> CSS px, devicePixelRatio: <b id="dpr"></b></p>
+  <div class="row">
+    <!-- A: width descriptors + sizes. The image is shown at 300 CSS px wide. -->
+    <figure style="width:300px">
+      <img srcset="media/hills-400.jpg 400w, media/hills-800.jpg 800w, media/hills-1600.jpg 1600w"
+           sizes="300px"
+           src="media/hills-800.jpg" alt="Hills at sunrise" width="800" height="533">
+      <figcaption>A: <code>sizes="300px"</code><br><span class="pick"></span></figcaption>
+    </figure>
+
+    <!-- B: density descriptors for a fixed-size image -->
+    <figure style="width:200px">
+      <img srcset="media/hills-400.jpg 1x, media/hills-800.jpg 2x"
+           src="media/hills-400.jpg" alt="Hills at sunrise" width="200" height="133">
+      <figcaption>B: <code>1x, 2x</code><br><span class="pick"></span></figcaption>
+    </figure>
+
+    <!-- C: <picture> for art direction (media) and format switching (type) -->
+    <figure style="width:280px">
+      <picture>
+        <source media="(max-width: 600px)" srcset="media/hills-square-600.jpg">
+        <source type="image/avif" srcset="media/hills-800.avif">
+        <source type="image/webp" srcset="media/hills-800.webp">
+        <img src="media/hills-800.jpg" alt="Hills at sunrise" width="800" height="533">
+      </picture>
+      <figcaption>C: <code>&lt;picture&gt;</code><br><span class="pick"></span></figcaption>
+    </figure>
+  </div>
+  <script>
+    // Show which file the browser actually chose (currentSrc) under each image.
+    vp.textContent = innerWidth; dpr.textContent = devicePixelRatio;
+    addEventListener('load', () => {
+      for (const img of document.querySelectorAll('img'))
+        img.closest('figure').querySelector('.pick').textContent =
+          'chosen: ' + img.currentSrc.split('/').pop();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="556" viewBox="0 0 1240 556" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Prefill reads the whole prompt at once; decode writes one token per step">
+  <defs>
+    <marker id="m4l1a-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <marker id="m4l1a-mviolet" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#7C3AED"/>
+    </marker>
+    <filter id="m4l1a-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m4l1a-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m4l1a-k1"><rect x="50" y="64" width="540" height="90" rx="12"/></clipPath>
+    <clipPath id="m4l1a-k2"><rect x="650" y="64" width="540" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="556" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M590,109 L650,109" marker-end="url(#m4l1a-mslate)"/></g>
+  <g fill="none" stroke="#7C3AED" stroke-width="1.5"><path d="M752,196 L1088,196" marker-end="url(#m4l1a-mviolet)"/></g>
+  <g filter="url(#m4l1a-soft)">
+    <rect x="50" y="64" width="540" height="90" rx="12" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.5"/>
+    <rect x="50" y="64" width="6" height="90" fill="#4F46E5" clip-path="url(#m4l1a-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3L21 21"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">Prefill: read the prompt</text>
+  <text x="320" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">parallel token processing, sometimes chunked</text>
+  <g filter="url(#m4l1a-lift)">
+    <rect x="650" y="64" width="540" height="90" rx="12" fill="#EDE9FE" stroke="#7C3AED" stroke-width="2"/>
+    <rect x="650" y="64" width="9" height="90" fill="#7C3AED" clip-path="url(#m4l1a-k2)"/>
+  </g>
+  <circle cx="688" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(677.56,98.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.9L18.8 9.8l-4.9 1.9L12 16.6l-1.9-4.9L5.2 9.8l4.9-1.9z"/><path d="M18.5 15.5l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9z"/></g>
+  <text x="714" y="116" font-size="18.5" font-weight="600" fill="#111827">Decode: write the answer</text>
+  <text x="920" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">sequential steps reuse cached attention state</text>
+  <rect x="156" y="214" width="34" height="34" rx="7" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.5"/>
+  <rect x="198" y="214" width="34" height="34" rx="7" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.5"/>
+  <rect x="240" y="214" width="34" height="34" rx="7" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.5"/>
+  <rect x="282" y="214" width="34" height="34" rx="7" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.5"/>
+  <rect x="324" y="214" width="34" height="34" rx="7" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.5"/>
+  <rect x="366" y="214" width="34" height="34" rx="7" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.5"/>
+  <rect x="408" y="214" width="34" height="34" rx="7" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.5"/>
+  <rect x="450" y="214" width="34" height="34" rx="7" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.5"/>
+  <text x="320" y="285" font-size="15.5" font-weight="600" text-anchor="middle" fill="#4338CA">input positions processed in parallel</text>
+  <rect x="756" y="214" width="34" height="34" rx="7" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="773" y="237" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">1</text>
+  <rect x="798" y="214" width="34" height="34" rx="7" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="815" y="237" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">2</text>
+  <rect x="840" y="214" width="34" height="34" rx="7" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="857" y="237" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">3</text>
+  <rect x="882" y="214" width="34" height="34" rx="7" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="899" y="237" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">4</text>
+  <rect x="924" y="214" width="34" height="34" rx="7" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="941" y="237" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">5</text>
+  <rect x="966" y="214" width="34" height="34" rx="7" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="983" y="237" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">6</text>
+  <rect x="1008" y="214" width="34" height="34" rx="7" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="1025" y="237" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">7</text>
+  <rect x="1050" y="214" width="34" height="34" rx="7" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="1067" y="237" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">8</text>
+  <text x="920" y="285" font-size="15.5" font-weight="600" text-anchor="middle" fill="#5B21B6">produced one at a time, in order</text>
+  <rect x="40" y="320" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="354" font-size="16" fill="#475569">Prefill is reading the question. Decode is writing the answer.</text>
+  <rect x="64" y="380" width="200" height="32" rx="9" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.2"/>
+  <text x="164" y="402" text-anchor="middle" font-size="15.5" font-weight="600" fill="#4338CA">Often compute-bound</text>
+  <text x="288" y="402" font-size="15.5" fill="#475569">limited by raw arithmetic speed, and fast per token</text>
+  <rect x="64" y="424" width="200" height="32" rx="9" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.2"/>
+  <text x="164" y="446" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">Often bandwidth-bound</text>
+  <text x="288" y="446" font-size="15.5" fill="#475569">limited by how fast data moves in and out of GPU memory</text>
+  <rect x="64" y="468" width="200" height="32" rx="9" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.2"/>
+  <text x="164" y="490" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">What each sets</text>
+  <text x="288" y="490" font-size="15.5" fill="#475569">prefill, decode, and queueing all affect latency</text>
+</svg>

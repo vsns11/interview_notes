@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Card — BEM</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; margin: 16px; display: flex; gap: 12px; color: #0f172a; }
+
+  /* Block */
+  .card { width: 170px; padding: 14px; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; }
+  /* Elements: block__element */
+  .card__title  { margin: 0; font-size: 16px; }
+  .card__price  { margin: 4px 0 12px; color: #475569; }
+  .card__button { width: 100%; padding: 8px; border: 0; border-radius: 8px; background: #2563eb; color: #fff; font: inherit; }
+  .card__button:hover { background: #1d4ed8; }
+  /* Modifier: block--modifier (always used together with the block class) */
+  .card--featured { border: 2px solid #f59e0b; background: #fffbeb; }
+  .card--featured .card__button { background: #d97706; }
+</style>
+<body>
+  <article class="card">
+    <h3 class="card__title">Trail shoes</h3>
+    <p class="card__price">$89</p>
+    <button class="card__button">Add to cart</button>
+  </article>
+  <article class="card card--featured">
+    <h3 class="card__title">Rain jacket</h3>
+    <p class="card__price">$129</p>
+    <button class="card__button">Add to cart</button>
+  </article>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Accessible form</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1rem; max-width: 30rem; }
+  label, legend { font-weight: 600; display: block; margin-top: .8rem; }
+  input[type=text], input[type=email] { font: inherit; padding: .3rem; width: 100%; box-sizing: border-box; border: 1px solid #64748b; border-radius: 4px; }
+  fieldset { border: 1px solid #cbd5e1; border-radius: 6px; margin-top: .8rem; }
+  fieldset label { font-weight: 400; display: inline; margin: 0 1rem 0 .2rem; }
+  .hint { color: #475569; font-size: .9rem; margin: .2rem 0; }
+  .error { color: #b91c1c; font-size: .9rem; margin: .2rem 0; }
+  [aria-invalid="true"] { border: 2px solid #b91c1c !important; }
+  .bad { border: 1px dashed #b91c1c; padding: .4rem; margin-top: 1rem; }
+  button { margin-top: 1rem; font: inherit; padding: .4rem 1rem; }
+</style>
+</head>
+<body>
+  <form novalidate>
+    <label for="name">Full name <span aria-hidden="true">*</span></label>
+    <input id="name" type="text" name="name" autocomplete="name" required>
+
+    <label for="email">Email <span aria-hidden="true">*</span></label>
+    <p class="hint" id="email-hint">We only use it for your receipt.</p>
+    <input id="email" type="email" name="email" autocomplete="email" required
+           aria-invalid="true" aria-describedby="email-hint email-err" value="sam@">
+    <p class="error" id="email-err">Error: enter an email like name@example.com</p>
+
+    <fieldset>
+      <legend>Delivery speed</legend>
+      <input type="radio" id="std" name="speed" checked><label for="std">Standard</label>
+      <input type="radio" id="exp" name="speed"><label for="exp">Express</label>
+    </fieldset>
+
+    <div class="bad">
+      Don't: <input type="text" placeholder="Phone number"> (placeholder only — no label)
+    </div>
+    <button type="submit">Place order</button>
+  </form>
+</body>
+</html>

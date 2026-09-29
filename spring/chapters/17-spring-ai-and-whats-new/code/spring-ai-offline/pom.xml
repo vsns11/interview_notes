@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.1.1</version>
+    <relativePath/>
+  </parent>
+  <groupId>handbook.spring</groupId>
+  <artifactId>ch17-spring-ai-offline</artifactId>
+  <version>1.0.0</version>
+  <properties>
+    <java.version>25</java.version>
+    <spring-ai.version>2.0.1</spring-ai.version>
+  </properties>
+  <dependencyManagement>
+    <dependencies>
+      <!-- Spring AI BOM: keeps every spring-ai-* artifact on the same version -->
+      <dependency>
+        <groupId>org.springframework.ai</groupId>
+        <artifactId>spring-ai-bom</artifactId>
+        <version>${spring-ai.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+    <!-- ChatClient + ChatClient.Builder auto-configuration (+ tool calling auto-config) -->
+    <dependency>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-autoconfigure-model-chat-client</artifactId>
+    </dependency>
+    <!-- ToolCallingManager + tool-calling auto-configuration (optional dependency of the one above) -->
+    <dependency>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-autoconfigure-model-tool</artifactId>
+    </dependency>
+    <!-- ChatMemory bean (MessageWindowChatMemory over an in-memory repository) -->
+    <dependency>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-autoconfigure-model-chat-memory</artifactId>
+    </dependency>
+    <!-- SimpleVectorStore (in-memory) and the QuestionAnswerAdvisor for RAG -->
+    <dependency>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-vector-store</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.ai</groupId>
+      <artifactId>spring-ai-vector-store-advisor</artifactId>
+    </dependency>
+    <!-- NOTE: no model starter (spring-ai-starter-model-openai / -anthropic) on purpose:
+         the ChatModel and EmbeddingModel beans are local fakes, so no API key is needed. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

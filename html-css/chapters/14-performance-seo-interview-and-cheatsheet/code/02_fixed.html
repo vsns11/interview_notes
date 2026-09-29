@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Core Web Vitals — fixed</title>
+  <link rel="stylesheet" href="02_styles.css">
+  <script src="02_fixed.js" defer></script>              <!-- defer: doesn't block parsing -->
+</head>
+<body>
+  <header><strong>Trail Shop</strong></header>
+  <div id="promo-slot" class="promo-slot"></div>         <!-- space reserved for the banner -->
+  <main>
+    <h1>Summer trail guide</h1>
+    <div class="hero">                                   <!-- in the HTML, eager, high priority, with size -->
+      <img src="media/hills-800.jpg" alt="Hills at sunset" width="800" height="533" fetchpriority="high">
+    </div>
+    <p>Our favourite routes for long evenings, with maps and gear lists.</p>
+    <button id="save">Save to favourites</button> <span id="status"></span>
+    <h2>Ridge loop, 12 km</h2>
+    <p>Start at the north car park, climb through the pines and follow the ridge west for views over both valleys.</p>
+  </main>
+</body>
+</html>

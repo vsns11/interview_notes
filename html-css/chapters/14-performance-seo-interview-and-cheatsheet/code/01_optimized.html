@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Render-blocking: optimized</title>
+  <style>
+    /* Critical CSS: only what the first screen needs, inlined (no request) */
+    body { font: 16px/1.6 system-ui, sans-serif; margin: 0; color: #0f172a; }
+    header { background: #1e3a8a; color: #fff; padding: 16px 24px; }
+    main { max-width: 640px; margin: 24px auto; padding: 0 16px; }
+  </style>
+  <!-- The full stylesheet loads WITHOUT blocking render, then applies itself -->
+  <link rel="preload" href="01_styles.css" as="style" onload="this.onload = null; this.rel = 'stylesheet'">
+  <noscript><link rel="stylesheet" href="01_styles.css"></noscript>
+  <script src="01_app.js" defer></script>
+</head>
+<body>
+  <header><strong>Daily News</strong></header>
+  <main><h1>Headline of the day</h1><p>The article text is right here in the HTML.</p></main>
+</body>
+</html>

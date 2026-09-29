@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="800" viewBox="0 0 1240 800" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="One shared model body, one small head per event, one value formula">
+  <defs>
+    <marker id="m3l2a-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <marker id="m3l2a-mpink" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#DB2777"/>
+    </marker>
+    <filter id="m3l2a-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m3l2a-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m3l2a-k1"><rect x="51" y="376" width="170" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l2a-k2"><rect x="293" y="376" width="170" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l2a-k3"><rect x="535" y="376" width="170" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l2a-k4"><rect x="777" y="376" width="170" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l2a-k5"><rect x="1019" y="376" width="170" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l2a-k6"><rect x="456" y="56" width="327" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l2a-k7"><rect x="472" y="206" width="296" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l2a-k8"><rect x="440" y="546" width="360" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="800" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M620,146 V206" marker-end="url(#m3l2a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M620,296 V316 Q620,328 608,328 H148 Q136,328 136,340 V376" marker-end="url(#m3l2a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M136,466 V486 Q136,498 148,498 H608 Q620,498 620,510 V546" marker-end="url(#m3l2a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M620,296 V316 Q620,328 608,328 H390 Q378,328 378,340 V376" marker-end="url(#m3l2a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M378,466 V486 Q378,498 390,498 H608 Q620,498 620,510 V546" marker-end="url(#m3l2a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M620,296 V376" marker-end="url(#m3l2a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M620,466 V546" marker-end="url(#m3l2a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M620,296 V316 Q620,328 632,328 H850 Q862,328 862,340 V376" marker-end="url(#m3l2a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M862,466 V486 Q862,498 850,498 H632 Q620,498 620,510 V546" marker-end="url(#m3l2a-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M620,296 V316 Q620,328 632,328 H1092 Q1104,328 1104,340 V376" marker-end="url(#m3l2a-mslate)"/></g>
+  <g fill="none" stroke="#DB2777" stroke-width="2"><path d="M1104,466 V486 Q1104,498 1092,498 H632 Q620,498 620,510 V546" marker-end="url(#m3l2a-mpink)"/></g>
+  <g filter="url(#m3l2a-soft)">
+    <rect x="51" y="376" width="170" height="90" rx="12" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <rect x="51" y="376" width="6" height="90" fill="#059669" clip-path="url(#m3l2a-k1)"/>
+  </g>
+  <circle cx="89" cy="421" r="18" fill="#FFFFFF"/>
+  <g transform="translate(78.56,410.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="115" y="428" font-size="18.5" font-weight="600" fill="#111827">P(like)</text>
+  <g filter="url(#m3l2a-soft)">
+    <rect x="293" y="376" width="170" height="90" rx="12" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <rect x="293" y="376" width="6" height="90" fill="#059669" clip-path="url(#m3l2a-k2)"/>
+  </g>
+  <circle cx="331" cy="421" r="18" fill="#FFFFFF"/>
+  <g transform="translate(320.56,410.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="357" y="428" font-size="18.5" font-weight="600" fill="#111827">P(comment)</text>
+  <g filter="url(#m3l2a-soft)">
+    <rect x="535" y="376" width="170" height="90" rx="12" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <rect x="535" y="376" width="6" height="90" fill="#059669" clip-path="url(#m3l2a-k3)"/>
+  </g>
+  <circle cx="573" cy="421" r="18" fill="#FFFFFF"/>
+  <g transform="translate(562.56,410.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="599" y="428" font-size="18.5" font-weight="600" fill="#111827">P(reshare)</text>
+  <g filter="url(#m3l2a-soft)">
+    <rect x="777" y="376" width="170" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="777" y="376" width="6" height="90" fill="#2563EB" clip-path="url(#m3l2a-k4)"/>
+  </g>
+  <circle cx="815" cy="421" r="18" fill="#FFFFFF"/>
+  <g transform="translate(804.56,410.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="841" y="428" font-size="18.5" font-weight="600" fill="#111827">E[dwell]</text>
+  <g filter="url(#m3l2a-soft)">
+    <rect x="1019" y="376" width="170" height="90" rx="12" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.5"/>
+    <rect x="1019" y="376" width="6" height="90" fill="#DB2777" clip-path="url(#m3l2a-k5)"/>
+  </g>
+  <circle cx="1057" cy="421" r="18" fill="#FFFFFF"/>
+  <g transform="translate(1046.56,410.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="1083" y="428" font-size="18.5" font-weight="600" fill="#111827">P(hide)</text>
+  <g filter="url(#m3l2a-soft)">
+    <rect x="456" y="56" width="327" height="90" rx="12" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5"/>
+    <rect x="456" y="56" width="6" height="90" fill="#64748B" clip-path="url(#m3l2a-k6)"/>
+  </g>
+  <circle cx="494" cy="101" r="18" fill="#FFFFFF"/>
+  <g transform="translate(483.56,90.56) scale(0.87)" fill="none" stroke="#64748B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></g>
+  <text x="520" y="108" font-size="18.5" font-weight="600" fill="#111827">Post and user, read once</text>
+  <g filter="url(#m3l2a-lift)">
+    <rect x="472" y="206" width="296" height="90" rx="12" fill="#EDE9FE" stroke="#7C3AED" stroke-width="2"/>
+    <rect x="472" y="206" width="9" height="90" fill="#7C3AED" clip-path="url(#m3l2a-k7)"/>
+  </g>
+  <circle cx="510" cy="251" r="18" fill="#FFFFFF"/>
+  <g transform="translate(499.56,240.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="15" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 1.5v3M15 1.5v3M9 19.5v3M15 19.5v3M1.5 9h3M1.5 15h3M19.5 9h3M19.5 15h3"/></g>
+  <text x="536" y="258" font-size="18.5" font-weight="600" fill="#111827">One shared model body</text>
+  <g filter="url(#m3l2a-lift)">
+    <rect x="440" y="546" width="360" height="90" rx="12" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+    <rect x="440" y="546" width="9" height="90" fill="#D97706" clip-path="url(#m3l2a-k8)"/>
+  </g>
+  <circle cx="478" cy="591" r="18" fill="#FFFFFF"/>
+  <g transform="translate(467.56,580.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h19l-7.5 8.5V20l-4 2v-9.5z"/></g>
+  <text x="504" y="598" font-size="18.5" font-weight="600" fill="#111827">The value formula</text>
+  <text x="620" y="661" font-size="15.5" text-anchor="middle" fill="#6B7280">harm terms are subtracted, so likely hides score lower</text>
+  <rect x="40" y="700" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="745" text-anchor="middle" font-size="16" fill="#475569">Choose weights with product, safety, and ML teams. Check units, calibration, and experiment results.</text>
+</svg>

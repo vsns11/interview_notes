@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The box model</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+  h2 { font-size: 15px; margin: 18px 0 6px; }
+  code { font: 12px ui-monospace, monospace; }
+
+  /* ---- 1. The four layers, coloured like the DevTools box-model diagram ---- */
+  .margin-area { display: flow-root; background: #f9cc9d; width: max-content; position: relative; }
+  .box {
+    margin: 28px; padding: 28px; border: 14px solid #fddd9b;
+    width: 220px;
+    /* two background layers: blue clipped to the content box, green to the padding box */
+    background: linear-gradient(#8cb6c0, #8cb6c0) content-box,
+                linear-gradient(#c3d08b, #c3d08b) padding-box;
+    text-align: center; position: relative;
+  }
+  .tag { position: absolute; font: 11px ui-monospace, monospace; color: #333; }
+
+  /* ---- 2. content-box vs border-box: same declarations, different result ---- */
+  .row { display: flex; gap: 24px; align-items: flex-start; }
+  .demo { width: 200px; padding: 20px; border: 6px solid #2563eb; background: #dbeafe; }
+  .content-box { box-sizing: content-box; }
+  .border-box  { box-sizing: border-box; }
+  .ruler { height: 8px; width: 200px; background: repeating-linear-gradient(90deg,#111 0 1px,transparent 1px 20px); border-right: 1px solid #111; box-sizing: border-box; margin-top: 4px; }
+</style>
+</head>
+<body>
+  <h2>1. Every element is a box: content, padding, border, margin</h2>
+  <div class="margin-area">
+    <span class="tag" style="left:4px;top:6px">margin 28px</span>
+    <div class="box">
+      <span class="tag" style="left:-10px;top:-13px">border 14px</span>
+      <span class="tag" style="left:4px;top:4px">padding 28px</span>
+      content<br>220 × auto
+    </div>
+  </div>
+
+  <h2>2. <code>width: 200px; padding: 20px; border: 6px</code></h2>
+  <div class="row">
+    <div>
+      <div class="demo content-box" id="cb">box-sizing: content-box (default)<br>rendered width = 200 + 2·20 + 2·6 = <b>252px</b></div>
+      <div class="ruler" title="200px ruler"></div><code>ruler: 200px</code>
+    </div>
+    <div>
+      <div class="demo border-box" id="bb">box-sizing: border-box<br>rendered width = <b>200px</b> (content shrinks to 148px)</div>
+      <div class="ruler"></div><code>ruler: 200px</code>
+    </div>
+  </div>
+</body>
+</html>

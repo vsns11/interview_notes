@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Web Worker demo</title>
+<style>body { font: 14px/1.45 system-ui, sans-serif; background: #f6f7f9; color: #1d2330; margin: 22px; }
+  .card { background: #fff; border: 1px solid #d9dde5; border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; max-width: 760px; }
+  code, pre { font: 12.5px/1.5 ui-monospace, Menlo, monospace; }
+  pre { margin: 0; white-space: pre-wrap; }
+  .ok { color: #1f7a45; font-weight: 600; } .bad { color: #b3261e; font-weight: 600; }
+  h3 { margin: 0 0 8px; font-size: 16px; }</style></head>
+<body>
+<h3>Counting primes up to 5,000,000 &mdash; main thread vs Web Worker</h3>
+<div class="card" id="main"></div>
+<div class="card" id="worker"></div>
+<script>
+  function countPrimes(upTo) {
+    let count = 0;
+    for (let n = 2; n <= upTo; n++) { let p = true; for (let d = 2; d * d <= n; d++) if (n % d === 0) { p = false; break; } if (p) count++; }
+    return count;
+  }
+  // Measure how often a 10 ms timer manages to run while the work happens (a proxy for "is the page responsive?")
+  function measure(label, el, start) {
+    let ticks = 0; const t0 = performance.now();
+    const id = setInterval(() => ticks++, 10);
+    return start().then((count) => {
+      clearInterval(id);
+      const ms = performance.now() - t0;
+      el.innerHTML = '<b>' + label + '</b>: ' + count.toLocaleString() + ' primes in ' + Math.round(ms) + ' ms. ' +
+        'Timer ticks during the work: <span class="' + (ticks > 5 ? 'ok' : 'bad') + '">' + ticks + '</span> of ~' + Math.round(ms / 10) + ' expected ' +
+        (ticks > 5 ? '(page stayed responsive)' : '(page was frozen)');
+    });
+  }
+  (async () => {
+    await measure('Main thread', document.getElementById('main'),
+      () => new Promise((r) => setTimeout(() => r(countPrimes(5_000_000)), 0)));
+    const w = new Worker('prime_worker.js');
+    await measure('Web Worker', document.getElementById('worker'),
+      () => new Promise((r) => { w.onmessage = (e) => r(e.data.count); w.postMessage(5_000_000); }));
+    w.terminate();
+  })();
+</script>
+</body></html>

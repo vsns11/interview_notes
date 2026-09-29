@@ -1,0 +1,19 @@
+{
+  "name": "scratchpad",
+  "version": "1.0.0",
+  "description": "",
+  "main": "ex.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "highlight.js": "^11.12.0",
+    "marked": "^12.0.2",
+    "mermaid": "^10.9.8",
+    "puppeteer-core": "^22.15.0"
+  }
+}

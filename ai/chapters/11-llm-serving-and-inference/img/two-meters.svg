@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="486" viewBox="0 0 1240 486" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Every GenAI design runs two meters at once: latency and cost">
+  <defs>
+
+    <filter id="m4l2a-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m4l2a-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m4l2a-k1"><rect x="50" y="64" width="540" height="90" rx="12"/></clipPath>
+    <clipPath id="m4l2a-k2"><rect x="650" y="64" width="540" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="486" fill="#FFFFFF"/>
+
+
+  <g filter="url(#m4l2a-lift)">
+    <rect x="50" y="64" width="540" height="90" rx="12" fill="#DBEAFE" stroke="#2563EB" stroke-width="2"/>
+    <rect x="50" y="64" width="9" height="90" fill="#2563EB" clip-path="url(#m4l2a-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 6.5V12l3.5 2.5"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">Latency meter</text>
+  <text x="320" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">TTFT, the wait before the first word appears</text>
+  <text x="320" y="202" font-size="15.5" text-anchor="middle" fill="#94A3B8">TPOT, the time per output token after that</text>
+  <g filter="url(#m4l2a-lift)">
+    <rect x="650" y="64" width="540" height="90" rx="12" fill="#D1FAE5" stroke="#059669" stroke-width="2"/>
+    <rect x="650" y="64" width="9" height="90" fill="#059669" clip-path="url(#m4l2a-k2)"/>
+  </g>
+  <circle cx="688" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(677.56,98.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="714" y="116" font-size="18.5" font-weight="600" fill="#111827">Cost meter</text>
+  <text x="920" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">input tokens, priced per million</text>
+  <text x="920" y="202" font-size="15.5" text-anchor="middle" fill="#94A3B8">output tokens, at a model-specific rate</text>
+  <rect x="40" y="250" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="284" font-size="16" fill="#475569">Interviewers increasingly ask candidates to read both meters aloud for their own design.</text>
+  <rect x="64" y="310" width="200" height="32" rx="9" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.2"/>
+  <text x="164" y="332" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">One chat turn</text>
+  <text x="288" y="332" font-size="15.5" fill="#475569">example: 3K in and 300 out cost $0.0126</text>
+  <rect x="64" y="354" width="200" height="32" rx="9" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.2"/>
+  <text x="164" y="376" text-anchor="middle" font-size="15.5" font-weight="600" fill="#475569">On a small model</text>
+  <text x="288" y="376" font-size="15.5" fill="#475569">assume one-tenth for this example</text>
+  <rect x="64" y="398" width="200" height="32" rx="9" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.2"/>
+  <text x="164" y="420" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">Say it out loud</text>
+  <text x="288" y="420" font-size="15.5" fill="#475569">order of magnitude, and I would verify current pricing</text>
+</svg>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="486" viewBox="0 0 1240 486" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="The loop: reason, act, observe, repeat">
+  <defs>
+    <marker id="m7l0c-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <filter id="m7l0c-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m7l0c-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m7l0c-k1"><rect x="50" y="64" width="320" height="90" rx="12"/></clipPath>
+    <clipPath id="m7l0c-k2"><rect x="460" y="64" width="320" height="90" rx="12"/></clipPath>
+    <clipPath id="m7l0c-k3"><rect x="870" y="64" width="320" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="486" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M370,109 L460,109" marker-end="url(#m7l0c-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M780,109 L870,109" marker-end="url(#m7l0c-mslate)"/></g>
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M1030,64 V40 Q1030,28 1018,28 H222 Q210,28 210,40 V52" marker-end="url(#m7l0c-mslate)"/></g>
+  <g filter="url(#m7l0c-soft)">
+    <rect x="50" y="64" width="320" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="50" y="64" width="6" height="90" fill="#7C3AED" clip-path="url(#m7l0c-k1)"/>
+  </g>
+  <circle cx="88" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,98.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.9L18.8 9.8l-4.9 1.9L12 16.6l-1.9-4.9L5.2 9.8l4.9-1.9z"/><path d="M18.5 15.5l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9z"/></g>
+  <text x="114" y="116" font-size="18.5" font-weight="600" fill="#111827">Reason</text>
+  <text x="210" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">what should happen next?</text>
+  <g filter="url(#m7l0c-soft)">
+    <rect x="460" y="64" width="320" height="90" rx="12" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.5"/>
+    <rect x="460" y="64" width="6" height="90" fill="#4F46E5" clip-path="url(#m7l0c-k2)"/>
+  </g>
+  <circle cx="498" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(487.56,98.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.5 13.2h6.2L10 22l8.5-11.2h-6.2z"/></g>
+  <text x="524" y="116" font-size="18.5" font-weight="600" fill="#111827">Act</text>
+  <text x="620" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">call a tool</text>
+  <g filter="url(#m7l0c-soft)">
+    <rect x="870" y="64" width="320" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="870" y="64" width="6" height="90" fill="#2563EB" clip-path="url(#m7l0c-k3)"/>
+  </g>
+  <circle cx="908" cy="109" r="18" fill="#FFFFFF"/>
+  <g transform="translate(897.56,98.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></g>
+  <text x="934" y="116" font-size="18.5" font-weight="600" fill="#111827">Observe</text>
+  <text x="1030" y="179" font-size="15.5" text-anchor="middle" fill="#6B7280">read the result</text>
+  <g font-size="15.5" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7"><text x="620" y="20" fill="#475569">repeat until done, or a bound stops it</text></g>
+  <rect x="40" y="250" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="284" font-size="16" fill="#475569">Every design question in this module is really a question about the loop.</text>
+  <rect x="64" y="310" width="200" height="32" rx="9" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.2"/>
+  <text x="164" y="332" text-anchor="middle" font-size="15.5" font-weight="600" fill="#BE185D">What enters it</text>
+  <text x="288" y="332" font-size="15.5" fill="#475569">context: what the model gets to see at this step</text>
+  <rect x="64" y="354" width="200" height="32" rx="9" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.2"/>
+  <text x="164" y="376" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">What it may touch</text>
+  <text x="288" y="376" font-size="15.5" fill="#475569">tools: the full set of actions it is allowed to propose</text>
+  <rect x="64" y="398" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="420" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">How it ends</text>
+  <text x="288" y="420" font-size="15.5" fill="#475569">bounds: steps, tokens, time, spend; then stop and escalate</text>
+</svg>

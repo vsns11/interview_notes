@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="640" viewBox="0 0 1240 640" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="The primary metric is positive; the binding metrics are negative">
+  <defs>
+
+    <filter id="m8l5a-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m8l5a-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m8l5a-k1"><rect x="50" y="70" width="540" height="90" rx="12"/></clipPath>
+    <clipPath id="m8l5a-k2"><rect x="650" y="70" width="540" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="640" fill="#FFFFFF"/>
+
+
+  <g filter="url(#m8l5a-soft)">
+    <rect x="50" y="70" width="540" height="90" rx="12" fill="#DBEAFE" stroke="#93C5FD" stroke-width="1.5"/>
+    <rect x="50" y="70" width="6" height="90" fill="#2563EB" clip-path="url(#m8l5a-k1)"/>
+  </g>
+  <circle cx="88" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,104.56) scale(0.87)" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></g>
+  <text x="114" y="122" font-size="18.5" font-weight="600" fill="#111827">Primary: useful answers</text>
+  <text x="320" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">attorney-verified: reliable enough to build on</text>
+  <g filter="url(#m8l5a-lift)">
+    <rect x="650" y="70" width="540" height="90" rx="12" fill="#FCE7F3" stroke="#DB2777" stroke-width="2"/>
+    <rect x="650" y="70" width="9" height="90" fill="#DB2777" clip-path="url(#m8l5a-k2)"/>
+  </g>
+  <circle cx="688" cy="115" r="18" fill="#FFFFFF"/>
+  <g transform="translate(677.56,104.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10v-6z"/></g>
+  <text x="714" y="122" font-size="18.5" font-weight="600" fill="#111827">Binding: the negatives</text>
+  <text x="920" y="185" font-size="15.5" text-anchor="middle" fill="#6B7280">these are what actually decide the launch</text>
+  <rect x="40" y="256" width="1160" height="196" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="290" font-size="16" fill="#475569">Enterprise RAG with the stakes at maximum. Refusal becomes the default posture, not the fallback.</text>
+  <rect x="64" y="316" width="200" height="32" rx="9" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.2"/>
+  <text x="164" y="338" text-anchor="middle" font-size="15.5" font-weight="600" fill="#BE185D">Fabricated citations</text>
+  <text x="288" y="338" font-size="15.5" fill="#475569">target is a measured zero; every incident gets a postmortem</text>
+  <rect x="64" y="360" width="200" height="32" rx="9" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.2"/>
+  <text x="164" y="382" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">Unsupported claims</text>
+  <text x="288" y="382" font-size="15.5" fill="#475569">measured on sampled answers, per claim, against the retrieved text</text>
+  <rect x="64" y="404" width="200" height="32" rx="9" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.2"/>
+  <text x="164" y="426" text-anchor="middle" font-size="15.5" font-weight="600" fill="#5B21B6">Refusal correctness</text>
+  <text x="288" y="426" font-size="15.5" fill="#475569">in both directions: a system that refuses everything is a canceled contract too</text>
+  <rect x="40" y="496" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="541" text-anchor="middle" font-size="16" fill="#475569">Example: allow up to 30 seconds for verification, then validate that target with users.</text>
+</svg>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Container queries: one component, three widths</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font: 14px/1.45 system-ui, sans-serif; margin: 12px; color: #1f2937; }
+  .page { display: grid; grid-template-columns: 1fr 220px; gap: 12px; }
+  .page > * { display: grid; gap: 12px; align-content: start; }
+  .label { font: 700 12px ui-monospace, monospace; color: #7c3aed; margin: 0; }
+
+  /* 1. Make each wrapper a size container, named "card", measured in the inline direction */
+  .card-slot { container: card / inline-size;          /* = container-name: card; container-type: inline-size */
+               outline: 2px dashed #9333ea; outline-offset: 3px; }
+
+  /* 2. The component's base (narrow) layout: image on top of the text */
+  .product { display: grid; gap: 8px; background: #eff6ff; border-radius: 10px; padding: 10px; }
+  .product .pic { aspect-ratio: 16 / 9; border-radius: 6px;
+                  background: linear-gradient(135deg, #60a5fa, #34d399); }
+  .product h3 { margin: 0; font-size: clamp(15px, 3cqi + 8px, 24px); }   /* cqi = 1% of the container's inline size */
+  .product p { margin: 0; }
+  .product .size { font: 700 12px ui-monospace, monospace; color: #b91c1c; }
+
+  /* 3. Wider container: picture beside the text */
+  @container card (width >= 400px) {
+    .product { grid-template-columns: 160px 1fr; align-items: center; }
+  }
+  /* 4. Very wide container: roomier layout */
+  @container card (width >= 600px) {
+    .product { grid-template-columns: 240px 1fr; padding: 16px; gap: 16px; }
+  }
+
+  /* 5. Style query (Baseline 2026): react to a custom property set on the container */
+  .featured { --featured: yes; }
+  @container style(--featured: yes) {
+    .product { background: #fef3c7; }
+    .product h3::after { content: " ★ featured"; color: #b45309; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <main>
+    <p class="label">main column</p>
+    <div class="card-slot"><article class="product"><div class="pic"></div><div>
+      <h3>Trail shoes</h3><p>Grippy, light, waterproof.</p><p class="size"></p></div></article></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="card-slot featured"><article class="product"><div class="pic"></div><div>
+        <h3>Rain jacket</h3><p>Packs into its own pocket.</p><p class="size"></p></div></article></div>
+      <div class="card-slot"><article class="product"><div class="pic"></div><div>
+        <h3>Head torch</h3><p>400 lumens, USB-C.</p><p class="size"></p></div></article></div>
+    </div>
+  </main>
+  <aside>
+    <p class="label">sidebar (220px)</p>
+    <div class="card-slot"><article class="product"><div class="pic"></div><div>
+      <h3>Water bottle</h3><p>750 ml, steel.</p><p class="size"></p></div></article></div>
+  </aside>
+</div>
+<script>
+  // Print each container's width inside its card (so the screenshot shows why the layout differs)
+  const show = () => document.querySelectorAll('.card-slot').forEach(slot =>
+    slot.querySelector('.size').textContent = `container: ${Math.round(slot.getBoundingClientRect().width)}px`);
+  show(); addEventListener('resize', show);
+</script>
+</body>
+</html>

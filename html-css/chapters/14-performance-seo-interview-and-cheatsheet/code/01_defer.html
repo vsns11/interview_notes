@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Render-blocking: defer the script only</title>
+  <link rel="stylesheet" href="01_styles.css">   <!-- render-blocking: nothing paints until it arrives -->
+  <script src="01_app.js" defer></script>         <!-- defer: download in parallel, run after parsing -->
+</head>
+<body>
+  <header><strong>Daily News</strong></header>
+  <main><h1>Headline of the day</h1><p>The article text is right here in the HTML.</p></main>
+</body>
+</html>

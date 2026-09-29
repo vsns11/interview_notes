@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="594" viewBox="0 0 1240 594" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Start from the failure you observe, not from the fanciest tool">
+  <defs>
+    <marker id="m4l5b-mindigo" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#4F46E5"/>
+    </marker>
+    <marker id="m4l5b-mviolet" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#7C3AED"/>
+    </marker>
+    <marker id="m4l5b-mamber" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#D97706"/>
+    </marker>
+    <filter id="m4l5b-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m4l5b-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m4l5b-k1"><rect x="430" y="56" width="380" height="90" rx="12"/></clipPath>
+    <clipPath id="m4l5b-k2"><rect x="50" y="216" width="255" height="90" rx="12"/></clipPath>
+    <clipPath id="m4l5b-k3"><rect x="50" y="336" width="255" height="90" rx="12"/></clipPath>
+    <clipPath id="m4l5b-k4"><rect x="451" y="216" width="286" height="90" rx="12"/></clipPath>
+    <clipPath id="m4l5b-k5"><rect x="451" y="336" width="286" height="90" rx="12"/></clipPath>
+    <clipPath id="m4l5b-k6"><rect x="883" y="216" width="307" height="90" rx="12"/></clipPath>
+    <clipPath id="m4l5b-k7"><rect x="883" y="336" width="307" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="594" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#4F46E5" stroke-width="2"><path d="M620,146 V162 Q620,174 608,174 H189.5 Q177.5,174 177.5,186 V216" marker-end="url(#m4l5b-mindigo)"/></g>
+  <g fill="none" stroke="#4F46E5" stroke-width="2"><path d="M177.5,306 V336" marker-end="url(#m4l5b-mindigo)"/></g>
+  <g fill="none" stroke="#7C3AED" stroke-width="2"><path d="M620,146 V162 Q620,174 608,174 H606 Q594,174 594,186 V216" marker-end="url(#m4l5b-mviolet)"/></g>
+  <g fill="none" stroke="#7C3AED" stroke-width="2"><path d="M594,306 V336" marker-end="url(#m4l5b-mviolet)"/></g>
+  <g fill="none" stroke="#D97706" stroke-width="2"><path d="M620,146 V162 Q620,174 632,174 H1024.5 Q1036.5,174 1036.5,186 V216" marker-end="url(#m4l5b-mamber)"/></g>
+  <g fill="none" stroke="#D97706" stroke-width="2"><path d="M1036.5,306 V336" marker-end="url(#m4l5b-mamber)"/></g>
+  <g filter="url(#m4l5b-lift)">
+    <rect x="430" y="56" width="380" height="90" rx="12" fill="#E2E8F0" stroke="#64748B" stroke-width="2"/>
+    <rect x="430" y="56" width="9" height="90" fill="#64748B" clip-path="url(#m4l5b-k1)"/>
+  </g>
+  <circle cx="468" cy="101" r="18" fill="#FFFFFF"/>
+  <g transform="translate(457.56,90.56) scale(0.87)" fill="none" stroke="#64748B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="5" r="2.2"/><circle cx="7" cy="19" r="2.2"/><circle cx="17" cy="12" r="2.2"/><path d="M7 7.2v9.6M9.2 12H14.8"/></g>
+  <text x="494" y="108" font-size="18.5" font-weight="600" fill="#111827">What is actually failing?</text>
+  <g filter="url(#m4l5b-soft)">
+    <rect x="50" y="216" width="255" height="90" rx="12" fill="#E0E7FF" stroke="#A5B4FC" stroke-width="1.5"/>
+    <rect x="50" y="216" width="6" height="90" fill="#4F46E5" clip-path="url(#m4l5b-k2)"/>
+  </g>
+  <circle cx="88" cy="261" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,250.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></g>
+  <text x="114" y="268" font-size="18.5" font-weight="600" fill="#111827">Missing knowledge</text>
+  <g filter="url(#m4l5b-lift)">
+    <rect x="50" y="336" width="255" height="90" rx="12" fill="#E0E7FF" stroke="#4F46E5" stroke-width="2"/>
+    <rect x="50" y="336" width="9" height="90" fill="#4F46E5" clip-path="url(#m4l5b-k3)"/>
+  </g>
+  <circle cx="88" cy="381" r="18" fill="#FFFFFF"/>
+  <g transform="translate(77.56,370.56) scale(0.87)" fill="none" stroke="#4F46E5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></g>
+  <text x="114" y="388" font-size="18.5" font-weight="600" fill="#111827">RAG over your corpus</text>
+  <text x="177.5" y="451" font-size="15.5" text-anchor="middle" fill="#6B7280">indexed updates and sources</text>
+  <g filter="url(#m4l5b-soft)">
+    <rect x="451" y="216" width="286" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="451" y="216" width="6" height="90" fill="#7C3AED" clip-path="url(#m4l5b-k4)"/>
+  </g>
+  <circle cx="489" cy="261" r="18" fill="#FFFFFF"/>
+  <g transform="translate(478.56,250.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12c0 4.1-3.8 7.4-8.5 7.4a10 10 0 0 1-2.6-.34L4.5 21l1.3-3.6A6.9 6.9 0 0 1 3.5 12C3.5 7.9 7.3 4.6 12 4.6s8.5 3.3 8.5 7.4z"/></g>
+  <text x="515" y="268" font-size="18.5" font-weight="600" fill="#111827">Wrong format or tone</text>
+  <g filter="url(#m4l5b-lift)">
+    <rect x="451" y="336" width="286" height="90" rx="12" fill="#EDE9FE" stroke="#7C3AED" stroke-width="2"/>
+    <rect x="451" y="336" width="9" height="90" fill="#7C3AED" clip-path="url(#m4l5b-k5)"/>
+  </g>
+  <circle cx="489" cy="381" r="18" fill="#FFFFFF"/>
+  <g transform="translate(478.56,370.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></g>
+  <text x="515" y="388" font-size="18.5" font-weight="600" fill="#111827">Prompt first, tune later</text>
+  <text x="594" y="451" font-size="15.5" text-anchor="middle" fill="#6B7280">tune once prompting plateaus</text>
+  <g filter="url(#m4l5b-soft)">
+    <rect x="883" y="216" width="307" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="883" y="216" width="6" height="90" fill="#D97706" clip-path="url(#m4l5b-k6)"/>
+  </g>
+  <circle cx="921" cy="261" r="18" fill="#FFFFFF"/>
+  <g transform="translate(910.56,250.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/></g>
+  <text x="947" y="268" font-size="18.5" font-weight="600" fill="#111827">Quality fine, cost not</text>
+  <g filter="url(#m4l5b-lift)">
+    <rect x="883" y="336" width="307" height="90" rx="12" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+    <rect x="883" y="336" width="9" height="90" fill="#D97706" clip-path="url(#m4l5b-k7)"/>
+  </g>
+  <circle cx="921" cy="381" r="18" fill="#FFFFFF"/>
+  <g transform="translate(910.56,370.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></g>
+  <text x="947" y="388" font-size="18.5" font-weight="600" fill="#111827">Tune a small specialist</text>
+  <text x="1036.5" y="451" font-size="15.5" text-anchor="middle" fill="#6B7280">it serves the volume path</text>
+  <rect x="40" y="478" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="523" text-anchor="middle" font-size="16" fill="#475569">These are starting points. Evaluate the actual cause before selecting an adaptation method.</text>
+</svg>

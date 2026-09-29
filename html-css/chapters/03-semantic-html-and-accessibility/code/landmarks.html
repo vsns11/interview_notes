@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trail news — Mountain Club</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; color: #1e293b; }
+  .skip { position: absolute; left: -9999px; }
+  .skip:focus { left: 1rem; top: 1rem; background: #fff; padding: .5rem; }
+  body > header, body > footer { background: #1e3a8a; color: #fff; padding: .6rem 1rem; }
+  body > header { display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; }
+  header a { color: #fff; }
+  nav ul { list-style: none; display: flex; gap: 1rem; margin: 0; padding: 0; }
+  .logo { font-weight: 700; font-size: 1.2rem; text-decoration: none; }
+  .wrap { display: grid; grid-template-columns: 1fr 13rem; gap: 1rem; padding: 1rem; }
+  article { border: 2px solid #93c5fd; border-radius: 8px; padding: 0 1rem; }
+  aside { border: 2px dashed #fdba74; border-radius: 8px; padding: 0 1rem; }
+  section { border-top: 1px solid #e2e8f0; }
+  .tag { font: 600 11px ui-monospace, monospace; background: #fef9c3; color: #713f12; padding: 1px 4px; border-radius: 3px; }
+  search input { width: 9rem; }
+</style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to main content</a>
+  <header>
+    <a class="logo" href="/">Mountain Club</a> <span class="tag" aria-hidden="true">header → banner</span>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="/" >Home</a></li>
+        <li><a href="/news" aria-current="page">News</a></li>
+        <li><a href="/events">Events</a></li>
+      </ul>
+    </nav> <span class="tag" aria-hidden="true">nav → navigation</span>
+    <search>
+      <form action="/search"><label for="q">Search</label> <input id="q" name="q" type="search"></form>
+    </search> <span class="tag" aria-hidden="true">search</span>
+  </header>
+  <div class="wrap">
+    <main id="main">
+      <h1>Trail news <span class="tag" aria-hidden="true">main</span></h1>
+      <article>
+        <header>
+          <h2>Ridge trail reopens <span class="tag" aria-hidden="true">article</span></h2>
+          <p>By Sam Lee · <time datetime="2026-09-20">20 September 2026</time></p>
+        </header>
+        <p>After three months of repairs, the ridge trail is open again.</p>
+        <section aria-labelledby="h-what">
+          <h3 id="h-what">What changed <span class="tag" aria-hidden="true">section → region (named)</span></h3>
+          <p>New steps on the steep part and two rest benches.</p>
+        </section>
+        <footer><p>Filed under <a href="/tags/trails">trails</a></p></footer>
+      </article>
+    </main>
+    <aside aria-labelledby="h-side">
+      <h2 id="h-side">Upcoming <span class="tag" aria-hidden="true">aside → complementary</span></h2>
+      <ul><li>Night run, Fri</li><li>Hill repeats, Sun</li></ul>
+    </aside>
+  </div>
+  <footer>
+    <small>© 2026 Mountain Club</small> <span class="tag" aria-hidden="true">footer → contentinfo</span>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Responsive background images with image-set()</title>
+<style>
+  .hero {
+    aspect-ratio: 2 / 1; max-width: 400px; border-radius: 8px;
+    background-size: cover; background-position: center;
+    background-image: url("media/hills-400.jpg");                 /* fallback for very old browsers */
+    background-image: image-set("media/hills-400.jpg" 1x,          /* normal screens */
+                                "media/hills-800.jpg" 2x);         /* high-density ("Retina") screens */
+  }
+</style>
+</head>
+<body>
+<div class="hero" role="img" aria-label="Green hills under a blue sky"></div>
+</body>
+</html>

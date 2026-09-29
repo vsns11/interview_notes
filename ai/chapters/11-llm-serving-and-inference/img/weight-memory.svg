@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="552" viewBox="0 0 1240 552" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Weights fill GPU memory first; what is left holds the KV cache">
+  <defs>
+
+    <filter id="m4l2c-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m4l2c-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+
+  </defs>
+  <rect x="0" y="0" width="1240" height="552" fill="#FFFFFF"/>
+
+
+  <text x="70" y="100" font-size="16.5" font-weight="600" text-anchor="start" fill="#111827">70B model at 16-bit precision</text>
+  <rect x="70" y="115" width="855" height="60" rx="8" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.5"/>
+  <text x="497.5" y="151" text-anchor="middle" font-size="15.5" font-weight="600" fill="#4338CA">weights, about 140 GB</text>
+  <rect x="925" y="115" width="245" height="60" rx="8" fill="#D1FAE5" stroke="#059669" stroke-width="1.5"/>
+  <text x="1047.5" y="151" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">KV cache</text>
+  <text x="70" y="240" font-size="16.5" font-weight="600" text-anchor="start" fill="#111827">the same model quantized to 8-bit</text>
+  <rect x="70" y="255" width="428" height="60" rx="8" fill="#E0E7FF" stroke="#4F46E5" stroke-width="1.5"/>
+  <text x="284" y="291" text-anchor="middle" font-size="15.5" font-weight="600" fill="#4338CA">weights, about 70 GB</text>
+  <rect x="498" y="255" width="672" height="60" rx="8" fill="#D1FAE5" stroke="#059669" stroke-width="1.5"/>
+  <text x="834" y="291" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">KV cache, much more room</text>
+  <rect x="40" y="360" width="1160" height="152" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="394" font-size="16" fill="#475569">Quantization means storing the same weights with fewer bits per number.</text>
+  <rect x="64" y="420" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="442" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">The real cap</text>
+  <text x="288" y="442" font-size="15.5" fill="#475569">memory, compute, bandwidth, and latency all limit capacity</text>
+  <rect x="64" y="464" width="200" height="32" rx="9" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.2"/>
+  <text x="164" y="486" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">Why it matters</text>
+  <text x="288" y="486" font-size="15.5" fill="#475569">cache space can support more active requests</text>
+</svg>

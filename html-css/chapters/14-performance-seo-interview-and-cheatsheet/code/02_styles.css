@@ -1,0 +1,7 @@
+body { font: 16px/1.5 system-ui, sans-serif; margin: 0; color: #0f172a; }
+header { background: #1e3a8a; color: #fff; padding: 12px 20px; }
+main { max-width: 640px; margin: 0 auto; padding: 16px; }
+.hero img { display: block; width: 100%; height: auto; border-radius: 8px; }
+.promo { background: #fef3c7; padding: 20px; border-bottom: 1px solid #f59e0b; }
+.promo-slot { min-height: 89px; }                       /* fixed page: space reserved in advance */
+button { font: inherit; padding: 8px 16px; border-radius: 8px; border: 0; background: #2563eb; color: #fff; }

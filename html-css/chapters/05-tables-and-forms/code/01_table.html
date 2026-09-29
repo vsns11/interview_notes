@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Data tables</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    table { border-collapse: collapse; margin-bottom: 18px; }
+    caption { caption-side: top; text-align: left; font-weight: 700; padding-bottom: 6px; }
+    th, td { border: 1px solid #c8c8d8; padding: 6px 10px; }
+    thead th { background: #2d2a5a; color: #fff; }
+    tbody th { background: #eeeef8; text-align: left; }
+    tbody tr:nth-child(even) td { background: #f8f8fc; }      /* zebra striping */
+    td.num, tfoot td { text-align: right; font-variant-numeric: tabular-nums; }
+    tfoot { font-weight: 700; border-top: 3px double #2d2a5a; }
+    col.highlight { background: #fff6d6; }
+    small { color: #555; }
+  </style>
+</head>
+<body>
+  <!-- 1. A simple data table: caption, thead/tbody/tfoot, scope -->
+  <table>
+    <caption>Quarterly revenue by region (USD thousands)</caption>
+    <colgroup><col><col><col class="highlight"><col></colgroup>
+    <thead>
+      <tr><th scope="col">Region</th><th scope="col">Q1</th><th scope="col">Q2</th><th scope="col">Q3</th></tr>
+    </thead>
+    <tbody>
+      <tr><th scope="row">North</th><td class="num">120</td><td class="num">135</td><td class="num">150</td></tr>
+      <tr><th scope="row">South</th><td class="num">98</td><td class="num">102</td><td class="num">97</td></tr>
+      <tr><th scope="row">West</th><td class="num">143</td><td class="num">160</td><td class="num">171</td></tr>
+    </tbody>
+    <tfoot>
+      <tr><th scope="row">Total</th><td>361</td><td>397</td><td>418</td></tr>
+    </tfoot>
+  </table>
+
+  <!-- 2. Two header levels: colspan/rowspan with scope="colgroup"/"rowgroup" -->
+  <table>
+    <caption>Course enrolment <small>(two-level headers)</small></caption>
+    <colgroup span="2"></colgroup>            <!-- Term + Course -->
+    <colgroup span="2"></colgroup>            <!-- the "Students" column group -->
+    <thead>
+      <tr><th rowspan="2" scope="col">Term</th><th rowspan="2" scope="col">Course</th>
+          <th colspan="2" scope="colgroup">Students</th></tr>
+      <tr><th scope="col">Enrolled</th><th scope="col">Completed</th></tr>
+    </thead>
+    <tbody>
+      <tr><th rowspan="2" scope="rowgroup">Spring</th><th scope="row">HTML</th><td class="num">40</td><td class="num">35</td></tr>
+      <tr><th scope="row">CSS</th><td class="num">32</td><td class="num">30</td></tr>
+    </tbody>
+    <tbody>
+      <tr><th rowspan="2" scope="rowgroup">Autumn</th><th scope="row">HTML</th><td class="num">52</td><td class="num">41</td></tr>
+      <tr><th scope="row">CSS</th><td class="num">45</td><td class="num">44</td></tr>
+    </tbody>
+  </table>
+</body>
+</html>

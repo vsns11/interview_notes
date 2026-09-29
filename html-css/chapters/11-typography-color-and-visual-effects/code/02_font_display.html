@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>font-display: block vs swap vs optional</title>
+<style>
+  /* The same font file three times (different ?query so each is its own download) */
+  @font-face { font-family: "F-block";    src: url("media/inter-latin-wght-normal.woff2?block") format("woff2");    font-weight: 100 900; font-display: block; }
+  @font-face { font-family: "F-swap";     src: url("media/inter-latin-wght-normal.woff2?swap") format("woff2");     font-weight: 100 900; font-display: swap; }
+  @font-face { font-family: "F-optional"; src: url("media/inter-latin-wght-normal.woff2?optional") format("woff2"); font-weight: 100 900; font-display: optional; }
+  body { margin: 12px; color: #1f2937; }
+  p { font-size: 24px; font-weight: 700; margin: 0 0 6px; border-left: 4px solid #93c5fd; padding-left: 8px; }
+  code { font: 600 12px ui-monospace, monospace; color: #b91c1c; display: block; }
+  /* fallback: a serif, so you can SEE whether the web font is in use yet */
+  .block    { font-family: "F-block", Georgia, serif; }
+  .swap     { font-family: "F-swap", Georgia, serif; }
+  .optional { font-family: "F-optional", Georgia, serif; }
+</style>
+</head>
+<body>
+<p class="block"><code>font-display: block</code>Quick brown fox</p>
+<p class="swap"><code>font-display: swap</code>Quick brown fox</p>
+<p class="optional"><code>font-display: optional</code>Quick brown fox</p>
+</body>
+</html>

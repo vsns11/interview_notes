@@ -1,0 +1,32 @@
+// Sass (SCSS syntax) — NOT RUN in this book (Sass isn't installed here). Compile with:  npx sass 11_sass_example.scss out.css
+@use "sass:color";
+@use "sass:math";
+
+$brand: #2563eb;                       // variable: replaced at COMPILE time, gone in the output
+$radius: 8px;
+$sizes: (sm: 12px, md: 16px, lg: 20px);
+
+@mixin focus-ring($c: $brand) {        // mixin: a reusable block of declarations
+  outline: 2px solid $c;
+  outline-offset: 2px;
+}
+
+%button-base { border: 0; font: inherit; }   // placeholder: shared via @extend
+
+.card {
+  border-radius: $radius;
+  padding: math.div(24px, 2);          // math at compile time -> 12px
+  &__title { font-size: 20px; }        // string concatenation -> .card__title
+  &--featured { border-color: color.adjust($brand, $lightness: -10%); }
+}
+
+.button {
+  @extend %button-base;
+  background: $brand;
+  &:hover { background: color.adjust($brand, $lightness: -8%); }
+  &:focus-visible { @include focus-ring; }
+}
+
+@each $name, $size in $sizes {         // loop: generates .text-sm, .text-md, .text-lg
+  .text-#{$name} { font-size: $size; }
+}

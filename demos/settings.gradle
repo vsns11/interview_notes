@@ -1,0 +1,12 @@
+/*
+ * Microservices Design Patterns — runnable demos.
+ *
+ * Single-project Gradle build. Each chapter under chapters/NN-name/ is wired
+ * up as its own source set in build.gradle so chapters compile in isolation:
+ * default-package classes cannot collide because each chapter lands in a
+ * separate output directory, and no chapter can accidentally depend on a
+ * helper class defined in another.
+ *
+ * Mirrors the layout of the ocp-java21-study project.
+ */
+rootProject.name = 'microservices-patterns-demos'

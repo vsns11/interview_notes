@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lists</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 1.5rem; }
+  h2 { font-size: 1rem; margin: .5rem 0 0; font-family: ui-monospace, monospace; }
+  dt { font-weight: 600; }
+</style>
+</head>
+<body>
+  <section>
+    <h2>&lt;ul&gt; unordered</h2>
+    <ul>
+      <li>Milk</li>
+      <li>Bread
+        <ul><li>Sourdough</li><li>Rye</li></ul>
+      </li>
+      <li>Apples</li>
+    </ul>
+  </section>
+  <section>
+    <h2>&lt;ol&gt; ordered</h2>
+    <ol>
+      <li>Preheat the oven</li>
+      <li>Mix the batter</li>
+      <li>Bake 25 minutes</li>
+    </ol>
+  </section>
+  <section>
+    <h2>&lt;ol start="4" type="a"&gt;</h2>
+    <ol start="4" type="a">
+      <li>fourth item is “d”</li>
+      <li>then “e”</li>
+    </ol>
+  </section>
+  <section>
+    <h2>&lt;ol reversed&gt;</h2>
+    <ol reversed>
+      <li>Bronze</li>
+      <li>Silver</li>
+      <li>Gold</li>
+    </ol>
+  </section>
+  <section>
+    <h2>&lt;ol type="I"&gt; + value</h2>
+    <ol type="I">
+      <li>Introduction</li>
+      <li value="10">Jumps to X</li>
+      <li>Then XI</li>
+    </ol>
+  </section>
+  <section>
+    <h2>&lt;dl&gt; description list</h2>
+    <dl>
+      <dt>HTML</dt><dd>Structure and meaning</dd>
+      <dt>CSS</dt><dd>Presentation</dd>
+      <dt>JS</dt><dt>JavaScript</dt><dd>Behaviour (two terms, one description)</dd>
+    </dl>
+  </section>
+</body>
+</html>

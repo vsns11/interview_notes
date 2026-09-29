@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cascade, layers and inheritance</title>
+  <style>
+    /* Declare layer order first: later layers win (for normal declarations). */
+    @layer reset, base, components;
+
+    @layer reset      { #l1 p { color: gray; } }          /* high specificity, but earliest layer */
+    @layer components { .card p { color: teal; } }
+    p.note { color: navy; }                                /* unlayered: beats every layer */
+
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    .case { border: 1px solid #ddd; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; }
+    h2 { font: 700 13px ui-monospace, monospace; margin: 0 0 4px; color: #5b4bc4; }
+
+    /* Inheritance: color and font are inherited, border and padding are not */
+    .parent { color: #b03a2e; font-style: italic; border: 2px solid #b03a2e; padding: 6px; }
+    .parent span { display: inline-block; margin-top: 4px; }
+
+    /* The global keywords */
+    .kw { color: #b03a2e; border: 2px solid #b03a2e; padding: 4px; }
+    .kw b { display: inline-block; margin: 2px; padding: 2px 6px; }
+    .kw .inherit { border: inherit; }        /* copy the parent's value, even for a non-inherited property */
+    .kw .initial { color: initial; }         /* the property's spec default (color: canvastext = black here) */
+    .kw .unset   { color: unset; border: unset; }  /* inherited prop -> inherit; non-inherited -> initial */
+    .kw .block   { display: block; }
+    .kw .block.revert { display: revert; }   /* roll back to the browser's default: <b> -> inline */
+
+    /* Form controls do NOT inherit font by default: fix with font: inherit */
+    .fonts { font: 18px Georgia, serif; }
+    .fonts .fixed { font: inherit; }
+  </style>
+</head>
+<body>
+  <div class="case" id="l1"><h2>@layer reset, base, components  +  unlayered</h2>
+    <div class="card"><p class="note" style="margin:0">navy: the unlayered <code>p.note</code> (0,1,1) beats <code>#l1 p</code> (1,0,1) in layer "reset" and <code>.card p</code> in "components"</p></div>
+  </div>
+
+  <div class="case"><h2>inheritance</h2>
+    <div class="parent">Parent: red, italic, bordered.<br>
+      <span>Child span: inherits the red colour and italics, but NOT the border or padding.</span></div>
+  </div>
+
+  <div class="case"><h2>inherit / initial / unset / revert</h2>
+    <div class="kw">Parent (red, bordered):
+      <b>normal b</b>
+      <b class="inherit">border: inherit</b>
+      <b class="initial">color: initial</b>
+      <b class="unset">color/border: unset</b>
+      <b class="block revert">class="block revert": inline again</b>
+      <b class="block">class="block": display block</b>
+    </div>
+  </div>
+
+  <div class="case fonts"><h2>form controls and font inheritance</h2>
+    Georgia 18px text
+    <input value="default input font"> <input class="fixed" value="font: inherit">
+    <button>default button</button> <button class="fixed">font: inherit</button>
+  </div>
+</body>
+</html>

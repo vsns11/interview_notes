@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Specificity battles</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #222; }
+    .case { border: 1px solid #ddd; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; }
+    .case pre { margin: 4px 0; font-size: 12px; color: #555; }
+    .result { font-weight: 700; }
+    .computed { font: 12px ui-monospace, monospace; color: #777; }
+
+    /* 1. type vs class vs id */
+    #c1 p          { color: gray; }    /* (1,0,1)  every selector is prefixed with its case id */
+    #c1 .lead      { color: green; }   /* (1,1,0) */
+    #c1 #intro     { color: blue; }    /* (2,0,0)  <- wins */
+
+    /* 2. equal specificity: last one wins */
+    #c2 .lead { color: green; }
+    #c2 .lead { color: darkorange; }   /* same (1,1,0), later  <- wins */
+
+    /* 3. many classes never beat one id */
+    #c3 .a.b.c.d.e.f.g.h.i.j.k { color: green; }  /* (1,11,0) */
+    #c3 #x                      { color: blue; }   /* (2,0,0)  <- wins: A is compared first */
+
+    /* 4. inline style beats every selector ... */
+    #c4 #y { color: blue; }
+    /* 5. ... but !important beats inline */
+    #c5 span { color: crimson !important; }
+
+    /* 6. :is() takes its most specific argument, :where() counts zero */
+    #c6 :is(#nope, .z) { color: blue; }          /* (2,0,0) -- counts #nope even though it matched via .z */
+    #c6 .z.z.z         { color: green; }         /* (1,3,0) -- repeating a class adds specificity */
+    #c7 :where(.w) { color: green; }             /* (1,0,0) */
+    #c7 span       { color: darkorange; }        /* (1,0,1)  <- wins, the :where part adds nothing */
+  </style>
+</head>
+<body>
+  <div class="case" id="c1"><pre>#c1 p (1,0,1) gray | #c1 .lead (1,1,0) green | #c1 #intro (2,0,0) blue</pre>
+    <p id="intro" class="lead" style="margin:0">Expected: blue — the ID rule wins.</p></div>
+  <div class="case" id="c2"><pre>#c2 .lead green, then #c2 .lead darkorange (equal specificity)</pre>
+    <p class="lead" style="margin:0">Expected: dark orange — the later rule wins.</p></div>
+  <div class="case" id="c3"><pre>#c3 .a.b.c.d.e.f.g.h.i.j.k (1,11,0) green | #c3 #x (2,0,0) blue</pre>
+    <p id="x" class="a b c d e f g h i j k" style="margin:0">Expected: blue — 11 classes never "carry over" into the ID column.</p></div>
+  <div class="case" id="c4"><pre>#c4 #y blue | style="color: purple"</pre>
+    <span id="y" style="color: purple">Expected: purple — inline style beats selectors.</span></div>
+  <div class="case" id="c5"><pre>#c5 span { color: crimson !important } | style="color: purple"</pre>
+    <span style="color: purple">Expected: crimson — !important beats a normal inline style.</span></div>
+  <div class="case" id="c6"><pre>#c6 :is(#nope, .z) (2,0,0) blue | #c6 .z.z.z (1,3,0) green</pre>
+    <span class="z">Expected: blue — :is() counts its most specific argument (#nope), even though .z matched.</span></div>
+  <div class="case" id="c7"><pre>#c7 :where(.w) (1,0,0) green | #c7 span (1,0,1) darkorange</pre>
+    <span class="w">Expected: dark orange — :where() adds zero.</span></div>
+  <script>
+    // Prove it: print the colour the browser actually computed for each sample.
+    for (const el of document.querySelectorAll('.case > :not(pre)'))
+      el.insertAdjacentHTML('afterend', `<div class="computed">computed color: ${getComputedStyle(el).color}</div>`);
+  </script>
+</body>
+</html>

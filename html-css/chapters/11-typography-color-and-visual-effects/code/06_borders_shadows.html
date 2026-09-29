@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Borders, radius, outlines and shadows</title>
+<style>
+  body { margin: 14px; font: 14px/1.4 system-ui, sans-serif; color: #1f2937; background: #f8fafc; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px 16px; }
+  figure { margin: 0; }
+  figcaption { font: 600 11px/1.3 ui-monospace, monospace; color: #7c3aed; margin-top: 8px; }
+  .b { height: 80px; background: #fff; display: grid; place-items: center; font-weight: 600; }
+
+  .styles  { border: 4px dashed #3b82f6; border-bottom-style: double; border-left: 8px solid #f59e0b; }
+  .round   { border: 2px solid #3b82f6; border-radius: 12px; }
+  .pill    { border-radius: 999px; background: #1d4ed8; color: #fff; height: 44px; }
+  .circle  { border-radius: 50%; aspect-ratio: 1; height: auto; width: 80px; background: #22c55e; }
+  .ellipse { border-radius: 50% / 30%; background: #a855f7; color: #fff; }             /* horizontal / vertical radii */
+  .corners { border-radius: 24px 0 24px 0; background: #0ea5e9; color: #fff; }
+  .outline { border: 2px solid #94a3b8; outline: 3px solid #f97316; outline-offset: 4px; }   /* outline takes no space */
+  .ring    { box-shadow: 0 0 0 4px #93c5fd; border-radius: 8px; }                           /* spread-only "ring" */
+
+  .elev1   { border-radius: 8px; box-shadow: 0 1px 2px rgb(0 0 0 / .12), 0 1px 3px rgb(0 0 0 / .08); }
+  .elev3   { border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / .1), 0 10px 20px -5px rgb(0 0 0 / .15); }
+  .inset   { border-radius: 8px; background: #e2e8f0; box-shadow: inset 0 2px 6px rgb(0 0 0 / .25); }
+  .tshadow { background: none; font: 900 30px system-ui; color: #fff; text-shadow: 0 2px 0 #1d4ed8, 0 4px 10px rgb(0 0 0 / .35); }
+
+  .img     { height: 80px; width: 80px; background: none; }
+  .img.box  { box-shadow: 6px 6px 8px rgb(0 0 0 / .45); }                       /* shadow of the BOX */
+  .img.drop { filter: drop-shadow(6px 6px 4px rgb(0 0 0 / .45)); }              /* shadow of the SHAPE */
+</style>
+</head>
+<body>
+<div class="grid">
+  <figure><div class="b styles">styles</div><figcaption>dashed / double / solid per side</figcaption></figure>
+  <figure><div class="b round">12px</div><figcaption>border-radius: 12px</figcaption></figure>
+  <figure><div class="b pill">Pill button</div><figcaption>border-radius: 999px</figcaption></figure>
+  <figure><div class="b circle"></div><figcaption>50% + aspect-ratio: 1</figcaption></figure>
+  <figure><div class="b ellipse">50% / 30%</div><figcaption>elliptical radii</figcaption></figure>
+  <figure><div class="b corners">per corner</div><figcaption>24px 0 24px 0</figcaption></figure>
+  <figure><div class="b outline">outline</div><figcaption>outline + outline-offset</figcaption></figure>
+  <figure><div class="b ring">ring</div><figcaption>box-shadow: 0 0 0 4px</figcaption></figure>
+  <figure><div class="b elev1">elevation 1</div><figcaption>two soft layers</figcaption></figure>
+  <figure><div class="b elev3">elevation 3</div><figcaption>bigger offset + blur</figcaption></figure>
+  <figure><div class="b inset">inset</div><figcaption>box-shadow: inset …</figcaption></figure>
+  <figure><div class="b tshadow">Shadow</div><figcaption>text-shadow (2 layers)</figcaption></figure>
+  <figure><img class="b img box" src="media/star.svg" alt=""><figcaption>box-shadow on an image</figcaption></figure>
+  <figure><img class="b img drop" src="media/star.svg" alt=""><figcaption>filter: drop-shadow()</figcaption></figure>
+</div>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Character references</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1rem; }
+  table { border-collapse: collapse; }
+  td, th { border: 1px solid #cbd5e1; padding: .25rem .6rem; }
+  td:nth-child(2), td:nth-child(3) { font-family: ui-monospace, monospace; }
+  td:first-child { font-size: 1.2rem; text-align: center; }
+</style>
+</head>
+<body>
+<table>
+  <tr><th>Shows</th><th>Named</th><th>Numeric</th><th>Why you need it</th></tr>
+  <tr><td>&lt;</td><td>&amp;lt;</td><td>&amp;#60;</td><td>Would start a tag</td></tr>
+  <tr><td>&gt;</td><td>&amp;gt;</td><td>&amp;#62;</td><td>Pairs with &amp;lt; for readability</td></tr>
+  <tr><td>&amp;</td><td>&amp;amp;</td><td>&amp;#38;</td><td>Would start a character reference</td></tr>
+  <tr><td>&quot;</td><td>&amp;quot;</td><td>&amp;#34;</td><td>Inside a "double-quoted" attribute</td></tr>
+  <tr><td>&#39;</td><td>&amp;apos;</td><td>&amp;#39;</td><td>Inside a 'single-quoted' attribute</td></tr>
+  <tr><td>a&nbsp;b</td><td>&amp;nbsp;</td><td>&amp;#160;</td><td>Space that never breaks: 10&nbsp;km</td></tr>
+  <tr><td>&copy;</td><td>&amp;copy;</td><td>&amp;#169;</td><td>Hard to type (or just type ©)</td></tr>
+  <tr><td>&mdash;</td><td>&amp;mdash;</td><td>&amp;#8212;</td><td>Em dash</td></tr>
+  <tr><td>&euro;</td><td>&amp;euro;</td><td>&amp;#x20AC;</td><td>Hex form uses x</td></tr>
+  <tr><td>&shy;</td><td>&amp;shy;</td><td>&amp;#173;</td><td>Invisible soft hyphen (break hint)</td></tr>
+</table>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="662" viewBox="0 0 1240 662" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="The action ladder, not a binary">
+  <defs>
+    <marker id="m3l6c-mslate" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#64748B"/>
+    </marker>
+    <filter id="m3l6c-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m3l6c-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="m3l6c-k1"><rect x="320" y="56" width="420" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l6c-k2"><rect x="320" y="176" width="420" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l6c-k3"><rect x="320" y="296" width="420" height="90" rx="12"/></clipPath>
+    <clipPath id="m3l6c-k4"><rect x="320" y="416" width="420" height="90" rx="12"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="1240" height="662" fill="#FFFFFF"/>
+
+  <g fill="none" stroke="#64748B" stroke-width="2"><path d="M240,70 V462" marker-end="url(#m3l6c-mslate)"/></g>
+  <g filter="url(#m3l6c-soft)">
+    <rect x="320" y="56" width="420" height="90" rx="12" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.5"/>
+    <rect x="320" y="56" width="6" height="90" fill="#DB2777" clip-path="url(#m3l6c-k1)"/>
+  </g>
+  <circle cx="358" cy="101" r="18" fill="#FFFFFF"/>
+  <g transform="translate(347.56,90.56) scale(0.87)" fill="none" stroke="#DB2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></g>
+  <text x="384" y="108" font-size="18.5" font-weight="600" fill="#111827">Auto-remove</text>
+  <text x="770" y="107" font-size="15.5" fill="#6B7280">the confidently harmful, at a high threshold</text>
+  <g filter="url(#m3l6c-soft)">
+    <rect x="320" y="176" width="420" height="90" rx="12" fill="#FEF3C7" stroke="#FCD34D" stroke-width="1.5"/>
+    <rect x="320" y="176" width="6" height="90" fill="#D97706" clip-path="url(#m3l6c-k2)"/>
+  </g>
+  <circle cx="358" cy="221" r="18" fill="#FFFFFF"/>
+  <g transform="translate(347.56,210.56) scale(0.87)" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></g>
+  <text x="384" y="228" font-size="18.5" font-weight="600" fill="#111827">Human review</text>
+  <text x="770" y="227" font-size="15.5" fill="#6B7280">uncertain cases and appeal review</text>
+  <g filter="url(#m3l6c-soft)">
+    <rect x="320" y="296" width="420" height="90" rx="12" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.5"/>
+    <rect x="320" y="296" width="6" height="90" fill="#7C3AED" clip-path="url(#m3l6c-k3)"/>
+  </g>
+  <circle cx="358" cy="341" r="18" fill="#FFFFFF"/>
+  <g transform="translate(347.56,330.56) scale(0.87)" fill="none" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10v-6z"/></g>
+  <text x="384" y="348" font-size="18.5" font-weight="600" fill="#111827">Reduce or age-gate</text>
+  <text x="770" y="347" font-size="15.5" fill="#6B7280">the borderline: leave it up, stop amplifying it</text>
+  <g filter="url(#m3l6c-soft)">
+    <rect x="320" y="416" width="420" height="90" rx="12" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <rect x="320" y="416" width="6" height="90" fill="#059669" clip-path="url(#m3l6c-k4)"/>
+  </g>
+  <circle cx="358" cy="461" r="18" fill="#FFFFFF"/>
+  <g transform="translate(347.56,450.56) scale(0.87)" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></g>
+  <text x="384" y="468" font-size="18.5" font-weight="600" fill="#111827">Auto-allow</text>
+  <text x="770" y="467" font-size="15.5" fill="#6B7280">the overwhelming majority of all content</text>
+  <text x="240" y="50" font-size="15.5" font-weight="600" text-anchor="middle" fill="#475569">most severe</text>
+  <text x="240" y="486" font-size="15.5" font-weight="600" text-anchor="middle" fill="#475569">least severe</text>
+  <rect x="40" y="546" width="1160" height="76" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="620" y="591" text-anchor="middle" font-size="16" fill="#475569">Choose actions using policy, measured errors, severity, and review capacity for each category.</text>
+</svg>

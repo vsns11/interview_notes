@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="620" viewBox="0 0 1240 620" font-family="&#39;Segoe UI&#39;, Arial, sans-serif" role="img" aria-label="Cost controls, used strictly in this order">
+  <defs>
+
+    <filter id="m8l7c-soft" x="-12%" y="-14%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <filter id="m8l7c-lift" x="-14%" y="-16%" width="128%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.16"/>
+    </filter>
+
+  </defs>
+  <rect x="0" y="0" width="1240" height="620" fill="#FFFFFF"/>
+
+
+  <rect x="50" y="62" width="280" height="58" rx="8" fill="#D1FAE5" stroke="#059669" stroke-width="1.5"/>
+  <text x="190" y="97" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">1. Batching</text>
+  <text x="350" y="86" font-size="15.5" text-anchor="start" fill="#6B7280">group jobs by model and resolution</text>
+  <text x="350" y="108" font-size="15.5" font-weight="600" text-anchor="start" fill="#047857">batching adds memory use and may add wait time</text>
+  <rect x="50" y="140" width="280" height="58" rx="8" fill="#DBEAFE" stroke="#2563EB" stroke-width="1.5"/>
+  <text x="190" y="175" text-anchor="middle" font-size="15.5" font-weight="600" fill="#1D4ED8">2. Warm pools</text>
+  <text x="350" y="164" font-size="15.5" text-anchor="start" fill="#6B7280">sized to demand trends, not to peaks</text>
+  <text x="350" y="186" font-size="15.5" font-weight="600" text-anchor="start" fill="#1D4ED8">cold GPUs arrive minutes late, so some idle is bought on purpose</text>
+  <rect x="50" y="218" width="280" height="58" rx="8" fill="#FEF3C7" stroke="#D97706" stroke-width="1.5"/>
+  <text x="190" y="253" text-anchor="middle" font-size="15.5" font-weight="600" fill="#B45309">3. Quality settings</text>
+  <text x="350" y="242" font-size="15.5" text-anchor="start" fill="#6B7280">fewer steps, lower resolution</text>
+  <text x="350" y="264" font-size="15.5" font-weight="600" text-anchor="start" fill="#B45309">used under a spike, and stated in advance, never improvised</text>
+  <rect x="50" y="296" width="280" height="58" rx="8" fill="#FCE7F3" stroke="#DB2777" stroke-width="1.5"/>
+  <text x="190" y="331" text-anchor="middle" font-size="15.5" font-weight="600" fill="#BE185D">4. Free-tier stretch</text>
+  <text x="350" y="320" font-size="15.5" text-anchor="start" fill="#6B7280">the free queue simply waits longer</text>
+  <text x="350" y="342" font-size="15.5" font-weight="600" text-anchor="start" fill="#BE185D">longer waits affect user experience too</text>
+  <rect x="40" y="386" width="1160" height="152" rx="14" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="64" y="420" font-size="16" fill="#475569">Idle GPU-seconds cost exactly what busy ones do, and produce nothing. That is the whole bill.</text>
+  <rect x="64" y="446" width="200" height="32" rx="9" fill="#D1FAE5" stroke="#6EE7B7" stroke-width="1.2"/>
+  <text x="164" y="468" text-anchor="middle" font-size="15.5" font-weight="600" fill="#047857">The rule</text>
+  <text x="288" y="468" font-size="15.5" fill="#475569">choose fallbacks according to the product promise</text>
+  <rect x="64" y="490" width="200" height="32" rx="9" fill="#FCE7F3" stroke="#F9A8D4" stroke-width="1.2"/>
+  <text x="164" y="512" text-anchor="middle" font-size="15.5" font-weight="600" fill="#BE185D">Never fail open</text>
+  <text x="288" y="512" font-size="15.5" fill="#475569">a moderation outage stops that lane; images do not get through unchecked</text>
+</svg>
