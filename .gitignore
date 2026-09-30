@@ -1,5 +1,6 @@
-# Built PDFs are published as GitHub Release assets, not committed (rebuild with <book>/tools/regen_pdfs.sh)
-*.pdf
+# Built PDFs are committed in each book folder (and attached to Releases).
+# Never commit the source textbook (copyrighted).
+system-design-patterns/Designing Data Intensive Applications by Martin Kleppmann.pdf
 
 # Tool environments and dependencies
 .venv-books/

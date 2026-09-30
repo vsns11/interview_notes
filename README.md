@@ -2,7 +2,7 @@
 
 Personal study handbooks for software-engineering interviews, from beginner to intermediate level. Each book is written in Markdown with runnable code, diagrams and colour-coded headings. Each is also rendered to a dark-theme PDF with a small **Interview Edition** for fast revision.
 
-> **PDFs** are not committed. Download them from the [Releases](../../releases) page, or rebuild them locally (see below).
+> **PDFs** sit next to their sources: each book's combined Handbook is in its folder, the per-chapter PDFs are in each chapter folder, and the Interview Edition is in `interview/`. The same PDFs are also on the [Releases](../../releases) page.
 
 ## Books
 
