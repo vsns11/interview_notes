@@ -65,7 +65,7 @@ Skeleton for any "design X with microservices" or "make this resilient" question
 | "Config change needs a redeploy; secrets everywhere" | Config Externalization | Discovery to find the server, Vault for secrets | Env vars/ConfigMaps already suffice |
 
 ## 2. Strangler Fig
-Replace a legacy system gradually behind a routing facade instead of a big-bang rewrite. Full notes: [02-strangler-fig.md](../02-strangler-fig.md)
+Replace a legacy system gradually behind a routing facade instead of a big-bang rewrite. Full notes: [02-strangler-fig.md](../chapters/02-strangler-fig/README.md)
 
 ### Must-know
 - **Problem** — legacy systems are painful to live with and to replace; a **big-bang rewrite** chases a moving target and discovers all undocumented behaviour on switchover day.
@@ -115,7 +115,7 @@ Replace a legacy system gradually behind a routing facade instead of a big-bang 
 Facade in front, migrate capability by capability with flags and consistent routing, shadow-compare, delete legacy on a committed date. Data is the part you must solve yourself.
 
 ## 3. API Gateway
-A single entry point in front of all microservices for external clients. Full notes: [03-api-gateway.md](../03-api-gateway.md)
+A single entry point in front of all microservices for external clients. Full notes: [03-api-gateway.md](../chapters/03-api-gateway/README.md)
 
 ### Must-know
 - **Problem** — many services, many clients: each client must know every service's location, auth and response shape; many round trips per screen; topology frozen into apps you cannot force-update (TV, mobile).
@@ -176,7 +176,7 @@ return new FeedPage(feed, notifs);
 One front door for routing, aggregation and cross-cutting concerns; run it HA, fan out in parallel with timeouts, keep it about transport.
 
 ## 4. Backends for Frontends (BFF)
-One tailored backend per client type (web, mobile, TV) instead of one shared API. Full notes: [04-bff.md](../04-bff.md)
+One tailored backend per client type (web, mobile, TV) instead of one shared API. Full notes: [04-bff.md](../chapters/04-bff/README.md)
 
 ### Must-know
 - **Problem** — a one-size-fits-all backend is shaped by the biggest/oldest client (web); mobile gets **over-fetching** (more data than needed) and many round trips on slow, metered networks.
@@ -224,7 +224,7 @@ One tailored backend per client type (web, mobile, TV) instead of one shared API
 Per-client backend that shapes shared data for one frontend, owned by that frontend's team; stateless, fan out in parallel, share common code.
 
 ## 5. Service Discovery
-Find services by logical name when instance addresses change constantly. Full notes: [05-service-discovery.md](../05-service-discovery.md)
+Find services by logical name when instance addresses change constantly. Full notes: [05-service-discovery.md](../chapters/05-service-discovery/README.md)
 
 ### Must-know
 - **Problem** — containers and auto-scaling give instances new IPs constantly and an unknown instance count; hardcoded endpoints couple every client to every deployment. (A monolith doesn't need it: calls are in-process.)
@@ -278,7 +278,7 @@ Find services by logical name when instance addresses change constantly. Full no
 Registry + logical names + health checks; client-side (Eureka) vs server-side (Kubernetes DNS); HA registry, client caching, register-when-ready.
 
 ## 6. Circuit Breaker
-Stop calling a dependency that is already failing, so failure doesn't cascade. Full notes: [06-circuit-breaker.md](../06-circuit-breaker.md)
+Stop calling a dependency that is already failing, so failure doesn't cascade. Full notes: [06-circuit-breaker.md](../chapters/06-circuit-breaker/README.md)
 
 ### Must-know
 - **Problem** — **cascading failure**: B hangs → A's threads block waiting → A runs out of threads and dies though its code is fine. **Slow is worse than down** (dead refuses instantly; slow holds threads hostage).
@@ -340,7 +340,7 @@ private PaymentResult paymentFallback(Order order, Throwable t) {
 Closed → Open → Half-Open per dependency, rate-based over a window, slow calls count, fallback locally, alert on Open.
 
 ## 7. Bulkhead
-Partition resources so one failing dependency cannot starve everything else. Full notes: [07-bulkhead.md](../07-bulkhead.md)
+Partition resources so one failing dependency cannot starve everything else. Full notes: [07-bulkhead.md](../chapters/07-bulkhead/README.md)
 
 ### Must-know
 - **Problem** — failure propagation: Order Service calls Inventory and Shipping from **one shared thread pool**; Inventory gets slow, every thread blocks on it, and Shipping calls fail though Shipping is healthy.
@@ -397,7 +397,7 @@ new ThreadPoolExecutor(10, 10, 0L, TimeUnit.MILLISECONDS,
 Bounded pool per dependency (threads, connections, pods), sized by Little's Law, with timeouts and load shedding; it contains failure, it doesn't add capacity.
 
 ## 8. Retry
-Ride out transient faults by re-attempting with backoff and jitter. Full notes: [08-retry.md](../08-retry.md)
+Ride out transient faults by re-attempting with backoff and jitter. Full notes: [08-retry.md](../chapters/08-retry/README.md)
 
 ### Must-know
 - **Problem** — networks and services have **transient** faults (dropped packets, brief connection exhaustion, LB restarts) that fix themselves in seconds; failing immediately turns a blip into an error.
@@ -462,7 +462,7 @@ executeWithRetry(() -> http.post("/payments")
 Transient-only, capped exponential backoff + jitter, few attempts, overall deadline, idempotency keys, one layer, paired with a circuit breaker.
 
 ## 9. Sidecar
-Move cross-cutting concerns into a co-located helper process next to each service. Full notes: [09-sidecar.md](../09-sidecar.md)
+Move cross-cutting concerns into a co-located helper process next to each service. Full notes: [09-sidecar.md](../chapters/09-sidecar/README.md)
 
 ### Must-know
 - **Problem** — every service needs logging, metrics, auth, mTLS, retries, discovery; a shared library must be rewritten **per language** in a polyglot estate and the versions drift; upgrades mean redeploying every service.
@@ -505,7 +505,7 @@ Move cross-cutting concerns into a co-located helper process next to each servic
 Same Pod, separate container, transparent proxy for networking/security/observability; language-agnostic but costs a process per instance.
 
 ## 10. Saga
-Distributed transactions as a sequence of local transactions with compensations. Full notes: [10-saga.md](../10-saga.md)
+Distributed transactions as a sequence of local transactions with compensations. Full notes: [10-saga.md](../chapters/10-saga/README.md)
 
 ### Must-know
 - **Problem** — with **database per service** there is no shared transaction manager for one ACID transaction; holding locks across seconds of network calls would block every other user.
@@ -573,7 +573,7 @@ try {
 Local transactions + compensations, eventually consistent, no isolation; orchestrate complex flows, idempotent steps, outbox for events, irreversible steps last.
 
 ## 11. Event-Driven Architecture (EDA)
-Components communicate by publishing events to a bus instead of calling each other. Full notes: [11-event-driven.md](../11-event-driven.md)
+Components communicate by publishing events to a bus instead of calling each other. Full notes: [11-event-driven.md](../chapters/11-event-driven/README.md)
 
 ### Must-know
 - **Problem** — direct synchronous calls tightly couple services; every new reaction means changing and redeploying the producer; callers block; real-time reactions are hard.
@@ -627,7 +627,7 @@ Components communicate by publishing events to a bus instead of calling each oth
 Publish past-tense facts to a bus; consumers react independently. Plan for at-least-once, per-partition ordering, additive schemas, correlation IDs and DLQs.
 
 ## 12. CQRS — Command Query Responsibility Segregation
-Separate the write model from the read model so each can be optimised. Full notes: [12-cqrs.md](../12-cqrs.md)
+Separate the write model from the read model so each can be optimised. Full notes: [12-cqrs.md](../chapters/12-cqrs/README.md)
 
 ### Must-know
 - **Problem** — one model/DB serves complex join reads *and* writes; reads are far more numerous, writes more complex; banking: transactions need accuracy/security, balance checks need speed — **one model can't be tuned for both** (writes want normalised, reads want denormalised pre-joined).
@@ -678,7 +678,7 @@ return readModel.find(userId);
 Commands write, queries read, never both; start with two models on one DB; separate DBs and event sourcing are costly upgrades that bring a consistency window.
 
 ## 13. Configuration Externalization
-Move config out of code and deployment packages into a central store fetched at runtime. Full notes: [13-config-externalization.md](../13-config-externalization.md)
+Move config out of code and deployment packages into a central store fetched at runtime. Full notes: [13-config-externalization.md](../chapters/13-config-externalization/README.md)
 
 ### Must-know
 - **Problem** — hardcoded (in source → recompile) or bundled (in the package → rebuild + redeploy) config ties a one-line change to a full deploy, **destroying independent deployability**; can't adapt to changing conditions; secrets scattered across services and Git history.

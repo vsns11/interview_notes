@@ -655,7 +655,7 @@ AI systems still stand on classic distributed-systems machinery. Companion notes
 
 - [System Design Patterns](../../../system-design-patterns/README.md) — caching, sharding, queues, replication and end-to-end designs.
 - [Designing Data-Intensive Applications notes](../../../ddia/README.md) — storage, replication, partitioning, streams, consistency in depth.
-- [Microservices patterns](../../../microservices-patterns/00-index.md) — service boundaries, communication, resilience, data consistency.
+- [Microservices patterns](../../../microservices-patterns/README.md) — service boundaries, communication, resilience, data consistency.
 - [Low-Level Design Handbook](../../../lld/README.md) — object-oriented design for the code inside those services.
 
 ### Final thoughts

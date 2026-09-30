@@ -55,18 +55,18 @@ Chapter numbers match the notes and the course chapters, so `runCh06` ↔
 
 | Task | Pattern | The number to look at |
 |---|---|---|
-| `runCh02` | [Strangler Fig](../microservices-patterns/02-strangler-fig.md) | Same user always routed to the same system; rollback with no deploy |
-| `runCh03` | [API Gateway](../microservices-patterns/03-api-gateway.md) | **279ms → 129ms** switching aggregation to parallel |
-| `runCh04` | [BFF](../microservices-patterns/04-bff.md) | Mobile receives **7%** of the shared payload |
-| `runCh05` | [Service Discovery](../microservices-patterns/05-service-discovery.md) | Registry dies; cached clients keep routing |
-| `runCh06` | [Circuit Breaker](../microservices-patterns/06-circuit-breaker.md) | `extra real calls during OPEN: 0` |
-| `runCh07` | [Bulkhead](../microservices-patterns/07-bulkhead.md) | Shipping **0/5** shared pool vs **5/5** bulkheaded |
-| `runCh08` | [Retry](../microservices-patterns/08-retry.md) | Herd: **1000/1000** in one bucket vs **~208** with jitter |
-| `runCh09` | [Sidecar](../microservices-patterns/09-sidecar.md) | Upstream called 3×, app asked once |
-| `runCh10` | [Saga](../microservices-patterns/10-saga.md) | Ledger shows charge **and** refund — compensation ≠ rollback |
-| `runCh11` | [Event-Driven](../microservices-patterns/11-event-driven.md) | Producer blocked **114ms → 0ms** |
-| `runCh12` | [CQRS](../microservices-patterns/12-cqrs.md) | Write store updated, read model stale — the consistency window |
-| `runCh13` | [Config Externalization](../microservices-patterns/13-config-externalization.md) | Flag flips every service at once, no deploy |
+| `runCh02` | [Strangler Fig](../microservices-patterns/chapters/02-strangler-fig/README.md) | Same user always routed to the same system; rollback with no deploy |
+| `runCh03` | [API Gateway](../microservices-patterns/chapters/03-api-gateway/README.md) | **279ms → 129ms** switching aggregation to parallel |
+| `runCh04` | [BFF](../microservices-patterns/chapters/04-bff/README.md) | Mobile receives **7%** of the shared payload |
+| `runCh05` | [Service Discovery](../microservices-patterns/chapters/05-service-discovery/README.md) | Registry dies; cached clients keep routing |
+| `runCh06` | [Circuit Breaker](../microservices-patterns/chapters/06-circuit-breaker/README.md) | `extra real calls during OPEN: 0` |
+| `runCh07` | [Bulkhead](../microservices-patterns/chapters/07-bulkhead/README.md) | Shipping **0/5** shared pool vs **5/5** bulkheaded |
+| `runCh08` | [Retry](../microservices-patterns/chapters/08-retry/README.md) | Herd: **1000/1000** in one bucket vs **~208** with jitter |
+| `runCh09` | [Sidecar](../microservices-patterns/chapters/09-sidecar/README.md) | Upstream called 3×, app asked once |
+| `runCh10` | [Saga](../microservices-patterns/chapters/10-saga/README.md) | Ledger shows charge **and** refund — compensation ≠ rollback |
+| `runCh11` | [Event-Driven](../microservices-patterns/chapters/11-event-driven/README.md) | Producer blocked **114ms → 0ms** |
+| `runCh12` | [CQRS](../microservices-patterns/chapters/12-cqrs/README.md) | Write store updated, read model stale — the consistency window |
+| `runCh13` | [Config Externalization](../microservices-patterns/chapters/13-config-externalization/README.md) | Flag flips every service at once, no deploy |
 
 ---
 

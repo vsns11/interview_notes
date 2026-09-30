@@ -424,7 +424,7 @@ timeout(2s) on a 5 s call -> fallback / TimeoutException
 onErrorReturn / onErrorResume / onErrorMap verified
 ```
 
-The first attempt runs at 0. The retries wait 1 s, 2 s and 4 s, so they run at 1,000, 3,000 and 7,000 ms. After 3 retries the error becomes `Retries exhausted: 3/3`. Real systems keep the default **jitter** (random ±50 % here) so that many clients don't retry in lockstep; `jitter(0)` is only for the deterministic test. Retry and circuit-breaker design in general: [microservices notes — retry](../../../microservices-patterns/08-retry.md).
+The first attempt runs at 0. The retries wait 1 s, 2 s and 4 s, so they run at 1,000, 3,000 and 7,000 ms. After 3 retries the error becomes `Retries exhausted: 3/3`. Real systems keep the default **jitter** (random ±50 % here) so that many clients don't retry in lockstep; `jitter(0)` is only for the deterministic test. Retry and circuit-breaker design in general: [microservices notes — retry](../../../microservices-patterns/chapters/08-retry/README.md).
 
 **Retry re-subscribes.** That only repeats the work if the source is lazy. `Mono.defer(...)`, `fromCallable` and `WebClient` calls are lazy. A `Mono.just(valueComputedEarlier)` would just replay the same value.
 

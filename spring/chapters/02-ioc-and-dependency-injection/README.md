@@ -923,7 +923,7 @@ Output for `place("A-1", 2_500)` then `place("B-2", 50_000)`:
 
 ### Common mistakes
 - Assuming events are asynchronous. They aren't unless you add `@Async`.
-- Using in-memory events as a reliable integration mechanism; for "must not be lost" use the transactional outbox + a broker (Chapter 14, [microservices notes](../../../microservices-patterns/11-event-driven.md)).
+- Using in-memory events as a reliable integration mechanism; for "must not be lost" use the transactional outbox + a broker (Chapter 14, [microservices notes](../../../microservices-patterns/chapters/11-event-driven/README.md)).
 - Sending emails in a plain listener inside a transaction that later rolls back — use `@TransactionalEventListener`.
 
 ### TL;DR

@@ -277,7 +277,7 @@ Callers of `CatalogClient` should not need to know it uses HTTP. Translate at th
 - **Connect timeout** — how long to wait for the TCP (and TLS) connection to be established.
 - **Read timeout** — how long to wait for response data once connected.
 
-Why it matters: without timeouts, a slow downstream service makes your request threads pile up waiting, until your service also stops answering — a **cascading failure**. Every remote call needs a timeout shorter than your own callers' timeout. See also [Circuit breaker](../../../microservices-patterns/06-circuit-breaker.md) and [Bulkhead](../../../microservices-patterns/07-bulkhead.md).
+Why it matters: without timeouts, a slow downstream service makes your request threads pile up waiting, until your service also stops answering — a **cascading failure**. Every remote call needs a timeout shorter than your own callers' timeout. See also [Circuit breaker](../../../microservices-patterns/chapters/06-circuit-breaker/README.md) and [Bulkhead](../../../microservices-patterns/chapters/07-bulkhead/README.md).
 
 ### Which library does Boot pick?
 
@@ -539,7 +539,7 @@ checkStock() -> ok on call 3
 2. **Only idempotent operations** — GET, PUT, DELETE — or POSTs protected by an **idempotency key** header that the server uses to de-duplicate (the way payment APIs such as Stripe do).
 3. **Exponential back-off + jitter** so thousands of clients don't hammer a recovering service in sync.
 4. **Bound the total time**: attempts × read timeout + delays must fit your own deadline (`@Retryable(timeout = ...)` since 7.0.2 caps the total).
-5. **Retry in one layer only**, and combine with a **circuit breaker** (Resilience4j) so a dead dependency is not retried forever — see [Chapter 16](../16-spring-cloud-and-microservices/README.md) and [Retry pattern](../../../microservices-patterns/08-retry.md).
+5. **Retry in one layer only**, and combine with a **circuit breaker** (Resilience4j) so a dead dependency is not retried forever — see [Chapter 16](../16-spring-cloud-and-microservices/README.md) and [Retry pattern](../../../microservices-patterns/chapters/08-retry/README.md).
 6. `@Retryable` is proxy-based: it must be on a Spring bean method called from **another** bean.
 
 ### Self-check

@@ -17,7 +17,7 @@ A real application runs in many places — your laptop, CI, staging, production 
 
 Runnable code: [`code/config-demo/`](code/config-demo/) (a non-web Boot app started in tests with different arguments, fake environment variables and profiles) and [`code/greeting-starter/`](code/greeting-starter/) (a three-module build: auto-configuration module, starter, and an app using it). Built with `mvn -q -B -ntp verify` on Spring Boot 4.1.1 / JDK 25; all outputs are real.
 
-Background you may want first: the container, `@Conditional` and profiles in [Chapter 2](../02-ioc-and-dependency-injection/README.md) (§2.11). The architecture idea behind this chapter — keep config out of the artifact — is the *externalized configuration* pattern in the [microservices notes](../../../microservices-patterns/13-config-externalization.md).
+Background you may want first: the container, `@Conditional` and profiles in [Chapter 2](../02-ioc-and-dependency-injection/README.md) (§2.11). The architecture idea behind this chapter — keep config out of the artifact — is the *externalized configuration* pattern in the [microservices notes](../../../microservices-patterns/chapters/13-config-externalization/README.md).
 
 ---
 

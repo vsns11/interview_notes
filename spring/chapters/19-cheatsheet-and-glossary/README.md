@@ -1680,4 +1680,4 @@ This is the last chapter. Where to go from here:
 - Back to the start: [Chapter 1 — The Spring Ecosystem and Your First App](../01-spring-ecosystem-and-first-app/README.md); revision questions: [Chapter 18](../18-spring-interview-questions/README.md).
 - [Java Handbook](../../../java/README.md) — the language underneath Spring (records, generics, lambdas, concurrency and virtual threads).
 - [SQL Handbook](../../../sql/README.md) — the queries, indexes and transaction isolation behind Chapters 7–9.
-- [Microservices patterns notes](../../../microservices-patterns/00-index.md) — gateway, discovery, circuit breaker, saga, CQRS and outbox, the designs Chapter 16 implements.
+- [Microservices patterns notes](../../../microservices-patterns/README.md) — gateway, discovery, circuit breaker, saga, CQRS and outbox, the designs Chapter 16 implements.

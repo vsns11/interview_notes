@@ -749,7 +749,7 @@ Spring Framework **7.0** (November 2025) added a small resilience toolkit to the
 - **`@ConcurrencyLimit`** — allow at most N threads inside a method at a time (a *bulkhead*).
 - **`RetryTemplate` / `RetryPolicy`** — the same retry logic, programmatically.
 
-They replace most uses of the separate **Spring Retry** project; Boot 4 removed dependency management for Spring Retry. They are **not** a full resilience library: there is no circuit breaker, rate limiter or time limiter — for those use Resilience4j (see [Chapter 16](../16-spring-cloud-and-microservices/README.md) and the [circuit breaker notes](../../../microservices-patterns/06-circuit-breaker.md)).
+They replace most uses of the separate **Spring Retry** project; Boot 4 removed dependency management for Spring Retry. They are **not** a full resilience library: there is no circuit breaker, rate limiter or time limiter — for those use Resilience4j (see [Chapter 16](../16-spring-cloud-and-microservices/README.md) and the [circuit breaker notes](../../../microservices-patterns/chapters/06-circuit-breaker/README.md)).
 
 ### Why it matters
 
@@ -902,7 +902,7 @@ RetryTemplate -> done on call 3
 
 ### When not to use it
 
-- **Non-idempotent operations** (charging a card, sending an email) — a retry after a timeout may do the work twice. Retry only operations that are safe to repeat, or make them idempotent first (idempotency keys). See [Retry pattern notes](../../../microservices-patterns/08-retry.md).
+- **Non-idempotent operations** (charging a card, sending an email) — a retry after a timeout may do the work twice. Retry only operations that are safe to repeat, or make them idempotent first (idempotency keys). See [Retry pattern notes](../../../microservices-patterns/chapters/08-retry/README.md).
 - **Errors that won't go away** — validation errors, 4xx responses, `NullPointerException`. Always set `includes` narrowly.
 - **Retry at every layer** — if the gateway, the client library and your service each retry 3 times, one user request can become 64 downstream calls ("retry storm"). Retry at one layer.
 - **Inside a transaction** — see section 4.6.

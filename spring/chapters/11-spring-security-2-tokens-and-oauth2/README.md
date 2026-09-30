@@ -28,7 +28,7 @@ All code lives in [`code/`](code/) — three Spring Boot **4.1.1** projects plus
 
 Every output block is real `mvn -q -B -ntp verify` output (log lines trimmed as `...`). Timestamps and random values change on each run.
 
-> **Prerequisites.** The filter chain, 401 vs 403, authorities and CSRF: [Chapter 10](../10-spring-security-1-fundamentals/README.md). Browser storage, cookies and XSS: JavaScript handbook [Chapter 14](../../../javascript/chapters/14-browser-apis-and-security/README.md). Gateways and BFFs as architecture patterns: [API Gateway](../../../microservices-patterns/03-api-gateway.md), [Backend for Frontend](../../../microservices-patterns/04-bff.md).
+> **Prerequisites.** The filter chain, 401 vs 403, authorities and CSRF: [Chapter 10](../10-spring-security-1-fundamentals/README.md). Browser storage, cookies and XSS: JavaScript handbook [Chapter 14](../../../javascript/chapters/14-browser-apis-and-security/README.md). Gateways and BFFs as architecture patterns: [API Gateway](../../../microservices-patterns/chapters/03-api-gateway/README.md), [Backend for Frontend](../../../microservices-patterns/chapters/04-bff/README.md).
 
 ---
 
@@ -811,7 +811,7 @@ flowchart LR
 3. The BFF forwards API calls with the bearer token (token relay, §11.10). Spring Cloud Gateway with `TokenRelay` is a common BFF.
 4. Because the SPA now uses cookies, **CSRF protection is required**. Use `csrf.spa()` ([10.8](../10-spring-security-1-fundamentals/README.md#108-csrf-protection)).
 
-The IETF draft *OAuth 2.0 for Browser-Based Applications* recommends this architecture as the most secure option. See also the [BFF pattern notes](../../../microservices-patterns/04-bff.md).
+The IETF draft *OAuth 2.0 for Browser-Based Applications* recommends this architecture as the most secure option. See also the [BFF pattern notes](../../../microservices-patterns/chapters/04-bff/README.md).
 
 | Where tokens live | XSS steals tokens? | CSRF risk | Complexity |
 |---|---|---|---|

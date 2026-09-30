@@ -1014,7 +1014,7 @@ public void placeOrder(Order o) {
 }
 ```
 
-The connection is held for the whole HTTP call. If the payment succeeds and the commit then fails, the customer has been charged and no order exists. Keep transactions short and database-only. Make remote calls before or after the transaction, or publish an event after commit ([7.15](#715-transactionaleventlistener)), or use the transactional outbox ([ch14](../14-messaging-async-and-scheduling/README.md), [event-driven patterns](../../../microservices-patterns/11-event-driven.md)).
+The connection is held for the whole HTTP call. If the payment succeeds and the commit then fails, the customer has been charged and no order exists. Keep transactions short and database-only. Make remote calls before or after the transaction, or publish an event after commit ([7.15](#715-transactionaleventlistener)), or use the transactional outbox ([ch14](../14-messaging-async-and-scheduling/README.md), [event-driven patterns](../../../microservices-patterns/chapters/11-event-driven/README.md)).
 
 ### Pitfall 5 — other threads
 

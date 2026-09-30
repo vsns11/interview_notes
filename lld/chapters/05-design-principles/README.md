@@ -3008,7 +3008,7 @@ Big business systems fail less from bad algorithms than from **muddled models**:
 1. **Talk to domain experts and write down the language.** Nouns become candidate entities and value objects, verbs become methods, "when X happens" becomes a domain event.
 2. **Draw the bounded contexts.** Where the same word starts meaning different things, you have a boundary. In an e-commerce business: *Catalog* (product descriptions, images), *Sales* (orders, prices, promotions), *Payments*, *Shipping* (parcels, weights, carriers), *Support*.
 3. **Decide how contexts talk (the context map).** The common relationships: one side publishes events or an API and the other consumes it; a **shared kernel** (a small shared library both own — use sparingly); **conformist** (you simply accept the other model); and the **anti-corruption layer** (you translate the other model into yours — the safest choice against a legacy or third-party system).
-4. **Map contexts to teams and services.** A bounded context is the most natural boundary for a microservice; that is why DDD is the usual starting point for splitting a monolith (see the [Strangler Fig notes](../../../microservices-patterns/02-strangler-fig.md) for migrating piece by piece).
+4. **Map contexts to teams and services.** A bounded context is the most natural boundary for a microservice; that is why DDD is the usual starting point for splitting a monolith (see the [Strangler Fig notes](../../../microservices-patterns/chapters/02-strangler-fig/README.md) for migrating piece by piece).
 
 **Tactical design — the building blocks inside one context**
 
@@ -3019,10 +3019,10 @@ Big business systems fail less from bad algorithms than from **muddled models**:
   2. Keep aggregates **small** (often the root plus a few value objects or child entities).
   3. **Reference other aggregates by id**, not by object (`CustomerId`, not `Customer`).
   4. **Change one aggregate per transaction**; keep other aggregates in step through domain events (**eventual consistency**).
-- **Domain events** are raised inside the aggregate when a state change happens, and published **after** the change is saved. In a database-backed system the reliable way is the **transactional outbox**: write the event to an outbox table in the same transaction as the aggregate, and let a relay publish it (see the [Saga notes](../../../microservices-patterns/10-saga.md) and [Event-Driven Architecture notes](../../../microservices-patterns/11-event-driven.md)).
+- **Domain events** are raised inside the aggregate when a state change happens, and published **after** the change is saved. In a database-backed system the reliable way is the **transactional outbox**: write the event to an outbox table in the same transaction as the aggregate, and let a relay publish it (see the [Saga notes](../../../microservices-patterns/chapters/10-saga/README.md) and [Event-Driven Architecture notes](../../../microservices-patterns/chapters/11-event-driven/README.md)).
 - **Repositories** exist only for aggregate roots (`OrderRepository`, never `OrderLineRepository`), because outsiders may only reach an `OrderLine` through its `Order`.
 - **Application services** (a thin layer above the domain) load an aggregate from its repository, call one domain method, save it — they orchestrate, the aggregate decides (GRASP Controller, section 16.3).
-- **Reads can use a different model.** When screens need data joined across aggregates, a separate read model fed by domain events is often simpler — that is **CQRS** (see the [CQRS notes](../../../microservices-patterns/12-cqrs.md)); storing the events themselves as the source of truth is **Event Sourcing** (Chapter 11, §11.7.6).
+- **Reads can use a different model.** When screens need data joined across aggregates, a separate read model fed by domain events is often simpler — that is **CQRS** (see the [CQRS notes](../../../microservices-patterns/chapters/12-cqrs/README.md)); storing the events themselves as the source of truth is **Event Sourcing** (Chapter 11, §11.7.6).
 
 ```mermaid
 flowchart LR

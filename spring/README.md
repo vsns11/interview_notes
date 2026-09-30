@@ -35,7 +35,7 @@ Every topic follows the same rhythm: *what it is → why it matters → how it w
 1. Data: **Ch 7** (transactions and their pitfalls, proved on PostgreSQL), **Ch 8** (N+1, locking, Flyway), **Ch 9** (Data JDBC, MongoDB/Redis, caching).
 2. Security: **Ch 10–11** (filter chain, CSRF/CORS, JWT resource servers, OAuth2 login, BFF).
 3. Concurrency and messaging: **Ch 13** (Reactor, WebFlux, R2DBC, a measured WebFlux-vs-virtual-threads comparison), **Ch 14** (`@Async`, `@Scheduled`, Kafka, outbox, RabbitMQ).
-4. Running it: **Ch 15** (Actuator, metrics, tracing, structured logs, graceful shutdown, AOT cache, native images), **Ch 16** (Config Server, discovery, Gateway, Resilience4j, contract tests). Pair Ch 16 with the [microservices patterns notes](../microservices-patterns/00-index.md).
+4. Running it: **Ch 15** (Actuator, metrics, tracing, structured logs, graceful shutdown, AOT cache, native images), **Ch 16** (Config Server, discovery, Gateway, Resilience4j, contract tests). Pair Ch 16 with the [microservices patterns notes](../microservices-patterns/README.md).
 
 **Interview path (you already use Spring):**
 1. Skim the TL;DRs of Ch 2–4, 7 and 10 (DI, auto-configuration, proxies, transactions, security) — most "why doesn't this work?" questions live there.
@@ -182,6 +182,6 @@ node tools/md2pdf.mjs chapters/07-data-access-jdbc-and-transactions/Chapter07-No
 | [Java Handbook](../java/README.md) | The language underneath Spring: OOP, generics, lambdas and streams, exceptions, concurrency and virtual threads, Maven and JUnit — read it first if you are new to Java |
 | [SQL Handbook](../sql/README.md) | The database side of Ch 7–9: queries, schema design, indexes, transactions and isolation levels (PostgreSQL) |
 | [LLD Handbook](../lld/README.md) | Object-oriented design, SOLID and the design patterns Spring is built from (proxy, template method, factory, observer, strategy) |
-| [Microservices patterns notes](../microservices-patterns/00-index.md) | Strangler fig, API gateway, BFF, service discovery, circuit breaker, bulkhead, retry, saga, event-driven, CQRS, config externalization — the designs behind Ch 14–16 |
+| [Microservices patterns notes](../microservices-patterns/README.md) | Strangler fig, API gateway, BFF, service discovery, circuit breaker, bulkhead, retry, saga, event-driven, CQRS, config externalization — the designs behind Ch 14–16 |
 | [System design patterns notes](../system-design-patterns/README.md) | Caching, sharding, replication, messaging and the other building blocks of the systems Spring services live in |
 | [AI & GenAI Handbook](../ai/README.md) | LLMs, prompting, RAG, agents and tool use — the concepts behind Spring AI in Ch 17 |

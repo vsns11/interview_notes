@@ -59,7 +59,7 @@ flowchart LR
 2. **Must happen at a time or interval?** Use `@Scheduled`. If the app runs on several instances, add a lock (14.7).
 3. **Another service must react, or the work must not be lost?** Use a broker. If the message must match a database change exactly, use the **transactional outbox** (14.17).
 
-The patterns behind this map (message queue, publish-subscribe, event-driven architecture) are explained without code in [System-design patterns, Module 2 — Moving data](../../../system-design-patterns/modules/02-moving-data/README.md) and in the [event-driven architecture notes](../../../microservices-patterns/11-event-driven.md). This chapter is about the Spring side.
+The patterns behind this map (message queue, publish-subscribe, event-driven architecture) are explained without code in [System-design patterns, Module 2 — Moving data](../../../system-design-patterns/modules/02-moving-data/README.md) and in the [event-driven architecture notes](../../../microservices-patterns/chapters/11-event-driven/README.md). This chapter is about the Spring side.
 
 ---
 
@@ -346,7 +346,7 @@ Boot 4.1 also has `spring.task.execution.propagate-context=true`. It registers S
 | CPU-bound (image resizing, PDF rendering) | about as many threads as cores. More threads only add context switching |
 | I/O-bound (HTTP calls, SMTP, database) | many threads, or virtual threads (14.5) |
 | Must not pile up in memory | a **bounded** queue plus a rejection policy. The default `AbortPolicy` throws `TaskRejectedException` to the caller; `CallerRunsPolicy` runs the task on the caller's thread, which slows the producer down |
-| Isolate slow jobs from fast ones | separate pools (a **bulkhead**, see [microservices notes](../../../microservices-patterns/07-bulkhead.md)) |
+| Isolate slow jobs from fast ones | separate pools (a **bulkhead**, see [microservices notes](../../../microservices-patterns/chapters/07-bulkhead/README.md)) |
 
 ### Common mistakes
 
@@ -1227,7 +1227,7 @@ sequenceDiagram
     C->>DB: INSERT processed_messages(id) - duplicate means skip
 ```
 
-The pattern is taught without Spring in the [Saga notes — Part 13D, implementing the saga log](../../../microservices-patterns/10-saga.md#d-implementing-the-saga-log-properly), the [event-driven architecture notes](../../../microservices-patterns/11-event-driven.md), and [System-design patterns, Module 10 — the outbox pattern](../../../system-design-patterns/modules/10-batch-and-streaming/README.md). Here it runs.
+The pattern is taught without Spring in the [Saga notes — Part 13D, implementing the saga log](../../../microservices-patterns/chapters/10-saga/README.md#d-implementing-the-saga-log-properly), the [event-driven architecture notes](../../../microservices-patterns/chapters/11-event-driven/README.md), and [System-design patterns, Module 10 — the outbox pattern](../../../system-design-patterns/modules/10-batch-and-streaming/README.md). Here it runs.
 
 ### The schema
 
