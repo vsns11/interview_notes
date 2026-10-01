@@ -4,7 +4,7 @@
 
 A **capstone** is a project big enough to force you to combine several chapters at once: the container, configuration, the web layer, data access, security, tests and operations. Reading a chapter teaches you a tool. Building a capstone teaches you when to reach for it, how it breaks, and how to explain your choice in an interview. This book holds **40 design briefs**, ordered from a weekend REST API to a multi-tenant SaaS with its own identity provider.
 
-Every brief targets the same stack as the handbook: **Spring Boot 4.1.1** (which brings **Spring Framework 7**, Spring Security 7 and the Spring Data 2026.0 train), **Java 25**, and **Jakarta EE 11** (Servlet 6.1, JPA 3.2, Bean Validation 3.1). Projects that need libraries outside the Boot BOM (Spring Cloud 2025.1 "Oakwood", Spring AI 2.0, Spring Modulith 2.0, Resilience4j, Bucket4j, ShedLock) say so. Where a brief relies on something new in Boot 4 or Framework 7 — API versioning, HTTP service client groups, `@Retryable`/`@ConcurrencyLimit`, `RestTestClient`, Authorization Server inside Spring Security — it is labelled, and the handbook chapter that proves it is linked.
+Every brief targets the same stack as the handbook: **Spring Boot 4.1.1** (which brings **Spring Framework 7**, Spring Security 7 and the Spring Data 2026.0 train), **Java 25**, and **Jakarta EE 11** (Servlet 6.1, JPA 3.2, Bean Validation 3.1). Projects that need libraries outside the Boot BOM (Spring Cloud 2025.1 "Oakwood", Spring AI 2.0, Spring Modulith 2.1, Resilience4j, Bucket4j, ShedLock) say so. Where a brief relies on something new in Boot 4 or Framework 7 — API versioning, HTTP service client groups, `@Retryable`/`@ConcurrencyLimit`, `RestTestClient`, Authorization Server inside Spring Security — it is labelled, and the handbook chapter that proves it is linked.
 
 **How to pick a project.**
 - New to Spring: start with projects 1–5 in order. Each adds one idea (REST, persistence, outbound HTTP, JPA, configuration).
@@ -65,13 +65,13 @@ Every brief targets the same stack as the handbook: **Spring Boot 4.1.1** (which
 | 27 | Microservices Shop with Gateway, Config and Discovery | Advanced | 4 weeks | Ch 6, 16 |
 | 28 | Order Saga with a Transactional Outbox | Advanced | 3–4 weeks | Ch 7, 14, 16 |
 | 29 | Observability with Micrometer and OpenTelemetry | Advanced | 2–3 weeks | Ch 15, 16 |
-| 30 | Spring AI RAG Documentation Assistant | Advanced | 3 weeks | Ch 17 |
+| 30 | Spring AI RAG Documentation Assistant | Advanced | 3 weeks | Ch 13, 17 |
 | 31 | Modular Monolith with Spring Modulith | Advanced | 3 weeks | Ch 2, 14, 16 |
 | 32 | GraalVM Native Image Function | Advanced | 2 weeks | Ch 3, 15 |
 | 33 | Resilient Travel Search Aggregator (Framework 7 resilience) | Advanced | 2–3 weeks | Ch 4, 6, 16 |
 | 34 | Identity Provider with Spring Authorization Server | Advanced | 3–4 weeks | Ch 10, 11 |
 | 35 | Event-sourced Wallet Ledger with CQRS | Advanced | 4 weeks | Ch 7, 9, 14 |
-| 36 | AI Support Agent with Tools and MCP | Advanced | 3 weeks | Ch 17 |
+| 36 | AI Support Agent with Tools and MCP | Advanced | 3 weeks | Ch 11, 17 |
 | 37 | Zero-downtime Deployments on Kubernetes | Advanced | 2–3 weeks | Ch 8, 15 |
 | 38 | Distributed Job Scheduler | Advanced | 3 weeks | Ch 7, 14 |
 | 39 | Payments API with Idempotency Keys | Advanced | 3 weeks | Ch 5, 7, 14 |
@@ -384,7 +384,7 @@ flowchart TD
 - [Ch 9 — Spring Data beyond JPA, and caching](../chapters/09-spring-data-beyond-jpa-and-caching/README.md): `@Cacheable` with a TTL.
 
 ### In the interview
-**Q:** `RestClient`, `WebClient` or `RestTemplate` for new code? / **A:** `RestClient` for blocking code (with virtual threads it scales well), `WebClient` only in a reactive app. `RestTemplate` is deprecated in the Framework 7 docs and scheduled for removal in 8.0.
+**Q:** `RestClient`, `WebClient` or `RestTemplate` for new code? / **A:** `RestClient` for blocking code (with virtual threads it scales well), `WebClient` only in a reactive app. `RestTemplate` is on its way out: the Spring team announced its deprecation with Framework 7.0, it becomes formally `@Deprecated` in 7.1 (Boot 4.1 still ships 7.0.x), and removal is planned for 8.0.
 
 **Q:** What does `@ImportHttpServices` give you? / **A:** It registers proxies for HTTP service interfaces in named groups; Boot configures each group's client (base URL, timeouts, headers, API version) from `spring.http.serviceclient.<group>.*`.
 
@@ -2076,7 +2076,7 @@ erDiagram
 
 ### Trade-offs, scaling and failure modes
 - RabbitMQ is excellent for task queues with per-message acks and routing; Kafka is better for replayable event streams and very high throughput.
-- Quorum queues are more durable than classic mirrored queues, at some throughput cost.
+- Quorum queues (Raft-replicated) are the durable choice; classic mirrored queues were removed in RabbitMQ 4.0, so replication now means quorum queues or streams, at some throughput cost.
 - Long-running jobs (minutes) can exceed the broker's consumer acknowledgement timeout; split them or extend the timeout deliberately.
 
 ### Stretch goals
@@ -3021,7 +3021,7 @@ erDiagram
 - **Deterministic rollouts.** Using `Random` gives users different experiences on each request. Hashing `flagKey + userId` gives a stable bucket per user per flag; including the flag key stops the same 10% of users from being the guinea pigs for every flag. Increasing 10% → 20% keeps the original 10% enabled.
 - **Consistency of updates.** Clients apply updates as a whole revision, replacing an immutable map atomically, so a request never evaluates half-old, half-new rules. Revisions also detect missed events: a gap triggers a full refetch.
 - **Failure modes are the product.** The safest default for a release flag is "off"; for an ops kill switch it may be "on". Make the default explicit per flag in code and test startup with no server and no snapshot.
-- **Flag debt.** Every flag doubles a code path. Add an expiry date per release flag, report stale flags, and make removing a flag part of the definition of done.
+- **Flag debt.** Each flag adds a second branch to test and reason about. Add an expiry date per release flag, report stale flags, and make removing a flag part of the definition of done.
 
 ### Testing strategy
 - Pure unit and property-style tests for the evaluator (no Spring).
@@ -3715,7 +3715,7 @@ A permission-aware RAG assistant: hash-based ingestion, heading-aware chunks in 
 **Level:** Advanced · **Time:** 3 weeks · **Prerequisites:** Ch 2, Ch 14, Ch 16
 
 ### What it is
-A library-management system (catalog, members, lending, fines, notifications) built as **one deployable application** with strictly separated internal **modules**, verified by **Spring Modulith**. Modulith treats each direct sub-package of your main package as an application module, checks in a test that modules only use each other's public API, lets modules communicate through **application events** that are persisted until handled, and generates architecture documentation from the code. Spring Modulith 2.0 targets Boot 4 and Framework 7.
+A library-management system (catalog, members, lending, fines, notifications) built as **one deployable application** with strictly separated internal **modules**, verified by **Spring Modulith**. Modulith treats each direct sub-package of your main package as an application module, checks in a test that modules only use each other's public API, lets modules communicate through **application events** that are persisted until handled, and generates architecture documentation from the code. Spring Modulith 2.0 moved the project to a Boot 4 / Framework 7 baseline, and 2.1 (June 2026) is the line built against Boot 4.1.
 
 ### The problem it solves
 Big-ball-of-mud monoliths are hard to change; microservices are expensive to operate. A **modular monolith** keeps one deployment and one database while enforcing boundaries like services would — so you can later extract a module into a service along a boundary that already works. Without tooling, boundaries erode one "quick import" at a time; Modulith makes violations fail the build.
@@ -3790,12 +3790,12 @@ erDiagram
         text status
     }
 ```
-Cross-module references (`LOAN.copy_id`, `FINE.loan_id`) are plain ids, not JPA relationships, so modules do not share entity classes — the same rule services would follow. Modulith 2.0 can also run Flyway migrations per module.
+Cross-module references (`LOAN.copy_id`, `FINE.loan_id`) are plain ids, not JPA relationships, so modules do not share entity classes — the same rule services would follow. Since 2.0, Modulith can also run Flyway migrations per module (`spring.modulith.runtime.flyway-enabled=true`).
 
 ### Tech stack
 | Component | Choice | Why |
 |---|---|---|
-| Structure | Spring Modulith 2.0 (`spring-modulith-starter-core`) | module model, verification |
+| Structure | Spring Modulith 2.1 (`spring-modulith-starter-core`) | module model, verification |
 | Events | `spring-modulith-starter-jdbc` (registry), `spring-modulith-events-kafka` | durable inter-module events, externalization |
 | Testing | `spring-modulith-starter-test` (`@ApplicationModuleTest`, `Scenario`) | test one module in isolation |
 | Docs | `Documenter` | diagrams and canvases generated from code |
