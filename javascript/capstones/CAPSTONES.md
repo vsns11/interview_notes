@@ -21,6 +21,8 @@ A **capstone** is a project big enough to pull several chapters together into on
 5. Only then attempt the **stretch goals**. They turn a portfolio piece into an interview story.
 6. Finish by answering the *In the interview* questions out loud, without notes.
 
+**Using these projects in interviews.** Each *In the interview* section is built to be rehearsed, not just read. Lead with the **30-second answer**: what you built, the one design decision that shaped it, the hardest problem and how you solved it. Make sure you can explain every entry under **Key terms** in plain words and point to where it appears in your code. Practise the Q&As out loud until the answers come in your own words, and swap the brief's target numbers for your own measured ones — latency, data size, memory, test counts. Finally, be ready for the two follow-ups interviewers almost always ask: "what would you change at 10x the load?" and "what breaks first?"
+
 **Colour code.** In the PDF, section headings are coloured by role so you can scan a page: green for **What it is**, coral for **The problem it solves** and **Requirements**, violet for **Real-world examples**, blue for **The architecture** and **Deep dive**, amber for **Trade-offs**, pink for **In the interview**, teal for **Self-check**, and yellow (boxed) for **TL;DR**.
 
 **Level legend.**
@@ -172,11 +174,59 @@ Left-to-right evaluation matches cheap pocket calculators; precedence matches ph
 - [Ch 13 — DOM and events](../chapters/13-dom-and-events/README.md): delegation, `keydown`, `data-*` attributes.
 
 ### In the interview
-**Q:** Why does `0.1 + 0.2 !== 0.3`? **A:** Numbers are binary 64-bit floats; 0.1 has no finite binary representation, so both operands are already slightly off and the sum rounds to a different double than 0.3. Compare with a tolerance or work in integers.
+**30-second answer:** I built a keyboard-accessible four-function calculator whose logic is a pure reducer, `(state, key) => newState`, with five modes such as *input*, *operator*, *result* and *error*. I chose a reducer over `eval` because it is safe under a strict Content Security Policy and lets me define exactly what `=` after `=` means. The hardest part was floating point: I keep typed input as a string so `0.05` never collapses, and I round only what the display shows to 12 significant digits. Every mode-by-key combination is a row in a table-driven test, including the edge cases.
 
-**Q:** Why model the calculator as a reducer? **A:** A pure `(state, key) => state` function makes every behaviour a testable row in a table and keeps the DOM code dumb.
+**Key terms to know:**
+- **State machine** — the app is always in exactly one named mode and each key moves it to a defined next mode; the `mode` field drives the reducer's `switch`.
+- **Reducer** — a pure function that takes the old state and an action and returns a new state without side effects; all calculator logic lives in one.
+- **Pure function** — same inputs always give the same output and nothing outside is changed; it is why the reducer runs in `node:test` with no browser.
+- **IEEE 754 double** — the 64-bit binary floating-point format every JavaScript `number` uses; it explains `0.1 + 0.2 = 0.30000000000000004`.
+- **`toPrecision`** — formats a number to N significant digits; `Number(x.toPrecision(12))` strips float noise for display.
+- **Event delegation** — one listener on the keypad reads `event.target.closest('button')` instead of one listener per button.
+- **`data-*` attributes** — custom HTML attributes such as `data-key="7"`, read through `element.dataset.key`, that map buttons to keys.
+- **`eval` and CSP** — `eval` runs any string as code, and a Content Security Policy without `'unsafe-eval'` blocks it; the reducer avoids both problems.
+- **Live region** — `aria-live="polite"` makes screen readers announce display changes without moving focus.
 
-**Q:** One listener or one per button? **A:** One on the container — event delegation — fewer listeners, and buttons added later work automatically.
+**Q:** Why does `0.1 + 0.2 !== 0.3`, and how does the calculator handle it?
+
+**A:** Numbers are 64-bit binary floats, and 0.1 and 0.2 have no exact binary representation, so both are already slightly off and the sum rounds to a different double than 0.3. I keep full precision in the arithmetic and round only the displayed value with `toPrecision(12)`. To compare floats in code you use a tolerance such as `Math.abs(a - b) < Number.EPSILON * 4`, or you work in integers.
+
+**Q:** Why model the calculator as a reducer instead of updating the DOM inside click handlers?
+
+**A:** A pure `(state, key) => state` function makes every behaviour a testable row such as `{ keys: '2+3==', display: '8' }`. The DOM code becomes dumb: it maps events to keys and renders state. The trade-off is a little more upfront design, but bugs like "what does `=` do after an error?" become one visible `case` instead of scattered `if`s.
+
+**Q:** Why not just call `eval` on the expression string?
+
+**A:** `eval` executes arbitrary code, so any injected string becomes a script, and it fails under a CSP that omits `'unsafe-eval'`. It also gives JavaScript precedence, not pocket-calculator chaining, and no control over repeated `=`. A reducer, or a small parser for precedence mode, is safer and documents the behaviour.
+
+**Q:** One listener or one per button?
+
+**A:** One on the keypad container — event delegation. Clicks bubble up from the button to the container, where `event.target.closest('[data-key]')` finds the pressed key. It uses fewer listeners, and buttons added later work without extra wiring.
+
+**Q:** What is the difference between `event.target` and `event.currentTarget` in that delegated handler?
+
+**A:** `target` is the innermost element actually clicked, which might be a `<span>` inside the button. `currentTarget` is the element the listener is attached to, the keypad. That is why the handler uses `event.target.closest('button')` rather than trusting `target` directly.
+
+**Q:** Why store `current` as a string rather than a number?
+
+**A:** Typing `0`, `.`, `0`, `5` as numbers gives `0`, `0`, `0`, `0.05`, so the user sees digits vanish, and `0.50` loses its zero. Keeping the text preserves exactly what was typed. I convert with `Number()` only when an operator or `=` arrives.
+
+**Q:** What happens on division by zero or a huge result?
+
+**A:** In JavaScript `5 / 0` is `Infinity`, not an error, so the reducer checks for a zero divisor and moves to the `error` mode, which shows "Cannot divide by zero" and makes the next digit start fresh. Results at or above `1e21` are already printed in exponent form by `toString`, so I format them that way deliberately and cap the display width.
+
+**Q:** How would you add operator precedence and parentheses — what changes at 10x the features?
+
+**A:** The single-pending-operator state no longer fits, so I would tokenise the input and use a shunting-yard parser (two stacks: operators and output) to build reverse Polish notation, then evaluate it. That is O(n) in the number of tokens. The reducer still owns the input mode, and the parser becomes a separate pure module with its own tests.
+
+**Q:** How do you prove the calculator is correct?
+
+**A:** A table-driven test runs every row through the reducer and checks the display string. I cover each mode crossed with each key, plus regressions like `0.1+0.2=` and `2+3==`. A small jsdom test checks only the wiring: delegation and keyboard mapping.
+
+**Common mistakes in answers:**
+- Saying `0.1 + 0.2` is a "JavaScript bug" — it is binary floating point and happens in every language using IEEE 754 doubles.
+- Rounding intermediate results to hide noise — that compounds error. Round only for display.
+- Claiming `eval` is fine "because the input comes from buttons" — keyboard input, future features and CSP all make it a liability.
 
 ### TL;DR
 A calculator is a state machine plus careful number formatting; keep the logic in a pure reducer, store typed input as text, and round only for display.
@@ -274,11 +324,66 @@ Unit-test the store actions as pure functions. With jsdom, test that rendering e
 - [Ch 14 — Browser APIs](../chapters/14-browser-apis-and-security/README.md): storage, the `storage` event, XSS.
 
 ### In the interview
-**Q:** `localStorage` vs `sessionStorage` vs cookies? **A:** `localStorage` persists per origin until cleared; `sessionStorage` lasts for one tab session; cookies are sent to the server on every request and can be `HttpOnly`. Use cookies for auth, storage for UI state.
+**30-second answer:** I built a to-do app with full CRUD, hash-based filters and persistence in `localStorage`, structured as one store holding a tasks array, a persist step and a render step. The key decision was a single source of truth: the DOM is always derived from the array, never read back from it. The hardest part was defensive loading — corrupt JSON or blocked storage must start an empty list rather than crash — plus syncing two tabs through the `storage` event. It renders 1,000 tasks in under 50 ms and never uses `innerHTML` with user text.
 
-**Q:** How do two tabs stay in sync? **A:** Writing to `localStorage` fires a `storage` event in every other same-origin tab; listen and reload state from the new value.
+**Key terms to know:**
+- **CRUD** — create, read, update, delete; the four operations the store's actions implement.
+- **Single source of truth** — one `tasks` array is authoritative and everything on screen is derived from it.
+- **`localStorage`** — a synchronous, string-only key-value store scoped per origin that survives reloads; tasks are saved under `todos:v1`.
+- **Origin** — scheme plus host plus port; storage, the `storage` event and the same-origin policy are all scoped to it.
+- **`storage` event** — fires in *other* same-origin tabs when one tab writes, which is how cross-tab sync works.
+- **Immutable update** — replacing the array (`map`, spread) instead of mutating it, so "did it change?" is a reference check.
+- **XSS (cross-site scripting)** — injected markup that runs script in your page; avoided by rendering titles with `textContent`.
+- **Event delegation** — one listener on the `<ul>` handles toggle, edit and delete for tasks added later.
+- **Hash routing** — filter state lives in `location.hash` (`#/active`), read on `hashchange`, so reload keeps the filter.
+- **Schema versioning** — the `v1` in the key lets you migrate stored data when its shape changes.
 
-**Q:** Why not store objects directly? **A:** Web Storage keeps strings only; `setItem('k', {a:1})` stores `"[object Object]"`. Serialize with JSON.
+**Q:** `localStorage` vs `sessionStorage` vs cookies?
+
+**A:** `localStorage` persists per origin until cleared. `sessionStorage` is per tab and is cleared when that tab closes. Cookies are sent to the server with every matching request, are small (about 4 KB each), and can be marked `HttpOnly` so JavaScript cannot read them. Use `HttpOnly` cookies for session tokens and Web Storage for UI state.
+
+**Q:** How do two tabs stay in sync?
+
+**A:** A `setItem` in tab A fires a `storage` event in every *other* same-origin tab, carrying `key`, `oldValue` and `newValue`. Tab B listens, parses `newValue` defensively and re-renders. The writing tab does not receive its own event, so it must render locally as usual.
+
+**Q:** Why not store objects directly?
+
+**A:** Web Storage keeps strings only, so `setItem('k', {a: 1})` stores `"[object Object]"`. Serialise with `JSON.stringify` and parse with `JSON.parse` inside `try/catch`. Dates come back as strings, which is why `createdAt` is stored as epoch milliseconds.
+
+**Q:** How do you stop a task title from running script?
+
+**A:** Never put user text into `innerHTML`. A title like `<img src=x onerror=alert(1)>` would execute. I build nodes with `createElement` and set `textContent`, which treats the string as text only.
+
+**Q:** What happens if storage is full, disabled or corrupt?
+
+**A:** `getItem` and `setItem` can throw (blocked storage, some private modes), `setItem` throws `QuotaExceededError` when the roughly 5 MB quota is full, and `JSON.parse` throws on bad text. I wrap all three in `try/catch`, validate the parsed shape, fall back to `[]`, and show a message when a save fails. Storage is treated as untrusted input.
+
+**Q:** Why immutable updates instead of `task.done = true`?
+
+**A:** Replacing the array and the changed object means the old and new state are different references, so change detection is cheap and undo is just keeping the old array. Mutation makes bugs where the render and the saved copy silently share objects. The cost is a small allocation per action, which is negligible at this size.
+
+**Q:** What breaks first at 10x or 100x the tasks?
+
+**A:** Full re-rendering and `JSON.stringify` of the whole list on each action are O(n), and `localStorage` blocks the main thread. At thousands of items I would patch only changed `<li>`s, and at large data sizes move to IndexedDB, which is asynchronous and stores structured objects. Past a few thousand visible rows, virtualise the list (Project 22).
+
+**Q:** Hands-on: what is wrong with this delegation code?
+
+```js
+list.addEventListener('click', e => {
+  if (e.target.className === 'delete') remove(e.target.parentNode.id);
+});
+```
+
+**A:** `className ===` fails as soon as the button has a second class, and `e.target` may be an icon inside the button. Use `e.target.closest('.delete')` and read the id from `closest('li').dataset.id`. Also avoid putting raw UUIDs into `id` attributes when a `data-id` is clearer.
+
+**Q:** How do you test it?
+
+**A:** Store actions are pure functions, so they get plain unit tests. With jsdom I test that a malicious title renders as text, that a corrupt stored value yields an empty list, and that the filter follows the hash. For sync I dispatch `new StorageEvent('storage', { key: 'todos:v1', newValue })` and assert the list updates.
+
+**Common mistakes in answers:**
+- Saying the `storage` event fires in the tab that wrote — it fires only in the *other* tabs.
+- Recommending `localStorage` for auth tokens — any XSS can read it. `HttpOnly` cookies are safer.
+- Treating storage as trusted — it can be corrupt, full or edited in DevTools, so parse and validate it like user input.
 
 ### TL;DR
 One array is the truth, the DOM is derived from it, and `localStorage` is a cautious, versioned mirror of it — parsed defensively and rendered with `textContent`.
@@ -376,11 +481,62 @@ Base64 costs ~33% more bytes but removes a whole class of decoding bugs. A respo
 - [Ch 13 — DOM and events](../chapters/13-dom-and-events/README.md): focus management, keyboard shortcuts.
 
 ### In the interview
-**Q:** Why is `sort(() => Math.random() - 0.5)` a bad shuffle? **A:** A comparator must be consistent; a random one gives a biased distribution that depends on the sort algorithm. Fisher–Yates gives every permutation equal probability in O(n).
+**30-second answer:** I built a timed multiple-choice quiz on the Open Trivia DB API, structured as a four-phase state machine: setup, question, feedback, results. The key decision was requesting Base64-encoded answers and decoding them with `atob` plus `TextDecoder`, so I never need `innerHTML` to turn entities like `&quot;` into text — that removes an XSS hole. The hardest parts were a fair shuffle (Fisher–Yates, not a random comparator) and a countdown that stays correct when the tab is throttled, which I solved by comparing against a deadline timestamp. It respects the API's one-call-per-5-seconds limit and falls back to 20 bundled questions offline.
 
-**Q:** Does `fetch` reject on a 500? **A:** No — it rejects only on network failure or abort. Check `response.ok` or `status` yourself.
+**Key terms to know:**
+- **State machine** — the app is in exactly one phase (setup, loading, question, feedback, results) and transitions are explicit; it prevents double timers and stray clicks.
+- **`fetch` and `response.ok`** — `fetch` resolves on any HTTP status, so you must check `ok` (status 200–299) yourself.
+- **HTML entities** — encoded characters like `&#039;`; decoding them through `innerHTML` also runs markup.
+- **Base64 with `atob` and `TextDecoder`** — `atob` returns one character per byte, so non-ASCII UTF-8 needs `TextDecoder` to rebuild the real string.
+- **Fisher–Yates shuffle** — an O(n) algorithm that gives every permutation equal probability; used on the answer choices.
+- **Deadline timestamp** — `performance.now() + 15000` decides time-up; the interval only redraws the display.
+- **Rate limiting** — the API allows one call per IP every 5 seconds and returns response code 5 when you exceed it.
+- **Focus management** — moving keyboard focus to each new question so keyboard and screen-reader users are not lost.
+- **Fake timers** — `mock.timers` in `node:test` lets tests advance time instantly.
 
-**Q:** How do you decode HTML entities safely? **A:** Avoid them (request another encoding) or parse with `DOMParser` and read `textContent`; never assign untrusted text to `innerHTML`.
+**Q:** Why is `sort(() => Math.random() - 0.5)` a bad shuffle?
+
+**A:** A comparator must be consistent: if a < b now, it must say so every time. A random one breaks the sort algorithm's assumptions, so some permutations come out far more often and the bias depends on the engine. Fisher–Yates walks from the end and swaps each item with a random index at or before it, giving every permutation equal probability in O(n).
+
+```js
+for (let i = a.length - 1; i > 0; i--) {
+  const j = Math.floor(Math.random() * (i + 1));
+  [a[i], a[j]] = [a[j], a[i]];
+}
+```
+
+**Q:** Does `fetch` reject on a 500?
+
+**A:** No. It rejects only on a network failure, a CORS failure or an abort. A 404 or 500 resolves with `response.ok === false`, so I throw my own error with the status and handle it like any other failure.
+
+**Q:** How do you decode HTML entities safely?
+
+**A:** Best is to avoid them by requesting `encode=base64`. If you must decode entities, parse with `new DOMParser().parseFromString(s, 'text/html')` and read `body.textContent`, because a parsed document does not run scripts. Then render with `textContent`, never `innerHTML`.
+
+**Q:** How do you keep the 15-second timer honest?
+
+**A:** `setInterval` fires no sooner than its delay and is throttled in background tabs, so counting ticks undercounts. I store a deadline and compute `remaining = deadline - performance.now()` on each tick. I also clear the interval on every phase change; otherwise a stale timer can fire after the user has already answered.
+
+**Q:** Why track `correctIndex` after shuffling?
+
+**A:** The API returns the correct answer separately from the wrong ones. If I record its index before shuffling, the index points at a different answer afterwards. I shuffle the combined array and then find the correct answer's new position, or shuffle objects that carry an `isCorrect` flag.
+
+**Q:** What happens if the API is down, rate-limited or the token expires?
+
+**A:** A network error or non-OK status falls back to the bundled JSON with a visible notice. Response code 5 means rate-limited, so I wait at least 5 seconds and retry once. If the session token is not found (it expires after 6 hours of inactivity), I request a new one and retry.
+
+**Q:** What changes if 10x more people play, or you want a global leaderboard?
+
+**A:** Each browser calls the API directly, so the per-IP limit is per player and scales fine. A global leaderboard needs a server, because `localStorage` is per device and trivially editable. The server must validate scores (or replay answers) since anything computed in the client can be faked.
+
+**Q:** How do you test it?
+
+**A:** I unit-test the shuffle statistically (run 60,000 shuffles of 3 items and check each of the 6 permutations is near 10,000), the UTF-8 decoder round trip, and every phase transition. I mock `fetch` with `mock.method(globalThis, 'fetch', …)` for success, HTTP 429 and network errors, and use `mock.timers` to fast-forward the timeout.
+
+**Common mistakes in answers:**
+- Saying `fetch` throws on HTTP errors — it does not, you must check `response.ok`.
+- Using `innerHTML` "just to decode entities" — that is the exact XSS sink the project avoids.
+- Believing `setInterval(fn, 1000)` runs exactly every second — it is a minimum delay and drifts.
 
 ### TL;DR
 A quiz is a four-state machine around fetched data; decode without `innerHTML`, shuffle with Fisher–Yates, and let timestamps — not intervals — decide when time is up.
@@ -481,11 +637,62 @@ Client-side caching cuts calls but means data can be 10 minutes old — show "up
 - [Ch 14 — Browser APIs](../chapters/14-browser-apis-and-security/README.md): `fetch`, `URL`, storage, geolocation.
 
 ### In the interview
-**Q:** How do you cancel a `fetch`? **A:** Pass `signal` from an `AbortController` and call `abort()`; the promise rejects with an `AbortError`. `AbortSignal.timeout(ms)` gives a signal that aborts itself.
+**30-second answer:** I built a weather dashboard that chains two Open-Meteo calls — geocoding a city name to coordinates, then fetching the forecast — and shows current, hourly and 7-day views in the *location's* time zone. The key design decision was owning one `AbortController` per search and combining it with `AbortSignal.timeout(8000)`, so a slow old request can never overwrite a newer one. The hardest bugs were that race and time zones, which I solved with abort plus a request id, and `Intl.DateTimeFormat` with `timeZone`. Responses are cached for 10 minutes per location, which keeps the app far below the free tier's 600 calls a minute.
 
-**Q:** Debounce vs throttle? **A:** Debounce runs once after activity stops (search box); throttle runs at most once per interval during activity (scroll handler).
+**Key terms to know:**
+- **Request chaining** — the second call needs the first call's result (city → lat/lon → forecast), so the calls run in sequence with `await`.
+- **`AbortController`** — creates a `signal` you pass to `fetch`; calling `abort()` makes that fetch reject with an `AbortError`.
+- **`AbortSignal.timeout` and `AbortSignal.any`** — a signal that aborts itself after N ms, and a signal that aborts when any of several do; used for cancel-or-timeout.
+- **Race condition** — the result depends on which async operation finishes first; here an older search finishing last.
+- **Debounce** — run a function once, only after input has paused (300 ms) — used for search suggestions.
+- **Cache with TTL** — a `Map` keyed by rounded coordinates and units, storing `fetchedAt`, valid for 10 minutes (time to live).
+- **`Intl.DateTimeFormat` with `timeZone`** — formats a time in a named IANA zone like `Asia/Tokyo` without a date library.
+- **Error `cause`** — `new Error('Forecast failed', { cause: err })` keeps the original error attached for debugging.
+- **Geolocation permission** — `navigator.geolocation` asks the user, and denial must show a helpful state, not a crash.
 
-**Q:** Where would you put an API key? **A:** Not in front-end code — anything shipped to the browser is public. Proxy through a server that adds the key.
+**Q:** How do you cancel a `fetch`?
+
+**A:** Pass `{ signal: controller.signal }` and call `controller.abort()`; the promise rejects with a `DOMException` named `AbortError`. `AbortSignal.timeout(ms)` aborts by itself (with a `TimeoutError`), and `AbortSignal.any([a, b])` combines a user cancel and a timeout. In `catch`, ignore `AbortError` because it means a newer search replaced this one.
+
+**Q:** How do you stop a stale response from overwriting a newer one?
+
+**A:** Abort the previous controller before starting a new search. As a second guard, give each search an increasing id and ignore any response whose id is not the latest, because a response can already be parsed when you abort. Both together make "last search wins" deterministic.
+
+**Q:** Debounce vs throttle?
+
+**A:** Debounce waits until events stop for N ms, then runs once — right for a search box. Throttle runs at most once per N ms while events keep coming — right for scroll or resize handlers. Both are closures holding a timer id or a last-run timestamp.
+
+```js
+const debounce = (fn, ms) => {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+};
+```
+
+**Q:** Where would you put an API key?
+
+**A:** Not in front-end code — anything shipped to the browser is public, including bundled environment variables. Proxy through a small server that adds the key and can also cache and rate-limit. Open-Meteo needs no key for non-commercial use, which is why the browser calls it directly.
+
+**Q:** Why do times go wrong across zones, and how do you fix it?
+
+**A:** With `timezone=auto` the API returns local times like `2026-10-01T09:00` with no offset. `new Date()` parses that as *your* local time, so a 9 a.m. Sydney forecast shows at the wrong hour for anyone else. I format with `Intl.DateTimeFormat(undefined, { hour: 'numeric', timeZone: place.timezone })` or treat the strings as labels and never shift them.
+
+**Q:** What happens when the network is offline, location is denied, or the API errors?
+
+**A:** Each is a distinct view state with its own message: `navigator.onLine` plus a failed fetch shows offline, geolocation error code 1 shows "permission denied" with a search box, an empty geocoding result shows "no matches", and a non-OK status shows an API error with retry. If a cached forecast exists, I show it with "updated 12 min ago".
+
+**Q:** What changes at 10x or 100x the users?
+
+**A:** Each user calls Open-Meteo from their own IP, so the free limits are per visitor. If I moved to a keyed or paid API, I would add a server proxy with a shared cache keyed by rounded coordinates — popular cities would be served from cache — and per-client rate limiting. The first thing to break would be the provider's quota, not my code.
+
+**Q:** How do you test the race condition?
+
+**A:** I mock `fetch` with promises I resolve by hand, start search A then search B, resolve B first and then A, and assert the screen shows B. I also check that A's signal was aborted. Cache expiry is tested by injecting a fake `now()` and advancing it past 10 minutes.
+
+**Common mistakes in answers:**
+- Saying debounce and throttle are the same — debounce fires after a pause, throttle fires at a steady maximum rate.
+- Thinking `abort()` alone always prevents stale renders — a response already in hand still needs an id check.
+- Hiding an API key in a front-end `.env` file — the bundler inlines it into public JavaScript.
 
 ### TL;DR
 Chain geocoding and forecast calls, cancel stale requests, cache briefly, and format every time in the place's own time zone.
@@ -580,11 +787,59 @@ Inject `now` into both models and test them as pure state: start at t=0, pause a
 - [Ch 12 — Async](../chapters/12-asynchronous-javascript/README.md): timers, clamping, why intervals drift.
 
 ### In the interview
-**Q:** Why does `setInterval` drift? **A:** It schedules a task "no sooner than" the delay; each run can be late due to other work or throttling, and lateness accumulates if you count ticks. Compute elapsed time from timestamps.
+**30-second answer:** I built a stopwatch and a Pomodoro timer that stay accurate even when the tab is hidden or the laptop sleeps. The key decision was to treat time as arithmetic on timestamps — elapsed equals accumulated plus `now - startedAt` — and use `setInterval` or `requestAnimationFrame` only to decide when to redraw. The hardest part was juggling two clocks: `performance.now()` for measuring because it is monotonic, and a `Date.now()`-based end time in `localStorage` so a reload resumes the block. My target was under 50 ms of drift after an hour, versus several seconds for the naive tick-counting version.
 
-**Q:** `performance.now()` or `Date.now()`? **A:** `performance.now()` for measuring durations (monotonic, high resolution); `Date.now()` for wall-clock moments you must store or share.
+**Key terms to know:**
+- **Timer drift** — `setInterval` delays are minimums, so each tick can be late and the lateness adds up if you count ticks.
+- **Monotonic clock** — `performance.now()` never jumps backwards when the system clock changes; it starts at zero for each page.
+- **Wall-clock time** — `Date.now()` is milliseconds since 1970 UTC; it survives reloads but can jump if the clock is adjusted.
+- **`requestAnimationFrame`** — calls your function before the next repaint, about 60 times a second, and pauses in hidden tabs.
+- **Timer throttling and clamping** — browsers clamp deeply nested timers to at least 4 ms and throttle hidden tabs to about once a second or less.
+- **Page Visibility API** — `document.visibilityState` and `visibilitychange` tell you when to stop or restart the render loop.
+- **Closure** — each model keeps private state (`startedAt`, `accumulatedMs`) in variables only its methods can reach.
+- **Dependency injection of the clock** — passing a `now()` function into the model so tests can control time.
+- **Notifications API** — `Notification.requestPermission()` then `new Notification(...)`; denial must not break the timer.
 
-**Q:** What happens to timers in a background tab? **A:** Browsers throttle them heavily to save power, so never rely on them for elapsed time.
+**Q:** Why does `setInterval` drift?
+
+**A:** It schedules a task to run *no sooner than* the delay. Each run can be late because the main thread was busy, the tab was throttled, or the machine slept, and if you count ticks those delays accumulate. Computing elapsed time from timestamps makes the drift disappear because lateness only affects when you redraw, not the value.
+
+**Q:** `performance.now()` or `Date.now()`?
+
+**A:** `performance.now()` for measuring durations: monotonic and sub-millisecond, though browsers coarsen its precision to resist timing attacks. `Date.now()` for moments you must store or share, such as the Pomodoro end time in `localStorage`, because `performance.now()` restarts at zero on each page load.
+
+**Q:** What happens to timers in a background tab or when the laptop sleeps?
+
+**A:** Browsers throttle hidden-tab timers heavily, and during sleep nothing runs at all. Because the models store start and end timestamps, the value is correct the moment the code runs again. I listen to `visibilitychange` to stop the animation loop when hidden and redraw immediately when visible.
+
+**Q:** Why `requestAnimationFrame` for the display rather than a 10 ms interval?
+
+**A:** rAF runs once per frame, just before paint, so you never compute values the screen cannot show, and it stops in hidden tabs, saving battery. A 10 ms interval wakes the CPU 100 times a second and still is not aligned with frames. While hidden, a 1-second `setTimeout` updates the tab title instead.
+
+**Q:** How do you survive a reload mid-block?
+
+**A:** I persist `phase` and the absolute `endAt` as a `Date.now()` value. On load, `remaining = endAt - Date.now()`; if it is negative, the block already ended while the page was closed, so I advance the phase and notify. A paused timer stores `remainingMs` instead of `endAt`.
+
+**Q:** What if the user changes the system clock or denies notifications?
+
+**A:** A `Date.now()` deadline moves with a clock change, so I either accept that or re-anchor on `visibilitychange` using `performance.now()` while the page stays open. Denied notification permission just skips the notification; the sound and title still work. Code must never assume permission was granted.
+
+**Q:** Hands-on: what does this print, and why?
+
+```js
+for (var i = 0; i < 3; i++) setTimeout(() => console.log(i), 0);
+```
+
+**A:** It prints `3 3 3`. `var` is function-scoped, so all three callbacks close over one `i`, which is 3 when they finally run after the loop. With `let`, each iteration gets a fresh binding and it prints `0 1 2`.
+
+**Q:** How do you test a 25-minute timer without waiting 25 minutes?
+
+**A:** Inject `now` into the models and test them as pure state: start at t=0, pause at 1500, resume at 4000, read at 5000 gives 2500 ms. For scheduling, `mock.timers.enable()` in `node:test` lets me `tick(25 * 60_000)` instantly and assert the long break comes after four work blocks. Sleep and hidden-tab behaviour I verify manually once.
+
+**Common mistakes in answers:**
+- Fixing drift by making the interval shorter — it wastes CPU and still drifts. Use timestamps.
+- Using `Date.now()` to measure durations — it can jump backwards. Use `performance.now()`.
+- Assuming background timers keep running normally — they are throttled or frozen.
 
 ### TL;DR
 Timers schedule, clocks measure: store start and end timestamps, redraw with `requestAnimationFrame`, and recompute on return — then hidden tabs and sleep can't make you wrong.
@@ -678,11 +933,60 @@ A class with private fields is clear for a single game; a pure reducer would mak
 - [Ch 13 — DOM and events](../chapters/13-dom-and-events/README.md): delegation, keyboard navigation, custom events.
 
 ### In the interview
-**Q:** How do you stop a user clicking during an animation? **A:** Hold an explicit `locked` flag in the model, set it before the timeout, clear it in the callback, and make every action check it.
+**30-second answer:** I built a memory card game where all the rules live in a `Game` class that extends `EventTarget` and emits `match`, `mismatch` and `win`, while a separate renderer only toggles CSS classes and ARIA attributes. The key decision was that split: I can test 100% of the rules in Node with a seeded shuffle and fake timers. The hardest bug was clicking during the 800 ms mismatch delay, which could open a third card; I fixed it with an explicit `locked` flag set before the timeout and checked by every action. Flips animate only `transform` so they hold 60 fps, and `prefers-reduced-motion` turns them off.
 
-**Q:** Why extend `EventTarget`? **A:** It gives `addEventListener`/`dispatchEvent` for free, decoupling the model from whoever listens.
+**Key terms to know:**
+- **`EventTarget`** — the built-in base class that provides `addEventListener` and `dispatchEvent`; `Game` extends it to publish events without a library.
+- **Publish/subscribe (pub/sub)** — the model announces events and any number of listeners react, so the model never knows about the DOM.
+- **`#private` fields** — class fields the language itself hides from code outside the class; `cards`, `open` and `locked` use them.
+- **Race condition / input lock** — a click arriving during the flip-back delay; the `locked` flag makes `flip()` return early.
+- **Fisher–Yates shuffle** — unbiased O(n) shuffle of the card pairs.
+- **Seeded PRNG** — a pseudo-random generator like mulberry32 that gives the same sequence for the same seed, so tests and daily challenges are repeatable.
+- **Compositor-friendly animation** — animating only `transform` and `opacity` avoids layout and paint, so the GPU can keep 60 fps.
+- **`backface-visibility`** — hides the back of a rotated element, which makes the 3D card flip work.
+- **ARIA grid pattern** — roles and arrow-key focus movement that make a grid of buttons usable from the keyboard.
 
-**Q:** Why are `#private` fields better than `_underscore`? **A:** They are enforced by the language — code outside the class cannot read or write them at all.
+**Q:** How do you stop a user clicking during an animation?
+
+**A:** Hold an explicit `locked` flag in the model, set it *before* scheduling `setTimeout(flipBack, 800)`, and clear it in the callback. `flip()` returns early while locked and also ignores a card already open or matched. Disabling buttons in the DOM is not enough on its own because keyboard handlers or tests can still call `flip()`.
+
+**Q:** Why extend `EventTarget`?
+
+**A:** It gives `addEventListener`, `removeEventListener` and `dispatchEvent` for free, in browsers and in Node. The model dispatches `new CustomEvent('match', { detail: { a, b } })` and does not care who listens. The renderer, a sound module and a test can all subscribe independently.
+
+**Q:** Why are `#private` fields better than an `_underscore` convention?
+
+**A:** They are enforced by the language: code outside the class body cannot read or write them, and accessing one is a `SyntaxError` at parse time. An underscore is only a hint. The trade-off is that you cannot inspect them from outside even in a test, so expose a read-only snapshot getter.
+
+**Q:** Hands-on: why might `this` be `undefined` in a handler, and how do you fix it?
+
+```js
+grid.addEventListener('click', game.flip);       // this is grid, not game
+grid.addEventListener('click', e => game.flip(idx(e))); // fixed
+```
+
+**A:** A method passed as a bare reference loses its receiver, so `this` becomes the element the listener is attached to (for a classic function) or `undefined` in strict-mode code called plainly. Wrap it in an arrow function, which captures `this` lexically, or use `game.flip.bind(game)`. Class bodies always run in strict mode.
+
+**Q:** Why animate `transform` instead of `left` or `width`?
+
+**A:** Changing `left` or `width` forces layout and paint on every frame. `transform` and `opacity` can be handled by the compositor on the GPU, so the main thread stays free. I respect `prefers-reduced-motion` by swapping instantly instead of rotating.
+
+**Q:** What happens if the timer fires after the user starts a new game?
+
+**A:** The stale `flipBack` would flip cards on the new board. I store the timeout id and `clearTimeout` it in `reset()`, or tag each game with an id and ignore callbacks from older games. Any async callback must check that the world it closed over still exists.
+
+**Q:** What changes at a 6×6 grid or with two players?
+
+**A:** Rules stay O(1) per flip, so size is not a performance issue; the shuffle is O(n). Emoji render differently per OS, so I switch to SVG icons for consistency. Two players adds a `currentPlayer` field and a per-player score, which only touches the class because the renderer just listens.
+
+**Q:** How do you test it?
+
+**A:** With a fixed seed I know where every pair is, so tests script flips and assert emitted events and state: match, mismatch, same card twice, matched card clicked. `mock.timers` from `node:test` advances the 800 ms instantly to check the lock is released. One jsdom test checks that clicking a card calls `flip` with the right index.
+
+**Common mistakes in answers:**
+- Relying on CSS `pointer-events: none` as the lock — keyboard input and programmatic calls bypass it. The model must enforce the rule.
+- Saying `#private` and `_private` are equivalent — only `#` is enforced.
+- Forgetting to cancel pending timers on restart, which corrupts the next game.
 
 ### TL;DR
 Keep the rules in an event-emitting class, lock input during the mismatch delay, and shuffle with a seeded Fisher–Yates so games are fair and tests are repeatable.
@@ -774,11 +1078,65 @@ Native validation is free and accessible but its message bubbles are hard to sty
 - [Ch 13 — DOM and events](../chapters/13-dom-and-events/README.md): forms, `FormData`, `blur` vs `input`, focus.
 
 ### In the interview
-**Q:** Why validate on the server if the client already does? **A:** The client is under the user's control; anything can be sent directly. Client validation is for UX, server validation is for correctness and security.
+**30-second answer:** I built a sign-up form with a tiny dependency-free validation library: you describe rules per field as plain functions, and the library binds events, renders accessible messages and runs a debounced, cancellable async check for username availability. The key decision was progressive enhancement — native HTML attributes like `required` and `type=email` work without JavaScript, and my rules layer on top for cross-field and async checks. The hardest part was timing: errors appear on blur, then update live on input, so users are not scolded mid-typing. The library is under 3 KB minified, and the same schema runs on the server because client validation is never security.
 
-**Q:** `input` vs `change` vs `blur`? **A:** `input` fires on every edit, `change` when a committed value changes (on blur for text fields), `blur` when focus leaves. Combine them to avoid premature errors.
+**Key terms to know:**
+- **Constraint validation API** — the browser's built-in checks (`required`, `pattern`, `minlength`, `type=email`) plus `checkValidity()` and `setCustomValidity()`.
+- **Progressive enhancement** — the form works with plain HTML first, and JavaScript adds a better experience on top; `novalidate` is added only when JS runs.
+- **Rule function** — `(value, allValues) => message | null`, or a promise of one for async rules; the schema maps fields to rule lists.
+- **Touched state** — whether the user has left a field once; errors are shown only after that ("reward early, punish late").
+- **`aria-describedby` and `aria-invalid`** — link an error message to its field and mark the field invalid for screen readers.
+- **`:user-invalid`** — a CSS pseudo-class that matches invalid fields only after user interaction, unlike `:invalid`.
+- **Debounce and `AbortController`** — wait 300 ms after typing stops, and cancel the previous availability request.
+- **`FormData`** — reads every named control in a form, including checkboxes and selects.
+- **Username enumeration** — an availability endpoint reveals which accounts exist, so it must be rate-limited.
 
-**Q:** How do you make errors accessible? **A:** Link the message with `aria-describedby`, set `aria-invalid`, announce via a live region or focus, and keep a summary at the top on submit.
+**Q:** Why validate on the server if the client already does?
+
+**A:** The client is under the user's control; anyone can skip the page and send a request with `curl` or edit the JavaScript. Client validation is for user experience, server validation is for correctness and security. Because rules are plain functions, I share the schema module with Node and the server's answer is final.
+
+**Q:** `input` vs `change` vs `blur`?
+
+**A:** `input` fires on every edit, `change` fires when a committed value changes (for text fields, when focus leaves after an edit), and `blur` fires when focus leaves whether or not anything changed. I validate on `blur` the first time and on `input` after a field has an error, so messages appear late and disappear early.
+
+**Q:** How do you make errors accessible?
+
+**A:** Each message has an id referenced by the field's `aria-describedby`, the field gets `aria-invalid="true"`, and on submit I focus the first invalid field and show a summary with links to each field. Screen readers then read the error when the field gets focus. Colour alone never signals an error.
+
+**Q:** Why not write a perfect email regex?
+
+**A:** The full address grammar is enormous and real addresses use `+`, subdomains and international characters that strict regexes reject. I accept what `type=email` accepts and confirm ownership by sending an email, which is the only real proof. The same goes for names: do not restrict characters.
+
+**Q:** How does the async rule avoid races?
+
+**A:** It is debounced 300 ms, and each call aborts the previous request with its `AbortController`. I also compare the value the response was for with the current value before showing it. If the check fails because of the network, I do not block submit — the server decides.
+
+**Q:** Hands-on: how do you collect values and block submit only when invalid?
+
+```js
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  const values = Object.fromEntries(new FormData(form));
+  const errors = await validate(schema, values);
+  if (Object.keys(errors).length) return showErrors(errors);
+  form.submit(); // does not fire 'submit' again
+});
+```
+
+**A:** `preventDefault` stops the browser's native submit while async rules run. `Object.fromEntries(new FormData(form))` gives a plain object, though multi-value fields need `getAll`. `form.submit()` bypasses the submit event and native validation, whereas `requestSubmit()` runs both.
+
+**Q:** What changes at 10x the fields or a multi-step form?
+
+**A:** Rule evaluation is cheap, so the cost is in rendering; I re-validate only the field that changed plus fields that depend on it (like `confirm` depending on `password`). For a wizard I validate per step and keep values in one object across steps. Server errors come back in the same `{ field: message }` shape so the renderer reuses one path.
+
+**Q:** How do you test it?
+
+**A:** Each rule and `validate` are pure, so they get table-driven unit tests. jsdom tests dispatch `blur`, `input` and `submit` and assert `aria-invalid`, `aria-describedby` and which element has focus. The async rule uses a mocked `fetch` and fake timers to prove only one request is sent and the stale one is aborted.
+
+**Common mistakes in answers:**
+- Treating client validation as security — it is UX only.
+- Validating on every keystroke from the first character, which shows errors before the user has had a chance.
+- Confusing `form.submit()` with `requestSubmit()` — only the latter fires the submit event and runs constraint validation.
 
 ### TL;DR
 Start with native HTML validation, layer a tiny rule-function library for cross-field and async checks, show errors late and clear them early, and always validate again on the server.
@@ -873,11 +1231,62 @@ A hidden input gives native keyboard behaviour on mobile but complicates focus (
 - [Ch 13 — DOM and events](../chapters/13-dom-and-events/README.md): input and composition events, minimal DOM updates.
 
 ### In the interview
-**Q:** Why can `str.length` be wrong for user-visible length? **A:** It counts UTF-16 code units. Emoji and combined characters use several; count grapheme clusters with `Intl.Segmenter`.
+**30-second answer:** I built a typing speed test that colours each character as you type and reports gross WPM, net WPM, accuracy and a speed-over-time chart. The key decision was to compare *grapheme clusters* from `Intl.Segmenter`, with both sides NFC-normalised, instead of UTF-16 code units, so "café" and skin-tone emoji count as the characters a human sees. The hardest parts were IME composition, where I ignore input until `compositionend`, and keeping keystroke-to-paint under 16 ms on a 500-word passage by updating only the one or two spans that changed. A scripted test typing 50 correct characters in 10 seconds reports exactly 60 WPM.
 
-**Q:** What is NFC normalisation? **A:** A canonical form where composed characters use the precomposed code point when one exists, so visually identical strings compare equal.
+**Key terms to know:**
+- **UTF-16 code unit** — what `str.length` and `str[i]` count; many emoji take two or more.
+- **Code point** — a Unicode number such as U+00E9; `[...str]` and `for…of` iterate code points.
+- **Grapheme cluster** — what a user sees as one character, possibly several code points; `Intl.Segmenter` with `granularity: 'grapheme'` splits by these.
+- **Normalisation (NFC)** — `normalize('NFC')` turns "e + combining accent" into the single precomposed "é" so equal-looking strings compare equal.
+- **IME composition** — the input method Chinese, Japanese and Korean users type through; `compositionstart`/`compositionend` and `event.isComposing` mark it.
+- **WPM** — words per minute with one word defined as 5 characters; gross counts everything, net subtracts uncorrected errors.
+- **Layout thrashing** — alternating DOM reads and writes that force the browser to recalculate layout repeatedly.
+- **Long task** — main-thread work over 50 ms, visible in the DevTools Performance panel.
+- **Hidden input** — a real `<input>` captures keystrokes (including mobile keyboards) while styled spans show the passage.
 
-**Q:** How do you keep a per-keystroke UI fast? **A:** Update only the changed nodes, avoid forced synchronous layout, and keep work per event tiny.
+**Q:** Why can `str.length` be wrong for user-visible length?
+
+**A:** It counts UTF-16 code units. `"👍🏽".length` is 4 (two surrogate pairs) but the user sees one character, and a family emoji joined with zero-width joiners is longer still. Count grapheme clusters with `[...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(s)].length`.
+
+**Q:** What is NFC normalisation and why does it matter here?
+
+**A:** Unicode can encode "é" as one precomposed code point or as "e" plus a combining accent. NFC converts to the precomposed form wherever one exists, so two visually identical strings become equal under `===`. Without it, a correctly typed "é" from one keyboard could be marked wrong against a passage stored the other way.
+
+**Q:** How do you handle IME input?
+
+**A:** During composition, `input` fires with intermediate text like a partially built syllable. I skip processing while `event.isComposing` is true and process the final text on `compositionend`. Otherwise half-built characters are scored as errors.
+
+**Q:** How do you keep a per-keystroke UI fast?
+
+**A:** I keep an array of span references and only swap the `className` of the one or two spans affected, instead of rebuilding 2,500 spans. I avoid reading layout (like `offsetTop`) right after writing styles, which would force a synchronous layout. Each input event does O(1) work.
+
+**Q:** How are WPM and accuracy computed?
+
+**A:** Gross WPM is (all typed characters ÷ 5) ÷ minutes, and net WPM subtracts uncorrected errors per minute. Accuracy is correct keystrokes ÷ total keystrokes, so a mistake you fixed still lowers accuracy. Time comes from `performance.now()` at the first keystroke, not from counting intervals.
+
+**Q:** Hands-on: what do these print?
+
+```js
+'é'.length;                 // 1 or 2 depending on encoding
+'é' === 'é';     // false
+'é'.normalize('NFC') === 'é'; // true
+[...'👍🏽'].length;          // 2 (two code points)
+```
+
+**A:** Spread splits by code points, so the thumbs-up with skin tone becomes two items even though it is one grapheme. Only `Intl.Segmenter` gives 1. This is why the target and typed arrays are built from segmenter output.
+
+**Q:** What edge cases could break or cheat the test?
+
+**A:** Pasting text would give impossible speeds, so I listen for `paste` and void the run. Clicking the passage blurs the hidden input, so I refocus it on click. On very old browsers without `Intl.Segmenter`, I would fall back to code points and accept that some emoji split.
+
+**Q:** How do you test it?
+
+**A:** The session model takes an injected clock and a scripted keystroke list, so "50 correct characters in 10 s" must give 60 WPM. I test tricky strings: combining marks, ZWJ emoji sequences, flags and right-to-left text. A jsdom test fires composition events and asserts no errors were recorded mid-composition.
+
+**Common mistakes in answers:**
+- Saying `[...str]` counts "characters" — it counts code points, which still splits many emoji.
+- Comparing strings without normalising, so equivalent accents fail.
+- Re-rendering the whole passage on every key and blaming the browser for lag.
 
 ### TL;DR
 Compare graphemes, not code units; respect IME composition; touch only the spans that changed; and compute WPM from timestamps with clearly stated formulas.
@@ -979,11 +1388,60 @@ A full in-memory scan is fine up to tens of thousands of entries; beyond that bu
 - [Ch 14 — Browser APIs](../chapters/14-browser-apis-and-security/README.md): `URL`, files, storage.
 
 ### In the interview
-**Q:** Why use `Map` instead of an object for the store? **A:** Any key type, guaranteed insertion order, `size`, and no prototype keys like `__proto__` to collide with user data.
+**30-second answer:** I built an on-device bookmark manager with tags, instant accent-insensitive search, locale-aware sorting, and JSON import and export. The key decision was to keep bookmarks in a `Map` by id with derived indexes — `tag → Set<id>` and `normalizedUrl → id` — so tag filters are set intersections and duplicate detection is one lookup. The hardest part was safe import: the file is untrusted, so I validate every record, show a dry-run preview of new, duplicate and invalid entries, and commit only after confirmation. Search across 5,000 bookmarks stays under 30 ms because each bookmark's search text is pre-normalised when saved.
 
-**Q:** How do you sort strings correctly for users? **A:** `Intl.Collator` (or `localeCompare`) with the user's locale; the default sort compares UTF-16 code units, so "Z" comes before "a".
+**Key terms to know:**
+- **`Map`** — a key-value collection with any key type, insertion order and `size`; the main store, keyed by id.
+- **`Set` and ES2025 set methods** — `intersection`, `union`, `difference` on sets; multi-tag AND filters intersect tag sets.
+- **Derived index** — a lookup structure rebuilt from the data (tag sets, normalised URLs) so queries avoid full scans.
+- **URL normalisation** — turning equivalent URLs into one canonical string with the `URL` class plus rules (no trailing slash, sorted query, no `utm_*`).
+- **Unicode normalisation (NFD)** — splits "é" into "e" plus a combining mark, which is then stripped with `/\p{M}/gu` for accent-insensitive search.
+- **`Intl.Collator`** — compares strings by a language's alphabetical rules instead of raw code units.
+- **Two-phase import** — validate and preview first, then commit everything at once or nothing.
+- **Prototype pollution** — a crafted `__proto__` key that modifies `Object.prototype` when merged carelessly; the import validator rejects such keys.
+- **`Blob` and object URLs** — export builds a `Blob` and downloads it through `URL.createObjectURL`, all without a server.
 
-**Q:** How do you import untrusted JSON safely? **A:** Parse in `try/catch`, validate shape and sizes, ignore dangerous keys, preview, then commit atomically.
+**Q:** Why use `Map` instead of a plain object for the store?
+
+**A:** A `Map` accepts any key type, keeps insertion order, has `size`, and has no inherited keys, so a user value like `"__proto__"` or `"constructor"` cannot collide with the prototype. It is also optimised for frequent adds and deletes. A plain object is fine for fixed-shape records, which is what each bookmark is.
+
+**Q:** How do you sort strings correctly for users?
+
+**A:** Use `Intl.Collator` (or `localeCompare`) with the user's locale and reuse one collator instance: `list.sort(new Intl.Collator(locale).compare)`. The default `sort()` compares UTF-16 code units, so "Z" comes before "a" and "Ä" lands after "z". In Swedish, "ä" sorts after "z", which only a collator knows.
+
+**Q:** How do you import untrusted JSON safely?
+
+**A:** Parse inside `try/catch`, check it is an array, then validate each record: the URL parses with `URL.canParse`, tags are short strings, sizes are bounded. Build fresh objects with only known fields, which drops `__proto__` and other unexpected keys. Show a preview and commit atomically, so a bad file never touches existing data.
+
+**Q:** Hands-on: how do you filter by tags A and B with ES2025 sets?
+
+```js
+const ids = index.get('a').intersection(index.get('b'));
+const results = [...ids].map(id => store.get(id));
+```
+
+**A:** `intersection` returns a new `Set` of ids present in both. The specification iterates whichever of the two sets is smaller, so the cost is roughly the smaller set's size, and with three or more tags you start from the rarest one. Missing tags must default to an empty set, or `get` returns `undefined` and the call throws.
+
+**Q:** What URL normalisation is safe, and what is risky?
+
+**A:** `new URL()` already lower-cases scheme and host and drops default ports like `:443`. Removing a trailing slash on non-root paths, sorting query parameters and dropping fragments and `utm_*` parameters are usually safe. Lower-casing the *path* is risky because many servers treat paths as case-sensitive, so I only lower-case the host.
+
+**Q:** Why pre-compute a search string per bookmark?
+
+**A:** Normalising title, URL, notes and tags on every keystroke for 5,000 items wastes time. Doing it once when a bookmark is saved means each keystroke only normalises the query and runs `includes` on each stored string. That is O(n) per query with a small constant.
+
+**Q:** What breaks first at 10x or 100x the bookmarks?
+
+**A:** At 50,000 the linear `includes` scan starts to feel slow and `localStorage`'s roughly 5 MB limit and synchronous writes become a problem. I would move storage to IndexedDB, which is asynchronous and much larger, and build an inverted index from words to ids. Rendering would also need virtualisation (Project 22).
+
+**Q:** How do you prove import and export are lossless?
+
+**A:** A round-trip test exports, clears, imports and compares with a `structuredClone` taken before. A table of URL pairs tests `normalizeUrl` for both equivalent and non-equivalent cases. The import validator gets malformed files: wrong types, huge strings and `__proto__` keys.
+
+**Common mistakes in answers:**
+- Saying `sort()` sorts alphabetically — by default it compares UTF-16 code units.
+- Normalising URLs by lower-casing the whole string — paths can be case-sensitive.
+- Merging imported objects with `Object.assign` without filtering keys, which invites prototype pollution.
 
 ### TL;DR
 Normalise URLs with `URL`, index tags with `Map` and ES2025 `Set` methods, search on pre-normalised text, sort with `Intl.Collator`, and import files in two validated phases.
@@ -1078,11 +1536,62 @@ Canvas is fast for many moving shapes but is not accessible by default — add a
 - [Ch 14 — Browser APIs](../chapters/14-browser-apis-and-security/README.md): `requestAnimationFrame`, visibility.
 
 ### In the interview
-**Q:** Why not move the snake inside `requestAnimationFrame` directly? **A:** rAF runs at the display's refresh rate, so speed would differ between 60 Hz and 120 Hz screens; a fixed-step accumulator keeps logic rate-independent.
+**30-second answer:** I built Snake on a 20×20 canvas grid with a fixed-timestep game loop: `requestAnimationFrame` adds elapsed time to an accumulator and the world advances one step every 120 ms, so the game runs at the same speed on 60 Hz and 120 Hz screens. The key design choice was a pure `World.step()` with no canvas dependency, so every collision rule is a Node unit test. The hardest bug was a fast Up-then-Left press letting the snake reverse into itself; I fixed it with an input queue that validates each direction against the last *queued* one. Collisions are O(1) through a `Set` of occupied cells, and the canvas is scaled by `devicePixelRatio` so it stays sharp.
 
-**Q:** How do you check self-collision fast? **A:** Keep a `Set` of occupied cell keys alongside the array; update both on each step for O(1) checks.
+**Key terms to know:**
+- **Game loop** — a function that repeatedly updates the world and draws it; here driven by `requestAnimationFrame`.
+- **Fixed timestep with an accumulator** — logic advances in equal steps however often frames arrive; leftover time carries to the next frame.
+- **`requestAnimationFrame`** — runs a callback before the next repaint at the display's refresh rate and pauses in hidden tabs.
+- **Input buffering** — a short queue (up to two) of pending direction changes, consumed one per step.
+- **Canvas 2D (immediate mode)** — you draw pixels each frame and the browser keeps no objects, unlike the DOM.
+- **`devicePixelRatio`** — physical pixels per CSS pixel; the canvas backing store must be scaled by it to avoid blur.
+- **`Set` for collisions** — `"x,y"` string keys give O(1) self-collision checks instead of scanning the snake.
+- **Spiral of death** — when catching up takes longer than real time; capping the accumulator prevents it.
+- **Seeded RNG** — makes food placement repeatable in tests.
 
-**Q:** Why does a canvas look blurry on retina screens? **A:** Its backing bitmap is in CSS pixels; scale it by `devicePixelRatio`.
+**Q:** Why not move the snake directly inside `requestAnimationFrame`?
+
+**A:** rAF fires at the display's refresh rate, so one move per frame would make the snake twice as fast on a 120 Hz screen. An accumulator collects real elapsed time and runs `update()` once per full `stepMs`, keeping speed independent of the display. Drawing still happens once per frame.
+
+```js
+acc += now - last; last = now;
+let steps = 0;
+while (acc >= stepMs && steps++ < 5) { world.step(); acc -= stepMs; }
+draw(world);
+```
+
+**Q:** Why cap the number of steps per frame?
+
+**A:** After a long pause or a slow frame, the accumulator can hold many seconds. Running all of those steps at once would teleport the snake into a wall, and on a slow device could take longer than the time it simulates. I cap it at a few steps and drop the rest, and I pause on `visibilitychange`.
+
+**Q:** How do you check self-collision fast?
+
+**A:** Keep a `Set` of `"x,y"` keys alongside the snake array and update both each step: add the new head, delete the old tail. A lookup is O(1) instead of scanning every segment. The subtle rule is that the head may move into the cell the tail is leaving in the same step, so remove the tail first unless the snake is growing.
+
+**Q:** What exactly is the reversal bug and how does the queue fix it?
+
+**A:** Moving right, the player presses Up then Left within one step. If each key is checked only against the *current* direction, both pass, Left overwrites Up before the step runs, and the snake reverses into itself. Validating each new key against the last queued direction rejects Left until Up has been applied.
+
+**Q:** Why does a canvas look blurry on retina screens?
+
+**A:** The canvas bitmap defaults to CSS pixels, and the browser stretches it over 2 or 3 times as many physical pixels. Set `canvas.width = cssWidth * devicePixelRatio` (and the same for height), keep the CSS size unchanged, and `ctx.scale(dpr, dpr)` so drawing code still uses CSS units.
+
+**Q:** What happens when the snake nearly fills the board?
+
+**A:** Picking random cells until you hit a free one becomes very slow and in theory may never finish. When occupancy is high I build the list of free cells and pick one at random, which is O(cells) but always terminates. If no cell is free, the player has won.
+
+**Q:** Canvas or a DOM grid, and how do you make canvas accessible?
+
+**A:** 400 divs would work and be inspectable, but toggling classes and styles each step costs more than a few `fillRect` calls. Canvas content is invisible to screen readers, so I add an off-screen live region announcing score and game over, and keep keyboard controls. At much larger grids canvas is clearly the better choice.
+
+**Q:** How do you test it?
+
+**A:** `World` is pure, so I construct states and call `step()`: the snake about to eat, about to hit a wall, and the head entering the cell the tail leaves. The input queue has its own tests for reversals. A seeded RNG makes food placement deterministic.
+
+**Common mistakes in answers:**
+- Using `setInterval` for the loop and claiming it is smooth — it is not aligned to frames and drifts.
+- Checking reversals against the current direction only, which allows the double-tap death.
+- Forgetting that entering the cell the tail is vacating is legal.
 
 ### TL;DR
 A fixed-step loop on `requestAnimationFrame`, a validated input queue, a `Set` for collisions and a DPR-scaled canvas make Snake correct on every screen.
@@ -1182,11 +1691,66 @@ Infinite scroll is great for browsing but bad for reaching the footer and for sh
 - [Ch 14 — Browser APIs](../chapters/14-browser-apis-and-security/README.md): `fetch`, `IntersectionObserver`, `URL`, History API.
 
 ### In the interview
-**Q:** How would you implement infinite scroll? **A:** A sentinel element after the list observed by `IntersectionObserver` with a generous `rootMargin`; a loading flag prevents duplicate fetches; append with a fragment; stop when the API says there are no more pages.
+**30-second answer:** I built an infinite-scroll image search on the Unsplash API, with a 30-line Node proxy so the API key never reaches the browser. The key design choice was using the right primitive for each problem: a 300 ms debounce for typing, an `AbortController` plus a request id for stale responses, and an `IntersectionObserver` sentinel with an 800 px `rootMargin` instead of a scroll listener. The hardest part was layout stability: every `<img>` gets `width` and `height` from the API so the browser reserves space, which kept Cumulative Layout Shift under 0.1. Pages are cached per query, which matters with a demo limit of 50 requests an hour.
 
-**Q:** Does debounce prevent race conditions? **A:** No. It reduces how many requests start; cancel stale ones with `AbortController` and ignore responses whose request id is outdated.
+**Key terms to know:**
+- **`IntersectionObserver`** — a browser API that calls you when an element enters or leaves the viewport (or a margin around it); it watches the sentinel.
+- **Sentinel element** — an empty element after the grid; when it comes near the viewport, the next page loads.
+- **`rootMargin`** — grows the observed area, so `'800px'` triggers loading before the user reaches the bottom.
+- **Debounce** — waits for a pause in typing before searching; reduces requests but does not prevent races.
+- **`AbortController` and request id** — cancel the old request, and drop any response whose id is not the latest.
+- **Cumulative Layout Shift (CLS)** — a Core Web Vital that measures how much visible content jumps; target under 0.1.
+- **Native lazy loading** — `loading="lazy"` defers off-screen images; `decoding="async"` lets decoding happen off the critical path.
+- **`DocumentFragment`** — an off-DOM container; appending one inserts a whole page of cards in a single DOM operation.
+- **API proxy** — a small server that adds the secret key, caches, and can rate-limit.
+- **HTTP 429** — "Too Many Requests"; the client must back off rather than retry in a loop.
 
-**Q:** How do you prevent layout shift from images? **A:** Reserve space with `width`/`height` attributes or `aspect-ratio`, and lazy-load below the fold.
+**Q:** How would you implement infinite scroll?
+
+**A:** Put a sentinel after the list and observe it with `IntersectionObserver` and a generous `rootMargin`. When it intersects and the controller is not already `loading` and `hasMore` is true, fetch the next page and append it with a fragment. Stop observing when the API reports the last page.
+
+**Q:** Why is `IntersectionObserver` better than a `scroll` listener?
+
+**A:** A scroll handler can fire many times per frame and usually reads `scrollTop` or `offsetHeight`, which forces layout. The observer is computed by the browser asynchronously and only calls you when the threshold is crossed. It also re-fires after you append a page if the sentinel is still visible, so tall screens need no extra check.
+
+**Q:** Does debounce prevent race conditions?
+
+**A:** No. It reduces how many requests start, but a slow response for "kit" can still arrive after the one for "kitten". Abort the previous request and also check a request id, because the abort may come after the body was already parsed.
+
+**Q:** How do you prevent layout shift from images?
+
+**A:** Reserve space before the image loads by setting `width` and `height` attributes (the browser derives an aspect ratio) with CSS `width: 100%; height: auto`, or set `aspect-ratio`. Lazy-load below the fold, and show a placeholder colour so the slot is not blank.
+
+**Q:** Hands-on: what is wrong here?
+
+```js
+new IntersectionObserver(([e]) => {
+  if (e.isIntersecting) loadNextPage();
+}, { rootMargin: '800px' }).observe(sentinel);
+```
+
+**A:** Nothing stops two calls while one page is still loading, so the same page can be fetched twice and appear as duplicates. Guard with `if (status === 'loading' || !hasMore) return`, and de-duplicate by photo id as a second safety net. Also keep a reference to the observer so you can `disconnect()` it when the query changes or the view is torn down.
+
+**Q:** What happens on a 429, a network error, or an empty result?
+
+**A:** Each is a separate controller state with its own UI: an error with a Retry button, an "end of results" message, or an empty state. On 429 I back off and tell the user rather than retrying in a tight loop. A failed page does not clear the pages already shown.
+
+**Q:** What breaks after 50 pages, or at 10x the traffic?
+
+**A:** After 50 pages there are 1,500 cards with decoded images, so memory and style recalculation grow. I would cap history by removing cards far above the viewport and keeping a spacer, or fully virtualise (Project 22). At higher traffic, the proxy's shared cache and a per-client rate limit protect the API quota.
+
+**Q:** Why not just call the API from the browser with the key?
+
+**A:** Anything in front-end code is public, so the key could be copied and its quota burned by anyone. The proxy keeps the secret on the server, lets me cache popular queries for everyone, and gives one place to enforce limits.
+
+**Q:** How do you test it, given jsdom has no `IntersectionObserver`?
+
+**A:** I inject an observer factory into the controller and, in tests, call its callback by hand to simulate the sentinel appearing. `debounce` gets fake-timer tests and the controller's transitions use a mocked client. Playwright against the proxy with fixtures scrolls the real page and asserts no duplicate ids.
+
+**Common mistakes in answers:**
+- Saying debounce solves races — it only reduces request count.
+- Forgetting a loading guard, which produces duplicate pages.
+- Leaving the API key in the bundle "because it is a read-only key".
 
 ### TL;DR
 Debounce the input, abort and id-check every request, let an `IntersectionObserver` sentinel ask for the next page, and give every image its size up front.
@@ -1305,11 +1869,59 @@ The native HTML drag-and-drop API gives file drops and cross-window drags but no
 - [Ch 14 — Browser APIs](../chapters/14-browser-apis-and-security/README.md): `requestAnimationFrame`, storage, cross-tab messaging.
 
 ### In the interview
-**Q:** How do you store order so a move is cheap? **A:** Fractional indexing — each item gets a sortable key between its neighbours, so moving one item updates one record.
+**30-second answer:** I built a Trello-style Kanban board with my own drag and drop on Pointer Events, so one code path handles mouse, touch and pen. The key design choice was fractional indexing: each card's `position` is a string sortable between its neighbours, so a move writes exactly one card record instead of renumbering a column. The hardest part was keeping dragging at 60 fps with 500 cards, which I solved by measuring card rectangles once at drag start, binary-searching them on each move, and moving only the ghost with `transform` inside `requestAnimationFrame`. Every move is also possible from the keyboard with live-region announcements, and moves sync across tabs through `BroadcastChannel`.
 
-**Q:** Pointer Events vs HTML5 drag and drop? **A:** HTML5 DnD handles files and cross-app drags but is weak on touch and styling; Pointer Events unify input and give full control at the cost of writing hit testing yourself.
+**Key terms to know:**
+- **Pointer Events** — one event family (`pointerdown`, `pointermove`, `pointerup`, `pointercancel`) for mouse, touch and pen.
+- **`setPointerCapture`** — keeps sending pointer events to the dragged element even when the pointer leaves it.
+- **Fractional indexing** — order keys like `"a0"`, `"a0V"` generated strictly between neighbours so a move updates one record.
+- **Hit testing** — working out which column and slot the pointer is over, using cached rectangles and card midpoints.
+- **Layout thrashing** — repeatedly reading layout (`getBoundingClientRect`) after writes, forcing the browser to recompute layout each time.
+- **`touch-action: none`** — tells the browser not to scroll or zoom on that element, so a touch drag is not stolen by scrolling.
+- **Command pattern and undo stack** — every change goes through `moveCard`, which is recorded so Ctrl+Z can invert it.
+- **`BroadcastChannel`** — a same-origin messaging API that tells other tabs a move happened.
+- **Interaction state vs data state** — what is being dragged and where it would drop, kept apart from the board data itself.
 
-**Q:** How do you keep dragging smooth? **A:** Measure layout once, move the ghost with `transform` in `requestAnimationFrame`, and avoid reading layout inside move handlers.
+**Q:** How do you store order so a move is cheap?
+
+**A:** With integers 0, 1, 2…, moving a card to the top renumbers every card below it. Fractional indexing gives each card a string key between its neighbours (`between('a0', 'a1')` might return `'a0V'`), compared lexicographically, so a move updates one record. Keys can grow long after many inserts in the same spot, so I occasionally rebalance.
+
+**Q:** Pointer Events vs the HTML5 drag-and-drop API?
+
+**A:** Native drag and drop supports files and dragging between windows or apps, but touch support is limited on many devices and the drag image is hard to style. Pointer Events need you to write hit testing and the ghost yourself, but they give one path for every input and full control. For dropping files from the desktop I would still use the native API.
+
+**Q:** How do you keep dragging smooth?
+
+**A:** I measure layout once at drag start (and after auto-scroll), store rectangles in an array, and binary-search by y on each move, so `pointermove` does no DOM reads. The ghost moves with `transform: translate()` inside `requestAnimationFrame`, which avoids layout and paint. This keeps work per event tiny.
+
+**Q:** What happens when the browser takes over a touch gesture or the user presses Escape?
+
+**A:** The browser fires `pointercancel` when it decides a gesture is a scroll or zoom, so I treat it like Escape: drop the ghost and restore the original position without writing data. On touch I start dragging only after a 200 ms long-press without movement, or set `touch-action: none` on handles. Because data changes only on a successful drop, a cancelled drag leaves nothing to clean up.
+
+**Q:** How do you make drag and drop accessible?
+
+**A:** Provide a non-pointer path: focus a card, Space to pick up, arrows to move, Space to drop, Escape to cancel. A polite live region announces "Fix login, position 2 of 5 in Doing" after each step. A "Move to…" menu is a simpler alternative.
+
+**Q:** Two users move cards to the same spot at the same time — what happens?
+
+**A:** Fractional keys merge cleanly when users move *different* cards, because each move touches one record. Two inserts in the same gap can generate the same key, so I append a client-id suffix to make keys unique and the order deterministic. With a real backend, the server is the tie-breaker.
+
+**Q:** Hands-on: what does `getBoundingClientRect()` inside `pointermove` cost?
+
+**A:** If anything changed the DOM since the last layout, reading a rectangle forces a synchronous layout of the page; doing that for 500 cards on every move is hundreds of forced layouts per second. Caching rectangles turns each move into an O(log n) binary search in plain JavaScript. Re-measure only after auto-scroll or a structural change.
+
+**Q:** What breaks first at 10x the cards?
+
+**A:** At 5,000 cards, rendering and memory for the DOM become the bottleneck, not hit testing. I would virtualise each column (Project 22) and measure only visible cards. Persisting the whole board to `localStorage` on every move would also need to change to per-card writes in IndexedDB.
+
+**Q:** How do you test it?
+
+**A:** `between(a, b)` gets a property-style test: thousands of random pairs, and the result must always sort strictly between them. The drag controller's state machine is tested in jsdom with synthetic pointer events and stubbed rectangles. One Playwright test performs a real mouse drag and one a touch drag.
+
+**Common mistakes in answers:**
+- Storing integer positions and renumbering, then calling the board "fast enough" — it fails with sync and large columns.
+- Reading layout inside every `pointermove` handler.
+- Treating keyboard support as optional — drag and drop needs a non-pointer alternative.
 
 ### TL;DR
 Pointer Events with capture, cached hit-test rectangles, a transform-only ghost, fractional-index positions and a keyboard alternative make drag and drop smooth, cheap to store and accessible.
@@ -1409,11 +2021,60 @@ Writing a parser teaches the most; for production use a spec-compliant library p
 - [Ch 14 — Browser APIs and security](../chapters/14-browser-apis-and-security/README.md): XSS, sanitising, CSP, IndexedDB.
 
 ### In the interview
-**Q:** What is the difference between escaping and sanitising? **A:** Escaping converts special characters so text displays literally; sanitising parses HTML and removes disallowed elements and attributes. Use escaping for text, sanitising for HTML you choose to allow.
+**30-second answer:** I built a split-pane Markdown editor with my own two-phase parser — blocks first, then inlines — that produces an AST and renders HTML with every text node escaped. The key decision was defence in depth against XSS: escaping all text, sanitising any allowed raw HTML with an allowlist, permitting only `http:`, `https:` and `mailto:` link schemes, and a test suite of known payloads that must produce no executable output. The hardest part was emphasis parsing, which needs a delimiter stack, and I measured my subset against the CommonMark spec examples. The preview updates in under 50 ms for a 20-page document by replacing only the blocks that changed.
 
-**Q:** Why not parse Markdown with regexes? **A:** Nested structures and context-dependent markers need state; regexes alone get complex, wrong and sometimes exponentially slow.
+**Key terms to know:**
+- **Parser and AST** — the parser turns text into an abstract syntax tree, a plain object tree such as `{ type: 'heading', level: 2, children }`.
+- **Block vs inline parsing** — block structure (lists, quotes, fences) is decided line by line first, then text inside each block is parsed for emphasis, code and links.
+- **Delimiter stack** — the CommonMark algorithm that matches runs of `*` and `_` to decide emphasis and strong emphasis.
+- **Escaping** — converting `& < > " '` to entities so text is displayed literally.
+- **Sanitising** — parsing HTML and removing elements and attributes not on an allowlist (DOMPurify or the Sanitizer API).
+- **Stored XSS** — malicious markup saved in a document that runs when someone else views it.
+- **`javascript:` URL** — a link scheme that runs code when clicked; blocked by checking `new URL(href, base).protocol`.
+- **Content Security Policy (CSP)** — an HTTP header limiting where scripts can come from, so injected markup cannot run code.
+- **ReDoS** — regular-expression denial of service, where crafted input makes a backtracking regex take exponential time.
 
-**Q:** How else can you limit XSS impact? **A:** A Content Security Policy that disallows inline scripts and limits script sources, so injected markup cannot run code.
+**Q:** What is the difference between escaping and sanitising?
+
+**A:** Escaping converts special characters so text shows literally: `<b>` becomes `&lt;b&gt;`. Sanitising takes HTML you *intend* to allow and removes dangerous elements, `on*` attributes and bad URLs. Escape every text node, and sanitise only the raw HTML you choose to permit.
+
+**Q:** Why not parse Markdown with regexes?
+
+**A:** Markdown is context-dependent: `*` at the start of a line is a list item, in the middle it is emphasis, inside backticks it is literal. Regexes cannot track nesting and open containers, so they become complex and wrong. Badly written ones also backtrack catastrophically on crafted input (ReDoS), whereas a linear scanner cannot.
+
+**Q:** Why parse blocks before inlines?
+
+**A:** Inline meaning depends on block structure: you must know a line is inside a code fence before deciding its stars are not emphasis. The block pass walks lines with a stack of open containers (quote, list, list item), and only then are leaf blocks' contents inline-parsed. This mirrors how CommonMark itself is specified.
+
+**Q:** How else can you limit XSS impact?
+
+**A:** A Content Security Policy such as `script-src 'self'` with no `'unsafe-inline'` stops inline scripts and event-handler attributes from running even if one slips through. Rendering the preview in a sandboxed `<iframe>` adds another layer. These are backups; escaping and sanitising remain the primary defence.
+
+**Q:** Hands-on: write a minimal `escapeHtml` and say where it must be used.
+
+```js
+const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const escapeHtml = s => s.replace(/[&<>"']/g, c => map[c]);
+```
+
+**A:** It must run on every text node and every attribute value the renderer emits, with `&` handled (here it is, since each character is replaced once). Escaping is not enough for URLs: `href="javascript:alert(1)"` contains no special characters, so link schemes need a separate allowlist check.
+
+**Q:** How do you keep the preview fast and stable for large documents?
+
+**A:** The parser is linear, so re-parsing 20 pages is cheap; the cost is replacing the whole preview, which reloads images and loses scroll. I hash each block's source and replace only blocks whose hash changed. Typing is debounced 100 ms, and for huge documents the parser could move into a Web Worker.
+
+**Q:** What happens with malformed or hostile input, like an unclosed fence or deeply nested lists?
+
+**A:** An unclosed fence runs to the end of the document, as CommonMark specifies, rather than erroring. Very deep nesting could blow the stack in a recursive renderer, so I cap nesting depth or render iteratively. Hostile HTML goes through the sanitiser and hostile links fail the scheme allowlist.
+
+**Q:** How do you prove the parser and the security work?
+
+**A:** CommonMark publishes its examples as JSON, so I run my claimed subset as table-driven tests and track the pass rate. A separate security suite feeds payloads like `<img src=x onerror=…>`, `<svg onload=…>` and `[x](javascript:alert(1))` and asserts no `script`, no `on*` attributes and no `javascript:` URLs survive.
+
+**Common mistakes in answers:**
+- Saying a library like marked "handles security" — it does not sanitise output by default.
+- Thinking escaping alone protects links — `javascript:` URLs need a scheme check.
+- Calling CSP a replacement for sanitising — it is a second line of defence.
 
 ### TL;DR
 Parse blocks then inlines into an AST, escape every text node, sanitise any allowed HTML with an allowlist (including URL schemes), and patch only changed blocks for a fast, safe preview.
@@ -1522,11 +2183,61 @@ One Node process keeps rooms in memory — simple, but a restart loses history a
 - [Ch 15 — Node.js basics](../chapters/15-nodejs-basics/README.md): `node:http`, upgrades, `EventEmitter`, buffers.
 
 ### In the interview
-**Q:** WebSockets vs Server-Sent Events vs long polling? **A:** WebSockets are full-duplex over one connection; SSE is server-to-client only over plain HTTP with automatic reconnect; long polling simulates push with held requests. Pick SSE for feeds, WebSockets for interactive two-way traffic.
+**30-second answer:** I built a multi-room chat with a Node 24 server using `ws` and a browser client on the built-in `WebSocket`, with rooms, presence, typing indicators, history and automatic reconnection. The key design decision was server-assigned per-room sequence numbers plus a client-generated id per message: on reconnect the client sends `lastSeq` and the server replays what it missed, while resends are de-duplicated, so delivery is lossless and idempotent. The hardest problems were dead connections and slow clients, which I handled with 30-second ping/pong heartbeats and by disconnecting any client whose send buffer passes 1 MB. My target was under 100 ms fan-out with 200 clients on a LAN, with every frame validated and a limit of 5 messages per second per connection.
 
-**Q:** How do you avoid missing messages on reconnect? **A:** Server-assigned sequence numbers, the client remembers the last one it saw, and the server replays from a buffer or database.
+**Key terms to know:**
+- **WebSocket** — a protocol that upgrades an HTTP request (`101 Switching Protocols`) into a long-lived, two-way connection.
+- **Full-duplex** — both sides can send at any time on the same connection, unlike request-response HTTP.
+- **Heartbeat (ping/pong)** — periodic control frames that detect peers that vanished without closing TCP.
+- **Sequence number (`seq`)** — a server-assigned, increasing per-room number used to replay missed messages.
+- **Idempotent send** — resending with the same `clientId` has no extra effect because the server drops duplicates.
+- **Backpressure / `bufferedAmount`** — bytes queued but not yet sent to a client; a growing value means a slow reader.
+- **Exponential backoff with jitter** — reconnect delays that double each attempt with randomness, so clients do not stampede after a restart.
+- **Cross-site WebSocket hijacking** — another site opening a socket with your user's cookies; blocked by checking the `Origin` header on upgrade.
+- **Server-Sent Events (SSE)** — one-way server-to-client streaming over plain HTTP, with built-in reconnect in `EventSource`.
+- **Pub/sub broker** — Redis or NATS relaying messages between server instances when you scale out.
 
-**Q:** How do you scale a WebSocket server horizontally? **A:** Share messages between instances through pub/sub, store state outside the process, and use a load balancer that supports upgrades.
+**Q:** WebSockets vs Server-Sent Events vs long polling?
+
+**A:** WebSockets are full-duplex over one connection and suit interactive two-way traffic like chat or games. SSE is server-to-client only over ordinary HTTP, with automatic reconnect and `Last-Event-ID` built in, which suits feeds and notifications. Long polling holds an HTTP request open until there is data, then the client immediately asks again — it works everywhere but costs a request per message batch.
+
+**Q:** How do you avoid missing or duplicating messages on reconnect?
+
+**A:** Every stored message gets a per-room increasing `seq`. The client remembers the last one it rendered and sends it in `join`, and the server replays newer messages from its ring buffer or database. Outgoing messages carry a `clientId`, so if the client resends an unacknowledged message after reconnecting, the server recognises it and only acks again.
+
+**Q:** How do you detect a dead connection?
+
+**A:** TCP can take a very long time to notice a client whose laptop lid closed. The server pings every 30 seconds and marks a connection alive when its pong arrives; on the next tick, any connection still not alive is terminated. The client likewise treats prolonged silence as a disconnect and starts reconnecting.
+
+**Q:** What happens when one client reads very slowly?
+
+**A:** Its outgoing buffer on the server grows, and with many such clients the process runs out of memory. Before sending, I check `socket.bufferedAmount` and disconnect clients above 1 MB, or drop non-essential messages like typing indicators for them. One slow phone must never stall or crash the room.
+
+**Q:** How do you scale a WebSocket server horizontally?
+
+**A:** Rooms in one process's memory cannot span two instances, so messages go through a pub/sub broker that every instance subscribes to, and history moves to a database. The load balancer must support the HTTP upgrade and long-lived connections. With shared state outside the process, sticky sessions become optional rather than required.
+
+**Q:** Why must the server validate every frame, and what does it check?
+
+**A:** Any client can send anything, not just your UI. I `JSON.parse` in `try/catch`, check `type`, room name and a 2,000-character text limit, apply the rate limit, and close with code 1008 (policy violation) on malformed frames. Clients render text with `textContent` so a message cannot inject HTML.
+
+**Q:** Hands-on: write the reconnect delay.
+
+```js
+const delay = attempt =>
+  Math.random() * Math.min(30_000, 500 * 2 ** attempt); // "full jitter"
+```
+
+**A:** The cap stops delays growing forever, the doubling backs off a struggling server, and the random factor spreads 200 clients over the window instead of all reconnecting at once. Reset `attempt` to 0 after a successful connection.
+
+**Q:** How do you test it?
+
+**A:** In a `node:test` `before` hook I start the server on port 0 (the OS picks a free port) and connect several clients with Node's global `WebSocket`. Tests cover broadcast, room isolation, replay by `lastSeq`, duplicate `clientId` suppression, the rate limit and malformed frames, and fake timers drive the heartbeat. A separate load script opens 200 connections and measures fan-out latency.
+
+**Common mistakes in answers:**
+- Assuming a closed laptop triggers a `close` event promptly — without heartbeats the server may never notice.
+- Reconnecting immediately in a loop without backoff and jitter, which turns a restart into a self-inflicted overload.
+- Forgetting that the WebSocket handshake carries cookies, so an unchecked `Origin` allows cross-site hijacking.
 
 ### TL;DR
 A WebSocket chat needs heartbeats to find dead peers, sequence numbers and client ids for lossless idempotent reconnects, backpressure limits per client, and strict validation of every frame.
@@ -1626,11 +2337,66 @@ A single-threaded stream pipeline is usually I/O-bound; if parsing is the bottle
 - [Ch 15 — Node.js basics](../chapters/15-nodejs-basics/README.md): streams, `process`, exit codes, `zlib`, child processes.
 
 ### In the interview
-**Q:** How do you process a file larger than memory in Node? **A:** Stream it — `createReadStream` with `readline` or a transform stream — so only a chunk is in memory, and use `pipeline` for error handling and backpressure.
+**30-second answer:** I built `logscope`, a Node CLI that reads access logs from files, gzipped files or stdin, filters them, and prints top paths, per-minute rates and latency percentiles as a table, JSON or CSV. The key design decision was streaming everything — `createReadStream`, gunzip, `readline` with `for await` — so a 5 GB file is processed in under 100 MB of memory. The hardest part was percentiles in constant memory, which I solved with a logarithmic-bucket histogram that trades a little precision for O(1) memory. It also behaves like a proper Unix tool: data to stdout, messages to stderr, exit codes 0/1/2, and a quiet exit when piped into `head`.
 
-**Q:** What is backpressure? **A:** A signal from a slow consumer to a fast producer to pause, so buffers do not grow without bound; Node streams expose it through `write()` returning `false` and the `drain` event.
+**Key terms to know:**
+- **Stream** — data processed in chunks as it arrives, so memory use stays constant regardless of file size.
+- **Backpressure** — a slow consumer making a fast producer pause; `write()` returns `false` and the producer waits for `drain`.
+- **`stream.pipeline`** — connects streams and, on an error in any stage, destroys all of them and reports one error.
+- **`readline` with `for await`** — turns a byte stream into lines you pull one at a time, which applies backpressure automatically.
+- **Histogram percentile** — counting values into fixed buckets and walking cumulative counts to estimate p50, p95, p99.
+- **stdout vs stderr** — results go to stdout for piping, diagnostics go to stderr so they do not corrupt the data.
+- **Exit code** — 0 success, 1 runtime error, 2 usage error; 130 after Ctrl+C by shell convention (128 + signal 2).
+- **`EPIPE`** — the error when writing to a pipe whose reader closed early, as with `| head`.
+- **`util.parseArgs`** — Node's built-in flag parser; strict mode rejects unknown flags.
+- **`bin` field and shebang** — `"bin": { "logscope": "./cli.js" }` plus `#!/usr/bin/env node` make the command installable.
 
-**Q:** How do you compute p99 latency over a huge stream? **A:** A fixed-bucket or sketch-based histogram, not storing every value.
+**Q:** How do you process a file larger than memory in Node?
+
+**A:** Stream it instead of `fs.readFile`: open with `createReadStream`, decompress with `zlib.createGunzip()` when needed, and read lines with `readline` and `for await`. Only one chunk and one line are in memory at a time. Use `pipeline` so an error in any stage closes the file handles.
+
+**Q:** What is backpressure?
+
+**A:** It is how a slow consumer tells a fast producer to pause so buffers do not grow without bound. In Node, `writable.write()` returns `false` when its internal buffer passes `highWaterMark`, and the producer should wait for the `drain` event. `pipeline` and async iteration handle this for you.
+
+**Q:** How do you compute p99 latency over a huge stream?
+
+**A:** Exact p99 needs every value sorted, which is impossible for billions of lines. I keep a histogram with logarithmic buckets (1, 2, 5, 10, 20… ms), increment counts as lines arrive, then walk the cumulative counts until 99% of the total is reached. Memory is O(buckets), and the answer is accurate to the bucket width — the output says it is approximate.
+
+**Q:** Hands-on: what is the core loop?
+
+```js
+const input = file.endsWith('.gz')
+  ? fs.createReadStream(file).pipe(zlib.createGunzip())
+  : fs.createReadStream(file);
+for await (const line of readline.createInterface({ input, crlfDelay: Infinity })) {
+  const r = parse(line);
+  if (r && matches(r)) aggregate(r); else if (!r) badLines++;
+}
+```
+
+**A:** `crlfDelay: Infinity` treats `\r\n` as one line break. `.pipe()` alone does not forward errors from the file stream to the gunzip stream, which is why production code uses `stream.pipeline` (or `compose`) for the input chain. Bad lines are counted, not fatal.
+
+**Q:** What happens when output is piped into `head`, or the user presses Ctrl+C?
+
+**A:** `head` closes the pipe after a few lines, so further writes fail with `EPIPE`; I listen for that error on `process.stdout` and exit quietly with code 0. On `SIGINT` I print partial results to stderr and exit with 130. Without these, users see a stack trace for normal shell usage.
+
+**Q:** What if a line is malformed, or the log format differs?
+
+**A:** Unparseable lines increment a `badLines` counter reported on stderr; one odd line must not abort a 5 GB run. Formats vary between servers (Common, Combined, custom latency fields), so the parser is pluggable by a `--format` option rather than guessing per line.
+
+**Q:** What breaks first at 10x the data, and how do you go faster?
+
+**A:** A single-threaded stream pipeline is usually limited by disk or decompression. If profiling shows parsing is the bottleneck, I can replace the regex with manual splitting, or split files across `worker_threads` and merge aggregator states — histograms and counts merge by addition. Memory stays bounded either way.
+
+**Q:** How do you test a CLI?
+
+**A:** Parser, filters and histogram percentiles get unit tests with real-world lines (IPv6, quotes in user agents, missing fields). Integration tests spawn the CLI with `child_process.spawn`, write to its stdin, and assert stdout, stderr and the exit code. A small gzipped fixture covers decompression.
+
+**Common mistakes in answers:**
+- Using `fs.readFile` or `split('\n')` on a multi-gigabyte file and blaming Node for running out of memory.
+- Claiming `.pipe()` handles errors — it does not propagate them, `pipeline` does.
+- Printing progress or warnings to stdout, which corrupts JSON output for the next tool in the pipe.
 
 ### TL;DR
 Stream lines through `pipeline` and `readline`, aggregate with bounded structures like histograms, and follow CLI conventions: stdout for data, stderr for messages, clear exit codes, and clean exits on `EPIPE` and Ctrl+C.
@@ -1768,11 +2534,68 @@ Express is minimal and familiar; Fastify adds schema-based validation and speed.
 - The [SQL Handbook](../../sql/chapters/01-databases-and-the-relational-model/README.md) for schema design, indexes and `EXPLAIN`.
 
 ### In the interview
-**Q:** How do you prevent SQL injection? **A:** Parameterised queries for values and allowlists for identifiers like sort columns; never concatenate input into SQL.
+**30-second answer:** I built a reading-list REST API twice — first on bare `node:http` to see what a framework hides, then on Express 5 with PostgreSQL through `pg` — layered as routers, services and repositories. The key design decisions were parameterised SQL everywhere, keyset (cursor) pagination instead of `OFFSET`, and one error middleware that turns domain errors into RFC 9457 `problem+json`. The hardest parts were transactions on a pooled connection and graceful shutdown, which I handled by checking out one client per transaction and releasing it in `finally`, and by draining in-flight requests on `SIGTERM`. Single-row reads stayed under 50 ms at p95 with 1 million books, verified with `EXPLAIN ANALYZE`.
 
-**Q:** Offset vs cursor pagination? **A:** Offset is simple and allows page jumps but slows with depth and shifts under inserts; cursor (keyset) pagination is fast and stable but sequential.
+**Key terms to know:**
+- **REST** — URLs name resources and HTTP methods (GET, POST, PATCH, DELETE) act on them, with status codes carrying the outcome.
+- **Middleware** — functions run in order on each request (request id, body limit, auth) before the route handler.
+- **Layered architecture** — routers handle HTTP, services hold business rules and ownership checks, repositories hold all SQL.
+- **Parameterised query** — `$1`, `$2` placeholders whose values the driver sends separately from the SQL text, preventing SQL injection.
+- **Connection pool** — a fixed set of open database connections shared by requests; its size bounds concurrency.
+- **Transaction** — `BEGIN … COMMIT` statements that succeed or fail together; they must run on one pooled client.
+- **Keyset (cursor) pagination** — `WHERE (created_at, id) > ($1, $2)` with a matching index, instead of `OFFSET`.
+- **Problem Details (RFC 9457)** — a standard JSON error body served as `application/problem+json`.
+- **Graceful shutdown** — on `SIGTERM`, stop accepting, finish in-flight requests within a deadline, close the pool.
+- **Health vs readiness** — `/healthz` says the process is alive, `/readyz` says it can serve (database reachable).
 
-**Q:** What does graceful shutdown involve? **A:** On SIGTERM, stop accepting connections, let in-flight requests finish with a deadline, close the database pool, then exit.
+**Q:** How do you prevent SQL injection?
+
+**A:** Use parameterised queries for every value: `pool.query('SELECT * FROM book WHERE id = $1', [id])`, so input is never parsed as SQL. Identifiers like sort columns cannot be parameters, so I map `?sort=title` through an allowlist object to a fixed SQL fragment. Never concatenate or template input into SQL.
+
+**Q:** Offset vs cursor pagination?
+
+**A:** `OFFSET 100000` makes PostgreSQL read and discard 100,000 rows, so deep pages get slow, and inserts during browsing shift rows so users see duplicates or gaps. Keyset pagination asks for rows after the last one seen on a unique sort key with a composite index, so every page costs about the same and is stable. The trade-off is you cannot jump straight to page 50.
+
+**Q:** Why do transactions need care with a pool?
+
+**A:** Each `pool.query` may run on a different connection, so `BEGIN` on one and `COMMIT` on another does nothing useful. I `await pool.connect()` to get one client, run all statements on it, `ROLLBACK` on error, and `release()` in `finally`. Forgetting to release leaks a connection, and after a few leaks every request hangs waiting for the pool.
+
+**Q:** What changed for error handling in Express 5?
+
+**A:** In Express 4, a rejected promise from an `async` handler was not passed to error middleware, so the request hung unless you wrapped it. Express 5 forwards rejections to `next(err)` automatically. I throw domain errors such as `NotFoundError` in services and map them, plus PostgreSQL codes like `23505` (unique violation) to 409, in one place.
+
+**Q:** What does graceful shutdown involve?
+
+**A:** On `SIGTERM`, fail `/readyz` so the load balancer stops sending traffic, call `server.close()` to stop accepting connections, let in-flight requests finish within 10 seconds, close the pool, then exit. A timer forces exit if the deadline passes. My test was a load run with a `SIGTERM` mid-way that dropped zero requests.
+
+**Q:** Hands-on: what is wrong with this, and how do you fix it?
+
+```js
+app.get('/books', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT * FROM book ORDER BY ${req.query.sort} LIMIT ${req.query.limit}`);
+  res.json(rows);
+});
+```
+
+**A:** Both values are injected into SQL text, so `?sort=1;DROP TABLE book` is an attack. Map `sort` through an allowlist (`{ title: 'title', year: 'published_year' }`), clamp `limit` to 1–100 and pass it as `$1`. Also select explicit columns rather than `*` so schema changes do not leak fields.
+
+**Q:** What breaks first at 10x or 100x the traffic?
+
+**A:** Usually the database: the pool queues requests if too small, and too many connections overwhelm PostgreSQL. I would size the pool by measurement, add read replicas for read-heavy endpoints, cache hot reads with ETags, and run several stateless Node instances behind a load balancer. Missing indexes show up first in `EXPLAIN ANALYZE` as sequential scans.
+
+**Q:** What happens if the database goes down?
+
+**A:** Queries reject, the error middleware returns 503 with a problem+json body and no stack trace, and `/readyz` fails so traffic moves to healthy instances. `/healthz` stays up so the orchestrator does not restart a process that is fine. The `pg` pool reconnects when the database returns.
+
+**Q:** How do you test it?
+
+**A:** Integration tests run against a real PostgreSQL with a fresh schema per file, or each test wrapped in a transaction that rolls back. The app listens on port 0 and tests use Node's global `fetch`. Specific tests assert 422 for invalid input, 404 for unknown ids, 409 for duplicate ISBNs, 403 when user B edits user A's shelf, and that injection strings in every parameter do nothing.
+
+**Common mistakes in answers:**
+- Saying an ORM or "escaping quotes" makes SQL injection impossible — parameters plus identifier allowlists do.
+- Using `OFFSET` for deep pagination and calling it fine because it worked on 100 rows.
+- Running `BEGIN` and `COMMIT` through `pool.query`, which may use different connections.
 
 ### TL;DR
 Layer routers, services and repositories; parameterise every query; paginate by keyset; turn domain errors into problem+json; and test against a real PostgreSQL.
@@ -1869,11 +2692,63 @@ Cache-first is fast but can serve stale code — always pair it with an update f
 - [Ch 14 — Browser APIs](../chapters/14-browser-apis-and-security/README.md): service workers, IndexedDB, storage, `fetch`.
 
 ### In the interview
-**Q:** What does a service worker do? **A:** It is a background script per origin that can intercept the page's network requests, serve responses from caches, and receive push and sync events; it has no DOM access.
+**30-second answer:** I built an installable offline-first notes app where IndexedDB is the source of truth, a service worker serves the app shell cache-first, and a sync engine pushes and pulls changes when the network returns. The key design decision was writing each note change and its outbox entry in one IndexedDB transaction, so the UI says "Saved" only once both are durable. The hardest parts were conflicts and the service-worker update lifecycle: the server accepts a write only if its `baseVersion` matches, otherwise I keep a visible conflict copy, and new versions activate only when the user agrees to reload. Second load renders in under 1 s with the network off, and retries never duplicate notes because every outbox operation has an id.
 
-**Q:** Cache-first vs network-first? **A:** Cache-first for versioned static assets (fast, offline); network-first for data that must be fresh, with a cache fallback.
+**Key terms to know:**
+- **Progressive Web App (PWA)** — a site with a web app manifest and a service worker that can be installed and work offline.
+- **Service worker** — a background script per origin that intercepts the page's network requests; it has no DOM access.
+- **Service worker lifecycle** — `install` (pre-cache), `waiting` (until old tabs close), `activate` (delete old caches), then `fetch` handling.
+- **Cache Storage** — a store of request/response pairs used by the service worker; versioned as `shell-v3`.
+- **Caching strategies** — cache-first, network-first and stale-while-revalidate, chosen per kind of resource.
+- **IndexedDB** — an asynchronous, transactional, large browser database for structured data and `Blob`s.
+- **Outbox pattern** — local changes queued as operations and sent to the server later.
+- **Optimistic concurrency** — the server rejects a write whose `baseVersion` is out of date, returning 409.
+- **Idempotency** — an operation id lets the server ignore repeats, so retries are safe.
+- **Storage eviction** — browsers may delete site data under pressure unless `navigator.storage.persist()` is granted.
 
-**Q:** How do you avoid losing offline edits? **A:** Write the change and an outbox entry atomically in IndexedDB, sync idempotently, and detect conflicts with version numbers.
+**Q:** What does a service worker do?
+
+**A:** It is a script the browser runs separately from any page, scoped to an origin and path, that can intercept the page's `fetch` requests and answer from caches or the network. It also receives push and sync events. It has no DOM access, runs only over HTTPS (or localhost), and the browser may stop it when idle, so it must not keep state in global variables.
+
+**Q:** Cache-first vs network-first vs stale-while-revalidate?
+
+**A:** Cache-first serves versioned static assets instantly and offline, but can serve stale code unless paired with an update flow. Network-first suits data that must be fresh, falling back to cache when offline. Stale-while-revalidate returns the cached copy immediately and updates the cache in the background, which is good for things like avatars.
+
+**Q:** How do you avoid losing offline edits?
+
+**A:** Write the note and its outbox entry in one IndexedDB transaction and show "Saved" only on the transaction's `complete` event, not when `put()` returns. The sync engine sends outbox operations with ids, and the server ignores repeats. Conflicts are detected with version numbers instead of silently overwriting.
+
+**Q:** How does a new version of the app reach users safely?
+
+**A:** The new worker installs and pre-caches under a new cache name, then *waits* while old tabs still use the old one. I message the page to show "Update available — reload"; on consent the page tells the worker to `skipWaiting()`, it activates, deletes old caches, and the page reloads. Forcing `skipWaiting()` without consent can run an old page against new files.
+
+**Q:** What happens when the same note was edited on two devices offline?
+
+**A:** The second device to sync sends `baseVersion: 4` while the server is at 5, so the server returns 409 with the current note. I keep both: the server version plus a "Note (conflict copy)". Last-writer-wins would be simpler but silently loses an edit, and CRDTs (Project 30) can merge text automatically at the cost of complexity.
+
+**Q:** Hands-on: what does a minimal cache-first fetch handler look like?
+
+```js
+self.addEventListener('fetch', e => {
+  if (new URL(e.request.url).pathname.startsWith('/api/')) return; // network only
+  e.respondWith(caches.match(e.request).then(r => r ?? fetch(e.request)));
+});
+```
+
+**A:** Returning without calling `respondWith` lets the browser handle API requests normally. For the shell, `caches.match` finds a cached response or falls back to the network. `respondWith` must be called synchronously inside the event handler, with a promise if the work is asynchronous.
+
+**Q:** What fails at scale or over time?
+
+**A:** Storage can be evicted under disk pressure unless persistence is granted, so I request `navigator.storage.persist()` and keep the server as a backup. A large outbox after weeks offline should be batched. On the server, pulling "changes since token" needs an index on update time, and many devices per user multiply conflict chances.
+
+**Q:** How do you test it?
+
+**A:** The sync engine runs against an in-memory fake server that can drop responses, return 409, or fail mid-batch, and I assert exactly-once results. Playwright installs the service worker, switches the context offline, edits, goes online and checks server state. Serving two builds in sequence tests the update prompt and old-cache cleanup.
+
+**Common mistakes in answers:**
+- Saying a service worker can touch the DOM — it cannot; it talks to pages with `postMessage`.
+- Treating `put()` returning as durable — wait for the transaction's `complete` event.
+- Using cache-first for everything with no versioning, which leaves users stuck on old code.
 
 ### TL;DR
 Cache the shell in a versioned service worker, make IndexedDB the source of truth with an atomic outbox, sync idempotently with version checks, and make conflicts visible.
@@ -1976,11 +2851,65 @@ This project *is* the testing strategy; add **mutation testing** as a check on t
 - [Ch 16 — Testing](../chapters/16-testing-and-typescript/README.md): `node:test`, mocks, fake timers, snapshots, coverage.
 
 ### In the interview
-**Q:** Mock, stub, fake — what is the difference? **A:** A stub returns canned answers, a fake is a working lightweight implementation, a mock also records calls so you can assert on interactions.
+**30-second answer:** I built a small shopping-cart library — line items, discount codes, tax, rounding, reservation expiry — and, more importantly, a test suite for it on the built-in `node:test` runner, later ported to Vitest for comparison. The key design decision was dependency injection: the clock and price catalogue are passed in as ports, so tests swap in fakes and never depend on real time. The hardest part was money: I keep integer cents, round once per line with a documented rule, and use property-based tests over 1,000 random carts to check invariants like `total = subtotal - discount + tax` and `total >= 0`. The suite runs in under 2 seconds with zero flakes over 100 repeated runs and over 90% line coverage.
 
-**Q:** How do you test code that depends on the current time? **A:** Inject a clock function or use fake timers so tests control time deterministically.
+**Key terms to know:**
+- **Test double** — any stand-in for a real dependency; stubs, fakes, spies and mocks are kinds of double.
+- **Dependency injection** — passing dependencies like `now()` and `getPrice()` into the library instead of reaching for globals.
+- **Table-driven test** — one test loop over rows of inputs and expected outputs, easy to extend with edge cases.
+- **Fake timers** — `mock.timers` in `node:test` replaces `setTimeout` and `Date` so time can be advanced instantly.
+- **Property-based testing** — generating many random inputs and checking invariants, then shrinking failures to a minimal case.
+- **Invariant** — a statement that must always hold, such as "total is never negative".
+- **Integer minor units** — storing money as whole cents to avoid float rounding errors.
+- **Code coverage** — which lines and branches ran during tests; it does not show whether they were checked.
+- **Mutation testing** — deliberately changing the code (`>=` to `>`) to see whether some test fails.
+- **Flaky test** — a test that passes and fails without code changes, usually from time, randomness, shared state or order.
 
-**Q:** Is 100% coverage a good goal? **A:** It shows what ran, not what was checked; aim for meaningful assertions on behaviour and use coverage to find untested areas.
+**Q:** Mock, stub, fake — what is the difference?
+
+**A:** A stub returns canned answers (`getPrice` always returns 500). A fake is a working lightweight implementation, like an in-memory catalogue. A spy records how it was called, and a mock is a double you set expectations on and assert interactions with. Use them only at boundaries such as the clock, catalogue or network.
+
+**Q:** How do you test code that depends on the current time?
+
+**A:** Inject a clock function so the test decides what "now" is, or use fake timers. In `node:test`, `mock.timers.enable({ apis: ['setTimeout', 'Date'] })` then `mock.timers.tick(15 * 60_000)` checks reservation expiry instantly. No test ever sleeps.
+
+**Q:** Is 100% coverage a good goal?
+
+**A:** Coverage shows what ran, not what was asserted, so 100% with weak assertions proves little and chasing the last few percent produces brittle tests. I use it to find untested areas and require a justification for uncovered lines. Mutation testing is a better check that the tests actually catch bugs.
+
+**Q:** Why integer cents, and how do you round tax?
+
+**A:** Floats cannot represent most decimal fractions, so errors creep in and multiply with tax. With integer cents I multiply, round once per line using one documented rule (half-up or banker's rounding, which sends x.5 to the even neighbour), and test the exact .5 boundary. Totals beyond `Number.MAX_SAFE_INTEGER` (2^53 − 1) would need `BigInt`.
+
+**Q:** Hands-on: write a table-driven test with `node:test`.
+
+```js
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+for (const [code, subtotal, expected] of [['TEN', 10_000, 1_000], ['TEN', 999, 0]]) {
+  test(`${code} on ${subtotal}`, () =>
+    assert.equal(cartWith(subtotal, code).totals().discount, expected));
+}
+```
+
+**A:** Each row becomes its own named test, so a failure tells you exactly which case broke. `node:assert/strict` makes `equal` use strict equality. Adding an edge case is one more row, such as exactly the minimum subtotal or one cent below.
+
+**Q:** What does property-based testing find that examples miss?
+
+**A:** It generates thousands of carts with random quantities, prices and codes and checks invariants: totals never negative, removing then re-adding an item restores the total, JSON round-trip is lossless. When one fails, shrinking reduces it to the smallest failing cart, often an edge you would never type, like zero quantity with a fixed discount. Seeding the generator makes failures reproducible.
+
+**Q:** Where do flaky tests come from, and how do you stop them?
+
+**A:** Real time, unseeded randomness, shared mutable state between tests, and dependence on test order. I inject clocks and seeds, build a fresh cart in every test, and run the suite repeatedly and in random order in CI to expose hidden ordering. A flaky test is treated as a bug, not retried until green.
+
+**Q:** What changes when the suite grows 10x?
+
+**A:** Speed and signal become the issue. `node:test` runs test files in parallel processes by default, so independent files scale well. I keep unit tests pure and fast, put slower integration tests in separate files, and keep snapshots small so reviewers actually read their diffs.
+
+**Common mistakes in answers:**
+- Using "mock" for every kind of double — interviewers often probe the distinction.
+- Asserting on private fields or internal call counts, which breaks on harmless refactors.
+- Treating high coverage as proof of correctness.
 
 ### TL;DR
 Design for injection, keep money in integer cents, test behaviour with tables and properties, control time and randomness, and treat coverage as a map, not a score.
@@ -2075,11 +3004,65 @@ JSDoc keeps `.js` files and no build step, which suits small libraries; `.ts` gi
 - [Ch 16 — Testing and TypeScript](../chapters/16-testing-and-typescript/README.md): narrowing, generics, `satisfies`, type stripping, JSDoc.
 
 ### In the interview
-**Q:** How would you migrate a large JS codebase to TypeScript? **A:** Incrementally: `allowJs`, convert leaves first, keep tests green, enable strict flags one at a time, validate at boundaries, track `any` counts.
+**30-second answer:** I migrated an existing JavaScript codebase — my Express API — to TypeScript incrementally, with `npm test` green after every commit and no big-bang rewrite. The key decisions were converting leaf modules first so their types flow into callers, enabling strict flags one per commit, and typing every external input as `unknown` and narrowing it through parse functions. The hardest part was `strictNullChecks`, which surfaced hundreds of possible `undefined`s that I fixed with better return types and early returns rather than `!`. I tracked the counts of `any` and `@ts-expect-error` per commit down to zero, and the server runs `.ts` directly with Node 24's type stripping while CI runs `tsc --noEmit` for checking.
 
-**Q:** `any` vs `unknown`? **A:** `any` disables checking; `unknown` accepts anything but forces you to narrow before use, so it is safe for untrusted data.
+**Key terms to know:**
+- **Incremental migration** — converting a codebase step by step with every commit building and passing tests.
+- **`allowJs` and `checkJs`** — let `tsc` compile `.js` files alongside `.ts`, and optionally type-check them using JSDoc.
+- **JSDoc types** — type annotations in comments (`/** @param {string} id */`) that the checker reads without renaming files.
+- **`strict` mode** — a bundle of flags including `strictNullChecks` and `noImplicitAny`.
+- **`any` vs `unknown`** — `any` turns checking off, `unknown` accepts anything but must be narrowed before use.
+- **Type narrowing** — refining a type with checks such as `typeof`, `in`, `Array.isArray` or a discriminant field.
+- **Discriminated union** — a union whose members share a literal field (`ok: true | false`) the compiler uses to narrow.
+- **Type stripping** — Node 24 runs `.ts` by erasing annotations, without checking types; only erasable syntax is allowed.
+- **Boundary validation** — parsing external data (HTTP bodies, `JSON.parse`, storage) into typed values at runtime.
+- **`@ts-expect-error`** — suppresses one error and itself errors once the problem is fixed, unlike `@ts-ignore`.
 
-**Q:** Does running `node app.ts` check types? **A:** No — Node strips types and runs the JavaScript; run `tsc --noEmit` separately.
+**Q:** How would you migrate a large JS codebase to TypeScript?
+
+**A:** Incrementally: add a `tsconfig.json` with `allowJs`, get `tsc` green in CI, add JSDoc types to core modules, then rename leaf modules to `.ts` first and work inward. Keep tests passing at every step. Enable strict flags one at a time, add runtime validation at boundaries, and track `any` and suppression counts so progress is visible.
+
+**Q:** `any` vs `unknown`?
+
+**A:** `any` disables checking for that value and silently spreads to everything it touches. `unknown` accepts any value but you cannot use it until you narrow it, so it is the right type for untrusted data. A `parseBook(u: unknown): Book` function that checks fields and throws on bad input is the bridge from untyped to typed.
+
+**Q:** Does running `node app.ts` check types?
+
+**A:** No. Node 24 strips the type annotations and runs the remaining JavaScript; a type error does not stop it. Type checking happens only with `tsc --noEmit` (or your editor), which is why it runs in CI.
+
+**Q:** What syntax does Node's type stripping not support, and how do you enforce that?
+
+**A:** Only erasable syntax works: no `enum`, no constructor parameter properties, no namespaces containing code, because those generate JavaScript. Relative imports must include the `.ts` extension, and type-only imports should use `import type`. Setting `"erasableSyntaxOnly": true` and `"verbatimModuleSyntax": true` makes `tsc` reject what Node cannot run.
+
+**Q:** Hands-on: narrow an `unknown` safely.
+
+```ts
+function parseBook(u: unknown): Book {
+  if (typeof u !== 'object' || u === null) throw new TypeError('not an object');
+  if (!('title' in u) || typeof u.title !== 'string') throw new TypeError('bad title');
+  // ...same for id and year
+  return { id: Number(u.id), title: u.title, year: u.year ?? null };
+}
+```
+
+**A:** The `typeof` and `null` check is needed because `typeof null === 'object'`. After `'title' in u` and the `typeof` check, TypeScript knows `u.title` is a string. A schema library like Zod generates the same logic and the type from one definition.
+
+**Q:** Why do types not protect you from bad API data?
+
+**A:** Types are erased at runtime, so a response declared as `Book` can still be anything the server or user sent. Casting with `as Book` only silences the compiler. Real safety needs runtime validation at every boundary, after which the types inside the program are trustworthy.
+
+**Q:** What changes for a team of 50 engineers or a 500k-line codebase?
+
+**A:** A codemod like Airbnb's ts-migrate can rename files and insert `@ts-expect-error` comments so everything compiles quickly, then teams burn down suppressions over time. Build performance matters, so project references split `tsc` into smaller units. CI blocks new `any` while allowing existing ones, so the number only goes down.
+
+**Q:** How do you prove the migration changed no behaviour?
+
+**A:** The existing test suite runs after every step and must stay green, and start-up time is compared to the baseline. I add type tests for important generics — assignments that must compile and `@ts-expect-error` lines that must fail — and runtime tests for boundary parsers with malformed input.
+
+**Common mistakes in answers:**
+- Believing Node's type stripping or a bundler checks types — only `tsc` does.
+- Fixing `strictNullChecks` errors with the non-null assertion `!` everywhere, which just hides the bugs.
+- Using `as SomeType` on `JSON.parse` output and calling it validated.
 
 ### TL;DR
 Migrate leaves first with tests green at every step, prefer `unknown` plus narrowing to `any`, turn on strict flags one at a time, and remember that only `tsc` — not type stripping — checks types.
@@ -2179,11 +3162,64 @@ Your own template language is small and safe-by-default but less powerful than J
 - [Ch 15 — Node.js basics](../chapters/15-nodejs-basics/README.md): `fs/promises`, paths, `fs.watch`, `node:http`.
 
 ### In the interview
-**Q:** How does a template engine avoid XSS? **A:** Escape every interpolation by default and require an explicit raw syntax for trusted HTML.
+**30-second answer:** I built `ssg`, a Node static site generator that turns Markdown with front matter and templates into pages, paginated indexes, tag pages, an RSS feed and a sitemap, plus a dev server with live reload over Server-Sent Events. The key design decision was compiling each template once into a JavaScript function that escapes every `{{ }}` interpolation by default, so a post titled `<script>` renders as text. The hardest part was incremental rebuilds: while rendering, I record every input each output touched, so editing one post rebuilds only its page, the index and its tag pages. A full build of 1,000 pages runs under 3 seconds, a one-post rebuild under 200 ms, and output is byte-for-byte deterministic.
 
-**Q:** How would you make rebuilds incremental? **A:** Record which inputs each output read; on change, rebuild only dependents, with a clean-build fallback.
+**Key terms to know:**
+- **Static site generator** — a build tool that pre-renders a whole site to plain files that any web server or CDN can host.
+- **Front matter** — a metadata block (title, date, tags, draft) at the top of a Markdown file.
+- **Template compilation** — tokenising a template and generating a JavaScript function once, then calling it per page.
+- **Auto-escaping** — `{{ x }}` escapes HTML by default and only `{{{ x }}}` outputs raw, trusted HTML.
+- **Collections** — groups of pages (posts sorted by date, tag to posts) used by index and tag pages.
+- **Dependency graph** — a `Map<input, Set<output>>` recording which outputs used which inputs, for incremental builds.
+- **`fs.watch` and debouncing** — file-change notifications that fire several times per save, collected for 50 ms then rebuilt once.
+- **Server-Sent Events (SSE)** — one-way HTTP streaming from server to browser, used to send "reload".
+- **Deterministic build** — same input always gives byte-identical output, so diffs and caches work.
+- **Bounded concurrency** — reading many files in parallel but with a limit, to avoid exhausting file descriptors.
 
-**Q:** SSE or WebSocket for live reload? **A:** SSE — the server only pushes, it runs over plain HTTP and the browser reconnects automatically.
+**Q:** How does a template engine avoid XSS?
+
+**A:** Escape every interpolation by default and require an explicit raw syntax, such as `{{{ body }}}`, for trusted HTML like rendered Markdown. That makes the safe path the easy path. Attribute values and URLs still need care, because escaping does not stop `href="javascript:…"`.
+
+**Q:** How do you compile a template, and what is the risk?
+
+**A:** Tokenise `Hello {{ name }}` into text and tag tokens, generate JavaScript source that concatenates strings and calls `escapeHtml`, then create the function once with `new Function` and reuse it for every page. That is why real engines are fast. The risk is that it is code generation, so you must never compile templates written by untrusted users.
+
+**Q:** How would you make rebuilds incremental?
+
+**A:** While rendering an output, record every input it read — its source file, layout, includes and any collection. On a change, look up dependents in the graph and rebuild only those. A layout change rebuilds every page using it, a new post invalidates index, tag and feed pages, and a `--clean` full build is the fallback when dependencies are missed.
+
+**Q:** SSE or WebSocket for live reload?
+
+**A:** SSE: the server only pushes "reload", it runs over plain HTTP with a `text/event-stream` response, and `EventSource` reconnects automatically after the dev server restarts. A WebSocket would add a protocol upgrade and two-way messaging nobody needs here.
+
+**Q:** Hands-on: how do you read 1,000 files quickly but safely?
+
+```js
+const files = (await fs.readdir('content', { recursive: true })).filter(f => f.endsWith('.md')).sort();
+const pages = [];
+for (let i = 0; i < files.length; i += 32) {
+  pages.push(...await Promise.all(files.slice(i, i + 32).map(loadPage)));
+}
+```
+
+**A:** `Promise.all` over all 1,000 at once could hit the open-file limit (`EMFILE`), so batches of 32 bound concurrency; a small pool that starts a new read as each finishes is even better. The `sort()` matters because directory listings have no guaranteed order, and determinism needs a stable order.
+
+**Q:** Why is `fs.watch` noisy, and how do you handle it?
+
+**A:** Editors often save by writing a temp file and renaming it, which fires several events per save, and events vary between operating systems. I debounce for 50 ms, collect changed paths into a `Set`, then rebuild once. A rebuild that is already running finishes before the next one starts.
+
+**Q:** What happens with broken front matter, and what breaks at 10x the pages?
+
+**A:** A parse error reports the file and line and fails the build with a non-zero exit code; in dev mode it shows the error in the browser instead of crashing the server. At 10,000 pages, Markdown parsing and image processing dominate, so I would cache parsed output by content hash and move image resizing to `worker_threads`.
+
+**Q:** How do you test it?
+
+**A:** Build a small fixture site and compare `dist/` file hashes against a stored snapshot, which also proves determinism. Unit-test front matter parsing with line-numbered errors, the template compiler for escaping and loops, and the dependency graph. An integration test edits a file under `ssg dev` and asserts an SSE "reload" arrives.
+
+**Common mistakes in answers:**
+- Escaping only some outputs, or making raw output the default.
+- Assuming `readdir` returns files in sorted order — it does not guarantee that.
+- Starting thousands of file reads at once with `Promise.all` and hitting `EMFILE`.
 
 ### TL;DR
 Load and parse content concurrently, compile templates to escaping functions, track dependencies for incremental rebuilds, debounce file events, and keep output deterministic.
@@ -2290,11 +3326,66 @@ Client routing makes navigation fast after the first load but makes the first lo
 - [Ch 14 — Browser APIs](../chapters/14-browser-apis-and-security/README.md): History API, `URL`, `URLSearchParams`.
 
 ### In the interview
-**Q:** How does SPA routing work without reloading? **A:** Intercept link clicks, call `history.pushState` to change the URL, render the matching view, and handle `popstate` for Back/Forward.
+**30-second answer:** I built a dependency-free client-side router under 4 KB with `URLPattern` matching, nested layouts, data loading before render, scroll restoration and focus management, plus a product-catalogue demo. The key design decision was one delegated click listener that intercepts *only* plain same-origin left clicks, so Ctrl-click, `target="_blank"` and downloads keep their native behaviour. The hardest part was everything a page load normally gives you for free: I abort the previous navigation's `load()` with an `AbortController`, save scroll positions into `history.state` before navigating, and move focus to the new `<h1>` so screen readers announce the page. Matching 100 routes takes under 1 ms, and the matcher is unit-tested in Node 24, which has `URLPattern` as a global.
 
-**Q:** Why does a deep link 404 on reload? **A:** The server receives the path and has no such file; configure it to serve `index.html` for app routes.
+**Key terms to know:**
+- **Single-page app (SPA)** — an app that swaps views in JavaScript instead of loading a new HTML page per URL.
+- **History API** — `pushState` and `replaceState` change the URL and history entry without reloading, and `popstate` fires on Back/Forward.
+- **`URLPattern`** — a standard matcher for patterns like `/products/:id` that returns named groups.
+- **Link interception** — a delegated `click` listener that turns qualifying `<a>` clicks into client navigations.
+- **Navigation cancellation** — each navigation owns an `AbortController`, and a newer one aborts the older one's data load.
+- **Nested layouts and outlets** — a parent route renders a frame with a slot where child routes render.
+- **Scroll restoration** — saving and restoring scroll position per history entry, with `history.scrollRestoration = 'manual'`.
+- **Focus management** — moving focus to the new page's main heading so keyboard and screen-reader users know the page changed.
+- **Server fallback** — the server serves `index.html` for unknown app paths so deep links work on reload.
+- **Navigation API** — a newer browser API with one interceptable `navigate` event for all navigations.
 
-**Q:** How do you avoid showing data for the wrong route? **A:** Cancel the previous navigation's loads with `AbortController` and check before rendering.
+**Q:** How does SPA routing work without reloading?
+
+**A:** Intercept qualifying link clicks and call `preventDefault`, then `history.pushState` to change the URL, match the path to a route, load its data and render it. Back and Forward fire `popstate`, where you match and render the entry the browser already moved to. Programmatic `navigate()` follows the same path.
+
+**Q:** Which clicks should the router intercept?
+
+**A:** Only a plain left click (`event.button === 0`) with no Ctrl, Cmd, Shift or Alt, on an `<a>` found with `event.target.closest('a')`, whose `href` is same-origin, with no `target` other than `_self` and no `download` attribute, and not already `defaultPrevented`. Everything else must behave natively so "open in new tab" and downloads still work.
+
+**Q:** Why does a deep link 404 on reload?
+
+**A:** On reload the browser asks the server for `/products/42`, and a static server has no such file. Configure the server to return `index.html` for app routes (but still 404 for missing assets), and let the client router render the right view. Hash routing avoids server config but gives uglier URLs and clashes with in-page anchors.
+
+**Q:** How do you avoid showing data for the wrong route?
+
+**A:** Each navigation creates an `AbortController`, aborts the previous one, and passes `signal` to `load()`, which passes it to `fetch`. After `await load()`, check `signal.aborted` before rendering. Clicking two products quickly therefore always shows the second.
+
+**Q:** Why is `popstate` tricky for scroll restoration?
+
+**A:** `popstate` fires *after* the URL has already changed, and you cannot cancel it. So before every navigation I save the current `scrollY` into the current entry with `history.replaceState`, and after rendering a popped entry I restore its saved position. The Navigation API improves this by letting you intercept the `navigate` event before it commits.
+
+**Q:** Hands-on: match a route with `URLPattern`.
+
+```js
+const p = new URLPattern({ pathname: '/products/:id' });
+const m = p.exec({ pathname: '/products/42' });
+m?.pathname.groups.id; // '42' — always a string
+```
+
+**A:** `exec` returns `null` when there is no match, hence the optional chaining. Parameters are strings, so the route must convert and validate `id`. I compile each pattern once at start-up and test routes in order, with `*` last as the 404.
+
+**Q:** What breaks for accessibility in an SPA, and how do you fix it?
+
+**A:** Without a page load, screen readers announce nothing and focus stays on the clicked link, which may no longer exist. After rendering I set `document.title`, move focus to the main `<h1>` (which has `tabindex="-1"`), or announce the title via a live region.
+
+**Q:** What changes as the app grows to 100 routes and a large bundle?
+
+**A:** Matching is still trivial, but shipping every view up front makes the first load slow. I would lazy-load route modules with dynamic `import()` and prefetch on link hover so the delay is hidden. A route that fails to load its chunk (for example, after a deploy) should fall back to a full page load.
+
+**Q:** How do you test it?
+
+**A:** The matcher and the click filter run in Node: `/products/42` gives `{ id: '42' }`, and modifier clicks are not intercepted. jsdom tests resolve mocked `load` functions out of order to prove the latest navigation wins. Playwright covers real Back/Forward, scroll restoration and new-tab behaviour.
+
+**Common mistakes in answers:**
+- Intercepting every `<a>` click, which breaks Ctrl-click, downloads and external links.
+- Thinking `pushState` fires `popstate` — it does not; only history traversal does.
+- Forgetting the server fallback, so deep links work in dev but 404 in production.
 
 ### TL;DR
 Intercept only the clicks that should be client navigations, match with `URLPattern`, cancel stale loads, and restore scroll and focus yourself because no page load will.
@@ -2395,11 +3486,60 @@ Fixed row heights make virtualisation easy; variable heights need measurement an
 - [Ch 14 — Browser APIs](../chapters/14-browser-apis-and-security/README.md): Web Workers, files, `requestAnimationFrame`.
 
 ### In the interview
-**Q:** How would you render a list of 100,000 items? **A:** Virtualise: a spacer for full height, render only visible rows plus overscan, recycle DOM nodes, and compute positions from `scrollTop`.
+**30-second answer:** I built a data grid that scrolls smoothly through 100,000 rows by 20 columns by virtualising: a tall spacer gives a real scrollbar, and a pool of about 60 recycled row elements shows only the visible slice plus overscan, so the DOM never holds more than 100 rows. The key design decision was a columnar data store, with numeric columns as `Float64Array`, and views computed as a `Uint32Array` of row indices, so sorting and filtering never copy rows. The hardest part was keeping the main thread free: CSV parsing runs in a Web Worker with a quote-aware state machine. Sorting 100,000 rows takes under 150 ms and filtering under 50 ms per keystroke.
 
-**Q:** Why sort an index array? **A:** It avoids moving the data, works with columnar typed arrays and keeps the original order available.
+**Key terms to know:**
+- **Virtualisation (windowing)** — rendering only the rows in the viewport plus a buffer, so cost is O(visible rows).
+- **Overscan** — extra rows rendered above and below the viewport to hide blank flashes during fast scrolls.
+- **Spacer element** — a single element sized `rows × rowHeight` that gives the scrollbar the full height.
+- **DOM node recycling** — reusing the same row elements and rewriting their text and `transform` as you scroll.
+- **Columnar storage** — one array per column instead of one object per row; compact and fast to scan.
+- **Typed arrays** — `Float64Array`, `Uint32Array`: fixed-type, contiguous memory, cheap to sort and transfer.
+- **Index array** — the view is an array of row numbers after filter and sort; the data never moves.
+- **Stable sort** — equal elements keep their original order; `Array.prototype.sort` is stable since ES2019.
+- **Web Worker and transferables** — parsing runs on another thread and posts `ArrayBuffer`s back without copying.
+- **ARIA grid** — `role="grid"`, `aria-rowcount` and `aria-rowindex` tell assistive tech about rows not in the DOM.
 
-**Q:** What breaks when you virtualise? **A:** Browser find-in-page, some accessibility semantics (fix with ARIA row counts and indices), and variable row heights need extra measurement.
+**Q:** How would you render a list of 100,000 items?
+
+**A:** Virtualise: a spacer gives the full scroll height, and on scroll I compute `first = Math.floor(scrollTop / rowHeight)` and `count = Math.ceil(viewportHeight / rowHeight) + 1`, add 5–10 rows of overscan, and render that slice into recycled row elements. One `transform: translateY` on the container positions the block. Scroll cost no longer depends on the total row count.
+
+**Q:** Why sort an index array instead of the rows?
+
+**A:** Sorting 100,000 row objects shuffles many references and allocates; sorting a `Uint32Array` of indices with a comparator that reads typed columns is lighter and cache-friendly. It also keeps the original order, so "unsort" is free, and filtering simply produces a shorter index array. For text columns I reuse one `Intl.Collator`'s `compare`.
+
+**Q:** What breaks when you virtualise?
+
+**A:** Browser find-in-page cannot see rows that are not rendered, so I provide my own search. Screen readers need `aria-rowcount` and `aria-rowindex` to know where they are. Variable row heights need measurement and an estimated-size cache, because the simple division no longer works.
+
+**Q:** Why not just `split(',')` the CSV?
+
+**A:** Fields can contain commas, newlines and escaped quotes (`""` means one quote) inside quoted fields, and files may start with a BOM or use CRLF line endings. I use a small state machine — in field, in quotes, after quote — that processes stream chunks and carries partial records across chunk boundaries.
+
+**Q:** Hands-on: what does this comparator do wrong?
+
+```js
+viewIndex.sort((a, b) => price[a] > price[b]); // returns true/false
+```
+
+**A:** A comparator must return a negative, zero or positive number; a boolean coerces to 1 or 0, never negative, so the result is engine-dependent and often unsorted. Use `(a, b) => price[a] - price[b]` for numbers. Typed arrays' `sort` without a comparator sorts numerically, unlike plain arrays which sort as strings.
+
+**Q:** Is there a limit to how many rows this can scroll?
+
+**A:** Yes. Browsers cap element heights at tens of millions of pixels, so 100,000 × 28 px (2.8 million) is fine but 10 million rows is not. Beyond the cap I scale scroll positions so each pixel represents several rows. At a billion rows, data no longer fits in the browser either, so the grid fetches row ranges from a server on demand.
+
+**Q:** What happens if the CSV is malformed or huge?
+
+**A:** Ragged rows get padded or flagged, unclosed quotes are reported with a line number, and type inference falls back to text when a column mixes types. Because parsing streams `file.stream()` in a worker, a 50 MB file never freezes the UI and progress can be shown. Columns are transferred, not copied, back to the main thread.
+
+**Q:** How do you test performance and correctness?
+
+**A:** Sorting and filtering are DOM-free, so Node tests assert budgets on a generated 100,000-row dataset with `performance.now()`. The CSV parser gets tricky fixtures: quoted newlines, empty fields, BOM, CRLF. The viewport maths gets unit tests, and Playwright scrolls to the end and checks the last row's text.
+
+**Common mistakes in answers:**
+- Saying "just use pagination" when the requirement is continuous scrolling and range selection.
+- Writing comparators that return booleans.
+- Forgetting accessibility and find-in-page when rows are not in the DOM.
 
 ### TL;DR
 Keep data columnar, compute views as index arrays, render only the visible slice with recycled rows, and parse big files off the main thread.
@@ -2498,11 +3638,61 @@ In-process caches and limiters are per instance: with 4 instances a client gets 
 - [Ch 15 — Node.js basics](../chapters/15-nodejs-basics/README.md): `node:http`, streams, buffers.
 
 ### In the interview
-**Q:** Implement an LRU cache. **A:** A `Map`: on get, delete and re-set to mark recent; on set beyond capacity, delete the first key. Both O(1).
+**30-second answer:** I built a reverse proxy in Node that sits in front of a slow third-party API and adds an LRU cache that obeys HTTP caching headers, request coalescing, and a per-client token-bucket rate limiter. The key design decisions were a `Map`-based LRU bounded by bytes rather than entry count, and a map of in-flight promises so 100 concurrent identical GETs make exactly one upstream call. The hardest part was not poisoning the coalescer: the in-flight entry is removed in `finally`, so one failure is not served to everyone, and requests with different `Vary` headers or an `Authorization` header are never merged. Cache hits add under 2 ms, and the limiter gives 10 requests a second with bursts of 20.
 
-**Q:** What is request coalescing? **A:** Concurrent identical requests share one in-flight upstream call through a map of promises, protecting the upstream from thundering herds.
+**Key terms to know:**
+- **Reverse proxy** — a server in front of another server that forwards requests and returns its responses.
+- **LRU cache** — evicts the least recently used entry when full; built on `Map` insertion order.
+- **`Cache-Control`** — response directives such as `max-age`, `no-store`, `private` and `stale-while-revalidate` that decide what may be cached and for how long.
+- **`Vary`** — names request headers that change the response, so they must be part of the cache key.
+- **Request coalescing** — concurrent identical requests share one upstream call through a promise map.
+- **Thundering herd** — many requests hitting the upstream at once when a popular entry expires.
+- **Token bucket** — a counter refilled at rate `r` up to capacity `C`; each request spends one token, allowing bounded bursts.
+- **HTTP 429 and `Retry-After`** — "Too Many Requests" plus how many seconds to wait.
+- **502 vs 504** — bad gateway (upstream error) vs gateway timeout (upstream too slow).
 
-**Q:** Token bucket vs fixed window? **A:** Token bucket allows bounded bursts and smooth refill; fixed windows are simpler but allow double bursts at window edges.
+**Q:** Implement an LRU cache.
+
+**A:** Use a `Map`, which iterates in insertion order. On `get`, `delete` the key and `set` it again to move it to the "most recent" end. On `set` beyond capacity, delete the first key, `map.keys().next().value`. Both are O(1).
+
+```js
+get(k) { if (!this.m.has(k)) return; const v = this.m.get(k); this.m.delete(k); this.m.set(k, v); return v; }
+set(k, v) { this.m.delete(k); this.m.set(k, v);
+  while (this.m.size > this.max) this.m.delete(this.m.keys().next().value); }
+```
+
+**Q:** What is request coalescing, and how do you avoid poisoning it?
+
+**A:** When a GET misses the cache, I store the *promise* of the upstream response in `inflight` before awaiting it, so concurrent identical requests await the same promise. I delete the entry in `finally`, whether it succeeded or failed; otherwise a single failure is returned to every future caller. Requests that differ in `Vary`-listed headers or carry credentials are not merged unless the key includes them.
+
+**Q:** Token bucket vs fixed window?
+
+**A:** A token bucket refills continuously and allows bursts up to its capacity while enforcing a steady average. A fixed window (say 100 per minute) is simpler but lets a client send 100 at 0:59 and 100 more at 1:00 — a double burst at the edge. A sliding window smooths that at some extra cost.
+
+**Q:** How does the token bucket work without timers?
+
+**A:** Each client stores `{ tokens, last }`. On a request I refill lazily: `tokens = min(C, tokens + (now - last) * r)`, then allow and decrement if `tokens >= 1`, otherwise return 429 with `Retry-After = ceil((1 - tokens) / r)`. Idle buckets are evicted periodically, or the `Map` grows forever.
+
+**Q:** What may a shared proxy cache?
+
+**A:** Only safe methods (GET and HEAD) with explicit freshness, never `no-store` or `private` responses, because `private` means per-user content that a shared cache must not serve to others. Headers named in `Vary` (for example `Accept-Encoding`) go into the key. With `stale-while-revalidate` I serve a stale entry instantly and start one background refresh.
+
+**Q:** What changes when you run 4 instances?
+
+**A:** In-process caches and limiters become per instance: a client effectively gets 4 times its limit and hit rates drop because each instance warms separately. I would move buckets and the cache to Redis — shared state at the cost of a network hop — or route each client to one instance consistently. Coalescing then only works per instance unless you add a distributed lock.
+
+**Q:** What happens when the upstream is slow or down?
+
+**A:** Each upstream `fetch` has `AbortSignal.timeout(5000)`; a timeout returns 504 and an upstream error returns 502, both as problem+json. If a stale entry exists, serving it is often better than an error. A circuit breaker would stop calling an upstream that fails repeatedly and retry after a cool-down.
+
+**Q:** How do you test it?
+
+**A:** A fake upstream on port 0 counts calls and can be slowed or made to fail. Tests fire 100 identical requests with `Promise.all` and assert one upstream call, check expiry and eviction by size with an injected clock, and send a burst of 30 to see 20 successes and 10 responses of 429 with `Retry-After`. A load test measures hit latency.
+
+**Common mistakes in answers:**
+- Bounding the cache by entry count when entries vary from bytes to megabytes — bound by size.
+- Caching `private` or authenticated responses in a shared cache, leaking one user's data to another.
+- Forgetting to remove failed in-flight promises, so one error is cached for everyone.
 
 ### TL;DR
 A useful proxy is a `Map`-based LRU that obeys HTTP caching rules, a promise map that merges duplicate calls, and a lazily refilled token bucket per client — all bounded in memory.
@@ -2621,11 +3811,66 @@ Bigger chunks mean fewer requests but more lost work on failure; 5–10 MB is a 
 - [Ch 15 — Node.js basics](../chapters/15-nodejs-basics/README.md): streams, `pipeline`, `crypto`, `fs`.
 
 ### In the interview
-**Q:** How do you limit concurrency of promises? **A:** A pool of N async workers pulling from a shared queue or iterator, so at most N tasks run at once.
+**30-second answer:** I built a resumable uploader for multi-gigabyte files: the browser slices the file into 8 MB chunks, uploads 4 at a time through a concurrency pool with per-chunk retries, and a Node server streams each chunk to disk while hashing it. The key design decision was making the server the source of truth for progress: on resume the client asks which chunk indexes the server already has and sends only the missing ones, and chunk PUTs are idempotent. The hardest parts were integrity and crashes, which I handled by verifying each chunk's SHA-256, writing to a temporary file and renaming only on a matching hash, and checking the whole-file hash on completion. Server memory stays flat regardless of file size, and uploads complete even when the server randomly fails 20% of chunks.
 
-**Q:** How do you make uploads resumable? **A:** Split into chunks with stable indexes, let the server report which it has, re-send only missing ones, and make chunk PUTs idempotent.
+**Key terms to know:**
+- **Chunking** — splitting a file with `File.slice(start, end)` into fixed-size pieces uploaded independently.
+- **Concurrency pool** — at most N async tasks in flight, with workers pulling the next chunk from a shared iterator.
+- **Resumable upload** — the server records received chunks so an interrupted upload continues instead of restarting.
+- **Idempotent PUT** — uploading the same chunk twice has the same effect as once, so retries are safe.
+- **SHA-256 checksum** — a hash of the bytes used to detect corruption; computed with `crypto.subtle.digest` in the browser and `crypto.createHash` in Node.
+- **Atomic write via rename** — write to a temp name, then `rename`, so a crash never leaves a half-written "complete" chunk.
+- **Streaming request body** — `stream.pipeline(req, hash, fileStream)` writes data as it arrives, in constant memory.
+- **Upload progress** — `XMLHttpRequest.upload.onprogress` reports bytes sent; `fetch` upload progress is still not broadly available.
+- **Exponential backoff** — growing waits between retries of a failed chunk.
+- **Pre-signed multipart upload** — object storage (such as S3) issuing per-part URLs so the browser uploads directly to storage.
 
-**Q:** How does a Node server accept a 10 GB upload? **A:** Stream the request into a file with `pipeline`, never buffering the body, and enforce size limits as bytes arrive.
+**Q:** How do you limit concurrency of promises?
+
+**A:** Start N async workers that each loop, pulling the next index from a shared iterator until none remain, then `await Promise.all(workers)`. At most N uploads are in flight, unlike `Promise.all(chunks.map(upload))`, which starts every chunk at once.
+
+```js
+async function pool(items, n, task) {
+  const it = items.entries();
+  const worker = async () => { for (const [i, x] of it) await task(x, i); };
+  await Promise.all(Array.from({ length: n }, worker));
+}
+```
+
+It works because all workers share one iterator, so each item is taken exactly once. Pause and cancel abort a shared `AbortController` signal passed to each request.
+
+**Q:** How do you make uploads resumable?
+
+**A:** Create an upload id with the file's size and hash, split into chunks with stable indexes, and on start or resume `GET /uploads/:id` to learn which indexes the server has. Re-send only the missing ones. Because chunk PUTs are idempotent, a chunk that was received but whose response was lost can safely be sent again.
+
+**Q:** How does a Node server accept a 10 GB upload?
+
+**A:** Never buffer the body. Pipe the request stream through a hash and into a file stream with `stream.pipeline`, enforce a size limit by counting bytes as they arrive, and destroy the request if it is exceeded. `pipeline` closes every stream if any one fails, so a dropped connection does not leak file handles.
+
+**Q:** How do you recognise the same file after a page reload?
+
+**A:** The browser cannot reopen the user's file, so they must select it again. I match it by name, size and `lastModified`, which is cheap, then confirm by hashing the first chunk before resuming. The upload id is stored in `localStorage` under that identity.
+
+**Q:** What happens if the server crashes mid-chunk, or a chunk is corrupted?
+
+**A:** The chunk is written to a temp file and renamed only after its hash matches, so a crash leaves only a temp file that cleanup deletes. A hash mismatch returns 422 and the client retries that chunk. On completion the server concatenates parts in order and verifies the whole-file hash before marking the upload done.
+
+**Q:** How do you choose the chunk size and parallelism?
+
+**A:** Bigger chunks mean fewer requests but more lost work per failure; 5–10 MB is a common balance. Parallelism helps on high-latency links and hurts on weak ones, so I would adapt N to measured throughput. My target was within 90% of a single-request upload's speed on a good connection.
+
+**Q:** What changes at 100x the users?
+
+**A:** Local disk ties every upload to one server and fills up. Production systems have the browser upload parts directly to object storage using pre-signed multipart URLs, while the API only tracks metadata. Incomplete uploads are expired after 24 hours by a scheduled cleanup, and per-user quotas and authorisation stop anyone appending to someone else's upload.
+
+**Q:** How do you test it?
+
+**A:** Server tests send chunks out of order, duplicates, wrong hashes, oversized bodies and someone else's upload id. The client manager runs against a fake transport that fails, delays and aborts. An end-to-end Playwright test uploads a generated 200 MB file, reloads mid-way, resumes and compares hashes.
+
+**Common mistakes in answers:**
+- Using `Promise.all` over all chunks and calling it "parallel uploads" — it is unbounded concurrency.
+- Letting the client decide what the server has — the server's record is the truth.
+- Buffering the request body with `await req.arrayBuffer()` on the server, which breaks on large files.
 
 ### TL;DR
 Slice files into idempotent, hashed chunks, upload them through a bounded pool with retries, let the server report what it has, and stream everything to disk in constant memory.
@@ -2728,11 +3973,65 @@ Checking external links makes the run slower and flakier (other sites go down); 
 - [Ch 15 — Node.js basics](../chapters/15-nodejs-basics/README.md): CLI, exit codes, `process`.
 
 ### In the interview
-**Q:** How do you crawl politely and fast? **A:** A global concurrency cap plus per-host limits, robots.txt, backoff on 429, timeouts, and a seen set so nothing is fetched twice.
+**30-second answer:** I built `linkcheck`, a Node CLI that crawls a site breadth-first from a start URL, checks every internal and external link, and reports broken links, redirect chains and the pages that reference them, with JSON output and a failing exit code for CI. The key design decision was two-level concurrency — a global cap of 10 plus at most 2 requests per host — so one slow host cannot consume every slot and no site gets hammered. The hardest parts were redirects and de-duplication: I follow redirects manually with a 5-hop limit and a visited set to catch loops, and normalise every URL into a seen set so each is checked once even if linked 1,000 times. It respects `robots.txt`, backs off on 429, and stays under 200 MB for a 10,000-page site.
 
-**Q:** Implement a semaphore in JavaScript. **A:** A counter and a queue of resolver functions; `acquire` resolves immediately if a slot is free or enqueues; `release` hands the slot to the next waiter.
+**Key terms to know:**
+- **Breadth-first search (BFS)** — visiting pages level by level using a FIFO queue, so shallow pages come first and depth limits are natural.
+- **Frontier** — the queue of URLs still to visit, each with depth and referrer.
+- **Seen set** — normalised URLs already queued, so each is fetched once and cycles terminate.
+- **Semaphore** — a counter plus a queue of waiters that limits how many tasks run at once.
+- **Per-host limit** — a separate active count and queue per host, so politeness is enforced per site.
+- **Manual redirects** — `fetch(url, { redirect: 'manual' })` returns each 3xx so you can record hops and detect loops.
+- **`robots.txt` (RFC 9309)** — a site's rules for which paths crawlers may fetch.
+- **`HEAD` vs `GET`** — `HEAD` asks for headers only; some servers mishandle it, so fall back to `GET` and abort the body.
+- **Timeout with `AbortSignal.timeout`** — every request is cancelled after 10 s.
+- **Exit code for CI** — 1 when any link is broken, so a pipeline step fails.
 
-**Q:** Why BFS for a crawler? **A:** It reaches shallow, usually important pages first and makes depth limits natural.
+**Q:** How do you crawl politely and fast?
+
+**A:** A global concurrency cap plus per-host limits, `robots.txt` fetched and cached once per host, a descriptive `User-Agent`, and backoff on a host that returns 429. Every request has a timeout, and a seen set ensures nothing is fetched twice. Speed comes from working on many hosts in parallel, not from hitting one host harder.
+
+**Q:** Implement a semaphore in JavaScript.
+
+**A:** Keep a count of free slots and a queue of resolver functions. `acquire()` returns a resolved promise if a slot is free, otherwise a promise whose `resolve` is queued; `release()` hands the slot to the next waiter or increments the count.
+
+```js
+class Semaphore {
+  #free; #q = [];
+  constructor(n) { this.#free = n; }
+  acquire() { return this.#free > 0 ? (this.#free--, Promise.resolve()) : new Promise(r => this.#q.push(r)); }
+  release() { const next = this.#q.shift(); next ? next() : this.#free++; }
+}
+```
+
+**Q:** Why BFS for a crawler?
+
+**A:** BFS reaches shallow, usually important pages first, and a `--depth 3` limit is just a field on each task. DFS can dive down an endless chain of generated pages (like a calendar with "next month" links) before checking the home page's links. BFS memory grows with the width of the frontier, which is acceptable for most sites.
+
+**Q:** Why is a global semaphore alone not enough?
+
+**A:** With only a global limit of 10, all 10 slots can end up waiting on one slow host while other hosts sit idle, and that host gets 10 parallel requests. The scheduler keeps a per-host queue and active count and picks the next task whose host is under its limit. Each redirect hop counts against the limit of *its* host.
+
+**Q:** How do you handle redirects and loops?
+
+**A:** With `redirect: 'manual'`, Node's `fetch` returns the 3xx response, so I read `Location`, resolve it against the current URL with `new URL(location, current)`, and loop. A hop limit of 5 and a visited set for the chain detect loops, and the full chain goes into the report.
+
+**Q:** What edge cases trip up a naive link checker?
+
+**A:** Relative URLs must be resolved against the page URL (or a `<base>` tag), fragments stripped before de-duplication, and `mailto:`, `tel:` and `javascript:` skipped. Some servers return 405 for `HEAD`, so fall back to `GET` and abort the body after the headers. Links built by client-side JavaScript are invisible to an HTML parser and would need a headless browser.
+
+**Q:** What changes for a 1-million-page site?
+
+**A:** The seen set and frontier no longer fit comfortably in memory, so I would store them in `node:sqlite` or another on-disk store. Runs would be incremental, re-checking only pages whose `ETag` or `Last-Modified` changed. External link checks, which are slow and flaky, could run separately with retries.
+
+**Q:** How do you test it?
+
+**A:** A local fixture server on port 0 serves known pages: cycles, broken links, slow endpoints, redirect chains and loops, `robots.txt` rules and a host that rejects `HEAD`. It also records the maximum concurrent requests it saw, so the test asserts the per-host limit was never exceeded. URL normalisation and robots matching get unit tests against RFC 9309 examples.
+
+**Common mistakes in answers:**
+- Using `Promise.all` on every discovered URL — unbounded concurrency that floods hosts and runs out of sockets.
+- Letting `fetch` follow redirects automatically and losing the chain and loop detection.
+- Parsing links with a regex over HTML, which misses quoted, unquoted and multi-line attributes.
 
 ### TL;DR
 Normalise and de-duplicate URLs, crawl breadth-first, schedule with global and per-host semaphores, follow redirects manually with a hop limit, and be polite to every host.
@@ -2834,11 +4133,67 @@ VDOM is simple to reason about (UI = f(state)) but does work proportional to the
 - [Ch 13 — DOM and events](../chapters/13-dom-and-events/README.md): `insertBefore`, `MutationObserver`, event handling.
 
 ### In the interview
-**Q:** How does automatic dependency tracking work? **A:** While a computation runs, a global pointer names it; every signal getter records that pointer as an observer. When the signal changes it notifies those observers.
+**30-second answer:** I built a tiny front-end framework in two layers: a reactivity layer of signals, lazy computed values and effects with automatic dependency tracking, and a rendering layer with `h()`, a keyed virtual-DOM diff and a patch step. The key design decision was push-pull invalidation — a write only marks dependants as possibly dirty, and computed values re-check their sources' versions when read — which makes updates glitch-free, so the classic diamond dependency runs once with consistent values. The hardest parts were dynamic dependencies, where each run re-collects its sources and unsubscribes from the rest, and keyed list diffing, where reversing 1,000 rows only moves DOM nodes. The library is under 5 KB, and effects are batched and flushed once in a microtask.
 
-**Q:** Why do lists need keys? **A:** Keys give items a stable identity across renders so the diff can move existing DOM nodes (and their state) instead of mutating them by position.
+**Key terms to know:**
+- **Signal** — a value container that records who reads it and notifies them when it changes.
+- **Computed** — a derived signal that caches its value and recomputes lazily only when its inputs changed.
+- **Effect** — a function re-run automatically when signals it read change; it returns a disposer and may return a cleanup.
+- **Automatic dependency tracking** — a module-level "current observer" is set while a computation runs, and each signal read subscribes it.
+- **Glitch** — a computation running with a mix of old and new inputs; avoided with push-pull.
+- **Push-pull invalidation** — writes push "maybe dirty" marks; reads pull and recompute only if sources really changed.
+- **Batching and microtask flush** — dirty effects are collected in a `Set` and run once via `queueMicrotask`.
+- **Virtual DOM** — a plain JavaScript tree describing the UI, diffed against the previous tree to find minimal DOM changes.
+- **Keys and keyed diffing** — stable identities for list items so the diff moves existing nodes instead of recreating them.
+- **Closure** — signals and effects are closures over private state; disposers must release them to avoid memory leaks.
 
-**Q:** VDOM vs signals? **A:** VDOM re-runs render and diffs trees — simple mental model, extra work; signals update exactly the dependants — less work, but reads must be tracked carefully.
+**Q:** How does automatic dependency tracking work?
+
+**A:** Before a computed or effect runs, the runtime sets a global `currentObserver` to it; every signal getter adds `currentObserver` to its `observers` set and the observer records the signal in its `sources`. After the run the pointer is restored (a stack handles nesting). When the signal is written, it notifies its observers.
+
+```js
+let current = null;
+function signal(v) { const subs = new Set();
+  return { get value() { if (current) subs.add(current); return v; },
+           set value(n) { if (n !== v) { v = n; [...subs].forEach(f => f()); } } };
+}
+function effect(fn) { const run = () => { const prev = current; current = run; try { fn(); } finally { current = prev; } }; run(); }
+```
+
+This sketch is eager and does not clean up stale sources, which is exactly what push-pull and per-run source clearing fix in the real library.
+
+**Q:** What is the diamond problem, and how do you avoid glitches?
+
+**A:** With `a → b`, `a → c` and `(b, c) → d`, eagerly pushing a change from `a` can run `d` after `b` updated but before `c` did, so `d` sees inconsistent inputs and runs twice. Push-pull fixes it: the write only marks `b`, `c` and `d` as possibly dirty, effects are scheduled, and when `d` is read it pulls `b` and `c` up to date first. `d` then runs once with consistent values.
+
+**Q:** Why do lists need keys?
+
+**A:** Keys give items a stable identity across renders, so the diff can match old and new items and move existing DOM nodes — with their focus, input values and animations — instead of patching by position. Without keys, reordering rewrites the contents of every row, and a typed-in input may end up next to the wrong item. Frameworks minimise moves with the longest increasing subsequence of old positions.
+
+**Q:** VDOM vs signals?
+
+**A:** A virtual DOM re-runs a component's render and diffs trees, so the mental model is simple (UI = f(state)) but work scales with the component tree. Signals update exactly the dependants, often a single text node, so work scales with what changed, but reads must happen inside tracked scopes. My framework uses `h()` for structure and binds signals directly to text and attributes on hot paths.
+
+**Q:** What happens if an effect writes a signal it reads, or is never disposed?
+
+**A:** Writing a signal you read re-triggers the effect forever, so the scheduler counts re-runs per flush and throws past a depth limit. An effect that is never disposed keeps its closure, its DOM nodes and its subscriptions alive — a memory leak — so unmount disposes every effect a component created and runs its cleanups.
+
+**Q:** Why flush effects in a microtask?
+
+**A:** Writing three signals in one handler should run each affected effect once, not three times. Collecting dirty effects into a `Set` and flushing them with `queueMicrotask` runs them after the current synchronous code but before the browser paints, so the screen never shows a half-updated state. `batch(fn)` does the same synchronously for explicit groups.
+
+**Q:** How does this scale to a big app?
+
+**A:** Signals scale well because updates touch only dependants, but deep graphs need the version checks to avoid recomputing unchanged branches. Large lists still need keyed diffing or virtualisation (Project 22). The main risk at scale is leaks from undisposed effects, so ownership trees — children disposed with their parent — become essential.
+
+**Q:** How do you prove updates are minimal and correct?
+
+**A:** Reactivity tests in plain Node count runs with `mock.fn`: the diamond runs `d` once, dynamic dependencies stop tracking `x` after `flag` turns false, and disposed effects never run. DOM tests attach a `MutationObserver` and assert that a counter click changes one text node and that reversing a keyed list creates no nodes. Benchmarks compare against hand-written DOM code.
+
+**Common mistakes in answers:**
+- Saying the virtual DOM is "faster than the DOM" — it adds work; its benefit is a simple model with acceptable cost.
+- Using array indexes as keys for lists that reorder.
+- Forgetting to clear old sources on each run, which causes stale subscriptions and leaks.
 
 ### TL;DR
 Signals with auto-tracking, push-pull invalidation and batched effects give glitch-free fine-grained updates; a keyed VDOM diff handles structure — build both to understand every modern framework.
@@ -2942,11 +4297,64 @@ A runtime registry is simpler and preserves module boundaries; scope hoisting pr
 - [Ch 15 — Node.js basics](../chapters/15-nodejs-basics/README.md): files, paths, watching.
 
 ### In the interview
-**Q:** What does a bundler do? **A:** Builds a module graph from entries by resolving imports, then emits browser-ready files with module scoping preserved, optionally tree-shaken, split and source-mapped.
+**30-second answer:** I built a JavaScript bundler in Node that parses with Acorn, resolves imports with Node's algorithm including `package.json` `exports`, builds a module graph that tolerates cycles, and emits a main chunk plus a chunk per dynamic `import()`, with source maps. The key design decision was to preserve ES module semantics exactly — live bindings through getters and the same depth-first post-order execution — so every fixture prints identical output bundled and unbundled. The hardest part was tree shaking, which only drops exports it can prove unused from side-effect-free modules, and scope hoisting, which needs AST-based renaming when two modules declare the same name. A 500-module project bundles in under 2 seconds and a one-file rebuild takes under 200 ms.
 
-**Q:** Why can't tree shaking remove some unused code? **A:** Code with possible side effects at import time must run; the bundler only removes what it can prove is unused and pure, helped by `sideEffects` hints.
+**Key terms to know:**
+- **Module graph** — every module as a node and every import as an edge, starting from the entry files.
+- **Module resolution** — turning a specifier like `'./a'` or `'lodash'` into a file path, including extensions, `index.js` and `exports` conditions.
+- **ES modules vs CommonJS** — ESM uses static `import`/`export` with live bindings, CommonJS uses `require` and a mutable `module.exports` object.
+- **Live binding** — an imported name refers to the exporter's variable, so later changes are visible.
+- **Tree shaking** — removing unused exports, possible because ESM imports are static.
+- **Side effects** — code that runs at import time (polyfills, global changes); such modules cannot be dropped; `"sideEffects": false` promises they can.
+- **Scope hoisting** — concatenating modules into one scope with renamed bindings instead of wrapping each in a function.
+- **Code splitting** — putting a dynamic `import()`'s subgraph into a separate chunk loaded on demand.
+- **Source map** — a JSON file whose `mappings` (base64 VLQ deltas) map generated positions back to original files and lines.
+- **AST** — the parsed tree of the code, used to find imports and rename safely.
 
-**Q:** What are live bindings? **A:** ES module imports reference the exporter's variable, not a copy, so updates are visible to importers.
+**Q:** What does a bundler do?
+
+**A:** It starts from entry files, parses each module, resolves its imports to files, and builds a graph. It then emits browser-ready files that preserve module scoping and execution order, optionally removing unused code, splitting at dynamic imports, and writing source maps so DevTools shows the original files.
+
+**Q:** Why can't tree shaking remove some unused code?
+
+**A:** A module may do something when imported — register a polyfill, patch a global, add CSS — and removing it would change behaviour. The bundler drops only what it can prove is unused and free of side effects, and a top-level call like `const x = makeThing()` might have effects too. Packages help by declaring `"sideEffects": false` in `package.json`.
+
+**Q:** What are live bindings, and how do you keep them in a bundle?
+
+**A:** ES module imports reference the exporter's variable, not a copy, so if a module exports `let count` and increments it, importers see the new value. Copying exports into an object at the end breaks this. In a runtime bundle I define each export as a getter, `Object.defineProperty(exports, 'count', { get: () => count, enumerable: true })`; with scope hoisting both modules simply share the variable.
+
+**Q:** Why is tree shaking easier with ESM than CommonJS?
+
+**A:** `import { a } from './x.js'` is static: the bundler knows at build time exactly which names are used. `require(name)` can be computed at runtime, and `module.exports` can be mutated anywhere, so the bundler cannot prove an export is unused. That is also why scope hoisting CommonJS is much harder.
+
+**Q:** Hands-on: what does this print, and why?
+
+```js
+// a.js
+import { b } from './b.js'; export const a = 'A'; console.log('a sees', b);
+// b.js
+import { a } from './a.js'; export const b = 'B'; console.log('b sees', typeof a);
+// main.js imports './a.js'
+```
+
+**A:** `b.js` runs first because ESM evaluates dependencies depth-first before the importer. When it runs, `a` is still in its temporal dead zone, so even `typeof a` throws a `ReferenceError` — a cycle bug a bundler must reproduce, not hide. If `a` were a function declaration, it would be hoisted and usable.
+
+**Q:** How do you handle a name clash with scope hoisting?
+
+**A:** Two modules may each declare a top-level `helper`. I rename one to `helper$1` everywhere it is referenced, using the AST's scope analysis rather than text search, so a string containing "helper" or a shadowing local variable is untouched. Exported names are renamed only internally, never at the public boundary.
+
+**Q:** What changes at 10x the modules, or when a file changes in watch mode?
+
+**A:** Parsing dominates, so I cache each module's parse and analysis by content hash and re-parse only changed files, then re-run linking and generation. Resolution results are cached per importer and specifier. At very large sizes, production tools parallelise parsing across threads, which is part of why esbuild is fast.
+
+**Q:** How do you prove the bundle behaves like the original?
+
+**A:** A fixture directory covers cycles, live bindings, default and namespace imports, side-effectful modules, CommonJS interop, JSON imports and dynamic imports. Each fixture runs with plain Node, then bundled, and stdout must be identical. The resolver is tested against a fake file tree, and VLQ encoding against known strings.
+
+**Common mistakes in answers:**
+- Saying tree shaking removes "all unused code" — it removes only what is provably unused and side-effect-free.
+- Describing imports as copies of values — they are live bindings.
+- Finding imports with regexes, which breaks on comments, strings and template literals.
 
 ### TL;DR
 Resolve and parse into a module graph, preserve ESM semantics (order, cycles, live bindings), shake only side-effect-free code, split at dynamic imports, and emit maps so debugging still points at your sources.
@@ -3043,11 +4451,74 @@ A library built on `queueMicrotask` matches native ordering closely but not perf
 - [Ch 16 — Testing](../chapters/16-testing-and-typescript/README.md): parity and compliance suites.
 
 ### In the interview
-**Q:** Implement `Promise.all`. **A:** Return a new promise; iterate inputs, `Promise.resolve` each, store results by index, count fulfilments, resolve when the count equals the length, reject on the first rejection; resolve immediately for empty input.
+**30-second answer:** I wrote a `Promise` class from scratch that passes the full Promises/A+ compliance suite, then added `catch`, `finally` and the statics `all`, `allSettled`, `race`, `any`, `withResolvers` and `try`. The key design decision was building every static purely on `then`, so they work with any thenable, and scheduling every reaction with `queueMicrotask` so my promises interleave correctly with native ones. The hardest part was the promise resolution procedure: rejecting self-resolution with a `TypeError`, reading `x.then` exactly once, and ignoring repeated calls from badly behaved thenables. A shared test file runs identically against native `Promise` and mine, and a 100,000-link chain completes without stack overflow.
 
-**Q:** Why are `then` callbacks always asynchronous? **A:** So ordering is predictable regardless of whether the promise is already settled; they run as microtasks after the current synchronous code.
+**Key terms to know:**
+- **Promise states** — pending, then exactly once fulfilled (with a value) or rejected (with a reason); settled means not pending.
+- **Promises/A+** — the community specification of `then` behaviour that native promises are compatible with.
+- **Thenable** — any object or function with a `then` method; promises adopt thenables.
+- **Resolution procedure** — the rules for resolving with a value `x`: self-check, read `then` once, adopt if it is a function, otherwise fulfil.
+- **Microtask** — a job run right after the current synchronous code, before the next task; promise reactions are microtasks.
+- **Zalgo** — an API that is sometimes synchronous and sometimes asynchronous; `then` callbacks are always asynchronous to avoid it.
+- **Combinators** — `all`, `allSettled`, `race` and `any`, which combine an iterable of promises.
+- **`AggregateError`** — the error `Promise.any` rejects with when every input rejects, holding all reasons.
+- **Unhandled rejection** — a rejected promise with no handler; Node and browsers report it through `unhandledRejection` and `unhandledrejection`.
+- **`async`/`await`** — syntax over promises: `await` suspends the function and resumes in a microtask when the promise settles.
 
-**Q:** What happens if you resolve a promise with another promise? **A:** It adopts that promise's eventual state via its `then` — the resolution procedure.
+**Q:** Implement `Promise.all`.
+
+**A:** Return a new promise, `Promise.resolve` each input so plain values and thenables work, store results by index, and resolve when the fulfilled count equals the input length. Reject on the first rejection. Empty input resolves immediately with `[]`.
+
+```js
+static all(iterable) {
+  return new this((resolve, reject) => {
+    const items = [...iterable], out = new Array(items.length); let left = items.length;
+    if (left === 0) return resolve(out);
+    items.forEach((p, i) => this.resolve(p).then(v => { out[i] = v; if (--left === 0) resolve(out); }, reject));
+  });
+}
+```
+
+**Q:** Why are `then` callbacks always asynchronous?
+
+**A:** If callbacks ran synchronously when the promise was already settled but asynchronously otherwise, code order would depend on timing. The spec requires them to run as microtasks after the current synchronous code, so `p.then(f); console.log('x')` always logs `x` first. That is why I schedule every reaction with `queueMicrotask`.
+
+**Q:** What happens if you resolve a promise with another promise?
+
+**A:** It *adopts* that promise's eventual state: the resolution procedure calls `x.then(resolve, reject)` with one-shot functions, so the outer promise settles however the inner one does. Resolving a promise with itself would wait forever, so it rejects with a `TypeError`. This is also why returning a promise from a `then` callback flattens it.
+
+**Q:** Hands-on: what does this log?
+
+```js
+console.log(1);
+setTimeout(() => console.log(2));
+Promise.resolve().then(() => console.log(3));
+queueMicrotask(() => console.log(4));
+console.log(5);
+```
+
+**A:** `1 5 3 4 2`. Synchronous code runs first (1, 5), then the microtask queue drains in order (3 from the promise, then 4), and only then does the timer task run (2), even with a 0 ms delay.
+
+**Q:** How does `finally` differ from `then(fn, fn)`?
+
+**A:** `finally(fn)` calls `fn` with no arguments and passes the original value or reason through unchanged, whereas `then(fn, fn)` replaces the outcome with `fn`'s return value and turns a rejection into a fulfilment. If `fn` returns a promise, `finally` waits for it, and if `fn` throws or returns a rejecting promise, that replaces the outcome.
+
+**Q:** `all` vs `allSettled` vs `race` vs `any`?
+
+**A:** `all` fulfils with every value in input order or rejects on the first rejection. `allSettled` never rejects and reports `{ status, value | reason }` for each. `race` settles like the first input to settle, either way. `any` fulfils with the first fulfilment and rejects with an `AggregateError` only if all reject — so `any([])` rejects immediately.
+
+**Q:** What goes wrong at scale, such as a 100,000-link chain or a forgotten `catch`?
+
+**A:** Because each reaction runs in its own microtask, a long chain never grows the call stack, so it cannot overflow. A rejected promise nobody handles is a silent bug, so I track rejections that have no handler after a microtask turn and warn, like the host's `unhandledrejection`. In Node, an unhandled rejection crashes the process by default since Node 15.
+
+**Q:** How do you prove compliance?
+
+**A:** The `promises-aplus-tests` suite runs through a small adapter exposing `resolved`, `rejected` and `deferred`, and it covers hundreds of edge cases of `then`. A parity suite parameterised by constructor, `[Promise, MyPromise]`, checks statics and ordering puzzles. Native `await` may resume a tick earlier on native promises, so I compare behaviour, not exact tick counts, for mixed code.
+
+**Common mistakes in answers:**
+- Writing `Promise.all` that pushes results in completion order instead of storing them by index.
+- Saying `setTimeout(fn, 0)` runs before a resolved promise's `then` — microtasks always go first.
+- Forgetting that `then` must return a *new* promise, which is what makes chaining work.
 
 ### TL;DR
 A promise is a three-state machine with a queue of reactions run as microtasks; the resolution procedure that adopts thenables is the hard part — pass the A+ suite and the combinators follow.
@@ -3146,11 +4617,64 @@ A simulation is precise only for what you model: rendering steps, `requestAnimat
 - [Ch 17 — JavaScript for interviews](../chapters/17-javascript-for-interviews/README.md): event-loop questions, implement-from-scratch practice.
 
 ### In the interview
-**Q:** In what order do sync code, microtasks and timers run? **A:** All synchronous code, then every queued microtask (including ones added meanwhile), then the next task such as a timer callback, then microtasks again.
+**30-second answer:** I built a teaching app that animates the call stack, microtask queue, task queue, timers and console for a pasted JavaScript snippet, step by step. It works by parsing the code with Acorn, instrumenting it — function entries and exits, `await` points turned into generator yields, wrapped scheduling callbacks — and running it against a simulated scheduler on a virtual clock that records a replayable trace. The hardest part was matching real engines exactly, especially how many microtask turns `await` costs, so a verification mode runs each snippet natively in a sandboxed iframe and compares the console order. All 50 puzzles in my corpus match native, and user code runs isolated with infinite loops halted by a step counter.
 
-**Q:** Where does `process.nextTick` fit? **A:** In Node it runs before promise microtasks, after the current operation; overusing it can starve I/O.
+**Key terms to know:**
+- **Call stack** — the frames of functions currently running; synchronous code runs until the stack is empty.
+- **Task (macrotask) queue** — callbacks such as timers, I/O and events; the loop runs one task per iteration.
+- **Microtask queue** — promise reactions, `queueMicrotask` and `await` continuations; drained completely after each task.
+- **Event loop** — run one task, drain all microtasks, possibly render, repeat.
+- **`process.nextTick`** — a Node-only queue drained before promise microtasks.
+- **`setImmediate` and Node phases** — Node's loop has timers, poll and check phases; `setImmediate` runs in check.
+- **Instrumentation** — rewriting the AST to insert tracking calls without changing meaning.
+- **Virtual clock** — simulated time, so timers fire in due order instantly and deterministically.
+- **Sandboxed iframe** — `<iframe sandbox="allow-scripts">` without `allow-same-origin` gets an opaque origin and cannot touch the app.
+- **Trace replay** — an append-only event log, so stepping backwards means replaying to step n.
 
-**Q:** How would you safely run user code in the browser? **A:** A sandboxed iframe with an opaque origin and strict CSP, or a Worker, communicating by `postMessage`, with a timeout that destroys it.
+**Q:** In what order do sync code, microtasks and timers run?
+
+**A:** All synchronous code first, until the call stack is empty. Then every queued microtask, including ones added while draining. Then the next task, such as a timer callback, followed by another full microtask drain — and in browsers, possibly a render step between tasks.
+
+**Q:** Hands-on: what does this print?
+
+```js
+console.log('start');
+setTimeout(() => console.log('timeout'), 0);
+(async () => { console.log('async'); await null; console.log('after await'); })();
+Promise.resolve().then(() => console.log('then'));
+console.log('end');
+```
+
+**A:** `start`, `async`, `end`, `after await`, `then`, `timeout`. The async function runs synchronously until its first `await`, which queues its continuation as a microtask before the `then` callback is queued, so it resumes first. The timer is a task and runs after the microtask queue is empty.
+
+**Q:** Where does `process.nextTick` fit?
+
+**A:** In Node, the `nextTick` queue is drained before the promise microtask queue, after the current operation. Recursively scheduling `nextTick` (or microtasks) can starve I/O, because the loop never gets to the next phase. For "run soon but let I/O happen", `setImmediate` is safer.
+
+**Q:** Why can't a long synchronous loop be interrupted by a timer?
+
+**A:** JavaScript runs to completion on one thread: a timer callback is a task, and tasks only start when the call stack is empty. A `while (true)` therefore blocks timers, promise callbacks, rendering and input. That is why the visualiser counts loop iterations through instrumentation and why heavy work belongs in a Worker.
+
+**Q:** Why does the exact cost of `await` matter?
+
+**A:** `await` on a native promise resumes after one microtask turn, but awaiting a non-native thenable costs extra turns because its `then` is called in a separate job. If the simulator gets the count wrong, puzzles mixing `await` and `then` come out in the wrong order. Engines changed this around 2018–2019, so I verify against native runs instead of trusting old blog posts.
+
+**Q:** How do you run untrusted user code safely in the browser?
+
+**A:** In a sandboxed iframe without `allow-same-origin`, so it has an opaque origin with no access to the app's DOM, cookies or storage, plus a strict CSP that blocks network access. The page talks to it only by `postMessage` and removes the iframe on timeout. A Web Worker is an alternative with no DOM at all.
+
+**Q:** What are the limits of the simulation?
+
+**A:** It is only as precise as what it models: rendering steps, `requestAnimationFrame`, I/O callbacks and `MessageChannel` must be added explicitly or rejected with a clear message. Instrumentation slows code heavily, which is fine for 50-line snippets but not libraries. Mismatches with the native run are shown, not hidden.
+
+**Q:** How do you test that the simulation is correct?
+
+**A:** Each puzzle's expected console order is generated by running it natively in Node and in a headless browser, and the simulator must produce the same order. The scheduler gets unit tests through direct API calls, and the transformer gets snapshot tests of generated code plus behaviour tests that `this`, short-circuiting and evaluation order are preserved.
+
+**Common mistakes in answers:**
+- Saying `setTimeout(fn, 0)` runs immediately or before promise callbacks.
+- Thinking only one microtask runs between tasks — the queue is drained completely.
+- Mixing Node and browser models, for example placing `nextTick` in the browser or ignoring Node's phases.
 
 ### TL;DR
 Instrument the code, simulate the loop with explicit task, microtask and timer queues on a virtual clock, record a trace you can replay, and verify every puzzle against a native run.
@@ -3270,11 +4794,56 @@ CRDTs work peer-to-peer and offline but carry metadata overhead and cannot enfor
 - [Ch 15 — Node.js basics](../chapters/15-nodejs-basics/README.md): WebSocket server, binary `Buffer`s, persistence.
 
 ### In the interview
-**Q:** What is a CRDT? **A:** A replicated data type whose operations or states merge deterministically regardless of order or duplication, so replicas converge without coordination.
+**30-second answer:** I built a collaborative text editor where several people edit at once, see each other's cursors, work offline and merge cleanly on reconnect. I first wrote a toy sequence CRDT — each character has a unique id of client id plus counter, inserts say "after character X", deletes are tombstones — and fuzz-tested that 1,000 random interleavings of 3 replicas always converge; then I used Yjs with a Node WebSocket relay and IndexedDB persistence. The key design decision was a "dumb" relay that only forwards and stores binary updates, because CRDT merges are commutative and idempotent and need no central referee. Local keystrokes apply in under 16 ms and reconnects send only what the other side is missing, computed from state vectors.
 
-**Q:** CRDT vs OT? **A:** OT transforms concurrent operations through a central server; CRDTs embed enough identity and ordering metadata that any replica can merge independently. CRDTs suit offline and peer-to-peer; OT has less metadata but needs a server.
+**Key terms to know:**
+- **CRDT (conflict-free replicated data type)** — a data structure whose copies can be edited independently and always merge to the same result.
+- **Replica and eventual consistency** — each client holds a full copy, and once all updates are delivered every copy is identical.
+- **Unique character ids** — `[clientId, counter]` identify each character so edits refer to identities, not indexes.
+- **Tombstone** — a deleted character kept as a marker because later operations may refer to it.
+- **Commutative and idempotent** — applying updates in any order, or more than once, gives the same result.
+- **State vector** — a map from client id to the highest counter seen, used to compute exactly which updates another replica lacks.
+- **Awareness** — ephemeral presence state (cursors, names, colours) that is broadcast but not stored in the document.
+- **Operational transformation (OT)** — an alternative where a central server transforms concurrent operations against each other.
+- **Interleaving anomaly** — concurrent words at one spot mixing letters; YATA-style ordering keeps each user's run together.
+- **Compaction** — merging the server's update log into a snapshot so loading stays fast.
 
-**Q:** How do two offline replicas sync efficiently? **A:** Exchange state vectors, compute what each is missing, send only those updates; merging is idempotent and commutative.
+**Q:** What is a CRDT?
+
+**A:** A replicated data type whose operations or states merge deterministically regardless of delivery order or duplication, so every replica converges to the same value without coordination. For text, that means every character has a unique, ordered identity. It is what lets two people edit offline and merge later without a server deciding.
+
+**Q:** Why can't you sync edits as "insert at index 5"?
+
+**A:** Indexes mean different things on replicas that have diverged: if Alice inserts at the start, Bob's "index 5" now points somewhere else. CRDTs describe an insert as "after character id A", and concurrent inserts after the same character are ordered by a deterministic tie-break such as client id. Every replica places them identically.
+
+**Q:** CRDT vs OT?
+
+**A:** OT transforms concurrent operations against each other through a central server, carries little metadata, and is notoriously hard to get right. CRDTs embed enough identity and ordering metadata that any replica can merge independently, which suits offline and peer-to-peer editing, at the cost of metadata growth. Figma chose a simpler server-authoritative design inspired by CRDTs, which shows the choice depends on the product.
+
+**Q:** How do two offline replicas sync efficiently?
+
+**A:** Each side sends its state vector; comparing them shows exactly which operations the other is missing, and each sends only those updates. Because merges are idempotent and commutative, a duplicated or reordered update is harmless. A reconnect after a long offline session is therefore a small diff, not the whole document.
+
+**Q:** Why are deletes tombstones rather than real removals?
+
+**A:** Another replica may concurrently insert "after character X" where X has just been deleted locally. If X were gone, that insert would have no anchor. Keeping X as a tombstone preserves the ordering, and tombstones are garbage-collected later when no replica or snapshot can still reference them.
+
+**Q:** What can CRDTs not do, and what does the server still need to do?
+
+**A:** They cannot enforce global invariants like "this username must be unique", because replicas merge without asking anyone; those need a server. Updates are not access-controlled by themselves, so authorisation must happen at the relay before forwarding or storing. The relay also persists updates so a client that was never online with others can still load the document.
+
+**Q:** What breaks first at scale?
+
+**A:** History grows: tombstones and per-character metadata grow with every edit, so Yjs merges adjacent items from the same client and the server compacts its log into snapshots. A single relay is a bottleneck and single point of failure, so rooms are sharded by document id across instances. Awareness messages for hundreds of cursors should be throttled.
+
+**Q:** How do you test convergence?
+
+**A:** Several documents run in one process over a fake network that delays, reorders, duplicates and drops (then redelivers) messages, and after delivery every replica's text must be identical with no user's text lost. Property tests generate random edit scripts. Playwright runs two browser contexts, takes one offline, edits both and checks the merge.
+
+**Common mistakes in answers:**
+- Claiming CRDTs "resolve conflicts the way users want" — they guarantee convergence, not intent.
+- Saying the relay must understand the text — it only forwards and stores opaque updates.
+- Forgetting authorisation because "the data structure handles it".
 
 ### TL;DR
 Give every character a unique id and a deterministic order, tombstone deletes, sync by state vectors, and let a dumb relay forward and store updates — build a toy CRDT to understand it, then use Yjs.
@@ -3376,11 +4945,67 @@ A tree-walking evaluator is simple; compiling formulas to JavaScript functions w
 - [Ch 17 — JavaScript for interviews](../chapters/17-javascript-for-interviews/README.md): graphs, BFS, topological sort, recursion vs iteration.
 
 ### In the interview
-**Q:** How does a spreadsheet know what to recalculate? **A:** It keeps a dependency graph; an edit marks all transitive dependants dirty and evaluates them in topological order.
+**30-second answer:** I built a browser spreadsheet with a formula engine: a tokenizer, a Pratt parser that builds an AST with correct precedence, a tree-walking evaluator, and a dependency graph of precedents and dependants. The key design decision was incremental recalculation — an edit collects only the cell's transitive dependants, orders them with Kahn's algorithm and evaluates each exactly once — so a cell with 10,000 dependants recalculates in under 100 ms. The hardest parts were cycles and ranges: cells Kahn's algorithm cannot order are marked `#CYCLE!` instead of overflowing the stack, and range dependencies are indexed per column rather than expanded into 100,000 edges. Errors are values that flow through formulas, never exceptions.
 
-**Q:** How do you detect a circular reference? **A:** During topological sorting (Kahn's algorithm), cells that never reach zero unresolved precedents are in or behind a cycle; or use DFS with a "visiting" colour.
+**Key terms to know:**
+- **Tokenizer** — splits `=SUM(A1:A3)*2` into tokens: function name, parenthesis, range, operator, number.
+- **Pratt parser** — a parser where each operator has a binding power, handling precedence and associativity in one small loop.
+- **AST** — the expression tree, e.g. `{ type: 'binary', op: '*', left, right }`, that the evaluator walks.
+- **Dependency graph** — `precedents` (cells a formula reads) and `dependants` (cells that read it) as a `Map` of `Set`s.
+- **Topological order** — an order in which every cell comes after the cells it depends on.
+- **Kahn's algorithm** — topological sort by repeatedly taking nodes with no unprocessed inputs; leftovers mean a cycle.
+- **Dirty set / incremental recalculation** — only cells affected by an edit are recomputed.
+- **Errors as values** — `#DIV/0!`, `#REF!` and friends propagate through formulas like ordinary values.
+- **Relative vs absolute references** — `A1` shifts when copied, `$A$1` does not.
+- **Volatile functions** — `NOW()` and similar that must recalculate on every recalc.
 
-**Q:** How would you parse `1 + 2 * 3`? **A:** With precedence climbing or a Pratt parser that assigns binding powers, so `*` binds tighter than `+`.
+**Q:** How does a spreadsheet know what to recalculate?
+
+**A:** It keeps a dependency graph. When a cell changes, I update its precedent edges from its new formula, collect all transitive dependants with a BFS over `dependants`, then evaluate that dirty subset in topological order. Each dirty cell is evaluated exactly once, after everything it reads is up to date.
+
+**Q:** How do you detect a circular reference?
+
+**A:** During Kahn's algorithm over the dirty subgraph, a cell is ready when all its dirty precedents are done. If cells remain when nothing more is ready, they are in or downstream of a cycle, and I mark them `#CYCLE!`. A DFS with a "visiting" colour also works, but iteration avoids stack overflows on long chains.
+
+**Q:** How would you parse `1 + 2 * 3`?
+
+**A:** With a Pratt parser: `+` has binding power 10 and `*` 20. After parsing `1`, the loop sees `+` (10 > 0), so it parses the right side with minimum power 10; inside that, `2` is followed by `*` (20 > 10), which binds first. The tree is `1 + (2 * 3)`, giving 7. Right-associative `^` parses its right side with one less power.
+
+**Q:** Hands-on: what is the core Pratt loop?
+
+```js
+function expr(minBp = 0) {
+  let left = prefix();                      // number, ref, (…), unary minus, call
+  for (let op = peek(); bp[op] > minBp; op = peek()) {
+    next();
+    left = { type: 'binary', op, left, right: expr(rightAssoc[op] ? bp[op] - 1 : bp[op]) };
+  }
+  return left;
+}
+```
+
+**A:** Each loop iteration absorbs one operator that binds tighter than the caller's minimum. Spreadsheet quirks are just binding-power choices — in Excel, unary minus binds tighter than `^`, so `=-2^2` is 4, and I document my rule.
+
+**Q:** Why not create one edge per cell in a range?
+
+**A:** `SUM(A1:A100000)` would add 100,000 edges for one formula, and the graph would explode with a few such formulas. I store range dependencies separately in an interval index per column and, on an edit, check which watched ranges contain the cell. This is where real engines spend much of their effort.
+
+**Q:** What happens with errors, deletions and bad input?
+
+**A:** A formula like `=1/0 + 1` yields `#DIV/0!`, because operators return their first error operand; `IFERROR` can catch it. Deleting a referenced row turns references into `#REF!`, an unknown function gives `#NAME?`, and a syntax error shows a parse error in the cell rather than crashing the sheet. Errors are a distinct class so they never look like strings.
+
+**Q:** What breaks first at 10x the sheet size?
+
+**A:** Recalculating long dependency chains and parsing on load start to block typing, so I would move the engine into a Web Worker and render results as they arrive. Volatile functions dirty all their dependants every time, so they must be used sparingly. The grid itself is already virtualised.
+
+**Q:** How do you prove incremental recalculation is correct?
+
+**A:** A property test builds random acyclic sheets, applies random edits, and checks that incremental results equal a full recompute from scratch. Counters assert each dirty cell is evaluated exactly once and clean cells not at all. Performance tests use a 10,000-cell chain and a wide fan-out.
+
+**Common mistakes in answers:**
+- Recomputing the whole sheet on every edit and calling it "reactive".
+- Detecting cycles with recursion that itself overflows the stack on long chains.
+- Using `eval` or `new Function` on formulas — it breaks under a strict CSP and invites injection.
 
 ### TL;DR
 Tokenize, Pratt-parse into an AST, maintain a precedents/dependants graph, recalc only dirty cells in topological order, and treat errors and cycles as values rather than crashes.
@@ -3485,11 +5110,56 @@ Unit-test pure modules (reading-time estimate, quote anchoring, rule generation)
 - [Ch 14 — Browser APIs and security](../chapters/14-browser-apis-and-security/README.md): messaging, storage, CSP, XSS, Shadow DOM.
 
 ### In the interview
-**Q:** What changed in Manifest V3? **A:** Background pages became service workers, remotely hosted code was banned, blocking `webRequest` was replaced by declarative rules, and APIs gained promise support.
+**30-second answer:** I built "Focus Reader", a Manifest V3 extension for Chrome and Firefox that shows a reading-time badge, saves highlights that reappear on later visits and sync across devices, and blocks distracting sites during focus sessions. The key design decision was assuming the background service worker can be stopped at any moment: all state lives in `chrome.storage`, scheduling uses `chrome.alarms`, and listeners are registered synchronously at the top level. The hardest part was anchoring highlights on pages that change, which I solved by storing the quoted text with a prefix and suffix instead of DOM paths. The extension asks only for `activeTab`, `storage`, `contextMenus` and `declarativeNetRequest`, renders its UI in Shadow DOM, and adds under 5 ms to page load.
 
-**Q:** What is an isolated world? **A:** A separate JavaScript environment for content scripts that shares the page's DOM but not its globals, so neither side can call the other's functions directly.
+**Key terms to know:**
+- **Manifest V3** — Chromium's current extension platform: service-worker background, no remotely hosted code, declarative network rules.
+- **Extension service worker** — the event-driven background script that the browser stops when idle.
+- **Content script** — extension code injected into web pages that can read and change their DOM.
+- **Isolated world** — the content script's separate JavaScript environment, sharing the DOM but not globals with the page.
+- **Message passing** — `runtime.sendMessage` and `onMessage` between content scripts, popup and service worker.
+- **`declarativeNetRequest`** — rules the browser applies to network requests itself, replacing blocking `webRequest`.
+- **`chrome.alarms`** — persistent scheduling that wakes the service worker, unlike `setTimeout`.
+- **Shadow DOM** — an encapsulated DOM subtree whose styles do not leak in or out.
+- **Least privilege** — requesting the fewest permissions, and host access only when the user acts.
+- **Text quote selector** — locating a highlight by its exact text plus surrounding context.
 
-**Q:** How do you schedule work in an MV3 service worker? **A:** With `chrome.alarms` and persisted state, because the worker may be terminated and in-memory timers lost.
+**Q:** What changed in Manifest V3?
+
+**A:** Persistent background pages became event-driven service workers, remotely hosted code was banned so all code ships in the package, blocking `webRequest` was replaced by declarative rules for most extensions, and APIs gained promise support. The result is better performance and privacy, at the cost of designing for a background that can disappear.
+
+**Q:** What is an isolated world?
+
+**A:** A separate JavaScript environment for content scripts: they see the same DOM as the page but not its variables or functions, and the page cannot call theirs. So a page cannot directly invoke extension code, but it can still read or modify DOM nodes the extension inserts and send it `postMessage` events — which must be treated as untrusted.
+
+**Q:** How do you schedule work in an MV3 service worker?
+
+**A:** With `chrome.alarms` plus persisted state. Chrome stops an idle extension service worker after about 30 seconds without events, which kills any `setTimeout` and loses globals. An alarm survives that and wakes the worker; the handler reads `focus.endsAt` from storage and removes the blocking rules.
+
+**Q:** Why must listeners be registered synchronously at the top level?
+
+**A:** When an event wakes a stopped worker, the browser runs the script from the top and then dispatches the event. A listener added later — inside an `await` or a callback — is not attached yet, so the event is missed. Registering all listeners at top level and keeping handlers idempotent makes each wake-up safe.
+
+**Q:** How do you anchor highlights on a page that changes?
+
+**A:** DOM paths like `div:nth-child(3) > p` break as soon as the page inserts an ad. I store the quoted text plus a few characters before and after; on load I search the page's text for the quote, use the context to pick between duplicates, then build a `Range` and wrap it, or use the CSS Custom Highlight API. If nothing matches, the highlight is listed in the popup as "not found" rather than lost.
+
+**Q:** What security rules matter for an extension?
+
+**A:** It runs with more power than a web page, so it is a target. No `eval` or remote code, no `innerHTML` with page-derived text, validate every message and check `sender.id` and `sender.tab` in the service worker, keep a strict extension CSP, and request host permissions at runtime only when needed.
+
+**Q:** What happens if sync storage is full or the browser restarts mid-session?
+
+**A:** `storage.sync` has small quotas (about 100 KB in total and 8 KB per item in Chrome), so large highlight lists overflow to `storage.local` and only summaries sync. After a restart, the stored `focus.endsAt` and the persisted alarm let the worker unblock sites on time. Dynamic `declarativeNetRequest` rules persist across restarts, so the end-of-session cleanup must always run.
+
+**Q:** How do you test it?
+
+**A:** Pure modules — reading-time estimation, quote anchoring, rule generation — get Node unit tests. Playwright launches Chromium with the unpacked extension for integration tests. I stop the service worker from `chrome://serviceworker-internals` mid-session and assert alarms and state survive.
+
+**Common mistakes in answers:**
+- Keeping state in global variables in the service worker and being surprised when it resets.
+- Believing content scripts are isolated from the page's DOM — only their JavaScript is isolated.
+- Requesting `<all_urls>` host permissions up front when `activeTab` would do.
 
 ### TL;DR
 Design for a background that can vanish: persist everything, schedule with alarms, isolate UI in Shadow DOM, anchor highlights by quoted text, validate every message and ask for the fewest permissions.
@@ -3618,11 +5288,63 @@ Browser-only apps are simpler to deploy (static hosting) but must accept token e
 - [Ch 15 — Node.js basics](../chapters/15-nodejs-basics/README.md): HTTP server, `crypto`, environment secrets.
 
 ### In the interview
-**Q:** What problem does PKCE solve? **A:** It binds the authorization code to the client that started the flow; a stolen code is useless without the secret verifier.
+**30-second answer:** I implemented "Sign in with GitHub" without an auth SDK, twice: a browser-only app using the authorization code flow with PKCE and tokens held only in memory, and a backend-for-frontend in Node that runs the flow server-side and gives the browser only an `HttpOnly; Secure; SameSite=Lax` session cookie. The key decision, following RFC 9700 and the browser-apps draft, was to prefer the BFF, because any token JavaScript can read can be stolen by XSS. The hardest parts were the checks around the flow — `state` bound to the pre-login session, single-use PKCE verifiers, exact redirect URIs, and a `returnTo` that accepts only same-origin paths. A suite of attack tests — missing state, replayed code, wrong verifier, open redirect — all fail safely.
 
-**Q:** Where should a single-page app keep tokens? **A:** Preferably nowhere — use a BFF with an `HttpOnly` session cookie. If browser-only, keep short-lived tokens in memory, never `localStorage`.
+**Key terms to know:**
+- **OAuth 2.0** — a protocol for an app to get limited access to an API on a user's behalf via an authorization server.
+- **Authorization code flow** — the user signs in at the provider, which redirects back with a short-lived `code` the app exchanges for tokens.
+- **PKCE** — the client sends `code_challenge = BASE64URL(SHA256(code_verifier))` at the start and the verifier at exchange, proving it is the same client.
+- **`state` parameter** — a random value tied to the user's session that the callback must match, preventing login CSRF.
+- **Access vs refresh token** — a short-lived token to call APIs vs a longer-lived one to get new access tokens.
+- **Backend-for-frontend (BFF)** — a server that performs OAuth and keeps tokens, exposing only a session cookie to the browser.
+- **`HttpOnly`, `Secure`, `SameSite` cookies** — not readable by JavaScript, HTTPS-only, and not sent on most cross-site requests.
+- **CSRF** — a malicious site making the user's browser send an authenticated request; defended with `SameSite` plus a CSRF token or custom header.
+- **XSS** — injected script running on your origin, which can read any token JavaScript can see.
+- **Open redirect** — a `returnTo` that sends users to an attacker's site after a genuine login.
 
-**Q:** What is the `state` parameter for? **A:** It ties the callback to the browser session that started the login, preventing login CSRF.
+**Q:** What problem does PKCE solve?
+
+**A:** It binds the authorization code to the client that started the flow. If an attacker intercepts the `code` (through a malicious app registered for the same custom scheme, a leaked referrer or a log), they cannot exchange it without the `code_verifier`, which never left the client. The server checks that the SHA-256 of the verifier matches the challenge it received earlier.
+
+**Q:** Hands-on: generate a PKCE pair in the browser.
+
+```js
+const b64url = b => btoa(String.fromCharCode(...new Uint8Array(b)))
+  .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+```
+
+**A:** 32 random bytes become a 43-character verifier, the minimum length RFC 7636 allows. Randomness must come from `crypto.getRandomValues`, never `Math.random`, and the method sent is `code_challenge_method=S256`.
+
+**Q:** What is the `state` parameter for?
+
+**A:** It ties the callback to the browser session that started the login. Without it, an attacker can make your browser complete *their* login, so you end up acting inside their account — login CSRF. I store a random `state` with the pending auth for 10 minutes and reject callbacks where it is missing or different.
+
+**Q:** Where should a single-page app keep tokens?
+
+**A:** Preferably nowhere: use a BFF and give the browser an `HttpOnly` session cookie. If it must be browser-only, keep short-lived access tokens in memory, never in `localStorage`, where any XSS can read them. Even with a BFF, XSS can *use* the session while the page is open, but it cannot steal long-lived tokens.
+
+**Q:** Why prefer the authorization code flow over the old implicit flow?
+
+**A:** The implicit flow returned the access token directly in the URL fragment, where it could leak through history, logs and referrers, and it had no way to bind the token to the client. Current guidance (RFC 9700) advises against it; the code flow with PKCE keeps tokens out of URLs and binds the code to the client.
+
+**Q:** How do you stop an open redirect through `returnTo`?
+
+**A:** Accept only relative paths that start with a single `/` (not `//`, which means another host). Parse with `new URL(returnTo, myOrigin)` and check that the resulting origin equals mine, otherwise fall back to `/`. Redirect URIs registered with the provider must also be exact, never wildcards.
+
+**Q:** What happens with concurrent refreshes or multiple server instances?
+
+**A:** With refresh-token rotation, two parallel requests refreshing at once can make the second use an already-rotated token, which the provider may treat as theft and revoke everything. I serialise refreshes per session with an in-flight promise. Across instances, sessions and that lock must live in shared storage such as Redis or a database.
+
+**Q:** How do you test it?
+
+**A:** A mock authorization server in `node:test` drives the whole flow deterministically, including error responses. Explicit attack tests cover missing or mismatched `state`, code replay, wrong verifier, expired pending auth, `returnTo` to another origin, and the presence of the `HttpOnly`, `Secure` and `SameSite` cookie flags. A static check fails the build if front-end code writes tokens to `localStorage`.
+
+**Common mistakes in answers:**
+- Saying PKCE replaces `state` or protects against XSS — it protects the code exchange only.
+- Storing tokens in `localStorage` "because it survives reloads".
+- Treating OAuth as authentication by itself — identity needs OpenID Connect's ID token, validated properly.
 
 ### TL;DR
 Use the authorization code flow with PKCE and `state`, validate redirects exactly, and prefer a backend-for-frontend so tokens live on the server and the browser holds only an `HttpOnly` cookie.
@@ -3724,11 +5446,61 @@ More workers mean more parallelism but more memory and start-up cost; beyond phy
 - [Ch 14 — Browser APIs](../chapters/14-browser-apis-and-security/README.md): Web Workers, `OffscreenCanvas`, files, cross-origin isolation.
 
 ### In the interview
-**Q:** When should you use a Web Worker? **A:** For CPU-heavy work that would block the main thread for more than a frame or two — parsing, image or data processing — not for DOM work, which workers cannot do.
+**30-second answer:** I built an in-browser photo tool that applies filters, convolution kernels, resizing and WebP/JPEG/AVIF compression entirely on the device, with pixel work in a pool of Web Workers so the main thread never has a long task. The key design decisions were splitting each image into horizontal tiles with overlap rows for convolution, and moving tile buffers between threads as transferables, so a 96 MB image is never copied. The hardest part was cancelling stale work while the user drags a slider: every job has an id, workers check for a newer one between tiles, and the coordinator drops results that are not current. On 4 workers, convolution ran at least 3x faster than on one, with no visible seams.
 
-**Q:** What is a transferable object? **A:** An object such as `ArrayBuffer` whose ownership `postMessage` can move to another thread without copying; the sender's copy becomes detached.
+**Key terms to know:**
+- **Main thread** — the single thread that runs your JavaScript, layout, paint and input; blocking it freezes the page.
+- **Web Worker** — a background thread with its own event loop and no DOM access, talking to the page via `postMessage`.
+- **Structured clone** — the default `postMessage` behaviour of deep-copying data.
+- **Transferable object** — an `ArrayBuffer` (or `ImageBitmap`, `OffscreenCanvas`) whose ownership moves to another thread with no copy; the sender's copy becomes detached.
+- **`OffscreenCanvas`** — a canvas usable inside workers, including `convertToBlob` for encoding.
+- **`Uint8ClampedArray`** — RGBA pixel bytes that clamp values to 0–255 automatically.
+- **Convolution kernel** — a small matrix (such as a 5×5 blur) applied around each pixel; needs neighbouring pixels.
+- **Tiling with overlap** — splitting the image into strips with extra rows equal to the kernel radius, discarded when stitching.
+- **Worker pool** — a fixed set of workers (`hardwareConcurrency - 1`) reused for many tasks.
+- **`SharedArrayBuffer` and cross-origin isolation** — shared memory between threads, available only with COOP/COEP headers.
 
-**Q:** How do you cancel work in a worker? **A:** Tag jobs with ids and check for newer ones between chunks, ignore stale results, or terminate the worker.
+**Q:** When should you use a Web Worker?
+
+**A:** For CPU-heavy work that would block the main thread for more than a frame or two — image processing, parsing big files, compression, number crunching. Workers cannot touch the DOM, so they suit pure computation, with the main thread doing the rendering. For short tasks, the messaging overhead can outweigh the benefit.
+
+**Q:** What is a transferable object?
+
+**A:** An object like `ArrayBuffer` whose ownership `postMessage` can move to another thread without copying, by listing it in the transfer list. The receiver gets it instantly and the sender's buffer becomes detached, with `byteLength` 0. Copying 96 MB by structured clone instead would take noticeable time and double memory.
+
+```js
+worker.postMessage({ jobId, tile: buf }, [buf]); // moved, not copied
+buf.byteLength; // 0 — the sender can no longer use it
+```
+
+**Q:** How do you cancel work in a worker?
+
+**A:** You cannot interrupt a worker in the middle of a synchronous loop. I tag each job with an id, send the latest id with each message (or keep it in a `SharedArrayBuffer` flag if cross-origin isolated), and workers check between tiles or rows and stop early. The coordinator ignores results whose job id is stale, and for instant cancellation it can `terminate()` and recreate the worker at some start-up cost.
+
+**Q:** Why do tiles need overlap?
+
+**A:** A 5×5 blur at a pixel on a tile's edge needs 2 rows from the neighbouring tile. Without them, each tile computes edge pixels with missing data and the stitched image shows seams. I send each tile with radius-many extra rows above and below, then discard those rows when stitching.
+
+**Q:** What limits the speedup from more workers?
+
+**A:** Beyond the number of physical cores you gain nothing, and each worker costs memory and start-up time. Splitting, transferring and stitching are sequential overhead, so speedup is near-linear only while the per-tile work dominates. I cap the pool at `navigator.hardwareConcurrency - 1` to leave a core for the UI.
+
+**Q:** What fails on big images or constrained devices?
+
+**A:** A 24-megapixel image is 96 MB of RGBA, and mobile browsers cap canvas size and memory, so very large images can fail to decode or draw. I downscale for the preview, process full size in tiles, and process batch photos one or two at a time. Encoding to AVIF may not be supported everywhere, so I feature-detect and fall back to WebP or JPEG.
+
+**Q:** What would you do for 10x the performance?
+
+**A:** Move convolution to WebAssembly with SIMD, or to a WebGL or WebGPU shader, which can be many times faster than plain JavaScript loops. `SharedArrayBuffer` would let workers read one image without per-tile transfers, but it requires COOP/COEP headers that can break third-party embeds. The JavaScript version remains the baseline and fallback.
+
+**Q:** How do you test it?
+
+**A:** Filters are pure functions over byte arrays, so Node unit tests run tiny synthetic images through known kernels and compare exact values. Tiling is tested by comparing tiled output to single-pass output byte for byte. The pool's scheduling and cancellation use fake workers, and the Performance panel confirms there are no long tasks.
+
+**Common mistakes in answers:**
+- Saying workers can update the DOM — they cannot; send results back and render on the main thread.
+- Forgetting the transfer list, so every message copies megabytes.
+- Assuming `terminate()` is free — recreating workers costs start-up time and lost state.
 
 ### TL;DR
 Decode once, tile with overlap, move buffers between a pool of workers with zero-copy transfers, cancel by job id, and keep the main thread free for the UI.
@@ -3828,11 +5600,67 @@ Statecharts add vocabulary and up-front design; for a two-state toggle, a boolea
 - [Ch 16 — Testing and TypeScript](../chapters/16-testing-and-typescript/README.md): discriminated unions for events, fake timers, generated tests.
 
 ### In the interview
-**Q:** Why use a state machine for UI? **A:** It makes states explicit and transitions the only way to change them, eliminating impossible combinations of booleans and documenting behaviour.
+**30-second answer:** I built a small statechart library: machines are plain data with nested and parallel states, guards, actions, delayed transitions, history and invoked async services, run by an interpreter with `start`, `send` and `subscribe`. The key design decision was splitting "decide" from "do" — a pure `transition(machine, state, event)` returns the next configuration plus an ordered list of actions, and the interpreter executes them — so the core is testable without mocks and event logs can be replayed. The hardest part was following SCXML's semantics: exiting from the deepest state up to the least common ancestor, entering top-down, and queuing events raised during a transition (run-to-completion). Because machines are data, I generate test paths that reach every state and export Mermaid diagrams, and the library is under 6 KB.
 
-**Q:** What do statecharts add to FSMs? **A:** Hierarchy (shared transitions in parent states), parallel regions, history, guards and actions, which avoid the state explosion of flat machines.
+**Key terms to know:**
+- **Finite state machine (FSM)** — a model with a finite set of states, one active at a time, and transitions triggered by events.
+- **Statechart** — an FSM extended with nested (hierarchical) states, parallel regions, history, guards and actions.
+- **Guard** — a condition that must be true for a transition to be taken, such as `attempts < 3`.
+- **Action** — a side effect run on entry, exit or a transition; `assign` updates the machine's context.
+- **Context (extended state)** — data that is not a mode, such as a retry count or form values.
+- **Event bubbling to parents** — if the active child does not handle an event, its parent state may.
+- **Least common compound ancestor** — the nearest state containing both source and target; exits stop below it.
+- **Run-to-completion** — each event is fully processed before the next; events sent meanwhile are queued.
+- **Interpreter** — the runtime that holds current state, runs actions, timers and services, and notifies subscribers.
+- **Model-based testing** — generating test paths from the machine definition to cover every state and transition.
 
-**Q:** What is run-to-completion? **A:** Each event is fully processed — all exits, actions, entries — before the next one starts; events raised meanwhile are queued.
+**Q:** Why use a state machine for UI?
+
+**A:** Booleans like `isLoading`, `hasError` and `isSubmitting` can combine into impossible states such as loading and error at once. A machine makes states explicit and transitions the only way to change them, so those combinations cannot be represented. The definition also documents behaviour and can be drawn as a diagram.
+
+**Q:** What do statecharts add to FSMs?
+
+**A:** Hierarchy lets a parent state handle shared transitions like `CANCEL` once instead of on every child. Parallel regions model independent concerns (playback and volume) without multiplying states. History, guards, actions and delays round it out, which avoids the state explosion of flat machines.
+
+**Q:** What is run-to-completion?
+
+**A:** Each event is fully processed — all exits, transition actions and entries — before the next starts. If an action sends another event, it is queued and processed after the current macrostep, rather than re-entrantly against a half-finished transition. It is the same guarantee JavaScript's event loop gives each task.
+
+**Q:** In what order do exit and entry actions run?
+
+**A:** Going from `a.b.c` to `a.d`, the least common compound ancestor is `a`. Exit from the deepest up to, but not including, it (`c` then `b`), run the transition's actions, then enter top-down (`d`, then its initial child). Getting this wrong runs cleanup in the wrong order or skips it.
+
+**Q:** Hands-on: define a tiny login machine.
+
+```js
+const login = {
+  id: 'login', initial: 'idle', context: { attempts: 0 },
+  states: {
+    idle:       { on: { SUBMIT: 'submitting' } },
+    submitting: { invoke: { src: 'auth', onDone: 'success', onError: { target: 'idle', actions: 'countFail' } } },
+    success:    { type: 'final' },
+  },
+};
+```
+
+**A:** The machine is plain data, so it can be validated, drawn and used to generate tests. A guard such as `{ target: 'locked', guard: ctx => ctx.attempts >= 3 }` on `SUBMIT` would lock after three failures. Named actions like `countFail` are supplied separately, keeping the definition serialisable.
+
+**Q:** What happens with a delayed transition if the state is left early, or an event is unknown?
+
+**A:** Delayed transitions and invoked services belong to their state: leaving the state cancels the timer and stops the service, so a stale `after: 3000` never fires in the wrong state. Unknown events, or events no active state handles, are ignored by default (optionally logged in development). Time comes from an injected scheduler, so behaviour is deterministic.
+
+**Q:** When is a state machine overkill, and what breaks with very large machines?
+
+**A:** For a two-state toggle a boolean is fine; statecharts add vocabulary and upfront design. Very large machines become hard to read without visual tools, which is why I export Mermaid. Overusing context to hold modes reintroduces boolean soup, so context should hold data and states should hold modes.
+
+**Q:** How do you test a statechart?
+
+**A:** `transition` is pure, so unit tests check bubbling, guards, action order, parallel regions and history directly. The interpreter is tested with a fake scheduler for delays. Model-based tests BFS over state and event pairs to generate paths covering every transition, drive the real UI along each path, and assert it shows what the state says.
+
+**Common mistakes in answers:**
+- Running side effects inside the transition function, which makes it impossible to test or replay.
+- Processing events raised by actions immediately instead of queuing them.
+- Putting modes into context flags, recreating the impossible states the machine was meant to remove.
 
 ### TL;DR
 Define machines as data, keep the transition function pure and the interpreter in charge of effects, follow SCXML's exit/entry ordering and run-to-completion, and let the definition generate your diagrams and tests.
@@ -3938,11 +5766,63 @@ Authoritative servers cost CPU per room but prevent most cheating; deterministic
 - [Ch 15 — Node.js basics](../chapters/15-nodejs-basics/README.md): binary `Buffer`s, server loop, process monitoring.
 
 ### In the interview
-**Q:** What is client-side prediction? **A:** The client applies its own inputs immediately to a local copy, then corrects when the authoritative server state arrives by replaying unacknowledged inputs.
+**30-second answer:** I built a browser arena game for up to 16 players per room with an authoritative Node server that ticks the simulation at 30 Hz and sends snapshots at 20 Hz, while clients only send numbered inputs. The key design decision was sharing one deterministic simulation module between server and client, which makes client-side prediction and server reconciliation exact: my own tank moves instantly and, when a snapshot arrives, the client resets to the server state and replays unacknowledged inputs. Other players are interpolated 100 ms in the past, and the server rewinds up to 200 ms for hit detection so shots that looked like hits count. It plays smoothly at 150 ms round trip with 2% packet loss, using binary delta-compressed snapshots under 10 KB/s per client.
 
-**Q:** Why interpolate remote entities in the past? **A:** Snapshots arrive at a lower rate and with jitter; rendering slightly behind real time lets you blend between two known states smoothly.
+**Key terms to know:**
+- **Authoritative server** — the server runs the true simulation; clients send inputs, never positions, so they cannot cheat by teleporting.
+- **Tick rate and snapshot rate** — how often the server simulates (30 Hz) and how often it sends state (20 Hz).
+- **Client-side prediction** — applying your own inputs locally right away instead of waiting a round trip.
+- **Server reconciliation** — on each snapshot, reset to the server state and re-apply inputs it has not processed yet (after `lastSeq`).
+- **Entity interpolation** — rendering other players slightly in the past, blending between two known snapshots.
+- **Lag compensation** — the server rewinds other players to what the shooter saw before testing a hit.
+- **Deterministic simulation** — same inputs give the same state on every machine; fixed-point maths and a seeded RNG help.
+- **Delta compression** — sending only what changed since the last snapshot the client acknowledged.
+- **Head-of-line blocking** — on TCP (and so WebSocket), one lost packet delays every later one.
+- **Fixed timestep** — the server advances in equal steps, as in Project 10, with drift correction.
 
-**Q:** Why an authoritative server? **A:** Clients cannot be trusted; the server validates inputs and owns the true state, so speed or teleport hacks fail.
+**Q:** What is client-side prediction?
+
+**A:** The client applies its own input to a local copy of the world immediately, so controls feel instant even with 150 ms latency. Each input carries a sequence number and is kept in a pending list. When the server's snapshot says it processed up to `lastSeq`, the client corrects itself through reconciliation.
+
+**Q:** How does reconciliation work, and why must the simulation be deterministic?
+
+**A:** On a snapshot with `lastSeq = 101`, the client sets its entity to the server's state, drops inputs up to 101, and re-applies inputs 102 onward. If the shared simulation is deterministic, the result matches what the player already sees and nothing visibly moves. Small differences are smoothed over a few frames instead of snapping.
+
+**Q:** Why interpolate remote entities in the past?
+
+**A:** Snapshots arrive only 20 times a second and with jitter, so drawing others at the latest snapshot makes them jump. Rendering them 100 ms behind means two snapshots usually bracket the render time, and I blend between them (angles the short way round). The cost is seeing others slightly in the past, which lag compensation corrects for fairness.
+
+**Q:** Hands-on: interpolate a remote position.
+
+```js
+const renderT = now - 100;
+const [a, b] = bracket(buffer, renderT);           // snapshots with a.t <= renderT <= b.t
+const k = (renderT - a.t) / (b.t - a.t);
+pos.x = a.x + (b.x - a.x) * k; pos.y = a.y + (b.y - a.y) * k;
+```
+
+**A:** `k` runs from 0 to 1 between the two snapshots. If the buffer has no later snapshot (packet loss), I hold the last position or extrapolate briefly and cap it, rather than guessing far ahead.
+
+**Q:** Why an authoritative server rather than trusting clients?
+
+**A:** Anything in the client can be modified, so a trusted client can teleport, move faster or fire faster. The server validates inputs (maximum speed, fire rate, valid aim) and owns the true state, so speed and teleport hacks fail. It costs server CPU per room, which is the price of fairness.
+
+**Q:** Authoritative server vs deterministic lockstep?
+
+**A:** Lockstep sends only inputs and every peer runs the same simulation, which needs very little bandwidth and suits RTS games with thousands of units. But everyone waits for the slowest player each turn, and any non-determinism causes a desync. An authoritative server tolerates slow clients and is harder to cheat in fast action games.
+
+**Q:** What fails under bad networks, and what changes at 100 rooms?
+
+**A:** WebSocket runs over TCP, so a lost packet stalls later snapshots (head-of-line blocking); WebTransport datagrams or WebRTC data channels would avoid that for state updates. A disconnected player has 30 seconds to rejoin a running match. For many rooms, I assign rooms to processes, keep each tick under 10 ms, and route players through a matchmaker.
+
+**Q:** How do you test something this timing-sensitive?
+
+**A:** The shared simulation gets unit tests that the same inputs give byte-identical state in Node and the browser. Headless bot clients play through a network emulator that adds delay, jitter and loss, and I assert reconciliation error stays below a threshold with no desyncs. CI measures tick duration and bandwidth with 16 bots.
+
+**Common mistakes in answers:**
+- Having clients send positions "and validating them" — send inputs and let the server simulate.
+- Using `Math.random()` or unordered iteration in shared simulation code, which breaks determinism.
+- Rendering other players at the newest snapshot, then blaming the network for jitter.
 
 ### TL;DR
 Let the server own the truth, predict and reconcile your own player, interpolate everyone else a little in the past, rewind for hits, and share one deterministic simulation module between client and server.
@@ -4045,11 +5925,63 @@ Tree-walking interpreters are simple and slow; a bytecode compiler with a stack 
 - [Ch 17 — JavaScript for interviews](../chapters/17-javascript-for-interviews/README.md): recursion and tree traversal.
 
 ### In the interview
-**Q:** How does a closure work under the hood? **A:** A function value carries a reference to the environment where it was created; calls create a new environment whose parent is that captured one, so outer variables stay reachable.
+**30-second answer:** I built an interpreter for "Pebble", a small dynamically typed language with `let`, control flow, first-class functions, closures, arrays, maps and built-ins, plus a Node REPL and a browser playground. The pipeline is a lexer, a parser using recursive descent for statements and Pratt parsing for expressions, a resolver that computes each variable's scope depth statically, and a tree-walking evaluator over environment chains. The key design decision was the resolver, which makes closures strictly lexical and lookups faster; the hardest part was error reporting, with line and column on every token and parser recovery so several errors appear at once. Naive `fib(25)` runs in under 2 seconds, and the playground stops infinite loops with a step budget inside a Web Worker.
 
-**Q:** Lexer vs parser? **A:** The lexer turns characters into tokens; the parser turns tokens into a tree according to the grammar, handling precedence and nesting.
+**Key terms to know:**
+- **Lexer** — turns characters into tokens (numbers, strings, identifiers, operators) with positions.
+- **Parser** — turns tokens into an AST according to the grammar, handling precedence and nesting.
+- **Recursive descent** — one function per grammar rule, calling each other recursively.
+- **Pratt parsing** — expression parsing with a binding power per operator for precedence and associativity.
+- **AST** — the abstract syntax tree the evaluator walks, e.g. `Call { callee, args }`.
+- **Environment** — a `Map` of bindings plus a pointer to its parent environment; a chain of them is the scope.
+- **Lexical scope** — a function sees variables where it was *defined*, not where it is *called*.
+- **Closure** — a function value bundled with its defining environment, keeping outer variables alive.
+- **Resolver** — a static pass recording how many scopes up each variable is declared.
+- **Tree-walking interpreter vs bytecode VM** — evaluate AST nodes directly, or compile to compact instructions run by a loop.
 
-**Q:** Tree-walking interpreter vs bytecode VM? **A:** Tree-walking evaluates AST nodes directly — simple but slow; a VM compiles to compact instructions run by a loop — faster and more cache-friendly.
+**Q:** How does a closure work under the hood?
+
+**A:** A function value stores a reference to the environment where it was created. Calling it creates a new environment for parameters and locals whose parent is that captured environment, not the caller's. So outer variables stay reachable — and alive in memory — for as long as the function exists, which is exactly how JavaScript closures behave.
+
+**Q:** Hands-on: what does this JavaScript print, and how does your interpreter model it?
+
+```js
+function counter() { let n = 0; return () => ++n; }
+const a = counter(), b = counter();
+a(); a();
+console.log(a(), b()); // 3 1
+```
+
+**A:** Each call to `counter` creates a fresh environment with its own `n`, and each returned arrow function captures its own. In Pebble, calling `counter` makes a new `Environment` whose parent is the global one, and the inner `PebbleFunction` stores that environment as `closure`. `a` and `b` therefore count independently.
+
+**Q:** Lexer vs parser?
+
+**A:** The lexer works on characters and produces a flat list of tokens, handling things like string escapes and number formats. The parser works on tokens and builds a tree according to the grammar, handling precedence, nesting and statements. Separating them keeps each simple and makes errors point to precise positions.
+
+**Q:** Why add a resolver instead of looking variables up by name at runtime?
+
+**A:** Pure dynamic lookup walks parent environments by name each time, so a closure can accidentally see a variable declared *later* in an outer scope, which breaks lexical expectations in edge cases. The resolver computes each use's scope distance once, so lookups are both correct and faster (`ancestor(depth).values.get(name)`). It also reports static errors such as reading a variable in its own initialiser.
+
+**Q:** How does `return` escape nested loops and blocks?
+
+**A:** The simplest approach throws a special `ReturnSignal` object holding the value, and the function-call code catches only that type. It unwinds through any number of blocks cleanly. Exceptions are slow in hot loops, so completion records — each statement returns "normal" or "return with value" — are the faster alternative.
+
+**Q:** What happens on deep recursion or an infinite loop?
+
+**A:** A tree-walking evaluator uses the JavaScript call stack, so deep Pebble recursion throws a JavaScript `RangeError`; I catch it and report "stack overflow" in Pebble terms, or make the evaluator iterative. In the playground, the interpreter runs in a Web Worker and counts steps, stopping the program with a clear message when the budget is spent, so the page never freezes.
+
+**Q:** Tree-walking interpreter vs bytecode VM — what changes for 10x speed?
+
+**A:** Tree-walking evaluates AST nodes directly: simple, but each node visit has overhead and poor cache locality. A compiler to bytecode with a stack-based VM is typically several times faster, because a tight loop over compact instructions is cheaper than recursive calls over objects. Compiling Pebble to JavaScript and letting V8's JIT run it would be faster still.
+
+**Q:** How do you test a language implementation?
+
+**A:** Golden tests: a folder of `.pbl` programs with expected `.out` output or `.err` errors, run on every change. Unit tests cover the lexer (escapes, unterminated strings), the parser (precedence tables, error recovery) and the resolver. A fuzz test feeds random token sequences to the parser and asserts it reports Pebble errors but never throws a raw JavaScript exception.
+
+**Common mistakes in answers:**
+- Saying a closure "copies" outer variables — it keeps a reference to the environment, so changes are shared.
+- Confusing dynamic scope (caller's variables) with lexical scope (definer's variables).
+- Parsing expressions with a regex or naive left-to-right loop that gets precedence wrong.
 
 ### TL;DR
 Lex, parse with recursive descent plus Pratt, resolve scopes statically, evaluate with environment chains that closures capture, and invest in error positions — then JavaScript's own scoping rules will never surprise you again.
@@ -4191,11 +6123,67 @@ More context means better debugging and more privacy risk — default to minimal
 - [Ch 15 — Node.js basics](../chapters/15-nodejs-basics/README.md): ingestion server, streams.
 
 ### In the interview
-**Q:** How do you catch all errors in a browser app? **A:** `window` `error` and `unhandledrejection` listeners, plus wrapping async boundaries and `fetch`; cross-origin scripts need CORS for details.
+**30-second answer:** I built a browser monitoring SDK under 6 KB gzipped plus a Node ingestion service: the SDK captures errors, unhandled rejections, failed requests, breadcrumbs and Core Web Vitals, and the server symbolicates stack traces with per-release source maps and groups events into issues. The key design decision was "never break the host page": every SDK entry point is wrapped in `try/catch`, patched APIs like `fetch` preserve their original behaviour, and the SDK loads asynchronously. The hardest part was reliable delivery as the page closes, which I solved by flushing small batches on `visibilitychange` to hidden and `pagehide` with `fetch` `keepalive` or `sendBeacon`, plus an offline retry queue. One process ingests 1,000 events a second with batched inserts, and the same bug from 1,000 users appears as one issue.
 
-**Q:** How do you send data when the user closes the tab? **A:** Flush on `visibilitychange` to hidden or `pagehide` with `sendBeacon` or `fetch` with `keepalive`.
+**Key terms to know:**
+- **Global error handlers** — `window` `error` for uncaught exceptions and resource failures, `unhandledrejection` for rejected promises nobody handled.
+- **Breadcrumbs** — the last few user actions, navigations and requests before an error, for context.
+- **Core Web Vitals** — LCP (loading), INP (responsiveness) and CLS (visual stability), typically judged at the 75th percentile.
+- **`PerformanceObserver`** — a browser API that delivers performance entries such as long tasks and largest contentful paint.
+- **`sendBeacon` and `fetch` `keepalive`** — ways to send a small request that completes even after the page unloads.
+- **Source map and symbolication** — mapping a minified file's line and column back to the original file, line and function.
+- **Fingerprint** — a stable grouping key from error type and top in-app frames.
+- **Sampling and rate limiting** — sending only a fraction of events, and capping them, to control cost.
+- **"Script error."** — the detail-less message for errors from cross-origin scripts loaded without CORS.
+- **Monkey-patching** — replacing a built-in such as `fetch` with a wrapper that calls the original.
 
-**Q:** How do you map a minified stack trace to source? **A:** Upload source maps per release and decode each frame's line and column with a source-map consumer on the server.
+**Q:** How do you catch all errors in a browser app?
+
+**A:** Listen to `window` `error` (uncaught exceptions, and with capture, resource load errors) and `unhandledrejection` (promises rejected with no handler). Wrap `fetch` to record failed responses, since a 500 is not an exception. For cross-origin scripts, serve them with `crossorigin="anonymous"` and CORS headers, or you only get "Script error." with no stack.
+
+**Q:** How do you send data when the user closes the tab?
+
+**A:** `unload` and `beforeunload` are unreliable, especially on mobile and with the back/forward cache. I flush when `visibilitychange` reports `hidden` and on `pagehide`, using `fetch(url, { method: 'POST', body, keepalive: true })` or `navigator.sendBeacon`. Both have payload limits (about 64 KB in flight), so batches stay small.
+
+**Q:** How do you map a minified stack trace to source?
+
+**A:** The build uploads source maps per release, and the SDK tags every event with the release version. The server parses each frame's file, line and column, loads that release's map, and decodes it with a source-map consumer to get the original file, line and function name. Maps are not served publicly, so source stays private.
+
+**Q:** Hands-on: how do you wrap `fetch` without breaking the host?
+
+```js
+const orig = window.fetch;
+window.fetch = function (...args) {
+  const started = performance.now();
+  return orig.apply(this, args).then(res => {
+    try { if (res.status >= 500) record(args[0], res.status, performance.now() - started); } catch {}
+    return res;                         // never alter the result
+  });
+};
+```
+
+**A:** `orig.apply(this, args)` preserves the receiver and arguments, the SDK's own bookkeeping is inside `try/catch`, and the original response or rejection passes through unchanged. Rejections are not swallowed, so the app's own error handling still runs.
+
+**Q:** How do you group errors into issues?
+
+**A:** Fingerprint on the error type plus the top few *in-app* frames, using file and function name but not line numbers, which change every release. Messages with variable data like `User 12345 not found` are normalised by replacing numbers and ids with placeholders. Without this, one bug becomes thousands of issues.
+
+**Q:** What are the Core Web Vitals and how do you measure them?
+
+**A:** LCP is when the largest content element renders (good under 2.5 s), INP measures the latency of interactions across the visit (good under 200 ms), and CLS measures unexpected layout shifts (good under 0.1). INP replaced FID as a Core Web Vital in 2024. I observe them with `PerformanceObserver` or the web-vitals library and report p75 per page.
+
+**Q:** What changes at 100x the event volume?
+
+**A:** Ingestion should accept quickly and enqueue (to a log or queue) while symbolication and grouping run asynchronously, so a slow symbolicator never drops events. The SDK samples performance data heavily and errors lightly, and per-project rate limits protect the backend. Storage moves from one PostgreSQL table to partitioned or columnar storage for analytics.
+
+**Q:** How do you test that the SDK works and never breaks pages?
+
+**A:** Playwright drives a real browser: throw errors, reject promises, fail requests, close the page right after an error, go offline — and assert what the ingest server received. Stack parsing gets unit tests with real stack strings from Chrome, Firefox and Safari. Server tests cover symbolication against a known build, grouping stability across releases and rate limiting.
+
+**Common mistakes in answers:**
+- Relying on `beforeunload` or `unload` to send data — use `visibilitychange` and `pagehide`.
+- Fingerprinting on line numbers or raw messages, which splits one bug into many issues.
+- Collecting personal data by default — scrub, sample and make extra context opt-in.
 
 ### TL;DR
 Hook errors and vitals without ever breaking the host, batch and flush on page hide with `keepalive` or beacons, symbolicate with per-release source maps, and group by stable fingerprints.
@@ -4299,11 +6287,65 @@ Process-per-worker isolation is robust but costs start-up time; `worker_threads`
 - [Ch 16 — Testing](../chapters/16-testing-and-typescript/README.md): what runners do for you, mocks and fake timers.
 
 ### In the interview
-**Q:** How does a test runner know a test failed asynchronously? **A:** It awaits the test's promise with a timeout and listens for uncaught exceptions and unhandled rejections, attributing them to the running test.
+**30-second answer:** I built `tinytest`, a Node test runner with `describe`/`test`/hooks, `.only` and `.skip`, async tests with timeouts, an `expect` library with readable diffs, mocks, fake timers, watch mode and several reporters. The key design decision was isolation: each test file runs in a fresh module graph inside a pool of child processes that stream serialised events back, so state cannot leak between files and a crash or `process.exit` is contained and reported as a failure. The hardest part was asynchronous failures that happen after a test has "finished", which I attribute to the right test or file through `uncaughtException` and `unhandledRejection` handlers in the worker. 200 small test files run in under 5 seconds on 8 cores.
 
-**Q:** Why run test files in separate processes? **A:** Module caches, globals and leaked handles cannot affect other files, and a crash is contained.
+**Key terms to know:**
+- **Collect, then run** — importing a test file only registers tests into a tree; execution starts after collection.
+- **Hooks** — `beforeAll`, `afterAll`, `beforeEach`, `afterEach`, run in a defined order around tests.
+- **Test isolation** — separate processes (or module graphs) so globals, module caches and handles cannot leak between files.
+- **IPC** — inter-process communication; `child_process.fork` gives a message channel between parent and worker.
+- **Timeout via `Promise.race`** — racing the test's promise against a timer, then clearing the timer.
+- **Leaked handles** — timers or sockets still open after a file finishes, which keep a process alive.
+- **Error serialisation** — `Error` objects lose properties in `JSON.stringify`, so they are converted to plain objects for IPC.
+- **Diff** — showing expected vs actual with a Myers diff on pretty-printed values.
+- **Fake timers** — replacements for `setTimeout`, `setInterval` and `Date` driven by a virtual clock.
+- **Reporter** — a consumer of the event stream that formats output (dot, spec, TAP, JSON) without affecting execution.
 
-**Q:** How do fake timers work? **A:** They replace `setTimeout`/`setInterval`/`Date` with versions driven by a virtual clock that tests advance explicitly.
+**Q:** How does a test runner know a test failed asynchronously?
+
+**A:** It awaits the test function's returned promise, racing it against a timeout, so a rejection or a hang is caught. For errors thrown later — a `setTimeout` callback after the test resolved — the worker installs `process.on('uncaughtException')` and `unhandledRejection` handlers and attributes the error to the currently running test, or to the file if none is running.
+
+**Q:** Why run test files in separate processes?
+
+**A:** Module caches, global variables, patched built-ins and leaked handles from one file cannot affect another, and a crash, infinite loop or `process.exit()` is contained to one worker. `worker_threads` start faster but share a process, so a native crash takes everything down. The cost of processes is start-up time, which a reused pool amortises.
+
+**Q:** How do fake timers work?
+
+**A:** They replace `setTimeout`, `setInterval` and `Date` with versions that store callbacks in a queue ordered by due time on a virtual clock. The test calls something like `clock.tick(5000)`, which advances the clock and runs every callback that falls due, in order. Nothing actually waits, so time-based tests are fast and deterministic.
+
+**Q:** Hands-on: implement a per-test timeout correctly.
+
+```js
+async function runWithTimeout(fn, ms) {
+  let timer;
+  const timeout = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`Timed out after ${ms} ms`)), ms); });
+  try { return await Promise.race([fn(), timeout]); }
+  finally { clearTimeout(timer); }
+}
+```
+
+**A:** The `finally` clears the timer so it does not keep the process alive or fire later. Note that `Promise.race` does not stop the losing test, which keeps running in the background — another reason each file gets its own process.
+
+**Q:** Why can `.only` not be applied while importing?
+
+**A:** `.only` in one test means "skip everything not marked only" across the file (or run), but you cannot know whether any `.only` exists until every `describe` and `test` has been registered. So the runtime imports the file to build the tree first, then walks it with modes resolved.
+
+**Q:** What goes wrong when you run files in parallel?
+
+**A:** Hidden shared state appears: two files using the same database, port or temp folder interfere and tests become flaky. I give each worker an index (like `TINYTEST_WORKER=3`) so tests can create unique resources. Ordering files by last known duration, slowest first, keeps all workers busy until the end.
+
+**Q:** What happens if a test file never exits, or the worker crashes?
+
+**A:** At the end of a file, a still-open handle (timer, socket) means the worker cannot exit naturally; I report it, as Jest's "did not exit" warning does, and kill the worker after a grace period. If a worker dies or calls `process.exit`, the parent sees the `exit` event before a "file done" message and reports the file as failed, then starts a new worker.
+
+**Q:** How do you test a test runner?
+
+**A:** Bootstrap with `node:test`, then use fixture projects that encode expected outcomes: hook order in nested suites, `.only` across files, timeouts, leaked timers, crashing files and order-dependent tests. Reporter output is snapshot-tested with durations normalised, and a synthetic suite measures parallel speed-up.
+
+**Common mistakes in answers:**
+- Thinking `Promise.race` cancels the slower promise — it only ignores its result.
+- Forgetting to clear the timeout timer, so the runner hangs after all tests pass.
+- Sending `Error` objects over IPC with `JSON.stringify` and getting `{}`.
 
 ### TL;DR
 Collect tests by importing files, run the tree with awaited hooks and raced timeouts, isolate files in worker processes that stream serialised events, and attribute late async errors to the right test.
@@ -4405,11 +6447,63 @@ A hand-written JavaScript parser is slower than llhttp (generated C) but readabl
 - [Ch 15 — Node.js basics](../chapters/15-nodejs-basics/README.md): `Buffer`, streams and backpressure, sockets.
 
 ### In the interview
-**Q:** How does a server know where an HTTP/1.1 request body ends? **A:** From `Transfer-Encoding: chunked` framing if present, otherwise `Content-Length`; a request with neither has no body. Conflicting signals must be rejected.
+**30-second answer:** I built an HTTP/1.1 server directly on `node:net` raw TCP sockets, without `node:http`, supporting keep-alive, pipelining, `Content-Length` and chunked bodies in both directions, static files with `ETag` and `Range`, and a small router. The key design decision was an incremental parser state machine that consumes whatever bytes have arrived and resumes on the next `data` event, because TCP delivers a byte stream, not messages. The hardest part was defensive parsing: I reject requests with both `Content-Length` and `Transfer-Encoding` or conflicting lengths to prevent request smuggling, and enforce size limits and header, idle and body timeouts to defeat slowloris. A 2 GB chunked upload streams to disk with flat memory thanks to backpressure in both directions.
 
-**Q:** What is HTTP request smuggling? **A:** Exploiting disagreement between two HTTP processors about message boundaries (for example CL vs TE) to hide a request inside another; prevented by strict, consistent parsing.
+**Key terms to know:**
+- **TCP byte stream** — one `data` event may contain half a request or several requests; messages have no built-in boundaries.
+- **Incremental parser** — a state machine (request line, headers, body, chunk size, chunk data) that keeps unconsumed bytes and resumes later.
+- **`Content-Length` vs chunked transfer encoding** — a known body size vs a body sent as hex-sized chunks ending with a zero-size chunk.
+- **Keep-alive** — reusing one TCP connection for many requests, the default in HTTP/1.1.
+- **Pipelining** — sending several requests without waiting; responses must go back in request order.
+- **Request smuggling** — two HTTP processors disagreeing about where a request ends, letting an attacker hide a second request.
+- **Slowloris** — holding many connections open by sending headers extremely slowly.
+- **Backpressure** — `socket.write()` returns `false` when buffers are full, and you wait for `drain`; pause the socket when the body reader is slow.
+- **Conditional and range requests** — `If-None-Match` with `ETag` returns 304, `Range` returns 206 with part of a file.
+- **`Buffer`** — Node's byte array; scanning with `indexOf('\r\n')` and `subarray` avoids copies.
 
-**Q:** What is a slowloris attack and the defence? **A:** Holding many connections open by sending headers very slowly; defend with header and idle timeouts and connection limits.
+**Q:** How does a server know where an HTTP/1.1 request body ends?
+
+**A:** If `Transfer-Encoding: chunked` is present, the chunks define it, ending with a zero-size chunk. Otherwise `Content-Length` gives the exact byte count. A request with neither has no body. Conflicting signals — both headers, or different `Content-Length` values — must be rejected.
+
+**Q:** What is HTTP request smuggling?
+
+**A:** It exploits disagreement between two HTTP processors, such as a proxy and your server, about message boundaries. If one uses `Content-Length` and the other `Transfer-Encoding`, an attacker can hide a second request inside the first one's body, which the back end then treats as the next user's request. RFC 9112 treats differing `Content-Length` values as an unrecoverable error and lets a server reject a message with both headers; I reject both cases and close the connection.
+
+**Q:** What is a slowloris attack and the defence?
+
+**A:** The attacker opens many connections and sends header bytes very slowly, so each connection stays open and the server runs out of sockets or memory. Defences are a header-read timeout (10 s here), idle and body-inactivity timeouts, limits on header size and count, and a cap on connections per client.
+
+**Q:** Hands-on: what is wrong with this parser?
+
+```js
+socket.on('data', chunk => {
+  const [head, body] = chunk.toString().split('\r\n\r\n');
+  handle(parseHeaders(head), body);
+});
+```
+
+**A:** It assumes one `data` event is exactly one request. A request split across packets would be parsed half-finished, and two pipelined requests in one chunk would lose the second. It also converts binary bodies to strings, corrupting them. The fix is a per-connection `Buffer`, scanning with `indexOf('\r\n\r\n')`, keeping the unconsumed tail, and treating the body as bytes framed by its length.
+
+**Q:** How does chunked encoding work?
+
+**A:** Each chunk is a hex size line, `\r\n`, that many bytes, then `\r\n`. A chunk of size `0` ends the body, optionally followed by trailer fields and a final `\r\n`. I parse the size strictly (hex digits only, with a maximum) and stream exactly that many bytes. When responding, chunked encoding lets the server stream content without knowing its total length.
+
+**Q:** How do you handle backpressure in both directions?
+
+**A:** If the application reads the request body slowly, the parser calls `socket.pause()` until the body stream asks for more. When writing, `socket.write()` returns `false` when the buffer is full, so I stop and resume on `drain`, or use `stream.pipeline` for files. Without this, one slow client makes the server buffer a whole file in memory.
+
+**Q:** What changes at 10x the traffic, and why not just use this in production?
+
+**A:** A JavaScript parser is slower than llhttp, the generated C parser inside Node, so my target was only half of `node:http`'s throughput for small keep-alive requests. At scale you also need TLS, HTTP/2 or HTTP/3 multiplexing, graceful shutdown and battle-tested edge-case handling, which is why production uses `node:http` behind a proxy. The value of this project is understanding what that stack does.
+
+**Q:** How do you test a protocol parser?
+
+**A:** Parser unit tests feed bytes directly without sockets: one byte at a time, three requests in one buffer, every limit and every malformed input. Integration tests use `net.connect` to send raw bytes and assert raw responses, and `curl`, browsers and Node's `fetch` cross-check compatibility. A fuzzer mutates valid requests; the parser must never throw, only answer 400 and close.
+
+**Common mistakes in answers:**
+- Treating each `data` event as a complete message.
+- Accepting both `Content-Length` and `Transfer-Encoding` "and using whichever is first" — that is exactly how smuggling happens.
+- Ignoring `socket.write()`'s return value, which lets memory grow without bound for slow clients.
 
 ### TL;DR
 Treat TCP as a byte stream, parse incrementally with a strict state machine, decide body length exactly as RFC 9112 says, stream bodies with backpressure, and enforce limits and timeouts everywhere.
