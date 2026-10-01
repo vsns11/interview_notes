@@ -61,6 +61,7 @@ flowchart LR
 |---|---|
 | `Java-Handbook.pdf` | The whole book as one PDF, with a cover and a table of contents (built by `tools/regen_pdfs.sh`). |
 | `interview/INTERVIEW.md` + `interview/Java-Interview-Edition.pdf` | **Interview Edition**: the whole book in ~44 pages for fast revision — per chapter must-know facts, key tables, likely questions with short answers, gotchas, plus a top-25 question list and a last-minute checklist. |
+| `capstones/CAPSTONES.md` + `capstones/Java-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs for plain Java 25 (no Spring), beginner to advanced — from a number-guessing game and a bank CLI to an HTTP server on virtual threads, a JSON parser, a Java agent profiler with the Class-File API, a B-tree database with a WAL, an FFM native binding and a Raft key-value store. Each has requirements, architecture and data-model diagrams, milestones, the hard parts, testing (JUnit 6, AssertJ, Mockito, JMH), trade-offs and interview questions. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
 | `chapters/NN-name/code/` | Runnable examples, one package per chapter and topic (`package ch07.strings;`). Ch 18 also has JUnit tests, Maven/Gradle build files and `run_tests.sh`. |
 | `chapters/16-jvm-internals-and-performance/jpms/` | A small multi-module (JPMS) project with its own `run.sh`. |
