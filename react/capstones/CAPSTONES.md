@@ -165,12 +165,15 @@ Two hundred cards are trivial; 20,000 are not — at that size you need paginati
 
 ### In the interview
 **Q:** Why not use the array index as a key?
+
 **A:** The key tells React which item is which between renders. If the list is reordered or filtered, index keys point at different items and React keeps the wrong component state and DOM. A stable id avoids that.
 
 **Q:** Where should `selectedTag` live?
+
 **A:** In the closest common parent of every component that reads it — here `App` — and be passed down with a callback to change it.
 
 **Q:** Why is the match count not state?
+
 **A:** It can be computed from existing state and props, so storing it creates two sources of truth that can disagree.
 
 ### TL;DR
@@ -260,12 +263,15 @@ RTL tests for each rule: add, toggle, filter, edit-cancel with Escape, "clear co
 
 ### In the interview
 **Q:** Why does calling `setCount(count + 1)` three times add only one?
+
 **A:** `count` is the value from the current render. All three calls ask for the same next value. Use the updater form so each call builds on the queued result.
 
 **Q:** Why must you not `push` into state?
+
 **A:** React detects changes by reference. Mutation keeps the reference, so React may skip the render, and other code holding the old array sees it change underneath.
 
 **Q:** What is batching?
+
 **A:** React groups all state updates from one event (and since React 18, from timeouts and promises too) into a single re-render.
 
 ### TL;DR
@@ -354,12 +360,15 @@ Controlled inputs re-render on every keystroke; for a form this small that is fr
 
 ### In the interview
 **Q:** Why keep the bill as a string in state?
+
 **A:** So partial input like "12." is preserved. Parse it during render and show an error if it is not a valid number.
 
 **Q:** How do you avoid floating-point errors with money?
+
 **A:** Work in integer minor units (cents), round once, and format with `Intl.NumberFormat`.
 
 **Q:** What is derived state and why avoid storing it?
+
 **A:** Values computable from other state; storing them creates two sources of truth.
 
 ### TL;DR
@@ -457,12 +466,15 @@ Hand-rolled fetching teaches the mechanics but you will rewrite caching, retries
 
 ### In the interview
 **Q:** How do you prevent a slow old response from overwriting a new one?
+
 **A:** Abort the previous request (or set an ignore flag) in the Effect's cleanup, which runs before the next Effect.
 
 **Q:** Why does my Effect fetch twice in development?
+
 **A:** StrictMode mounts, unmounts and remounts to surface missing cleanup. Production runs it once.
 
 **Q:** Should the °C/°F conversion be in an Effect?
+
 **A:** No. It is derived from data you already have; compute it during render.
 
 ### TL;DR
@@ -555,12 +567,15 @@ A reducer adds ceremony for a two-field form but pays off here. For very complex
 
 ### In the interview
 **Q:** When do you prefer `useReducer` over `useState`?
+
 **A:** When several values change together or the next state depends on rules; the reducer puts all transitions in one pure, testable function.
 
 **Q:** Why not shuffle answers in render?
+
 **A:** Render must be pure; shuffling there gives a different order on every re-render.
 
 **Q:** How do you make a countdown accurate?
+
 **A:** Store a deadline and compute remaining time from the clock each tick, rather than decrementing a counter.
 
 ### TL;DR
@@ -651,12 +666,15 @@ URL state makes views shareable but means every navigation is a history entry �
 
 ### In the interview
 **Q:** What must an accessible modal do?
+
 **A:** Move focus inside on open, keep it there, close on Escape, hide the background from assistive tech, and return focus to the opener.
 
 **Q:** Why use a portal for a custom modal?
+
 **A:** To render outside parents whose `overflow` or `z-index` would clip or bury it, while keeping React's event bubbling and context.
 
 **Q:** What changed for refs in React 19?
+
 **A:** `ref` is a normal prop on function components, and ref callbacks can return a cleanup function.
 
 ### TL;DR
@@ -679,7 +697,7 @@ Before React 19, every form re-implemented the same plumbing: `preventDefault`, 
 ### Requirements
 **Functional**
 - Fields with labels; server-style validation returns field errors and a form error.
-- Submitted values are kept on error (the form resets automatically only on success).
+- Submitted values are kept on error. React resets uncontrolled fields whenever the Action finishes without throwing — even when it returns an error state — so you must restore them yourself.
 - Button shows pending text and is disabled while submitting.
 - Success screen with the new user's name.
 
@@ -728,7 +746,7 @@ sequenceDiagram
 
 ### Deep dive: the hard parts
 - **The Action signature.** With `useActionState`, the function receives `(previousState, formData)` — easy to miss and get `formData` in the wrong slot.
-- **Automatic reset.** React resets uncontrolled fields after a successful Action. On error, return the submitted values and feed them back as `defaultValue`, or the user retypes everything.
+- **Automatic reset.** React resets uncontrolled fields once the Action completes without throwing — and returning an error object still counts as completing. So on a validation error, return the submitted values and feed them back as `defaultValue`, or the user retypes everything.
 - **`useFormStatus` placement.** It only works in a component rendered *inside* the `<form>`; calling it in the form's own component returns not pending.
 - **Accessibility.** Each error gets an id; the input has `aria-invalid` and `aria-describedby`. Move focus to the first invalid field after a failed submit.
 
@@ -750,13 +768,16 @@ Actions shine for submit-and-show-result forms. For live per-keystroke validatio
 
 ### In the interview
 **Q:** What does `useActionState` return?
+
 **A:** The current state (the last value the Action returned), a wrapped action to pass to the form, and an `isPending` flag.
 
 **Q:** Why must `useFormStatus` be in a child component?
+
 **A:** It reads the status of the nearest parent `<form>`, so the calling component must render inside that form.
 
 **Q:** Does the form reset after an Action?
-**A:** Yes, uncontrolled fields reset after a successful submission; return submitted values to restore them on error.
+
+**A:** Yes. Uncontrolled fields reset once the Action completes without throwing, even if it returned validation errors, so return the submitted values and use them as `defaultValue` to restore them.
 
 ### TL;DR
 Let the form's Action return the next state, render errors from it, show pending with `useFormStatus` in a child, and keep values on failure.
@@ -843,12 +864,15 @@ A Web Worker or the Page Visibility API can make timing even more robust, but ti
 
 ### In the interview
 **Q:** Why does my interval always see the initial state?
+
 **A:** The callback closed over the state from the render when the Effect ran. Use an updater, a ref to the latest callback, or `useEffectEvent`.
 
 **Q:** How do you keep a timer accurate in a background tab?
+
 **A:** Store an end timestamp and compute the remaining time from the clock, because intervals get throttled.
 
 **Q:** What is `useEffectEvent` for?
+
 **A:** To read the latest props or state inside an Effect's callback without making them dependencies that restart the Effect.
 
 ### TL;DR
@@ -940,12 +964,15 @@ Unit-test the reducer and the migrations. Test the Hook with `renderHook`: set a
 
 ### In the interview
 **Q:** Why not just write to `localStorage` in a `useEffect`?
+
 **A:** It works for one tab, but other tabs won't update and components can read different values. `useSyncExternalStore` subscribes properly and keeps reads consistent.
 
 **Q:** What must `getSnapshot` guarantee?
+
 **A:** It returns the same value (by reference) when nothing changed; otherwise React thinks the store changed every render.
 
 **Q:** How do you evolve stored data safely?
+
 **A:** Version it, validate on load and run migrations.
 
 ### TL;DR
@@ -1036,12 +1063,15 @@ Client-side filtering is fine to a few thousand items. Beyond that, filter on th
 
 ### In the interview
 **Q:** `useDeferredValue` or debounce?
+
 **A:** Defer when the work is local rendering — it adapts to the device. Debounce when you want to limit network calls.
 
 **Q:** Why keep filters in the URL?
+
 **A:** Shareable links, Back/Forward, and refresh all work, and there is one source of truth.
 
 **Q:** Why does `useDeferredValue` need `memo` on the slow child?
+
 **A:** The urgent render passes the old deferred value; `memo` lets React skip the slow list in that render.
 
 ### TL;DR
@@ -1058,8 +1088,8 @@ A Trello-style board: columns (To do, Doing, Done, plus custom ones) holding car
 Drag and drop is where UIs become inaccessible and buggy: no keyboard support, lost drops when the network fails, and ordering that breaks when two people move cards. A kanban board forces you to design ordering, persistence and accessibility properly.
 
 ### Real-world examples
-- [dnd-kit](https://dndkit.com/) and its [accessibility guide](https://docs.dndkit.com/guides/accessibility) describe keyboard sensors, screen-reader announcements and live regions for drag operations.
-- dnd-kit's [Sortable preset](https://docs.dndkit.com/presets/sortable) handles reordering within and across lists.
+- [dnd-kit](https://dndkit.com/) and its [accessibility guide](https://dndkit.com/legacy/guides/accessibility/) describe keyboard sensors, screen-reader announcements and live regions for drag operations.
+- dnd-kit's [Sortable preset](https://dndkit.com/legacy/presets/sortable/overview/) handles reordering within and across lists.
 - Figma's post [How Figma's multiplayer technology works](https://www.figma.com/blog/how-figmas-multiplayer-technology-works/) describes **fractional indexing** — the ordering trick used below.
 
 ### Requirements
@@ -1162,12 +1192,15 @@ Context + reducer re-renders every consumer on any change; with hundreds of card
 
 ### In the interview
 **Q:** How do you store order so that a move updates one row?
+
 **A:** Use a fractional index — a sortable string between the neighbours' keys — instead of integer positions.
 
 **Q:** How do you make drag and drop accessible?
+
 **A:** Provide a keyboard sensor (pick up, move, drop, cancel), visible focus, and live-region announcements of the item and its position.
 
 **Q:** What happens if the save fails?
+
 **A:** Roll back to the remembered position, tell the user, and keep later queued moves consistent by replaying or refetching.
 
 ### TL;DR
@@ -1184,7 +1217,7 @@ A Twitter-like home feed: posts with author, text, images and like counts that l
 Feeds combine every hard data problem: pagination that must not skip or duplicate items when new posts arrive, cache invalidation, optimistic updates, memory growth and scroll restoration. Hand-rolled solutions usually fail one of these.
 
 ### Real-world examples
-- TanStack Query's [Infinite Queries guide](https://tanstack.com/query/latest/docs/framework/react/guides/infinite-queries) and [`useInfiniteQuery` reference](https://tanstack.com/query/latest/docs/framework/react/reference/useInfiniteQuery) define `getNextPageParam` and `maxPages`.
+- TanStack Query's [Infinite Queries guide](https://tanstack.com/query/latest/docs/framework/react/guides/infinite-queries) and [`useInfiniteQuery` reference](https://tanstack.com/query/latest/docs/framework/react/reference/functions/useInfiniteQuery) define `getNextPageParam` and `maxPages`.
 - MDN's [Intersection Observer API](https://developer.mozilla.org/en-US/docs/Web/API/Intersection_Observer_API) is the standard way to detect a "load more" sentinel coming into view.
 - TanStack Query's [Optimistic Updates guide](https://tanstack.com/query/latest/docs/framework/react/guides/optimistic-updates) covers the like button.
 
@@ -1265,12 +1298,15 @@ Polling is simple and cheap at 30 s; real-time push (WebSocket or Server-Sent Ev
 
 ### In the interview
 **Q:** Why cursor pagination for feeds?
+
 **A:** New items shift offsets and cause duplicates or gaps; a cursor anchors to a specific item.
 
 **Q:** How does an optimistic update roll back in TanStack Query?
+
 **A:** `onMutate` cancels queries, snapshots the cache, writes the optimistic value and returns the snapshot; `onError` restores it; `onSettled` invalidates.
 
 **Q:** How do you trigger loading the next page?
+
 **A:** Observe a sentinel element with `IntersectionObserver` using a generous `rootMargin`.
 
 ### TL;DR
@@ -1399,12 +1435,15 @@ Context is fine for one cart. With many independent slices (wishlist, recently v
 
 ### In the interview
 **Q:** Why two contexts for one store?
+
 **A:** Consumers re-render when the context value changes; dispatch is stable, so components that only dispatch avoid re-rendering on state changes.
 
 **Q:** Should the client calculate the order total?
+
 **A:** For display only. The server reprices from its catalogue and validates promos when the order is placed.
 
 **Q:** What changed for context in React 19?
+
 **A:** You can render the context object directly as a provider and read context with `use()`, even conditionally.
 
 ### TL;DR
@@ -1422,7 +1461,7 @@ Dashboards are where pages get slow and fragile: one failing widget blanks the p
 
 ### Real-world examples
 - [Recharts](https://recharts.org/) documents responsive containers, tooltips and composable chart components.
-- TanStack Query's [`useQuery` reference](https://tanstack.com/query/latest/docs/framework/react/reference/useQuery) documents the `refetchInterval` and `refetchIntervalInBackground` options that drive auto-refresh.
+- TanStack Query's [`useQuery` reference](https://tanstack.com/query/latest/docs/framework/react/reference/functions/useQuery) documents the `refetchInterval` and `refetchIntervalInBackground` options that drive auto-refresh.
 - web.dev's [Interaction to Next Paint article](https://web.dev/articles/inp) explains the responsiveness metric your filter changes must respect.
 
 ### Requirements
@@ -1504,12 +1543,15 @@ Many parallel queries are fine over HTTP/2; batching them into one request saves
 
 ### In the interview
 **Q:** How do you stop one widget's error from breaking the page?
+
 **A:** Wrap each widget in its own error boundary and Suspense boundary, with a retry that resets that widget's query.
 
 **Q:** Why wrap filter changes in a transition?
+
 **A:** So React keeps the current UI visible while the new data loads instead of falling back to skeletons.
 
 **Q:** How do you make charts accessible?
+
 **A:** Provide a text summary and a data-table alternative, label axes, and don't rely on colour alone.
 
 ### TL;DR
@@ -1626,12 +1668,15 @@ Local IndexedDB means no sync; adding a server introduces conflicts (two devices
 
 ### In the interview
 **Q:** Why a fetcher instead of a `<Form>` for autosave?
+
 **A:** A fetcher calls the route action without navigating or adding history entries, which suits background saves.
 
 **Q:** How do you render user Markdown safely?
+
 **A:** Render to React elements, keep raw HTML disabled or sanitized, and never use `dangerouslySetInnerHTML` on unsanitized input.
 
 **Q:** What is a loader?
+
 **A:** A function attached to a route that fetches its data before the route renders, so components receive ready data.
 
 ### TL;DR
@@ -1725,12 +1770,15 @@ Client-side filtering is better for small static lists (no network). For huge re
 
 ### In the interview
 **Q:** Debounce or throttle for search-as-you-type?
+
 **A:** Debounce: you want the request after the user pauses, not at regular intervals during typing.
 
 **Q:** Why is debouncing not enough?
+
 **A:** Responses can still arrive out of order; abort the previous request or ignore stale responses.
 
 **Q:** How does a screen reader know which option is active?
+
 **A:** The focused input's `aria-activedescendant` holds the active option's id; the listbox and options have proper roles.
 
 ### TL;DR
@@ -1828,12 +1876,15 @@ Drafts in `localStorage` are device-bound and may contain personal data — encr
 
 ### In the interview
 **Q:** How do you validate only the current step?
+
 **A:** Give each step its own schema and form instance; Next runs that step's validation and only then saves to the shared store.
 
 **Q:** What happens to answers in a step that no longer applies?
+
 **A:** Delete them in the same update that removes the step, so the final submission is consistent.
 
 **Q:** Why React Hook Form for big forms?
+
 **A:** It keeps inputs uncontrolled and subscribes narrowly, so typing doesn't re-render the whole form.
 
 ### TL;DR
@@ -1852,7 +1903,7 @@ Bolted-on dark mode leads to hard-coded colours everywhere, poor contrast, and t
 ### Real-world examples
 - Josh Comeau's [The Quest for the Perfect Dark Mode](https://www.joshwcomeau.com/react/dark-mode/) explains the flash problem in server-rendered React and the blocking-script fix.
 - Tailwind CSS's [dark mode docs](https://tailwindcss.com/docs/dark-mode) show class-based and media-query strategies.
-- MDN's [`prefers-color-scheme`](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme) media feature.
+- MDN's [`prefers-color-scheme`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@media/prefers-color-scheme) media feature.
 
 ### Requirements
 **Functional**
@@ -1928,12 +1979,15 @@ Cookie-based preference makes SSR correct but adds a cookie to every request. CS
 
 ### In the interview
 **Q:** How do you avoid the dark-mode flash with SSR?
+
 **A:** Store the preference where the server can read it (a cookie) or run a tiny blocking script in `<head>` that sets the theme attribute before paint.
 
 **Q:** Why CSS variables instead of a theme object in context?
+
 **A:** Switching variables restyles everything without re-rendering React components.
 
 **Q:** What is a design token?
+
 **A:** A named design decision (colour, spacing, radius) used by components instead of raw values, so themes can swap them.
 
 ### TL;DR
@@ -2057,12 +2111,15 @@ Server sessions need a lookup per request (cache them); stateless JWTs avoid tha
 
 ### In the interview
 **Q:** Where should an SPA keep its session token?
+
 **A:** Preferably in an `HttpOnly`, `Secure`, `SameSite` cookie, so JavaScript (and XSS) cannot read it.
 
 **Q:** Is a protected route enough to secure data?
+
 **A:** No. It is a UX guard; the server must check authorization on every request.
 
 **Q:** How do you avoid flashing private content?
+
 **A:** Resolve the session before rendering protected routes — in router middleware or loaders — not in an Effect after render.
 
 ### TL;DR
@@ -2158,12 +2215,15 @@ Zustand is minimal; Redux Toolkit adds devtools time-travel and stricter structu
 
 ### In the interview
 **Q:** Why Zustand instead of context here?
+
 **A:** Components subscribe to selected slices, so high-frequency updates re-render only the components that read them, and no provider is needed.
 
 **Q:** How do you keep `timeupdate` from re-rendering the app?
+
 **A:** Put the current time in its own small store and subscribe only the seek bar and clock to it.
 
 **Q:** What if `audio.play()` is blocked?
+
 **A:** It returns a rejected promise; catch it, show paused, and ask for a user gesture.
 
 ### TL;DR
@@ -2270,7 +2330,7 @@ Rules are stored as *local wall-clock times in the host's zone*; bookings as abs
 5. **Drag/resize.** *Done when* changes snap to 15 minutes and persist.
 
 ### Deep dive: the hard parts
-- **Wall time vs instant.** "Every Monday 09:00–17:00" is wall time in the host's zone; on DST days that range is 7 or 9 hours of absolute time on some days. Convert per date with `PlainDate.toZonedDateTime`, never by adding 24 hours.
+- **Wall time vs instant.** "Every Monday 09:00–17:00" is wall time in the host's zone. After a DST change the same wall time maps to a different UTC instant (London 09:00 is 08:00 UTC in summer, 09:00 UTC in winter), and a range that crosses the switch itself (say 00:00–06:00 on the change night) lasts 5 or 7 real hours. Convert per date with `PlainDate.toZonedDateTime`, never by adding 24 hours to the previous day's instant.
 - **Nonexistent and repeated times.** 02:30 may not exist on the spring-forward day and happens twice in autumn. Temporal's `disambiguation` option makes you choose.
 - **Overlap layout.** Sort events by start; group into clusters that overlap transitively; within a cluster, assign each event the first free column. Width = 1 / columns in cluster.
 - **Race-free booking.** The client's slot list is a hint. The server inserts inside a transaction with an exclusion check (PostgreSQL's exclusion constraints can enforce non-overlapping ranges).
@@ -2294,12 +2354,15 @@ Client-side slot computation is fast but risks disagreement if the client's zone
 
 ### In the interview
 **Q:** How do you store weekly availability?
+
 **A:** As wall-clock times plus the host's IANA time zone, converted to instants per specific date.
 
 **Q:** Why not add 24 hours to get "tomorrow at 9"?
+
 **A:** DST days are 23 or 25 hours long; use calendar arithmetic in a zone-aware API.
 
 **Q:** How do you prevent double bookings?
+
 **A:** Re-check on the server inside a transaction or with a database constraint; the client's slot list is only a hint.
 
 ### TL;DR
@@ -2395,12 +2458,15 @@ Server-Sent Events are simpler for one-way streams and reconnect automatically; 
 
 ### In the interview
 **Q:** How do you render 1,000 updates per second?
+
 **A:** Buffer messages outside React, flush once per frame, and subscribe each row only to its own key.
 
 **Q:** WebSocket or Server-Sent Events?
+
 **A:** SSE for simple server-to-client streams over HTTP; WebSocket when the client also sends messages, such as subscriptions.
 
 **Q:** How should reconnection work?
+
 **A:** Exponential backoff with jitter, a cap, heartbeats to detect dead connections, and automatic resubscription.
 
 ### TL;DR
@@ -2493,12 +2559,15 @@ Direct-to-storage uploads (pre-signed URLs to object storage) remove your server
 
 ### In the interview
 **Q:** How does a resumable upload know where to continue?
+
 **A:** The server tracks the received offset; the client asks for it and sends the remaining bytes from there.
 
 **Q:** Why throttle progress updates?
+
 **A:** Progress events fire far more often than the screen can show; updating state each time wastes renders.
 
 **Q:** What must you clean up when previewing files?
+
 **A:** Revoke object URLs created with `URL.createObjectURL`.
 
 ### TL;DR
@@ -2595,12 +2664,15 @@ Bundling all locales is simpler but grows linearly; lazy per-locale loading adds
 
 ### In the interview
 **Q:** Why are concatenated strings bad for i18n?
+
 **A:** Languages differ in word order and plural rules; a single message with placeholders and plural branches lets translators produce correct sentences.
 
 **Q:** How do you support RTL without a second stylesheet?
+
 **A:** Set `dir` on `<html>` and use logical CSS properties so layout mirrors automatically.
 
 **Q:** How do you avoid shipping every language?
+
 **A:** Lazy-load the message bundle for the active locale, typically in the route loader.
 
 ### TL;DR
@@ -2721,12 +2793,15 @@ Server-side everything scales but costs a round-trip per interaction; for under 
 
 ### In the interview
 **Q:** What does "headless" mean for a table library?
+
 **A:** It manages state and logic (sorting, pagination, selection) but renders nothing; you write the markup and styles.
 
 **Q:** How do you avoid empty flashes when paging?
+
 **A:** Keep the previous page's data as placeholder while the next page loads, and dim it.
 
 **Q:** How do you implement "select all matching"?
+
 **A:** Send the filter and an exclusion list to the server, which applies the action to the current matching set.
 
 ### TL;DR
@@ -2858,12 +2933,15 @@ RSC reduce client JavaScript but tie you to a framework and its caching model; a
 
 ### In the interview
 **Q:** What can a Server Component do that a Client Component can't?
+
 **A:** Run only on the server, read databases and secrets directly, use `async`/`await` in render, and contribute no JavaScript to the bundle. It can't use state, Effects or browser APIs.
 
 **Q:** Is a Server Action secure because it runs on the server?
+
 **A:** No. It is an HTTP endpoint anyone can call; validate and authorize inside it.
 
 **Q:** Where does `'use client'` go?
+
 **A:** At the top of the module that starts a client subtree, as low in the tree as possible.
 
 ### TL;DR
@@ -2965,12 +3043,15 @@ CRDTs guarantee convergence but documents grow with history; compact snapshots. 
 
 ### In the interview
 **Q:** CRDT or operational transformation?
+
 **A:** CRDTs merge without a central transform server and support offline well; OT needs a server to order operations. For shape boards, CRDTs or Figma-style last-writer-wins per property are simpler.
 
 **Q:** How do you keep drawing at 60 fps in React?
+
 **A:** Draw on a canvas outside React's render, subscribe the renderer to the data store directly, and keep React for low-frequency UI.
 
 **Q:** How does per-user undo work?
+
 **A:** Track the origin of each transaction and undo only the current user's transactions.
 
 ### TL;DR
@@ -3071,12 +3152,15 @@ Virtualization breaks Ctrl+F; provide your own search. Canvas-based grids scale 
 
 ### In the interview
 **Q:** How does virtualization work?
+
 **A:** Compute which items intersect the viewport from the scroll offset and item sizes, render only those (plus overscan), and position them inside a spacer with the full height.
 
 **Q:** How do you handle variable row heights?
+
 **A:** Estimate, measure rendered rows, cache measurements and adjust scroll offset when heights above the viewport change.
 
 **Q:** What accessibility problems does virtualization cause?
+
 **A:** Off-screen rows don't exist in the DOM, so you must expose total counts and indices with ARIA and manage focus explicitly.
 
 ### TL;DR
@@ -3175,12 +3259,15 @@ Building on headless primitives (Radix, React Aria) saves months of accessibilit
 
 ### In the interview
 **Q:** How do you decide a component's API?
+
 **A:** Mirror native elements where possible, compose with children and compound components, spread remaining props, and avoid many booleans.
 
 **Q:** How do you prevent visual regressions?
+
 **A:** Screenshot every story in CI and review diffs on pull requests.
 
 **Q:** Do you still need `forwardRef` in React 19?
+
 **A:** No. `ref` is passed as a regular prop to function components.
 
 ### TL;DR
@@ -3262,7 +3349,7 @@ flowchart TD
 Each remote runs standalone with a mock shell for its own tests. Contract tests check the shell's props and the event payloads against shared types. Playwright composes the real deployed versions and checks navigation and failure fallbacks.
 
 ### Trade-offs, scaling and failure modes
-Micro-frontends solve organizational problems, not technical ones; for a few teams, a well-structured monorepo is cheaper. Risks: version skew, duplicated libraries, slower first navigation, harder debugging. Server-side composition (assembling fragments on the server or edge) and build-time packages in a monorepo are the main alternatives.
+The payoff of micro-frontends is team independence, not faster code; with only a few teams, a well-structured monorepo costs far less. Risks: version skew, duplicated libraries, slower first navigation, harder debugging. Server-side composition (assembling fragments on the server or edge) and build-time packages in a monorepo are the main alternatives.
 
 ### Stretch goals
 - Server-side rendering of remotes.
@@ -3277,12 +3364,15 @@ Micro-frontends solve organizational problems, not technical ones; for a few tea
 
 ### In the interview
 **Q:** When are micro-frontends worth it?
+
 **A:** When many independent teams need to deploy separately and the organizational cost of a shared release outweighs the runtime and complexity costs.
 
 **Q:** What breaks if two React copies load?
+
 **A:** Hooks and context fail across the boundary ("invalid hook call"); share React as a singleton.
 
 **Q:** How should micro-frontends communicate?
+
 **A:** Through small, versioned contracts — props from the shell and typed events — not by importing each other.
 
 ### TL;DR
@@ -3384,7 +3474,7 @@ IDs are UUIDs generated on the device so records can be created offline. `base_v
 
 ### Milestones
 1. **Local-only app** on IndexedDB with live queries. *Done when* everything works with the network disabled from the start.
-2. **App shell and install.** *Done when* Lighthouse PWA checks pass and the app opens offline after first visit.
+2. **App shell and install.** *Done when* the Application panel in Chrome DevTools shows a valid manifest and an active service worker, the browser offers to install the app, and it opens offline after the first visit. (Lighthouse dropped its separate PWA category in version 12, so check these directly.)
 3. **Outbox push.** *Done when* edits made offline reach the server in order after reconnect, even if the tab was closed in between.
 4. **Pull and conflicts.** *Done when* editing the same report on two devices produces a conflict screen with both versions.
 5. **Photos.** *Done when* photos compress, store as blobs and upload in the background with retry.
@@ -3413,12 +3503,15 @@ Last-writer-wins is simple but silently drops edits; versioned conflict handling
 
 ### In the interview
 **Q:** What does offline-first mean?
+
 **A:** The app reads and writes a local database as its primary source and syncs with the server in the background, rather than treating the network as required.
 
 **Q:** How do you avoid losing or duplicating offline edits?
+
 **A:** Write the record and an outbox entry in one transaction, push in order with idempotent mutation ids, and retry until acknowledged.
 
 **Q:** How do you detect conflicts?
+
 **A:** Send the base version with each edit; the server rejects it if the record changed meanwhile, and the client resolves.
 
 ### TL;DR
@@ -3512,12 +3605,15 @@ The Compiler removes most manual memoization but can make debugging slightly les
 
 ### In the interview
 **Q:** Does the React Compiler make `useMemo` obsolete?
+
 **A:** Mostly for performance memoization; it inserts it automatically. You may still use it for semantic reasons, and the Compiler does not replace virtualization or code splitting.
 
 **Q:** How do you find what is slow?
+
 **A:** Profile a production build with a throttled CPU, look at commits and flame graphs, find components rendering too often or too slowly, and fix one cause at a time.
 
 **Q:** What's the difference between `actualDuration` and `baseDuration`?
+
 **A:** Actual is the time rendering this commit; base is the estimated time to render the whole subtree without memoization.
 
 ### TL;DR
@@ -3617,12 +3713,15 @@ SVG rendering via React is simplest and accessible but slows with many nodes; ca
 
 ### In the interview
 **Q:** How do you implement undo/redo in an editor?
+
 **A:** Route every change through commands that record forward and inverse patches; undo applies the inverse, redo the forward, and drags are coalesced into one entry.
 
 **Q:** Why not render the canvas with React components per shape?
+
 **A:** It works for small scenes, but reconciling thousands of nodes on every pointer move is too slow; render imperatively and keep React for panels.
 
 **Q:** How do you handle tools?
+
 **A:** One state machine per tool that turns input events into commands, so modes, cancellation and modifiers are explicit.
 
 ### TL;DR
@@ -3757,12 +3856,15 @@ Optimistic UI can lie briefly; show subtle "sending" state. A single WebSocket s
 
 ### In the interview
 **Q:** How does `useOptimistic` roll back?
+
 **A:** It doesn't need explicit rollback: the optimistic value is shown only while the Action is pending, and afterwards React renders the real state passed to the Hook.
 
 **Q:** How do you avoid duplicate messages?
+
 **A:** Generate a client id for each send; the server stores it uniquely and echoes it, and the client merges by that id.
 
 **Q:** How do you keep scroll position when loading history?
+
 **A:** Record the distance from the bottom before prepending and restore it after, or rely on scroll anchoring.
 
 ### TL;DR
@@ -3865,12 +3967,15 @@ Streaming improves perceived speed but complicates caching (CDNs cache whole res
 
 ### In the interview
 **Q:** What does streaming SSR improve?
+
 **A:** The browser gets and paints the shell before slow data resolves; slow sections arrive later and hydrate independently.
 
 **Q:** What causes hydration mismatches?
+
 **A:** Server and client rendering different output — time, randomness, browser-only checks, locale differences or different data.
 
 **Q:** Why can't you send a 404 after streaming starts?
+
 **A:** Headers, including the status code, are sent with the first chunk; decide the status before or at shell readiness.
 
 ### TL;DR
@@ -3969,12 +4074,15 @@ React Native shares skills and some code; fully native apps can deliver deeper p
 
 ### In the interview
 **Q:** What can you share between React web and React Native?
+
 **A:** Logic, types, validation, data fetching and Hooks; usually not UI components, styling or routing.
 
 **Q:** Why `FlatList` instead of mapping in a `ScrollView`?
+
 **A:** `FlatList` virtualizes, rendering only visible rows, which keeps memory and frame times low.
 
 **Q:** Where do you store auth tokens on mobile?
+
 **A:** In platform secure storage (Keychain or Keystore), not plain async storage.
 
 ### TL;DR
@@ -4069,12 +4177,15 @@ Mesh is simplest and has no media server cost but caps at a few users; SFUs scal
 
 ### In the interview
 **Q:** Why does the camera stay on after leaving?
+
 **A:** A track wasn't stopped. Stop every `MediaStreamTrack` and close peer connections in cleanup.
 
 **Q:** How do you show a `MediaStream` in React?
+
 **A:** Use a ref to the `<video>` element and set `srcObject`; it's not a JSX attribute.
 
 **Q:** Mesh or SFU?
+
 **A:** Mesh for 2–4 participants with no server cost; SFU beyond that, because each client uploads once.
 
 ### TL;DR
@@ -4170,12 +4281,15 @@ Browser bundling avoids servers but is limited (no native modules, slower cold s
 
 ### In the interview
 **Q:** How do you run untrusted code safely in the browser?
+
 **A:** In a sandboxed iframe on a separate origin, communicating only via `postMessage` with origin and schema checks.
 
 **Q:** How do you keep the editor responsive while compiling?
+
 **A:** Debounce changes and compile in a Web Worker, so the main thread only handles typing and rendering.
 
 **Q:** How do you integrate a non-React editor?
+
 **A:** Mount it once into a ref'd element in an Effect, destroy it in cleanup, and sync changes through its event API rather than re-rendering it.
 
 ### TL;DR
@@ -4318,12 +4432,15 @@ Hosted tools (Sentry, LaunchDarkly and similar) give mature grouping, alerting a
 
 ### In the interview
 **Q:** What do error boundaries not catch?
+
 **A:** Errors in event handlers, asynchronous callbacks, server rendering and in the boundary itself; handle those separately.
 
 **Q:** How do you roll out a feature to 10 % of users consistently?
+
 **A:** Hash the flag key with a stable user id into 0–99 and enable when the bucket is below 10, on both server and client.
 
 **Q:** How do you make minified stack traces readable?
+
 **A:** Upload source maps at build time to the monitoring backend (not to the public site) and resolve frames on ingest.
 
 ### TL;DR
@@ -4340,7 +4457,7 @@ The capstone of capstones: a production-grade online shop using **React Router f
 Commerce sites are judged on speed (slow pages lose sales), SEO (pages must be crawlable), correctness (prices, stock, payments) and resilience (sales spikes). Building one end to end forces real trade-offs: what to cache, what to stream, where to put state, how to keep JavaScript small.
 
 ### Real-world examples
-- Shopify's [Hydrogen](https://hydrogen.shopify.dev/) is a headless commerce framework built on Remix, from the team behind React Router (Remix's server features now ship as React Router framework mode) — a close reference for this architecture.
+- Shopify's [Hydrogen](https://hydrogen.shopify.dev/) is a headless commerce framework that began on Remix and, since its May 2025 release, runs on React Router framework mode (where Remix's server features now live) — a close reference for this architecture.
 - React Router's [modes overview](https://reactrouter.com/start/modes) explains framework mode versus data and declarative modes.
 - web.dev's [INP article](https://web.dev/articles/inp) explains the responsiveness metric you must keep in budget.
 
@@ -4436,7 +4553,7 @@ erDiagram
 ### Tech stack
 | Component | Choice | Why |
 |---|---|---|
-| Framework | React Router framework mode (v8, as in the book) | SSR, loaders/actions, streaming, progressive enhancement |
+| Framework | React Router 8 framework mode, as in the book | SSR, loaders/actions, streaming, progressive enhancement |
 | Data | PostgreSQL + search service, or a headless commerce API | catalogue and orders |
 | Payments | payment provider's hosted checkout or elements | PCI scope stays with them |
 | Observability | Project 39's tools or a hosted service, web-vitals field data | real-user metrics |
@@ -4474,12 +4591,15 @@ Framework mode gives SSR and progressive enhancement but you must operate server
 
 ### In the interview
 **Q:** How do you cache an e-commerce page without leaking personal data?
+
 **A:** Cache only anonymous HTML at the CDN and fetch personal parts separately, uncached, or after hydration.
 
 **Q:** What goes in the shell and what gets streamed?
+
 **A:** Content that defines the page and its SEO (title, price, main image) is in the shell; optional, slow content (reviews, recommendations) is streamed behind Suspense.
 
 **Q:** How do you know an order is paid?
+
 **A:** From the payment provider's signed webhook, handled idempotently — not from the browser redirect.
 
 ### TL;DR
