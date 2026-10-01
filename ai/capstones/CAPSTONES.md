@@ -23,7 +23,7 @@ A **capstone** is a project big enough to force you to combine many ideas from t
 | Intermediate | You have built a small LLM app before | 1–3 weeks, a database, an evaluation set |
 | Advanced | You want interview-grade system design depth | 3–6 weeks, several services, load and failure testing |
 
-**Shared stack.** Unless a brief says otherwise: Python 3.14, FastAPI for HTTP services, PostgreSQL with the pgvector extension for storage and vectors, and React 19 for any web UI. Every brief is provider-neutral: use whichever model API you have, or a local open-weight model. Where a brief names Anthropic's Claude models, the current IDs are `claude-opus-5-5` (most capable), `claude-sonnet-5-5` (balanced) and `claude-haiku-4-5-20251001` (fast and cheap). Model names and prices change often, so check the provider's docs before you rely on one ([§1.9](../chapters/01-ai-landscape/README.md) explains how).
+**Shared stack.** Unless a brief says otherwise: Python 3.14, FastAPI for HTTP services, PostgreSQL with the pgvector extension for storage and vectors, and React 19 for any web UI. Every brief is provider-neutral: use whichever model API you have, or a local open-weight model. Where a brief names Anthropic's Claude models, the current IDs used here are `claude-opus-5-5` (the default flagship), `claude-sonnet-5-5` (balanced) and `claude-haiku-4-5` (fast and cheap). Model names and prices change often, so check the provider's docs before you rely on one ([§1.9](../chapters/01-ai-landscape/README.md) explains how).
 
 **Keep secrets out of the repository.** Every project that calls a hosted model reads its API key from an environment variable, never from code. Add a `.env.example` file with placeholder names and put `.env` in `.gitignore`.
 
@@ -720,7 +720,7 @@ flowchart TD
 |---|---|---|
 | API | FastAPI | Pydantic models are native |
 | Validation | Pydantic v2 | Types, custom validators, JSON schema export |
-| Model | A small fast model, such as `claude-haiku-4-5-20251001` or any equivalent | Extraction rarely needs the largest model |
+| Model | A small fast model, such as `claude-haiku-4-5` or any equivalent | Extraction rarely needs the largest model |
 | Storage | PostgreSQL (JSONB) | Easy querying of logs |
 
 ### Milestones
@@ -731,7 +731,7 @@ flowchart TD
 5. **Multiple schemas.** Done when job posts and receipts work through the same endpoint.
 
 ### Deep dive: the hard parts
-- **Valid JSON is not correct data.** Schema enforcement guarantees structure, not truth. The model can still put the due date in `issue_date`. Accuracy comes from clear field descriptions, a few examples, and validators that encode business rules.
+- **Valid JSON is not correct data.** A schema fixes the shape of the answer and says nothing about whether the values are right. The model can still put the due date in `issue_date`. Accuracy comes from clear field descriptions, a few examples, and validators that encode business rules.
 - **Null versus invented.** Models are trained to be helpful and will fill gaps. Make absence explicit ("if the document does not state X, return null") and test with documents that lack fields.
 - **Arithmetic.** LLMs are unreliable at adding many numbers. Let the model extract line items; compute and compare totals in code.
 - **Retry with feedback.** Sending the validation error back ("total 120.00 does not equal sum of items 112.50") often fixes the mistake, but cap retries at one or two, since repeated failures usually mean the document is ambiguous and needs a human.
@@ -1092,7 +1092,7 @@ Job seekers either ignore AI or let it write fiction. This project practises the
 
 ### Real-world examples
 - The fact-sheet method and keyword-gap script in [Ch 16](../chapters/16-appendix-ai-for-your-career/README.md) are the starting point.
-- Anthropic's [prompt-engineering and structured-output docs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs) show how to constrain responses to a schema, used here for the gap report.
+- Anthropic's [structured-outputs docs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs) show how to constrain responses to a schema, used here for the gap report.
 
 ### Requirements
 **Functional**
@@ -1148,7 +1148,7 @@ flowchart TD
 4. **Verifier.** Done when a suggestion with an invented metric is rejected in tests.
 
 ### Deep dive: the hard parts
-- **Grounding by construction.** The writer never sees the resume's free text or the internet, only facts. That narrows what it can invent. The verifier then checks numbers and names: a cheap, deterministic guard against the most damaging hallucinations.
+- **Limit what the writer can see.** The writer never sees the resume's free text or the internet, only facts. That narrows what it can invent. The verifier then checks numbers and names: a cheap, deterministic guard against the most damaging hallucinations.
 - **Synonyms and seniority.** "Led a team of 4" is evidence for "leadership", but keyword matching will not see it. Use the LLM for a second pass that proposes evidence links, which you confirm.
 - **Keyword stuffing.** Matching every keyword can make a resume worse. The report should prefer evidence-backed bullets over adding words.
 
@@ -1179,6 +1179,10 @@ flowchart TD
 **Q:** Why do keyword matching in code instead of asking the LLM?
 
 **A:** It is deterministic, explainable and free; the LLM adds value only for fuzzy evidence links.
+
+**Q:** The user's resume is private. How do you handle that data?
+
+**A:** Run locally or with a provider the user picks, send only the fact sheet and job post to the model, keep nothing server-side, and never log the raw resume.
 
 ### TL;DR
 Extract job skills, match them deterministically, and let an LLM rewrite bullets only from a verified fact sheet, with a verifier that rejects anything it cannot trace.
@@ -2178,7 +2182,7 @@ flowchart TD
 |---|---|---|
 | VAD | Silero VAD | Small and accurate |
 | STT | Whisper-family model locally (for example via faster-whisper) or a hosted streaming STT | Quality versus latency choice |
-| LLM | A fast model, such as `claude-haiku-4-5-20251001` or a local small model | TTFT dominates |
+| LLM | A fast model, such as `claude-haiku-4-5` or a local small model | TTFT dominates |
 | TTS | A local neural TTS or a hosted streaming TTS | Natural voice |
 | Transport | WebSocket between browser and FastAPI | Bidirectional audio |
 
@@ -3333,7 +3337,7 @@ A system that answers open-ended research questions ("compare the main approache
 Some questions need breadth: many searches, many documents, more than fits in one context window. A single agent works sequentially and its context fills with search results. An orchestrator–worker design runs explorations in parallel, each with a clean context, and compresses findings before they return. The price is many more tokens and harder debugging. This project teaches when multi-agent systems are worth it and how to keep them controllable.
 
 ### Real-world examples
-- Anthropic's engineering post ["How we built our multi-agent research system"](https://www.anthropic.com/engineering/multi-agent-research-system) describes a lead agent with parallel sub-agents and a citation agent; it reports the multi-agent setup outperformed a single agent by 90.2% on an internal research evaluation, while using about 15 times the tokens of a chat interaction.
+- Anthropic's engineering post ["How we built our multi-agent research system"](https://www.anthropic.com/engineering/multi-agent-research-system) describes a lead agent with parallel sub-agents and a citation agent; it reports that a Claude Opus 4 lead with Claude Sonnet 4 sub-agents outperformed single-agent Claude Opus 4 by 90.2% on an internal research evaluation, and that multi-agent systems use about 15 times the tokens of a chat interaction.
 - Wu et al., ["AutoGen"](https://arxiv.org/abs/2308.08155) (2023), is a framework for building applications from conversing agents.
 
 ### Requirements
@@ -3415,7 +3419,7 @@ erDiagram
 | Component | Choice | Why |
 |---|---|---|
 | Lead model | A strong reasoning model, for example `claude-opus-5-5` or equivalent | Planning and synthesis quality |
-| Sub-agent model | A faster model, for example `claude-sonnet-5-5` or `claude-haiku-4-5-20251001` | Cost of many parallel calls |
+| Sub-agent model | A faster model, for example `claude-sonnet-5-5` or `claude-haiku-4-5` | Cost of many parallel calls |
 | Orchestration | Python `asyncio` with your own loop (no framework required) | Full control and visibility |
 | Search | A web-search API or your own corpus index | Swappable tool |
 | Storage | PostgreSQL | Traces and run memory |
@@ -3482,7 +3486,7 @@ Coding agents are among the most useful and most dangerous agents: they run arbi
 ### Real-world examples
 - Jimenez et al., ["SWE-bench"](https://arxiv.org/abs/2310.06770) (2023), evaluates models on real GitHub issues by running the repository's tests after the model's patch.
 - Yang et al., ["SWE-agent"](https://arxiv.org/abs/2405.15793) (2024), showed that a purpose-designed agent–computer interface (concise file viewer, search, edit commands with linting) materially improves results.
-- Isolation technologies: [gVisor](https://gvisor.dev/) (a user-space kernel for containers) and [Firecracker](https://firecracker-microvm.github.io/) (lightweight virtual machines). The open-source [OpenHands](https://github.com/OpenHands/OpenHands) agent runs its actions in Docker sandboxes.
+- Isolation technologies: [gVisor](https://gvisor.dev/) (a user-space kernel for containers) and [Firecracker](https://firecracker-microvm.github.io/) (lightweight virtual machines). The open-source [OpenHands](https://github.com/OpenHands/OpenHands) coding agent is a working example of an agent loop that can execute its actions inside a container rather than directly on the host.
 
 ### Requirements
 **Functional**
@@ -3625,7 +3629,7 @@ The grown-up version of project 11: a retrieval system for a large, changing cor
 Basic RAG demos well and disappoints in production: exact terms like error codes are missed by embeddings, chunks lose meaning without their document context, the top 5 results are often near-misses, stale or unauthorised documents slip through, and nobody notices quality drift. Production RAG is mostly retrieval engineering and evaluation discipline.
 
 ### Real-world examples
-- Anthropic's ["Contextual Retrieval"](https://www.anthropic.com/news/contextual-retrieval) reports that prepending chunk-specific context before embedding and BM25 indexing cut top-20 retrieval failures by 49%, and by 67% when combined with reranking.
+- Anthropic's ["Contextual Retrieval"](https://www.anthropic.com/news/contextual-retrieval) reports that prepending chunk-specific context before embedding and BM25 indexing cut the top-20 retrieval failure rate by 49% (5.7% to 2.9%), and by 67% when reranking was added.
 - Cormack, Clarke and Büttcher's [reciprocal rank fusion paper](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) (2009) is the standard way to merge lexical and vector rankings.
 - Es et al., ["Ragas"](https://arxiv.org/abs/2309.15217) (2023), proposes reference-free metrics for RAG such as faithfulness and context relevance; Khattab and Zaharia's ["ColBERT"](https://arxiv.org/abs/2004.12832) (2020) shows late-interaction retrieval as an alternative to single-vector embeddings.
 
@@ -3855,7 +3859,7 @@ flowchart TD
 
 ### Deep dive: the hard parts
 - **Prefill versus decode.** Prefill processes the whole prompt in parallel and is compute-bound; it sets TTFT. Decode generates one token per step per sequence and is memory-bandwidth-bound; it sets TPOT. Long prompts hurt TTFT of everyone in the batch unless the engine splits prefill into chunks (chunked prefill), which vLLM supports.
-- **KV cache memory.** Each token stores keys and values for every layer: bytes per token = 2 × layers × KV heads × head dimension × bytes per value. For a model with 32 layers, 8 KV heads, head dimension 128 and 16-bit values, that is 2 × 32 × 8 × 128 × 2 = 131,072 bytes, 128 KiB per token, so 10,000 tokens of context take about 1.25 GiB. GPU memory left after weights decides how many sequences fit at once, which decides throughput.
+- **KV cache memory.** Each token stores keys and values for every layer: bytes per token = 2 × layers × KV heads × head dimension × bytes per value. For a model with 32 layers, 8 KV heads, head dimension 128 and 16-bit values, that is 2 × 32 × 8 × 128 × 2 = 131,072 bytes, 128 KiB per token, so 10,000 tokens of context take about 1.2 GiB. GPU memory left after weights decides how many sequences fit at once, which decides throughput.
 - **PagedAttention and continuous batching.** Instead of reserving a contiguous maximum-length buffer per request, vLLM allocates the KV cache in small blocks on demand, nearly eliminating fragmentation. Continuous batching lets new requests join and finished ones leave at every decode step, so the GPU is not idle waiting for the longest request in a batch.
 - **Quantisation.** 8-bit or 4-bit weights (GPTQ, AWQ and similar) shrink memory, leaving more room for KV cache and sometimes speeding decode, at some quality cost. Measure quality with your evaluation suite, not just speed.
 
@@ -4106,7 +4110,7 @@ flowchart TD
 - **Designing tools for models, not for APIs.** Wrapping every REST endpoint one-to-one produces dozens of low-level tools and long call chains. Design fewer, task-shaped tools (`summarise_project` instead of five list calls), return human-readable ids alongside internal ones, and include next-step hints in results.
 - **Context economy.** A tool that returns 500 issues as JSON can consume the model's whole context. Paginate, filter by default, return only fields needed, and offer a `detail` parameter.
 - **Authorisation on behalf of a user.** The server must act with the user's rights, not its own. Validate that tokens were issued for this server (audience checks) and never pass a client's token through to other services. Least privilege limits the damage of prompt injection arriving through issue text.
-- **Protocol revisions.** The 2026-07-28 revision made the protocol stateless and deprecated some older client features. Pin the SDK version, read the changelog, and test with more than one client.
+- **Protocol revisions.** The 2026-07-28 revision made requests stateless and self-contained, and deprecated Roots, Sampling, Logging and Dynamic Client Registration (each with a migration path). Pin the SDK version, read the changelog, and test with more than one client.
 
 ### Testing strategy
 - Protocol tests with the SDK's client against your server for each tool, resource and prompt.
