@@ -15,6 +15,8 @@ This book holds **40 design briefs**: 10 beginner, 15 intermediate and 15 advanc
 4. Read *Deep dive* when you get stuck, or after you finish to compare approaches. Then do the *Testing strategy*.
 5. Pick one or two **stretch goals**. Finish by answering *In the interview* out loud.
 
+**Using these projects in interviews.** Each *In the interview* section is built to be said out loud. Lead with the **30-second answer**: what you built, the key decision and why, the hardest problem and one number. Make sure you can explain every item under **Key terms** in plain words, because interviewers probe the vocabulary first. Practise the Q&As aloud until the answers come in your own words, not the book's. Quote your own numbers from the build: Lighthouse scores, LCP and CLS, kilobytes shipped, contrast ratios, breakpoints tested, test counts. Expect follow-ups such as "what would you change at 10x?" and "what breaks first?", and read **Common mistakes** so you don't repeat them.
+
 **The briefs describe what to build and why. You write the code.** There are no solutions here on purpose: the learning is in making the decisions.
 
 **Colour code (in the PDF).** Section headings are coloured by their role, the same as in the main handbook:
@@ -182,14 +184,60 @@ Hand-written HTML doesn't scale to fifty pages, but that's project 10's job. A s
 - [Ch 6 — CSS Fundamentals](../chapters/06-css-fundamentals/README.md): selectors, colours, units.
 
 ### In the interview
+**30-second answer:** I built a one-page profile site from an empty file: one HTML file, one stylesheet, no framework, under 100 KB including the photo. I wrote the content as semantic HTML first (header, main, footer, a section with an `<h2>` per topic) and only then styled it mobile-first. The hardest part was the photo: without `width` and `height` attributes the text jumped when it loaded, so I added them and let CSS scale the image, which brought layout shift to zero. It validates with no errors, passes 4.5:1 contrast and reflows at 320 px.
+
+**Key terms to know:**
+- **Semantic HTML** — choosing elements for their meaning (`<header>`, `<nav>`, `<section>`) rather than their look. Every region of the profile uses one.
+- **Landmark** — a page region (banner, main, contentinfo) that screen-reader users can jump to. `<header>`, `<main>` and `<footer>` create them here.
+- **Heading outline** — the table of contents built from `<h1>`–`<h6>`. One `<h1>` (your name), then an `<h2>` per section.
+- **Viewport meta tag** — `width=device-width, initial-scale=1`, which stops phones laying the page out at a fake 980 px width.
+- **Alt text** — the text alternative for an image. The photo needs a meaningful one, or `alt=""` if it's purely decorative.
+- **Layout shift (CLS)** — content jumping as late resources arrive. Prevented by the image's `width`/`height` attributes.
+- **Box model and `box-sizing`** — content, padding, border, margin. `border-box` makes `width` include padding and border, which the base styles set.
+- **`:focus-visible`** — matches when the browser decides a focus ring should show (usually keyboard use). Used for link focus styles.
+- **Measure** — line length. `max-inline-size: 65ch` keeps the bio readable.
+- **Contrast ratio** — WCAG AA asks for at least 4.5:1 for body text.
+
 **Q:** Why use `<header>`, `<main>` and `<footer>` instead of `<div>`s?
-**A:** They create landmarks in the accessibility tree, so screen-reader users can jump between regions. They also document intent for the next developer. A `<div>` has no role at all.
+
+**A:** They create landmarks in the accessibility tree, so screen-reader users can jump between regions. They also document intent for the next developer. A `<div>` has no role at all, so it gives assistive technology nothing to work with.
 
 **Q:** What does the viewport meta tag do?
-**A:** Without it, mobile browsers lay the page out at a wide virtual width (typically 980 px) and shrink it to fit. `width=device-width, initial-scale=1` makes the layout viewport match the device width, so media queries and text sizes behave.
+
+**A:** Without it, mobile browsers lay the page out at a wide virtual width (typically 980 px) and shrink it to fit. `width=device-width, initial-scale=1` makes the layout viewport match the device width, so media queries and text sizes behave as written.
 
 **Q:** Why put `width` and `height` on an `<img>` when CSS resizes it anyway?
-**A:** The browser uses their ratio to reserve the right amount of space before the image loads, which prevents layout shift. CSS then scales it.
+
+**A:** The browser uses their ratio to reserve the right amount of space before the image downloads, which prevents layout shift. CSS such as `max-inline-size: 100%; block-size: auto` then scales it responsively while keeping that ratio.
+
+**Q:** What does `box-sizing: border-box` change, and why set it globally?
+
+**A:** By default (`content-box`), `width` sets only the content area, and padding and border are added on top, so a 300 px box with 20 px padding is really 340 px wide. With `border-box`, padding and border fit inside the declared width. Setting it on everything makes sizes predictable, which is why almost every reset starts with it.
+
+**Q:** Should you write `alt="Photo of me"`?
+
+**A:** No. Screen readers already say "image", so "photo of" adds noise, and "me" tells the listener nothing. Describe what a sighted visitor gets from it ("Priya smiling outdoors"), or use `alt=""` if your name is right beside it and the photo adds nothing. Never omit the attribute, because some screen readers then read the file name.
+
+**Q:** Why `:focus-visible` instead of `:focus` for the focus ring?
+
+**A:** `:focus` matches every time an element gets focus, including mouse clicks on buttons, which is why designers used to ask for outlines to be removed. `:focus-visible` matches only when the browser's heuristics say an indicator is useful, mainly keyboard navigation. Keyboard users keep a clear ring and mouse users don't see one on click.
+
+**Q:** This page has to become 50 pages. What breaks first?
+
+**A:** Duplication. The header, footer and `<head>` are copied into every file, so a fix to one gets missed in others, and relative links break when pages move into folders. At that point you want templates or a static-site generator, and a stylesheet organised into tokens and components (projects 10 and 33).
+
+**Q:** The photo is a 3 MB phone picture. What happens and how do you fix it?
+
+**A:** It is 30 times the whole page budget, so it dominates load time on mobile and probably becomes the slow LCP element. Export it at about twice its displayed size, compress it to WebP or AVIF, keep the `width`/`height` attributes, and check the Network panel to confirm the transferred size.
+
+**Q:** How do you prove the page is finished?
+
+**A:** Run the W3C Nu checker (zero errors), Tab through every link with no mouse, check the accessibility tree for landmarks and heading levels, zoom to 200 % and resize to 320 px with no horizontal scroll, and run Lighthouse's accessibility audit. Each requirement maps to one of these checks.
+
+**Common mistakes in answers:**
+- Saying semantic elements are "for SEO". The main reason is the accessibility tree and maintainability. Search benefits are a side effect.
+- Saying `width`/`height` on images make them non-responsive. They only set the aspect ratio for space reservation, and CSS still controls the rendered size.
+- Removing outlines with `outline: none` "because they look ugly". The correct fix is `:focus-visible` with a styled, high-contrast ring.
 
 ### TL;DR
 Write the content as valid semantic HTML first, then style it mobile-first with one stylesheet. Landmarks, real alt text, reserved image space and visible focus are the habits every later project assumes.
@@ -284,14 +332,60 @@ Making the ingredient column sticky helps laptops but can trap short viewports, 
 - [Ch 14 — Performance, SEO, Interview and Cheat Sheets](../chapters/14-performance-seo-interview-and-cheatsheet/README.md): JSON-LD.
 
 ### In the interview
+**30-second answer:** I built a recipe page that serves three audiences from one HTML file: cooks on a tablet, people printing it, and search engines. The key decision was letting the elements carry meaning: `<ul>` for ingredients, `<ol>` for steps, a `<dl>` for prep and cook times with `<time datetime="PT20M">`, and a JSON-LD Recipe block that mirrors the visible content. The hardest part was print, which I solved with an `@media print` block that hides chrome and keeps each step whole with `break-inside: avoid`. It fits on one or two A4 pages and passes Google's Rich Results Test.
+
+**Key terms to know:**
+- **`<article>`** — a self-contained piece of content that would make sense syndicated on its own. The recipe is one.
+- **`<ul>` vs `<ol>`** — unordered when order doesn't matter (ingredients), ordered when it does (method steps).
+- **Description list (`<dl>`)** — pairs of terms (`<dt>`) and values (`<dd>`). Used for the facts block.
+- **`<time datetime>`** — a machine-readable date or ISO 8601 duration such as `PT1H5M`, alongside human text.
+- **`<figure>` and `<figcaption>`** — groups the hero image with its caption.
+- **JSON-LD** — structured data in a `<script type="application/ld+json">` block, read by search engines and never executed.
+- **schema.org Recipe** — the shared vocabulary (`recipeIngredient`, `totalTime`) the JSON-LD uses.
+- **Rich results** — enhanced search listings. Structured data makes a page eligible, not guaranteed.
+- **Print stylesheet** — `@media print` rules plus `@page` for margins, and `break-inside` to control page breaks.
+- **`position: sticky`** — keeps the ingredients column visible while you scroll the method on wide screens.
+
 **Q:** When would you use `<ol>` rather than `<ul>`?
-**A:** When order is part of the meaning, like recipe steps. Assistive technology announces the numbers, and changing the order would change the meaning.
+
+**A:** When order is part of the meaning, like recipe steps. Assistive technology announces the item count and the numbers, and reordering the items would change the meaning. Ingredients are a set, so `<ul>` is honest there.
 
 **Q:** What is JSON-LD and why put it in a script tag?
-**A:** It is structured data in JSON format using a vocabulary like schema.org. A script with a non-JavaScript type isn't executed, so it's a safe place to put data that search engines read.
+
+**A:** It is structured data in JSON format using a vocabulary like schema.org. A `<script>` with a non-JavaScript `type` isn't executed, so it's a safe container for data that search engines read, and it stays separate from the visible markup.
 
 **Q:** How do you make content print well?
-**A:** Use a `@media print` block to hide navigation and decoration, force readable colours, control breaks with `break-inside: avoid`, and set page margins with `@page`.
+
+**A:** Use a `@media print` block to hide navigation and decoration, force readable black-on-white colours, control breaks with `break-inside: avoid` on steps and `break-after: avoid` on headings, and set page margins with `@page { margin: 15mm }`. Then check print preview in two browsers, because print engines differ.
+
+**Q:** Why a `<dl>` for prep time, cook time and servings instead of a table or paragraphs?
+
+**A:** The data is a short list of label and value pairs, which is exactly what a description list models. A table would imply two-dimensional data, and paragraphs would lose the pairing. Screen readers announce the list and its items so the structure is kept.
+
+**Q:** The sticky ingredients column doesn't stick. What do you check?
+
+**A:** First that it has an inset such as `inset-block-start: 1rem`, because sticky does nothing without one. Then that no ancestor has `overflow: hidden` or `auto`, which makes that ancestor the scroll container. Finally that the element is shorter than the viewport and its parent is taller than it, or there is no room to stick.
+
+**Q:** The JSON-LD says 30 minutes but the page now says 45. Why does it matter?
+
+**A:** Search engines expect structured data to describe what's visible, and a mismatch can make the page ineligible for rich results or look misleading. Hand-written duplicates drift, so in a real site you generate both the HTML and the JSON-LD from one source, as in project 33.
+
+**Q:** What's one code-level gotcha with JSON-LD in HTML?
+
+**A:** If any string in the JSON contains `</script>`, the HTML parser ends the script element early and the rest spills into the page. Generators should escape `<` as `<` (or `</` as `<\/`) when serialising. Never build JSON-LD by concatenating strings.
+
+**Q:** What changes if this becomes a site with 5,000 recipes?
+
+**A:** Hand-written HTML and JSON-LD stop being viable, so recipes move into data (Markdown or a database) rendered by templates that output both. Images need an automated pipeline for sizes and formats. The print stylesheet and semantics stay the same, which is the benefit of getting them right in the template once.
+
+**Q:** How do you test it?
+
+**A:** Validate the HTML, run Google's Rich Results Test on the JSON-LD, print-preview in two browsers, and use a screen reader to confirm "list, 9 items" for ingredients and numbered steps. Check zoom at 200 % and image size in Lighthouse.
+
+**Common mistakes in answers:**
+- Saying JSON-LD "improves ranking". It makes a page eligible for rich results, which can raise click-through, but it isn't a ranking boost on its own.
+- Using `<br>` or numbered paragraphs for steps. The list element is what gives assistive technology the structure.
+- Claiming `display: none` in print hides content from screen readers on screen. Print styles only apply to printed output and print preview.
 
 ### TL;DR
 A recipe is a lesson in choosing lists (`ul` for ingredients, `ol` for steps), description lists and `<time>`. Add print styles and JSON-LD, and the same HTML serves cooks, printers and search engines.
@@ -389,14 +483,67 @@ Native validation is robust but limited in style. Custom validation is consisten
 - [Ch 6 — CSS Fundamentals](../chapters/06-css-fundamentals/README.md): pseudo-classes.
 
 ### In the interview
+**30-second answer:** I built a contact form that everyone can complete: keyboard users, screen-reader users, people on phones and people who make mistakes. The key decision was using native HTML for almost everything: visible `<label>`s, a `<fieldset>` and `<legend>` for the topic radios, `type="email"`, `autocomplete` tokens and built-in constraint validation, with errors styled by `:user-invalid` so a fresh form isn't red. The hard part was persistent, accessible error messages, which I solved by validating again on the server and rendering errors into the returned page. It works with JavaScript turned off, and every target is at least 24 × 24 px.
+
+**Key terms to know:**
+- **Accessible name** — what a screen reader announces for a control. A `<label for>` provides it here.
+- **`<fieldset>` and `<legend>`** — group related controls and name the group, so "Topic" is read with each radio.
+- **`aria-describedby`** — links hint and error text to a field so it is read after the name.
+- **Constraint Validation API** — the browser's built-in checks driven by `required`, `type`, `minlength` and similar attributes.
+- **`:invalid` vs `:user-invalid`** — the first matches from page load, the second only after the user interacts or submits.
+- **`autocomplete` tokens** — values like `name` and `email` that let the browser autofill correctly.
+- **Server-side validation** — re-checking every value on the server, because client checks can be bypassed.
+- **WCAG 2.5.8 Target Size (Minimum)** — targets of at least 24 × 24 CSS px, or enough spacing around them.
+- **Use of colour (WCAG 1.4.1)** — errors must not be shown by colour alone, so add text or an icon.
+- **Honeypot field** — a hidden field humans never fill, used as a cheap spam filter.
+
 **Q:** How do you make a form field accessible?
-**A:** A visible `<label>` tied to it with `for`/`id`, hints linked with `aria-describedby`, the right `type` and `autocomplete`, related controls grouped in a fieldset with a legend, and errors described in text and linked to the field.
+
+**A:** A visible `<label>` tied to it with `for`/`id`, hints linked with `aria-describedby`, the right `type` and `autocomplete`, related controls grouped in a fieldset with a legend, and errors described in text and linked to the field. Required state should be in text ("required"), not only an asterisk or colour.
 
 **Q:** Is client-side validation enough?
-**A:** No. It improves the experience but anyone can bypass it. The server must validate everything again.
+
+**A:** No. It improves the experience but anyone can bypass it with DevTools or by posting directly to the endpoint. The server must validate everything again and return useful errors.
 
 **Q:** Why `:user-invalid` instead of `:invalid`?
-**A:** It waits until the user has interacted, so you don't show errors on a fresh, empty form.
+
+**A:** `:invalid` matches an empty required field as soon as the page loads, so the form shouts errors before the user has typed anything. `:user-invalid` waits until the user has changed the field or tried to submit, which is how GOV.UK-style forms behave.
+
+**Q:** Why is placeholder text not a label?
+
+**A:** It disappears as soon as you type, so people forget what the field was for. It often fails contrast and some assistive technology doesn't treat it as a reliable name. Use a real label, and placeholders only for an example format if at all.
+
+**Q:** Why not use a `<div>` with a click handler as the submit button?
+
+**A:** A `<div>` isn't focusable, has no button role, doesn't respond to Enter or Space, and doesn't submit the form. A `<button type="submit">` gets all of that for free and works with JS off. Recreating it means `tabindex`, `role`, key handlers and submission logic you'd have to maintain.
+
+**Q:** What happens if the form-handling service is down when someone submits?
+
+**A:** With a plain POST the user lands on an error page from the endpoint and their message may be lost. Mitigations are a server you control that re-renders the form with the user's input and a clear "try again" message, and a fallback contact method (email address) on the page. Never show success until the server confirms it.
+
+**Q:** Spam floods in. What's your first response?
+
+**A:** Add a honeypot field that is visually hidden and labelled "leave this empty", and reject submissions that fill it. Then add server-side rate limiting. A CAPTCHA is a last resort because many are inaccessible, and WCAG 2.2's Accessible Authentication criterion warns against cognitive tests.
+
+**Q:** How do you test it?
+
+**A:** Keyboard-only run, then a screen reader pass checking each field's name, role, required state and hint. Submit empty, then submit an invalid email, and confirm autofill fills name and email. Run axe DevTools, and try a real phone to check the email keyboard appears.
+
+**Q:** Give one snippet that links a hint and shows the error state accessibly.
+
+**A:** The hint is linked by id, and the error styling only appears after interaction.
+```html
+<label for="email">Email (required)</label>
+<p id="email-hint">We only use this to reply.</p>
+<input id="email" type="email" autocomplete="email"
+       required aria-describedby="email-hint">
+```
+With `input:user-invalid { border-color: var(--danger) }` plus an icon or text, never colour alone.
+
+**Common mistakes in answers:**
+- Saying `aria-label` is the best way to label inputs. A visible `<label>` is better because sighted users see it, it enlarges the click target, and it's what the first rule of ARIA prefers.
+- Treating `required` on the client as security. It is a convenience. Only server checks protect data.
+- Saying a red border is enough to show an error. WCAG 1.4.1 needs a non-colour cue such as text or an icon.
 
 ### Self-check
 - Which attribute makes the browser offer saved emails?
@@ -490,14 +637,60 @@ Showing "per month, billed yearly" is clear but legally sensitive: make the bill
 - [Ch 13 — Modern CSS and Architecture](../chapters/13-modern-css-and-architecture/README.md): `:has()`.
 
 ### In the interview
+**30-second answer:** I built a pricing section with two parts: three plan cards to sell, and a real comparison `<table>` to compare. Cards use flexbox, and each card is itself a flex column so `margin-block-start: auto` pins every button to the bottom regardless of text length. The comparison table has a `<caption>`, `scope="col"` plan headers and `scope="row"` feature headers, so a screen reader reads "Pro, SSO, Not included" for any cell. A monthly/yearly switch uses two radios and `:has()` with no JS, and on a 320 px phone the table scrolls inside a focusable wrapper while the page never scrolls sideways.
+
+**Key terms to know:**
+- **Flexbox** — one-dimensional layout along a row or column. Used for the card row and inside each card.
+- **`align-items: stretch`** — the default that makes flex items in a row equal height.
+- **Auto margins in flexbox** — an `auto` margin absorbs free space, pushing the button to the bottom.
+- **`<caption>` and `scope`** — give the table a name and tell assistive technology which headers apply to which cells.
+- **`:has()`** — the "parent" selector. `.pricing:has(#yearly:checked)` styles the section from a radio's state.
+- **`:checked`** — matches a selected radio or checkbox, the state the toggle relies on.
+- **`position: sticky` first column** — keeps feature names visible while the table scrolls sideways. Needs a background.
+- **Focusable scroll region** — `tabindex="0"`, `role="region"` and an `aria-label` so keyboard users can scroll the table.
+- **WCAG 1.4.10 Reflow** — content must work at 320 px without horizontal scroll, except two-dimensional content such as data tables.
+- **Use of colour** — the "Most popular" plan is labelled in text, not only highlighted.
+
 **Q:** Cards or table for a plan comparison?
+
 **A:** Both. Cards for the pitch and the call to action, a table for the feature matrix, because the matrix is two-dimensional data where each cell needs its row and column context.
 
 **Q:** How do you push a button to the bottom of a flex column?
-**A:** `margin-block-start: auto` on the button. Auto margins in flexbox absorb free space.
+
+**A:** Make the card `display: flex; flex-direction: column` and give the button `margin-block-start: auto`. An auto margin in flexbox absorbs all the free space on that side, so the button sits at the bottom of every card.
 
 **Q:** How can you swap content without JavaScript?
-**A:** Use real form state, such as a checked radio, and select on it with `:checked` and `:has()`. It's keyboard accessible because the radios are.
+
+**A:** Use real form state, such as a checked radio, and select on it with `:checked` and `:has()`: `.pricing:has(#yearly:checked) .price-monthly { display: none }`. It's keyboard accessible because the radios are, and screen readers announce the choice.
+
+**Q:** Why flexbox for the cards and not grid?
+
+**A:** The cards are one row of content-sized items that should wrap when space runs out, which is flexbox's strength. Grid would also work and is better if you need columns to line up across rows. A reasonable answer names the trade-off: flex for content-out wrapping, grid for layout-in tracks.
+
+**Q:** What does `scope` do on a `<th>`?
+
+**A:** It says whether the header applies to its column (`scope="col"`) or its row (`scope="row"`). Screen readers then announce the matching headers as you move between cells. Without it, browsers guess, and they guess wrong in tables that have both row and column headers.
+
+**Q:** The sticky first column shows the scrolled cells through it. Why?
+
+**A:** Sticky cells have a transparent background by default, so content scrolling underneath is visible. Give the sticky `th` a solid background from your surface token, and a `z-index` if other positioned cells overlap it.
+
+**Q:** What happens on a 320 px phone if you don't add a wrapper?
+
+**A:** The table is wider than the viewport, so the whole page scrolls sideways, which fails reflow for the rest of the content and makes the cards awkward too. Wrapping the table in an `overflow-x: auto` container confines the scroll to the data, which WCAG allows for tables.
+
+**Q:** The client wants 12 plans. What breaks first?
+
+**A:** The table becomes too wide to compare at a glance, and the card row wraps into a wall. Group plans (personal vs business tabs or pages), put features into `<tbody>` groups with header rows, and consider letting users pick two or three plans to compare.
+
+**Q:** How do you test the table?
+
+**A:** Use screen-reader table navigation (Ctrl+Alt+arrow keys in NVDA or VoiceOver) and confirm each cell reads its plan and feature. Resize to 320 px, Tab to the scroll region and scroll with arrow keys, and check the featured card's colour contrast.
+
+**Common mistakes in answers:**
+- Using tick images in `<div>` grids for the matrix. Without table semantics, a screen reader hears disconnected ticks.
+- Saying empty cells are fine for "not included". Always write the words, with any icon `aria-hidden="true"`.
+- Saying `:has()` needs JS fallbacks today. It is Baseline, so the risk is low, but the radios must still be keyboard operable.
 
 ### TL;DR
 Flexbox cards for selling, a semantic table for comparing. `:has()` and radios give you a no-JS billing switch, and a scrolling, focusable table wrapper keeps the page from overflowing on phones.
@@ -591,14 +784,60 @@ A web font gives brand character but costs bytes and may cause a visible font sw
 - [Ch 11 — Typography, Colour and Visual Effects](../chapters/11-typography-color-and-visual-effects/README.md): measure, line height, `text-wrap`.
 
 ### In the interview
+**30-second answer:** I built a reusable long-form article template where the real work was typography: a 60–75 character measure using `max-inline-size: 70ch`, unitless line height around 1.6, consistent flow spacing with `.prose > * + *`, and balanced headings with `text-wrap: balance`. The HTML is fully semantic: `<article>` with a header, byline and `<time datetime>`, `<blockquote>` with `<cite>`, `<figure>` for images, `<pre><code>` for code, and footnotes as an ordered list with back-links. The hard problem was making wide content safe, so a 200-character code line scrolls inside its own block and a 2,000 px image never overflows at 320 px. Text still works at 200 % zoom.
+
+**Key terms to know:**
+- **Measure** — line length in characters. 60–75 is comfortable for body text.
+- **`ch` unit** — the width of the "0" glyph in the current font. It scales with font size and zoom.
+- **Unitless `line-height`** — inherited as a ratio and recomputed per element's font size.
+- **Owl selector (`* + *`)** — selects every element that has a previous sibling, for even spacing between blocks.
+- **Margin collapsing** — adjacent vertical margins combine into the larger one instead of adding up.
+- **`text-wrap: balance`** — evens out line lengths in short multi-line text like headings.
+- **`hyphens: auto`** — lets the browser hyphenate using the dictionary for the element's `lang`.
+- **`:target`** — matches the element whose `id` is in the URL fragment. Used to highlight the footnote you jumped to.
+- **Logical properties** — `max-inline-size`, `margin-block-start` and so on, which follow writing direction.
+- **WCAG 1.4.4 Resize Text** — text must scale to 200 % without loss of content.
+
 **Q:** How do you control line length responsively?
-**A:** `max-inline-size` in `ch` units, around 60–75ch for body text, centred with `margin-inline: auto`. It scales with font size and zoom.
+
+**A:** `max-inline-size` in `ch` units, around 60–75ch for body text, centred with `margin-inline: auto`. Because `ch` depends on the font size, the measure stays right when users zoom or change their default font size, which pixel widths don't.
 
 **Q:** What does `* + *` do?
-**A:** It selects every element that has a previous sibling, so you can space siblings evenly without adding space before the first one.
+
+**A:** It selects every element that has a previous sibling, so you can space siblings evenly without adding space before the first one. Scoped to `.prose > * + *` it applies only to direct children of the article body.
 
 **Q:** Why is `line-height` usually unitless?
-**A:** A unitless value is inherited as a ratio and recomputed for each element's font size. A length like `24px` is inherited as a fixed value and breaks for larger headings.
+
+**A:** A unitless value is inherited as a ratio and recomputed for each element's font size. A length like `24px` (or a computed `em` value) is inherited as a fixed length, so a 40 px heading would get 24 px lines and overlap.
+
+**Q:** Why do the owl selector and margin collapsing work well together?
+
+**A:** Vertical margins between block siblings collapse to the larger value, so if both a heading and a paragraph set margins you don't get double spacing. Setting only a top margin through `* + *` means one margin controls each gap, and the container never gets stray space at its top or bottom.
+
+**Q:** A long code line makes the whole page scroll sideways. How do you fix it?
+
+**A:** Give `pre` an `overflow-x: auto` so it scrolls inside itself, and `tabindex="0"` so keyboard users can scroll it. If the article sits in a grid or flex column, also give that column `min-width: 0` or `minmax(0, 1fr)`, because flex and grid items default to a minimum size equal to their content.
+
+**Q:** Why `text-wrap: balance` on headings but not on paragraphs?
+
+**A:** Balancing compares possible line breaks across the whole block, which is expensive, so browsers limit it to a few lines. It's meant for headings and captions. For paragraphs, `text-wrap: pretty` avoids single-word last lines, but treat it as an enhancement because it isn't Baseline.
+
+**Q:** What happens to hyphenation if the page has no `lang` attribute?
+
+**A:** `hyphens: auto` needs to know the language to choose a dictionary, so without `lang` most browsers don't hyphenate at all. The same `lang` also tells screen readers which voice to use, so it should always be on `<html>`.
+
+**Q:** Authors will paste in odd HTML, such as two images in a row or a list inside a quote. What breaks first?
+
+**A:** Fixed per-element spacing rules break, because they assume a particular order. The flow rule `* + *` is resilient to any order, and sizing rules like `img { max-inline-size: 100% }` protect against oversized media. Test with deliberately messy content.
+
+**Q:** How do you test the template?
+
+**A:** Count characters per line at three widths, zoom to 200 % and use text-only zoom, try a long German word to check hyphenation, and turn CSS off to confirm the article still reads in order. Click a footnote and its back-link to check `:target` and return position.
+
+**Common mistakes in answers:**
+- Setting `max-width: 700px` and calling it measure. Pixels don't track font size, so zoomed text gets fewer characters per line.
+- Using `font-size: 2vw` for headings. Viewport units alone ignore user font settings and can fail WCAG 1.4.4.
+- Putting `<cite>` around the quote text. `<cite>` marks the title of a work, while the quoted words go in `<blockquote>`.
 
 ### TL;DR
 Long-form reading is about measure (60–75ch), unitless line height, consistent flow spacing and headings that wrap well. Semantic quotes, figures, code and footnotes complete a template you can reuse everywhere.
@@ -693,14 +932,59 @@ A menu that changes daily is painful to hand-edit; a small CMS or a JSON file an
 - [Ch 10 — Responsive Design](../chapters/10-responsive-design/README.md): print media.
 
 ### In the interview
+**30-second answer:** I replaced a restaurant's PDF menu with a semantic HTML menu under 20 KB that reflows on phones, can be read by screen readers and translated, and prints on one A4 page in two columns. The signature detail is the dotted leader between dish name and price: a flex row with the name, an empty span that grows with `flex: 1` and a dotted bottom border, then the price, all aligned on the baseline so it survives wrapping. Dietary tags are `<abbr>` elements in a list with a visible key, because touch users can't hover to see a `title`. For print I used `columns: 2` with `break-inside: avoid` so no dish splits across columns.
+
+**Key terms to know:**
+- **Flex grow (`flex: 1`)** — lets an item take the leftover space in the row. The leader span uses it.
+- **`align-items: baseline`** — aligns flex items on their text baseline, so dots sit on the text line even when the name wraps.
+- **`<abbr title>`** — marks an abbreviation such as "VG" and gives its expansion.
+- **`<data value>`** — pairs human text with a machine-readable value, used for prices.
+- **Multi-column layout (`columns`)** — flows content into newspaper-style columns. Used in print.
+- **Fragmentation (`break-inside`, `break-after`)** — controls where columns and pages may break.
+- **`scroll-margin-top`** — offsets anchor jumps so headings aren't hidden under a sticky nav.
+- **`prefers-reduced-motion`** — the user setting that gates `scroll-behavior: smooth`.
+- **schema.org Menu** — the vocabulary (`Menu`, `MenuSection`, `MenuItem`) for structured data about dishes.
+
 **Q:** How would you build dotted leaders?
-**A:** A flex row: name, a growing empty element with a dotted bottom border, then the price, aligned on the baseline. It adapts to any width without fake dot characters.
+
+**A:** A flex row: name, a growing empty element with a dotted bottom border, then the price, aligned on the baseline. It adapts to any width without fake dot characters. Give the leader a `min-inline-size` such as `2ch` so a long name can't squeeze it to nothing.
 
 **Q:** Why is a PDF menu worse than HTML?
-**A:** It doesn't reflow on phones, is harder for assistive technology, isn't easily translated, and is heavier. HTML is responsive, searchable and accessible.
+
+**A:** It doesn't reflow on phones, so people pinch and zoom. It's harder for assistive technology, isn't easily translated or indexed, and is usually heavier. HTML is responsive, searchable and accessible by default.
 
 **Q:** How do you stop content splitting across columns in print?
-**A:** `break-inside: avoid` on the items and `break-after: avoid` on headings.
+
+**A:** `break-inside: avoid` on each dish and on section blocks, and `break-after: avoid` on headings so a heading never sits alone at the bottom of a column. These are requests, so very tall items may still split.
+
+**Q:** Why not type "......" between the name and the price?
+
+**A:** The number of dots would be wrong at every other width, and screen readers would read "dot dot dot" or skip unpredictably. A border on an empty element is pure decoration that assistive technology ignores and that resizes itself.
+
+**Q:** Is `title` on `<abbr>` enough to explain "GF"?
+
+**A:** No. `title` only appears on mouse hover, so touch and keyboard users rarely see it, and screen readers handle it inconsistently. The visible dietary key (a `<dl>`) is the reliable explanation, and `title` is a bonus.
+
+**Q:** Why use `align-items: baseline` instead of `center`?
+
+**A:** With `center`, a two-line dish name pushes the dots and price to the vertical middle, between the lines. Baseline alignment puts the dots and price on the first line's baseline, which reads naturally.
+
+**Q:** The menu changes every day. What breaks first?
+
+**A:** Hand-editing HTML: typos, wrong prices and forgotten updates. Move the dishes into a JSON file or a small CMS and render the menu with a template. The CSS stays the same because the structure doesn't change.
+
+**Q:** In-page links hide the section heading under the sticky nav. How do you fix it?
+
+**A:** Add `scroll-margin-top` on the headings (or `scroll-padding-top` on the root) equal to the nav height plus a little room. Anchor jumps and focus scrolling then stop short of the bar.
+
+**Q:** How do you test it?
+
+**A:** Resize from 320 px to 1600 px and watch the leaders and wrapping, print-preview in two browsers, and check with a screen reader that each dish reads name, price, description, tags in a sensible order. Turn CSS off to confirm the source order makes sense.
+
+**Common mistakes in answers:**
+- Using a `<table>` for the menu "because it has prices". A menu is a list of items, not a two-dimensional grid of data.
+- Saying `columns` is a good screen layout. On screens it makes readers scroll down and back up, so keep it for print.
+- Forgetting the currency in the visible price. "14.50" alone is ambiguous.
 
 ### TL;DR
 A menu teaches flexbox with baseline alignment (leaders), honest semantics for tags and prices, and print layout with columns and break control. HTML beats a PDF on every axis that matters to diners.
@@ -792,14 +1076,59 @@ Square crops look tidy but can cut off the subject. `object-position` can shift 
 - [Ch 11 — Typography, Colour and Visual Effects](../chapters/11-typography-color-and-visual-effects/README.md): `object-fit`.
 
 ### In the interview
+**30-second answer:** I built a photo gallery whose column count adapts with one line of CSS Grid, `repeat(auto-fill, minmax(200px, 1fr))`, and no media queries for the basic layout. Tiles are cropped consistently with `aspect-ratio` and `object-fit: cover`, and each `<img>` has `width`, `height`, `srcset` and `sizes` so the browser reserves space and downloads the smallest suitable file. The hard part was performance: first-screen images load eagerly, the rest use `loading="lazy"`, and thumbnails are WebP or AVIF under 40 KB. The result is CLS of 0 in Lighthouse, and keyboard focus stays visible on every tile.
+
+**Key terms to know:**
+- **`repeat(auto-fill, minmax(200px, 1fr))`** — as many columns as fit, each at least 200 px, sharing extra space.
+- **`auto-fill` vs `auto-fit`** — both create as many tracks as fit. `auto-fit` collapses empty ones so items stretch.
+- **`fr` unit** — a fraction of the free space in the grid container.
+- **`aspect-ratio` + `object-fit: cover`** — fixed tile shape with the photo cropped, not squashed.
+- **`srcset` and `sizes`** — candidate files by width, and a hint of how wide the slot is, so the browser picks a file.
+- **Lazy loading** — `loading="lazy"` defers offscreen images until the user scrolls near them.
+- **LCP (Largest Contentful Paint)** — time until the biggest visible element renders. Lazy-loading it makes it worse.
+- **`grid-auto-flow: dense`** — backfills holes with later items, so visual order can differ from DOM order.
+- **Spanning** — `grid-column: span 2; grid-row: span 2` for featured photos.
+
 **Q:** Explain `repeat(auto-fill, minmax(200px, 1fr))`.
-**A:** Create as many columns as fit, each at least 200 px and sharing leftover space equally. The column count adapts to the container without media queries.
+
+**A:** Create as many columns as fit, each at least 200 px and sharing leftover space equally. The column count adapts to the container without media queries. On a container narrower than 200 px it would overflow, which is why many people write `minmax(min(200px, 100%), 1fr)`.
 
 **Q:** Should every image be lazy-loaded?
-**A:** No. Images visible on first load, especially the LCP image, should load eagerly. Lazy-loading them delays the largest paint.
+
+**A:** No. Images visible on first load, especially the LCP image, should load eagerly, because lazy-loading them delays the largest paint. Lazy-load only images below the fold.
 
 **Q:** What's the risk with `grid-auto-flow: dense`?
-**A:** Visual order no longer matches DOM order, so keyboard and screen-reader order differs from what's on screen.
+
+**A:** Visual order no longer matches DOM order, so keyboard and screen-reader order differs from what's on screen. That's acceptable for a photo grid where order barely matters, not for steps or articles.
+
+**Q:** When do `auto-fill` and `auto-fit` look different?
+
+**A:** Only when there are fewer items than columns would fit. `auto-fill` keeps the empty tracks, so three photos stay 200-ish px wide. `auto-fit` collapses empty tracks and the three photos stretch to fill the row, which can look huge on a wide screen.
+
+**Q:** How does the browser choose a file from `srcset`?
+
+**A:** It reads `sizes` to learn the slot's width in CSS pixels, multiplies by the device pixel ratio, and picks the smallest candidate that's at least that wide. It may choose a smaller one on a slow connection. That's why `sizes` must roughly match your CSS.
+
+**Q:** Why do the featured 2 × 2 spans need a media query?
+
+**A:** With only one or two columns, a tile that spans two columns forces extra columns or overflows. A `min-width` media query applies the span only when there are at least four columns. This is the one place the layout needs a breakpoint.
+
+**Q:** The gallery grows to 2,000 photos. What breaks first?
+
+**A:** The DOM and the initial HTML get huge and every image request competes, even with lazy loading. Add pagination or "load more" pages, consider `content-visibility: auto` on rows far below the fold, and generate thumbnails with a build pipeline or an image CDN.
+
+**Q:** A photo's subject is cut off by the square crop. How do you fix it?
+
+**A:** Set `object-position` per image, for example `object-position: 30% 20%`, to move the crop's focus towards the subject. Store the focal point with the image data so it's applied automatically.
+
+**Q:** How do you prove the gallery is fast and stable?
+
+**A:** Lighthouse for CLS and properly sized images, then the Network panel with throttling to watch lazy images arrive only on scroll. Check `currentSrc` in the console to see which file was chosen, and Tab through the tiles to confirm focus is visible.
+
+**Common mistakes in answers:**
+- Using `loading="lazy"` on the hero or first-row images. It delays LCP.
+- Saying `object-fit` resizes the file. It only changes how the downloaded image is painted in its box, so the bytes are the same.
+- Claiming CSS Grid can do true masonry today. Grid has fixed rows, and native masonry (`grid-lanes`) isn't Baseline yet.
 
 ### TL;DR
 One grid line gives a responsive gallery. The real work is images: reserved space, sensible `srcset`/`sizes`, modern formats, lazy loading below the fold, and real alt text.
@@ -886,14 +1215,60 @@ A table is right for three tracks. With fifteen tracks it becomes unreadable on 
 - [Ch 7 — Box Model and Layout Basics](../chapters/07-box-model-and-layout-basics/README.md): sticky positioning, overflow, stacking.
 
 ### In the interview
+**30-second answer:** I built a three-track conference schedule as a real data table, because a talk only makes sense with its time and its room. It has a `<caption>` with the date and timezone, room headers with `scope="col"`, time headers with `scope="row"` containing `<time datetime>`, and keynote and lunch rows spanning all rooms with `colspan="3"`. The hard part was mobile: rather than turning rows into blocks, the table scrolls inside a labelled, focusable wrapper with the header row and time column sticky in both directions. A screen reader announces "09:30, Room B, CSS Grid deep dive" for any talk.
+
+**Key terms to know:**
+- **`<caption>`** — the table's accessible name, announced when a screen reader enters the table.
+- **`scope="col"` / `scope="row"`** — tell assistive technology which headers apply to each data cell.
+- **`colspan`** — makes a cell span several columns, as with the keynote row.
+- **`headers` attribute** — explicit list of header ids for a cell, used for irregular tables.
+- **`<time datetime>`** — a machine-readable time next to the human-readable one.
+- **Scroll container** — the nearest ancestor with `overflow` other than visible. Sticky elements stick within it.
+- **Sticky in two directions** — the corner cell uses both `top` and `left` insets and a higher `z-index`.
+- **Focusable region** — `tabindex="0"`, `role="region"` and a label so keyboard users can scroll the wrapper.
+- **`border-collapse: separate`** — keeps borders on cells, which sticky cells need.
+- **`@page { size: landscape }`** — requests landscape pages for printing.
+
 **Q:** When is a `<table>` the right choice?
+
 **A:** When content is two-dimensional data where each cell needs its row and column context. Never for page layout.
 
 **Q:** Why might `position: sticky` not work in a table?
-**A:** An ancestor with `overflow` other than visible becomes the scroll container, and the element sticks within that. If that container doesn't scroll, nothing sticks.
+
+**A:** An ancestor with `overflow` other than visible becomes the scroll container, and the element sticks within that. If that container doesn't scroll in that direction, nothing sticks. Also check that an inset such as `top: 0` is set, and that the wrapper has a `max-block-size` if you want vertical sticking inside it.
 
 **Q:** How do you make a scrollable region keyboard accessible?
-**A:** Give it `tabindex="0"` so it can be focused and scrolled with arrow keys, plus `role="region"` and a label so screen readers announce what it is.
+
+**A:** Give it `tabindex="0"` so it can be focused and scrolled with arrow keys, plus `role="region"` and an `aria-label` (or `aria-labelledby` pointing to the caption) so screen readers announce what it is.
+
+**Q:** Why not turn the table into stacked cards on phones with `display: block`?
+
+**A:** Changing `display` on table elements has caused some browsers to drop table semantics, so the time and room relationship is lost for screen readers. Cards also kill the ability to compare rooms at a glance. WCAG reflow allows data tables to scroll, so scrolling is the honest choice.
+
+**Q:** How does a cell that spans all three rooms get its headers?
+
+**A:** With `scope` set on the room headers, a cell with `colspan="3"` is associated with all three columns it covers, so the keynote reads with every room and its time. For more complex structures, use explicit `headers` attributes listing the header ids.
+
+**Q:** Why does the top-left corner cell need special treatment?
+
+**A:** It's sticky to both the top and the inline start, and every other sticky cell scrolls underneath it. Give it both insets, a solid background and a higher `z-index`, otherwise scrolled headers paint over it.
+
+**Q:** The conference grows to 15 tracks. What breaks first?
+
+**A:** The table becomes unreadable on any screen, because nobody can scan 15 columns. Switch to a per-room list or a "now and next" view generated from the same data, and keep the full grid as an optional view.
+
+**Q:** Attendees join remotely from other timezones. What fails?
+
+**A:** Times like "14:00" are wrong for most of them. State the timezone in the caption, and use full `datetime` values with an offset (`2026-10-14T14:00+01:00`) so a script or calendar export can convert them. Highlighting "now" needs JS or server rendering.
+
+**Q:** How do you find a `colspan` mistake?
+
+**A:** Run the Nu HTML Checker, which reports rows whose cell count doesn't match the column count. Then navigate the table with a screen reader to confirm headers are announced correctly for spanning cells.
+
+**Common mistakes in answers:**
+- Saying sticky "doesn't work on tables". It does on `th`/`td`. The usual cause is the wrong scroll container or a missing inset.
+- Using `<td><strong>` for headers. Only `<th>` creates header associations.
+- Making the wrapper scrollable but not focusable, so keyboard users can't reach the hidden columns.
 
 ### TL;DR
 A conference schedule is real tabular data: caption, scoped headers, spans for shared sessions. On phones, scroll the table inside a labelled, focusable wrapper with sticky headers rather than breaking it into blocks.
@@ -982,14 +1357,59 @@ A sticky header costs screen space on short phones, where landscape phones may h
 - [Ch 10 — Responsive Design](../chapters/10-responsive-design/README.md): breakpoints, reflow.
 
 ### In the interview
+**30-second answer:** I built the header that every page of a site reuses, with no JavaScript: a skip link that appears on first Tab, a logo link named with the site name, a `<nav aria-label="Main">` with `aria-current="page"` and a non-colour indicator, a `<search>` landmark, and a `<details>` "Menu" disclosure on small screens. The hardest decision was how to show the nav open on desktop and collapsed on mobile, since CSS can't toggle the `open` attribute. I chose one approach (styling `::details-content`, or a duplicated list hidden with `display: none`) and can explain the trade-off. The sticky header never hides focused elements because `scroll-padding-top` equals its height.
+
+**Key terms to know:**
+- **Skip link** — the first focusable link, jumping to `<main>`. Meets WCAG 2.4.1 Bypass Blocks.
+- **`aria-current="page"`** — announces the current page link as "current page".
+- **Landmarks** — banner (`<header>`), navigation (`<nav>`), search (`<search>`), main. Screen readers list them.
+- **`<details>`/`<summary>`** — a native disclosure with keyboard support and expanded/collapsed state.
+- **Visually hidden** — hides content from the eye but keeps it in the accessibility tree, unlike `display: none`.
+- **Accessible name** — the hamburger button must still be named "Menu".
+- **`scroll-padding-top`** — keeps scrolled-to and focused content clear of a sticky header.
+- **WCAG 2.4.11 Focus Not Obscured (Minimum)** — a focused element must not be entirely hidden by author content like a sticky bar.
+- **`::details-content`** — pseudo-element for the content part of `<details>`, which can be styled.
+
 **Q:** What is a skip link and why is it needed?
-**A:** A link at the top of the page that jumps to the main content. Without it, keyboard users have to tab through every header link on every page. WCAG requires a way to bypass repeated blocks.
+
+**A:** A link at the top of the page that jumps to the main content. Without it, keyboard users have to tab through every header link on every page. WCAG requires a way to bypass repeated blocks, and the link is hidden until focused so it doesn't clutter the design.
 
 **Q:** How do you mark the current page in navigation?
-**A:** `aria-current="page"` on the link, plus a visual indicator that isn't only colour.
+
+**A:** `aria-current="page"` on the link, plus a visual indicator that isn't only colour, such as an underline or bar. You can style it with `[aria-current="page"]`, which keeps state and style in one place.
 
 **Q:** How do you stop a sticky header covering focused elements?
-**A:** Set `scroll-padding-top` on the scrolling element to the header height, so focus and anchor scrolling leave room for it.
+
+**A:** Set `scroll-padding-top` on the scrolling element to the header height, so focus and anchor scrolling leave room for it. Then tab through a long page to confirm, because it's what WCAG 2.4.11 checks.
+
+**Q:** What's the difference between `display: none` and a visually-hidden class?
+
+**A:** `display: none` (and the `hidden` attribute) removes content from layout and from the accessibility tree, so screen readers can't reach it. A visually-hidden utility clips the element to 1 px with `overflow: hidden`, so it's invisible but still read. Use it for labels on icon-only controls.
+
+**Q:** Why can't CSS alone make `<details>` open on desktop and closed on mobile?
+
+**A:** `open` is an HTML attribute that represents state, and CSS can't set attributes. You can instead style the closed content to show anyway on wide screens through `::details-content` and hide the `<summary>`, or render the link list twice and hide one copy with `display: none`. Each needs testing in screen readers.
+
+**Q:** Why use `<details>` rather than a checkbox hack for the mobile menu?
+
+**A:** `<summary>` is exposed as a button with expanded/collapsed state and responds to Enter and Space. A hidden checkbox with a styled label announces as "checkbox, not checked", which is misleading. Native semantics beat clever selectors.
+
+**Q:** The `<details>` menu doesn't close when the user taps elsewhere. Is that a bug?
+
+**A:** It's a known trade-off of zero JS: `<details>` has no light dismiss. Users can close it with the summary. If outside-click closing matters, use the Popover API (`popover="auto"`), which provides light dismiss natively (project 32).
+
+**Q:** The client wants 12 top-level nav items. What do you say?
+
+**A:** The header will wrap or need a menu even on desktop, and users scan fewer items better. Restructure the information architecture into fewer sections first. Only then add sub-menus, using nested disclosures with normal Tab navigation rather than an ARIA menu.
+
+**Q:** How do you test the header?
+
+**A:** Keyboard pass at every breakpoint (skip link appears first and moves focus into `<main>`), a screen-reader landmarks list showing banner, navigation "Main", search and main, and zoom to 400 % to check the mobile menu kicks in. Tab down a long page to check the sticky header.
+
+**Common mistakes in answers:**
+- Adding `role="navigation"` to `<nav>`. It already has that role, and redundant ARIA adds noise.
+- Using `role="menu"` for site navigation. That promises application-menu keyboard behaviour that links don't have.
+- Hiding the skip link with `display: none`, which makes it unfocusable. It must be visually hidden until focused.
 
 ### TL;DR
 Skip link, named nav with `aria-current`, a `<search>` landmark, a native `<details>` menu for small screens and `scroll-padding-top` for the sticky header: a header that works for everyone with no JavaScript.
@@ -1093,14 +1513,60 @@ Copy-pasted headers drift: one page gets a fix the others don't. That pain is th
 - [Ch 14 — Performance, SEO, Interview and Cheat Sheets](../chapters/14-performance-seo-interview-and-cheatsheet/README.md): titles, descriptions, Lighthouse.
 
 ### In the interview
+**30-second answer:** I built a five-page site for a local bike shop, with Home, Services, About, Contact and a real 404, sharing one header, footer, `<head>` pattern and stylesheet. The key decision was organising one CSS file from generic to specific (reset, tokens, base, layout, components, utilities) with single-class BEM-style selectors, so source order decides conflicts and specificity stays flat. The hardest problems were the ones a single page hides: copied headers drifting, relative links breaking, and a 404 page that must return status 404, not 200. Every page validates, has zero broken links and scores 100 on Lighthouse accessibility and SEO.
+
+**Key terms to know:**
+- **Custom properties (tokens)** — `--color-brand`, `--space-3` on `:root`, so a palette change is one edit.
+- **Specificity** — the (id, class, type) weight that decides which selector wins. Kept at one class here.
+- **Cascade order** — when specificity ties, the later rule wins, which is why files go generic to specific.
+- **ITCSS** — "inverted triangle" ordering of CSS from broad to narrow. Cascade layers formalise it later.
+- **BEM** — Block, Element, Modifier naming (`.card__title`, `.card--featured`).
+- **Relative vs root-relative URL** — `css/a.css` resolves from the current folder, `/css/a.css` from the site root.
+- **HTTP status codes** — 200 OK, 301 moved permanently, 404 not found.
+- **Soft 404** — an error page served with status 200.
+- **Meta description and `<title>`** — unique per page, shown in tabs and search results.
+- **Lighthouse** — the audit tool for accessibility, SEO and performance scores.
+
 **Q:** How would you organise CSS for a small site?
-**A:** From general to specific: reset, tokens, base element styles, layout primitives, components, utilities. Keep specificity low and flat with single-class selectors so order decides conflicts.
+
+**A:** From general to specific: reset, tokens, base element styles, layout primitives, components, utilities. Keep specificity low and flat with single-class selectors so order decides conflicts. Utilities go last so they can override components.
 
 **Q:** What's a soft 404?
-**A:** An error page served with status 200. Search engines may index it as real content. A missing page should return a real 404 status.
+
+**A:** An error page served with status 200. Search engines may index it as real content. A missing page should return a real 404 status, which most static hosts do when the file is named `404.html`. Check it in DevTools' Network panel.
 
 **Q:** Why use custom properties for colours?
-**A:** One source of truth: change the palette in one place, theme with overrides, and keep values consistent across components.
+
+**A:** One source of truth: change the palette in one place, theme with overrides, and keep values consistent across components. Unlike preprocessor variables, they're live in the browser, inherit and can be changed per element or media query.
+
+**Q:** How is specificity calculated?
+
+**A:** As three counts compared left to right: ID selectors, then classes, attributes and pseudo-classes, then type selectors and pseudo-elements. `#nav a` is (1,0,1) and beats `.nav .link`, which is (0,2,0). Inline styles and `!important` sit above that, and `:where()` adds zero.
+
+**Q:** Root-relative or relative links?
+
+**A:** Root-relative (`/css/styles.css`) works from any folder depth, so pages can move. It breaks if the site is served from a sub-path such as `example.com/shop/`. Relative links survive sub-paths but break when a page moves folder. Choose deliberately and check with a link checker.
+
+**Q:** Why are utilities placed last, and why is BEM useful here?
+
+**A:** Utilities like `.visually-hidden` should win over component styles, and with equal single-class specificity the later rule wins. BEM keeps every selector at one class, so you never need IDs or nesting to win a fight, and the names say what each class belongs to.
+
+**Q:** The site grows to 50 pages. What breaks first?
+
+**A:** The copy-pasted header and footer drift, because a fix lands on some pages but not others. Use a static-site generator or server includes for shared templates. The single stylesheet also accumulates unused CSS, so split by component or check coverage.
+
+**Q:** The shop changes its opening hours and forgets the website. What fails?
+
+**A:** Customers trust the site and arrive at a closed shop. Put hours in one data file used by every page (and by `LocalBusiness` JSON-LD), so there is only one place to update, and add a "last updated" note.
+
+**Q:** How do you verify the site before launch?
+
+**A:** Validate every page, run a link checker, run Lighthouse on each page in mobile mode, check the 404 status code in the Network panel, and do a keyboard and screen-reader pass of the contact form. Then view it on a real phone over a mobile connection.
+
+**Common mistakes in answers:**
+- Fixing a conflict by adding an ID or `!important`. That raises the bar for every later override.
+- Thinking custom properties are the same as Sass variables. Sass variables vanish at build time, while custom properties exist at runtime and cascade.
+- Assuming a pretty 404 page is enough. The status code is what search engines and tools read.
 
 ### TL;DR
 Five pages expose the real problems of a site: shared templates, consistent tokens, organised CSS, correct links and status codes. Solve them by hand once and you'll understand what every framework is automating.
@@ -1201,14 +1667,60 @@ Fluid everything can make large screens feel oversized, so cap with the `clamp()
 - [Ch 14 — Performance, SEO, Interview and Cheat Sheets](../chapters/14-performance-seo-interview-and-cheatsheet/README.md): Core Web Vitals.
 
 ### In the interview
+**30-second answer:** I built a marketing landing page mobile-first with fluid `clamp()` type and space tokens and intrinsic layout primitives (a flex "switcher" for the hero, an auto-fit grid for features, a scroll-snap strip for testimonials), using only two media queries in the whole stylesheet. The key decision was adapting continuously instead of to a list of device widths, which removed the in-between widths where layouts usually break. The hardest part was the hero image as the LCP element: it's a `<picture>` in the HTML with AVIF/WebP, `fetchpriority="high"`, `width`/`height` and no lazy loading. Lighthouse mobile shows LCP under 2.5 s and CLS under 0.1, and 200 % zoom still enlarges the text.
+
+**Key terms to know:**
+- **Mobile-first** — base styles for the smallest screen, with `min-width` queries adding layout as space grows.
+- **Intrinsic layout** — layouts that respond to their content and container instead of fixed breakpoints.
+- **`clamp(min, preferred, max)`** — a value that scales with the middle term but never leaves the bounds.
+- **Fluid type** — font sizes that scale between two viewport widths, here with a `rem + vw` middle term.
+- **Switcher primitive** — a flex layout that flips from side by side to stacked at a container threshold, with no media query.
+- **`minmax(min(18rem, 100%), 1fr)`** — an auto-fit grid track that can't overflow on tiny screens.
+- **CSS scroll snap** — `scroll-snap-type` and `scroll-snap-align` for a swipeable strip with no JS.
+- **LCP and CLS** — Core Web Vitals for loading (good at 2.5 s or less) and visual stability (good at 0.1 or less).
+- **`fetchpriority="high"`** — tells the browser to fetch the hero image early.
+- **WCAG 1.4.4 Resize Text** — text must scale to 200 %, which `vw`-only font sizes can break.
+
 **Q:** What does mobile-first mean in CSS?
-**A:** Base styles target the smallest screen, and `min-width` queries add complexity as space grows. Small devices download and parse fewer overrides, and the default is the simplest layout.
+
+**A:** Base styles target the smallest screen, and `min-width` queries add complexity as space grows. The default is the simplest layout, small devices apply fewer overrides, and you design the content priority before the decoration.
 
 **Q:** How do you make type fluid without breaking zoom?
-**A:** `clamp(min, rem + vw, max)`. The `rem` part keeps the size tied to user preferences and zoom, and the limits stop it growing too large or small.
+
+**A:** `clamp(min, rem + vw, max)`. The `rem` part keeps the size tied to user preferences and zoom, and the limits stop it growing too large or small. A pure `vw` size barely changes when users zoom on a wide screen.
 
 **Q:** How would you improve a slow hero image?
-**A:** Put it in the HTML as `<img>` or `<picture>` (not a CSS background), never lazy-load it, give it `fetchpriority="high"`, serve AVIF/WebP at the right size via `srcset`, and set `width`/`height`.
+
+**A:** Put it in the HTML as `<img>` or `<picture>` (not a CSS background), never lazy-load it, give it `fetchpriority="high"`, serve AVIF/WebP at the right size via `srcset`, and set `width`/`height`. Most of the gain usually comes from early discovery, not compression.
+
+**Q:** How does the switcher flip without a media query?
+
+**A:** Each item gets `flex-grow: 1` and `flex-basis: calc((30rem - 100%) * 999)`. When the container is wider than 30rem the basis becomes a huge negative number (treated as 0), so items share the row. When it's narrower the basis is huge and positive, so each item takes a full line and they stack.
+
+**Q:** Why `minmax(min(18rem, 100%), 1fr)` rather than `minmax(18rem, 1fr)`?
+
+**A:** On a container narrower than 18rem, a fixed 18rem minimum overflows sideways. `min(18rem, 100%)` lowers the minimum to the container width in that case, so a single column fits on any phone.
+
+**Q:** Why only two media queries? Isn't that dogma?
+
+**A:** It's a design constraint that forces intrinsic solutions, not a rule. Media queries are still right for page-level changes and user preferences. The benefit is that components adapt at every width, including the in-between tablet sizes that fixed breakpoints miss.
+
+**Q:** Marketing wants an autoplaying hero video. What happens to the budget?
+
+**A:** A video is heavy and can become or delay the LCP element, and it eats mobile data. Use a compressed poster image as the LCP element, load the video later without blocking, respect `prefers-reduced-motion` and data concerns, and always provide a pause control.
+
+**Q:** The testimonial carousel uses `scroll-snap-type: x mandatory`. What can go wrong?
+
+**A:** With `mandatory`, if an item is taller or wider than the scrollport, parts of it can become unreachable because the browser always snaps back. The region also needs to be keyboard focusable and labelled. Use `proximity` for tall items, and let the next card peek in so users see there's more.
+
+**Q:** How do you measure LCP reliably?
+
+**A:** Run Lighthouse mobile three times and take the median, because lab runs vary. Confirm in the Performance panel which element is the LCP candidate. After deploying, check PageSpeed Insights for field data from real users at the 75th percentile.
+
+**Common mistakes in answers:**
+- Writing `font-size: 4vw` for fluid type. It ignores user font settings and can fail WCAG 1.4.4.
+- Preloading the hero and also lazy-loading it. `loading="lazy"` delays the request regardless of the hint.
+- Saying mobile-first means "design for phones only". It is about the order in which you write CSS and prioritise content.
 
 ### TL;DR
 Build mobile-first with fluid `clamp()` tokens and intrinsic primitives (switcher, auto-fit grid, cluster) so the page adapts at every width with almost no breakpoints. Treat the hero image as the LCP element and load it first.
@@ -1302,14 +1814,60 @@ Three columns are great on 1440 px screens and wasteful on 1024 px ones. Decide 
 - [Ch 10 — Responsive Design](../chapters/10-responsive-design/README.md): layout changes per width.
 
 ### In the interview
+**30-second answer:** I built a documentation shell with three regions: a sticky sidebar tree, the article, and an "On this page" table of contents, collapsing to two and then one region as width shrinks. The key decision was the grid track `minmax(0, 1fr)` for the article column, because a plain `1fr` refuses to shrink below a long code line and widens the whole page. Each sidebar is sticky with a `max-block-size` and its own `overflow-y: auto`, and headings use `scroll-margin-top` so anchor jumps land below the sticky top bar. A 300-character code line scrolls inside its block, and there's no horizontal page scroll from 320 px up.
+
+**Key terms to know:**
+- **`minmax(0, 1fr)`** — a track that can shrink to zero, overriding the automatic content-based minimum.
+- **Automatic minimum size** — grid and flex items default to `min-width: auto`, roughly their content's min-content width.
+- **Sticky + own scroll** — `position: sticky` plus `max-block-size` and `overflow-y: auto` for long sidebars.
+- **Scroll container** — any element with `overflow` other than visible. Nested ones need keyboard access.
+- **`scroll-margin-top`** — offsets the scroll position when a heading is the anchor target.
+- **`:target`** — matches the element named in the URL fragment, used to highlight the heading you jumped to.
+- **Multiple navigation landmarks** — two `<nav>`s, each with a distinct `aria-label`.
+- **`aria-current="page"`** — marks the current page in the sidebar tree.
+- **`dvh` unit** — 1 % of the dynamic viewport height, which accounts for mobile browser toolbars.
+- **`rel="prev"` / `rel="next"`** — link relations on the pager.
+
 **Q:** Why does a long code block break a grid layout, and how do you fix it?
-**A:** Grid items have an automatic minimum size of their content, so `1fr` won't shrink below the code's width. Use `minmax(0, 1fr)` or `min-width: 0`, and let the `pre` scroll.
+
+**A:** Grid items have an automatic minimum size of their content, so `1fr` won't shrink below the code's width. Use `minmax(0, 1fr)` on the track or `min-width: 0` on the item, and let the `pre` scroll with `overflow-x: auto`.
 
 **Q:** How do you stop anchor links hiding headings under a sticky header?
-**A:** `scroll-margin-top` on the targets or `scroll-padding-top` on the scrolling element, set to the header height.
+
+**A:** `scroll-margin-top` on the targets or `scroll-padding-top` on the scrolling element, set to the header height plus some breathing room. Store the header height in a custom property so both use the same value.
 
 **Q:** How do you label two navigation regions?
-**A:** Give each `<nav>` an `aria-label` ("Docs", "On this page") so screen readers can tell them apart.
+
+**A:** Give each `<nav>` an `aria-label` ("Docs", "On this page") so screen readers can tell them apart in the landmarks list. Don't include the word "navigation", because the role is already announced.
+
+**Q:** Why is the sidebar sticky and scrollable rather than `position: fixed`?
+
+**A:** A fixed sidebar is taken out of flow, so you have to reserve its space manually and it ignores the grid. Sticky stays in the grid column and scrolls normally until it reaches its inset. Adding `max-block-size: calc(100dvh - var(--topbar-h))` and `overflow-y: auto` lets a long tree scroll independently.
+
+**Q:** Why `100dvh` and not `100vh`?
+
+**A:** On mobile browsers `100vh` equals the largest viewport, with toolbars hidden, so content sized with it is partly hidden behind the address bar when toolbars show. `dvh` tracks the current visible height. `svh` is a safe smallest value if you don't want resizing as toolbars move.
+
+**Q:** Where should the "On this page" TOC go on a medium screen?
+
+**A:** At about 1000 px there isn't room for three columns plus a 75ch article, so it moves above the article inside a `<details>`. The grid template changes per breakpoint, and the HTML order (sidebar, article, TOC) stays sensible for keyboard and screen readers.
+
+**Q:** The sidebar has 500 entries. What breaks first?
+
+**A:** The current page's link may be far down the scroll area and invisible on load, and the HTML is heavy on every page. Collapse sections with `<details>`, open only the current section, and ensure the current link is in view. At that size, generate the tree in the build and consider search as the main way in.
+
+**Q:** Hand-written TOCs drift from the headings. How do you prevent it?
+
+**A:** Generate the TOC and heading `id`s from the content at build time, so a renamed heading updates both. Add a link checker in CI to catch fragments that no longer exist.
+
+**Q:** How do you stress-test the layout?
+
+**A:** Use a 300-character code line, an 80-item sidebar and a 40-word heading. Tab through sidebar, article and TOC to check order, list landmarks in a screen reader, zoom to 200 %, and sweep widths from 320 px to 1920 px.
+
+**Common mistakes in answers:**
+- Fixing overflow with `overflow-x: hidden` on `body`. That hides the bug and can break sticky positioning.
+- Saying `1fr` means "equal width". It means a share of free space after the automatic minimums are met.
+- Leaving nested scroll areas unfocusable, so keyboard users can't scroll the sidebar.
 
 ### TL;DR
 A docs shell is a three-track grid with `minmax(0, 1fr)` in the middle, two sticky sidebars with their own scroll, scroll margins for headings and code blocks that scroll themselves. Collapse to fewer columns as width shrinks.
@@ -1404,14 +1962,59 @@ Named areas are readable but every new widget means editing every template strin
 - [Ch 3 — Semantic HTML and Accessibility](../chapters/03-semantic-html-and-accessibility/README.md): landmarks, focus order.
 
 ### In the interview
+**30-second answer:** I built a dashboard shell with named `grid-template-areas`, drawing the layout as text and redrawing it at three breakpoints without changing the HTML. Header, nav rail, KPI tiles, two charts, a table and a notes panel fit a 1366 × 768 laptop without page scroll, using `100dvh` on the shell and `minmax(0, 1fr)` rows so inner regions scroll instead of stretching the page. The nav rail collapses to icons with a checkbox and `:has()`, keeping labels visually hidden rather than removed. The hardest part was order: I fixed one source order that makes sense everywhere, because keyboard and screen readers follow the DOM, not the grid.
+
+**Key terms to know:**
+- **`grid-template-areas`** — named regions drawn as strings, with `grid-area` placing each child.
+- **Implicit vs explicit grid** — tracks you define vs tracks the browser creates for extra items.
+- **Nested grids** — a grid inside a grid item (here inside `<main>`) so landmarks stay intact.
+- **`display: contents`** — removes an element's box so its children join the parent grid. Risky on semantic elements.
+- **`minmax(0, 1fr)` rows** — let a row shrink so inner content scrolls instead of growing the page.
+- **DOM order vs visual order** — WCAG 1.3.2 Meaningful Sequence and 2.4.3 Focus Order require them to agree where it matters.
+- **`reading-flow`** — a newer property to make focus follow visual grid order. Chromium only, not Baseline.
+- **`:has()` toggle** — `.app:has(#collapse:checked)` changes the rail width with no JS.
+- **Visually hidden labels** — keep icon links named in the collapsed rail.
+
 **Q:** What are `grid-template-areas` good for?
-**A:** Naming regions and drawing the layout as a string map. You can redefine the map per breakpoint without touching HTML.
+
+**A:** Naming regions and drawing the layout as a string map. You can redefine the map per breakpoint without touching HTML, and the CSS reads like a picture of the page.
 
 **Q:** What's the accessibility risk of re-ordering with grid?
+
 **A:** Screen readers and keyboard focus follow the DOM, not the visual order. If they diverge in a way that changes meaning, the page fails WCAG's sequence and focus order criteria.
 
 **Q:** Why does a grid row grow past the viewport even with `1fr`?
-**A:** `1fr` has an automatic minimum of its content's size. Use `minmax(0, 1fr)` and let the inner region scroll.
+
+**A:** `1fr` has an automatic minimum of its content's size. Use `minmax(0, 1fr)` and let the inner region scroll with `overflow: auto`.
+
+**Q:** What are the rules for writing a template-areas string?
+
+**A:** Each string is a row and each word is a cell, every row must have the same number of cells, and each named area must form a rectangle. Use `.` for an empty cell. An invalid template makes the whole declaration invalid, so nothing is placed by name.
+
+**Q:** Why keep `<main>` and use nested grids instead of one flat grid?
+
+**A:** To put everything in one grid you'd have to remove `<main>` or use `display: contents` on it, and `display: contents` has a history of bugs that dropped semantics from the accessibility tree. Nested grids keep the landmarks and still give precise placement.
+
+**Q:** Why not hide the rail labels with `display: none` when collapsed?
+
+**A:** That removes them from the accessibility tree, leaving icon-only links with no accessible name. Use a visually-hidden class in collapsed mode instead, and a `title` or tooltip for sighted mouse users.
+
+**Q:** Users want to drag and arrange their own widgets. Do named areas still work?
+
+**A:** Poorly, because every new widget means editing every template string. For user-configurable dashboards, line-based placement (`grid-column: 2 / span 3`) or auto-placement with stored positions scales better. Named areas suit fixed designer layouts.
+
+**Q:** What happens on a small laptop where the fixed-height layout doesn't fit?
+
+**A:** Content gets squeezed into tiny scroll regions or hidden, and multiple nested scroll areas are hard to use on touch. Allow the page to scroll as a fallback below a minimum height, for example with a `min-height` media query that drops the `100dvh` lock.
+
+**Q:** How do you debug the layout?
+
+**A:** Turn on the DevTools grid inspector with area names, check each breakpoint (320, 600, 1100, 1366, 1920 px), then Tab through the page at each to confirm focus follows the visual order. At 200 % zoom on a 1366 px screen the effective width is 683 px, so the tablet layout should apply.
+
+**Common mistakes in answers:**
+- Saying `order` or grid placement "fixes" tab order. It only moves boxes, and focus still follows the DOM.
+- Using one flat grid by stripping semantic wrappers.
+- Assuming `1fr` rows will keep content inside the viewport. Without `minmax(0, 1fr)` they grow with content.
 
 ### TL;DR
 Draw the dashboard with named grid areas, redraw it per breakpoint with the same HTML, and keep source order sensible. Use `minmax(0, 1fr)` and inner scrolling to fit the viewport, and a checkbox with `:has()` for a no-JS collapsible rail.
@@ -1503,14 +2106,65 @@ Exclusive accordions can frustrate users who want to compare two answers. Use `n
 - [Ch 13 — Modern CSS and Architecture](../chapters/13-modern-css-and-architecture/README.md): `:has()`, progressive enhancement.
 
 ### In the interview
+**30-second answer:** I built an FAQ accordion and a tab-like settings group on the native `<details>`/`<summary>` elements with no JavaScript. The shared `name` attribute makes an exclusive accordion where opening one item closes the others, and the browser announces expanded and collapsed state for free. I animated opening with `::details-content` and the grid `0fr`-to-`1fr` trick as an enhancement, disabled under reduced motion. The key judgement was honesty: my "tabs" are disclosures, not ARIA tabs, so I didn't add `role="tab"` without the arrow-key behaviour that role promises.
+
+**Key terms to know:**
+- **`<details>`/`<summary>`** — a native disclosure widget. `<summary>` acts as the toggle button.
+- **Exclusive accordion** — several `<details>` with the same `name`, so only one is open at a time.
+- **`::details-content`** — pseudo-element wrapping everything except the summary, which can be transitioned.
+- **`interpolate-size: allow-keywords`** — allows transitions to `auto` sizes. Chromium only, not Baseline.
+- **Grid `0fr`/`1fr` trick** — an inner grid row that transitions from `0fr` to `1fr` to animate height.
+- **`transition-behavior: allow-discrete`** — lets discrete properties like `content-visibility` flip at the right moment of a transition.
+- **First rule of ARIA** — use a native element with the semantics you need instead of adding roles.
+- **APG tabs pattern** — `tablist`/`tab`/`tabpanel` roles, one tab stop and arrow keys between tabs, which needs JS.
+- **Find-in-page** — the HTML standard says matching text should auto-open a closed `<details>`.
+- **`prefers-reduced-motion`** — disables the slide animation.
+
 **Q:** How do you make an accordion where only one item opens, without JS?
+
 **A:** Give each `<details>` the same `name` attribute. The browser closes the others when one opens.
 
 **Q:** Can you animate `height: auto`?
+
 **A:** Not with plain transitions in all browsers. Use the grid `0fr`/`1fr` trick, or `interpolate-size: allow-keywords` where it's supported, and fall back to no animation.
 
 **Q:** Are `<details>`-based tabs real tabs?
+
 **A:** No. They're disclosures. They're accessible, but they don't have tab semantics or arrow-key navigation. Real tabs follow the APG tabs pattern with ARIA roles and JS.
+
+**Q:** Why not build the accordion from `<div>`s with click handlers?
+
+**A:** You'd have to add a button role, focusability, Enter and Space handling and `aria-expanded` yourself, and it fails without JS. `<details>` provides all of that natively and also supports find-in-page in browsers that implement it.
+
+**Q:** Why keep closed answers in the DOM instead of removing them?
+
+**A:** Content that exists but is collapsed can be found with Ctrl+F (which opens the matching `<details>` in supporting browsers) and is still in the HTML for search engines. Removing it or hiding it with `display: none` on your own wrapper makes it unsearchable.
+
+**Q:** How does the grid trick animate height?
+
+**A:** The content sits in a grid with one row. Closed, the row is `0fr` and the child has `min-height: 0` and `overflow: hidden`. Open, it becomes `1fr`. Grid track sizes are animatable, so the row grows smoothly to the content's height.
+```css
+.panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .25s; }
+details[open] .panel { grid-template-rows: 1fr; }
+.panel > div { min-block-size: 0; overflow: hidden; }
+```
+
+**Q:** What's the risk with `display: contents` in the tab-like layout?
+
+**A:** It removes the element's box so its children join the parent grid, and some browsers have historically dropped the element's semantics from the accessibility tree, especially on interactive elements. Test with screen readers and fall back to a plain accordion if anything breaks.
+
+**Q:** When is an exclusive accordion a bad idea?
+
+**A:** When users need to compare two answers or settings side by side, because opening the second closes the first. Use `name` only where one-at-a-time genuinely helps, such as long FAQs on phones.
+
+**Q:** How do you test it?
+
+**A:** Keyboard and screen reader on each component (state announced as expanded or collapsed), Ctrl+F for a word inside a closed answer, reduced-motion emulation, and Chrome, Firefox and Safari to see both the enhancement and the fallback path.
+
+**Common mistakes in answers:**
+- Adding `role="tab"` to `<summary>` to "make it tabs". That changes the announcement without adding the expected keyboard behaviour.
+- Animating with `max-height: 1000px`. It guesses a height, clips long content and gives uneven timing.
+- Forgetting the reduced-motion guard on the open animation.
 
 ### TL;DR
 `<details name>` gives you an accessible, exclusive accordion with zero JS. Animate it with `::details-content` as an enhancement, and be honest that disclosure "tabs" aren't ARIA tabs.
@@ -1610,14 +2264,60 @@ Hand-coding email is slow. Frameworks like MJML trade control for reliability. E
 - [Ch 4 — Images, Media and Embeds](../chapters/04-images-media-and-embeds/README.md): alt text.
 
 ### In the interview
+**30-second answer:** I built an HTML email newsletter that renders acceptably across major clients, including classic Outlook for Windows, which uses Word's rendering engine. Layout is nested `<table role="presentation">`s with critical styles inlined, and the two-column row uses the "hybrid" technique: inline-block columns with `max-width: 300px` that sit side by side or stack even where media queries are ignored. The hard parts were images-off and dark-mode inversion, so the button is a styled link (bulletproof), every image has alt text and no text is baked into images. The file stays under 100 KB to avoid Gmail clipping at about 102 KB, which would hide the unsubscribe link.
+
+**Key terms to know:**
+- **Layout tables with `role="presentation"`** — tables used only for layout, with table semantics removed for screen readers.
+- **Inlined CSS** — styles written into `style` attributes, because some clients or contexts strip `<style>` blocks.
+- **Hybrid (spongy) columns** — inline-block columns with `max-width` that wrap without media queries.
+- **Bulletproof button** — a padded, coloured link (and table cell) that works with images blocked.
+- **Preheader** — hidden text shown after the subject line in inbox previews.
+- **Gmail clipping** — messages over about 102 KB are cut off behind "View entire message".
+- **Conditional comments (`<!--[if mso]>`)** — markup seen only by Outlook's Word engine, used for "ghost tables".
+- **Dark-mode inversion** — clients may partially or fully invert colours, which you can't fully control.
+- **Plain-text alternative** — a text part of the multipart email for clients and users that prefer it.
+- **Can I email** — support tables for HTML and CSS features in email clients.
+
 **Q:** Why do HTML emails still use tables?
+
 **A:** Email clients have limited and inconsistent CSS support, and some render with engines that don't support flexbox, grid or reliable `div` sizing. Tables render everywhere. `role="presentation"` keeps them accessible.
 
 **Q:** How do you make columns responsive without media queries?
-**A:** Use inline-block columns with `max-width` and `width: 100%` inside a fixed-max container. They wrap when there isn't room.
+
+**A:** Use inline-block columns with `max-width` and `width: 100%` inside a fixed-max container. They sit side by side when there's room and wrap when there isn't. Outlook for Windows ignores `max-width` on divs, so a conditional ghost table gives it fixed columns.
 
 **Q:** What's a preheader?
-**A:** Hidden text at the start of the email that inbox lists show as a preview after the subject line.
+
+**A:** Hidden text at the start of the email that inbox lists show as a preview after the subject line. Without one, clients show the first text they find, often "View in browser".
+
+**Q:** Why can't you just use your website's CSS?
+
+**A:** Many clients strip or rewrite `<style>` blocks, ignore external stylesheets, don't support flexbox or grid, and sanitise selectors. Classic Outlook uses Word's HTML engine, which supports a small, old subset. You design for the weakest client and enhance for the rest.
+
+**Q:** How do you handle dark mode in email?
+
+**A:** Accept that you can't control it fully: some clients do nothing, some invert light backgrounds, some invert everything. Use logos with transparent backgrounds and an outline, avoid text in images, and add `prefers-color-scheme` styles for the clients that honour them.
+
+**Q:** Images are blocked by default. What does the reader see?
+
+**A:** With good habits, a readable email: styled alt text in place of images, a live-text button, and headlines in real text. With bad habits, a blank grey box. Always test with images off, because many clients block them until the reader allows it.
+
+**Q:** The email grows to 140 KB. What breaks?
+
+**A:** Gmail clips it, so the bottom (usually the footer with the unsubscribe link and address) is hidden behind a link. That hurts compliance and deliverability. Cut inline-style duplication, remove comments and whitespace, and move long content to the website.
+
+**Q:** Why a bulletproof button instead of an image button?
+
+**A:** An image button disappears when images are blocked and its text can't be read by screen readers if alt text is weak. A link with padding and a background colour on the surrounding cell works in nearly every client and stays clickable.
+
+**Q:** How do you test across clients?
+
+**A:** Send to real accounts on at least three clients (webmail, a desktop client, a phone app), use a rendering-preview service for the rest, check every CSS feature against Can I email, test images off, and run a screen reader on the HTML to confirm no table structure is announced.
+
+**Common mistakes in answers:**
+- Saying "nobody uses tables any more". In email they're still the most reliable layout primitive.
+- Forgetting `role="presentation"`, so screen readers announce "table with 3 rows" for every layout table.
+- Relying on media queries alone for mobile. Several clients ignore them, which is why hybrid columns exist.
 
 ### TL;DR
 Email is web development with the clock turned back: presentation tables, inlined styles, hybrid columns, bulletproof buttons and alt-text-first design. Test in real clients and keep the file under the clipping limit.
@@ -1714,14 +2414,60 @@ DevTools rendering panel: emulate light and dark. Test the manual override in bo
 - [Ch 13 — Modern CSS and Architecture](../chapters/13-modern-css-and-architecture/README.md): theming with tokens, `light-dark()`, `:has()`.
 
 ### In the interview
+**30-second answer:** I built a theming system where components never mention a raw colour: they use semantic tokens like `--color-surface` and `--color-text`, defined once with `light-dark()` pairs. `color-scheme: light dark` makes the page follow the OS and also themes form controls and scrollbars, and a Light/Dark/System radio group overrides it through `:root:has(#theme-dark:checked)` with no JS. The hard problem was the flash of the wrong theme for returning visitors, which I solved with a tiny inline script in `<head>` that reads the saved choice and sets `data-theme` before first paint. Every token pair passes 4.5:1 in both themes, and switching repaints colour only, with no layout change.
+
+**Key terms to know:**
+- **Semantic colour tokens** — custom properties named by role (`--color-text-muted`), not by value.
+- **`color-scheme`** — declares supported schemes so the browser themes native UI and picks `light-dark()` branches.
+- **`light-dark(a, b)`** — returns the first colour in a light scheme and the second in a dark one.
+- **`prefers-color-scheme`** — the media feature reporting the OS preference.
+- **Flash of incorrect theme** — the page painting in the default theme before a saved choice is applied.
+- **Render-blocking inline script** — a small synchronous script in `<head>` that runs before first paint.
+- **`oklch()`** — a perceptual colour space where lightness behaves predictably, useful for tuning contrast.
+- **`color-mix()`** — derives hover and border shades from base tokens.
+- **Contrast ratio** — 4.5:1 for text, 3:1 for large text and UI component boundaries.
+- **Halation** — the glow of bright text on pure black, a reason to use dark greys.
+
 **Q:** How would you implement dark mode?
+
 **A:** Semantic colour tokens that components use exclusively, `color-scheme: light dark` so the browser themes its UI, token values via `light-dark()` or per-theme overrides, and a manual override that sets `color-scheme` or a data attribute, persisted with a tiny inline script.
 
 **Q:** What does `color-scheme` do?
+
 **A:** It declares which schemes the page supports, so the browser renders form controls, scrollbars and the default background to match, and it decides which value `light-dark()` returns.
 
 **Q:** How do you avoid a theme flash on load?
-**A:** Read the saved preference with a small inline script in the head that sets the theme attribute before first paint.
+
+**A:** Read the saved preference with a small inline script in the head that sets the theme attribute before first paint. It must be inline (no network request) and before the body renders. Following the OS alone needs no script, because CSS media queries apply immediately.
+
+**Q:** Why semantic tokens instead of `.dark .card { background: #222 }` overrides?
+
+**A:** Overrides multiply per component and theme, and every missed selector stays light. With semantic tokens, a theme is just a different mapping of a dozen roles to colours, so new components are themed automatically and a third theme is cheap.
+
+**Q:** What does `light-dark()` need to work, and what are its limits?
+
+**A:** The element's used colour scheme must be set through `color-scheme`, otherwise it always picks the light value. It handles exactly two schemes, so a high-contrast or brand theme needs token overrides on a `[data-theme]` selector instead.
+
+**Q:** The logo uses `<picture>` with a dark-mode source, but it doesn't change when the user picks "Dark" manually. Why?
+
+**A:** The `media="(prefers-color-scheme: dark)"` on `<source>` reads the OS setting, not your page's override. For logos that must follow the switch, use inline SVG with `fill: currentColor` or token-driven colours, which follow `color-scheme` and the cascade.
+
+**Q:** Why not pure black and white for the dark theme?
+
+**A:** Very high contrast between pure white text and pure black backgrounds causes halation and eye strain for many people. Dark greys with slightly reduced text lightness read better. In dark themes, raised surfaces get lighter instead of using shadows, and saturated brand colours need lightening.
+
+**Q:** JavaScript fails to load. What does the user see?
+
+**A:** The page still follows the OS theme through CSS, and the radio switch still works within the page through `:has()`. Only persistence across visits is lost. That's the benefit of keeping JS to the one job only it can do.
+
+**Q:** How do you test it?
+
+**A:** Emulate light and dark in DevTools, try the manual override in both OS modes (four combinations), check every token pair's contrast, reload on a throttled connection to look for a flash, and check forced-colors mode so your theme doesn't fight the user's.
+
+**Common mistakes in answers:**
+- Inverting the page with `filter: invert(1)`. It wrecks images, brand colours and contrast tuning.
+- Forgetting `color-scheme`, which leaves form controls and scrollbars bright white in dark mode.
+- Loading the theme script with `defer`. Deferred scripts run after parsing, too late to prevent the flash.
 
 ### TL;DR
 Components use semantic tokens only. `color-scheme` plus `light-dark()` handles the OS theme and native controls, and a `:has()`-driven switch with a tiny inline script gives a manual override without flashing.
@@ -1814,14 +2560,60 @@ Browsers' print engines differ, so the PDF from one browser may break differentl
 - [Ch 11 — Typography, Colour and Visual Effects](../chapters/11-typography-color-and-visual-effects/README.md): type sizes, fonts.
 
 ### In the interview
+**30-second answer:** I built my CV as one HTML page that's responsive on screen and prints, or saves as PDF, as exactly two clean A4 or US Letter pages. The print side uses `@page { size; margin }`, an `@media print` block that strips decoration and forces black on white, printed URLs after links with `a[href^="http"]::after { content: " (" attr(href) ")" }`, and break control so no job entry splits. The hard part is that break rules are requests, so I kept entries short and added `orphans` and `widows`. The PDF has selectable, searchable text that applicant tracking systems can read.
+
+**Key terms to know:**
+- **Paged media** — CSS for content laid out on pages, such as printing and PDF.
+- **`@page`** — sets page size, orientation and margins for the page box.
+- **`@media print`** — rules that apply only when printing or in print preview.
+- **`break-inside: avoid`** — asks the browser not to split an element across pages.
+- **`break-after: avoid`** — keeps a heading with the content that follows.
+- **`orphans` / `widows`** — minimum lines left at the bottom or carried to the top of a page.
+- **Generated content (`::after` with `attr()`)** — prints link URLs that can't be clicked on paper.
+- **`print-color-adjust: exact`** — keeps a deliberate background when printing.
+- **A4 vs US Letter** — 210 × 297 mm vs 8.5 × 11 in (about 216 × 279 mm).
+- **Applicant tracking system (ATS)** — software that extracts text from CVs and can misread columns.
+
 **Q:** How do you stop an element breaking across printed pages?
-**A:** `break-inside: avoid` on the element, `break-after: avoid` on headings, and `orphans`/`widows` for paragraphs. These are requests, so very tall content still splits.
+
+**A:** `break-inside: avoid` on the element, `break-after: avoid` on headings, and `orphans`/`widows` for paragraphs. These are requests, so content taller than a page still splits.
 
 **Q:** How do you show link URLs in print?
-**A:** In print styles, `a[href]::after { content: " (" attr(href) ")" }`, usually limited to external links.
+
+**A:** In print styles, `a[href]::after { content: " (" attr(href) ")" }`, usually limited to external links with `a[href^="http"]`. Skip it for `mailto:` links where the text already is the address.
 
 **Q:** What does `@page` control?
-**A:** The page box: size, orientation and margins for paged media like printing and PDF.
+
+**A:** The page box: size, orientation and margins for paged media like printing and PDF. It's an at-rule at the top level of the stylesheet, and pseudo-classes like `@page :first` target specific pages.
+
+**Q:** Should you set `size: A4`?
+
+**A:** If you set it, US Letter printers scale the page to fit, which shrinks the text. If you leave `size` unset, the user's paper is used, so you must design margins and content to fit both. I tested both sizes and kept the layout flexible.
+
+**Q:** Why might the PDF from Chrome look different from Firefox's?
+
+**A:** Print engines differ in how they handle breaks, page-margin boxes and font rendering. Pick one browser to generate the official PDF and test the others for readers who print themselves.
+
+**Q:** Why are backgrounds missing when you print?
+
+**A:** Browsers skip background colours and images by default to save ink, unless the user enables them. For a background that carries meaning or brand, set `print-color-adjust: exact` on that element only.
+
+**Q:** Why single-column in print when the screen version has a sidebar?
+
+**A:** Some applicant tracking systems read text in source or geometric order and mix up two columns, so skills land inside job descriptions. A single column prints predictably and still looks professional.
+
+**Q:** A new job pushes the CV to three pages. What do you do?
+
+**A:** Treat the page count as a content budget: tighten older entries rather than shrinking the font below 10 pt. A "compact" class can reduce spacing for print. Check that no entry is now taller than a page, because then `break-inside: avoid` can't help.
+
+**Q:** How do you test the output?
+
+**A:** Print preview in Chrome, Firefox and Safari, save as PDF, then check text selection, links and embedded fonts in a PDF viewer. Paste the PDF text into a plain editor to see what an ATS would read, and repeat on A4 and Letter.
+
+**Common mistakes in answers:**
+- Saying `page-break-inside` is current. It's the legacy name, and `break-inside` is the standard property (the old one still works as an alias).
+- Using screenshots or images of text in the PDF. Text must be selectable for search and ATS.
+- Using `px` sizing logic for print. `pt` and `mm` are fine in print styles, where physical size matters.
 
 ### TL;DR
 One HTML CV, two outputs: a responsive screen layout and a print layout with `@page` size and margins, break control and printed URLs. Test in print preview and the generated PDF, and keep text selectable.
@@ -1918,14 +2710,60 @@ DevTools Performance panel with CPU throttling at 4× or 6×. Rendering panel: p
 - [Ch 13 — Modern CSS and Architecture](../chapters/13-modern-css-and-architecture/README.md): `:has()`, `:focus-within`.
 
 ### In the interview
+**30-second answer:** I built a product card with polished motion that stays fast and inclusive: image zoom, a cross-fading second image, a slide-up "Add to basket" button, a one-off badge pulse and an entry fade with `@starting-style`, all in CSS. Every effect animates only `transform` and `opacity`, so the browser can do it at the compositing stage without layout or paint, and a Performance recording confirms that. Effects trigger on `:focus-within` as well as `:hover`, `@media (hover: none)` keeps the button visible on touch screens, and `prefers-reduced-motion: reduce` removes movement. The whole card is clickable through a stretched link while the button stays a separate, valid control.
+
+**Key terms to know:**
+- **Rendering pipeline** — style, layout, paint, composite. Cheaper animations skip the earlier stages.
+- **Compositor-friendly properties** — `transform` and `opacity`, which can animate without layout or paint.
+- **`@starting-style`** — the "from" styles for an element's first render, enabling entry transitions.
+- **`:focus-within`** — matches an element containing the focused element, so keyboard users see the effects.
+- **`@media (hover: none)`** — detects devices whose primary input can't hover.
+- **Stretched link** — a link's `::after` covers the card, so the card is clickable without nesting interactive elements.
+- **`prefers-reduced-motion`** — the user preference to minimise non-essential movement.
+- **Easing** — ease-out for entering, ease-in for leaving.
+- **`will-change`** — a hint to prepare a layer. Costs memory, so use sparingly.
+- **`:has()` with radios** — swatch radios swap the visible image.
+
 **Q:** Which properties are cheap to animate and why?
-**A:** `transform` and `opacity`, because they can be handled by the compositor without re-running layout or paint.
+
+**A:** `transform` and `opacity`, because they can be handled by the compositor without re-running layout or paint. Animating `width`, `top` or `box-shadow` forces layout or paint on every frame and can drop below 60 fps on mid-range phones.
 
 **Q:** How do you make hover effects accessible?
+
 **A:** Trigger the same effects on `:focus-visible` or `:focus-within`, never hide essential controls behind hover, and use `@media (hover: none)` for touch.
 
 **Q:** How do you respect reduced motion?
+
 **A:** Wrap non-essential movement in `@media (prefers-reduced-motion: no-preference)`, or override it under `reduce`. Keep subtle fades if they carry meaning.
+
+**Q:** Why not put the button inside the link so the whole card is one link?
+
+**A:** A `<button>` inside an `<a>` is invalid HTML, and assistive technology gets confused about which action happens. The stretched-link pattern keeps them as siblings: the link's pseudo-element covers the card, and the button gets `position: relative; z-index: 1` to sit above it.
+
+**Q:** How do you fake an animated shadow cheaply?
+
+**A:** Put the bigger shadow on a pseudo-element with `opacity: 0`, and animate that pseudo-element's opacity on hover. The shadow is painted once, and only opacity changes per frame.
+
+**Q:** What does `@starting-style` solve, and what's the gotcha?
+
+**A:** A newly rendered element has no previous style, so a transition has nothing to start from. `@starting-style` provides those starting values. If you write it as a separate rule with the same specificity, it must come after the normal rule, or the normal rule overrides it. Nesting it inside the rule avoids that.
+
+**Q:** Should you add `will-change: transform` to all 100 cards?
+
+**A:** No. Each promoted layer costs GPU memory, and too many can make performance worse. Modern browsers promote layers during animations anyway. Use `will-change` only for a measured problem, ideally just before the animation.
+
+**Q:** Loading two images per card doubles bandwidth. How do you handle a grid of 60 cards?
+
+**A:** Lazy-load the alternate image, or load it only on interaction. Lazy-load cards below the fold and reserve image space to avoid layout shift. Measure the total transfer and LCP with and without the second image.
+
+**Q:** How do you prove the animations are smooth?
+
+**A:** Record hovering in the DevTools Performance panel with 4× CPU throttling and check there are no layout or paint events during the animation. Turn on paint flashing, emulate reduced motion and touch, and Tab into the card to check focus triggers the same effects.
+
+**Common mistakes in answers:**
+- Saying "CSS animations are always GPU accelerated". Only some properties can be composited, and others trigger layout or paint.
+- Hiding "Add to basket" until hover with no touch or keyboard alternative.
+- Thinking reduced motion means removing all animation. It means removing non-essential movement, and small fades can stay.
 
 ### TL;DR
 Animate `transform` and `opacity` only, trigger effects on focus as well as hover, use real radios with `:has()` for state, `@starting-style` for entry, and remove movement under reduced motion.
@@ -2023,14 +2861,60 @@ Tokens add a build step and indirection. For a five-page site, plain custom prop
 - [Ch 13 — Modern CSS and Architecture](../chapters/13-modern-css-and-architecture/README.md): theming with tokens, `@property`.
 
 ### In the interview
+**30-second answer:** I built a design-token pipeline: tokens for colour, type, space, radius, shadow and motion live once in DTCG-format JSON, and Style Dictionary builds them into CSS custom properties, a dark-theme file and a generated reference page. The key design was three tiers: primitives (what values exist), semantic tokens (what they're for, always aliases of primitives) and a few component tokens. Five components use only semantic or component tokens, enforced by a Stylelint rule that rejects raw colours, so a dark theme is just overrides of semantic tokens. The full build runs in under 2 seconds, and every semantic text and background pair meets 4.5:1.
+
+**Key terms to know:**
+- **Design token** — a named design decision (a colour, a spacing step) stored in a platform-neutral format.
+- **Primitive token** — a raw value such as `color.blue.600`.
+- **Semantic token** — a role such as `color.action.primary` that points to a primitive.
+- **Component token** — a per-component setting like `button.padding-inline`.
+- **Alias / reference** — a token whose value is another token, written `"{color.blue.600}"` in DTCG.
+- **DTCG format** — the W3C Design Tokens Community Group JSON format with `$value` and `$type`.
+- **Style Dictionary** — a build tool that resolves aliases and writes tokens to CSS and other platforms.
+- **Transforms** — build steps such as px to rem or naming to kebab-case.
+- **Lint rule** — a Stylelint check rejecting raw values in component CSS.
+- **Snapshot test** — diffing the generated CSS on every change.
+
 **Q:** What are design tokens?
+
 **A:** Named design decisions (colours, spacing, type, motion) stored in a platform-neutral format and transformed into each platform's code, so design and every codebase share one source of truth.
 
 **Q:** Why separate primitive and semantic tokens?
+
 **A:** Primitives list the available values. Semantics say what each is for. Components use semantics, so a theme or rebrand changes the mapping without touching components.
 
 **Q:** How do you stop people bypassing the tokens?
-**A:** A lint rule that rejects raw values in component styles, plus docs and code review.
+
+**A:** A lint rule that rejects raw values in component styles (Stylelint rules like `color-no-hex` or `declaration-property-value-disallowed-list`), plus docs and code review. The generated reference page makes the right token easy to find.
+
+**Q:** Should the CSS output keep references or resolved values?
+
+**A:** References (`--color-action-primary: var(--color-blue-600)`) keep the chain alive at runtime, so a theme can override one primitive and everything updates, but they're harder to read in DevTools. Resolved values are simpler and slightly faster to debug, but a theme must override every semantic token. I kept references for semantic tokens.
+
+**Q:** How do you name tokens?
+
+**A:** By purpose, not appearance: `color.text.danger`, not `color.red-text`, because the colour may change and the purpose won't. A predictable order (category, concept, property, variant, state) makes them guessable. Names are an API, so renames need a deprecation period.
+
+**Q:** Why not just use CSS custom properties directly, without JSON and a build?
+
+**A:** For a single website, plain custom properties are enough and simpler. Tokens in JSON pay off when the same decisions must reach several platforms (iOS, Android, design tools) or several themes and brands, and when you want generated docs and checks.
+
+**Q:** Someone renames `color.text.muted`. What breaks?
+
+**A:** Every component that uses `var(--color-text-muted)` silently falls back to the inherited or initial value, because an undefined custom property makes the declaration invalid at computed-value time. Keep the old name as an alias with a deprecation note, and add a CI check that every `var(--…)` used in components exists in the build output.
+
+**Q:** What changes at 10 brands and 3 platforms?
+
+**A:** The token set stays the same shape, but you add brand files that override primitives or semantics, and more output formats. Build time and review load grow, so keep tiers shallow, generate everything, and snapshot-test outputs per brand and platform.
+
+**Q:** How do you test the system?
+
+**A:** Build in CI, snapshot-test the generated CSS, run a contrast script on each declared text and background pair in both themes, lint components for raw values, and visually check the reference page.
+
+**Common mistakes in answers:**
+- Calling every CSS variable a "design token". Tokens are shared design decisions with a source of truth, not any variable.
+- Letting components use primitives directly. Then a theme can't remap them without editing components.
+- Over-tokenising every margin in every component, which makes the system harder to use than plain CSS.
 
 ### TL;DR
 Write tokens once in JSON with three tiers (primitive, semantic, component), build them into CSS custom properties and a docs page, and lint components so they use semantic tokens only. Themes become semantic overrides.
@@ -2125,14 +3009,63 @@ Strict magazine alignment works with curated content. User-generated content wit
 - [Ch 3 — Semantic HTML and Accessibility](../chapters/03-semantic-html-and-accessibility/README.md): reading order, duplicates.
 
 ### In the interview
+**30-second answer:** I built a magazine-style home page and feature article on a 12-column grid with named lines, so figures can break out to `wide` or `full` width without extra wrappers. The key feature is subgrid: each story card spans four parent rows and uses `grid-template-rows: subgrid`, so images, kickers, titles and bylines line up across every card in a row, whatever the title length. That replaced fixed heights, which break with real content. Headlines are balanced with `text-wrap: balance`, and the layout collapses to one column below about 800 px while keeping a sensible reading order.
+
+**Key terms to know:**
+- **Subgrid** — a nested grid that uses its parent's tracks instead of defining its own.
+- **Named grid lines** — `[full-start]`, `[content-start]` and so on, so items can be placed with `grid-column: content`.
+- **Full-bleed / breakout layout** — content in a centred column, with chosen elements spanning to the viewport edges.
+- **`grid-row: span 4`** — the card occupies four parent rows, one per child.
+- **`minmax(0, 1fr)`** — truly equal columns that ignore content's minimum width.
+- **Implicit rows** — rows the grid creates automatically as more items are placed.
+- **Gap inheritance** — a subgrid inherits the parent's gaps unless it overrides them.
+- **`text-wrap: balance`** — evens line lengths for headlines.
+- **`aria-hidden` on pull-quotes** — hides a purely visual repeat of article text from screen readers.
+
 **Q:** What problem does subgrid solve?
+
 **A:** It lets a nested grid reuse its parent's tracks, so content inside separate components (like card titles) aligns across components without fixed heights.
 
 **Q:** What is a full-bleed layout with named lines?
+
 **A:** A grid whose outer tracks are named (for example `full`) and inner ones `content`, so most content sits in `content` while chosen elements span `full` to the viewport edges.
 
 **Q:** Why `minmax(0, 1fr)` rather than `1fr` for columns?
+
 **A:** `1fr` has a minimum of the content's min-content size, so long words or images can make columns unequal or overflow. `minmax(0, 1fr)` makes them truly equal.
+
+**Q:** How exactly do the card rows align?
+
+**A:** The card row is a grid, and each card spans four of its rows and declares `grid-template-rows: subgrid`. The card's four children (image, kicker, title, byline) each sit in one of those shared rows, so the title row's height is set by the tallest title among all cards in that row.
+```css
+.card { display: grid; grid-row: span 4;
+        grid-template-rows: subgrid; }
+```
+
+**Q:** What goes wrong if a card has five children but spans four rows?
+
+**A:** The extra child creates an implicit row inside the card that isn't shared with the other cards, so that part no longer aligns, and the layout below may shift. The span must equal the number of children, or the children must be grouped.
+
+**Q:** Why not use flexbox and `min-height` on titles?
+
+**A:** A fixed minimum height guesses the tallest title and breaks with real headlines in other languages or at other widths. JavaScript measuring is fragile and causes layout shift. Subgrid lets the browser size the shared track to the real content.
+
+**Q:** Should the pull-quote be read by screen readers?
+
+**A:** If it repeats a sentence from the article purely for visual emphasis, it's a duplicate, so `aria-hidden="true"` avoids reading it twice. If it adds new content, keep it as a real `<blockquote>`. Decide and document it.
+
+**Q:** User-uploaded images with random aspect ratios break the rows. How do you fix it?
+
+**A:** Set `aspect-ratio` and `object-fit: cover` on card images so the image row has a predictable height. Subgrid aligns content, but wildly varied images still make the shared row as tall as the tallest one.
+
+**Q:** How do you debug the layout?
+
+**A:** Use the Firefox or Chrome grid inspector with line names and subgrid overlays turned on, stress-test titles from 2 to 20 words, sweep widths from 320 to 1600 px, and use a screen reader to check order and duplicates.
+
+**Common mistakes in answers:**
+- Saying subgrid is "a grid inside a grid". A plain nested grid has its own tracks, and subgrid is specifically about sharing the parent's.
+- Forgetting that subgrid alignment only works within one parent row of cards.
+- Using a 12-column grid on phones. Below a breakpoint, a single column is simpler and clearer.
 
 ### TL;DR
 A 12-column grid with named lines handles breakouts, and subgrid makes cards share the parent's row tracks so titles and bylines align across a row. Editorial layout on the web finally works with real content.
@@ -2229,14 +3162,64 @@ Multiple pages add round trips but are easier to complete and to recover from er
 - [Ch 1 — How the Web Works](../chapters/01-how-the-web-works/README.md): POST, redirects.
 
 ### In the interview
+**30-second answer:** I built a five-step checkout (contact, shipping, delivery, payment, review) as server-rendered pages, one `<form method="post">` each, that works with JavaScript off. The key work was the HTML attributes: correct `autocomplete` tokens with `shipping` and `billing` prefixes, `inputmode="numeric"` instead of `type="number"` for card numbers and postcodes, and labels on everything, so browser autofill completes each step in one action. Delivery options are radio cards highlighted with `:has(:checked)`, and invalid submissions come back with a linked error summary and nothing typed lost. The hard edge case was hiding billing fields with `:has()`: hidden `required` fields still block submission, so the server validates that step.
+
+**Key terms to know:**
+- **`autocomplete` tokens** — values such as `given-name`, `postal-code` and `cc-number` that drive autofill.
+- **Section prefixes** — `shipping` and `billing` tell the browser which address a field belongs to.
+- **`inputmode`** — chooses the on-screen keyboard (for example `numeric`) without changing validation.
+- **`type="number"`** — for quantities only. It adds spinners and rejects spaces.
+- **`aria-current="step"`** — marks the current step in the progress list.
+- **Error summary** — a list at the top of the page linking to each invalid field.
+- **`:user-invalid`** — styles invalid fields only after interaction.
+- **`:has(:checked)`** — highlights the selected delivery card.
+- **Check your answers** — a review page with "Change" links back to each step.
+- **Hosted payment fields** — a payment provider's iframe fields so card data never touches your server.
+
 **Q:** What makes browser autofill work?
+
 **A:** Correct `autocomplete` tokens on each field (with `shipping`/`billing` prefixes where needed), plus sensible `name`, `type` and labels.
 
 **Q:** Why not `type="number"` for a credit card?
+
 **A:** It's for quantities: it adds spinners, can drop leading zeros and rejects spaces. Use text with `inputmode="numeric"`.
 
 **Q:** Why split checkout into steps?
+
 **A:** Shorter pages reduce cognitive load and errors, each step can be validated and recovered independently, and the back button works naturally.
+
+**Q:** Why one "Full name" field instead of first and last name?
+
+**A:** Many people's names don't fit a first/last structure (single names, family name first, multiple surnames). One field with `autocomplete="name"` works for everyone and still autofills. Split only if a downstream system truly needs it.
+
+**Q:** How do you hide the billing fields when "same as shipping" is checked, and what's the trap?
+
+**A:** `form:has(#same:checked) .billing { display: none }` hides them visually and from the accessibility tree. The trap is that a hidden `required` field still takes part in validation, so the browser blocks submission with an error the user can't see. Don't put `required` on those fields, and validate them on the server only when the box is unchecked.
+
+**Q:** How would you mark up the progress indicator?
+
+**A:** An ordered list, because the steps have a sequence. Completed steps are links, the current step has `aria-current="step"`, and future steps are plain text. Screen readers announce "current step" and the count.
+
+**Q:** The server rejects a postcode. What should the user experience?
+
+**A:** The same page comes back with the title prefixed "Error:", an error summary at the top linking to the field, an inline message like "Enter a postcode, like SW1A 1AA" connected with `aria-describedby`, and everything else they typed still filled in. Never clear the form.
+
+**Q:** International customers can't complete the address step. What's wrong?
+
+**A:** Usually validation built for one country: a strict postcode pattern, a required "state" field, or a short maximum length. Keep address fields flexible (two lines, free-text region, optional postcode where countries don't use one) and validate format per country on the server.
+
+**Q:** Would you store card numbers in your own form for a real shop?
+
+**A:** No. Real card data should go through a payment provider's hosted fields or redirect, so it never touches your server and you avoid most PCI compliance scope. This project uses dummy fields only to practise the HTML attributes.
+
+**Q:** How do you test the flow?
+
+**A:** Autofill test in two browsers with saved addresses and cards, a keyboard-only run, a screen-reader pass of the progress list, error summary and radio groups, a JS-disabled run, and a real phone to check keyboards. Add edge cases: long names, apostrophes, accents and international addresses.
+
+**Common mistakes in answers:**
+- Using `autocomplete="off"` to "secure" checkout. It mostly frustrates users and many browsers ignore it for addresses and passwords.
+- Using `pattern` or `type="number"` to force digits in card fields and blocking spaces users naturally type.
+- Treating `:has()`-hidden fields as "gone". They are still submitted if they hold values, and still validated if `required`.
 
 ### TL;DR
 A checkout is mostly correct HTML: the right `type`, `inputmode` and `autocomplete` on every field, one form per step, server validation with a linked error summary, and `:has()` to style choices without JS.
@@ -2333,14 +3316,60 @@ Five widths times three formats is 15 files per image, which is fine for a portf
 - [Ch 14 — Performance, SEO, Interview and Cheat Sheets](../chapters/14-performance-seo-interview-and-cheatsheet/README.md): LCP, CLS.
 
 ### In the interview
+**30-second answer:** I built a portfolio that serves every visitor the right image: the right size for their screen and pixel density, the right format, and the right crop. A Node script turns each original into five widths in AVIF, WebP and JPEG, and the pages use `<picture>` with `type` sources for format negotiation, `srcset` with `w` descriptors plus an accurate `sizes` for resolution switching, and `media` sources for an art-directed portrait hero on phones. The hard part was writing `sizes` to mirror the CSS layout, which I checked with `currentSrc` at each breakpoint. The hero LCP is under 2.5 s on mobile and CLS is 0.
+
+**Key terms to know:**
+- **Resolution switching** — the same image at several widths, chosen by the browser via `srcset` and `sizes`.
+- **Art direction** — different crops for different layouts, chosen by `<source media>`.
+- **Format negotiation** — `<source type="image/avif">` then WebP then JPEG fallback.
+- **`w` vs `x` descriptors** — width candidates for fluid images, density candidates for fixed-size images.
+- **`sizes`** — the image's display width at different viewport widths, known before CSS loads.
+- **Device pixel ratio (DPR)** — physical pixels per CSS pixel. A 3× phone needs three times the pixels.
+- **`currentSrc`** — the URL the browser actually chose, readable in the console.
+- **AVIF and WebP** — modern formats, usually much smaller than JPEG for photos.
+- **`fetchpriority="high"`** — prioritises the LCP hero.
+- **Image CDN** — a service that resizes and encodes on request.
+
 **Q:** What's the difference between `srcset` and `<picture>`?
+
 **A:** `srcset` with `sizes` offers the same image at different resolutions and lets the browser choose. `<picture>` lets you force choices: different formats via `type`, or different crops via `media`.
 
 **Q:** What does `sizes` tell the browser?
-**A:** How wide the image will be displayed at different viewport widths, before CSS is loaded, so it can pick a candidate early.
+
+**A:** How wide the image will be displayed at different viewport widths, before CSS is loaded, so it can pick a candidate early. It's read in order, and the first matching media condition wins.
 
 **Q:** Why keep a JPEG fallback?
+
 **A:** For browsers and tools that don't support AVIF or WebP, including some crawlers that generate link previews.
+
+**Q:** On a 375 px phone at 3×, which file does a full-width image download?
+
+**A:** With `sizes="100vw"` the slot is 375 CSS px, times a DPR of 3 is 1125 physical pixels, so the browser picks the smallest candidate at least 1125 px wide, here the 1200 px file. If `sizes` were missing it would assume `100vw` anyway, but in a three-column grid that assumption would download images three times too large.
+
+**Q:** Why can't the browser just measure the image slot itself?
+
+**A:** The preload scanner starts fetching images while the HTML is still being parsed, before CSS has loaded and layout exists. `sizes` gives it the layout information early, which is why it must match your CSS. `sizes="auto"` for lazy-loaded images is the exception, but it isn't Baseline yet.
+
+**Q:** Why not mix `1x, 2x` and `w` descriptors?
+
+**A:** They answer different questions. `x` descriptors suit a fixed-size image like a 120 px logo. `w` descriptors with `sizes` suit fluid images. A single `srcset` can't mix them, and mixing makes the attribute invalid.
+
+**Q:** What's the order of `<source>` elements and why?
+
+**A:** Most preferred first: AVIF, then WebP, then the `<img>` with JPEG. The browser takes the first source whose `type` it supports (and whose `media` matches), so putting JPEG first would mean nobody gets AVIF. The `<img>` is required, and it carries `alt`, `width`, `height` and loading attributes.
+
+**Q:** The portfolio becomes a 20,000-image shop catalogue. What breaks first?
+
+**A:** Build time and storage: five widths times three formats is 15 files per image, so 300,000 files. Switch to an image CDN that resizes and encodes on request and caches the result, and keep only the originals in storage.
+
+**Q:** How do you verify the right file is downloaded?
+
+**A:** In DevTools, emulate devices at DPR 1, 2 and 3, filter the Network panel to images, and run `document.querySelector('img').currentSrc` in the console. Lighthouse's "properly size images" audit flags oversized downloads.
+
+**Common mistakes in answers:**
+- Thinking `sizes` sets the displayed size. CSS sets the size, and `sizes` only helps the browser choose a file.
+- Using `<picture>` with `media` for simple resolution switching. That removes the browser's freedom to choose by network or density.
+- Lazy-loading the hero image, which delays LCP.
 
 ### TL;DR
 Generate several widths and formats with a script, use `srcset` plus an accurate `sizes` for resolution switching, `<picture>` with `type` for formats and `media` for art direction, and treat the hero as the LCP image.
@@ -2435,14 +3464,60 @@ A variable font file is bigger than one static weight. If you only use regular a
 - [Ch 14 — Performance, SEO, Interview and Cheat Sheets](../chapters/14-performance-seo-interview-and-cheatsheet/README.md): CLS, render-blocking resources.
 
 ### In the interview
+**30-second answer:** I built a reusable typography system on one self-hosted, subset WOFF2 variable font that covers weights 300–800 in a single file under 100 KB, plus a seven-step fluid type scale with `clamp()`. Loading was the hard part: I preload the main font, use `font-display: swap` so text is visible immediately, and define a metric-matched fallback `@font-face` with `size-adjust` and ascent/descent overrides so the swap barely moves anything. That kept font-swap CLS under 0.01 on a throttled connection. A specimen page shows every style in two languages.
+
+**Key terms to know:**
+- **Variable font** — one file with continuous axes such as weight (`wght`), width (`wdth`) and optical size (`opsz`).
+- **`@font-face` weight range** — `font-weight: 100 900` declares that one file covers every weight in the range.
+- **WOFF2** — the best-compressed web font format.
+- **`font-display`** — what to show while the font loads: `swap`, `optional`, `block`, `fallback`.
+- **FOIT and FOUT** — flash of invisible text (text hidden) and flash of unstyled text (fallback first, then swap).
+- **`<link rel="preload" as="font" crossorigin>`** — starts the font download early.
+- **Metric overrides** — `size-adjust`, `ascent-override`, `descent-override` make the fallback take the same space.
+- **Subsetting and `unicode-range`** — ship only needed characters, and download per-script files only when used.
+- **Modular type scale** — sizes related by a ratio, made fluid with `clamp()`.
+- **`font-optical-sizing: auto`** — uses the `opsz` axis to adjust glyph design for size.
+
 **Q:** What's a variable font and why use one?
+
 **A:** One font file containing continuous design axes like weight and width. It can replace several static files and lets you use any value in the range.
 
 **Q:** Compare `font-display: swap` and `optional`.
-**A:** `swap` always shows fallback text first and swaps later, which risks layout shift. `optional` only uses the web font if it's available almost immediately, so there's no shift but the web font might not be used.
+
+**A:** `swap` always shows fallback text first and swaps later, which risks layout shift. `optional` only uses the web font if it's available almost immediately, so there's no shift but the web font might not be used on that page view.
 
 **Q:** How do you reduce shift when a web font loads?
+
 **A:** Match the fallback font's metrics with `size-adjust` and ascent/descent overrides, preload the main font, and subset it so it arrives sooner.
+
+**Q:** Why does a font preload need `crossorigin`?
+
+**A:** Fonts are always fetched in CORS mode, even from your own origin. A preload without `crossorigin` is made in a different mode, so the browser can't reuse it and downloads the font twice. Always include `type="font/woff2"` and `crossorigin`.
+
+**Q:** When is a variable font the wrong choice?
+
+**A:** When you only need one or two weights. A variable file is larger than a single static weight, so regular and bold as two static files may be smaller in total. Measure before switching.
+
+**Q:** What does `unicode-range` do?
+
+**A:** It tells the browser which characters a `@font-face` file covers. If a page has no Cyrillic characters, the Cyrillic subset is never downloaded. It's how large multilingual fonts stay cheap for each page.
+
+**Q:** Why not preload every font?
+
+**A:** Preloads compete for bandwidth with the LCP image and critical CSS. Preloading italic and mono files that only appear further down delays what matters. Preload one or two critical files at most.
+
+**Q:** What happens if the font file fails to load?
+
+**A:** With `swap` or `optional`, users keep the fallback stack, so text stays readable. That's why the fallback is metric-matched and the stack ends in `system-ui` or a generic family. With `block`, text could be invisible for up to about three seconds first, so avoid it for body text.
+
+**Q:** How do you measure the loading behaviour?
+
+**A:** DevTools Network for font requests, sizes and timing, and the Performance panel with throttling to watch when text appears and swaps. Lighthouse reports CLS. Check variable font rendering in three browsers, and test text zoom and 200 % zoom.
+
+**Common mistakes in answers:**
+- Saying `font-display: swap` removes layout shift. It removes invisible text but can cause shift, which metric overrides address.
+- Loading fonts from a third-party CSS URL "for caching". Browsers partition caches by site, so shared-CDN caching no longer helps, and the extra connection delays text.
+- Setting `font-variation-settings: "wght" 700` instead of `font-weight: 700`. The low-level property overrides cascade-friendly ones and is harder to maintain.
 
 ### TL;DR
 Self-host one or two subset WOFF2 variable fonts, declare weight ranges, preload the main one, use `font-display: swap` with a metric-matched fallback, and drive sizes from a fluid `clamp()` scale.
@@ -2537,14 +3612,67 @@ Declarative commands cover show, close and toggle. Anything conditional (validat
 - [Ch 13 — Modern CSS and Architecture](../chapters/13-modern-css-and-architecture/README.md): logical properties, `:has()`.
 
 ### In the interview
+**30-second answer:** I built a modal confirmation dialog, a side drawer, a dismissible notice and a light-dismiss menu with zero `<script>` elements. Buttons open the dialogs declaratively with invoker commands (`commandfor` plus `command="show-modal"`), so the browser puts them in the top layer, makes the rest of the page inert, closes on Escape and returns focus to the trigger. Non-modal overlays use the Popover API (`auto` for light dismiss, `manual` for the notice). The hard part was animating in and out of `display: none`, which I did with `@starting-style` and `transition-behavior: allow-discrete`, treating the exit animation as a bonus because the `overlay` property is Chromium-only.
+
+**Key terms to know:**
+- **`<dialog>` and `showModal()`** — the native modal. Opening it modally makes the page behind inert.
+- **Top layer** — a layer above all content, so no `z-index` or `overflow` clipping issues.
+- **`inert`** — content that can't be focused, clicked or found by assistive technology.
+- **Invoker Commands API** — `command` and `commandfor` attributes letting a button act on another element.
+- **Popover API** — the `popover` attribute and `popovertarget` for non-modal overlays.
+- **Light dismiss** — closing on outside click or Escape, built into `popover="auto"`.
+- **`::backdrop`** — the pseudo-element behind a modal dialog or popover.
+- **`@starting-style`** — starting values for entry transitions.
+- **`transition-behavior: allow-discrete`** — lets `display` and `overlay` change at the right moment of a transition.
+- **`method="dialog"`** — a form inside a dialog that closes it on submit and sets `returnValue`.
+
 **Q:** What does `showModal()` give you that a positioned `<div>` doesn't?
+
 **A:** Top-layer rendering (no `z-index` fights), an inert background so focus and clicks can't escape, Escape to close, a `::backdrop`, and correct dialog semantics.
 
 **Q:** How can a button open a dialog without JavaScript?
+
 **A:** With invoker commands: `commandfor` names the dialog's `id` and `command="show-modal"` says what to do. `command="close"` closes it.
+```html
+<button commandfor="confirm" command="show-modal">Delete</button>
+<dialog id="confirm" aria-labelledby="t">
+  <h2 id="t">Delete this file?</h2>
+  <button commandfor="confirm" command="close">Cancel</button>
+</dialog>
+```
 
 **Q:** When would you use a popover instead of a dialog?
+
 **A:** For non-modal overlays like menus, pickers and tooltips that should close on outside click and shouldn't block the rest of the page.
+
+**Q:** What's the difference between `show()` and `showModal()`?
+
+**A:** `show()` opens a non-modal dialog in normal flow: the page behind stays interactive, there's no backdrop, and Escape doesn't close it. `showModal()` uses the top layer, makes everything else inert and adds Escape handling. For a confirmation, you want modal.
+
+**Q:** Why is animating a dialog's exit hard?
+
+**A:** Closing sets `display: none` and removes it from the top layer instantly, so there's nothing left to animate. `transition-behavior: allow-discrete` on `display` and `overlay` delays those flips until the transition ends. `overlay` is Chromium-only, so other browsers may cut the exit short.
+
+**Q:** How do you stop the page scrolling behind an open modal?
+
+**A:** `body:has(dialog[open]) { overflow: hidden }` (or `html:has(dialog:modal)`). The page is already inert, so it can't be clicked or focused, but it would still scroll with the wheel or touch without this.
+
+**Q:** A browser doesn't support invoker commands. What happens?
+
+**A:** The `command` attributes are ignored and the buttons do nothing, which is a broken page. Plan a fallback: make the button a link to a page version of the dialog, or add a tiny script that feature-detects (`'command' in HTMLButtonElement.prototype`) and calls `showModal()`.
+
+**Q:** The design wants clicking the backdrop to close the modal. How?
+
+**A:** `<dialog closedby="any">` provides light dismiss for modals, but it isn't Baseline (no Safari yet). Without it, provide a visible close button, which is required anyway, and accept that backdrop clicks won't close it in some browsers.
+
+**Q:** How do you test the dialogs?
+
+**A:** Keyboard: open, Tab and Shift+Tab stay inside, Escape closes, and focus returns to the trigger. Screen reader: role, name (from `aria-labelledby`) and modal state announced. Test animations in Chrome, Firefox and Safari, emulate reduced motion, and use a browser without invoker commands to check the fallback.
+
+**Common mistakes in answers:**
+- Writing a manual focus trap for `showModal()`. The inert background already keeps focus inside.
+- Raising `z-index` to 9999 for overlays. The top layer makes `z-index` irrelevant.
+- Using a popover for a must-answer confirmation. Popovers don't make the page inert, so users can wander off mid-task.
 
 ### TL;DR
 `<dialog>` plus `command`/`commandfor` gives you accessible modals with no script. The Popover API covers menus and notices with light dismiss, and `@starting-style` with `allow-discrete` animates them in and out where supported.
@@ -2642,14 +3770,64 @@ Full custom styling costs maintenance in three engines. `accent-color` alone may
 - [Ch 13 — Modern CSS and Architecture](../chapters/13-modern-css-and-architecture/README.md): tokens, theming.
 
 ### In the interview
+**30-second answer:** I built a kit of branded form controls (checkbox, radio, switch, select, text input, range, file input, progress and meter) where every control is still the real HTML element. The key decision was restyling the native element with `appearance: none` and pseudo-elements, or `accent-color` for quick wins, instead of hiding it behind fake `<div>`s, so keyboard, screen-reader, autofill and form behaviour stay native. The hard parts were range inputs, which need separate WebKit and Firefox pseudo-element rules, and Windows forced-colors mode, where marks drawn with backgrounds or shadows disappear. Every state is distinguishable without colour, and focus rings are at least 2 px with 3:1 contrast.
+
+**Key terms to know:**
+- **`appearance: none`** — removes the platform drawing of a control so you can style it, without changing what it is.
+- **`accent-color`** — sets the highlight colour of native checkboxes, radios, range and progress.
+- **`role="switch"`** — makes a checkbox announce as a switch, on or off.
+- **`:indeterminate`** — matches a checkbox in the mixed state, which can only be set from JS.
+- **Vendor pseudo-elements** — `::-webkit-slider-thumb` and `::-moz-range-thumb` for range styling.
+- **`::file-selector-button`** — styles the button part of a file input.
+- **WCAG 1.4.11 Non-text Contrast** — UI components and focus indicators need 3:1 against adjacent colours.
+- **Forced colors mode** — Windows High Contrast, where author colours become system colours.
+- **System colour keywords** — `CanvasText`, `Highlight`, `ButtonText` and similar for forced colors.
+- **`appearance: base-select`** — the customizable select. Not Baseline, so an enhancement.
+
 **Q:** How do you style a checkbox without breaking accessibility?
+
 **A:** Keep the real `<input type="checkbox">`, use `appearance: none` and draw the box and mark with CSS (borders, pseudo-elements). Keyboard, screen-reader and form behaviour stay native.
 
 **Q:** What's `accent-color`?
+
 **A:** A property that sets the highlight colour of native checkboxes, radios, range and progress controls without restyling them.
 
 **Q:** What breaks in forced-colors mode?
-**A:** Author colours and background images are overridden, so marks drawn with backgrounds or box-shadows can disappear. Use borders, `currentColor` and system colour keywords there.
+
+**A:** Author colours are replaced with system colours, `box-shadow` and `text-shadow` are removed, and gradient backgrounds are dropped (url images are kept). Marks drawn with gradients, background colours or shadows can disappear. Use borders, `currentColor` and system colour keywords there.
+
+**Q:** Why not use the older hide-the-input pattern with `opacity: 0` and a styled `<span>`?
+
+**A:** It works, but the real input and the visible fake can get out of sync: the focus ring may appear on the wrong element, the click target may not match, and states need duplicate selectors. Styling the input itself with `appearance: none` leaves nothing to keep in sync.
+
+**Q:** Why must WebKit and Firefox range rules be written separately?
+
+**A:** If any selector in a selector list is invalid, the whole rule is dropped. Firefox doesn't recognise `::-webkit-slider-thumb` and Chromium doesn't recognise `::-moz-range-thumb`, so combining them with a comma means neither browser applies the rule.
+```css
+input[type=range]::-webkit-slider-thumb { /* thumb */ }
+input[type=range]::-moz-range-thumb { /* same thumb */ }
+```
+
+**Q:** How do you put a checkbox in the indeterminate state?
+
+**A:** There's no HTML attribute for it. Set `checkbox.indeterminate = true` in JS, then style it with `:indeterminate`. It's typical for a "select all" box when only some children are checked.
+
+**Q:** Why the rule `font: inherit` on form controls?
+
+**A:** Inputs, selects, textareas and buttons don't inherit font family and size by default, so they render in a small system font. `font: inherit` makes them match the page and respect user font-size settings.
+
+**Q:** A user in Windows High Contrast says the checkbox ticks are invisible. How do you fix it?
+
+**A:** The tick is probably drawn with a background colour or `box-shadow`, which forced colors overrides or removes. Draw it with a border or a `clip-path`/mask using `currentColor`, and in `@media (forced-colors: active)` set it to a system colour like `CanvasText`. Use `forced-color-adjust: none` only as a last resort.
+
+**Q:** How do you test the kit?
+
+**A:** Screen reader for each control's role, name and state, keyboard (Space on checkboxes and switches, arrows in radio groups and on range), forced-colors emulation, 200 % zoom, three browsers, and a phone to check target sizes.
+
+**Common mistakes in answers:**
+- Building a "checkbox" from a `<div role="checkbox">`. You then owe keyboard handling, state, form submission and labelling.
+- Saying a styled `<select>` can fully restyle the dropdown list everywhere. Only the customizable select can, and it isn't Baseline.
+- Removing the focus outline on custom controls and relying on a colour change.
 
 ### TL;DR
 Restyle the real controls (`accent-color` for quick wins, `appearance: none` for full control), cover every state with pseudo-classes, write vendor rules for range separately, and check forced-colors mode so nothing disappears.
@@ -2755,14 +3933,68 @@ Layers are powerful but invisible: a developer who doesn't know about them can't
 - [Ch 3 — Semantic HTML and Accessibility](../chapters/03-semantic-html-and-accessibility/README.md): accessible components.
 
 ### In the interview
+**30-second answer:** I built a 15-component CSS library organised with cascade layers: one order statement, `@layer reset, tokens, base, layout, components, utilities, overrides;`, then each component in its own file inside `components`. The key idea is that layer order is checked before specificity, so a utility class beats `#id .button` in the components layer, vendor CSS imported with `layer(vendor)` can't override my components, and an unlayered consumer rule with one class beats the whole library without `!important`. The confusing part, and the thing I tested most, is that `!important` reverses layer order. The library is under 30 KB compressed and every component passes axe and keyboard checks.
+
+**Key terms to know:**
+- **The cascade** — the algorithm that picks one value per property: origin and importance, context, inline styles, layers, specificity, then order.
+- **Cascade layer (`@layer`)** — a named bucket of rules, ordered by its first declaration.
+- **Layer order statement** — `@layer a, b, c;` at the top, fixing priority regardless of file order.
+- **Unlayered styles** — normal declarations outside any layer beat all layered ones.
+- **`!important` reversal** — important declarations in earlier layers beat important ones in later layers.
+- **Specificity** — still decides between rules inside the same layer.
+- **`:where()`** — wraps selectors with zero specificity, ideal for resets and defaults.
+- **`@import … layer()`** — puts an imported stylesheet into a named layer.
+- **Nested layers** — `components.button`, sub-layers within a layer.
+- **`revert-layer`** — rolls a property back to the value from the previous layer.
+
 **Q:** Where do cascade layers sit in the cascade?
-**A:** After origin and importance, before specificity. So a rule in a later layer wins over an earlier layer regardless of selector specificity. Unlayered styles count as the last layer for normal declarations.
+
+**A:** After origin and importance (and inline `style` attributes), before specificity. So a rule in a later layer wins over an earlier layer regardless of selector specificity. Unlayered styles count as the last layer for normal declarations.
 
 **Q:** Why would a library put itself in a layer?
+
 **A:** So any consumer style, even a single class, wins without specificity hacks or `!important`.
 
 **Q:** What happens with `!important` in layers?
+
 **A:** The order reverses: important declarations in earlier layers beat those in later layers, so lower layers can protect critical rules.
+
+**Q:** A teammate's `#sidebar .button` loses to `.button` in your utilities layer. Why?
+
+**A:** If `#sidebar .button` is in the components layer and `.button` is in utilities, layer order decides first and utilities comes later, so it wins. Specificity is only compared within the same layer. DevTools' Styles panel shows the layer name next to each rule, which explains it.
+
+**Q:** What happens if you forget the order statement?
+
+**A:** Each layer's position is set by the first time its name appears, which depends on file and import order. A component file that loads before the reset could put `components` below `reset`. Always declare the full order once at the very top.
+
+**Q:** How does `:where()` help inside a layer?
+
+**A:** `:where()` gives its selector zero specificity, so `:where(.button)[data-variant]` style defaults can be overridden by any later single-class rule in the same layer. It's most useful in resets, where even element selectors can get in the way.
+
+**Q:** What does `revert-layer` do?
+
+**A:** It makes a property fall back to whatever the previous layers would have given it, as if this layer's declaration didn't exist. It's handy in a utilities or overrides layer to "undo" a component style without hard-coding the old value.
+
+**Q:** A consumer also uses layers. What can go wrong?
+
+**A:** Their layer names can collide with yours (two `components` layers merge), and their layers might be declared before yours. Namespace the library (`@layer mylib.components`) and document that consumers should either stay unlayered or declare their layers after `mylib`.
+
+**Q:** How do you prove the priority order works?
+
+**A:** A cascade test page with about ten tricky cases (ID selector in a low layer, utility vs component, vendor high-specificity rule, consumer override, `!important` in reset), checked with a headless browser reading `getComputedStyle`. Run it in CI so a refactor can't silently change priorities.
+
+**Q:** What's an `@import` gotcha with layers?
+
+**A:** `@import` must come before all other rules except `@charset` and `@layer` statements, so the order statement goes first and imports straight after it. An `@import` placed later is ignored.
+```css
+@layer reset, vendor, tokens, base, components, utilities;
+@import url(vendor.css) layer(vendor);
+```
+
+**Common mistakes in answers:**
+- Saying layers raise specificity. They are a separate step before specificity and don't change it.
+- Saying a later layer always wins. For `!important` declarations, the earliest layer wins.
+- Putting the app in a layer declared before the library, so the library unexpectedly overrides the app.
 
 ### Self-check
 - If you `@import` a vendor stylesheet without `layer()`, where do its rules end up?
@@ -2860,14 +4092,66 @@ Container queries move responsibility into components, which is great for reuse 
 - [Ch 13 — Modern CSS and Architecture](../chapters/13-modern-css-and-architecture/README.md): component architecture, `@property`.
 
 ### In the interview
+**30-second answer:** I built a family of cards that adapt to the space they're placed in, not the viewport: the same HTML card is stacked in a narrow sidebar, a horizontal media object in a grid cell and a large feature in a hero slot. Each slot is a container with `container-type: inline-size`, cards switch layout with `@container (inline-size > 25rem)` rules, and inner type scales with `cqi` units inside `clamp()` so text zoom still works. A "featured" variant uses a style query on `--featured`, with a class fallback because style queries are newly Baseline. Card CSS contains zero viewport media queries and works from 200 px to 1200 px.
+
+**Key terms to know:**
+- **Container query** — a rule that applies based on an ancestor container's size or style.
+- **`container-type: inline-size`** — makes an element a size container for its inline axis.
+- **Size containment** — the container's size no longer depends on its children.
+- **`container-name`** — lets a query target a specific ancestor instead of the nearest one.
+- **`cqi` unit** — 1 % of the query container's inline size.
+- **Style query** — `@container style(--featured: true)` tests a custom property's computed value.
+- **`@property` with `inherits: false`** — keeps a flag from flowing into nested containers.
+- **Media query vs container query** — page-level and user preferences vs component-level adaptation.
+- **Range syntax** — `(inline-size > 25rem)` comparisons in queries.
+
 **Q:** Media query or container query?
+
 **A:** Media queries for page-level layout and user preferences. Container queries for components that must adapt to whatever space they're placed in.
 
 **Q:** Why can't an element query its own size?
+
 **A:** The query result could change the element's size, which would change the query result, creating a loop. Containment breaks the loop by making the container's size independent of its contents.
 
 **Q:** What's `cqi`?
-**A:** 1 % of the query container's inline size. Useful for type and spacing that scale with the component's slot.
+
+**A:** 1 % of the query container's inline size. Useful for type and spacing that scale with the component's slot, with a `rem` term or lower bound in `clamp()` so user font settings still apply.
+
+**Q:** What's a common bug when you add `container-type: inline-size`?
+
+**A:** The container's width can no longer come from its content. If it's sized by content, such as a flex item with no basis or an element with `width: fit-content`, it can collapse to zero width. Containers need an externally determined width, like a grid cell or a block element.
+
+**Q:** Should the card be the container?
+
+**A:** The card can't query itself, so either wrap it in a container (the slot) or make the card a container and let its inner wrapper change layout. The slot approach keeps card HTML identical, and the card-as-container approach makes the card self-contained. Both are valid if you're consistent.
+
+**Q:** What does a minimal container query look like?
+
+**A:** Name the slot as an inline-size container, then query that name.
+```css
+.slot { container: card-slot / inline-size; }
+@container card-slot (inline-size > 25rem) {
+  .card { grid-template-columns: 40% 1fr; }
+}
+```
+The shorthand `container` sets name and type together.
+
+**Q:** Why give style-query flags `inherits: false`?
+
+**A:** Custom properties inherit by default, so `--featured: true` on a grid would also apply to every nested container. Registering it with `@property` and `inherits: false` keeps the flag local to the element it's set on.
+
+**Q:** The design system grows to 40 components, each with its own breakpoints. What breaks first?
+
+**A:** Consistency. Every component picks slightly different thresholds, and page behaviour becomes hard to predict. Share container breakpoint tokens across components and document each component's layouts. Also watch for unexpected containment side effects as more elements become containers.
+
+**Q:** How do you test it?
+
+**A:** Use demo wrappers with `resize: horizontal` to sweep container widths, then a viewport sweep from 320 to 1920 px, 200 % zoom, and a screen reader to confirm the same HTML order works in every layout. A headless script can set container widths and assert the card's computed layout.
+
+**Common mistakes in answers:**
+- Saying container queries replace media queries. Page layout and user preferences still need media queries.
+- Using `container-type: size` by default. It also contains height, which collapses containers whose height comes from content.
+- Using `cqi` alone for font size, which ignores the user's font setting.
 
 ### TL;DR
 Make each slot an `inline-size` container, let cards choose stacked, media or feature layouts by container width, scale their insides with `cqi`, and use style queries (with a fallback) for variants. Card HTML stays identical everywhere.
@@ -2973,14 +4257,60 @@ Conformance is about the whole page in every state. A single inaccessible third-
 - [Ch 11 — Typography, Colour and Visual Effects](../chapters/11-typography-color-and-visual-effects/README.md): contrast.
 
 ### In the interview
+**30-second answer:** I built an e-commerce product page to WCAG 2.2 Level AA and documented it in a criterion-by-criterion audit table. Every choice is a native control: colour and size are radio groups in fieldsets with text names, prices are written out as "Was £60, now £45", stock is stated in text, specs are a table with row headers, and reviews are articles with ratings in text. The hard parts were new 2.2 criteria: a sticky mobile "Add to basket" bar must not hide the focused field (`scroll-padding` for both bars), targets must be at least 24 × 24 px, and help appears in the same place on every page. axe catches mechanical issues, and the audit records manual keyboard, screen-reader, zoom and text-spacing evidence for the rest.
+
+**Key terms to know:**
+- **WCAG 2.2 Level AA** — the common legal and contractual accessibility target, with A and AA success criteria.
+- **POUR** — WCAG's principles: perceivable, operable, understandable, robust.
+- **2.4.11 Focus Not Obscured (Minimum)** — a focused element must not be entirely hidden by author content.
+- **2.5.8 Target Size (Minimum)** — targets at least 24 × 24 CSS px, or enough spacing.
+- **3.2.6 Consistent Help** — help mechanisms appear in the same relative place across pages.
+- **1.4.11 Non-text Contrast** — 3:1 for UI components, focus rings and selected-state indicators.
+- **1.4.10 Reflow** — usable at 320 CSS px wide without two-dimensional scrolling, except things like tables.
+- **1.4.12 Text Spacing** — content survives user-increased line, letter, word and paragraph spacing.
+- **Accessible name** — swatches named "Burgundy", thumbnails named "Back view".
+- **European Accessibility Act** — EU law applying accessibility requirements to many e-commerce services since June 2025.
+
 **Q:** Name three criteria new in WCAG 2.2 and how you'd meet them.
+
 **A:** Focus Not Obscured (keep sticky bars from covering focus with `scroll-padding`), Target Size Minimum (24 × 24 px targets or enough spacing), Dragging Movements (provide a single-pointer alternative to any drag, like buttons beside a slider).
 
 **Q:** How do you make a colour swatch accessible?
+
 **A:** Make it a radio with a text label (the colour name), group it in a fieldset with a legend, and show selection with something other than colour that meets 3:1 contrast.
 
 **Q:** Can automated tools prove WCAG conformance?
+
 **A:** No. They only catch issues a machine can detect, like missing names or low contrast. Manual keyboard, screen-reader and visual checks are needed for most criteria.
+
+**Q:** Should an out-of-stock size be `disabled`?
+
+**A:** Disabled controls are skipped by Tab and exempt from contrast, so some users never learn the size exists. A common alternative is keeping it focusable, labelled "out of stock" in text, and offering "notify me". Either way, unavailability must be stated in text, not only greyed out.
+
+**Q:** Why write "Was £60, now £45" instead of using a strikethrough?
+
+**A:** Most screen readers don't announce `<del>` or `text-decoration: line-through` by default, so users hear "£60 £45" with no meaning. Visible or visually hidden text that says "was" and "now" makes the relationship explicit for everyone.
+
+**Q:** How do you build the gallery without JS and keep it accessible?
+
+**A:** Use radios (one per view) with `:has()` to show the matching image, or links to anchors. Radios give arrow-key navigation within the group for free. Each control is named after the view ("Back view"), each image has alt text describing that view, and nothing rotates automatically.
+
+**Q:** A third-party reviews widget fails the audit. What do you do?
+
+**A:** Conformance is for the whole page, so one inaccessible widget means the page doesn't conform. Report it to the vendor with evidence, ask for their accessibility conformance report, and meanwhile provide an accessible alternative (server-rendered reviews) or remove it. Include vendors in procurement checks.
+
+**Q:** How do you keep the page accessible after launch?
+
+**A:** An audit is a snapshot, so add automated checks (axe on every page state, computed-style checks for focus and target size) to CI (project 39), and schedule periodic manual audits. Make accessibility part of the definition of done for new features.
+
+**Q:** What does your testing look like?
+
+**A:** axe DevTools on every state, a keyboard-only purchase, a screen-reader purchase with NVDA or VoiceOver, zoom to 200 % and 400 %, the text-spacing bookmarklet, forced-colors mode and reduced motion. Each result goes into the audit table as evidence.
+
+**Common mistakes in answers:**
+- Saying 2.4.11 requires the focused element to be fully visible. At AA it must not be entirely hidden. Full visibility is the AAA criterion 2.4.12.
+- Claiming a Lighthouse 100 means WCAG compliant. It's a small automated subset.
+- Saying WCAG 2.2 still has 4.1.1 Parsing. It was removed in 2.2.
 
 ### TL;DR
 Build the product page from native, labelled controls, show prices and stock in text, keep focus visible past sticky bars, meet contrast and target sizes, and prove it with a criterion-by-criterion audit, because automated tools alone can't.
@@ -3075,14 +4405,64 @@ Scroll-linked motion is fun for some users and nauseating for others. Keep it su
 - [Ch 13 — Modern CSS and Architecture](../chapters/13-modern-css-and-architecture/README.md): `@supports`, progressive enhancement.
 
 ### In the interview
+**30-second answer:** I built three pieces of expressive CSS: an illustration of 30+ shapes drawn with gradients, `clip-path`, borders and shadows, a five-scene story animated by scroll-driven animations, and a gallery whose thumbnails morph into the detail view with view transitions. The key discipline was progressive enhancement: scroll-driven animations aren't Baseline, so every effect lives inside `@supports (animation-timeline: view())`, the static page is complete without them, and reduced motion turns them off. The hardest bug was content that started at `opacity: 0` outside the `@supports` block and vanished in Firefox, which I fixed by moving starting states inside it. Performance recordings show no layout work during scroll animations.
+
+**Key terms to know:**
+- **Scroll-driven animation** — a CSS animation whose progress follows scroll position instead of time.
+- **`scroll()` timeline** — progress of a scroll container, such as `scroll(root)` for the page.
+- **`view()` timeline** — progress of an element moving through the scrollport.
+- **`animation-range`** — which part of the timeline the animation runs over, such as `entry 0% cover 40%`.
+- **View Transitions API** — snapshots old and new states and animates between them.
+- **`view-transition-name`** — pairs an old and new element so they morph. Must be unique at a time.
+- **`::view-transition-old/new`** — pseudo-elements for the snapshots, which you can style.
+- **`@supports`** — feature query wrapping enhancements.
+- **`clip-path` and gradients** — tools for drawing shapes in CSS art.
+- **`role="img"` with `aria-label`** — gives the illustration a single text alternative.
+
 **Q:** How do scroll-driven animations differ from a scroll listener in JS?
+
 **A:** They're declarative: the animation's progress is tied to a scroll or view timeline, and the browser can run them off the main thread for compositor-friendly properties. A scroll listener runs JS on the main thread and can jank.
 
 **Q:** How does a view transition work?
+
 **A:** The browser snapshots the old state, you update the DOM, it snapshots the new state, then animates between them using pseudo-elements. Elements with matching `view-transition-name` morph individually.
 
 **Q:** How do you ship a non-Baseline effect safely?
+
 **A:** Wrap it in `@supports`, make sure the default experience is complete without it, and respect `prefers-reduced-motion`.
+
+**Q:** Your scroll animation does nothing even in Chrome. What's a likely code-level cause?
+
+**A:** The `animation` shorthand resets `animation-timeline` to `auto`, because the timeline is a reset-only part of the shorthand. If `animation-timeline` is declared before `animation`, it's wiped out. Declare it after.
+```css
+.bar { animation: grow linear both;
+       animation-timeline: scroll(root); }
+```
+
+**Q:** What happens if two elements share a `view-transition-name`?
+
+**A:** Names must be unique among rendered elements at the time of the snapshot, so the transition is skipped and the DOM update just happens. In a gallery, give the clicked thumbnail the name right before the transition and remove it after, or set names dynamically.
+
+**Q:** Same-document vs cross-document view transitions?
+
+**A:** Same-document transitions are started with `document.startViewTransition(callback)` in a single page, which needs a little JS. Cross-document transitions animate between two real page loads on the same origin, opted into with `@view-transition { navigation: auto }` in both pages' CSS and no JS. Cross-document support is narrower.
+
+**Q:** How should reduced motion affect these effects?
+
+**A:** Scroll-linked movement should be removed under `prefers-reduced-motion: reduce`, because it's movement the user didn't ask for. View transitions can become a short cross-fade or be disabled by setting `animation: none` on the `::view-transition-group(*)` pseudo-elements.
+
+**Q:** Text inside a morphing card looks stretched mid-transition. Why?
+
+**A:** The old and new states are captured as images and scaled between sizes, so text inside them stretches like a picture. Use `object-fit` on `::view-transition-old/new`, give the text its own `view-transition-name` so it moves separately, or keep size changes small.
+
+**Q:** How do you test and debug the story?
+
+**A:** Compare Chrome, Safari and Firefox side by side, emulate reduced motion, scrub scroll timelines in the DevTools Animations panel, record with CPU throttling in the Performance panel, and check the art and story pages with a screen reader.
+
+**Common mistakes in answers:**
+- Saying scroll-driven animations are Baseline. They are not yet supported in every major engine, so they must be enhancements.
+- Leaving content hidden by default and revealed only by the animation, which leaves it invisible where unsupported.
+- Exposing 30 empty `<div>`s to assistive technology instead of one labelled `role="img"`.
 
 ### TL;DR
 Draw with gradients and `clip-path`, animate scenes with scroll and view timelines inside `@supports`, morph views with view transitions, and make sure the static, reduced-motion page is complete on its own.
@@ -3179,14 +4559,60 @@ Budgets are only useful if someone owns them. Without an owner, the team raises 
 - [Ch 14 — Performance, SEO, Interview and Cheat Sheets](../chapters/14-performance-seo-interview-and-cheatsheet/README.md): critical rendering path, Core Web Vitals.
 
 ### In the interview
+**30-second answer:** I took a 10-page content site, measured a deliberately slow "before" version, fixed it, and kept it fast with a performance budget enforced in CI by Lighthouse CI. The budget is explicit: lab LCP at most 2.0 s, CLS at most 0.05, Total Blocking Time at most 100 ms, under 50 KB of HTML and CSS per page and at most 15 requests. The biggest win was LCP discovery, making the hero a plain `<img>` with `fetchpriority="high"` instead of a lazy-loaded or CSS background image, followed by self-hosting fonts and removing a CSS framework. A pull request that adds a 500 KB image now fails the build, and field data from CrUX confirms the p75 numbers.
+
+**Key terms to know:**
+- **Core Web Vitals** — LCP (loading), INP (responsiveness), CLS (visual stability), judged at the 75th percentile of real visits.
+- **Good thresholds** — LCP at most 2.5 s, INP at most 200 ms, CLS at most 0.1.
+- **LCP sub-parts** — time to first byte, resource load delay, resource load time, element render delay.
+- **INP** — Interaction to Next Paint, the latency of clicks, taps and key presses through the next frame.
+- **TBT** — Total Blocking Time, a lab metric used as a proxy for responsiveness.
+- **Lab vs field data** — simulated Lighthouse runs vs real-user data (CrUX, `web-vitals`).
+- **Render-blocking CSS** — the browser doesn't paint until stylesheets in `<head>` load.
+- **Critical CSS** — inlining the styles for the first screen.
+- **Performance budget** — agreed limits that fail a build when exceeded.
+- **Lighthouse CI** — runs Lighthouse in CI and asserts on metrics and sizes.
+
 **Q:** What are the Core Web Vitals and their "good" thresholds?
+
 **A:** LCP (loading) at most 2.5 s, INP (responsiveness) at most 200 ms, CLS (visual stability) at most 0.1, each at the 75th percentile of real page loads.
 
 **Q:** What's a performance budget and how do you enforce it?
+
 **A:** Agreed limits on metrics and resource sizes. Enforce them in CI with Lighthouse CI or bundler checks so a change that breaks the budget fails the build.
 
 **Q:** Why might a page pass Lighthouse but fail Core Web Vitals?
+
 **A:** Lighthouse is one simulated lab run. Core Web Vitals use real users' devices, networks and interactions at p75, which can be much worse, and INP can't be measured in a lab at all.
+
+**Q:** Which part of LCP does `fetchpriority="high"` mainly improve?
+
+**A:** Resource load delay, the gap between the page starting to load and the browser starting to fetch the LCP image. A high priority hint gets the request queued earlier and ahead of less important images. Compressing the image improves load time instead, a different sub-part.
+
+**Q:** How is CLS calculated?
+
+**A:** Each unexpected layout shift scores impact fraction (how much of the viewport moved) times distance fraction (how far it moved). Shifts are grouped into session windows (up to 5 s, with gaps under 1 s), and CLS is the worst window. Shifts within 500 ms of user input don't count.
+
+**Q:** Why is CSS render-blocking, and what do you do about it?
+
+**A:** The browser won't paint until it has the CSS that applies to the page, to avoid a flash of unstyled content. Keep CSS small, self-host fonts, inline critical CSS for the first screen on large sites, and avoid `@import` chains that add sequential requests.
+
+**Q:** Build failures keep happening randomly. What's wrong?
+
+**A:** Lab variance, often around 10 %, makes single runs flaky. Run each page three times and assert on the median, leave headroom below the real target, and run on consistent CI hardware. Flaky budgets get ignored, which defeats them.
+
+**Q:** Marketing adds a chat widget and LCP and INP get worse. What do you do?
+
+**A:** Measure the cost with and without it, then negotiate with numbers. Load it after the page is interactive or on user intent (a "Chat with us" button that loads the script), and keep it off pages where it doesn't help. Third parties are the most common budget-breakers.
+
+**Q:** How do you find the cause of a slow LCP?
+
+**A:** Identify the LCP element in Lighthouse or the Performance panel, then break the time into its four sub-parts. A large load delay means late discovery (CSS background, lazy loading, JS injection). A large render delay means blocking CSS, fonts or scripts.
+
+**Common mistakes in answers:**
+- Saying FID is a Core Web Vital. INP replaced FID in March 2024.
+- Optimising only the lab score. Field p75 is what users and search see.
+- Thinking compression is always the main LCP fix. Late discovery is often the bigger problem.
 
 ### Self-check
 - Which part of LCP does `fetchpriority="high"` mainly improve?
@@ -3288,14 +4714,65 @@ Logical properties are a small mental shift for teams, so a lint rule makes it s
 - [Ch 8 — Flexbox](../chapters/08-flexbox/README.md): direction-aware layout.
 
 ### In the interview
+**30-second answer:** I built a small site in English, Arabic and German from one stylesheet that works left-to-right and right-to-left, plus a vertical Japanese page. The key decision was logical properties everywhere (`margin-inline-start`, `padding-block`, `inset-inline-end`, `text-align: start`), enforced by a Stylelint rule, so `dir="rtl"` on `<html>` mirrors the layout with no overrides. Flex and grid already follow writing direction. The hard parts were what not to flip (logos, play buttons, numbers) and mixed-direction text, which I isolated with `<bdi>` and `dir="auto"`. German text 30–40 % longer fits everywhere, and nothing overflows at 320 px in any language.
+
+**Key terms to know:**
+- **Logical properties** — properties relative to writing direction: inline/block axes and start/end sides.
+- **Inline vs block axis** — the direction text runs in a line vs the direction blocks stack.
+- **`dir` attribute** — sets text direction (`ltr`, `rtl`, `auto`) on an element, ideally on `<html>`.
+- **`lang` attribute** — declares language for screen readers, hyphenation, fonts and `:lang()` selectors.
+- **`:dir(rtl)`** — matches elements by their computed direction, used to flip directional icons.
+- **Unicode Bidirectional Algorithm** — how browsers order mixed LTR and RTL text.
+- **`<bdi>`** — bidirectional isolate, keeping user content from scrambling surrounding text.
+- **`writing-mode`** — horizontal or vertical text flow, such as `vertical-rl` for Japanese.
+- **`hreflang`** — tells search engines which URL serves which language.
+- **Pseudo-localisation** — lengthening and accenting strings to stress-test layouts.
+
 **Q:** What are logical properties and why use them?
+
 **A:** Properties defined relative to writing direction (inline and block, start and end) instead of physical sides. One stylesheet then works for LTR, RTL and vertical writing.
 
 **Q:** How do you handle a username in a different direction from the surrounding text?
+
 **A:** Wrap it in `<bdi>`, or use `dir="auto"` on its container, so the bidi algorithm treats it as an isolated run.
 
 **Q:** Should everything mirror in RTL?
+
 **A:** No. Directional things like arrows and layout do. Logos, media controls, numbers and checkmarks don't.
+
+**Q:** Why set `dir` in HTML rather than `direction: rtl` in CSS?
+
+**A:** Direction is part of the content's meaning, so it belongs in the markup, where it also works with CSS off and is available to assistive technology and the bidi algorithm. The CSS Writing Modes spec itself advises authors to use the HTML `dir` attribute rather than the `direction` property, because stylesheets can be turned off or overridden.
+
+**Q:** Which CSS has no logical equivalent, and how do you handle it?
+
+**A:** `transform: translateX()`, `background-position: left`, shadow offsets and some gradients are physical. Use a direction custom property and multiply.
+```css
+:root { --dir: 1; }
+:dir(rtl) { --dir: -1; }
+.slide { translate: calc(1rem * var(--dir)) 0; }
+```
+
+**Q:** What does `dir="auto"` do on an input?
+
+**A:** It sets the element's direction from the first strong directional character in its content. In a comment box where people may type Arabic or English, the text aligns and orders correctly for whichever they type.
+
+**Q:** German text is 40 % longer. What breaks first?
+
+**A:** Fixed-width buttons, nav items and labels truncate or overflow, and long compound words don't wrap. Size with padding instead of widths, allow wrapping, use `hyphens: auto` with `lang` set, and `overflow-wrap: break-word` as a last resort.
+
+**Q:** How do you stop Latin-language pages downloading the Arabic font?
+
+**A:** Declare the Arabic font with a `unicode-range` covering the Arabic block. The browser only downloads a font file when characters in its range appear on the page, so English pages never fetch it.
+
+**Q:** How do you test it?
+
+**A:** Toggle `dir` in DevTools on every page, run pseudo-localisation, test with real translated text, check `lang` switching with a screen reader that has an Arabic voice, and crawl the `hreflang` links. The lint rule catches physical properties creeping back.
+
+**Common mistakes in answers:**
+- Saying RTL support means `transform: scaleX(-1)` on the page. That mirrors text glyphs too and makes them unreadable.
+- Flipping every icon, including logos and play buttons.
+- Forgetting that `width` and `height` swap meaning in vertical writing, which is why `inline-size` and `block-size` exist.
 
 ### TL;DR
 Set `lang` and `dir` per page, use logical properties everywhere (lint-enforced), flip only directional icons with `:dir(rtl)`, isolate mixed-direction text with `<bdi>`, and stress-test with long and RTL text. One stylesheet then serves every direction.
@@ -3393,14 +4870,66 @@ Native features reduce JS and bugs but move complexity into browser support matr
 - [Ch 13 — Modern CSS and Architecture](../chapters/13-modern-css-and-architecture/README.md): `@supports`, progressive enhancement.
 
 ### In the interview
+**30-second answer:** I built floating UI (dropdown menus, toggletips, tooltips, a field hint and a listbox) with the platform instead of a positioning library. The Popover API handles showing, hiding, the top layer and light dismiss, so nothing is clipped by `overflow: hidden` ancestors, and CSS anchor positioning places each popover next to its trigger with `position-area`, flipping with `position-try-fallbacks` near viewport edges. Because anchor positioning isn't fully Baseline, all anchoring lives in `@supports` with a simpler fixed-position fallback that is still usable. Tooltips meet WCAG 1.4.13: they show on focus, can be dismissed with Escape, and stay while you hover them.
+
+**Key terms to know:**
+- **Popover API** — the `popover` attribute and `popovertarget` buttons for non-modal overlays.
+- **`popover="auto"` vs `"manual"`** — auto has light dismiss and closes other auto popovers, manual stays until closed.
+- **Top layer** — rendering above everything, immune to `z-index` and ancestor clipping.
+- **`anchor-name`** — names an element as an anchor (`--menu-btn`).
+- **`position-anchor`** — tells a positioned element which anchor to use.
+- **`position-area`** — places the element in a 3 × 3 grid of areas around the anchor.
+- **`position-try-fallbacks`** — alternative placements such as `flip-block` when the first overflows.
+- **Toggletip** — a button that reveals a short explanation on click.
+- **WCAG 1.4.13 Content on Hover or Focus** — dismissible, hoverable and persistent.
+- **Disclosure vs ARIA menu** — a button showing links vs an application menu with arrow-key behaviour.
+
 **Q:** What does the Popover API give you?
+
 **A:** Declarative show and hide from a button, top-layer rendering (no clipping or `z-index` issues), light dismiss for `auto` popovers, and automatic accessibility wiring for the trigger's expanded state.
 
 **Q:** How does anchor positioning work?
+
 **A:** The trigger gets an `anchor-name`, the floating element references it with `position-anchor`, and is placed with `position-area` or `anchor()` in inset properties. `position-try-fallbacks` lists alternative placements when it would overflow.
+```css
+.btn { anchor-name: --menu-btn; }
+.menu { position-anchor: --menu-btn;
+        position-area: block-end span-inline-end;
+        position-try-fallbacks: flip-block; }
+```
 
 **Q:** Why not put essential information in a tooltip?
+
 **A:** Touch users can't hover, it may not be announced, and it disappears. Essential text should be visible or behind a real button.
+
+**Q:** Why not use `role="menu"` for a navigation dropdown?
+
+**A:** `role="menu"` promises application-style behaviour: arrow keys between items, type-ahead and a single tab stop, which needs JS. A navigation dropdown is better as a disclosure, a button that shows a list of links with normal Tab navigation. Adding the role without the behaviour misleads screen-reader users.
+
+**Q:** Why is a popover not clipped by a parent with `overflow: hidden`?
+
+**A:** An open popover is moved into the top layer, which renders outside the normal stacking and containing-block hierarchy of the page. Ancestor `overflow`, `z-index` and stacking contexts no longer apply to it, which used to require portalling elements to the end of `<body>` with JS.
+
+**Q:** What happens in a browser without anchor positioning?
+
+**A:** The anchor properties are ignored, so a popover would appear at its default top-layer position, centred in the viewport. That's why the anchor rules sit inside `@supports (anchor-name: --a)` and the fallback gives a deliberate fixed position that's always on-screen and usable.
+
+**Q:** How do you meet WCAG 1.4.13 for a tooltip?
+
+**A:** Dismissible: Escape hides it without moving focus. Hoverable: the pointer can move from the trigger onto the tooltip without it vanishing, so leave no gap or add a short hide delay. Persistent: it stays until the user moves away, dismisses it or it's no longer relevant, never on a timer.
+
+**Q:** A table has a tooltip on every one of 500 cells. What's the problem?
+
+**A:** It's heavy markup, a cluttered experience and often hides data that should be visible. Show the information in the table itself or in a details panel, and use one shared popover that's populated on demand if a tooltip is truly needed.
+
+**Q:** How do you test the kit?
+
+**A:** Keyboard: open, navigate, Escape and focus return for every component. Screen reader: the trigger's expanded state and the popover content. Place triggers at all four viewport edges and inside an `overflow: hidden` container, zoom to 200 % to force flipping, and test in a browser without anchor positioning.
+
+**Common mistakes in answers:**
+- Saying `popover` makes something modal. Popovers never make the page inert. Use `<dialog>` with `showModal()` for that.
+- Relying on the `title` attribute for tooltips. It isn't keyboard accessible and isn't announced consistently.
+- Shipping anchor positioning without a fallback because "Chrome supports it".
 
 ### TL;DR
 Use the Popover API for showing, hiding, top layer and light dismiss. Use anchor positioning in `@supports` to place and flip overlays next to triggers. Keep tooltips supplementary, use disclosures rather than ARIA menus for navigation, and make sure everything still works where anchoring isn't supported.
@@ -3501,14 +5030,60 @@ Static sites are fast and secure but need a rebuild for every change, which take
 - [Ch 1 — How the Web Works](../chapters/01-how-the-web-works/README.md): status codes, redirects.
 
 ### In the interview
+**30-second answer:** I built a 30-page blog with a static-site generator, so every page gets correct SEO from templates: a unique `<title>` and description, a canonical URL, Open Graph tags, one `<h1>`, `lang`, and JSON-LD (`BlogPosting`, `BreadcrumbList`, `WebSite`) generated from each post's front matter, never typed by hand. The build also outputs `sitemap.xml`, `robots.txt`, an RSS feed and a 404 page that returns status 404. The key principle is that structured data must match visible content, so dates come from front matter rather than build time. The site ships zero client-side JS, scores 100 for SEO and accessibility, and CI fails on broken links or missing descriptions.
+
+**Key terms to know:**
+- **Static-site generator (SSG)** — builds plain HTML from content files and templates at build time.
+- **Front matter** — metadata at the top of a Markdown file, the single source for visible dates and JSON-LD.
+- **Canonical URL** — `<link rel="canonical">` naming the preferred URL for duplicate content.
+- **301 redirect** — a permanent redirect, a stronger signal than a canonical.
+- **JSON-LD structured data** — schema.org data in a script block that makes pages eligible for rich results.
+- **Open Graph** — `og:` meta tags used for link previews on social platforms.
+- **`sitemap.xml`** — a list of indexable URLs with `lastmod` dates.
+- **`robots.txt`** — crawl instructions. It controls crawling, not indexing.
+- **`noindex`** — a meta robots directive that keeps a page out of search results.
+- **Rich Results Test** — Google's tool for checking structured data eligibility.
+
 **Q:** What's a canonical URL and why does it matter?
+
 **A:** The preferred URL for content available at several addresses. It consolidates ranking signals and avoids duplicate-content confusion. Back it with redirects where possible.
 
 **Q:** Why JSON-LD rather than microdata?
+
 **A:** It's separate from the visible HTML, easier to generate and maintain, and Google recommends it. It must still match what the page shows.
 
 **Q:** How does a static-site generator help SEO?
+
 **A:** Templates apply correct metadata, headings and structured data to every page consistently, the output is plain HTML that every crawler reads, and pages are fast.
+
+**Q:** Does `Disallow` in `robots.txt` keep a page out of Google?
+
+**A:** No. It stops crawling, but a blocked URL can still be indexed (without content) if other sites link to it. To keep a page out of results, allow crawling and add `<meta name="robots" content="noindex">`, because the crawler has to fetch the page to see the `noindex`.
+
+**Q:** Why not use build time for `dateModified`?
+
+**A:** Every build would claim every post changed, which misleads search engines and readers and contradicts the visible content. Use the content's real `updated` field from front matter, and only change it for meaningful edits.
+
+**Q:** Why is semantic HTML part of SEO?
+
+**A:** Search engines use headings, links, `<main>`, `<article>`, `<time>` and alt text to understand what a page is about and how pages relate. An accessible, well-structured page is mostly already well-structured for crawlers. Keyword stuffing and fake markup do the opposite.
+
+**Q:** How do you generate JSON-LD safely in a template?
+
+**A:** Build a data object from front matter and site data and serialise it with the template engine's JSON filter, which escapes quotes correctly. Also escape `<` (or at least `</`) so a title containing `</script>` can't end the script block. Never concatenate JSON strings by hand.
+
+**Q:** The site grows to 50,000 pages. What breaks first?
+
+**A:** Build time, because a full rebuild for every change takes minutes, so use incremental builds or on-demand rendering. A single sitemap file is limited to 50,000 URLs and 50 MB uncompressed, so split it and add a sitemap index. Thin tag pages multiply and may need `noindex`.
+
+**Q:** How do you test the SEO output?
+
+**A:** Validate all HTML, run a link checker, test samples in the Rich Results Test and Schema Markup Validator, run Lighthouse CI, crawl the output to find duplicate titles, missing descriptions and non-200 pages, and check previews in social debuggers.
+
+**Common mistakes in answers:**
+- Saying structured data improves rankings directly. It makes pages eligible for rich results, which isn't guaranteed.
+- Using `robots.txt` to remove pages from search results.
+- Treating canonical tags as redirects. They're hints that search engines may ignore.
 
 ### TL;DR
 Generate plain HTML from Markdown, write titles, descriptions, canonicals, Open Graph and JSON-LD in templates from front matter, produce sitemaps and feeds, and check validity and links in CI. Good semantic HTML does most of the SEO work.
@@ -3608,14 +5183,60 @@ Refactoring has no visible feature, so get buy-in by showing metrics and the cos
 - [Ch 9 — CSS Grid](../chapters/09-grid/README.md): modern layout replacements.
 
 ### In the interview
+**30-second answer:** I refactored a 5,000-line legacy stylesheet full of IDs, deep nesting and `!important`, incrementally and without breaking the site. First I measured it (size, specificity, `!important` count, unique colours, coverage) and captured visual regression baselines of 10 pages at 3 widths. Then I imported the old CSS into a low cascade layer, `@import url(legacy.css) layer(legacy)`, so new token-based, single-class code in higher layers wins without specificity fights, and migrated component by component, deleting legacy rules only after screenshots showed no unintended change. The result met the targets: at least 80 % fewer `!important`s, no IDs in new code and a stylesheet at least 30 % smaller, with lint rules blocking regressions.
+
+**Key terms to know:**
+- **Incremental migration** — changing a system in small, deployable steps instead of a rewrite.
+- **Strangler pattern** — growing the new system around the old one and removing the old piece by piece.
+- **Legacy layer** — old CSS imported into a low cascade layer so new layers override it.
+- **Specificity** — why `#content .sidebar ul li a` was hard to override.
+- **`!important` in layers** — important declarations in lower layers beat normal ones in higher layers.
+- **Visual regression testing** — screenshots compared against approved baselines.
+- **DevTools Coverage** — shows which CSS rules were used on the visited pages and states.
+- **ITCSS / CUBE CSS** — methodologies that order and structure CSS from generic to specific.
+- **Design tokens** — mapped from the legacy's 70 colours and 35 font sizes into a small set.
+- **Stylelint** — rules like `selector-max-id` and `declaration-no-important` to stop regressions.
+
 **Q:** How would you approach a messy legacy stylesheet?
+
 **A:** Measure it, put visual regression tests in place, wrap the old CSS in a low cascade layer, introduce tokens and a new layered structure alongside it, migrate component by component, delete old rules only after tests pass, and add lint rules to prevent regressions.
 
 **Q:** How do cascade layers help a refactor?
+
 **A:** New code in higher layers beats legacy code regardless of the legacy selectors' specificity, so you don't need specificity hacks to override it.
 
 **Q:** How do you know CSS is safe to delete?
+
 **A:** Combine coverage data across many pages and states, search templates for the selectors, and rely on visual regression tests to confirm nothing changed.
+
+**Q:** What's the catch with putting legacy CSS in a low layer?
+
+**A:** The legacy `!important` declarations still win over your new normal declarations, because important rules sit above all normal ones and reverse layer order. Remove or neutralise legacy `!important`s early, starting with those that touch components you're migrating.
+
+**Q:** Why not rewrite the stylesheet from scratch?
+
+**A:** A big-bang rewrite has to match years of undocumented edge cases at once, can't ship until it's finished, and usually stalls. Incremental migration keeps the site deployable after every step, delivers value early and limits the blast radius of each mistake.
+
+**Q:** Coverage says 40 % of the CSS is unused. Can you delete it?
+
+**A:** Not directly. Coverage only knows the pages and states you visited, so hover and error states, CMS content and rare pages look unused. Combine coverage from many pages and states, search the templates for class names, and delete in small batches behind visual tests.
+
+**Q:** Your visual tests fail randomly. What do you do?
+
+**A:** Make them deterministic: wait for `document.fonts.ready`, disable animations and transitions, freeze dates, mask dynamic regions like ads, and run in the same container image every time. Flaky tests get ignored, which removes the safety net.
+
+**Q:** How do you get buy-in for a refactor with no visible feature?
+
+**A:** Show numbers: time spent per CSS change, bugs caused by overrides, the metrics report, and how the change unblocks theming or redesign work. Agree a short migration window and visible milestones, then report the before and after metrics.
+
+**Q:** How do you approach a rule like `#content .sidebar ul li a`?
+
+**A:** Find what it was written to beat, because DevTools shows overridden declarations struck through. Often the overridden rule and the overriding rule can be deleted together and replaced by one single-class component rule.
+
+**Common mistakes in answers:**
+- Proposing to add more specific selectors or `!important` to win, which deepens the problem.
+- Deleting "unused" CSS from a single coverage run.
+- Treating layers as the end state. They make old code easy to override, but the goal is still to delete it.
 
 ### TL;DR
 Measure, protect with visual tests, layer the legacy CSS at the bottom, grow a token-based layered system beside it, migrate and delete component by component, and lock in the gains with lint rules and metrics.
@@ -3711,14 +5332,60 @@ Horizontal scrolling is honest but less discoverable, which is why cues matter. 
 - [Ch 11 — Typography, Colour and Visual Effects](../chapters/11-typography-color-and-visual-effects/README.md): gradients, `font-variant-numeric`.
 
 ### In the interview
+**30-second answer:** I built four data-heavy tables, including a 15-column player stats table and a quarterly revenue table with two levels of column headers and grouped rows, that stay accessible and usable on a phone. Each remains a real `<table>`, using `scope="colgroup"` with `<colgroup>`, `scope="rowgroup"` on `<tbody>` headers and `tabular-nums` for numbers. On small screens only the table scrolls, inside a `role="region"` wrapper labelled by the caption and focusable with `tabindex="0"`, with a sticky header row, a sticky first column and scroll shadows built from `background-attachment: local` gradients. Screen readers announce "2026, Q2, Revenue, North" for nested headers, and the page never scrolls sideways at 320 px.
+
+**Key terms to know:**
+- **`scope="colgroup"` / `"rowgroup"`** — header cells that apply to a group of columns or rows.
+- **`<colgroup>` and `<col>`** — define column groups for header association and column styling.
+- **Multiple `<tbody>`** — row groups, each with its own header row.
+- **`headers` attribute** — explicit header ids on a cell for irregular structures.
+- **WCAG 1.4.10 Reflow** — allows two-dimensional scrolling for content like data tables.
+- **Sticky header and column** — `position: sticky` inside the wrapper, with the corner cell above both.
+- **`border-collapse: separate`** — keeps borders attached to sticky cells.
+- **Scroll shadows** — gradient cues that appear only when more content is hidden.
+- **`font-variant-numeric: tabular-nums`** — equal-width digits so numbers line up.
+- **`aria-sort`** — announces sort state on a column header when sorting is added.
+
 **Q:** How do you make a data table responsive?
+
 **A:** Usually by keeping it a real table inside a focusable, labelled scroll container, with sticky headers and scroll cues. WCAG's reflow criterion allows two-dimensional scrolling for data tables. Card layouts are an option only when users don't need to compare rows.
 
 **Q:** What can go wrong if you set `display: block` on table elements?
+
 **A:** Some browsers drop the table semantics, so screen readers lose row and column headers. You'd need to add ARIA roles back.
 
 **Q:** How do you associate cells with two levels of headers?
+
 **A:** `scope="colgroup"` on group headers with matching `<colgroup>`s, `scope="col"` on sub-headers, or explicit `headers` attributes for irregular tables.
+
+**Q:** Why do borders detach from sticky cells?
+
+**A:** With `border-collapse: collapse`, borders belong to the table grid rather than each cell, so when a cell sticks its borders scroll away. Use `border-collapse: separate; border-spacing: 0` with borders on the cells, or draw lines with `box-shadow`, and give sticky cells an opaque background.
+
+**Q:** How do scroll shadows work without JavaScript?
+
+**A:** Layer four backgrounds on the wrapper: two shadow gradients with `background-attachment: scroll` stay at the edges, and two "cover" gradients in the surface colour with `background-attachment: local` move with the content. At the very start or end, a cover sits over its shadow and hides it, so a shadow is visible only on a side with more content.
+
+**Q:** Why right-align numbers and use `tabular-nums`?
+
+**A:** With proportional digits, "1,111" and "8,888" have different widths, so place values don't line up and columns are hard to compare. Tabular figures give every digit the same width, and right alignment lines up units, tens and hundreds.
+
+**Q:** The transaction log has 20,000 rows. What breaks first?
+
+**A:** Rendering and memory: a huge DOM table is slow to lay out and scroll. Paginate on the server, or virtualise rows with JS. `content-visibility: auto` on `<tbody>` groups helps the browser skip rendering offscreen groups, but doesn't reduce the HTML size.
+
+**Q:** When are cards the right choice for a table on mobile?
+
+**A:** When users look at one record at a time (a transaction's details) and don't compare across rows. If you switch to cards with `display` changes, restore `role="table"`, `row`, `cell` and `columnheader` explicitly and test in two screen readers.
+
+**Q:** How do you test complex headers?
+
+**A:** Navigate cells with NVDA (with Firefox or Chrome) and VoiceOver (with Safari) and listen to the headers announced, scroll the wrapper with the keyboard, check 320 px and 400 % zoom, print-preview to confirm repeated headers, and validate to catch `colspan` and `headers` mistakes.
+
+**Common mistakes in answers:**
+- Hiding columns on mobile, which loses data rather than making it responsive.
+- Saying horizontal scrolling always fails WCAG. Reflow explicitly exempts content that needs two-dimensional layout.
+- Making the wrapper scroll but not focusable or labelled, so keyboard users can't reach hidden columns.
 
 ### TL;DR
 Keep data tables as real tables. Use `scope`, `colgroup` and `tbody` groups for complex headers, a focusable labelled scroll wrapper with sticky header and column, and scroll shadows as cues. Reflowing into cards is a trade-off, not a default.
@@ -3815,14 +5482,66 @@ Every preference multiplies test combinations, so centralise responses in tokens
 - [Ch 12 — Transitions, Transforms and Animation](../chapters/12-transitions-transforms-and-animation/README.md): reduced motion.
 
 ### In the interview
+**30-second answer:** I made an existing site adapt to every preference the browser exposes: light and dark schemes, `prefers-contrast: more`, Windows forced colours, reduced motion, larger default font sizes, text-spacing overrides and 400 % zoom. The key design was centralising each response in token overrides, so for example reduced motion sets the duration tokens near zero and more contrast swaps muted text for full-strength text, with no component edits. The hard parts were things forced colours can't fix for you: focus rings built from `box-shadow` (removed in that mode), SVG icons with hard-coded fills, and meaning carried by backgrounds. A matrix of 8 preference combinations by 5 pages passes, with screenshots as evidence.
+
+**Key terms to know:**
+- **User-preference media features** — `prefers-color-scheme`, `prefers-contrast`, `prefers-reduced-motion`, `forced-colors`.
+- **Forced colors mode** — the browser replaces author colours with a small user-chosen palette (Windows High Contrast).
+- **System colour keywords** — `Canvas`, `CanvasText`, `LinkText`, `ButtonText`, `Highlight` for use in forced colors.
+- **`forced-color-adjust: none`** — opts an element out of forced colours. A last resort.
+- **`currentColor`** — makes SVG icons follow the text colour in every mode.
+- **Motion tokens** — durations as custom properties that reduced motion can zero out.
+- **`rem` units** — scale with the user's browser default font size.
+- **WCAG 1.4.12 Text Spacing** — content survives line height 1.5, paragraph spacing 2×, letter spacing 0.12× and word spacing 0.16×.
+- **WCAG 1.4.10 Reflow** — 400 % zoom on a 1280 px screen is about 320 CSS px wide.
+- **Test matrix** — pages × preference combinations, each with evidence.
+
 **Q:** What happens in forced-colors mode and what do you need to fix?
-**A:** The browser replaces author colours with a small user-chosen palette and removes shadows and background images. Fix focus rings that rely on box-shadow, icons with hard-coded fills, and meaning carried by backgrounds.
+
+**A:** The browser replaces author colours with a small user-chosen palette, removes box and text shadows, and drops gradient backgrounds (url images remain). Fix focus rings that rely on box-shadow, icons with hard-coded fills, and meaning carried by backgrounds.
 
 **Q:** Why use `rem` for font sizes?
+
 **A:** `rem` scales with the user's browser default font size. Pixel sizes ignore that setting, so users who need larger text don't get it.
 
 **Q:** How do you implement reduced motion site-wide efficiently?
+
 **A:** Put durations in tokens and set them near zero under `prefers-reduced-motion: reduce`, then remove large movement effects explicitly.
+
+**Q:** How do you make a box-shadow focus ring survive forced colours?
+
+**A:** Add a transparent outline alongside it. Normally it's invisible, but forced colours recolour outlines to a system colour, so it appears exactly when the shadow is removed.
+```css
+:focus-visible {
+  box-shadow: 0 0 0 3px var(--color-focus);
+  outline: 2px solid transparent;
+}
+```
+
+**Q:** Why set durations to `0.01ms` rather than `0`?
+
+**A:** Some code listens for `transitionend` or `animationend` events, and a zero duration may skip the transition so the event never fires. A tiny non-zero duration keeps the events while making the motion effectively instant.
+
+**Q:** When is `forced-color-adjust: none` justified?
+
+**A:** When the actual colour is the content, such as a colour swatch picker or a chart legend sample. Using it broadly undoes the user's deliberate choice and can make text unreadable for them.
+
+**Q:** A button has `height: 40px` and clips text under the text-spacing bookmarklet. Why, and how do you fix it?
+
+**A:** Increased line height and letter spacing make the text taller and wider than the fixed box allows. Use padding and `min-block-size` instead of `height`, let text wrap, and avoid `overflow: hidden` on text containers.
+
+**Q:** Every new preference multiplies the test matrix. How do you keep it manageable?
+
+**A:** Centralise responses in tokens so each preference is one override block, automate screenshot runs with emulated media features in CI (project 39), and reserve manual testing for real OS modes like Windows contrast themes, which differ from emulation.
+
+**Q:** How do you test it?
+
+**A:** DevTools rendering emulation for scheme, contrast, forced colours and reduced motion, then real Windows contrast themes, the text-spacing bookmarklet, browser default font size at 20 and 24 px, and zoom to 200 % and 400 %. Record screenshots in the matrix.
+
+**Common mistakes in answers:**
+- Saying forced colours removes all background images. Only non-url backgrounds such as gradients are dropped.
+- Setting the root font size in pixels (for example `html { font-size: 10px }`), which overrides the user's default font setting. Percentages and `rem` respect it.
+- Treating `prefers-reduced-motion` as "no animation at all" instead of "no non-essential movement".
 
 ### TL;DR
 Respond to every preference the browser exposes, centrally through tokens. Use `rem` units, outlines that survive forced colours, `currentColor` icons, motion tokens and no fixed text heights, and prove it with a page-by-preference test matrix.
@@ -3918,14 +5637,63 @@ CSS charts are excellent for simple, static charts and poor for interactive ones
 - [Ch 6 — CSS Fundamentals](../chapters/06-css-fundamentals/README.md): custom properties.
 
 ### In the interview
+**30-second answer:** I built bar, stacked-bar, area, ring and heat-map charts where the data lives in an accessible HTML `<table>` and CSS draws it, with zero JavaScript. Each value cell carries an inline custom property like `style="--size: 0.73"`, and CSS turns it into a bar width with `calc()`, a ring with `conic-gradient()`, an area slice with `clip-path: polygon()` or a heat-map colour with `color-mix()`. With CSS off or in a screen reader, every chart is a correctly headed, captioned table, plus a one-sentence summary of the trend. Series are distinguishable without colour, graphical parts meet 3:1 contrast, and charts print legibly in greyscale.
+
+**Key terms to know:**
+- **Custom properties as a data channel** — inline `--value` properties carry numbers from HTML into CSS.
+- **`calc()`** — turns a 0–1 value into a length or percentage.
+- **`conic-gradient()`** — a gradient around a centre point, used for progress rings.
+- **`clip-path: polygon()`** — clips an element to a shape, used for area-chart slices.
+- **`color-mix()`** — mixes two colours by a percentage, used for heat-map intensity.
+- **`@property`** — registers a custom property with a type, initial value and inheritance, making it animatable.
+- **WCAG 1.4.11 Non-text Contrast** — 3:1 for graphical objects needed to understand content.
+- **Complex image alternative** — charts need the data and the insight as text, not just alt text.
+- **Normalisation** — dividing values by the maximum so they fit 0–1.
+
 **Q:** How can CSS draw a chart from data?
+
 **A:** Pass each value as an inline custom property and use it in `calc()` for sizes, in gradient stops for rings, or in `clip-path` coordinates for areas. The data stays in an HTML table.
 
 **Q:** How do you make a chart accessible?
+
 **A:** Provide the underlying data as a table or text, summarise the key insight, don't rely on colour alone, and ensure 3:1 contrast for graphical parts.
 
 **Q:** Why register a custom property with `@property`?
+
 **A:** To give it a type, an initial value and inheritance behaviour, which also lets the browser animate it.
+
+**Q:** Why can't you transition an unregistered `--size` from 0 to 0.73?
+
+**A:** Unregistered custom properties are treated as token streams, not numbers, so the browser can only flip them at the end of a transition. Registering with `syntax: "<number>"` tells the browser it's a number it can interpolate.
+```css
+@property --size { syntax: "<number>";
+  inherits: false; initial-value: 0; }
+```
+
+**Q:** How does the bar know how long to be?
+
+**A:** The build step writes the normalised value, `--size: 0.73`, into the cell, and CSS sets `inline-size: calc(var(--size) * 100%)` on the bar. Alternatively, put `--max` on the table and let CSS divide, `calc(var(--value) / var(--max) * 100%)`, which keeps raw values in the HTML.
+
+**Q:** Why style spans inside cells rather than changing the cells' `display`?
+
+**A:** Changing `display` on table elements has caused browsers to drop table semantics, so screen readers would lose the headers that make the chart accessible. Drawing with inner `<span>`s or pseudo-elements leaves the table structure untouched.
+
+**Q:** When would you switch to a JavaScript charting library?
+
+**A:** For interactive charts (precise tooltips, zooming, brushing) or thousands of points, where CSS would mean a huge DOM and no interaction model. Even then, keep a data table or downloadable data as the accessible alternative.
+
+**Q:** Two series are red and green. What's wrong?
+
+**A:** Many people with common colour-vision deficiencies can't tell them apart, and in greyscale print they may look identical. Add direct labels, patterns via `repeating-linear-gradient`, or different shapes, and check with DevTools' colour-blindness emulation.
+
+**Q:** How do you check the charts are correct?
+
+**A:** View with CSS off, navigate the tables with a screen reader, emulate colour-vision deficiencies, check contrast of segments, resize the container, print in greyscale, and compare a table value with the measured length of its bar to verify the maths.
+
+**Common mistakes in answers:**
+- Thinking an `alt` on a chart image is enough. Users need the data, not "bar chart of sales".
+- Saying inline `style` attributes are always bad practice. Inline custom properties are a legitimate way to pass data.
+- Relying on colour alone for series.
 
 ### TL;DR
 Keep data in an accessible table, pass values to CSS as custom properties, and draw bars, rings, areas and heat maps with Grid, gradients and `clip-path`. Add text summaries and non-colour cues. It's zero JS, printable and readable everywhere.
@@ -4031,14 +5799,60 @@ Multi-page forms need server state and more round trips than a single-page app, 
 - [Ch 2 — HTML Structure and Text](../chapters/02-html-structure-and-text/README.md): `<dl>`, titles.
 
 ### In the interview
+**30-second answer:** I built a government-style "Apply for a parking permit" service as server-rendered, one-question-per-page HTML forms that work with JavaScript, CSS and images all turned off. Each POST is validated on the server and answered with a 303 redirect to the next page chosen by a rules table, so refresh and the back button never resubmit, and branching lives in one place. Errors come back with "Error:" in the title, a linked error summary and inline messages tied to fields with `aria-describedby`. JS only adds enhancements, such as a character count, and removing it changes nothing essential. Pages stay under 50 KB.
+
+**Key terms to know:**
+- **Progressive enhancement** — build the core on HTML and server logic, then layer CSS and JS that can fail safely.
+- **POST/redirect/GET (PRG)** — answer a successful POST with a redirect to a GET page.
+- **303 See Other** — the redirect status that tells the browser to follow with a GET.
+- **Server-side session** — answers stored on the server, keyed by a cookie.
+- **One thing per page** — each page asks one question, with one error state and one decision.
+- **Error summary** — a list of errors linking to fields, focused or announced on load.
+- **`aria-invalid` and `aria-describedby`** — mark a field invalid and connect its message.
+- **Check your answers** — a `<dl>` summary with "Change" links.
+- **WCAG 3.3.7 Redundant Entry** — don't make users re-enter information already given in the same process.
+- **`type="module"` scripts** — enhancements old browsers skip safely.
+
 **Q:** What is progressive enhancement?
+
 **A:** Building the core experience from the most robust technology (HTML and server logic), then layering CSS and JS improvements so that if a layer fails, the service still works.
 
 **Q:** What is the POST/redirect/GET pattern?
+
 **A:** After processing a POST, the server responds with a redirect to a GET page. Refreshing or going back doesn't resubmit the form.
 
 **Q:** How should form errors be presented accessibly?
+
 **A:** An error summary at the top linking to each field, inline messages connected with `aria-describedby`, `aria-invalid` on fields, and "Error:" at the start of the page title.
+
+**Q:** Why 303 and not 302 for the redirect?
+
+**A:** 303 See Other explicitly tells the browser to fetch the new URL with GET, whatever the original method. 302 historically had ambiguous method handling (browsers usually switched to GET, but the spec didn't require it). 303 states the intent of PRG precisely.
+
+**Q:** Why does an invalid submission return 200 with the same page instead of redirecting?
+
+**A:** The page must show the user's input and the errors, which are part of this response. Redirecting would need to stash them in the session. Returning the re-rendered form directly is simpler, and the user fixes and resubmits, so nothing is duplicated.
+
+**Q:** A user goes back and changes "Electric vehicle?" from Yes to No. What must the server do?
+
+**A:** Recompute the journey from the rules table and discard the answers to questions that no longer apply (the charging-bay question), so the check-your-answers page and the final submission don't contain stale data. Branching logic on the server keeps this in one place.
+
+**Q:** The session times out mid-application. What should happen?
+
+**A:** Warn users before it expires (with JS where available, and state the time limit on the start page), let them extend it, and if it does expire explain clearly what was lost and how to start again. WCAG 2.2.1 Timing Adjustable requires warning and extension for time limits.
+
+**Q:** Why "one thing per page" when it means more page loads?
+
+**A:** It suits small screens, screen magnifier users and people with cognitive impairments, and makes errors and branching simple. The extra loads are cheap when each page is about 20 KB of HTML with cached CSS.
+
+**Q:** How do you test that JS is truly optional?
+
+**A:** Run automated end-to-end tests twice, with JS enabled and disabled in the headless browser, and run the journey manually with CSS off and on a throttled connection. Press back and refresh at every step.
+
+**Common mistakes in answers:**
+- Saying progressive enhancement means "no JavaScript". It means JS is an enhancement, not a requirement.
+- Putting the branching logic in client-side JS, which breaks without it and drifts from the server rules.
+- Clearing the form after a validation error.
 
 ### TL;DR
 Build the service as server-rendered, one-question-per-page HTML forms with POST/redirect/GET, server-side branching and validation, a check-your-answers page and accessible errors. Then add CSS and small JS enhancements that are never required.
@@ -4133,14 +5947,65 @@ Visual tests are powerful but expensive to maintain: every intended change needs
 - [Ch 6 — CSS Fundamentals](../chapters/06-css-fundamentals/README.md): computed values.
 
 ### In the interview
+**30-second answer:** I built a CI pipeline that tests CSS like code. Stylelint runs first with custom rules (no IDs, no `!important` outside utilities, token-only colours, logical properties, a specificity ceiling), then a size budget, then Playwright drives Chromium, Firefox and WebKit for screenshot comparisons, axe-core on every page and state, and `getComputedStyle` assertions for things screenshots miss, like focus outline width and 24 px target sizes. The hardest part was making screenshots deterministic, which meant a fixed container image, disabled animations, waiting for fonts and masking dynamic regions. The pipeline runs in under 5 minutes with a flake rate under 1 %, and baselines only change through a reviewed command.
+
+**Key terms to know:**
+- **Stylelint** — the CSS linter. Rules like `selector-max-id`, `declaration-no-important`, `selector-max-specificity`.
+- **Visual regression test** — a screenshot compared with an approved baseline image.
+- **Baseline** — the stored "known good" screenshot per page, width, theme and engine.
+- **Diff threshold** — tolerance such as `maxDiffPixelRatio`, balancing flakes against missed changes.
+- **Determinism** — identical output on every run, required for screenshot tests.
+- **axe-core** — Deque's accessibility rules engine for automated checks.
+- **Computed-style assertion** — reading `getComputedStyle()` in a browser test to check a specific value.
+- **Flake rate** — the share of failures that pass on re-run without changes.
+- **Size budget** — a CI limit on the CSS bundle size.
+
 **Q:** How do you test CSS?
+
 **A:** Lint for patterns and errors, visual regression screenshots against baselines, computed-style assertions for critical rules, automated accessibility checks, and size budgets, all in CI.
 
 **Q:** How do you make visual tests reliable?
+
 **A:** Fixed environment and fonts, disabled animations, waiting for fonts and images, masking dynamic content, per-engine baselines, and a small diff tolerance.
 
 **Q:** Does a passing axe run mean the page is accessible?
+
 **A:** No. It catches mechanical issues only. Manual testing with keyboard and screen readers is still required.
+
+**Q:** Show a Playwright screenshot assertion and what its defaults do for you.
+
+**A:** `toHaveScreenshot()` disables CSS animations and transitions and hides the text caret by default, which removes two common causes of flakes. You add masks for dynamic regions and a tolerance.
+```js
+await page.goto('/button.html');
+await page.evaluate(() => document.fonts.ready.then(() => true));
+await expect(page).toHaveScreenshot('button.png',
+  { mask: [page.locator('.date')], maxDiffPixelRatio: 0.001 });
+```
+
+**Q:** Why use computed-style assertions when you have screenshots?
+
+**A:** Some regressions are invisible in a static screenshot (a focus outline that only appears on focus, a `scroll-padding-top` value) or are too subtle for a threshold. A direct assertion like "outline width is at least 2 px" is precise, fast and explains itself when it fails.
+
+**Q:** Why order the stages lint, budget, then browser tests?
+
+**A:** Lint and size checks take seconds and catch many problems, so they fail fast before spending minutes starting browsers. Developers get the cheapest feedback first.
+
+**Q:** Why store baselines per engine?
+
+**A:** Chromium, Firefox and WebKit render fonts and anti-aliasing differently, so one shared baseline would always fail in two engines or need a huge tolerance. Per-engine baselines triple the images but keep thresholds tight.
+
+**Q:** The pipeline grows to 40 minutes. What happens and what do you cut?
+
+**A:** People skip it or merge without waiting, so it stops protecting anything. Cover components in isolation rather than every page, run the full engine and theme matrix nightly with a smaller set per pull request, and shard tests across machines.
+
+**Q:** How do you test the tests?
+
+**A:** Introduce deliberate regressions (a wrong colour, a removed outline, a 1 px padding change, an ID selector) and confirm each is caught by the expected stage. Track flake rate over two weeks and time each stage.
+
+**Common mistakes in answers:**
+- Setting the diff threshold to zero. Anti-aliasing differences cause constant flakes.
+- Updating baselines automatically when tests fail, which accepts every regression.
+- Thinking lint rules alone are "CSS tests". They check code patterns, not what the user sees.
 
 ### TL;DR
 Give CSS a real test pipeline: Stylelint rules, deterministic Playwright screenshots, axe-core on every state, computed-style assertions for critical rules and size budgets. Update baselines deliberately, and never mistake green for "accessible".
@@ -4237,14 +6102,64 @@ Deriving everything from a few inputs is elegant but limits brand expression. So
 - [Ch 13 — Modern CSS and Architecture](../chapters/13-modern-css-and-architecture/README.md): theming, `@property`, architecture.
 
 ### In the interview
+**30-second answer:** I built one component set that renders three brands, each in light and dark, and lets any subtree be themed differently, such as a partner's promo block inside our page. Each brand file sets a few typed inputs (`--brand-hue`, `--brand-chroma`, `--font-brand`, `--radius-base`, `--density`) registered with `@property`, and all palette tokens are derived from them with `oklch()`, relative colour syntax and `color-mix()`. The hard bug was nested theming: custom properties inherit computed values, not formulas, so I declare derived tokens on every theme scope (`:root, [data-brand]`). Container style queries switch density and inverted surfaces, with class fallbacks. A new brand takes under 20 lines, and a script verifies contrast for every brand and mode.
+
+**Key terms to know:**
+- **Brand inputs** — the few values a brand file sets, from which all tokens derive.
+- **`@property`** — registers a custom property with `syntax`, `inherits` and `initial-value`.
+- **`oklch()`** — perceptual colour space with lightness, chroma and hue.
+- **Relative colour syntax** — `oklch(from var(--c) calc(l - 0.08) c h)` derives a colour from another.
+- **`color-mix()`** — blends colours, for borders and tints.
+- **Computed-value inheritance** — children inherit a custom property's computed value, not its formula.
+- **Theme scope** — any element with `data-brand` that re-declares inputs and derived tokens.
+- **Container style query** — `@container style(--density: compact)` reacts to a custom property on an ancestor.
+- **`light-dark()`** — per-brand light and dark values.
+- **Contrast verification script** — computes every semantic pair's ratio across brands and modes.
+
 **Q:** How would you support several brands with one component library?
+
 **A:** Components use semantic tokens only. Each brand sets a few typed inputs from which tokens are derived, scoped to any element so subtrees can be re-themed, with contrast verified automatically.
 
 **Q:** Why doesn't changing an input on a nested element update a token computed on `:root`?
+
 **A:** Custom properties inherit computed values, not formulas. The derived token must be declared again on the nested scope so it recomputes from the new input.
 
 **Q:** What are container style queries useful for?
+
 **A:** Letting components react to inherited context flags (density, inverted surface, brand variant) set as custom properties on an ancestor container, without adding modifier classes to every component.
+
+**Q:** What does registering `--brand-hue` with a syntax protect against?
+
+**A:** If a brand file sets an invalid value, say `--brand-hue: blue`, an unregistered property passes it through and every colour using it becomes invalid at computed-value time. With `syntax: "<number>"` registered, the invalid value is treated as unset, so the property falls back to the inherited hue or the registered initial value and the palette still renders.
+```css
+@property --brand-hue { syntax: "<number>";
+  inherits: true; initial-value: 250; }
+```
+
+**Q:** Why can't OKLCH lightness alone guarantee contrast?
+
+**A:** OKLCH lightness tracks perceived lightness much better than HSL, but WCAG contrast is calculated from relative luminance, which still varies with hue and chroma. A yellow and a blue at 55 % lightness can give different ratios against white. That's why the derived pairs are checked by a script.
+
+**Q:** Why not just copy the CSS per brand?
+
+**A:** Every bug fix and new component would need doing three times and the copies would drift. Global theme classes on `<html>` also allow only one theme per page. Deriving from inputs on any scope gives one codebase, nested themes and a cheap fourth brand.
+
+**Q:** A brand insists on a hand-picked button colour that the formula doesn't produce. What do you do?
+
+**A:** Allow overrides of semantic tokens in the brand file as a documented escape hatch, then run the contrast script on the override. Derivation should be the default, not a cage.
+
+**Q:** What changes at 50 brands?
+
+**A:** Runtime derivation and visual testing get expensive: 50 brands × 2 modes × densities is hundreds of screenshot combinations. Pre-compute resolved palettes at build time for production, keep runtime derivation for previews, and test a representative sample of brands per pull request with the full set nightly.
+
+**Q:** How do you test it?
+
+**A:** Visual regression across brands × modes × densities, the contrast script, a nested-theme page (Brand B inside Brand A), a browser matrix for style queries and relative colours, and forced-colors mode to make sure no meaning depends on derived colours.
+
+**Common mistakes in answers:**
+- Declaring derived tokens only on `:root` and expecting nested `[data-brand]` scopes to recompute them.
+- Saying style queries can query any CSS property today. Browsers support custom-property style queries only.
+- Trusting the colour maths without measuring contrast.
 
 ### Self-check
 - What does registering `--brand-hue` with `syntax: "<number>"` protect against?
