@@ -15,6 +15,8 @@ A **capstone** is a project big enough to pull several chapters together into on
 6. When everything works, pick one or two **stretch goals**.
 7. Finish with *In the interview*: say the answers out loud. If you can explain your trade-offs, the project counts.
 
+**Using these projects in interviews.** Each *In the interview* section starts with a **30-second answer**: lead with it when someone says "tell me about a project", then let the interviewer choose where to dig. Make sure you can explain every term under **Key terms** in plain words, because follow-up questions are built from them. Practise the Q&As out loud until you can answer without reading; the **Common mistakes** list shows what weaker candidates get wrong. Quote your own numbers from the build, such as latency percentiles, data sizes, throughput and test counts, rather than the targets in the brief. Finally, have an answer ready for "what would you change at 10x?" and "what breaks first?"
+
 **Colour-coding.** In the PDF, section headings are colour-coded so you can scan a brief quickly: *What it is* and *The problem it solves* (the idea), *Real-world examples* (who uses it), *The architecture* and *Deep dive* (how it works), *Trade-offs* (what you gave up), *In the interview*, *Self-check* and *TL;DR* each have their own colour.
 
 **Levels.**
@@ -167,17 +169,67 @@ Compact source files are for small programs: once you need several classes in pa
 - [Ch 8 — Exceptions](../chapters/08-exceptions/README.md) — catching `NumberFormatException`
 
 ### In the interview
+**30-second answer:** I built a console number-guessing game as a single Java 25 compact source file, run with `java Guess.java`. The key decision was to split it into a pure `Game` class that takes a guess and returns `TOO_LOW`, `TOO_HIGH` or `CORRECT`, plus a thin console loop, so all the rules are unit-testable. The hardest part was input: I parse in one method that returns an `OptionalInt`, so letters, blank lines, end-of-input and values like `99999999999` never crash the program or count as a try. The whole thing is under 150 lines, and an optimal player never needs more than 7 guesses for 1–100.
+
+**Key terms to know:**
+- **Compact source file** — a Java 25 file (JEP 512) that can contain just `void main()` with no class declaration. The whole game is one of these.
+- **`java.lang.IO`** — a Java 25 helper class with `IO.println` and `IO.readln(prompt)` for console text. It is used for every prompt and guess.
+- **Source-file mode** — `java Guess.java` compiles in memory and runs in one step, with no `.class` file written. It is how you run the game.
+- **`NumberFormatException`** — the unchecked exception `Integer.parseInt` throws for text that is not a valid `int`, including values that overflow. It is caught in the parser.
+- **`OptionalInt`** — a container that either holds an `int` or is empty. The parser returns it instead of a magic value like `-1`.
+- **Exclusive upper bound** — `nextInt(1, 101)` returns 1 to 100 because the second argument is never returned. This is the off-by-one to watch when picking the secret.
+- **`RandomGenerator` injection** — passing the random source into `Game` instead of creating it inside. Tests pass a seeded or fake generator so the secret is known.
+- **Binary search** — halving the remaining range with each guess. It explains the 7-guess bound and the "computer guesses" stretch goal.
+
 **Q:** What does `java Guess.java` do differently from `javac` then `java`?
 
-**A:** It compiles the source in memory and runs it in one step (source-file mode, Java 11, extended to several files in Java 22). No `.class` file is written. Fine for scripts and learning, not for shipping.
+**A:** It compiles the source in memory and runs it in one step (source-file mode, added in Java 11 and extended to programs of several files in Java 22). No `.class` file is written to disk. That is fine for scripts and learning, but a shipped application is compiled ahead of time and packaged as a JAR.
+
+**Q:** What is a compact source file, and when would you stop using one?
+
+**A:** It is a Java 25 feature (JEP 512) where a file can hold top-level methods and fields with no class declaration, and `main` can be a plain `void main()`. The compiler wraps it in an unnamed class behind the scenes. Once the program needs several classes in packages, tests or a build tool, you switch back to a normal named class with a standard `main`.
 
 **Q:** Why does the best strategy need at most 7 guesses for 1–100?
 
-**A:** Each answer halves the remaining range, and 2^7 = 128 ≥ 100. That is binary search: O(log n).
+**A:** Each "too high" or "too low" answer lets you discard half of the remaining range, and 2^7 = 128 ≥ 100, so seven halvings always leave one number. That is binary search, which takes O(log n) steps. For 1–1000 the bound becomes 10 guesses, since 2^10 = 1024.
+
+**Q:** How do you parse a guess safely?
+
+**A:** Trim the line, call `Integer.parseInt` inside a try/catch, check the range, and return an `OptionalInt` so the loop never sees an exception. A `null` line means end of input (Ctrl-D), which should end the game rather than loop forever.
+```java
+static OptionalInt parse(String line, int lo, int hi) {
+    if (line == null) return OptionalInt.empty();
+    try {
+        int n = Integer.parseInt(line.trim());
+        return (n >= lo && n <= hi) ? OptionalInt.of(n) : OptionalInt.empty();
+    } catch (NumberFormatException e) { return OptionalInt.empty(); }
+}
+```
+
+**Q:** Is it safe to write `switch (Integer.compare(guess, secret)) { case -1 -> ... case 1 -> ... }`?
+
+**A:** No. The `Comparable`/`compare` contract only promises a negative number, zero or a positive number, not exactly -1 or 1. Today's `Integer.compare` happens to return -1/0/1, but code that relies on it breaks with other comparators. Use `Integer.signum(...)` around the result, or plain `if (guess < secret)` checks.
 
 **Q:** How would you make this testable?
 
-**A:** Move the rules into a class with no I/O and inject the random generator, so tests control the secret.
+**A:** Move the rules into a `Game` class that has no I/O and takes a `RandomGenerator` in its constructor. Tests pass a seeded generator (or a fake that always returns 42), feed guesses directly, and assert on the returned result and the tries count. The console loop then becomes a few lines that are checked by one end-to-end test with scripted input.
+
+**Q:** What happens with input like `99999999999`, an empty line, or Ctrl-D?
+
+**A:** `parseInt` throws `NumberFormatException` for the first two (the big value does not fit in an `int`, whose maximum is 2,147,483,647). The parser turns that into an empty result and the loop prints a hint without counting a try. `IO.readln` returns `null` at end of input, and if you do not check for it the loop spins forever printing prompts.
+
+**Q:** `Random`, `ThreadLocalRandom` or `SecureRandom` — which one, and why?
+
+**A:** For a game, `RandomGenerator.getDefault()` or `ThreadLocalRandom` is fine: fast and statistically good. `SecureRandom` is only needed when an attacker must not predict the value, such as tokens or keys. Using the `RandomGenerator` interface (Java 17) lets you swap implementations and pass a seeded one in tests.
+
+**Q:** What would you change if this became a multiplayer web game?
+
+**A:** The rules in `Game` stay the same, but the console loop is replaced by an HTTP or WebSocket handler, and each player's round state lives in a map keyed by session ID instead of local variables. The global `best` score becomes shared state that needs a thread-safe structure or a database. Clean separation between rules and I/O is what makes that change small.
+
+**Common mistakes in answers:**
+- Saying `nextInt(1, 100)` gives 1–100. The upper bound is exclusive, so it gives 1–99.
+- Treating the program as finished because it handles letters. Weak answers forget overflow (`99999999999`) and end-of-input (`null` from `readln`).
+- Claiming compact source files replace classes. They are a learning and scripting on-ramp. The compiler still creates a class, and real projects still use named classes and packages.
 
 ### TL;DR
 A loop, a decision and safe input parsing, written as a Java 25 compact source file. Separate the rules from the console so you can test them.
@@ -282,17 +334,55 @@ Keeping transactions in a list makes the balance a cached value; an alternative 
 - [Ch 18 — Testing, build and tooling](../chapters/18-testing-build-and-tooling/README.md) — JUnit and AssertJ
 
 ### In the interview
+**30-second answer:** I built a command-line bank that opens accounts, deposits, withdraws, transfers and prints statements. The key decision was a `Money` record wrapping `BigDecimal` at scale 2, so balances are exact to the cent and amounts like `"1.005"` are rejected at the edge. The hardest part was making transfers all-or-nothing: the `Bank` checks both accounts and the funds before changing anything, so a failed transfer leaves both balances untouched. Commands are parsed into a sealed interface of records, and every rule has a JUnit test, including "withdraw too much throws and the balance is unchanged".
+
+**Key terms to know:**
+- **Encapsulation** — keeping fields private so only the object's own methods can change them. `Account.balance` can only move through `deposit` and `withdraw`.
+- **Invariant** — a rule that must always hold, such as "balance is never negative". The account methods enforce it.
+- **`BigDecimal`** — an exact decimal number stored as an unscaled integer plus a scale (digits after the point). It is used for every amount.
+- **Scale and `RoundingMode.UNNECESSARY`** — `setScale(2, UNNECESSARY)` throws if rounding would be needed. It validates "at most 2 decimals".
+- **Value object / `Money` record** — an immutable type compared by value, not identity. Amounts are `Money`, never raw numbers.
+- **Checked vs unchecked exception** — checked exceptions must be declared or caught, unchecked ones (subclasses of `RuntimeException`) need not be. `InsufficientFundsException` is the design choice discussed here.
+- **Sealed interface + records** — a closed set of command types the compiler knows about. The parser returns `Deposit`, `Withdraw`, `Transfer` and so on.
+- **All-or-nothing (atomic) operation** — either every step happens or none does. `transfer` validates first, then mutates.
+- **Injected `Clock`** — a time source passed in, so tests can fix "now". It timestamps transactions.
+
 **Q:** Why not `double` for money?
 
-**A:** Binary floating point cannot represent most decimal fractions exactly, so sums drift (`0.1 + 0.2 = 0.30000000000000004`). `BigDecimal` stores a decimal unscaled value and a scale, so cents are exact. Some systems use a `long` count of cents instead, which is faster.
+**A:** Binary floating point cannot represent most decimal fractions exactly, so sums drift: `0.1 + 0.2` is `0.30000000000000004`. `BigDecimal` stores a decimal unscaled value and a scale, so cents are exact. Some systems store a `long` count of cents instead, which is faster and also exact, but you must handle currency decimals and overflow yourself.
+
+**Q:** Why is `new BigDecimal("2.0").equals(new BigDecimal("2.00"))` false, and what do you do about it?
+
+**A:** `BigDecimal.equals` compares both the value and the scale, and these have scales 1 and 2. `compareTo` compares only the numeric value and returns 0 here. Either compare with `compareTo`, or normalise every amount to scale 2 when you create it so `equals` and `hashCode` behave predictably in maps and sets.
+
+**Q:** What is wrong with `new BigDecimal(0.1)`?
+
+**A:** The `double` 0.1 is already inexact, and the constructor faithfully copies that inexact binary value, giving `0.1000000000000000055511151231257827…`. Use `new BigDecimal("0.1")` or `BigDecimal.valueOf(0.1)`, which goes through the double's shortest string form and gives `0.1`.
+
+**Q:** How do you make a transfer all-or-nothing?
+
+**A:** Look up both accounts and check the amount and funds before you change either one. Only then withdraw and deposit. If you withdraw first and the deposit then fails (unknown target account), money disappears. This is the single-threaded version of a database transaction.
 
 **Q:** How do you make a transfer safe if two threads run it at once?
 
-**A:** Lock both accounts, always in the same order (e.g. by ID), check, then move the money. A consistent lock order prevents deadlock.
+**A:** Lock both accounts, always in the same order (for example by account ID), then check and move the money. Without a consistent order, thread 1 can lock A then wait for B while thread 2 locks B then waits for A, which is a deadlock. A test with 8 threads doing random transfers should show the total money never changes.
 
-**Q:** Why is `balance` private?
+**Q:** Should `InsufficientFundsException` be checked or unchecked?
 
-**A:** So every change goes through methods that enforce the invariant "balance never goes below zero".
+**A:** Insufficient funds is an expected business outcome the caller should handle, so a checked exception is defensible: the compiler forces callers to deal with it. Many modern codebases prefer unchecked exceptions or a result type (such as a sealed `Result` with `Ok` and `Rejected`) because checked exceptions do not work well with lambdas and streams. The important point is to choose deliberately and keep it consistent.
+
+**Q:** Why is `balance` private, and why use a `Money` record instead of a raw `BigDecimal`?
+
+**A:** Private fields mean every change goes through methods that enforce "never below zero" and record a transaction. A `Money` record puts parsing, scale and (later) currency in one type, so you cannot accidentally add a raw number with three decimals or mix EUR with USD.
+
+**Q:** What would change at 10x or 100x the accounts and traffic?
+
+**A:** The `HashMap` lookup stays O(1), so in-memory speed is not the problem. What breaks first is durability and concurrency: everything is lost on exit, and the single-threaded design has no locking. The next steps are persistence (atomic file writes, then a database with real transactions) and thread-safe transfers with ordered locks.
+
+**Common mistakes in answers:**
+- Saying "use `double` and round at the end". Errors accumulate across many operations, and rounding cannot recover the lost cents.
+- Saying `BigDecimal.equals` compares values. It also compares scale, so use `compareTo` or a fixed scale.
+- Describing a transfer as "withdraw, then deposit" with no up-front validation, which loses money when the second step fails.
 
 ### TL;DR
 A small domain model that teaches encapsulation, exact decimal money with `BigDecimal`, and all-or-nothing operations with clear exceptions.
@@ -395,17 +485,67 @@ Records cannot have mutable state or extend other classes; that is the point, bu
 - [Ch 13 — I/O and NIO](../chapters/13-io-and-nio/README.md) — reading lines from files
 
 ### In the interview
+**30-second answer:** I built a grade book that loads students and marks from text files and reports per-student averages and letters, per-course mean and median, and a top-N ranking. The key decision was to model the data as immutable records with compact constructors, so a mark outside 0–100 can never exist in memory, and to index them with `HashMap` for lookups and `TreeMap` for sorted output. The trickiest parts were collecting bad lines instead of failing on the first one, and getting the median right for even counts. It processes 10,000 students × 10 courses in well under a second.
+
+**Key terms to know:**
+- **Record** — a Java 16 class declared by its components, with a canonical constructor, private final fields, accessors, `equals`, `hashCode` and `toString` generated. `Student` and `Grade` are records.
+- **Compact constructor** — a record constructor without a parameter list that runs before the fields are assigned. It validates the mark range and normalises course codes.
+- **Immutability** — an object's state cannot change after construction. Report code cannot corrupt the input data.
+- **Defensive copy** — copying a mutable argument (for example with `List.copyOf`) so outside code cannot change it later. It is needed for list components.
+- **`HashMap` vs `TreeMap`** — a hash table with average O(1) lookups and no ordering versus a red-black tree with O(log n) operations and sorted keys. Both are used for indexes.
+- **`Comparator.comparing(...).thenComparing(...)`** — builds a multi-key sort. It ranks by average, then by name.
+- **Enum with behaviour** — an enum whose constants carry data and methods. `Letter.from(int)` maps a mark to A–F.
+- **Integer division** — `int / int` truncates toward zero. It is the bug in naive averages.
+- **Median** — the middle value of sorted data, or the mean of the two middles for an even count.
+
 **Q:** What does a record generate for you?
 
-**A:** A canonical constructor, private final fields, accessor methods named after the components, and `equals`, `hashCode` and `toString` based on all components.
+**A:** A canonical constructor, a private final field and a public accessor (named `mark()`, not `getMark()`) for each component, and `equals`, `hashCode` and `toString` based on all components. You can add methods, static fields and extra constructors, but not extra instance fields, and a record cannot extend another class.
 
 **Q:** Can a record be mutable?
 
-**A:** Its fields are final, but if a component is a mutable object (like an `ArrayList`) its contents can still change. Copy defensively with `List.copyOf` in the compact constructor.
+**A:** Its fields are final, so you cannot reassign them. But if a component is a mutable object, such as an `ArrayList`, its contents can still change through a shared reference. Copy defensively with `List.copyOf` in the compact constructor, which also rejects `null` elements.
+
+**Q:** Why do `equals` and `hashCode` matter for records used as map keys?
+
+**A:** A `HashMap` finds a key by first using `hashCode` to pick a bucket and then `equals` to confirm the match. The contract says equal objects must have equal hash codes. Records generate both from the same components, so they are consistent, but a record holding a mutable list can change its hash code after insertion and become unfindable in the map.
 
 **Q:** `HashMap` or `TreeMap` here?
 
-**A:** `HashMap` for O(1) lookups by ID; `TreeMap` (O(log n)) when the output must be sorted by key.
+**A:** `HashMap` for lookups by student ID, which are average O(1). `TreeMap` (O(log n) per operation) when the report must be printed in key order, such as courses alphabetically, because iteration is already sorted and you skip a separate sort step.
+
+**Q:** Why is your average 89 instead of 89.5?
+
+**A:** `sum / count` with two `int`s does integer division and drops the fraction, so 179 / 2 is 89. Convert to `double` first (`(double) sum / count`), use `IntStream.average()`, or use `BigDecimal` with an explicit rounding rule.
+```java
+double avg = marks.stream().mapToInt(Integer::intValue).average().orElse(0);
+```
+
+**Q:** How do you rank the top N students with ties broken by name?
+
+**A:** Sort with a comparator that orders by average descending and then by name ascending, then take N. A full sort is O(n log n), which is fine for 10,000 students. For huge inputs a min-heap of size N gives O(n log N).
+```java
+Comparator<StudentStats> byRank = Comparator
+    .comparingDouble(StudentStats::average).reversed()
+    .thenComparing(StudentStats::name);
+```
+
+**Q:** Why collect bad lines instead of throwing on the first one?
+
+**A:** Data entry files often have a few mistakes, and the user wants a list of all of them in one run rather than fixing them one at a time. The risk is silently accepting a completely wrong file, so print the reject count and fail if more than a threshold (say 10%) of lines are bad.
+
+**Q:** How do you test it, and which edge cases matter?
+
+**A:** Parameterized tests on letter-grade boundaries (59, 60, 89, 90), median for lists of length 0, 1, 2 and 3, a record constructor test that `new Grade("s1", "MATH", 101)` throws, and one fixture file from `src/test/resources` whose full report is checked with AssertJ `containsExactly`.
+
+**Q:** What changes at 100x the data?
+
+**A:** A million students × 10 courses is still fine in memory with records and maps. Past that, loading everything stops working: you stream the file and keep running sums per student and course (mean is easy, an exact median is not, because it needs all values or an approximation). At that scale a database with `GROUP BY` is usually the right tool.
+
+**Common mistakes in answers:**
+- Saying records are deeply immutable. Only the references are final; mutable components need defensive copies.
+- Saying records are "just Lombok". They are a language feature with fixed semantics: no extra instance fields, no inheritance, and generated members based on all components.
+- Forgetting the even-count case of the median, or sorting a shared list in place to compute it.
 
 ### TL;DR
 Model the data with immutable records, index it with the right maps, then compute. Validate once, in the compact constructor.
@@ -498,17 +638,65 @@ Enums make units compile-time constants, so users cannot add units without recom
 - [Ch 10 — Collections](../chapters/10-collections/README.md) — maps for aliases
 
 ### In the interview
+**30-second answer:** I built a command-line unit converter covering six dimensions and over 30 units, such as `convert 5 km to mi`. Each dimension is an enum implementing a sealed `Unit` interface, and every conversion goes through the dimension's base unit, so N units need N definitions instead of N² pairs. The hard part was temperature, which is affine rather than a simple factor, so each unit has `toBase` and `fromBase` methods instead of one multiplier. Arithmetic is `BigDecimal` with `MathContext.DECIMAL64`, so defined factors such as 1 inch = 0.0254 m are exact and round-trip tests pass for every unit.
+
+**Key terms to know:**
+- **Enum with fields** — enum constants that take constructor arguments, such as a factor to metres. Each unit is one constant.
+- **Sealed interface** — an interface that lists exactly which types may implement it (`permits`). `Unit` is implemented only by the dimension enums.
+- **Exhaustive switch** — a switch expression or pattern switch that covers every case, so no `default` is needed and a new case causes a compile error. It is used when dispatching on dimension.
+- **Base unit** — one reference unit per dimension (metre, kilogram, kelvin) that all conversions pass through.
+- **Linear vs affine conversion** — `y = a·x` versus `y = a·x + b`. Temperature is affine because of the offset (0 °C = 273.15 K).
+- **`MathContext`** — a precision (number of significant digits) plus a rounding mode for `BigDecimal` operations. Every division needs one.
+- **Round-trip property** — converting to base and back must return the original value. It is the main test.
+- **Alias registry** — a `Map<String, Unit>` from every accepted spelling to its unit. The parser uses it for O(1) lookups.
+
 **Q:** Why convert through a base unit?
 
-**A:** With N units you store N factors instead of N×(N−1) pairwise rates, and every pair is consistent.
+**A:** With N units you store N factors instead of N×(N−1) pairwise rates, and every pair is automatically consistent, because km→mi and mi→km come from the same two definitions. Adding a unit is one line. The cost is two operations per conversion instead of one, which is negligible.
 
-**Q:** Why an enum rather than constants?
+**Q:** Why an enum rather than `int` or `String` constants?
 
-**A:** Enums are type-safe (you cannot pass a mass where a length is expected), can carry fields and methods, and work with exhaustive switches.
+**A:** Enums are type-safe: a method taking `Length` cannot be given a mass. They can carry fields and methods, `values()` lets tests iterate every unit, and the compiler checks switch expressions over them for exhaustiveness. String constants can be misspelled and are only checked at run time.
+
+**Q:** How does temperature fit the same interface as length?
+
+**A:** Instead of a single factor, `Unit` has `toBase(BigDecimal)` and `fromBase(BigDecimal)`. Linear units implement them as multiply and divide. Celsius adds or subtracts 273.15, and Fahrenheit does `(f − 32) × 5/9 + 273.15`. The converter never needs to know which kind it has.
 
 **Q:** Why does `BigDecimal.ONE.divide(new BigDecimal(3))` throw?
 
-**A:** The exact result has infinitely many digits; you must give a precision or rounding mode.
+**A:** Without a `MathContext`, `divide` tries to return the exact result, and 1/3 has infinitely many decimal digits, so it throws `ArithmeticException` ("Non-terminating decimal expansion"). Pass a precision: `divide(three, MathContext.DECIMAL64)` gives 16 significant digits. Fahrenheit's 5/9 hits the same problem.
+
+**Q:** What does a sealed interface give you that a normal interface does not?
+
+**A:** The compiler knows the complete list of implementations, so a pattern-matching `switch` over `Unit` can be exhaustive without a `default`. If someone adds a new dimension to `permits`, every switch that does not handle it fails to compile, rather than falling into a default branch at run time.
+```java
+String label = switch (unit) {
+    case Length l -> "length";
+    case Mass m -> "mass";
+    case Temperature t -> "temperature";
+};
+```
+
+**Q:** What happens with `convert 5 kg to m` or an unknown unit?
+
+**A:** The parser resolves both units, then the converter compares their `dimension()` and throws a clear error naming both dimensions ("cannot convert MASS to LENGTH"). An unknown alias fails in the registry lookup with "unknown unit 'kgs'", ideally with a suggestion. Neither case should reach the arithmetic.
+
+**Q:** How do you test it?
+
+**A:** A round-trip test over `Length.values()` (and each other dimension) via JUnit `@MethodSource`, checking that to-base-then-back returns the input within the chosen precision. Add fixed points with known answers: 1 mile = 1609.344 m exactly, -40 °C = -40 °F, 0 K = -273.15 °C. Add negative tests for cross-dimension and unknown units.
+
+**Q:** Is 1 KB 1000 or 1024 bytes?
+
+**A:** Both are used, which is why the standard units are separate: `kB` = 1000 bytes (SI prefix) and `KiB` = 1024 bytes (binary prefix, IEC). Supporting both by name removes the ambiguity rather than guessing.
+
+**Q:** What breaks first if you add compound units like km/h, or let users add units?
+
+**A:** The "one enum per dimension" model cannot express km/h or N·m; you need a unit represented as exponents per base dimension (length¹ time⁻¹), as JSR 385 does. User-defined units cannot be enum constants because enums are fixed at compile time, so you would load them from configuration and lose compile-time checking.
+
+**Common mistakes in answers:**
+- Treating temperature as a multiplication. Celsius and Fahrenheit have offsets, so a single factor gives wrong answers.
+- Rounding intermediate results. Round only when formatting output, or errors compound across the two conversion steps.
+- Saying `BigDecimal` is always the right choice. It is about an order of magnitude slower than `double`; that does not matter here but does in a numeric simulation.
 
 ### TL;DR
 Enums per dimension, a shared base unit, and `toBase`/`fromBase` methods so even temperature fits. Keep arithmetic exact and round only for display.
@@ -600,17 +788,69 @@ The whole vocabulary must fit in memory; for web-scale text you would count in p
 - [Ch 10 — Collections](../chapters/10-collections/README.md) — maps and `PriorityQueue`
 
 ### In the interview
+**30-second answer:** I built a word-frequency tool that reads files or standard input and prints the top N words, as one stream pipeline: lazy lines, split into Unicode words, lower-case, filter stop words, group and count, then take the top N. The key decision was `Files.lines` with an explicit UTF-8 charset inside try-with-resources, so memory grows with the vocabulary, not the file size. The hard parts were Unicode-aware tokenising with `\p{L}`, locale-safe lower-casing, and getting the top N without sorting everything. A 100 MB file runs in under 5 seconds with a 256 MB heap.
+
+**Key terms to know:**
+- **Stream pipeline** — a source, zero or more intermediate operations (`map`, `filter`, `flatMap`) and one terminal operation (`collect`). The whole counter is one pipeline.
+- **Lazy evaluation** — intermediate operations do nothing until a terminal operation pulls data. `Files.lines` only reads lines as they are needed.
+- **`flatMap`** — maps each element to a stream and flattens the results. It turns lines into words.
+- **`Collectors.groupingBy(..., counting())`** — groups elements by a key and counts each group into a `Map<String, Long>`.
+- **Try-with-resources** — closes an `AutoCloseable` automatically. `Files.lines` holds an open file handle.
+- **Charset / UTF-8** — the rule mapping bytes to characters. Invalid bytes throw `MalformedInputException` (wrapped in `UncheckedIOException` from the stream).
+- **`Locale.ROOT`** — a neutral locale for case conversion so Turkish rules do not change `I`. It is used when folding case.
+- **Min-heap (`PriorityQueue`)** — a structure whose smallest element is cheapest to remove. It finds the top K in O(n log K).
+- **Parallel stream** — splits work across the common ForkJoin pool. It is optional here and must be measured.
+
 **Q:** Why is `Files.lines` better than `Files.readAllLines` here?
 
-**A:** It is lazy: lines are read as the stream pulls them, so memory does not grow with file size.
+**A:** `readAllLines` loads the whole file into a `List<String>`, so a 100 MB file needs at least that much heap (more, because Java strings carry object overhead). `Files.lines` is lazy: lines are read as the pipeline pulls them, so memory depends only on the counts map. It must be closed, so wrap it in try-with-resources.
+
+**Q:** Walk me through the pipeline.
+
+**A:** Each line is split by a precompiled `Pattern` into words, lower-cased with `Locale.ROOT`, filtered against a stop-word `Set`, then grouped and counted.
+```java
+try (Stream<String> lines = Files.lines(path, UTF_8)) {
+    Map<String, Long> counts = lines
+        .flatMap(line -> WORD.matcher(line).results())
+        .map(m -> m.group().toLowerCase(Locale.ROOT))
+        .filter(w -> !STOP.contains(w))
+        .collect(groupingBy(w -> w, counting()));
+}
+```
+`Matcher.results()` (Java 9) returns every match as a stream of `MatchResult`.
 
 **Q:** How do you get the top K of n items efficiently?
 
-**A:** A min-heap of size K: push each item, pop the smallest when size exceeds K. O(n log K) time, O(K) extra space.
+**A:** Use a min-heap of size K: add each entry, and when the size exceeds K remove the smallest. That is O(n log K) time and O(K) extra space, against O(n log n) for sorting every entry. For K = 10 and a million distinct words the heap wins clearly, though for small inputs a full sort is simpler and fast enough.
+
+**Q:** Why `toLowerCase(Locale.ROOT)` instead of `toLowerCase()`?
+
+**A:** The no-argument version uses the JVM's default locale. In Turkish, upper-case `I` lower-cases to a dotless `ı`, so "TITLE" would not match "title" on a Turkish machine. `Locale.ROOT` gives the same result everywhere, which is what you want for program logic as opposed to text shown to users.
 
 **Q:** When does `parallel()` help?
 
-**A:** For CPU-heavy work on large, easily split sources. With file I/O and a shared result it often does not; measure.
+**A:** For CPU-heavy work on a large source that splits cheaply. Here reading the file is often the bottleneck, line splitting is less even than splitting an array, and merging the per-thread maps costs time, so it may not help. If you try it, use `groupingByConcurrent` or let `groupingBy` merge partial maps, never a shared `HashMap` mutated from `forEach`, and measure.
+
+**Q:** What happens if the file is not valid UTF-8, or is missing?
+
+**A:** A missing file makes `Files.lines` throw `NoSuchFileException`, an `IOException`. Bad bytes are only found while the stream is consumed, so they surface as an `UncheckedIOException` wrapping `MalformedInputException`. Catch both at the top level and print the file name with a clear message rather than a stack trace.
+
+**Q:** Why does `Map<String, Long>` use `Long` and not `Integer`?
+
+**A:** `Collectors.counting()` returns a `Long`, so the map type follows. It also avoids overflow for very large inputs. If you build the map yourself, `map.merge(word, 1L, Long::sum)` is the idiomatic one-liner.
+
+**Q:** How do you test it?
+
+**A:** Unit-test the tokeniser on punctuation, apostrophes (`don't`), digits and accents (`café`, `naïve`). Test the top-N step with a hand-built map, including ties, which must be alphabetical. Write fixture files into a JUnit `@TempDir`, and include an invalid UTF-8 byte to check the error message.
+
+**Q:** What changes at web scale, say 1 TB of text?
+
+**A:** The vocabulary may no longer fit in one JVM's memory, and one machine reads too slowly. You split the input, count each partition separately, and merge the partial counts by word, which is the classic MapReduce word count. Approximate structures such as Count-Min Sketch can find frequent words in fixed memory if exact counts are not required.
+
+**Common mistakes in answers:**
+- Forgetting that `Files.lines` must be closed. Processing thousands of files leaks file handles.
+- Saying "just add `.parallel()` and it gets faster" without measuring, or mutating a shared map inside `forEach`, which is a data race.
+- Splitting on `\s+` or `[a-zA-Z]+`, which mishandles punctuation and drops accented letters. Use `\p{L}`.
 
 ### TL;DR
 A stream pipeline from lazy lines to a grouped count to a top-N. Mind encodings, locales and closing the file.
@@ -701,17 +941,61 @@ Full search works because the tree is tiny. For Connect Four or chess you must c
 - [Ch 19 — Java for coding interviews](../chapters/19-java-for-coding-interviews/README.md) — backtracking
 
 ### In the interview
-**Q:** What is minimax?
+**30-second answer:** I built terminal tic-tac-toe where the computer never loses, because it searches the whole game tree with minimax. The key design decision was a `Player` interface with `HumanPlayer` and `MinimaxPlayer` behind it and a `Board` class with no console code, so the AI and the rules are testable on their own. The interesting problems were making the AI prefer faster wins by subtracting search depth from the score, and adding alpha-beta pruning so the first move takes well under 50 ms. A property test plays 1,000 games against a random player and asserts the AI never loses.
 
-**A:** A recursive search over game states where one player maximises and the other minimises the score, assuming both play optimally.
+**Key terms to know:**
+- **Game tree** — every position reachable from the current one, with moves as edges. Tic-tac-toe's is small enough to search completely (255,168 possible games).
+- **Minimax** — a recursive search where the AI picks the move with the highest score and assumes the opponent picks the lowest. It is the AI's whole algorithm.
+- **Terminal position** — a board with a win or a full board, scored +10, -10 or 0. It is the base case of the recursion.
+- **Depth penalty** — subtracting the search depth from a win score so quicker wins score higher. It stops the AI delaying a win.
+- **Alpha-beta pruning** — skipping branches that cannot change the decision, tracked with alpha (best for the maximiser so far) and beta (best for the minimiser). Same answer, far fewer nodes.
+- **Backtracking** — make a move, recurse, then undo it, instead of copying the board. It saves allocation in the search.
+- **Strategy pattern** — interchangeable algorithms behind one interface. `Player.chooseMove(Board)` is implemented by a human and by the AI.
+- **Heuristic evaluation / transposition table** — a scoring guess for unfinished positions and a cache of positions already scored. They are what bigger games need (stretch goals).
 
-**Q:** What does alpha-beta pruning change?
+**Q:** Explain minimax in plain words.
 
-**A:** Not the result, only the work: branches that cannot affect the final choice are skipped. With good move ordering it roughly square-roots the number of nodes.
+**A:** On the AI's turn, try every legal move, score the result recursively, and take the maximum. On the opponent's turn take the minimum, assuming they play perfectly. A finished board returns its result directly. Because the depth is at most 9, plain recursion is safe.
 
-**Q:** Copy the board or undo moves?
+**Q:** Why does the AI sometimes delay a win, and how do you fix it?
 
-**A:** Undo is faster and allocation-free but easier to get wrong; copy is simpler. For 9 cells either is fine.
+**A:** Without a depth term, a win in 1 move and a win in 5 moves both score +10, so the AI may pick the slow one. Score wins as `10 - depth` and losses as `depth - 10`, so it prefers quick wins and, if losing, the slowest loss.
+
+**Q:** What does alpha-beta pruning do, and does it change the answer?
+
+**A:** It carries two bounds: alpha, the score the maximiser can already guarantee, and beta, the minimiser's guarantee. When alpha ≥ beta in a branch, the opponent would never let the game reach it, so the rest of the branch is skipped. The chosen move is the same as plain minimax, but far fewer nodes are visited, especially if good moves are tried first.
+
+**Q:** Copy the board at each node, or make and undo moves?
+
+**A:** Copying is simpler and has no risk of forgetting to undo, but allocates a new array at every node. Make/undo (backtracking) allocates nothing and is faster. With a 9-cell board either is fine; for chess engines make/undo is standard.
+```java
+for (int cell : board.emptyCells()) {
+    board.set(cell, AI);
+    best = Math.max(best, minimax(board, depth + 1, false));
+    board.clear(cell);          // undo
+}
+```
+
+**Q:** How do you detect a win without a long chain of `if`s?
+
+**A:** Store the 8 winning lines (3 rows, 3 columns, 2 diagonals) as a constant array of cell-index triples and check whether all three cells in any line hold the same non-empty mark. That is data rather than code, and it generalises to K-in-a-row on bigger boards.
+
+**Q:** How do you prove the AI never loses?
+
+**A:** Fixed-position tests ("must block this row", "must take this win"), plus a property test where a random player plays 1,000 games against the AI and the AI never loses. Because the game is tiny, you can go further and enumerate every possible opponent strategy from both starting sides. Counting nodes with and without pruning checks that alpha-beta really prunes.
+
+**Q:** What happens with bad input, such as an occupied cell or `x`?
+
+**A:** The human player's input method parses and validates in a loop: a non-number, a number outside 1–9 or an occupied cell prints a hint and asks again. The `Board` also rejects an illegal move with an exception, so a bug in any player cannot corrupt the game state.
+
+**Q:** What changes for Connect Four or chess?
+
+**A:** The full tree is far too big (Connect Four has about 4.5 trillion positions, and chess vastly more), so you search to a fixed depth and score unfinished positions with a heuristic evaluation. You add move ordering for better pruning, a transposition table to reuse scores of positions reached by different move orders, and iterative deepening to answer within a time limit.
+
+**Common mistakes in answers:**
+- Saying alpha-beta is a heuristic that may pick a worse move. It always returns the same result as minimax; only depth-limited search with a heuristic evaluation is approximate.
+- Forgetting the depth penalty and then being unable to explain why the AI "toys" with the opponent.
+- Mixing console I/O into the board or AI code, which makes the AI impossible to unit-test.
 
 ### TL;DR
 Recursive minimax over a 3×3 board makes a perfect player; alpha-beta makes it fast. Keep rules, AI and UI separate.
@@ -823,17 +1107,63 @@ A two-word parser is easy but limited; a real one needs a grammar with prepositi
 - [Ch 19 — Java for coding interviews](../chapters/19-java-for-coding-interviews/README.md) — BFS over a graph
 
 ### In the interview
+**30-second answer:** I built a generic text-adventure engine where rooms, exits, items, locked doors and the win condition come from a data file, so a new 20-room world needs no code changes. Commands are parsed into a sealed interface of records, such as `Go(Direction)` and `Take(String)`, and handled by one exhaustive `switch` with no `default`, so adding a command breaks compilation until it is handled everywhere. The key design decision was splitting an immutable `World` from a small mutable `GameState`, which made save and load a matter of writing one object. At load time a breadth-first search checks that every room is reachable and every exit points somewhere real.
+
+**Key terms to know:**
+- **Sealed interface** — an interface that lists its permitted implementations. `Command` permits only the command records.
+- **Record pattern** — a pattern that matches a record and pulls out its components, as in `case Go(var dir)`. It is used in the engine's switch (Java 21).
+- **Pattern matching for `switch`** — a switch that branches on an object's type and shape (final in Java 21). It is the engine's dispatcher.
+- **Exhaustiveness** — the compiler checks that a switch covers every permitted subtype. It is why no `default` is needed.
+- **Immutable world / mutable state** — static content that never changes versus the facts the player changes. `World` and `GameState`.
+- **`EnumMap`** — a map whose keys are enum constants, backed by an array. It is used for a room's exits by `Direction`.
+- **Graph and BFS** — rooms are nodes and exits are edges, and breadth-first search visits everything reachable from a start node. It validates the world file.
+- **Data-driven design** — behaviour described in data, not code. The world file is what makes the engine generic.
+
 **Q:** Why sealed interfaces for commands?
 
-**A:** The compiler knows every permitted subtype, so a switch over them can be exhaustive without `default`; adding a type causes compile errors where it is not handled.
+**A:** The compiler knows every permitted subtype, so a `switch` over a `Command` can be exhaustive without a `default`. When you add a new record such as `Open(item)`, every switch that does not handle it stops compiling, instead of silently falling into a default branch at run time. It also removes casts, because record patterns pull out the fields.
+```java
+String reply = switch (cmd) {
+    case Go(var dir)    -> move(dir);
+    case Take(var item) -> take(item);
+    case Look()         -> describe(state.room());
+    // ...one case per remaining command record
+    case Unknown(var t) -> "I don't understand '" + t + "'.";
+};
+```
 
-**Q:** Why keep the world immutable?
+**Q:** Why keep the world immutable and the state separate?
 
-**A:** It can be shared and reasoned about freely, and the mutable state is small and in one place, which makes saving and testing simple.
+**A:** The world can be shared and reasoned about freely, and all the mutable facts (current room, inventory, item locations, opened doors) live in one small `GameState`. Saving is writing that object, loading is reading it, and tests can build a state directly. If items lived inside mutable `Room` objects, saving would mean serialising the whole graph.
 
 **Q:** How do you check that every room is reachable?
 
-**A:** BFS from the start room over exits; any room not visited is unreachable.
+**A:** Run BFS from the start room over exits, using a queue and a visited set. Any room not visited is unreachable, and the loader reports it together with exits pointing to missing rooms and keys that do not exist. BFS is O(rooms + exits).
+
+**Q:** Why `EnumMap<Direction, Exit>` instead of `HashMap`?
+
+**A:** `EnumMap` stores values in an array indexed by the enum's ordinal, so it is faster and smaller than a hash map, and it iterates in declaration order. It only works with enum keys, which is exactly this case.
+
+**Q:** How does the parser handle synonyms and unknown words?
+
+**A:** It lower-cases and splits the line, maps synonyms through a table (`n` → `go north`, `get` → `take`), and returns a command record. Anything it cannot match becomes `Unknown(text)`, which the engine answers politely. The parser never throws, which meets the "never an exception" requirement.
+
+**Q:** What happens if the world file is broken?
+
+**A:** The loader validates everything before the game starts: exits to missing rooms, keys that do not exist, items in unknown rooms, and an unreachable win room. It collects all problems and reports them with line numbers rather than stopping at the first. A broken world never reaches the engine.
+
+**Q:** How do you test a whole game?
+
+**A:** A table-driven parser test (input → expected `Command`), a scripted walkthrough test that feeds every command needed to win and asserts the final state is "won", a save → load test asserting the restored state equals the original (records make `equals` free), and validator tests with broken fixture files.
+
+**Q:** What would you change for a much bigger or richer game?
+
+**A:** The two-word parser becomes a small grammar with prepositions and adjectives ("put the small key in the box"). Puzzles move from Java code into data as conditions and effects, so writers can add them without recompiling. For very large worlds you would load rooms lazily, but even thousands of rooms fit easily in memory.
+
+**Common mistakes in answers:**
+- Adding a `default` branch "to be safe". It disables the exhaustiveness check that is the main reason to use a sealed type.
+- Saying a record makes the game state immutable even when it holds a mutable `List` or `Set` that is changed in place.
+- Mixing content and engine, such as hard-coding room descriptions in Java, which defeats the "new world with no code changes" requirement.
 
 ### TL;DR
 A data-driven game engine: sealed command records, one exhaustive switch, an immutable world and a small mutable game state.
@@ -935,17 +1265,60 @@ Rewriting the whole file on each save is simple and fine for thousands of rows; 
 - [Ch 12 — Streams](../chapters/12-streams/README.md) — grouping for reports
 
 ### In the interview
+**30-second answer:** I built a command-line expense tracker that stores everything in a CSV file you can open in a spreadsheet, with monthly and per-category reports and import from bank exports. The key decision was atomic saves: write a temp file in the same directory, force it to disk, then rename it over the original, so killing the process mid-save leaves either the old file or the new one, never a mix. The hardest part was a real RFC 4180 CSV codec, a small state machine that handles quoted commas, doubled quotes and embedded newlines. Amounts are `BigDecimal`, dates are `LocalDate`, and 100,000 expenses load in under a second.
+
+**Key terms to know:**
+- **RFC 4180** — the CSV convention: fields containing commas, quotes or line breaks are wrapped in quotes, and a quote inside a field is written twice. The codec follows it.
+- **State machine parser** — a parser that reads one character at a time and switches between states such as "in field", "in quotes" and "quote seen". It is how CSV is parsed correctly.
+- **Atomic rename** — `Files.move(tmp, file, ATOMIC_MOVE)` replaces the file in one step on the same file system. It is the core of crash-safe saving.
+- **fsync / `force`** — asking the OS to flush data to the physical disk, via `FileChannel.force(true)`. Without it a power cut can lose a "saved" file.
+- **NIO.2** — the `java.nio.file` API (`Path`, `Files`). All file access uses it with explicit UTF-8.
+- **`LocalDate` / `YearMonth`** — calendar dates and months with no time zone. Expenses and monthly reports use them.
+- **`DateTimeFormatter`** — parses and formats dates with a pattern such as `dd/MM/yyyy`. Bank import formats are configurable through it.
+- **Idempotent import** — importing the same file twice adds nothing the second time, via a hash of date, amount and description.
+- **`@TempDir`** — a JUnit annotation that gives each test a fresh temporary directory for file tests.
+
 **Q:** How do you save a file so a crash cannot corrupt it?
 
-**A:** Write a temp file in the same directory, flush and fsync it, then atomically rename it over the original.
+**A:** Write the full content to a temp file in the same directory, call `force(true)` on its channel so the bytes reach the disk, then `Files.move(tmp, target, ATOMIC_MOVE)`. A rename on the same file system is atomic, so readers see either the old or the new file. Keeping a `.bak` of the previous version gives a second safety net.
+
+**Q:** Why must the temp file be in the same directory?
+
+**A:** An atomic rename only works within one file system. If the temp file is on another mount (such as `/tmp`), `ATOMIC_MOVE` fails with `AtomicMoveNotSupportedException`, and a copy-then-delete move is not atomic. Note also that with `ATOMIC_MOVE` the Javadoc says whether an existing target is replaced is implementation-specific (other options are ignored); on Linux and macOS a rename replaces it.
 
 **Q:** Why not split CSV lines on commas?
 
-**A:** Quoted fields can contain commas, quotes and newlines; you need a quote-aware parser.
+**A:** Quoted fields can contain commas, quotes and even newlines, so `split(",")` breaks `"Lunch, with Sam"` into two fields, and reading line by line breaks a field containing a newline. You need a quote-aware parser that can continue a record across physical lines. A round-trip test on `"Lunch, with ""Sam"""` proves the codec writes and reads back the same text.
 
 **Q:** `LocalDate` or `Instant` for an expense?
 
-**A:** `LocalDate`: an expense happens on a calendar day; there is no meaningful instant or time zone.
+**A:** `LocalDate`. An expense happens on a calendar day, and there is no meaningful instant or time zone. An `Instant` would be a point on the UTC timeline, and converting it back to a day depends on the zone, which can move a late-evening purchase to the next day.
+
+**Q:** How do you parse dates from different banks?
+
+**A:** Make the import format configurable per bank with `DateTimeFormatter.ofPattern("dd/MM/yyyy")` and parse strictly. `14/09/2026` is unambiguous, but `03/04/2026` could be March or April, so never guess. Reject a file whose dates do not parse with the configured pattern.
+```java
+var fmt = DateTimeFormatter.ofPattern("dd/MM/uuuu").withResolverStyle(ResolverStyle.STRICT);
+LocalDate d = LocalDate.parse("14/09/2026", fmt);
+```
+With `STRICT`, use `uuuu` (year) rather than `yyyy` (year of era), or parsing fails.
+
+**Q:** What if two copies of the program write at the same time?
+
+**A:** Each loads the file, changes its own copy and saves, so the last writer wins and the other's changes are lost (a "lost update"). Taking an exclusive lock with `FileChannel.tryLock` on a lock file at startup prevents a second instance from running. A database would solve this properly with transactions.
+
+**Q:** How do you test the atomic save?
+
+**A:** Inject a writer that throws halfway through writing, then assert the original file is byte-for-byte unchanged and no partial file replaced it. Use `@TempDir` so each test gets a clean directory. Killing a real process mid-save is a good manual check too.
+
+**Q:** What changes at 100x the data?
+
+**A:** Rewriting the whole file on every save is O(n) per change, fine for thousands of rows but slow at millions. You would switch to appending new rows, or to SQLite or H2 through JDBC behind the same repository interface. CSV also has no schema, so add a header row and read columns by name to stay compatible when a column is added.
+
+**Common mistakes in answers:**
+- Saying "I write the file then close it" counts as safe. A crash mid-write leaves a truncated file; only temp-file + fsync + rename is crash-safe.
+- Using `Instant` or `LocalDateTime` for a calendar-day fact and getting time-zone bugs.
+- Parsing CSV with `split(",")` or one regex, which fails on quoted commas and multi-line fields.
 
 ### TL;DR
 Plain-text persistence done properly: an RFC 4180 codec, atomic saves, `java.time` dates and exact money.
@@ -1063,17 +1436,65 @@ In-memory indexes are fast but cost memory and must be updated on every change; 
 - [Ch 7 — Core APIs](../chapters/07-core-apis/README.md) — `java.time` for due dates
 
 ### In the interview
+**30-second answer:** I built a library catalogue with loans and a search that combines any mix of title words, author, subject, year range and "available only", sorted by title, year or relevance and paged ten at a time. Search starts from in-memory indexes, a generic `MultiIndex<K, V>` over `Map<K, Set<V>>`, picks the smallest candidate set, then applies the remaining filters as composed `Predicate<Book>` objects. The subtle bug I had to design out was unstable paging: every comparator ends with the ISBN as a unique tie-breaker. A randomized test checks that indexed search agrees with a linear scan on 1,000 random queries, and search over 100,000 books stays under 50 ms.
+
+**Key terms to know:**
+- **Generic class** — a class with a type parameter, such as `MultiIndex<K, V>`, written once and reused for words, authors and subjects.
+- **Type erasure** — generic type arguments are removed at compile time, so at run time `MultiIndex<String, Book>` is just `MultiIndex`. It limits what generic code can do with `T`.
+- **Bounded type / wildcard** — `<T extends Comparable<? super T>>` restricts what `T` may be, and `?` stands for an unknown type. It is needed in a "top K" helper.
+- **PECS** — "producer extends, consumer super": use `? extends T` for a source you read from, `? super T` for a sink you write to.
+- **`Predicate<T>`** — a function from `T` to `boolean` that composes with `and`, `or` and `negate`. Every filter is one.
+- **`Comparator` combinators** — `comparing`, `thenComparing`, `reversed`, `nullsLast` build multi-key orders. Every sort option is one.
+- **Total, stable order** — every pair of items has a defined order, so results never shuffle between requests. The ISBN tie-breaker ensures it.
+- **Inverted index** — a map from a term to the items containing it. The title-word index is one.
+- **Pagination** — returning results in fixed-size pages (offset and limit).
+
 **Q:** How do you combine optional search filters cleanly?
 
-**A:** Represent each as a `Predicate<T>` and fold them with `and`, starting from `t -> true`. New filters are new predicates; existing code is untouched.
+**A:** Represent each active filter as a `Predicate<Book>` and fold them with `and`, starting from `b -> true`. Adding a filter type is adding a predicate builder, with no change to existing code (the open/closed principle).
+```java
+Predicate<Book> p = b -> true;
+if (q.author() != null) p = p.and(b -> b.authors().contains(q.author()));
+if (q.from() != null)   p = p.and(b -> b.year() >= q.from());
+if (q.availableOnly())  p = p.and(loans::hasFreeCopy);
+```
 
 **Q:** Why add a unique tie-breaker to a sort?
 
-**A:** To make the order total and deterministic, so pagination does not duplicate or skip items.
+**A:** If two books share a year, their relative order is not defined by the comparator, so it can differ between runs or after data changes, and paging may show a book twice or skip it. Ending with a unique key such as ISBN makes the order total and deterministic. Java's object sort (TimSort) is stable, but stability alone does not help when the input order itself changes.
 
-**Q:** What does PECS mean?
+**Q:** What does PECS mean? Give an example.
 
-**A:** Use `? extends T` for a source you read from, `? super T` for a sink you write to.
+**A:** Use `? extends T` when you only read `T`s out of a structure, and `? super T` when you only put `T`s in. For example, `addAll(Collection<? super Book> sink, List<? extends Book> source)` accepts a `List<Object>` as the sink and a `List<EBook>` as the source. `Comparator<? super T>` appears in `sort` for the same reason: a comparator of `Book` can sort `EBook`s.
+
+**Q:** Why can't you write `new T[]` or `if (x instanceof List<Book>)`?
+
+**A:** Generics are erased: at run time the JVM has no idea what `T` or the element type of a `List` is. Creating an array needs the real element class, and an `instanceof` check needs run-time type information, so both are rejected. Workarounds are passing a `Class<T>` or `IntFunction<T[]>`, or checking `instanceof List<?>`.
+
+**Q:** With several index hits, how do you find the candidates fast?
+
+**A:** Look up each indexed criterion, start from the smallest set, and test the remaining criteria with predicates on just those books rather than intersecting large sets. If "author = Tolkien" gives 30 books and "subject = fantasy" gives 20,000, you check 30 books, not 20,000. This is the same idea a database query planner uses when it picks the most selective index.
+
+**Q:** How do you sort books with no year?
+
+**A:** Either model the year as `Optional<Integer>` and map it to a sentinel only inside the comparator, or use `Comparator.nullsLast(...)`. Without one of these, `comparing(Book::year)` throws a `NullPointerException` on unboxing or comparing a null.
+
+**Q:** What edge cases matter for loans?
+
+**A:** Borrowing a copy that is already out must fail, returning a copy twice must fail, and "overdue" depends on today's date, so inject a `Clock` and test with `Clock.fixed`. Each loan state change should be checked before it is applied, so a failed borrow leaves no partial loan record.
+
+**Q:** How do you prove the indexed search is correct?
+
+**A:** Keep the slow linear scan as a reference implementation and run a randomized test: 1,000 random queries over a fixture catalogue, asserting both return the same books in the same order. Any difference points to an index that was not updated or a predicate bug. Unit-test `MultiIndex` on its own too.
+
+**Q:** What changes at 10 million books?
+
+**A:** In-memory indexes cost memory and must be updated on every add, edit and loan, and simple word matching misses plurals and typos. At that size you would move to a database with proper indexes or a search engine with an inverted index, stemming and relevance scoring (project 36), and keep the `Predicate`/`Comparator` design for in-memory post-filtering.
+
+**Common mistakes in answers:**
+- Saying `List<EBook>` is a subtype of `List<Book>`. Generics are invariant; you need `List<? extends Book>`.
+- Thinking a stable sort guarantees consistent paging. You need a total order with a unique final key.
+- Filtering by scanning every book "because it is fast enough", with no plan for when the catalogue grows.
 
 ### TL;DR
 Indexes for candidates, predicates for filters, comparators for order — generics and lambdas turning search into composable pieces.
@@ -1185,17 +1606,63 @@ Leitner is simple and explainable; SM-2 adapts per card; modern schedulers fit a
 - [Ch 18 — Testing, build and tooling](../chapters/18-testing-build-and-tooling/README.md) — table-driven tests
 
 ### In the interview
+**30-second answer:** I built a terminal flashcard app that shows only the cards due today and schedules each card further out the better you rate yourself. The key design decision was making the scheduler a pure function, (card state, rating, today) → new state, with the date passed in from an injected `Clock`, so I can simulate 60 days of reviews in a millisecond test. Due cards sit in a `PriorityQueue` ordered by due date, and I keep both the current card state and an append-only review log. A 10,000-card deck opens in under a second, and progress is saved atomically after every answer.
+
+**Key terms to know:**
+- **Spaced repetition** — reviewing an item just before you are likely to forget it, at growing intervals. It is the app's purpose.
+- **Leitner system** — cards move up through boxes reviewed less and less often, and a miss sends a card back to box 1. It is the first scheduler (intervals 1, 2, 4, 8, 16 days).
+- **SM-2 / ease factor** — a per-card multiplier (starting near 2.5) applied to the interval and adjusted by each rating. It is the second scheduler.
+- **Pure function** — output depends only on inputs, with no hidden reads of time or files. The scheduler is one.
+- **`java.time.Clock`** — an injectable source of "now". Production uses the system clock, tests use `Clock.fixed` or a test clock.
+- **`LocalDate` / `ChronoUnit.DAYS`** — day-level dates and day arithmetic with no time zones.
+- **`PriorityQueue`** — a binary heap that always yields the smallest element first, with O(log n) insert and poll. It orders due cards.
+- **Append-only log** — records are only added, never changed. The review log feeds statistics and can rebuild card states.
+
 **Q:** Why inject a `Clock`?
 
-**A:** So time-dependent logic is deterministic in tests; `Clock.fixed` or a mutable test clock lets you simulate days passing.
+**A:** Code that calls `LocalDate.now()` directly cannot be tested for "what happens in three weeks". With a `Clock` passed in, production uses `Clock.systemDefaultZone()` and tests use `Clock.fixed(...)` or a mutable test clock that advances a day at a time. The scheduler then becomes a table of inputs and expected outputs.
 
-**Q:** What breaks if you mutate an element inside a `PriorityQueue`?
+**Q:** What breaks if you change an element inside a `PriorityQueue`?
 
-**A:** The heap order is not re-established, so `poll` can return the wrong element. Remove, change, re-add.
+**A:** The heap order is only restored when you add or remove. If you change a card's due date in place, the queue is not told, so `poll` can return the wrong card, and later operations can leave it in a broken state. Remove the card, change it, then re-add it, or rebuild the queue per session.
+```java
+queue.remove(card);                 // O(n) search, then O(log n) fix-up
+var updated = scheduler.next(card, rating, today);
+queue.add(updated);
+```
+
+**Q:** Explain the scheduling rule you implemented.
+
+**A:** Each card has an interval in days and an ease. "Good" multiplies the interval by the ease, "easy" multiplies more and raises the ease, "hard" uses a smaller multiplier and lowers the ease, and "again" resets the interval to one day and lowers the ease. The ease is clamped to a minimum (about 1.3 in SM-2) so a hard card is not stuck being shown every day forever.
 
 **Q:** Why keep a review log as well as card state?
 
-**A:** State answers "what is due"; the log answers "how am I doing" and allows recomputing state if the algorithm changes.
+**A:** The card state answers "what is due today". The log answers "how am I doing", such as retention over 30 days, and it allows recomputing every card's state if you change the algorithm. It is a small form of event sourcing: the log is the truth, the state is a cached result.
+
+**Q:** Why does `iterator()` on a `PriorityQueue` not give cards in due order?
+
+**A:** A heap only guarantees that the root is the smallest; the rest of the array is partially ordered. Iterating or printing it shows that internal array order. To list cards in order, `poll` repeatedly from a copy, or sort a copy of the elements.
+
+**Q:** What happens if the program crashes mid-session?
+
+**A:** Progress is saved after every answer using the atomic temp-file-and-rename technique, so at most the current answer is lost and the deck file is never half-written. Saving each answer costs some I/O, but a person answers a card every few seconds, so it is negligible.
+
+**Q:** How do you test the scheduler?
+
+**A:** Table-driven tests: (interval, ease, rating) → expected (interval, ease), including the ease floor. A simulation test answers "good" every day for 60 simulated days with a test clock and asserts the intervals grow. Repository round-trip tests use `@TempDir`.
+
+**Q:** What edge cases come from dates and time zones?
+
+**A:** "Today" depends on the user's time zone, so a traveller can see a day skipped or repeated. Storing due dates as `LocalDate` in the user's zone is good enough. Day arithmetic must use `plusDays` or `ChronoUnit.DAYS.between`, not 24-hour multiples, which go wrong around daylight-saving changes.
+
+**Q:** What would change at 1 million cards or many users?
+
+**A:** Loading the whole deck into a heap each session gets slow, so you would store cards in a database with an index on due date and query only "due ≤ today, limit N". With many users, each user's data is separate, so it partitions cleanly by user ID.
+
+**Common mistakes in answers:**
+- Calling `LocalDate.now()` inside the scheduler and then testing by waiting or by mocking static methods.
+- Assuming a `PriorityQueue` re-sorts itself when an element changes, or that iterating it gives sorted order.
+- Forgetting to clamp the ease, which lets difficult cards spiral to tiny intervals.
 
 ### TL;DR
 A pure scheduling function, a priority queue of due cards and an injected clock — spaced repetition made testable.
@@ -1293,17 +1760,65 @@ Regex-only converters are quick to write and wrong on nesting. A full CommonMark
 - [Ch 18 — Testing, build and tooling](../chapters/18-testing-build-and-tooling/README.md) — dynamic and parameterized tests
 
 ### In the interview
+**30-second answer:** I built a Markdown-to-HTML library and CLI that works like a compiler front end: a block parser reads the document line by line into a tree of containers, an inline parser handles emphasis, links and code spans inside each leaf block, and a renderer turns the resulting AST into HTML. The AST is a sealed hierarchy of records, so the renderer is one exhaustive pattern-matching `switch`. The hardest parts were emphasis, which I resolve with the CommonMark delimiter stack in linear time, and lazy continuation lines in block quotes. I run the CommonMark spec examples as JUnit dynamic tests and track the pass rate per section, and all output is HTML-escaped by default to prevent XSS.
+
+**Key terms to know:**
+- **AST (abstract syntax tree)** — a tree of typed nodes describing the document's structure. Everything between parsing and rendering is the AST.
+- **Block vs inline parsing** — first decide the document's structure (paragraphs, lists, quotes), then parse emphasis and links inside text. This two-phase design is the core of the project.
+- **Container stack** — the list of open containers (quote inside list item inside list) that the block parser checks each new line against.
+- **Delimiter stack** — the CommonMark algorithm for matching `*` and `_` runs into emphasis and strong emphasis in linear time.
+- **Lazy continuation** — a paragraph line inside a block quote may omit the `>` marker. It is the rule most hand-written parsers miss.
+- **Sealed records + pattern matching** — the AST node types and the exhaustive renderer switch.
+- **XSS (cross-site scripting)** — an attack where user input becomes executable script in someone else's browser. It is prevented by escaping and URL-scheme allowlists.
+- **Dynamic tests (`@TestFactory`)** — JUnit tests generated at run time from data. Each spec example becomes one test.
+- **Catastrophic backtracking** — a regex taking exponential time on some inputs. It is why the design avoids regex-driven parsing.
+
 **Q:** Why not convert Markdown with regular expressions?
 
-**A:** Markdown has nested, context-dependent structure (lists in quotes in lists, emphasis rules that depend on neighbours). Regexes cannot track nesting and tend to backtrack badly.
+**A:** Markdown has nested, context-dependent structure: lists inside quotes inside lists, and emphasis rules that depend on the characters next to each delimiter. Regular expressions cannot count nesting depth, and patterns that try become slow or wrong. Some backtracking regexes take exponential time on inputs like thousands of `*` characters, which is also a denial-of-service risk.
 
 **Q:** What is an AST and why build one?
 
-**A:** A tree of typed nodes representing the document's structure. It decouples parsing from output, so you can render to several formats and transform the tree.
+**A:** A tree of typed nodes such as `Heading(level, children)` and `Emphasis(children)` that represents the document's structure independent of output format. It decouples parsing from output, so the same tree can be rendered to HTML, plain text or terminal colours, and transformed (a table of contents, link checking) without re-parsing.
+
+**Q:** Why parse blocks before inlines?
+
+**A:** The meaning of a character depends on the block structure. A `*` at the start of a line may be a list marker, while inside a paragraph it may start emphasis, and inside a code block it is just text. You only know which once the block structure is fixed, so all blocks are parsed first.
+
+**Q:** How does the delimiter stack handle `*a **b** c*`?
+
+**A:** Each run of `*` is pushed as a delimiter with flags saying whether it can open or close, based on the surrounding characters. When a closer arrives, the parser searches back for a compatible opener, wraps the nodes in between in `Emphasis` or `Strong`, and removes the delimiters in between. Each delimiter is processed a bounded number of times, so the whole thing is linear.
+
+**Q:** How does the renderer look in modern Java?
+
+**A:** A recursive pattern-matching `switch` over the sealed `Node` type, appending to a `StringBuilder`. Because the hierarchy is sealed, a new node type causes a compile error until the renderer handles it.
+```java
+void render(Node n, StringBuilder out) {
+    switch (n) {
+        case Heading(int lvl, var kids) -> { out.append("<h").append(lvl).append('>');
+            kids.forEach(k -> render(k, out)); out.append("</h").append(lvl).append('>'); }
+        case Text(String s) -> out.append(escapeHtml(s));
+        // ...one case per node type
+    }
+}
+```
 
 **Q:** How do you avoid XSS in user Markdown?
 
-**A:** Escape all text, escape or strip raw HTML, and allowlist link schemes such as `http`, `https` and `mailto`.
+**A:** Escape `<`, `>`, `&` and quotes in all text, escape or strip raw HTML unless the caller explicitly opts in, and allowlist link schemes such as `http`, `https` and `mailto` so `javascript:` URLs are dropped. Escaping happens in the renderer, so no code path can forget it.
+
+**Q:** How do you test a parser like this?
+
+**A:** The CommonMark spec ships hundreds of input/expected-HTML examples, which I load as JUnit dynamic tests named by section and track the pass rate. Every bug fixed gets a regression test. A performance test feeds adversarial input (deep nesting, thousands of unmatched delimiters) at several sizes and asserts time grows roughly linearly.
+
+**Q:** What breaks first with a 100 MB document?
+
+**A:** Memory: the full AST costs memory proportional to the document, plus the output `StringBuilder`. A streaming renderer that writes HTML as blocks close would use less memory, but cannot look ahead for things like link reference definitions at the end of the file, and it rules out whole-tree transforms such as a table of contents.
+
+**Common mistakes in answers:**
+- Claiming Markdown is "simple enough for regex". Nesting and emphasis rules make it a real parsing problem.
+- Escaping HTML only in some places, such as text but not link titles or attributes, which still leaves an XSS hole.
+- Describing a visitor pattern as the only way to walk an AST. With sealed types, a pattern-matching `switch` gives the same exhaustiveness with less code.
 
 ### TL;DR
 Blocks first, inlines second, an AST in the middle, rendering last. Use the CommonMark examples as your test suite.
@@ -1400,17 +1915,62 @@ A tree is easy to use but holds the whole document in memory; a streaming (pull)
 - [Ch 16 — JVM internals and performance](../chapters/16-jvm-internals-and-performance/README.md) — JMH benchmarking
 
 ### In the interview
+**30-second answer:** I built a dependency-free JSON library in three layers: a lexer that turns characters into tokens, a recursive-descent parser that builds an immutable tree of sealed `JsonValue` records, and a reflection-based mapper that binds JSON to Java records through their canonical constructors. The key decision was to keep numbers as their original text and convert lazily, because converting to `double` silently corrupts integers above 2^53. The hardest parts were reading generic targets like `List<Order>` despite type erasure, which I solved with a super-type token, and enforcing a nesting-depth limit so hostile input fails cleanly instead of overflowing the stack. I measured throughput with JMH against a well-known library.
+
+**Key terms to know:**
+- **Lexer (tokenizer)** — turns characters into tokens such as `{`, `:`, strings and numbers, with line and column for errors.
+- **Recursive descent** — a parser with one method per grammar rule (`parseValue`, `parseObject`, `parseArray`) that call each other.
+- **Sealed `JsonValue` tree** — records `JsonObject`, `JsonArray`, `JsonString`, `JsonNumber`, `JsonBool`, `JsonNull` behind a sealed interface.
+- **Reflection** — inspecting classes at run time. The mapper uses `getRecordComponents()` and the canonical constructor.
+- **Type erasure** — generic type arguments are not kept on objects at run time, so `List.class` cannot say "list of `Order`".
+- **Super-type token** — an anonymous subclass such as `new TypeRef<List<Order>>(){}` whose generic superclass records the full type, readable with `getGenericSuperclass()`.
+- **Surrogate pair** — two UTF-16 code units that together encode a character outside the Basic Multilingual Plane, such as an emoji. `😀` must be decoded as one.
+- **2^53 limit** — the largest range where every integer is exactly representable as a `double`. Large IDs above it lose digits.
+- **JMH** — the Java Microbenchmark Harness, which handles warm-up and dead-code elimination for honest numbers.
+
 **Q:** What is recursive descent?
 
-**A:** A parser written as one method per grammar rule; rules that refer to other rules become method calls. Simple, fast and easy to debug for grammars like JSON.
+**A:** A parser written as one method per grammar rule, where a rule that refers to another becomes a method call. `parseValue` looks at the next token and calls `parseObject`, `parseArray` or a literal parser, and `parseObject` calls `parseValue` for each member. It is simple, fast and easy to debug for a grammar as small as JSON.
 
 **Q:** How can a JSON library deserialise `List<Order>` despite erasure?
 
-**A:** The caller passes a type token — an anonymous subclass whose generic superclass records `List<Order>`, readable with `getGenericSuperclass()`.
+**A:** The caller passes a type token, an anonymous subclass whose generic superclass records `List<Order>`. Reflection reads it with `getGenericSuperclass()`, which returns a `ParameterizedType` whose type argument is `Order`. Erasure removes type arguments from objects, but they are kept in class-file signatures, which is why this works.
+```java
+abstract class TypeRef<T> {
+    final Type type = ((ParameterizedType) getClass()
+        .getGenericSuperclass()).getActualTypeArguments()[0];
+}
+List<Order> orders = Json.read(text, new TypeRef<List<Order>>() {});
+```
 
 **Q:** Why keep numbers as text?
 
-**A:** To avoid precision loss: a `double` cannot represent all 64-bit integers or decimals exactly.
+**A:** JSON numbers have arbitrary precision, but a `double` has only 53 bits of mantissa, so integers above 2^53 (about 9 × 10^15), such as 64-bit IDs, and many decimals lose precision. Keeping the original digits lets the mapper pick `long`, `BigDecimal` or `double` based on the target field's type, and lets the writer reproduce the input exactly.
+
+**Q:** How do you map JSON to a record?
+
+**A:** Read the record's components with `Class.getRecordComponents()` (in declaration order), find the canonical constructor whose parameter types match, convert each JSON member to its component's generic type recursively, and invoke the constructor. Because the constructor runs, any validation in a compact constructor also runs. Cache the per-class metadata, because reflection lookups are slow the first time.
+
+**Q:** What happens with `[[[[...]]]]` nested 100,000 deep?
+
+**A:** Each level is a recursive call, so the thread's stack overflows with `StackOverflowError`, an `Error` that callers do not expect from a parser. Count the depth while parsing and throw your own parse exception past a limit (default 512). It matters because JSON often comes from untrusted clients.
+
+**Q:** How should the parser handle duplicate keys, comments or trailing commas?
+
+**A:** RFC 8259 says object names "should" be unique and leaves duplicate handling to implementations, and comments and trailing commas are not valid JSON. Be strict by default (reject them, with line and column), because different libraries resolving duplicates differently is a known security problem. Offer lenient parsing as an explicit option.
+
+**Q:** How do you test it?
+
+**A:** Use a community JSON conformance suite of valid, invalid and implementation-defined documents. Add a property-based round-trip test: generate random trees, write them, parse them back and assert equality. Add mapper tests per supported type, a test that deep nesting fails with your error, and a JMH benchmark on a 1 MB file.
+
+**Q:** What changes for a 5 GB JSON file?
+
+**A:** A tree holds the whole document in memory, which will not fit. You need a streaming pull API (`nextToken()`) that reads tokens on demand with constant memory, and let the mapper bind objects one at a time, such as each element of a huge top-level array. Jackson's design separates exactly these layers for that reason.
+
+**Common mistakes in answers:**
+- Saying erasure makes generic types completely unavailable at run time. They are lost on instances, but kept in field, method and superclass signatures, which reflection can read.
+- Parsing numbers straight into `double` and assuming large IDs survive.
+- Ignoring hostile input: no depth limit, no size limit, and lenient duplicate-key handling.
 
 ### TL;DR
 Lexer, recursive-descent parser, immutable tree, reflection-based mapper. Respect number precision, Unicode and nesting limits.
@@ -1507,17 +2067,65 @@ Golden tests: a directory of `.sql` + `.csv` + `.expected` files run by a parame
 - [Ch 19 — Java for coding interviews](../chapters/19-java-for-coding-interviews/README.md) — heaps for top-N
 
 ### In the interview
+**30-second answer:** I built a command-line SQL engine for CSV files: it parses a query into an AST, plans it into operators (scan, filter, project, aggregate, sort, limit) checked against the CSV header, and runs the plan as a Java stream pipeline. The key design decision was compiling every expression once into a `Function<Row, Object>` closure instead of walking the expression tree per row. The hard parts were one-pass `GROUP BY` with a custom `Collector` holding several accumulators per group, SQL `NULL` semantics, and top-N with a bounded heap. It streams a 1 GB file in under 256 MB of heap and filters 10 million rows in under 10 seconds.
+
+**Key terms to know:**
+- **Query plan / operator tree** — the query rewritten as nested operators such as `Limit(Sort(Aggregate(Filter(Scan))))`. The executor runs it.
+- **Recursive descent with precedence levels** — one parse method per precedence level (`parseOr` → `parseAnd` → `parseComparison`), so `a OR b AND c` means `a OR (b AND c)`.
+- **Expression compilation** — turning an expression tree into a closure once per query. It removes per-row interpretation.
+- **Closure** — a lambda that captures values from its surrounding scope, such as a column index.
+- **Custom `Collector`** — supplier, accumulator, combiner and finisher that define how a stream is reduced. It computes several aggregates in one pass.
+- **Hash aggregate** — a map from group key to accumulators, updated per row. It is how `GROUP BY` executes.
+- **Three-valued logic** — SQL comparisons with `NULL` give UNKNOWN, which `WHERE` treats as not true.
+- **Top-N heap** — a bounded priority queue that keeps only the best N rows, O(n log N).
+- **Type inference** — guessing column types (integer, decimal, date, text) from a sample of rows.
+
 **Q:** How does a query engine execute `GROUP BY`?
 
-**A:** Usually with a hash aggregate: a map from group key to accumulators, updated per row, then emitted. Sorting by key is the alternative when data is already ordered or too big for memory.
+**A:** Usually with a hash aggregate: a map from group key to an array of accumulators, updated as each row streams past, then emitted at the end. Sorting by key and aggregating adjacent rows is the alternative when the data is already ordered or the groups do not fit in memory. In streams, `groupingBy(keyFn, myCollector)` is the hash aggregate.
 
 **Q:** Why compile expressions into lambdas?
 
-**A:** To pay the interpretation cost once per query instead of once per row.
+**A:** Walking the expression tree for every row repeats the same decisions (which column? which operator?) millions of times. Compiling resolves those once per query into a chain of closures that already know the column index and operator, so per-row work is just calls.
+```java
+Function<Row, Object> compile(Expr e) {
+    return switch (e) {
+        case ColumnRef c -> { int i = schema.index(c.name()); yield row -> row.get(i); }
+        case Literal l   -> row -> l.value();
+        case BinaryOp b  -> compileBinary(b.op(), compile(b.left()), compile(b.right()));
+        case Call c      -> functions.compile(c);
+    };
+}
+```
 
 **Q:** How do SQL `NULL` comparisons behave?
 
-**A:** They yield unknown, which `WHERE` treats as false; use `IS NULL` to test for null.
+**A:** Any comparison with `NULL`, even `NULL = NULL`, yields UNKNOWN, and `WHERE` keeps only rows where the condition is TRUE, so those rows are dropped. Use `IS NULL` to test for null. Aggregates skip nulls too: `COUNT(col)` and `AVG(col)` ignore them, while `COUNT(*)` counts every row.
+
+**Q:** What are the four parts of a `Collector`, and why does the combiner matter?
+
+**A:** A supplier creates a mutable container, the accumulator adds one element to it, the combiner merges two containers, and the finisher turns the container into the result. The combiner is only used by parallel streams, which split the input and merge partial results, so it must be correct even if your sequential tests never call it.
+
+**Q:** How do you handle `ORDER BY ... LIMIT 10` over 10 million rows?
+
+**A:** Sorting everything is O(n log n) and holds every row in memory. A min-heap of size 10 (ordered by the sort key) keeps only the current best ten, so it is O(n log 10) time and O(10) memory. Use the same comparator for the heap and the final ordering, including tie-breakers.
+
+**Q:** What happens if type inference is wrong, such as text at row 9 million in a "numeric" column?
+
+**A:** The value fails to convert while the query is running. Fail with a clear message naming the row, column and value, or fall back to treating the column as text, with a warning. Silently returning null for the bad value would give wrong aggregates without anyone noticing.
+
+**Q:** How do you test a query engine?
+
+**A:** Golden tests: a directory of `.sql`, `.csv` and `.expected` files run by one parameterized test. Cross-check a sample of queries against SQLite or PostgreSQL loaded with the same CSV. Unit-test the parser for precedence and error positions, and each accumulator, including empty groups and all-null columns.
+
+**Q:** What breaks first at 100x the data?
+
+**A:** Simple filters keep streaming in constant memory. `GROUP BY` with millions of distinct keys runs out of heap, because the hash table holds one entry per group, so you need to spill partitions to disk or switch to sort-based aggregation. Parallel streams can speed up CPU-heavy filters, but ordering and `LIMIT` reduce the gain, so measure.
+
+**Common mistakes in answers:**
+- Saying `NULL = NULL` is true, or that `COUNT(col)` counts nulls.
+- Compiling the query but still interpreting the expression tree per row, and then calling it "compiled".
+- Sorting the whole input for `LIMIT 10`, or forgetting that the combiner must be correct for parallel streams.
 
 ### TL;DR
 Parse SQL into a plan, then execute the plan as a stream pipeline with compiled expressions and one-pass aggregation.
@@ -1612,17 +2220,69 @@ Approximate percentiles trade accuracy for memory; document the error bound. A s
 - [Ch 10 — Collections](../chapters/10-collections/README.md) — `ArrayDeque`, `PriorityQueue`
 
 ### In the interview
+**30-second answer:** I built a log analyser that streams plain, gzipped or live-tailed logs and reports requests per minute, error rates, slowest endpoints, p95 latency and error bursts. The key design decision was to use Java 24 stream gatherers: a custom sequential gatherer cuts the event stream into one-minute windows by timestamp, which plain streams could not express without collecting everything first. Percentiles come from a logarithmic-bucket histogram per window, so memory stays constant and windows can be merged by adding counts. It analyses 1 GB of logs in under 15 seconds with a 256 MB heap, and malformed lines are counted and sampled, never fatal.
+
+**Key terms to know:**
+- **Stream gatherer** — a custom intermediate stream operation (`Stream.gather`, final in Java 24, JEP 485) that can keep state and emit zero, one or many outputs per input.
+- **Initializer / integrator / finisher** — the three parts of a gatherer: create state, handle each element (and optionally push results downstream), flush what is left at the end.
+- **Built-in gatherers** — `Gatherers.windowFixed`, `windowSliding`, `scan`, `fold` and `mapConcurrent`. They are used for batching and running totals.
+- **Tumbling vs sliding window** — non-overlapping fixed periods (each minute) versus a window that moves with every event (the last 60 seconds). Per-minute stats use the first, burst detection the second.
+- **Percentile (p95)** — the value below which 95% of observations fall. It is reported for latency.
+- **Histogram with logarithmic buckets** — counts per range (1–2 ms, 2–4 ms…) that approximate percentiles in fixed memory.
+- **Watermark / allowed lateness** — "latest time seen minus a grace period". A window is closed only once the watermark passes its end, which tolerates out-of-order events.
+- **k-way merge** — merging k sorted inputs with a min-heap. Several log files are merged by time this way.
+- **`GZIPInputStream`** — the JDK class that decompresses `.gz` files as a stream.
+
 **Q:** What problem do stream gatherers solve?
 
-**A:** They let you write custom stateful intermediate operations (windows, scans, deduplication by run) that previously required collecting the whole stream or abandoning streams.
+**A:** Before Java 24, stream intermediate operations were fixed (`map`, `filter`, `flatMap`, `distinct`…) and none could keep custom state across elements, so "group consecutive events by minute" or "sliding window" meant collecting the whole stream first or abandoning streams. Gatherers let you write such stateful operations yourself and still stay lazy and composable. `collect` is the terminal-operation analogue; `gather` is the intermediate one.
+
+**Q:** Show the shape of your time-window gatherer.
+
+**A:** The state holds the current minute and its accumulator. When an event from a new minute arrives, the integrator pushes the finished window downstream and starts a new one, and the finisher pushes the last window.
+```java
+Gatherer<LogEvent, ?, MinuteStats> perMinute = Gatherer.ofSequential(
+    MinuteAcc::new,
+    (acc, e, down) -> {
+        if (acc.isNewMinute(e)) down.push(acc.flush());
+        acc.add(e);
+        return !down.isRejecting();   // stop early if downstream is done
+    },
+    (acc, down) -> { if (!acc.isEmpty()) down.push(acc.flush()); });
+```
+
+**Q:** Why not just use `Gatherers.windowFixed(n)`?
+
+**A:** `windowFixed` groups by count, such as every 1,000 elements. Traffic varies, so 1,000 events might span two seconds or two hours. Time windows need to look at each event's timestamp, which is why the per-minute gatherer is custom. `windowFixed` is still useful for batching writes.
 
 **Q:** How do you compute p95 latency over a huge stream?
 
-**A:** With a histogram or a sketch that stores counts per bucket, giving an approximation in fixed memory, mergeable across windows.
+**A:** An exact p95 needs every value kept and sorted, which is unbounded memory. A histogram with logarithmic buckets stores just a count per bucket, so p95 is found by walking the cumulative counts until 95% is reached, with error bounded by the bucket width. Histograms for different minutes or files merge by adding counts, which exact percentiles cannot do.
 
 **Q:** How do you merge k sorted files?
 
-**A:** A min-heap holding the next element of each file; pop the smallest, push that file's next element. O(n log k).
+**A:** Keep a min-heap holding the next event from each file, keyed by timestamp. Pop the smallest, output it, and push that file's next event. It is O(n log k) for n events in total, and memory holds only k events, unlike concatenating and sorting.
+
+**Q:** What happens with out-of-order events?
+
+**A:** Multi-threaded servers log events slightly out of order, so an event for 10:00:59 can arrive after one for 10:01:00. If the window closes immediately it is counted in the wrong minute or dropped. Allow a small lateness (say 2 seconds): keep a window open until the watermark passes its end, and count anything later still as "late".
+
+**Q:** What happens when the log file is rotated while you follow it?
+
+**A:** The original file is renamed or truncated and a new one created, so a reader holding the old handle sees no more data, or reads from a position past the new end. Detect it by checking whether the file at the path has a different identity (file key or inode) or has shrunk, then reopen from the start of the new file.
+
+**Q:** Can a gatherer run in parallel?
+
+**A:** One built with `Gatherer.ofSequential` always processes elements in order on one thread, even in a parallel stream. A parallel-capable gatherer also needs a combiner to merge states from different chunks, and time windows that straddle chunk boundaries need extra handling. For this workload, I/O and parsing dominate, so sequential processing is usually fine.
+
+**Q:** How do you test it?
+
+**A:** Unit-test the gatherer on tiny lists with known windows, including empty input and a single element. Run fixture logs through and compare with expected reports. Compare histogram percentiles with exact ones from sorting random data, and check the error is within one bucket. Generate a 1 GB file and run it with `-Xmx256m` for the performance target.
+
+**Common mistakes in answers:**
+- Saying gatherers are a new terminal operation. They are intermediate; `collect` remains the terminal one.
+- Computing p95 by averaging per-minute p95s. Percentiles do not average; merge histograms instead.
+- Forgetting the finisher, which silently drops the last window.
 
 ### TL;DR
 Parse logs into events, window them with custom gatherers, summarise with histograms — all streaming, in bounded memory.
@@ -1722,17 +2382,66 @@ Watching is fast but unreliable; scanning is reliable but slow. Hybrid gives bot
 - [Ch 18 — Testing, build and tooling](../chapters/18-testing-build-and-tooling/README.md) — integration tests with temp directories
 
 ### In the interview
+**30-second answer:** I built a one-way folder sync tool: an initial full sync, then live updates driven by the NIO.2 `WatchService`. The key design decision was to treat watch events only as hints that a path may have changed: a debouncer coalesces bursts, a planner compares the real source and target state, and an executor copies through a temp file and an atomic move, so duplicate, reordered or lost events are harmless. Because `WatchService` is not recursive and can drop events with `OVERFLOW`, I register every new directory, scan it once after registering, and run periodic full rescans. Changes reach the target within 2 seconds, and a stress test with 10,000 rapid file operations ends with a full compare reporting identical trees.
+
+**Key terms to know:**
+- **`WatchService`** — the NIO.2 API that asks the operating system for file-change notifications (`ENTRY_CREATE`, `ENTRY_MODIFY`, `ENTRY_DELETE`).
+- **`WatchKey`** — the registration token for one directory. It must be `reset()` after its events are processed, or no more events arrive.
+- **`OVERFLOW`** — a special event meaning events were lost. The tool answers with a full rescan.
+- **Debouncing** — waiting until a path has been quiet for a while (500 ms) before acting, merging a burst of events into one.
+- **Idempotent operation** — doing it twice has the same effect as once. Every planned action is idempotent.
+- **Reconciliation** — comparing desired and actual state and fixing the difference, as the planner and periodic scanner do.
+- **Atomic move** — copy to a temp file next to the target, then `Files.move(..., ATOMIC_MOVE)`, so readers never see a half-copied file.
+- **`ScheduledExecutorService`** — runs tasks after a delay or periodically. It drives debouncing and rescans.
+- **`PathMatcher` (glob)** — matches paths against patterns like `**/*.tmp`. It implements excludes.
+
 **Q:** Is `WatchService` reliable?
 
-**A:** No. Events can be coalesced or lost (`OVERFLOW`), it is not recursive, and some platforms poll. Use events as hints and reconcile with periodic scans.
+**A:** No. Events can be coalesced or lost (signalled by `OVERFLOW`), it watches one directory at a time rather than a tree, and on some platforms, historically macOS, the JDK polls, so events arrive seconds late. Use events as hints and reconcile with periodic scans, so the design is correct even if every event were lost.
+
+**Q:** Show the core watch loop.
+
+**A:** Take a key, process its events, resolve each relative path against the directory registered for that key, and reset the key.
+```java
+for (;;) {
+    WatchKey key = watcher.take();
+    Path dir = dirs.get(key);
+    for (WatchEvent<?> ev : key.pollEvents()) {
+        if (ev.kind() == OVERFLOW) { rescanAll(); continue; }
+        changes.offer(dir.resolve((Path) ev.context()));
+    }
+    if (!key.reset()) dirs.remove(key);   // directory deleted
+}
+```
 
 **Q:** How do you avoid copying a half-written file?
 
-**A:** Debounce until the file has been quiet, re-check size and mtime around the copy, and copy to a temp file followed by an atomic move.
+**A:** Debounce until the file has been quiet for a short time, record size and modification time before copying, check them again afterwards, and retry if they changed. Copy to a temp file in the target directory and atomically move it into place, so the target path only ever holds a complete file.
 
 **Q:** Why should sync actions be idempotent?
 
-**A:** So repeated or reordered events and retries after crashes produce the same final state.
+**A:** Events can be duplicated or reordered, and the tool can crash and restart midway. If every action is "make the target match the current source state for this path", repeating it is harmless and the final state is the same. That is what makes "rescan everything" a safe recovery for any problem.
+
+**Q:** What race happens when a new directory appears?
+
+**A:** If someone runs `mkdir a && touch a/f`, the file can be created before your watcher registers `a`, so no event for `a/f` ever arrives. After registering a new directory, scan it once to pick up anything created in between.
+
+**Q:** How do you detect what changed: size and mtime, or a hash?
+
+**A:** Size plus modification time is cheap, coming from one metadata read, and catches nearly all changes, but misses an edit that keeps both the same, which is rare. A hash such as SHA-256 catches everything but reads every byte of both files. A common compromise is metadata by default, hashing on request, or a periodic deep check.
+
+**Q:** How do you test something this timing-dependent?
+
+**A:** Unit-test the planner with fake `FileState` maps, with no disk and no timing. Integration tests use `@TempDir` for source and target, perform operations, then poll with a timeout until a full compare reports equal, instead of using fixed sleeps that are flaky on slow CI machines. A stress test does thousands of random creates, modifies and deletes, then compares.
+
+**Q:** What breaks at 100x the files, or with two-way sync?
+
+**A:** With millions of files, the initial scan and periodic rescans get slow, and Linux inotify has a per-user watch limit (`max_user_watches`) that you can exceed. You would persist a state database of known file states to skip unchanged subtrees. Two-way sync is a much harder problem: you must detect when both sides changed since the last sync and produce conflict copies rather than overwrite.
+
+**Common mistakes in answers:**
+- Trusting events as the source of truth, so a lost or reordered event leaves the target permanently wrong.
+- Forgetting `key.reset()`, after which a directory silently stops reporting events.
+- Assuming registering the root directory watches the whole tree. `WatchService` is not recursive.
 
 ### TL;DR
 Use watch events as hints, debounce them, compare real file state, and write atomically. A periodic rescan makes it correct.
@@ -1832,17 +2541,65 @@ Start the server on port 0 (random free port) in a JUnit extension; use `java.ne
 - [Ch 16 — JVM internals and performance](../chapters/16-jvm-internals-and-performance/README.md) — JFR events, modules (`requires jdk.httpserver`)
 
 ### In the interview
+**30-second answer:** I built a small web framework on the JDK's `com.sun.net.httpserver`, with routing and path parameters, a middleware chain, safe static files with ETags, JSON, and graceful shutdown. The key decision was running every request on its own virtual thread via `Executors.newVirtualThreadPerTaskExecutor()`, so handlers are plain blocking code yet 10,000 concurrent one-second requests finish in about 1–2 seconds, where a 200-thread platform pool needs about 50 seconds. I carry the request ID in a `ScopedValue` instead of a `ThreadLocal`. The parts that needed real care were path-traversal protection, always closing the exchange, and checking with JFR that nothing pins virtual threads.
+
+**Key terms to know:**
+- **Virtual thread** — a lightweight thread scheduled by the JVM rather than the OS (final in Java 21). A blocked virtual thread unmounts from its carrier, so you can have millions. Each request runs on one.
+- **Carrier thread** — the platform (OS) thread a virtual thread runs on, from a `ForkJoinPool` sized to the CPU count by default.
+- **Pinning** — a virtual thread that cannot unmount while blocked, tying up its carrier. Since Java 24 (JEP 491) `synchronized` no longer pins, but native frames still can. JFR event `jdk.VirtualThreadPinned` detects it.
+- **Thread-per-request** — one thread handles one request from start to finish with blocking calls. Virtual threads make this style scale.
+- **`ScopedValue`** — an immutable, per-thread value bound for the duration of a call (final in Java 25, JEP 506). It carries the request ID to logging.
+- **Middleware** — a function `Handler → Handler` that wraps another handler, like a servlet filter. Logging, timing, gzip and error mapping are middleware.
+- **ETag / 304 Not Modified** — a version tag for a resource. If the client's `If-None-Match` matches, the server sends no body.
+- **Path traversal** — an attack using `../` to read files outside the web root.
+- **Back-pressure** — limiting incoming work so a slower resource is not overwhelmed, for example a `Semaphore` around database calls.
+
 **Q:** What do virtual threads improve for a web server?
 
-**A:** Concurrency for I/O-bound work with simple blocking code: one cheap thread per request instead of a limited pool, so throughput is not capped by pool size.
+**A:** Concurrency for I/O-bound work with simple blocking code. Each request gets a cheap thread, and when it blocks on I/O or `sleep` it unmounts from its carrier, so a few OS threads serve thousands of waiting requests. Throughput is no longer capped by a thread-pool size, and there are no callbacks or reactive chains.
 
 **Q:** When do virtual threads not help?
 
-**A:** CPU-bound work, and when another resource (database connections, a rate-limited API) is the bottleneck.
+**A:** For CPU-bound work, because there are still only as many carriers as cores, so nothing runs faster. They also do not help when another resource is the bottleneck, such as 20 database connections or a rate-limited API. More threads just queue there, so you still need limits like a connection pool or a `Semaphore`.
+
+**Q:** Should you pool virtual threads?
+
+**A:** No. They are cheap to create and meant to be used once per task; pooling only adds contention. Create one per task with `newVirtualThreadPerTaskExecutor()` or `Thread.ofVirtual().start(...)`, and if you need to limit concurrency, limit the resource with a `Semaphore` instead of limiting threads.
+
+**Q:** What is pinning, and did Java 24 fix it?
+
+**A:** Pinning means a blocked virtual thread cannot unmount and holds its carrier, so with enough pinned threads the server stalls. Before Java 24, blocking inside `synchronized` pinned; JEP 491 (Java 24) fixed that. Blocking while a native method or foreign function is on the stack can still pin. JFR's `jdk.VirtualThreadPinned` event shows where it happens.
+
+**Q:** Why `ScopedValue` instead of `ThreadLocal` for the request ID?
+
+**A:** A `ThreadLocal` is mutable, must be removed manually, and with pooled threads it leaks values between requests. A `ScopedValue` is bound immutably for the duration of one call and automatically unbound when it returns, so it cannot leak, and it is cheap to read.
+```java
+static final ScopedValue<String> REQUEST_ID = ScopedValue.newInstance();
+ScopedValue.where(REQUEST_ID, newId()).run(() -> next.handle(exchange));
+// deep in logging code:
+log(REQUEST_ID.orElse("-") + " " + message);
+```
 
 **Q:** How do you prevent `../` attacks on a static file handler?
 
-**A:** Decode, resolve against the root, normalise, and verify the result is still inside the root.
+**A:** URL-decode the path first (so `%2e%2e` becomes `..`), resolve it against the root, `normalize()` it, and check the result still `startsWith(root)`; otherwise return 404. For symbolic links inside the root, compare `toRealPath()` too. Test with `/../etc/passwd` and encoded variants.
+
+**Q:** What happens if a handler throws, or forgets to close the exchange?
+
+**A:** If nobody catches the exception, the client gets a dropped connection instead of a 500. If the response body is never closed, the connection hangs and the client eventually times out. The outermost middleware catches everything, maps it to a 500 with the request ID, and closes the exchange in a `finally`.
+
+**Q:** How do you test and load-test it?
+
+**A:** A JUnit extension starts the server on port 0 (a random free port) and tests call it with `java.net.http.HttpClient`: routes, 405 with `Allow`, 304, traversal and error mapping. A tagged load test fires 10,000 concurrent slow requests from virtual-thread clients and asserts total time and p99, and a JFR recording checks for pinning events.
+
+**Q:** What breaks first at 10x traffic?
+
+**A:** Usually not the threads but what they call: a database or downstream API gets 10x the concurrent requests and slows down or fails, so you cap calls with a pool or `Semaphore`. Memory per in-flight request (buffers, bodies) is next, so the 1 MB body limit matters. The JDK server itself is HTTP/1.1 only and basic; at real scale you would move to Jetty, Tomcat or Netty.
+
+**Common mistakes in answers:**
+- Saying virtual threads make code faster. They improve concurrency for waiting work; CPU-bound work is no faster.
+- Pooling virtual threads or limiting them with a fixed pool, instead of limiting the scarce resource.
+- Still claiming every `synchronized` block pins in current Java. That was fixed in Java 24; native calls can still pin.
 
 ### TL;DR
 A thin framework over the JDK HTTP server with routing, middleware and safe static files, one virtual thread per request.
@@ -1953,17 +2710,67 @@ Hand-written SQL is explicit and fast but verbose; an ORM saves code but hides q
 - [Ch 12 — Streams](../chapters/12-streams/README.md) — mapping results
 
 ### In the interview
+**30-second answer:** I built a todo REST API by hand: HTTP routing on the JDK server with virtual threads, a service layer that runs each use case in one JDBC transaction, a repository with only prepared statements, a connection pool, and a versioned schema migrator. The key design decision was optimistic locking: each item has a version exposed as an `ETag`, and `PATCH` with a stale `If-Match` returns 412, so no database locks are held between requests. I also treat the connection pool as back-pressure, because virtual threads make it easy to start 10,000 requests but the database is happiest with a few dozen connections. Single-item reads stay under 20 ms p95 at 500 requests per second, and a concurrency test shows two parallel PATCHes produce exactly one 200 and one 412.
+
+**Key terms to know:**
+- **JDBC** — the JDK's standard SQL API (`Connection`, `PreparedStatement`, `ResultSet`). All persistence uses it directly.
+- **`PreparedStatement`** — SQL with `?` placeholders whose values are sent separately. It prevents SQL injection.
+- **Transaction / auto-commit** — a group of statements that all commit or all roll back. JDBC auto-commits each statement unless you call `setAutoCommit(false)`.
+- **Connection pool** — a set of open connections reused across requests, because opening one costs milliseconds. It also limits database load.
+- **Optimistic locking** — detect conflicting updates with a version column instead of holding locks. It backs `ETag`/`If-Match` and 412.
+- **Idempotent and safe methods** — `GET` changes nothing (safe); `PUT` and `DELETE` have the same effect if repeated (idempotent); `POST` is neither.
+- **Status codes** — `201 Created` + `Location`, `204 No Content`, `400`, `404`, `409 Conflict`, `412 Precondition Failed`.
+- **Schema migration** — versioned SQL scripts applied once each, recorded in a table.
+- **Keyset pagination** — `WHERE id > :last ORDER BY id LIMIT 20`. It stays fast where `OFFSET` slows down.
+
 **Q:** Why `PreparedStatement` instead of string concatenation?
 
-**A:** Parameters are sent separately from the SQL text, so user input cannot change the query (no SQL injection), and the database can reuse the plan.
+**A:** Parameters are sent separately from the SQL text, so user input is always treated as a value and can never change the query's structure, which prevents SQL injection. The database can also cache the parsed plan. Column and table names cannot be parameters, so if those come from input (such as a sort field), map them through an allowlist.
+
+**Q:** Show how you run a use case in a transaction.
+
+**A:** Take one connection, turn off auto-commit, do every statement on that connection, commit, and roll back on any exception. Try-with-resources returns the connection to the pool.
+```java
+try (Connection c = pool.getConnection()) {
+    c.setAutoCommit(false);
+    try { var r = work.apply(c); c.commit(); return r; }
+    catch (Exception e) { c.rollback(); throw e; }
+}
+```
+Using a different connection for each statement would put each one in its own transaction.
 
 **Q:** Optimistic or pessimistic locking for a todo app?
 
-**A:** Optimistic: conflicts are rare, and no locks are held while a user edits. Pessimistic (`SELECT ... FOR UPDATE`) suits short, high-contention transactions.
+**A:** Optimistic: conflicts are rare, and no locks are held while a user is editing, which might take minutes. The update is `UPDATE todo_item SET title = ?, version = version + 1 WHERE id = ? AND version = ?`, and an update count of 0 means someone else changed it first, so you return 412. Pessimistic locking (`SELECT ... FOR UPDATE`) suits short transactions with high contention, such as decrementing stock.
 
-**Q:** Which HTTP status for a successful create?
+**Q:** Which HTTP status for a successful create, and why does `PATCH` need care?
 
-**A:** `201 Created` with a `Location` header pointing to the new resource.
+**A:** `201 Created` with a `Location` header pointing at the new resource. `PATCH` is not guaranteed idempotent, so a client retrying after a timeout might apply a change twice. The `If-Match` version check makes a retried PATCH fail safely with 412 instead of silently overwriting.
+
+**Q:** How big should the connection pool be with virtual threads?
+
+**A:** Size it for the database, not for the number of threads: typically a few dozen connections, close to the database server's cores times a small factor. Virtual threads waiting for a connection are cheap, so the pool becomes the queue. Always use a borrow timeout so requests fail with 503 instead of waiting forever when the database is overloaded.
+
+**Q:** Why does `OFFSET` paging get slow, and what replaces it?
+
+**A:** `LIMIT 20 OFFSET 100000` makes the database find and throw away 100,000 rows before returning 20, so later pages cost more. Keyset pagination remembers the last seen key and asks for `WHERE id > :lastSeen ORDER BY id LIMIT 20`, which uses the index directly. It is also stable when rows are inserted between page requests; return the key as an opaque cursor.
+
+**Q:** What happens if the database goes down mid-request?
+
+**A:** The JDBC call throws `SQLException`. The transaction rolls back (the database discards uncommitted work if the connection dies), the pool discards the broken connection, and the API returns 503 rather than 500 with a stack trace. If the failure happens after the commit was sent but before the reply arrived, the client cannot know whether it succeeded; idempotency keys solve that for `POST`.
+
+**Q:** How do you test it?
+
+**A:** Repository tests run against a real database, H2 in PostgreSQL mode for speed and PostgreSQL in a container on CI, because H2 differs in subtle SQL details. API tests start the server on a random port and use `HttpClient`, checking status codes, headers and error bodies. A concurrency test fires parallel PATCHes with the same `If-Match` and asserts exactly one succeeds.
+
+**Q:** What changes at 10x or 100x load?
+
+**A:** The single database becomes the bottleneck and single point of failure. First add indexes and check query plans, then read replicas for `GET`s (accepting slightly stale reads), caching, and finally partitioning data by user or list. The stateless HTTP layer scales horizontally behind a load balancer with no changes.
+
+**Common mistakes in answers:**
+- Using a separate connection per statement and believing it is still one transaction.
+- Making the pool as big as the number of threads, which overloads the database instead of protecting it.
+- Saying `PreparedStatement` can parameterise table or column names. Only values can be parameters.
 
 ### TL;DR
 A REST API by hand: correct HTTP semantics, prepared statements, explicit transactions, a pool as back-pressure, and version-checked updates.
@@ -2058,17 +2865,59 @@ Thread-per-connection on virtual threads is easy to read; selectors give finer c
 - [Ch 6 — Inheritance, interfaces, records](../chapters/06-oop-inheritance-interfaces-and-more/README.md) — sealed command types
 
 ### In the interview
+**30-second answer:** I built an IRC-style chat server over raw TCP with nicknames, rooms, private messages and room history, which you can use from plain `nc`. Each connection gets two virtual threads: a reader that parses lines and runs commands, and a writer that drains a bounded outbound queue, so a slow client can never block anyone else. If a client's queue fills up, it is disconnected. Shared state lives in `ConcurrentHashMap`s, with `putIfAbsent` making nickname claims atomic. The server holds 10,000 concurrent connections and delivers a message to 1,000 room members in under 100 ms, and I wrote a second, selector-based version that passes the same test suite so I could compare the two models.
+
+**Key terms to know:**
+- **TCP socket** — a reliable, ordered, two-way byte stream between two programs (`ServerSocket` accepts, `Socket` connects).
+- **Framing** — deciding where one message ends in a byte stream, here with newline-delimited UTF-8 lines and a 4 KB maximum.
+- **Thread-per-connection** — each connection served by blocking code on its own threads. Virtual threads make it cheap.
+- **Event loop / `Selector`** — one thread watches many non-blocking `SocketChannel`s and reacts to readiness events. It is the model behind Netty and the second implementation here.
+- **Slow consumer** — a client that reads more slowly than messages arrive. It is handled with a bounded `ArrayBlockingQueue` and `offer`.
+- **`ConcurrentHashMap` atomic operations** — `putIfAbsent`, `computeIfAbsent`, `remove(key, value)` do check-and-act in one step. They protect the registry.
+- **Broadcast / fan-out** — sending one message to every member of a room.
+- **Heartbeat / socket timeout** — detecting dead peers that disappeared without closing the connection.
+
 **Q:** Why can a single `read` return half a message?
 
-**A:** TCP delivers a byte stream with no message boundaries; the application must frame messages (delimiters or length prefixes).
+**A:** TCP delivers a stream of bytes with no message boundaries; the sender's writes can be split or merged anywhere along the way. The application must frame messages itself with a delimiter (a newline here) or a length prefix. A `BufferedReader` handles the newline case, but you must still cap line length so a client sending 1 GB with no newline cannot exhaust memory.
 
 **Q:** How do you stop one slow client from slowing everyone?
 
-**A:** Decouple sending from writing with a bounded per-client queue and a dedicated writer; drop or disconnect when it fills.
+**A:** Separate sending from writing. The sender only calls `offer` on each recipient's bounded queue, which never blocks, and each session's writer thread does the actual socket writes. If a queue is full, that client is too slow, so disconnect it (or drop its messages). Without this, one client with a full TCP buffer blocks the sender's thread, and with it the whole room.
+```java
+void deliver(Session s, String line) {
+    if (!s.outbound().offer(line)) s.close("too slow");
+}
+```
 
 **Q:** Thread-per-connection or event loop?
 
-**A:** With virtual threads, thread-per-connection scales to many thousands and is simpler; event loops give tighter control and fewer context switches but more complex code.
+**A:** With virtual threads, thread-per-connection scales to tens of thousands of connections and the code reads top to bottom. An event loop with a `Selector` uses a few threads and gives tighter control over buffers, but each connection becomes a state machine of callbacks. I chose virtual threads for clarity and kept the selector version to compare code size and performance.
+
+**Q:** How do you make nickname changes safe under concurrency?
+
+**A:** "Check if the name is free, then take it" as two separate steps lets two clients take the same name. `registry.putIfAbsent(nick, session)` does both atomically and returns the existing session if the name is taken, so you reply `433 nick in use`. Removing the old nickname uses `remove(oldNick, session)`, so you only remove your own entry.
+
+**Q:** What happens when a client disappears without sending `QUIT`?
+
+**A:** If the connection was reset, the next read or write throws `IOException`. If the network silently died, a blocking read could wait forever, so set a read timeout (`setSoTimeout`) or send heartbeats. In both cases a `finally` block removes the session from every room and the registry and broadcasts a leave notice, so no dead sessions accumulate.
+
+**Q:** How is room state kept consistent when `JOIN` touches both a room and a session?
+
+**A:** Make room membership the single source of truth, a concurrent set per room, and derive "which rooms am I in" from it, or lock per room when both must change together. Two independent updates without coordination can leave a session listed in a room it thinks it left. Iterating a `ConcurrentHashMap.newKeySet()` while others modify it is safe, though the iterator is weakly consistent: it may or may not see concurrent changes.
+
+**Q:** How do you test it?
+
+**A:** Unit-test the parser and command handler with no sockets. Integration tests start the server on port 0 and use a small test client that waits for expected lines with timeouts, never fixed sleeps. One test connects a client that never reads and asserts other clients still get messages quickly. A load test opens thousands of virtual-thread clients to check the latency target.
+
+**Q:** What changes when one server is not enough?
+
+**A:** Rooms live in one server's memory, so users on different servers cannot see each other. You add a shared pub/sub layer, such as Redis or Kafka, that every server subscribes to for its rooms, plus a shared store for nicknames and history. Plain TCP is also unencrypted, so anything real needs TLS (`SSLServerSocket`) or WebSockets over HTTPS.
+
+**Common mistakes in answers:**
+- Assuming one `write` on the sender equals one `read` on the receiver. TCP has no message boundaries.
+- Writing directly to every recipient's socket from the sender's thread, so one stuck client freezes the room.
+- Using a plain `HashMap` for the registry, or check-then-put on a `ConcurrentHashMap`, which is still a race.
 
 ### TL;DR
 TCP sockets, line framing, a reader and writer per session with bounded queues, and concurrent registries — one virtual thread per direction.
@@ -2168,17 +3017,64 @@ In-memory seen sets cap the crawl at tens of millions of URLs; large crawlers us
 - [Ch 7 — Core APIs](../chapters/07-core-apis/README.md) — URI handling, strings
 
 ### In the interview
+**30-second answer:** I built a polite concurrent web crawler that starts from seed URLs, follows links up to a depth or page limit, and reports broken links with their referrers, redirect chains and status codes. Each fetch runs on a virtual thread through one shared `HttpClient`, bounded by a global `Semaphore` of 200 and a per-host semaphore of 2, with `robots.txt` and per-host delays respected. Deduplication is an atomic `add` on a concurrent set of normalised URLs, so each URL is fetched at most once. The hardest part was termination: I count in-flight tasks and finish exactly when that count reaches zero, because an empty queue does not mean the crawl is done.
+
+**Key terms to know:**
+- **Frontier** — the queue of URLs waiting to be fetched, each with its depth and referrer.
+- **Seen set** — `ConcurrentHashMap.newKeySet()`, whose `add` atomically returns false if the URL was already present. It ensures each URL is enqueued once.
+- **URL normalisation** — rewriting equivalent URLs to one form (lower-case scheme and host, no default port, no fragment, `..` resolved). Without it, duplicates are crawled.
+- **`Semaphore`** — a counter of permits; `acquire` waits for one and `release` returns it. Global and per-host limits use it.
+- **Politeness** — per-host concurrency limits, delays between requests and obeying `robots.txt` (RFC 9309).
+- **In-flight counting / `Phaser`** — tracking tasks that are submitted but not finished. It is how the crawler knows it is done.
+- **`LongAdder`** — a counter split into cells to avoid contention, summed on read. It is used for statistics.
+- **Retry with backoff** — retrying transient failures (5xx, timeouts) after growing delays, at most twice here.
+- **Crawler trap** — a site that generates infinite URLs, such as a calendar's "next month" link. Depth and per-host page limits stop it.
+
 **Q:** How do you guarantee each URL is fetched once with many threads?
 
-**A:** Normalise it, then use an atomic `add` on a concurrent set; only the thread for which `add` returns true enqueues it.
+**A:** Normalise it first, then call `seen.add(url)` on a concurrent set. `add` is atomic, so exactly one thread gets `true` and enqueues the URL, and every other thread gets `false`. Checking `contains` and then calling `add` as two steps would let two threads both see "not present".
 
 **Q:** How does the crawler know it has finished?
 
-**A:** It tracks in-flight tasks; when the frontier is empty and the in-flight count is zero, the crawl is complete.
+**A:** It tracks in-flight tasks. The counter is incremented before a task is submitted and decremented after it has finished processing, including enqueuing its children. Because children are counted before their parent finishes, the count only reaches zero when there is truly no work left.
+```java
+void submit(CrawlTask t) {
+    inFlight.incrementAndGet();
+    executor.submit(() -> {
+        try { process(t); }          // may call submit() for new links
+        finally { if (inFlight.decrementAndGet() == 0) done.countDown(); }
+    });
+}
+```
 
 **Q:** How do you avoid overloading one website?
 
-**A:** Per-host concurrency limits, delays, and honouring `robots.txt` crawl rules.
+**A:** Take a per-host permit (2 here) as well as the global one, wait the per-host delay between requests, and honour `robots.txt` rules, cached per host. A global limit alone would let one large site take all 200 slots. Always acquire in the same order, global then host, and release in a `finally`, so permits are never leaked or deadlocked.
+
+**Q:** Why virtual threads here, and what do they not solve?
+
+**A:** A crawler spends almost all its time waiting on the network, so one blocking virtual thread per fetch gives high concurrency with simple code. They do not limit load: you could start a million fetches and flood both remote sites and your own memory. That is why semaphores bound concurrency and the frontier is bounded too.
+
+**Q:** Why `LongAdder` rather than `AtomicLong` for the statistics?
+
+**A:** Under heavy contention, many threads doing compare-and-set on one `AtomicLong` keep retrying. `LongAdder` spreads increments across several cells and only sums them when read, so increments are cheaper. It suits counters that are written often and read rarely; for a value you must read-and-update atomically, `AtomicLong` is still the right tool.
+
+**Q:** What happens with redirect loops, slow servers or 500s?
+
+**A:** `HttpClient` follows redirects with its own limit, and the crawler records the chain. Connect and request timeouts (5 s and 15 s) stop a slow server from holding a permit forever. 5xx responses and timeouts are retried up to twice with backoff; 4xx are recorded as broken, never retried.
+
+**Q:** How do you test a crawler?
+
+**A:** Run a local test site using the JDK `HttpServer` with known pages, slow endpoints, redirects, 500s and link loops. Assert the exact set of visited URLs, that the server never saw more than 2 concurrent requests per host (the server counts them), and that the crawl terminates. Unit-test normalisation with a table of URL pairs that must or must not be equal.
+
+**Q:** What changes at 100 million URLs?
+
+**A:** The in-memory seen set and frontier no longer fit. You replace the seen set with a Bloom filter, a compact probabilistic set that may give false positives (skipping a few URLs) but never false negatives, or a disk-backed or distributed store. The frontier is persisted so the crawl can resume, and work is partitioned across machines by host so politeness stays local to one worker.
+
+**Common mistakes in answers:**
+- Saying "stop when the queue is empty". A running fetch may be about to add more URLs, so you must also count in-flight work.
+- Using `contains` followed by `add`, a check-then-act race that fetches some URLs twice.
+- Treating virtual threads as a rate limit. They remove the thread limit; you still need semaphores and timeouts.
 
 ### TL;DR
 Virtual threads for I/O, semaphores for limits, a concurrent seen-set for dedup, and careful in-flight counting to know when you are done.
@@ -2277,17 +3173,69 @@ A local limiter only limits one process; with 10 servers each allowing 100/s, a 
 - [Ch 9 — Generics](../chapters/09-generics/README.md) — generic keys
 
 ### In the interview
+**30-second answer:** I built a thread-safe rate-limiter library with four algorithms behind one interface: token bucket, fixed window, sliding-window log and sliding-window counter, with per-key limits and eviction of idle keys. The key design decision was lazy refill with atomic per-key updates, done inside `ConcurrentHashMap.compute` or as a compare-and-set loop on an immutable state record, so no timer threads are needed and 32 threads hammering 1,000 keys never exceed the limit. Time comes from an injected nanosecond source, so tests are exact and fast. I also wrote a test showing a fixed window letting through twice the limit across a boundary, which the sliding counter prevents, and recorded `tryAcquire` throughput with JMH.
+
+**Key terms to know:**
+- **Token bucket** — a bucket holding up to `capacity` tokens, refilled at a fixed rate; each request takes one. It allows bursts up to capacity and enforces an average rate.
+- **Fixed window** — count requests per calendar window (each minute). Simple, but bursty at boundaries.
+- **Sliding-window log** — keep each request's timestamp and count those in the last window. Exact but memory grows with the limit.
+- **Sliding-window counter** — estimate as `current + previous × overlap fraction`. Near-exact in constant memory.
+- **Lazy refill** — compute tokens earned since the last request when the next one arrives, instead of running a timer.
+- **CAS (compare-and-set)** — atomically replace a value only if it still equals what you read, retrying otherwise. It gives a lock-free single-key limiter.
+- **`ConcurrentHashMap.compute`** — runs a read-modify-write for one key atomically. It updates per-key state.
+- **Monotonic clock** — `System.nanoTime()` never goes backwards, unlike wall-clock time.
+- **429 / `Retry-After`** — the HTTP status for "too many requests" and the header telling the client when to retry.
+
 **Q:** Token bucket vs leaky bucket?
 
-**A:** A token bucket allows bursts up to its capacity while enforcing an average rate; a leaky bucket outputs at a constant rate, smoothing bursts.
+**A:** A token bucket allows bursts up to its capacity while enforcing an average rate: an idle client saves up tokens and can spend them at once. A leaky bucket is a queue drained at a constant rate, so output is smooth and bursts are delayed or dropped. APIs usually prefer token buckets because short bursts are normal and harmless.
 
 **Q:** What is wrong with fixed windows?
 
-**A:** Bursts at window edges can let through up to twice the limit in a short span.
+**A:** With "100 per minute", a client can send 100 requests at 12:00:59 and 100 more at 12:01:00, which is 200 in two seconds, because the counter resets at the boundary. The sliding log fixes this exactly but stores every timestamp. The sliding counter approximates it in constant memory by weighting the previous window's count by how much of it is still in view.
+
+**Q:** Show a lock-free token bucket for one key.
+
+**A:** Read the immutable state, compute refilled tokens, and try to swap in the new state; if another thread won the race, loop and retry. `State` is a record of `(double tokens, long lastNanos)`.
+```java
+boolean tryAcquire() {
+    for (;;) {
+        State s = ref.get(); long now = clock.getAsLong();
+        double t = Math.min(capacity, s.tokens() + (now - s.lastNanos()) * perNano);
+        if (t < 1) return false;
+        if (ref.compareAndSet(s, new State(t - 1, now))) return true;
+    }
+}
+```
+
+**Q:** Why `System.nanoTime()` and not `currentTimeMillis()`?
+
+**A:** `currentTimeMillis()` is wall-clock time, which can jump backwards or forwards when NTP or an administrator adjusts the clock, producing negative elapsed times or a sudden flood of tokens. `nanoTime()` is monotonic and meant for measuring elapsed time. Its absolute value has no meaning, so only compare differences, using `a - b`, which also handles overflow correctly.
+
+**Q:** `compute` or a CAS loop, which is faster?
+
+**A:** `compute` locks one map bin while it runs, which is simple and fine for many keys with little contention per key. For a very hot single key, a CAS loop on an `AtomicReference` avoids blocking, though under heavy contention threads waste work retrying. I measured both with JMH using `@Threads(1, 4, 32)` rather than guessing.
+
+**Q:** How do you test something based on time?
+
+**A:** Inject a `LongSupplier` for nanoseconds and use a fake clock in tests that you advance by exact amounts, so "capacity 10, refill 1 per second, wait 3 seconds" gives exactly 3 more permits with no sleeping. An abstract JUnit contract test runs against all four algorithms. A concurrency test counts successes from N threads and asserts they never exceed the theoretical maximum.
 
 **Q:** How do you rate-limit across many servers?
 
-**A:** Keep counters in a shared store with atomic operations (e.g. Redis with a script), or divide the budget across servers and accept approximation.
+**A:** A local limiter only limits one process: 10 servers each allowing 100/s lets a client do 1,000/s. Keep counters in a shared store with atomic operations, such as Redis running a Lua script that refills and takes tokens in one step, or divide the budget across servers and accept approximation. Shared state adds a network round trip per request, so some systems combine a local limiter with periodic synchronisation.
+
+**Q:** What happens if the shared limiter store is down?
+
+**A:** You must choose to fail open (allow traffic, risking overload) or fail closed (reject traffic, causing an outage for everyone). Most public APIs fail open with a local fallback limiter, because rejecting all users is usually worse than briefly exceeding limits. Make the choice explicit and configurable.
+
+**Q:** What breaks first with millions of keys?
+
+**A:** Memory: each key needs a map entry plus state, so idle keys must be evicted, which the evictor does by last-access time. The sliding log is the worst case because it stores up to `limit` timestamps per key; token bucket and counters are constant per key, a few dozen bytes plus map overhead.
+
+**Common mistakes in answers:**
+- Using a background timer thread per key to add tokens. Lazy refill on access needs no threads.
+- Reading the token count and updating it in two steps without atomicity, which lets concurrent requests over-spend.
+- Using `currentTimeMillis()` for elapsed time.
 
 ### TL;DR
 Token bucket with lazy refill, atomic per-key state, a fake clock for tests — and know why fixed windows leak at the edges.
@@ -2386,17 +3334,64 @@ A local cache is fast but each server has its own copy — data can differ betwe
 - [Ch 16 — JVM internals and performance](../chapters/16-jvm-internals-and-performance/README.md) — JMH, GC pressure
 
 ### In the interview
+**30-second answer:** I built an in-process cache library, a small Caffeine: `get`, `put` and `getOrLoad` with a size bound, expiry after write or access, LRU and TinyLFU eviction, removal listeners and hit-rate statistics. Lookups go through a `ConcurrentHashMap`, and missing keys are loaded through one `CompletableFuture` per key, so 100 threads asking for the same missing key cause exactly one load. The hardest problem was that LRU turns every read into a write to the recency list, so I moved to buffering access events and applying them in batches. On a scan-heavy trace TinyLFU admission beat plain LRU's hit rate, and I benchmarked against Caffeine with JMH.
+
+**Key terms to know:**
+- **LRU (least recently used)** — evict the entry not used for the longest time, using a hash map plus a doubly linked list in recency order.
+- **`LinkedHashMap` access order** — `new LinkedHashMap<>(16, 0.75f, true)` reorders on every `get`, and `removeEldestEntry` evicts. It is the single-threaded baseline.
+- **Cache stampede (thundering herd)** — many threads miss the same key at once and all hit the slow backend. It is prevented with one shared future per key.
+- **TinyLFU** — an admission policy that only lets a new key in if it is estimated to be used more often than the eviction victim.
+- **Count-min sketch** — a compact array of small counters giving approximate frequencies, halved periodically so old popularity fades. TinyLFU uses it.
+- **Scan resistance** — not being flushed by a one-off pass over many keys.
+- **Lock striping / fine-grained locking** — locking small parts of a structure instead of the whole. `ConcurrentHashMap` locks per bin.
+- **TTL / expiry** — time-to-live after write or after last access, checked lazily on read plus a periodic sweep.
+- **Hit rate** — hits / (hits + misses). The metric that eviction policies compete on.
+
 **Q:** How do you implement an LRU cache in O(1)?
 
-**A:** A hash map from key to a node in a doubly linked list ordered by recency; on access move the node to the head; evict from the tail.
+**A:** A hash map from key to a node in a doubly linked list ordered by recency. On every access, unlink the node and move it to the head; on insert, add at the head and, if over capacity, remove the tail node and its map entry. Every step is O(1). In Java the single-threaded version is a few lines:
+```java
+class Lru<K, V> extends LinkedHashMap<K, V> {
+    private final int max;
+    Lru(int max) { super(16, 0.75f, true); this.max = max; }
+    @Override protected boolean removeEldestEntry(Map.Entry<K, V> e) {
+        return size() > max;
+    }
+}
+```
 
 **Q:** What is a cache stampede and how do you prevent it?
 
-**A:** Many requests miss the same key at once and all hit the backend. Coalesce loads with one shared future per key, or use locks or early refresh.
+**A:** When a popular key is missing or expires, many requests miss at the same moment and all call the backend, which can knock it over. Coalesce loads: the first caller puts a `CompletableFuture` in the map and runs the loader, and everyone else waits on that same future. Early or background refresh before expiry reduces stampedes further.
+
+**Q:** Why not just use `computeIfAbsent(key, loader)`?
+
+**A:** `computeIfAbsent` holds a lock on that map bin while the loader runs, so a slow load blocks other keys in the same bin. If the loader touches the cache itself, `ConcurrentHashMap` may throw `IllegalStateException` ("Recursive update") or deadlock; its Javadoc forbids updating other mappings from the function. Inserting a future quickly and completing it outside the lock avoids both, and you remove the future if the load fails so the next caller retries.
 
 **Q:** Why can LFU-style admission beat LRU?
 
-**A:** It protects frequently used items from being pushed out by one-off scans.
+**A:** LRU assumes recently used means likely to be used again. A one-time scan over a million keys breaks that and pushes out every hot entry. TinyLFU only admits a new key if its estimated frequency is higher than the victim's, so one-off keys rarely displace popular ones.
+
+**Q:** Why is LRU hard to make fast under concurrency?
+
+**A:** Every `get` must move a node in a shared list, so every read takes a lock, and 16 reader threads queue on it. Caffeine records accesses in lossy ring buffers and applies them to the policy in batches under a try-lock. Losing a few access records only makes the policy slightly less precise, never incorrect.
+
+**Q:** What happens if the loader throws, or the removal listener is slow?
+
+**A:** A failed load must complete the future exceptionally, pass the error to every waiter, and remove the future so it is not cached as a permanent failure (unless you deliberately cache errors briefly). User callbacks such as removal listeners must never run while you hold internal locks, or a slow or re-entrant listener can stall or deadlock the cache. Queue them and run them afterwards.
+
+**Q:** How do you test a concurrent cache?
+
+**A:** Unit tests with a fake clock for expiry and hand-traced eviction orders. Stress tests with 16 threads that check invariants: size within the documented slack, no lost entries, stats adding up. A test with 100 threads on one missing key asserts the loader ran once. Replaying a recorded access trace compares LRU and TinyLFU hit rates.
+
+**Q:** What changes at 10x the data or with many servers?
+
+**A:** A larger on-heap cache means more GC work and longer pauses with some collectors, so consider weight-based limits or off-heap storage. With many servers each has its own copy, which can disagree until entries expire; you either accept short staleness, broadcast invalidations, or add a shared remote cache (such as Redis) behind the local one.
+
+**Common mistakes in answers:**
+- Describing LRU with a `PriorityQueue` of timestamps, which is O(log n) and needs updates on every access.
+- Claiming `ConcurrentHashMap` alone makes the cache correct. Eviction order, size bounds and single loading need their own design.
+- Ignoring negative caching: caching "not found" saves backend calls but can hide data created later, so it needs a short TTL.
 
 ### TL;DR
 A concurrent map plus a policy: LRU for recency, TinyLFU for frequency, one future per missing key, and buffered bookkeeping to avoid a global lock.
@@ -2510,17 +3505,65 @@ One process means one point of failure; running two instances fires every job tw
 - [Ch 10 — Collections](../chapters/10-collections/README.md) — priority queues
 
 ### In the interview
+**30-second answer:** I built a job scheduler library and daemon that runs jobs on cron expressions, fixed rates, fixed delays or one-off times, each in its own time zone, with overlap policies, retries with backoff, timeouts, run history and misfire handling after downtime. The key design decision was making "next fire time" a pure function of (schedule, after, zone), so hundreds of table-driven tests cover month ends, leap days and DST without waiting for anything. One timing thread sleeps until the earliest entry in a priority queue and hands jobs to a virtual-thread executor, so a slow job never delays timing for the other 10,000. The trickiest cases were DST gaps and overlaps and classic cron's day-of-month OR day-of-week rule.
+
+**Key terms to know:**
+- **Cron expression** — fields for (seconds,) minutes, hours, day of month, month and day of week, with ranges, lists, steps (`*/15`) and names (`MON`).
+- **Next-fire-time function** — a pure calculation from a schedule and a starting time to the next run. It is the heart of the scheduler and fully unit-testable.
+- **`ZonedDateTime` / `ZoneId`** — a date-time with a time-zone region whose rules include DST. Schedules are computed in local time.
+- **DST gap and overlap** — a local time that does not exist (spring forward) or happens twice (fall back).
+- **Fixed rate vs fixed delay** — start runs a fixed period apart versus wait a fixed gap after each run finishes.
+- **`ScheduledExecutorService`** — the JDK executor that runs tasks after a delay or periodically. It is the first milestone.
+- **Misfire policy** — what to do about runs missed during downtime: run once, run all, or skip.
+- **Overlap policy** — what to do if a run is still going when the next is due: skip or queue.
+- **Exponential backoff** — retry delays that double each time (1 s, 2 s, 4 s…), usually with random jitter.
+
 **Q:** `scheduleAtFixedRate` vs `scheduleWithFixedDelay`?
 
-**A:** Fixed rate aims at start times period apart (late runs try to catch up); fixed delay waits the period after each run finishes. Neither runs the same task concurrently.
+**A:** Fixed rate aims to start runs at `initialDelay + n × period`; if a run is late, the next ones start back to back to catch up. Fixed delay waits the full period after each run finishes, so starts drift but never bunch. Neither runs the same task concurrently with itself; a slow run just delays the next.
+
+**Q:** What happens if a periodic task throws an exception?
+
+**A:** With `ScheduledExecutorService`, an uncaught exception silently cancels all future runs of that task; the exception is only visible through the returned `ScheduledFuture`. Wrap job bodies in a try/catch that records the failure and applies the retry policy, so one bad run does not stop the schedule.
+```java
+ses.scheduleAtFixedRate(() -> {
+    try { job.run(); }
+    catch (Throwable t) { history.recordFailure(job, t); }
+}, 0, 1, TimeUnit.MINUTES);
+```
 
 **Q:** How should a daily 02:30 job behave on a DST spring-forward day?
 
-**A:** 02:30 does not exist; a sensible policy runs at the next valid time (03:00 or 03:30) and documents it. Store schedules in local time with a zone, not as UTC offsets.
+**A:** 02:30 does not exist that day. `ZonedDateTime.of` shifts a gap time forward by the gap length (to 03:30 for a one-hour gap), and a sensible policy runs then and documents it. On the fall-back day 01:30 happens twice; run once, at the earlier offset, which is what `ZonedDateTime` picks by default. Store schedules as local time plus zone, never as fixed UTC offsets.
+
+**Q:** How do you compute the next fire time efficiently?
+
+**A:** Do not test every minute of the next year. Find the largest field that does not match (month, then day, then hour, then minute), advance it to its next allowed value and reset all smaller fields to their minimum, then check again. Bound the search (say 5 years) so an impossible expression like 30 February returns "never" instead of looping forever.
+
+**Q:** What is the day-of-month / day-of-week surprise in cron?
+
+**A:** In classic cron, if both day fields are restricted, the job runs when either matches, not both. So `0 0 13 * 5` runs on every 13th and on every Friday, not only on Friday the 13th. Implement it deliberately and test it, because many people expect AND.
+
+**Q:** Why one timing thread plus a worker pool?
+
+**A:** The timing thread only sleeps until the earliest fire time and hands the job off, so its wake-ups stay precise however long jobs take. Jobs run on virtual threads with timeouts, so a job blocked on I/O costs little and cannot delay others. Timing sleeps should be computed from a monotonic clock, re-checking the wall clock on wake, because NTP corrections can make the wall clock jump.
 
 **Q:** How do you avoid duplicate runs with two scheduler instances?
 
-**A:** Coordinate: a database lock or conditional update per run, or elect a single leader.
+**A:** Coordinate through shared state: for example a conditional update `UPDATE job SET next_fire = ? WHERE id = ? AND next_fire = ?`, where only the instance whose update count is 1 runs the job, or a row lock. Alternatively elect a single leader (project 40). Without coordination, running two instances for availability fires every job twice.
+
+**Q:** How do you test a scheduler without waiting?
+
+**A:** The cron parser and next-time function are pure, so test them with large tables, including `Europe/London` and `America/New_York` around their DST dates, month ends and 29 February. The scheduler loop takes a fake clock and a fake sleeper, so a simulated week passes in milliseconds. Concurrency tests check that a job taking twice its interval never overlaps under the "skip" policy.
+
+**Q:** What happens after a 3-hour outage?
+
+**A:** On startup, the scheduler reads each job's persisted next fire time and sees runs in the past. The misfire policy decides: run once now (typical for "refresh a report"), run every missed occurrence (for billing jobs that must process each period), or skip to the next future time. Persisting next fire times is what makes this possible; in-memory timers forget.
+
+**Common mistakes in answers:**
+- Storing schedules as UTC times, which shifts "9:00 local" by an hour twice a year.
+- Saying fixed rate starts a new run while the previous one is still going. It never overlaps; it bunches runs after a delay.
+- Forgetting that an uncaught exception silently cancels a periodic task in `ScheduledExecutorService`.
 
 ### TL;DR
 Parse cron into field sets, compute next fire times as a pure DST-aware function, and keep timing separate from execution.
@@ -2620,17 +3663,63 @@ Runtime reflection is flexible but slower to start and errors appear only when r
 - [Ch 14 — Concurrency 1](../chapters/14-concurrency-1/README.md) — thread-safe lazy initialisation
 
 ### In the interview
+**30-second answer:** I built a small dependency-injection container in the style of Guice: `@Inject` constructors, interface bindings in modules, singleton and prototype scopes, `@Named` qualifiers, `Provider<T>` injection and lifecycle callbacks. The key decision was keying bindings by the full generic `Type` plus qualifier, read with `Parameter.getParameterizedType()`, because after erasure `Provider<Foo>` and `Provider<Bar>` are the same `Class`. The hardest parts were cycle detection with a resolution stack that prints the exact cycle, and thread-safe singleton creation, since a recursive `computeIfAbsent` on the same map is not allowed. A 500-class graph resolves in under 200 ms, and 32 threads asking for the same singleton always get the identical instance.
+
+**Key terms to know:**
+- **Dependency injection** — a class receives its collaborators (usually through its constructor) instead of creating them. The container automates the wiring.
+- **Inversion of control** — the framework, not your code, decides when objects are created and connected.
+- **Reflection** — inspecting and invoking classes at run time (`getConstructors`, `newInstance`). It is how the container discovers dependencies.
+- **Retention policy** — `@Retention(RUNTIME)` keeps an annotation visible to reflection. Without it, `@Inject` is invisible at run time.
+- **Binding and `Key`** — a rule mapping a `Key` (type + qualifier) to a class, instance or provider method.
+- **Scope** — the lifetime of created objects: singleton (one per container) or prototype (new each time).
+- **Qualifier** — an annotation such as `@Named("primary")` that tells apart two bindings of the same type.
+- **`Provider<T>`** — an object whose `get()` creates or returns a `T` later. It enables lazy creation and can break cycles.
+- **Cycle detection** — finding A → B → A while resolving, using a stack of keys in progress.
+- **JPMS `opens`** — a module declaration that allows deep reflection into a package. The container needs it.
+
 **Q:** Why prefer constructor injection?
 
-**A:** Dependencies are explicit, fields can be final, objects are complete after construction, and tests can pass fakes without a container.
+**A:** Dependencies are explicit in the constructor signature, fields can be `final`, the object is complete as soon as it is constructed, and tests can call the constructor with fakes without any container. Field injection hides dependencies, prevents `final` fields, and allows half-built objects.
 
 **Q:** How does a container detect circular dependencies?
 
-**A:** It tracks the keys being resolved on a stack; meeting a key already on the stack is a cycle.
+**A:** Push each key onto a stack before resolving its constructor parameters and pop it afterwards. If a key you are about to resolve is already on the stack, there is a cycle, and the stack slice from that key gives the message "A -> B -> A". Injecting `Provider<B>` into A breaks the cycle, because B is only resolved when `get()` is called later.
+
+**Q:** How do you read `Provider<Foo>` from a constructor parameter?
+
+**A:** `Parameter.getType()` returns just `Provider.class` because of erasure. `Parameter.getParameterizedType()` returns a `ParameterizedType` whose actual type argument is `Foo`, because generic signatures are kept in the class file. The `Key` therefore stores a `Type`, not a `Class`, and its `equals` compares types and qualifiers.
+```java
+for (Parameter p : ctor.getParameters()) {
+    Type t = p.getParameterizedType();                 // Provider<Foo>, not Provider
+    Annotation q = qualifierOf(p.getAnnotations());    // e.g. @Named("primary")
+    args.add(resolve(new Key(t, q)));
+}
+```
+
+**Q:** How do you make singleton creation thread-safe?
+
+**A:** Two threads may request the same singleton at once, and both must get the same instance. `ConcurrentHashMap.computeIfAbsent` looks ideal, but creating singleton A requires singleton B, which calls `computeIfAbsent` on the same map from inside the first call; the Javadoc forbids that and it can throw `IllegalStateException` or deadlock. Use a per-key lock or store a holder future, creating the object outside the map's internal lock.
 
 **Q:** Reflection-based vs generated DI?
 
-**A:** Reflection is flexible and needs no build step; generated code fails at compile time, starts faster and works well with ahead-of-time compilation.
+**A:** Reflection (Guice, Spring by default) is flexible and needs no build step, but errors appear only when the app starts and startup is slower. Generated code (Dagger) uses an annotation processor to write plain factory classes at compile time, so missing bindings fail the build, startup is fast, and it works well with ahead-of-time compilation such as GraalVM native images, which restrict reflection.
+
+**Q:** What happens with a missing binding, or two constructors?
+
+**A:** A missing binding should fail with the full dependency path ("No binding for Repo, required by Service, required by Controller"), so the user knows where to look. A class with several public constructors and none marked `@Inject` is ambiguous, so fail with a clear message rather than guessing. A validation mode resolves the whole graph at startup so these errors appear immediately, not on the first request.
+
+**Q:** Why does reflection fail in a modular application?
+
+**A:** Under JPMS, deep reflection into a package of another module (calling non-public constructors or `setAccessible(true)`) is only allowed if that module `opens` the package to the container. Public constructors in exported packages are fine. Users must declare `opens com.acme.app to my.container;`, which the container's error message should say.
+
+**Q:** How do you test the container, and how does DI help testing?
+
+**A:** Small fixture classes per feature, exact error-message assertions for cycles and missing bindings, and a concurrency test resolving one singleton from 32 threads and asserting identity. To show DI's value, an override module replaces the real `Repo` binding with a fake, and the whole graph runs in a test with no database.
+
+**Common mistakes in answers:**
+- Saying DI requires a container. DI is passing dependencies in; the container is only automation.
+- Using `getType()` for generic parameters and then wondering why `Provider<Foo>` and `Provider<Bar>` collide.
+- Forgetting `@Retention(RUNTIME)` on custom annotations, so reflection never sees them.
 
 ### TL;DR
 Keys, bindings, a recursive resolver with a cycle stack, and scopes — reflection and runtime generics doing what Spring and Guice do.
@@ -2728,17 +3817,63 @@ Module layers give strong isolation but every plugin needs a proper `module-info
 - [Ch 9 — Generics](../chapters/09-generics/README.md) — generic service lookup
 
 ### In the interview
+**30-second answer:** I built a host application whose converters come from plugin JARs dropped into a `plugins/` folder. The host exports only an `app.api` module, discovers plugins with `ServiceLoader` through `uses` and `provides`, and loads each plugin into its own `ModuleLayer` with its own class loader, so two plugins can use different versions of the same library in one JVM. The hardest part was unloading: a layer is only garbage-collected when nothing references it, so I clear every instance, thread and static cache and prove the old class loader is gone with a `WeakReference` test. A plugin that throws during loading is marked FAILED and the others keep working.
+
+**Key terms to know:**
+- **JPMS (Java Platform Module System)** — modules declared in `module-info.java` with `requires`, `exports`, `opens`, `uses` and `provides` (Java 9).
+- **Strong encapsulation** — only exported packages are accessible to other modules. Plugins see `app.api` only.
+- **`ServiceLoader`** — the JDK mechanism that finds and instantiates implementations of a service interface.
+- **`uses` / `provides ... with`** — the consumer declares which service it looks up, and the provider declares which class implements it.
+- **Class loader** — the object that loads class bytes; a class's identity is its name plus its loader. It is what makes isolation possible.
+- **`ModuleLayer` / `Configuration`** — a resolved group of modules with its own class loader(s), created at run time with the boot layer as parent. There is one per plugin.
+- **Split package** — the same package in two modules of one layer, which the module system rejects.
+- **Class-loader leak** — a lingering reference that keeps an unloaded plugin's loader and every class it loaded in memory.
+- **`WeakReference`** — a reference that does not keep its object alive. It is used to prove unloading.
+
 **Q:** How does `ServiceLoader` find implementations?
 
-**A:** On the module path from `provides ... with` clauses in module descriptors; on the class path from `META-INF/services/<interface name>` files. It instantiates providers lazily.
+**A:** On the module path it reads `provides app.api.Converter with com.acme.PdfConverter` clauses in module descriptors; on the class path it reads `META-INF/services/app.api.Converter` files listing class names. Providers are instantiated lazily as you iterate, using a public no-argument constructor or, for modules, a public static `provider()` method. The provider class does not need to be in an exported package, so implementations stay private.
+
+**Q:** Show the code that loads one plugin into its own layer.
+
+**A:** Find the plugin's modules, resolve them against the boot layer's configuration, define a layer with one new class loader, then ask `ServiceLoader` for providers in that layer.
+```java
+ModuleFinder finder = ModuleFinder.of(pluginDir);
+ModuleLayer boot = ModuleLayer.boot();
+Configuration cf = boot.configuration()
+    .resolve(finder, ModuleFinder.of(), Set.of(moduleName));
+ModuleLayer layer = boot.defineModulesWithOneLoader(cf, ClassLoader.getSystemClassLoader());
+ServiceLoader.load(layer, Converter.class).forEach(registry::add);
+```
 
 **Q:** How can two plugins use different versions of the same library?
 
-**A:** Load each in its own class loader (here, its own module layer), so each sees its own copy of the library's classes.
+**A:** Each plugin's layer has its own class loader, and each layer resolves its own copy of the library module. Classes are identified by name plus loader, so `com.lib.Parser` from layer A and from layer B are different classes and never clash. In a single flat class path only one version could win.
 
-**Q:** Why do class-loader leaks happen?
+**Q:** Why do class-loader leaks happen, and how do you prove you avoided one?
 
-**A:** Any surviving reference from outside — a static cache, a thread, a registered driver — keeps the loader and all its classes alive.
+**A:** Any surviving reference from outside the layer keeps the loader and all its classes alive: a plugin instance in a host cache, a thread the plugin started, a `ThreadLocal` value, a JDBC driver registered with `DriverManager`, or a listener registered with the host. To prove unloading, keep only a `WeakReference` to the old class loader, drop everything else, call `System.gc()` a few times (it is only a hint) and assert the reference has cleared.
+
+**Q:** What is the difference between `exports` and `opens`?
+
+**A:** `exports` makes a package's public types accessible at compile time and run time. `opens` additionally allows deep reflection at run time, including private members, which frameworks such as DI containers and JSON mappers need. You can open a package without exporting it, and qualify either to specific modules (`opens x to y`).
+
+**Q:** What happens if a plugin throws, or is badly behaved?
+
+**A:** An exception in a provider's constructor surfaces as a `ServiceConfigurationError` during iteration; catch it per plugin, mark that plugin FAILED and keep loading the rest. But in-process isolation has limits: a plugin that loops forever, leaks memory or calls `System.exit` affects the whole JVM. Strong isolation needs a separate process communicating over sockets or standard input and output.
+
+**Q:** How do you evolve the plugin API without breaking every plugin?
+
+**A:** Plugins compile against `app.api`, so adding an abstract method to `Converter` breaks every existing plugin. Add new methods as `default` methods with sensible behaviour, never remove or change signatures in a minor version, and put a version in the API module so the host can refuse plugins built for an incompatible major version.
+
+**Q:** How do you test the plugin system?
+
+**A:** Build small test plugins as separate modules during the build and copy them into a `@TempDir` plugins folder. Integration tests cover discovery, two plugins using conflicting library versions, a plugin that throws during loading, and reload, including the `WeakReference` unloading check retried a few times because GC timing varies.
+
+**Common mistakes in answers:**
+- Saying the provider class must be exported. `ServiceLoader` can instantiate it from a non-exported package; only the service interface must be visible.
+- Believing unloading a plugin is just removing it from a list. Every reference, thread and registration must go, or the class loader leaks.
+- Thinking modules alone give version isolation. Isolation comes from separate class loaders (separate layers); one layer cannot hold two versions of a module.
 
 ### TL;DR
 `uses`/`provides` for discovery, one module layer per plugin for isolation, and careful reference hygiene so plugins can be unloaded.
@@ -2833,17 +3968,67 @@ Parallel streams are one line and good enough for simple cases, but use the comm
 - [Ch 13 — I/O and NIO](../chapters/13-io-and-nio/README.md) — walking trees, file I/O
 
 ### In the interview
+**30-second answer:** I built a thumbnailer that walks a photo tree and writes thumbnails at several sizes, skipping images that are already up to date. The key design decision was separating I/O from CPU work: decoding and writing run on virtual threads, while pixel resizing runs as `RecursiveAction`s on a `ForkJoinPool` sized to the cores. A `Semaphore`, acquired before decoding and released after encoding, caps how many decoded images are in memory, because a 24-megapixel image is about 96 MB once decoded. I measured throughput at 1, 2, 4 and 8 threads and can explain where scaling stops, and a corrupt image fails alone without stopping the batch.
+
+**Key terms to know:**
+- **CPU-bound vs I/O-bound** — limited by processor speed (resizing pixels) versus by waiting on disk or network (reading files). They need different kinds of concurrency.
+- **Fork/Join framework** — split a task into subtasks (`fork`), run them in parallel and combine results (`join`). Resizing splits an image into row bands.
+- **`RecursiveAction` / `RecursiveTask`** — Fork/Join tasks without and with a result.
+- **Work stealing** — idle workers take tasks from the back of busy workers' queues. It is what makes Fork/Join balance load.
+- **Split threshold** — the size below which a task stops splitting and does the work directly.
+- **Common pool** — the shared `ForkJoinPool` that parallel streams use by default, with parallelism of (cores − 1).
+- **Back-pressure via `Semaphore`** — limiting items in flight so memory stays bounded.
+- **Amdahl's law** — speed-up is limited by the part of the work that stays serial. It explains the scaling table.
+- **`BufferedImage` / `ImageIO`** — the JDK's in-memory image type and its decoder/encoder.
+
 **Q:** How does work stealing work?
 
-**A:** Each worker has a deque of tasks; it pushes and pops its own at one end, and idle workers steal from the other end of busy workers' deques, balancing load with little contention.
+**A:** Each worker thread has its own double-ended queue of tasks. It pushes and pops its own tasks at one end (newest first, which is cache-friendly), and when it runs out, it steals from the other end of another worker's queue, taking the oldest and usually largest task. Owners and thieves work at opposite ends, so contention is low and load balances itself.
+
+**Q:** Show the shape of the Fork/Join resize task.
+
+**A:** If the band of rows is small enough, resize it directly; otherwise split it in two and run both halves in parallel.
+```java
+protected void compute() {
+    if (rowEnd - rowStart <= THRESHOLD) { resizeRows(rowStart, rowEnd); return; }
+    int mid = (rowStart + rowEnd) >>> 1;
+    invokeAll(new ResizeTask(src, dst, rowStart, mid),
+              new ResizeTask(src, dst, mid, rowEnd));
+}
+```
 
 **Q:** Why not run I/O inside a `ForkJoinPool`?
 
-**A:** Its few threads (about one per core) would block, leaving CPUs idle. Use virtual threads or a separate pool for I/O.
+**A:** The pool has only about one thread per core. If those threads block on file reads, the cores sit idle while work waits. Run I/O on virtual threads (or a separate pool) and give the Fork/Join pool only pixel work. The same reasoning is why blocking calls inside a parallel stream hurt everything else using the common pool.
+
+**Q:** How do you choose the split threshold?
+
+**A:** Too small and the cost of creating and scheduling tasks outweighs the work, as with splitting a 100×100 thumbnail. Too large and there are too few tasks to balance across cores. Start around "a band of about 64 rows", measure with JMH on real image sizes, and adjust; the right value depends on the per-row cost.
 
 **Q:** How do you stop a parallel pipeline from running out of memory?
 
-**A:** Bound the number of in-flight items with bounded queues or a semaphore — back-pressure.
+**A:** Bound the number of in-flight items. Here a semaphore with, say, 8 permits is acquired before decoding and released after encoding, so at most 8 decoded images exist at once whatever the number of reader threads. Without it, `parallel().forEach` can decode many large images at once and throw `OutOfMemoryError` on a small heap.
+
+**Q:** Parallel stream or an explicit pipeline?
+
+**A:** `paths.parallel().forEach(...)` is one line and works for simple cases, but it uses the shared common pool, mixes I/O and CPU on the same few threads, and has no memory bound. The explicit pipeline is more code but controls memory, keeps I/O off the CPU pool and lets you measure each stage. I built both and kept the measurements.
+
+**Q:** Why does speed-up stop being linear?
+
+**A:** Parts of the work stay serial or shared: walking the directory, disk bandwidth, the JPEG decoder itself, and memory bandwidth when many cores read large images. By Amdahl's law, if 10% of the time is serial, even infinitely many cores give at most a 10× speed-up. On a slow disk, I/O dominates and extra cores barely help at all.
+
+**Q:** What happens with a corrupt, zero-byte or huge image?
+
+**A:** `ImageIO.read` may throw `IOException` or return `null` when no decoder recognises the file, so check for both. Each job catches its own failure, records it with the reason in the stats, releases its semaphore permit in a `finally`, and the batch continues. A very large image needs either a per-image size limit or subsampled decoding through an `ImageReader` to avoid one image using the whole heap.
+
+**Q:** How do you test and measure it?
+
+**A:** Unit-test the resize kernel on tiny synthetic images with known pixel values. An integration test runs over fixture images, including a corrupt file and a zero-byte file, and checks outputs and failure reports. A tagged performance test produces the 1–N core throughput table, JMH measures the kernel alone, and JFR shows whether threads are waiting on I/O or busy on CPU.
+
+**Common mistakes in answers:**
+- Saying "use more threads" for CPU-bound work. Beyond the core count, extra threads only add switching overhead.
+- Running blocking I/O inside parallel streams or the common pool, which starves other users of that pool.
+- Ignoring memory: the decoded image is far bigger than the JPEG file on disk.
 
 ### TL;DR
 Separate I/O (virtual threads) from CPU work (Fork/Join), bound memory with a semaphore, and measure where scaling stops.
@@ -2950,17 +4135,60 @@ Proxies are simple but only work for interfaces. Bytecode generation handles cla
 - [Ch 8 — Exceptions](../chapters/08-exceptions/README.md) — exception handling and reporting
 
 ### In the interview
+**30-second answer:** I built a small test runner and a mocking library to understand how JUnit and Mockito work. The runner discovers `@Test` methods by reflection, creates a fresh instance per test, runs lifecycle methods, enforces timeouts and keeps going when a test throws. The mocking library uses `java.lang.reflect.Proxy` for interfaces and generated subclasses for classes, records every call, and supports `when(...).thenReturn(...)`, argument matchers and `verify`. The interesting part is that `when(mock.foo())` works only because the mock records its last invocation in thread-local state, which also explains why mixing matchers with raw values fails; in the end the library's own tests run on my runner.
+
+**Key terms to know:**
+- **Reflection** — finding classes, methods and annotations at run time and invoking them. It powers test discovery and execution.
+- **Dynamic proxy** — `java.lang.reflect.Proxy` creates, at run time, a class implementing given interfaces that forwards every call to an `InvocationHandler`. It mocks interfaces.
+- **Bytecode generation** — creating new classes at run time (Class-File API in Java 24, or Byte Buddy). It mocks classes via subclasses.
+- **Inline mock maker** — Mockito 5's default, which rewrites the mocked class itself through an instrumentation agent so final classes and methods can be mocked.
+- **Stubbing** — telling a mock what to return (`thenReturn`), throw (`thenThrow`) or compute (`thenAnswer`) for a call.
+- **Verification** — checking which calls happened, how often and in what order (`verify(m, times(2))`).
+- **Argument matcher** — a predicate such as `any()` or `eq(100)` used instead of a literal argument. Matchers are recorded on a thread-local stack.
+- **`ThreadLocal`** — per-thread state. It is how `when` and matchers find the last invocation.
+- **Test double: mock vs stub vs fake** — a mock verifies interactions, a stub returns canned answers, a fake is a working lightweight implementation.
+
 **Q:** How does Mockito's `when(mock.method())` capture the call?
 
-**A:** The mock records the invocation in thread-local state when it is called; `when` then reads that last invocation and attaches the stub.
+**A:** Java evaluates `mock.method()` first. The mock's handler records "last invocation = method(args)" in thread-local state and returns a default such as `null` or 0. Then `when(...)` ignores the value it was passed, reads that last invocation from the thread-local, and returns a builder that attaches the stub to it.
+
+**Q:** Why does `when(m.charge(any(), 100))` fail?
+
+**A:** Each matcher call such as `any()` pushes a matcher onto a thread-local stack and returns a dummy value. When the invocation is recorded, the library expects either no matchers (all raw values) or one matcher per argument. Here there is one matcher for two arguments, so it cannot tell which argument it belongs to. Wrap raw values in `eq(100)`.
 
 **Q:** Why can't a dynamic proxy mock a class?
 
-**A:** `java.lang.reflect.Proxy` creates classes that implement interfaces; it cannot extend a class. Subclass generation or instrumentation is needed.
+**A:** `Proxy` generates a class that extends `java.lang.reflect.Proxy` and implements the given interfaces; Java has single inheritance, so it cannot also extend your class. For classes you generate a subclass that overrides each method, which still cannot handle `final` classes or methods, or instrument the class's own bytecode, as Mockito's inline mock maker does.
+```java
+Repo mock = (Repo) Proxy.newProxyInstance(
+    Repo.class.getClassLoader(), new Class<?>[] { Repo.class },
+    (proxy, method, args) -> recorder.handle(method, args));   // record and answer
+```
+
+**Q:** How does the runner keep one failing test from stopping the rest?
+
+**A:** It invokes each test method reflectively inside a try/catch of `Throwable`. `Method.invoke` wraps the test's exception in `InvocationTargetException`, so the runner unwraps `getCause()` to report the real failure. Each test gets a new instance of its class, so fields cannot leak state from one test to the next, and the thread-local mocking state is reset after every test.
+
+**Q:** How do you enforce a per-test timeout?
+
+**A:** Run the test on its own (virtual) thread and `join` with a timeout. If it has not finished, report it as timed out and interrupt it. You cannot forcibly stop a Java thread safely, so a test that ignores interruption keeps running in the background; the report should say so.
 
 **Q:** Mock or fake?
 
-**A:** A mock verifies interactions; a fake is a working lightweight implementation (in-memory repository). Fakes produce less brittle tests for stateful collaborators.
+**A:** A mock verifies interactions ("`save` was called twice"), which is right for checking that an email was sent. A fake is a working lightweight implementation, such as an in-memory repository, which is better for stateful collaborators. Over-mocking produces tests that check implementation details and break on every refactor, while fakes test behaviour.
+
+**Q:** Why does Mockito ask you to attach its agent with `-javaagent` on recent JDKs?
+
+**A:** The inline mock maker needs an instrumentation agent to rewrite classes. Since JDK 21 (JEP 451), loading an agent dynamically into a running JVM prints a warning, and a future release is expected to disallow it by default. Attaching it at startup with `-javaagent` is the supported path.
+
+**Q:** How do you test a test framework?
+
+**A:** Bootstrap: write the first tests with JUnit, then migrate them to your own runner once it works ("self-hosting"). Test every stubbing and verification combination, the exact text of failure messages ("wanted 2 calls, got 1", with actual calls listed), and deliberate misuse such as unfinished stubbing or mixed matchers, which must give helpful errors.
+
+**Common mistakes in answers:**
+- Saying Mockito mocks classes with dynamic proxies. Proxies only handle interfaces; Mockito uses Byte Buddy to generate or instrument classes.
+- Thinking `when(...)` receives the method call as an argument. It only receives the returned dummy value; the call itself is found through thread-local state.
+- Assuming a timed-out test thread is killed. Java threads can only be asked to stop through interruption.
 
 ### TL;DR
 A runner is reflection plus isolation; a mock library is proxies or generated subclasses plus thread-local recording that makes `when(...)` and matchers work.
@@ -3059,17 +4287,69 @@ Reactive code scales well with few threads but is hard to debug: stack traces sh
 - [Ch 9 — Generics](../chapters/09-generics/README.md) — generic operator signatures
 
 ### In the interview
+**30-second answer:** I built a small reactive library on `java.util.concurrent.Flow`, with sources, operators such as `map`, `flatMap`, `take`, `zip` and `publishOn`, and blocking terminals for tests. The defining requirement is back-pressure: a subscriber requests `n` items and a publisher never sends more, so an infinite source feeding a slow subscriber stays in bounded memory. The hardest parts were demand accounting from several threads and keeping signals serial, which I solved with the drain-loop ("work in progress" counter) pattern instead of locks. My publishers pass the relevant Reactive Streams TCK rules, and `range → map → filter` runs about 10 million items per second on one core.
+
+**Key terms to know:**
+- **Reactive Streams / `Flow`** — four interfaces (`Publisher`, `Subscriber`, `Subscription`, `Processor`) and a set of rules. The JDK copy is `java.util.concurrent.Flow` (Java 9).
+- **Back-pressure** — the consumer says how much it can take with `request(n)`, and the producer never exceeds it.
+- **Demand accounting** — tracking outstanding requested items in an `AtomicLong`, capped at `Long.MAX_VALUE`, which means unbounded.
+- **Serial signals** — `onNext`, `onError` and `onComplete` are never called concurrently for one subscriber.
+- **Drain loop / WIP counter** — whoever moves a counter from 0 to 1 emits; other threads only increment it and leave. It keeps signals serial without locks.
+- **Terminal signal** — `onError` or `onComplete`, after which nothing else may be signalled.
+- **Cancellation** — `cancel()` propagates upstream and releases timers and files. It must be idempotent.
+- **Async boundary (`publishOn`)** — a bounded queue plus an executor where signals switch threads.
+- **TCK** — the Reactive Streams Technology Compatibility Kit, a test suite for spec rules.
+
 **Q:** What is back-pressure?
 
-**A:** A way for a consumer to tell a producer how much it can handle (`request(n)`), so a fast producer cannot overwhelm a slow consumer.
+**A:** A way for a consumer to tell a producer how much it can handle, here by calling `request(n)` on its subscription, so a fast producer cannot overwhelm a slow consumer. Without it, the only options are unbounded buffering (eventually `OutOfMemoryError`) or dropping data. With it, demand flows upstream and data flows downstream, and memory stays bounded end to end.
 
 **Q:** Why must `onNext` calls be serial?
 
-**A:** The spec guarantees subscribers never see concurrent signals, so they need no internal synchronisation; operators use drain loops to uphold this.
+**A:** The spec guarantees a subscriber never sees concurrent signals, so subscriber code needs no locks of its own. Operators that receive signals from several threads, such as `flatMap` merging inner publishers or `publishOn`, must therefore serialise their output, which is what drain loops do.
+
+**Q:** Explain the drain loop.
+
+**A:** A "work in progress" counter tracks pending work. A thread that increments it from 0 to 1 becomes the only emitter and loops while there is demand and data; other threads just increment it and return, which tells the emitter "check again". The emitter then subtracts the work it saw and only exits when the counter reaches 0, so no signal is missed.
+```java
+void drain() {
+    if (wip.getAndIncrement() != 0) return;   // someone else is draining
+    int missed = 1;
+    do {
+        emitWhileDemandAndData();
+        missed = wip.addAndGet(-missed);
+    } while (missed != 0);
+}
+```
+
+**Q:** What goes wrong if a subscriber calls `request(1)` inside `onNext`?
+
+**A:** A naive publisher's `request` emits the next item immediately, calling `onNext` again from inside `onNext`, so the stack grows with every item and overflows after a few thousand. The drain loop fixes it: the nested `request` only adds demand and increments the counter, and the outer loop emits the next item iteratively.
+
+**Q:** How do you add demand safely from several threads?
+
+**A:** Use a CAS loop on an `AtomicLong` that adds `n` and caps at `Long.MAX_VALUE` instead of overflowing to a negative number, and treat `Long.MAX_VALUE` as "unbounded". A non-positive `n` is a spec violation that must be reported with `onError(IllegalArgumentException)`.
 
 **Q:** Reactive streams or virtual threads?
 
-**A:** Virtual threads for straightforward blocking request handling; reactive streams for streaming data with back-pressure and complex async composition.
+**A:** Virtual threads for straightforward request/response code: blocking calls read top to bottom, stack traces make sense, and concurrency is cheap. Reactive streams for streaming data with back-pressure and complex composition across async sources, such as merging live feeds with rate limits. I implemented one pipeline both ways to compare readability, debugging and throughput.
+
+**Q:** What happens after an error?
+
+**A:** After `onError` or `onComplete` nothing else may be signalled, and the operator must cancel upstream subscriptions and release resources. `retry(n)` resubscribes to the source; `onErrorResume` switches to a fallback publisher. Track the terminal state with an atomic flag so a late `onNext` from another thread is dropped, not delivered.
+
+**Q:** How do you test a reactive library?
+
+**A:** The TCK checks spec rules for each publisher. A test subscriber records every signal and lets the test request manually (`request(2)`, then assert exactly two values arrived). Concurrency tests have many threads calling `request` at once and assert no demand is lost. An infinite source with a slow subscriber, run with a small heap, proves memory stays bounded.
+
+**Q:** What are the costs at scale?
+
+**A:** Every async boundary adds a queue and a thread hop, and buffer sizes trade throughput against memory. Debugging is hard because stack traces show operator internals rather than your logic. Operator fusion, combining adjacent synchronous operators so they skip per-item `request` bookkeeping, is how mature libraries recover performance.
+
+**Common mistakes in answers:**
+- Saying reactive code is "faster". It uses fewer threads for waiting work; per-item overhead is often higher than plain loops.
+- Adding an unbounded queue "just in case", which silently removes back-pressure.
+- Using a lock around `onNext` to serialise signals, which can deadlock when a subscriber calls back into `request`.
 
 ### TL;DR
 Implement `Flow` with demand accounting and drain loops so signals stay serial and memory stays bounded; then compare honestly with virtual threads.
@@ -3166,17 +4446,62 @@ Lock-free does not mean wait-free: a thread can retry a CAS indefinitely under c
 - [Ch 10 — Collections](../chapters/10-collections/README.md) — queue semantics
 
 ### In the interview
+**30-second answer:** I implemented three concurrent queues with `VarHandle` atomics: a single-producer/single-consumer ring buffer, a multi-producer/single-consumer linked queue, and the Michael–Scott multi-producer/multi-consumer queue. Then I proved them correct with stress tests of 10^8 sequence-numbered elements and compared them with `ArrayBlockingQueue` and `ConcurrentLinkedQueue` using JMH. The key insight was matching memory ordering to ownership: in the SPSC ring each index has a single writer, so release/acquire is enough and there is no CAS at all. The biggest measured wins came from padding `head` and `tail` onto separate cache lines to remove false sharing, and from caching the other side's index; under heavy contention the MPMC queue was not always faster than a lock, and I report that honestly.
+
+**Key terms to know:**
+- **Java Memory Model (JMM)** — the rules for when one thread's writes become visible to another. Without a happens-before relationship, a thread may see stale or reordered values.
+- **Happens-before** — a guarantee that one action's effects are visible to another, created by things like a volatile write followed by a read of the same variable, a lock release then acquire, or `Thread.start`.
+- **`VarHandle` access modes** — plain, opaque, release/acquire and volatile, from weakest to strongest ordering. The queues use the cheapest mode that is correct.
+- **Release/acquire** — a release write makes all earlier writes visible to a thread that reads the same variable with acquire. It publishes ring-buffer elements.
+- **CAS (compare-and-set)** — atomically update a value only if it still has the expected value. It is used where several threads write the same field.
+- **Lock-free vs wait-free** — some thread always makes progress versus every thread finishes in a bounded number of steps.
+- **False sharing** — independent fields on the same 64-byte cache line written by different cores, making the line bounce between them.
+- **ABA problem** — a value changes A → B → A, so a CAS wrongly succeeds. Java's GC removes most ABA cases for node-based queues.
+- **JMH and jcstress** — the OpenJDK harnesses for honest microbenchmarks and for finding rare racy interleavings.
+
 **Q:** What does lock-free mean?
 
-**A:** At least one thread always makes progress in a finite number of steps, even if others are delayed; no thread holding a lock can block everyone.
+**A:** At least one thread always makes progress in a finite number of steps, even if other threads are delayed or descheduled; a thread paused at the wrong moment cannot block everyone, as it could while holding a lock. It does not mean every thread progresses: under contention one thread's CAS can keep failing. That stronger guarantee is called wait-free.
 
 **Q:** What is false sharing?
 
-**A:** Independent variables on the same cache line written by different cores, causing the line to ping-pong between caches; fix with padding or layout changes.
+**A:** CPUs move memory between caches in 64-byte lines. If `head` (written by the consumer) and `tail` (written by the producer) sit on the same line, every write by one core invalidates the other core's copy, and the line ping-pongs although the threads never touch the same variable. Pad the fields apart, or use `@Contended` (which needs `-XX:-RestrictContended` outside the JDK), and benchmark the difference.
 
 **Q:** Why release/acquire instead of full volatile?
 
-**A:** It gives exactly the ordering needed for single-writer publication at lower cost than sequentially consistent volatile access.
+**A:** In the SPSC ring each index has exactly one writer, so all you need is "the element written into the slot is visible before the new index is". A release store of `tail` and an acquire load on the other side give exactly that. A full volatile write also orders it against later reads, which on x86 needs an expensive fence instruction. Release/acquire costs almost nothing extra there.
+```java
+// producer
+buffer[(int) (t & mask)] = e;      // plain write of the element
+TAIL.setRelease(this, t + 1);      // publish: element is visible before index
+// consumer
+long t = (long) TAIL.getAcquire(this);
+```
+
+**Q:** Why does the SPSC ring need no CAS, while the MPMC queue does?
+
+**A:** CAS is needed when several threads may write the same variable and must not lose each other's updates. In SPSC, only the producer writes `tail` and only the consumer writes `head`, so ordered plain writes suffice. In MPMC, many producers race for the tail and many consumers race for the head, so each step is a CAS loop, and threads "help" by advancing a lagging tail pointer.
+
+**Q:** Is lock-free always faster?
+
+**A:** No. Under heavy contention, many threads retrying failed CAS operations generate a lot of cache traffic, and a good lock that makes threads wait in turn can win. `ArrayBlockingQueue` with one lock may beat an MPMC queue at high thread counts. The real wins come from specialised designs (SPSC, MPSC) whose assumptions remove contention entirely.
+
+**Q:** What happens if someone uses the SPSC queue with two producers?
+
+**A:** Both producers read the same `tail`, write into the same slot and publish the same index, so one element silently overwrites the other or elements are duplicated. Nothing throws. Specialised queues are only correct under their threading contract, so name and document them clearly, and assert the contract in debug builds if possible.
+
+**Q:** How do you prove a concurrent queue is correct?
+
+**A:** Stress tests where each producer sends increasing sequence numbers and the consumer checks for gaps, duplicates and per-producer reordering, run 10^8 operations many times and on more than one machine. jcstress tests small publication scenarios across millions of interleavings, such as "can the consumer see the index but a null slot?". Passing tests do not prove absence of bugs, so reason about happens-before for every shared field as well.
+
+**Q:** What are the classic benchmarking traps, and how does JMH help?
+
+**A:** The JIT can remove code whose result is unused (dead-code elimination), early iterations run interpreted (no warm-up), one JVM's profile can bias results (forks), and producer/consumer pairs can run at different rates. JMH handles warm-up and forks, provides `Blackhole` to consume results, and `@Group` to run producer and consumer threads together. Never measure with `System.nanoTime` around a loop in a JUnit test.
+
+**Common mistakes in answers:**
+- Saying `volatile` makes `count++` atomic. It gives visibility and ordering, not atomic read-modify-write; use `AtomicLong` or CAS.
+- Equating lock-free with wait-free, or with "always faster".
+- Assuming the ABA problem works the same in Java as in C; garbage collection prevents node reuse while a reference exists.
 
 ### TL;DR
 Ring buffers and CAS queues with `VarHandle` ordering, padding against false sharing, stress-tested for correctness and measured with JMH.
@@ -3272,17 +4597,55 @@ Lab results do not transfer automatically to production: real object graphs, thr
 - [Ch 12 — Streams](../chapters/12-streams/README.md) — aggregating results
 
 ### In the interview
+**30-second answer:** I built a reproducible GC lab: a workload generator with configurable allocation rate, object lifetimes and live-set size, and a harness that runs a matrix of collector × heap size × profile, each in a fresh JVM, recording JDK Flight Recorder data. A parser built on `jdk.jfr.consumer` computes pause percentiles, GC CPU share, allocation rate and heap after GC, alongside the latency the workload itself measures. The key discipline was changing one variable per run with fixed seeds and `-Xms` equal to `-Xmx`, and repeating each run three times so I can tell a real difference from noise. The main findings were that heap headroom fixes more problems than flags, and that generational ZGC cut p99 latency on the request profile at the cost of extra CPU.
+
+**Key terms to know:**
+- **Garbage collection** — automatic reclaiming of objects no longer reachable from roots (thread stacks, static fields).
+- **Generational hypothesis** — most objects die young, so collectors collect a small young generation often and the old generation rarely.
+- **Stop-the-world pause** — all application threads halted for GC work. It is what latency-sensitive services try to minimise.
+- **G1 / ZGC / Parallel / Serial / Shenandoah** — G1 is the default and balances pauses and throughput (pause target `-XX:MaxGCPauseMillis`, default 200 ms). ZGC (generational-only since JDK 24) does nearly all work concurrently with sub-millisecond pauses. Parallel maximises throughput with longer pauses. Serial is single-threaded for small heaps. Shenandoah is another concurrent collector whose generational mode is a product feature in JDK 25.
+- **Live set / headroom** — memory still reachable after GC, and the free space above it.
+- **Allocation rate** — bytes allocated per second. It drives how often the young generation fills.
+- **JFR (JDK Flight Recorder)** — the JVM's built-in low-overhead event recorder, analysed with JDK Mission Control or the `jfr` tool.
+- **Allocation stall** — ZGC pausing an allocating thread because collection cannot keep up (`jdk.ZAllocationStall`).
+- **Coordinated omission** — a latency-measurement error where a stall also stops the load generator, hiding the delayed requests.
+
 **Q:** How would you investigate long GC pauses?
 
-**A:** Enable GC logging or JFR, look at pause causes, heap occupancy after GC and allocation rate; check heap headroom and humongous allocations (G1); then consider a low-pause collector like generational ZGC, measuring user-visible latency before and after.
+**A:** Turn on GC logging (`-Xlog:gc*`) or JFR and look at what the pauses are (young, mixed, full), their causes, heap occupancy after GC and the allocation rate. Check for too little headroom, a growing live set (a leak), and with G1 humongous allocations (objects at least half a region in size). Fix the cause first: heap size, leaks, allocation hot spots. Only then consider a low-pause collector like generational ZGC, measuring user-visible latency before and after.
 
 **Q:** G1 or ZGC?
 
-**A:** G1 is a good default balancing throughput and pauses; ZGC suits latency-sensitive services with spare CPU and memory headroom, giving sub-millisecond pauses.
+**A:** G1 is a good default that balances throughput and pause times for most services. ZGC suits latency-sensitive services, keeping pauses typically below a millisecond regardless of heap size, but it uses more CPU for its concurrent work and needs memory headroom, or threads hit allocation stalls. Parallel is best for batch jobs where only total throughput matters.
+
+**Q:** What are the three things every collector trades off?
+
+**A:** Pause time (latency), throughput (share of CPU left for the application) and footprint (memory needed). You can usually improve two at the expense of the third. Before tuning, decide which the workload needs; a nightly batch job and a trading API want opposite choices.
 
 **Q:** Why measure from the intended start time?
 
-**A:** To avoid coordinated omission, which hides the latency of requests delayed by a stall.
+**A:** If the load generator only sends the next request after the previous one finishes, a 500 ms pause delays one measured request, while the many requests that should have been sent during it are never measured. That is coordinated omission, and it makes p99 look far better than users experience. Schedule operations at fixed intended times and measure latency from the intended time.
+
+**Q:** How does the JVM size the heap in a container?
+
+**A:** The JVM is container-aware: it reads the container's memory limit and by default uses 25% of it as the maximum heap. In containers you usually set `-XX:MaxRAMPercentage` (for example 75) or an explicit `-Xmx`, leaving room for metaspace, thread stacks, direct buffers and the JIT's code cache, or the container is killed for exceeding its limit even though the heap looks fine.
+
+**Q:** How do you find a memory leak with this lab?
+
+**A:** A leak shows as heap-after-GC rising steadily across collections, even when allocation rate is constant. JFR's `jdk.OldObjectSample` events and allocation samples point at the type and allocation site, and a heap histogram (`jcmd <pid> GC.class_histogram`) taken twice shows which class keeps growing. A heap dump analysed in a tool shows the reference path keeping objects alive.
+
+**Q:** How do you make experiments trustworthy?
+
+**A:** Run each configuration in a fresh JVM with the same seed and duration, warm up before measuring, set `-Xms` equal to `-Xmx` so heap resizing does not add noise, and repeat each run several times. A difference smaller than the spread between repetitions is noise. Validate your own parser against `jfr view gc-pauses` for the same recording.
+
+**Q:** What changes from lab to production?
+
+**A:** Real object graphs, thread counts and CPU limits differ, so lab numbers guide a decision but do not replace production measurement. Roll out a collector change to a few instances, compare their p99 latency, CPU and memory against the rest, and keep the flag set small and justified. Each extra tuning flag makes behaviour harder to predict.
+
+**Common mistakes in answers:**
+- Quoting old advice such as "ZGC is not generational" or long lists of CMS-era flags. CMS was removed in JDK 14, and ZGC is generational-only since JDK 24.
+- Looking only at GC pause events. Users feel end-to-end latency, including time-to-safepoint and allocation stalls.
+- Tuning flags before checking heap headroom and the live set, which fixes most problems on its own.
 
 ### TL;DR
 A reproducible lab: controlled workloads, one variable per run, JFR as the evidence, and user-visible latency as the judge.
@@ -3381,17 +4744,68 @@ Instrumentation gives exact call counts but distorts timings and inlining; sampl
 - [Ch 1 — Java and the JVM](../chapters/01-java-and-the-jvm/README.md) — the JVM's class-loading pipeline
 
 ### In the interview
+**30-second answer:** I built a profiler delivered as a Java agent: `premain` registers a `ClassFileTransformer`, and for matching classes I rewrite the bytecode with the JDK's Class-File API (final in Java 24) to call `Recorder.enter` at method entry and `Recorder.exit` before every return and in a catch-all handler that rethrows. The recorder keeps a per-thread stack, so there is no global lock on the hot path, and it produces call counts, self and total time, and collapsed stacks for flame graphs. The hard parts were covering every exit path, letting the API compute stack map frames, and never instrumenting the profiler itself. I also measured overhead against a sampling mode and showed how instrumentation distorts tiny methods by blocking JIT inlining.
+
+**Key terms to know:**
+- **Java agent** — a JAR loaded with `-javaagent:` whose `premain` method runs before the application's `main`, named by `Premain-Class` in the manifest.
+- **`Instrumentation` / `ClassFileTransformer`** — the API that lets an agent receive each class's bytes before it is defined and return modified bytes.
+- **Bytecode** — the JVM's instruction set stored in `.class` files (`INVOKESTATIC`, `IRETURN`, `ATHROW`…). `javap -c` prints it.
+- **Class-File API (`java.lang.classfile`)** — the JDK's standard API for parsing, transforming and generating class files (JEP 484, final in Java 24).
+- **Stack map frames** — type information at branch targets that the verifier requires since Java 7. Adding an exception handler changes them.
+- **Self time vs total time** — time spent in a method's own code versus including the methods it calls.
+- **Flame graph** — a visualisation of stack samples where width shows time. Collapsed stacks (`a;b;c 1234`) are its input.
+- **Sampling profiler** — periodically records thread stacks without changing code, with lower overhead but statistical results.
+- **Safepoint bias** — samples taken only at JVM safepoints over-represent certain code locations. It is a weakness of thread-dump sampling.
+
 **Q:** How does a Java agent modify classes?
 
-**A:** It registers a `ClassFileTransformer` via `Instrumentation`; the JVM passes each class's bytes to the transformer before defining it, and uses the bytes it returns.
+**A:** The JVM calls the agent's `premain(String args, Instrumentation inst)` before `main`, and the agent registers a `ClassFileTransformer`. For every class loaded afterwards, the JVM passes its bytes to `transform`; returning `null` means "unchanged", and returning new bytes makes the JVM define the modified class. Classes loaded before the agent can be changed later with `retransformClasses`, within limits such as not adding fields or methods.
+
+**Q:** What does a transform with the Class-File API look like?
+
+**A:** Parse the bytes, then rebuild the class with a transform that rewrites matching methods' code; the builder emits the instructions you add plus the originals.
+```java
+ClassFile cf = ClassFile.of();
+byte[] out = cf.transformClass(cf.parse(bytes),
+    ClassTransform.transformingMethodBodies(
+        m -> matches(m),                              // which methods
+        CodeTransform.ofStateful(TimingTransform::new) // inserts enter/exit calls
+    ));
+```
+The API computes stack map frames by default, which is one of its main advantages over hand-rolled ASM code.
+
+**Q:** How do you time every exit path, including exceptions?
+
+**A:** Insert a call to `Recorder.exit` before every return instruction (`IRETURN`, `LRETURN`, `ARETURN`, `RETURN`…), and wrap the original body in an exception handler covering all of it that calls `exit` and rethrows the exception with `ATHROW`. Otherwise a method that throws is entered but never exited, and the per-thread stack gets out of step.
 
 **Q:** Instrumenting vs sampling profiler?
 
-**A:** Instrumentation records every call exactly but adds overhead and changes inlining; sampling periodically captures stacks with low overhead but statistical accuracy.
+**A:** Instrumentation records every call exactly, giving exact counts, but adds overhead to every call and changes what the JIT does: the inserted calls make small methods too big to inline, so you measure a different program. Sampling captures stacks periodically with low overhead and little distortion, but its results are statistical and miss short, rare methods. Thread-dump sampling also suffers from safepoint bias, which tools like async-profiler avoid.
 
 **Q:** Why did the JDK add the Class-File API?
 
-**A:** So the JDK and tools can parse and generate class files with an API that always supports the current class-file version, instead of depending on third-party libraries that lag behind.
+**A:** The class-file format changes with every Java release. Frameworks that bundled a copy of ASM could not read classes compiled for a newer JDK until the library caught up, which blocked upgrades. The Class-File API ships with the JDK, so it always supports the current class-file version.
+
+**Q:** What happens if you instrument the profiler's own classes or `java.*`?
+
+**A:** `Recorder.enter` would itself be instrumented and call `Recorder.enter`, recursing until the stack overflows, and instrumenting core JDK classes the recorder uses (such as collections) does the same indirectly. Exclude your own package and `java.*` by default, and guard against re-entry with a per-thread flag.
+
+**Q:** What if your transform throws or produces invalid bytecode?
+
+**A:** An exception thrown from `transform` is caught by the JVM and the class is loaded unchanged, but invalid returned bytes fail verification with `VerifyError` when the class loads, which can crash the application. Wrap the transform in try/catch, return `null` on any error and log it, and test transforms by loading the output in a fresh class loader.
+
+**Q:** How do you test the agent?
+
+**A:** Fixture programs with known call patterns (A calls B ten times, B sleeps 10 ms) run in a child JVM with the agent, and tests parse the report. Bytecode tests run the transformer on compiled fixture classes and load the result in a new class loader. A failure-injection test checks that a broken transform leaves the class usable, and `javap -c` confirms the inserted calls.
+
+**Q:** Why are dynamically attached agents discouraged now?
+
+**A:** Since JDK 21 (JEP 451), loading an agent into a running JVM prints a warning, and a future release is expected to disallow it by default unless `-XX:+EnableDynamicAgentLoading` is set. The goal is integrity: code should not be able to change a running application without the operator's consent at startup. Agents meant for production should be attached with `-javaagent`.
+
+**Common mistakes in answers:**
+- Instrumenting only the normal return, so methods that throw are never closed on the timing stack.
+- Trusting instrumented timings of tiny hot methods. The instrumentation itself and lost inlining dominate the result.
+- Saying agents can freely redefine any loaded class. Retransformation cannot add or remove fields or methods, and dynamic attach now warns.
 
 ### TL;DR
 A `premain` agent, a Class-File API transform that times every exit path, per-thread recording — and data showing why instrumentation distorts what it measures.
@@ -3495,17 +4909,67 @@ Actors remove data races but not logical races: message ordering between differe
 - [Ch 11 — Lambdas and functional programming](../chapters/11-lambdas-and-functional-programming/README.md) — behaviours as functions
 
 ### In the interview
+**30-second answer:** I built a typed actor framework where each actor has private state, a bounded mailbox and a receive loop on its own virtual thread, so its state is only ever touched by one thread and needs no locks. Actors communicate only through `tell` and `ask`, form a parent/child hierarchy, and are restarted, resumed or stopped by their supervisor's strategy, with restart limits such as 3 per minute. Scatter-gather fan-out uses `StructuredTaskScope`, which is still a preview API in Java 25, so it sits behind a small interface with a `CompletableFuture` fallback. The system runs 100,000 live actors on a laptop, and a bank-of-actors stress test keeps the total money constant under random concurrent transfers.
+
+**Key terms to know:**
+- **Actor** — an object with private state and a mailbox that handles one message at a time. Other code can only send it messages.
+- **Mailbox** — the actor's message queue, with many senders and one receiver; bounded here, with an overflow policy.
+- **`tell` / `ask`** — fire-and-forget send versus send-and-await-reply with a timeout.
+- **Behaviour** — a function `(context, message) → next behaviour`, so state changes are explicit return values.
+- **Supervision / "let it crash"** — a parent decides what happens when a child fails (restart with fresh state, resume, stop, escalate), instead of defensive recovery code everywhere.
+- **Death watch** — being notified with a `Terminated` message when another actor stops.
+- **Structured concurrency** — subtasks are forked inside a scope and cannot outlive it, and failure or cancellation propagates. `StructuredTaskScope` is a preview API in Java 25 (JEP 505).
+- **`ScopedValue`** — an immutable per-call context value (final in Java 25). It holds the current actor.
+- **Data race vs logical race** — unsynchronised concurrent access to memory versus a correctness bug caused by message ordering. Actors prevent the first, not the second.
+
 **Q:** Why do actors avoid data races?
 
-**A:** Each actor's state is touched only by its own receive loop, one message at a time; other code interacts only by sending messages.
+**A:** Each actor's state is touched only by its own receive loop, one message at a time, on one thread at a time; other code can only put messages in the mailbox, a thread-safe queue whose hand-off also creates the happens-before edge for the message contents. As long as a behaviour never hands its mutable state to another thread (for example in a `CompletableFuture` callback), no locks are needed.
 
 **Q:** Is structured concurrency final in Java 25?
 
-**A:** No. It is the fifth preview (JEP 505) and needs `--enable-preview`; scoped values, by contrast, became final in Java 25 (JEP 506).
+**A:** No. It is the fifth preview (JEP 505), so you compile and run with `--enable-preview`, and the API changed in later releases too. Scoped values, by contrast, became final in Java 25 (JEP 506). That is why my fan-out code sits behind a small interface with a non-preview `CompletableFuture` implementation.
+```java
+try (var scope = StructuredTaskScope.open()) {          // preview API in Java 25
+    List<Subtask<Quote>> tasks = workers.stream()
+        .map(w -> scope.fork(() -> w.ask(req, timeout))).toList();
+    scope.join();                                        // waits; fails fast by default
+    return tasks.stream().map(Subtask::get).toList();
+}
+```
 
 **Q:** What does "let it crash" mean?
 
-**A:** Do not write defensive recovery everywhere; let a failing actor stop and have its supervisor restart it from a known good state.
+**A:** Do not wrap every operation in defensive recovery code. Let a failing actor stop, and have its supervisor restart it from a known-good initial state, which clears whatever corrupted state caused the failure. Restart limits (3 per minute, say) stop a permanently broken actor from looping, escalating to its parent instead.
+
+**Q:** What happens to the mailbox and the failing message on restart?
+
+**A:** The actor's state is discarded and a fresh behaviour created, while the mailbox is usually kept so queued messages are not lost. The message that caused the failure is normally dropped; retrying it risks a crash loop if the message itself is the problem ("poison message"). It is a deliberate, documented choice.
+
+**Q:** How can `ask` cause a deadlock, and how do you avoid it?
+
+**A:** If actor A blocks its receive loop waiting for B's reply while B blocks waiting for A's, neither ever processes the other's request. Inside an actor, `ask` must not block the loop: it should return a future whose result is delivered back to the actor as a message. Blocking `ask` is only safe from outside the actor system, and always with a timeout.
+
+**Q:** Why bounded mailboxes?
+
+**A:** An unbounded mailbox hides overload: a slow actor's queue grows until the JVM runs out of memory. A bounded mailbox forces a policy (drop newest, drop oldest, or fail the sender), which surfaces back-pressure. System messages such as stop and restart use a separate queue so they are not stuck behind user messages.
+
+**Q:** One virtual thread per actor, or actors scheduled as tasks?
+
+**A:** A virtual thread per actor makes the receive loop plain blocking code, and an idle actor costs only a parked virtual thread, so 100,000 actors are fine. For millions of mostly idle actors, a scheduler-based design (an actor is a task submitted only when it has mail, as in Akka) uses less memory. I benchmarked ping-pong throughput and memory per actor to compare.
+
+**Q:** How do you test actors?
+
+**A:** A test kit provides probes, `ActorRef`s whose received messages a test can assert with timeouts (`probe.expectMessage(...)`). Supervision tests inject exceptions and check restarts, limits and parent notifications. Stress tests send random messages between many actors and check invariants, such as total money in a bank of actors staying constant.
+
+**Q:** What changes when actors span several machines?
+
+**A:** Messages must be serialised, delivery can fail or be duplicated, and `tell` becomes "at most once" unless you add acknowledgements and retries. You need location-transparent addresses, failure detection for remote nodes, and handling for network partitions. It is a big step; Akka Cluster and Erlang distribution exist because it is hard.
+
+**Common mistakes in answers:**
+- Saying actors eliminate all concurrency bugs. They remove data races, but message ordering between different senders is not guaranteed, so logical races remain.
+- Claiming structured concurrency is a final Java 25 feature. It is a preview; scoped values are the final one.
+- Blocking an actor's loop on `ask`, or capturing its mutable state in an async callback that runs on another thread.
 
 ### TL;DR
 Isolated state, mailboxes, one virtual thread per actor and supervision trees; structured concurrency for fan-out — behind an interface, because it is still preview.
@@ -3627,17 +5091,65 @@ A declarative build file is easy to read; a programmable one (like Gradle's) is 
 - [Ch 15 — Modern concurrency](../chapters/15-concurrency-2-modern/README.md) — parallel task execution
 
 ### In the interview
+**30-second answer:** I built a small build tool for multi-module Java projects: it reads a build file, resolves transitive dependencies from Maven Central with checksum verification, compiles in-process with `javax.tools.JavaCompiler`, runs JUnit through the Platform Launcher API, and packages JARs. Tasks form a DAG, and a scheduler runs every task whose dependencies are done, several at once. The key design decision was content fingerprints instead of timestamps: each task stores SHA-256 hashes of its inputs, configuration and outputs, and is skipped when they match. A no-op build of 20 modules takes under a second, and changing one leaf file recompiles only that module and its dependents.
+
+**Key terms to know:**
+- **Task graph (DAG)** — tasks as nodes and "needs" as edges, with no cycles allowed. It defines what can run and in what order.
+- **Topological sort / Kahn's algorithm** — an order in which every task comes after its dependencies, found by repeatedly taking nodes with no unfinished dependencies.
+- **Incremental build** — skipping tasks whose inputs and outputs have not changed since the last successful run.
+- **Fingerprint** — a content hash (SHA-256 via `MessageDigest`) of a task's inputs, settings or outputs.
+- **ABI / compile avoidance** — a module's public API signatures. Dependents only need recompiling when the API changes, not the method bodies.
+- **Transitive dependency resolution** — following each library's POM to its own dependencies and choosing one version per library.
+- **Nearest-wins vs highest-wins** — Maven picks the version closest to the root of the tree; Gradle picks the highest requested.
+- **Hermetic task** — a task whose output depends only on declared inputs, never on the environment or network. Only such tasks cache safely.
+- **`javax.tools.JavaCompiler`** — the in-process compiler API, returning diagnostics as objects.
+
 **Q:** How does a build tool decide what to rebuild?
 
-**A:** It compares fingerprints (hashes) of each task's declared inputs and outputs with the last run; tasks whose fingerprints match are skipped.
+**A:** Before running a task, it hashes the task's declared inputs (source files, classpath, compiler flags) and checks its outputs still exist with the recorded hashes. If everything matches the last successful run, the task is up to date and skipped. Any change, or a missing output, makes it run, and its new outputs become inputs to dependent tasks.
+
+**Q:** Why hashes instead of file timestamps?
+
+**A:** Timestamps change when you check out a branch or copy files, so you rebuild needlessly, and they can lie after reverting a file to old content with a new timestamp. Content hashes depend only on the bytes. Hashing large trees is slow, so cache each file's hash keyed by (path, size, mtime) and only rehash files whose metadata changed.
 
 **Q:** How do you find a valid order for tasks?
 
-**A:** Topological sort of the task DAG (Kahn's algorithm or DFS); a cycle means the build is invalid.
+**A:** Topological sort of the task DAG. With Kahn's algorithm, count each task's unfinished dependencies, start every task with a count of zero, and when a task finishes, decrement its dependents' counts and start any that reach zero. If tasks remain but none has count zero, there is a cycle, and you report its path. The same counting drives parallel execution.
+```java
+void onFinished(Task t) {
+    for (Task d : dependents.get(t))
+        if (remaining.get(d).decrementAndGet() == 0) executor.submit(() -> run(d));
+}
+```
 
 **Q:** Nearest-wins vs highest-wins resolution?
 
-**A:** Maven picks the version nearest the root of the dependency tree; Gradle picks the highest requested. Both can surprise you, so pin versions where it matters.
+**A:** Maven picks the version nearest the root of the dependency tree, using declaration order to break ties; Gradle picks the highest version requested anywhere. Nearest-wins can select an older version that a deeper library cannot work with, causing `NoSuchMethodError` at run time, while highest-wins can pull in an upgrade you never asked for. Report every conflict and let the user pin versions.
+
+**Q:** Why can a module skip recompiling when its dependency changed?
+
+**A:** If module A changed only inside a method body, every class compiled against A still links correctly, because compiled code depends on A's signatures, not its implementation. Hashing A's public API separately lets B skip compilation. Changing a public method signature, a constant's value (constants are inlined into callers) or a class hierarchy does require recompiling dependents.
+
+**Q:** What happens when a task fails mid-build?
+
+**A:** Stop scheduling new tasks, let tasks already running finish, then print a summary of what failed and why. Never record fingerprints for a failed task, so it runs again next time. Write outputs to a temporary location and move them into place on success, so a half-written JAR is never mistaken for an up-to-date one.
+
+**Q:** Why should downloads be verified by checksum?
+
+**A:** A corrupted or tampered JAR would otherwise be cached and used in every build. Comparing the downloaded file's hash with the published checksum catches corruption. Checksums from the same server do not stop a compromised repository, which is why signatures and lock files with pinned hashes exist.
+
+**Q:** How do you test a build tool?
+
+**A:** Fixture projects in test resources (single module, multi-module, a cycle, a version conflict) are copied to a temp directory, and tests assert which tasks ran and which were skipped. A second build must run nothing, and touching one leaf file must rebuild exactly the expected set. Unit-test topological sort and version selection separately, and serve a fake Maven repository from a local HTTP server so tests are offline.
+
+**Q:** What changes at 1,000 modules or for a whole team?
+
+**A:** Hashing and graph setup become the cost, so cache file hashes and load only the part of the graph needed for the requested tasks. Across a team, a remote build cache keyed by input hash lets one machine's outputs be reused by others, which is only safe if tasks are hermetic, with every input declared.
+
+**Common mistakes in answers:**
+- Using file timestamps for up-to-date checks and calling the build "incremental".
+- Forgetting that task configuration (compiler flags, Java release) is an input; changing it must invalidate outputs.
+- Treating a resolved dependency graph as a tree with no conflicts. Real projects request the same library at several versions.
 
 ### TL;DR
 A DAG of tasks, content fingerprints for incrementality, a resolver for transitive dependencies, and a scheduler that runs ready tasks in parallel.
@@ -3740,17 +5252,69 @@ Targeting the JVM gives you a world-class JIT and GC for free, but you must fit 
 - [Ch 19 — Java for coding interviews](../chapters/19-java-for-coding-interviews/README.md) — recursion and trees
 
 ### In the interview
+**30-second answer:** I built a compiler for a small statically typed language, Tiny, with variables, `if`, `while`, recursive functions, strings and `print`, that emits real JVM class files with the Class-File API and runs on plain `java`. The pipeline is a lexer, a recursive-descent parser with Pratt parsing for expressions, a resolver that assigns local-variable slots, a type checker that reports several errors per run with line and column, and two back ends: a tree-walking interpreter and a bytecode generator. Every golden test must give the same output from both, which caught most code-generation bugs. Compiled `fib(30)` runs within 2× of hand-written Java, because once loaded it is optimised by the same JIT.
+
+**Key terms to know:**
+- **Lexer** — turns source text into tokens with positions, handling comments and string escapes.
+- **Parser / AST** — builds a tree of sealed records (`Binary`, `If`, `Call`…) from tokens.
+- **Pratt parsing** — expression parsing driven by each operator's binding power, handling precedence and associativity in one loop.
+- **Semantic analysis** — name resolution (which declaration does `x` refer to?) and type checking.
+- **Stack machine** — the JVM evaluates expressions by pushing and popping an operand stack (`iload`, `iadd`).
+- **Local variable slots** — numbered storage for parameters and locals in a JVM method frame.
+- **Verifier and stack map frames** — the JVM checks bytecode type safety before running it; stack map frames give the expected types at branch targets.
+- **Labels and jumps** — `ifeq`, `goto` and labels implement `if`, `while` and short-circuit `&&`/`||`.
+- **Differential testing** — running the same program through two implementations (interpreter and compiler) and comparing results.
+
 **Q:** What are the phases of a compiler?
 
-**A:** Lexing, parsing into an AST, semantic analysis (name resolution and type checking), optional optimisation, and code generation.
+**A:** Lexing into tokens, parsing into an AST, semantic analysis (resolving names and checking types), optional optimisation, and code generation for the target machine. Keeping the phases separate means each can be tested alone, and the interpreter and compiler share everything except the last phase.
+
+**Q:** How does Pratt parsing handle `1 + 2 * 3` and `a - b - c`?
+
+**A:** Each operator has a binding power: `*` binds tighter than `+`. `parseExpr(minPower)` parses a primary expression, then keeps consuming operators whose power is at least `minPower`, parsing the right side with a higher minimum. So `2 * 3` is grouped before the `+`. Left-associative operators parse the right side with power + 1, which makes `a - b - c` mean `(a - b) - c`.
+```java
+Expr parseExpr(int minPower) {
+    Expr left = parsePrimary();
+    while (power(peek()) >= minPower) {
+        Token op = next();
+        left = new Binary(op, left, parseExpr(power(op) + 1));  // left-associative
+    }
+    return left;
+}
+```
+
+**Q:** How does `a + b * c` become bytecode?
+
+**A:** Generate operands before operators (post-order): `iload a`, `iload b`, `iload c`, `imul`, `iadd`. Each instruction has a fixed effect on the operand stack, so walking the AST in post-order always leaves the result on top. For `int` the instructions start with `i`; strings use `StringBuilder` or `invokedynamic` string concatenation.
 
 **Q:** Why does the JVM verifier care about stack maps?
 
-**A:** It checks type safety of bytecode in one pass; stack map frames tell it the types of locals and stack entries at branch targets.
+**A:** The verifier proves bytecode is type-safe (no treating an `int` as a reference, no stack underflow) in a single linear pass. To do that without exploring every path, it needs stack map frames stating the types of locals and stack entries at every branch target, and every path into a target must agree. The Class-File API computes them by default, but you must still generate consistent code, such as leaving the same stack depth on both branches of an `if`.
+
+**Q:** How do you compile `while` and short-circuit `&&`?
+
+**A:** `while (c) body` becomes: label start, evaluate `c`, `ifeq end` (jump out if false), body, `goto start`, label end. `a && b` is control flow too: evaluate `a`, jump to a "push false" label if it is zero, otherwise evaluate `b`, so `b` is never evaluated when `a` is false. That is what makes `x != 0 && 10 / x > 1` safe.
 
 **Q:** Interpreter or compiler?
 
-**A:** An interpreter is simpler and starts instantly; compiling to bytecode lets the JIT optimise hot code, giving much higher steady-state speed.
+**A:** A tree-walking interpreter is simpler, starts instantly and is easy to debug, but pays for walking the tree on every operation. Compiling to bytecode lets the JIT turn hot functions into optimised machine code, so steady-state speed is far higher. Keeping both gave me a reference implementation for testing the compiler.
+
+**Q:** What happens with a type error, or with several errors in one file?
+
+**A:** The type checker records a diagnostic with line and column (for example "expected int, found bool") and keeps going, giving the bad expression an "error" type that suppresses follow-on errors, so users see all real problems in one run. Code generation runs only if there are no errors; generating bytecode for an ill-typed program would just produce a `VerifyError`.
+
+**Q:** How do you test a compiler?
+
+**A:** Golden tests: each `.tiny` file has expected output, and both the interpreter and the compiled class must produce it. Error tests have expected diagnostics. Differential fuzzing generates random well-typed programs and checks that interpreter and compiler agree, which finds code-generation bugs no hand-written test would. Generated classes are loaded through a custom class loader in the test, and `javap -c` helps inspect failures.
+
+**Q:** What would it take to add closures?
+
+**A:** A function that captures variables needs those variables to live beyond the stack frame that created them. On the JVM you either generate a class per closure with fields for the captured values, or use `invokedynamic` with `LambdaMetafactory`, as `javac` does for lambdas. Captured variables that are reassigned need a shared mutable box, which is why Java requires captured locals to be effectively final.
+
+**Common mistakes in answers:**
+- Writing one recursive function per precedence level and getting associativity wrong, so `a - b - c` parses as `a - (b - c)`.
+- Assuming the JVM will accept any bytecode that "looks right". The verifier rejects inconsistent stack shapes at branch targets.
+- Evaluating both sides of `&&` and then combining them, which breaks short-circuit semantics.
 
 ### TL;DR
 Lexer, Pratt parser, sealed-record AST, type checker, then two back ends — an interpreter and a Class-File API code generator — that must agree on every test.
@@ -3848,17 +5412,69 @@ Writing your own parser teaches the format; using the Class-File API lets you fo
 - [Ch 6 — Inheritance, interfaces, records](../chapters/06-oop-inheritance-interfaces-and-more/README.md) — inheritance and dispatch, seen from the inside
 
 ### In the interview
+**30-second answer:** I built a small JVM in Java: it parses real `.class` files from `javac`, loads classes lazily from a class path, runs static initialisers in the right order, and interprets about 100 opcodes, including object allocation, virtual and interface dispatch through vtables, and exceptions found through each method's exception table. Each call gets a frame with a local-variable array and an operand stack, held in primitive arrays to avoid boxing. The correctness strategy was differential testing: every fixture program runs on the real JVM and on mine, and the outputs must match. It executes over 10 million simple bytecodes per second, and building it made class loading, dispatch and the cost of interpretation concrete.
+
+**Key terms to know:**
+- **Class file** — the binary format `javac` produces: constant pool, fields, methods, a `Code` attribute with bytecode, and an exception table. `javap -v` prints it.
+- **Constant pool** — a per-class table of constants and symbolic references (class names, method names, descriptors) that instructions refer to by index.
+- **Frame** — per-call state: local variables, operand stack and program counter. A new one is pushed for each method call.
+- **Operand stack** — where JVM instructions take their inputs and leave results (`iadd` pops two ints, pushes one).
+- **Linking / resolution** — turning symbolic constant-pool references into actual fields and methods on first use, then caching them.
+- **Class initialisation (`<clinit>`)** — running static initialisers on first active use, superclass first.
+- **vtable** — per-class array of method implementations indexed by slot. It makes `invokevirtual` a lookup instead of a search.
+- **`invokestatic` / `invokespecial` / `invokevirtual` / `invokeinterface` / `invokedynamic`** — the five call instructions: static, exact (constructors, private, `super`), virtual, through an interface, and bootstrap-linked call sites (lambdas, string concatenation).
+- **Interpreter vs JIT** — executing bytecode one instruction at a time versus compiling hot code to machine code.
+
 **Q:** What does `invokevirtual` do?
 
-**A:** It pops the receiver and arguments, looks up the method implementation in the receiver's runtime class (via a vtable or search up the hierarchy), pushes a new frame and starts executing it.
+**A:** It resolves the symbolic method reference, pops the arguments and the receiver object from the operand stack, finds the implementation in the receiver's runtime class (via its vtable slot, or a search up the hierarchy), pushes a new frame with the receiver in local slot 0 and the arguments after it, and starts executing. A `null` receiver throws `NullPointerException`. The runtime class, not the declared type, picks the method, which is how polymorphism works.
 
 **Q:** When is a class initialised?
 
-**A:** On first active use — creating an instance, calling a static method, or accessing a non-constant static field — after its superclass is initialised.
+**A:** On first active use: creating an instance, calling a static method, assigning or reading a non-constant static field, or initialising a subclass. Its superclass is initialised first, then its `<clinit>` runs. Reading a `static final` compile-time constant does not trigger initialisation, because `javac` copies the value into the caller.
 
 **Q:** Why is a JIT so much faster than an interpreter?
 
-**A:** It compiles hot bytecode to machine code, removing dispatch overhead and enabling optimisations like inlining, escape analysis and register allocation.
+**A:** An interpreter pays for fetching, decoding and dispatching every instruction and moves values through a memory-based stack. A JIT compiles hot methods to machine code once, removing dispatch overhead, and applies optimisations such as inlining, escape analysis (allocating non-escaping objects on the stack or not at all) and register allocation. Interpreters are typically 10–100× slower than JIT-compiled code.
+
+**Q:** Why does a `long` take two local-variable slots?
+
+**A:** The JVM specification defines locals and stack entries as 32-bit units, and `long` and `double` occupy two of them. A method `static void f(long a, int b)` has `a` in slots 0–1 and `b` in slot 2. If your interpreter treats every value as one slot, the indices in real class files no longer line up.
+
+**Q:** How does exception handling find a handler?
+
+**A:** When an exception is thrown, look in the current method's exception table for an entry whose pc range covers the throwing instruction and whose catch type is the exception's class or a superclass (any type for `finally`). If found, clear the operand stack, push the exception and jump to the handler. If not, pop the frame and repeat in the caller; if no frame handles it, the thread dies with a stack trace.
+
+**Q:** What is the interpreter's inner loop?
+
+**A:** Fetch the opcode at the program counter, switch on it, execute, advance.
+```java
+for (;;) {
+    int op = code[pc++] & 0xFF;
+    switch (op) {
+        case IADD     -> { int b = (int) stack[--sp]; stack[sp - 1] = (int) stack[sp - 1] + b; }
+        case IRETURN  -> { return stack[--sp]; }
+        // ...about 100 more
+    }
+}
+```
+
+**Q:** Why do string concatenation and lambdas break a simple VM?
+
+**A:** Since Java 9, `javac` compiles string `+` to `invokedynamic` with `StringConcatFactory`, and lambdas use `invokedynamic` with `LambdaMetafactory`. Supporting it means running a bootstrap method that returns a method handle, which is a project of its own. I compiled string fixtures with `-XDstringConcat=inline` to get plain `StringBuilder` calls, and said so in the README.
+
+**Q:** How do you test a VM?
+
+**A:** Differential testing: compile fixture programs (fibonacci, sorting, linked lists, polymorphism, exceptions) with `javac --release 25`, run them on the real JVM and on mine, and compare output. Unit tests per opcode group use tiny methods generated with the Class-File API. A conformance list tracks which opcodes are implemented, so unsupported ones fail with a clear error rather than misbehaving.
+
+**Q:** What would it take to make it faster or more complete?
+
+**A:** Faster: cache resolved references in the instruction stream ("quickening"), avoid boxing entirely, and eventually compile hot methods, which is where real JVMs spend most of their complexity. More complete: threads with `monitorenter`/`monitorexit`, your own heap and garbage collector instead of reusing the host's, and `invokedynamic`.
+
+**Common mistakes in answers:**
+- Saying the declared type of a variable decides which method `invokevirtual` calls. The receiver's runtime class does.
+- Claiming a class is initialised when it is loaded. Loading, linking and initialisation are separate, and initialisation is lazy.
+- Saying reading any `static final` field triggers initialisation. Compile-time constants are inlined and do not.
 
 ### TL;DR
 Parse class files, build runtime classes with vtables, and interpret frames with operand stacks — then compare your output with the real JVM, program by program.
@@ -3955,17 +5571,68 @@ FFM removes C glue but not native risks: a wrong `FunctionDescriptor` can still 
 - [Ch 16 — JVM internals and performance](../chapters/16-jvm-internals-and-performance/README.md) — native memory tracking, JMH
 
 ### In the interview
+**30-second answer:** I wrapped the SQLite C library in an idiomatic Java API using the Foreign Function & Memory API, final in Java 22, with no JNI glue code. Each C function is a downcall `MethodHandle` built from a `FunctionDescriptor`, and `Database` and `Statement` are `AutoCloseable` wrappers around native pointers. Temporary native memory such as C strings lives in confined arenas, so it is freed deterministically and any use after free throws instead of crashing. The tricky parts were out-parameters like `sqlite3**`, reading zero-length returned pointers, and an upcall for a custom SQL function that must never let a Java exception escape into C. A million prepare/step/finalize cycles keep memory flat, and I benchmarked my hand-written bindings against jextract-generated ones and a JDBC driver.
+
+**Key terms to know:**
+- **FFM API (`java.lang.foreign`)** — the standard API for calling native functions and accessing off-heap memory (JEP 454, final in Java 22). It replaces most JNI and `Unsafe` use.
+- **`Linker` / downcall** — the object that creates a `MethodHandle` which calls a C function from Java.
+- **`SymbolLookup`** — finds a native function's address in a library by name.
+- **`FunctionDescriptor` / `ValueLayout`** — the C signature described in Java (`JAVA_INT`, `JAVA_LONG`, `ADDRESS`). A wrong one can crash the JVM.
+- **`MemorySegment`** — a bounded region of memory (native or heap) with checked access.
+- **`Arena`** — owns segments and frees them all when closed. Confined arenas are single-thread; shared ones can be closed from any thread.
+- **Upcall** — a Java method exposed to C as a function pointer, used for the custom SQL function.
+- **Restricted methods / native access** — unsafe operations such as `reinterpret` need `--enable-native-access`, or the JVM warns.
+- **jextract** — a tool that generates Java bindings from C header files.
+
 **Q:** What does FFM replace?
 
-**A:** JNI for calling native code (no C glue needed) and `sun.misc.Unsafe` for off-heap memory access, with bounds and lifetime checks.
+**A:** JNI for calling native code, because no C wrapper has to be written and compiled per platform, and `sun.misc.Unsafe` for off-heap memory access. Unlike `Unsafe`, every access is checked against the segment's bounds and its arena's lifetime, so a mistake throws an exception instead of corrupting memory.
 
 **Q:** What is an `Arena`?
 
-**A:** An owner of native memory segments; when it closes, all its memory is freed and further access is rejected. Confined arenas are single-thread, shared ones can be used by many threads.
+**A:** An owner of native memory segments. When it closes, all its memory is freed at once and any later access to those segments throws `IllegalStateException`. Confined arenas can only be used by the thread that created them; shared arenas can be used by many threads; the global arena is never freed; automatic arenas are freed by the garbage collector.
+
+**Q:** How do you call a C function with an out-parameter like `sqlite3_open_v2`?
+
+**A:** Allocate a pointer-sized segment, pass it as the `sqlite3**` argument, then read the address C wrote into it.
+```java
+try (Arena arena = Arena.ofConfined()) {
+    MemorySegment ppDb = arena.allocate(ValueLayout.ADDRESS);
+    int rc = (int) OPEN_V2.invokeExact(arena.allocateFrom(path), ppDb, flags, MemorySegment.NULL);
+    if (rc != SQLITE_OK) throw new SqliteException(rc);
+    return new Database(ppDb.get(ValueLayout.ADDRESS, 0));   // the sqlite3* handle
+}
+```
+The handle outlives the arena because SQLite allocated it, not the arena; it must be released with `sqlite3_close`.
+
+**Q:** Who frees memory that SQLite allocates?
+
+**A:** Not the arena: arenas only free memory they allocated. Statements and connections are SQLite objects and must be released with `sqlite3_finalize` and `sqlite3_close`, so the Java wrappers implement `AutoCloseable` and are used with try-with-resources. A `Cleaner` can act as a safety net for forgotten objects, but never as the main mechanism, because GC timing is unpredictable.
+
+**Q:** How do you read a C string that SQLite returns?
+
+**A:** A pointer returned from native code arrives as a zero-length segment, because Java does not know how big the memory behind it is. Call `reinterpret` with a size (a restricted method that needs native access enabled) and then `getString(0)`, which reads UTF-8 up to the NUL terminator. For input, `arena.allocateFrom(str)` writes a NUL-terminated UTF-8 copy.
 
 **Q:** What happens if a Java exception escapes an upcall?
 
-**A:** The JVM terminates; upcalls must catch and translate errors themselves.
+**A:** The JVM cannot unwind through C stack frames, so it terminates the process. The upcall must catch everything and report the error through the C API, here `sqlite3_result_error`, so SQLite fails just that query.
+
+**Q:** Is the binding thread-safe?
+
+**A:** A SQLite connection is not safe to use from several threads at once in the default mode, so document "one connection per thread" or guard each `Database` with a lock. Confined arenas add their own rule: only the owning thread may use them, which naturally catches accidental sharing. A pool of connections serves concurrent users.
+
+**Q:** How do you test for native memory leaks?
+
+**A:** Java heap tools cannot see native memory. Run a million prepare/bind/step/finalize cycles while sampling process memory (RSS) or Native Memory Tracking, and assert it stays flat. Also test type round trips (including UTF-8 text and blobs), error mapping for syntax errors and constraint violations, and both file-based and `:memory:` databases.
+
+**Q:** What are the costs and limits of FFM?
+
+**A:** Each downcall has a small fixed overhead, so APIs should do more work per call, such as batching rows. A wrong `FunctionDescriptor` or a pointer used after `sqlite3_finalize` can still crash the JVM, because FFM checks memory it manages, not what C does. Native libraries are also platform-specific, so library names and availability must be handled per operating system.
+
+**Common mistakes in answers:**
+- Saying FFM makes native code safe. It checks Java-side memory access, but C code can still crash the process.
+- Assuming closing an arena frees objects the C library allocated. Only memory the arena allocated is freed.
+- Letting exceptions escape upcalls, or relying on finalisation or `Cleaner` instead of explicit `close`.
 
 ### TL;DR
 Describe C functions with `FunctionDescriptor`, call them through `MethodHandle`s, own memory with arenas, and wrap native handles in `AutoCloseable` Java objects.
@@ -4070,17 +5737,66 @@ Bigger segments search faster but merge costs grow (write amplification); a tier
 - [Ch 14 — Concurrency 1](../chapters/14-concurrency-1/README.md) — single-writer/many-reader concurrency
 
 ### In the interview
+**30-second answer:** I built a Lucene-style full-text search engine: an analyser turns text into terms, an in-memory buffer is flushed as immutable on-disk segments with a sorted term dictionary and delta-encoded postings, and a background merger combines segments and drops deleted documents. Queries support required and excluded terms, phrases using stored positions, and field boosts, ranked by BM25 with a top-k heap. The key design decision was immutability: segments are never modified, deletes are a side bitmap, and a commit file listing active segments is replaced atomically, so readers need no locks and a crash cannot corrupt committed data. It indexes a million short documents in under two minutes with p95 query latency under 50 ms.
+
+**Key terms to know:**
+- **Inverted index** — a map from each term to the sorted list of documents (and positions) containing it.
+- **Analyser** — the tokenise, lower-case, stop-word and stemming pipeline that turns text into terms, used for both documents and queries.
+- **Postings list** — the doc IDs, term frequencies and positions for one term.
+- **Delta + variable-length encoding** — store gaps between sorted doc IDs, and write small numbers in fewer bytes. It makes postings small.
+- **Segment** — an immutable mini-index on disk. Searches run over all live segments.
+- **Merge / write amplification** — combining segments rewrites data many times; a tiered merge policy limits the cost.
+- **BM25** — a ranking formula combining IDF (rarer terms count more), saturating term frequency and document-length normalisation (parameters k1 and b).
+- **Memory-mapped file** — `FileChannel.map` makes a file look like memory, served from the OS page cache.
+- **Commit point** — a small file listing the active segments, written to a temp file and atomically renamed.
+
 **Q:** What is an inverted index?
 
-**A:** A map from each term to a sorted list of the documents (and positions) where it appears, so queries read only the lists for their terms.
+**A:** A map from each term to a sorted list of the documents (and positions) where it appears. A query reads only the lists for its terms instead of scanning every document, which is why it beats `LIKE '%word%'`, which must scan every row and cannot rank.
 
 **Q:** Why does Lucene use immutable segments?
 
-**A:** Writes become appends of new files, readers need no locks, caching is simple and crashes cannot corrupt existing data; merges clean up over time.
+**A:** Updating a compressed, sorted on-disk structure in place is slow and risky. With immutable segments, writes are appends of new files, readers see a consistent snapshot with no locks, OS caching is simple, and a crash cannot corrupt existing data. Deletes are marks in a bitmap, and merges reclaim the space later.
 
 **Q:** What does BM25 improve over plain TF-IDF?
 
-**A:** It saturates term frequency (the tenth occurrence matters less than the second) and normalises by document length with tunable parameters.
+**A:** It saturates term frequency, so the tenth occurrence of a word adds much less than the second and keyword stuffing does not pay. It also normalises by document length, so a long document is not favoured just for containing more words. Both effects are tunable with k1 (saturation, around 1.2) and b (length normalisation, around 0.75).
+
+**Q:** How do you intersect postings for `+java +threads`?
+
+**A:** Walk both sorted doc-ID lists with two pointers, always advancing the one with the smaller ID, and emit IDs found in both. Start from the shorter list, and use skip data (block maxima) to jump ahead in long lists instead of decoding every entry.
+```java
+while (a.doc() != END && b.doc() != END) {
+    if (a.doc() == b.doc()) { emit(a.doc()); a.next(); b.next(); }
+    else if (a.doc() < b.doc()) a.advance(b.doc());   // skip ahead
+    else b.advance(a.doc());
+}
+```
+
+**Q:** How do phrase queries work?
+
+**A:** First intersect the documents containing every term, then check positions: for `"virtual threads"`, a match needs a position p for `virtual` and p + 1 for `threads` in the same document. That is why the index stores positions, which make it larger, but without them phrases are impossible.
+
+**Q:** What happens if the process crashes while indexing?
+
+**A:** Segments that a commit point references are complete and never modified, so they are safe. A segment that was half-written when the crash happened is not listed in any commit file. On startup the engine loads the latest commit and deletes unreferenced files. Documents added after the last commit are lost unless you also keep a write-ahead log.
+
+**Q:** Why memory-map the index, and when does it hurt?
+
+**A:** Memory-mapped files are read through the OS page cache with no copying into the Java heap, so a hot index is served at memory speed and does not add GC pressure. If the index is much larger than RAM, page faults turn queries into random disk reads and latency jumps. `FileChannel.map` is limited to 2 GB per mapping; FFM `MemorySegment` mappings do not have that limit.
+
+**Q:** How do you test a search engine?
+
+**A:** Round-trip tests for every encoding on random integer lists, query-semantics tests on a tiny corpus with known answers for each operator, and a ranking test against a hand-computed BM25 example. A crash test kills indexing mid-flush and asserts the previous commit still loads. Benchmarks measure indexing rate and query latency at the target scale.
+
+**Q:** What changes at 100x the data?
+
+**A:** One machine's index and RAM are no longer enough. You shard documents across machines, send each query to all shards, and merge their top-k results; replicas add throughput and availability. Statistics such as document frequency differ per shard, so scores are slightly inconsistent unless global statistics are shared.
+
+**Common mistakes in answers:**
+- Saying deletes remove documents from segments immediately. They only mark a bitmap; space comes back when merges rewrite segments.
+- Using different analysers at index and query time, so "Running" in a query never matches "run" in the index.
+- Treating BM25 statistics per segment as global, which gives inconsistent scores across segments.
 
 ### TL;DR
 Analyse, invert, compress, write immutable segments, merge in the background, and rank with BM25 using postings intersections and a top-k heap.
@@ -4199,17 +5915,65 @@ In-memory data limits size to RAM; disk-based B-trees use a buffer pool and page
 - [Ch 15 — Modern concurrency](../chapters/15-concurrency-2-modern/README.md) — memory model, happens-before for snapshots
 
 ### In the interview
+**30-second answer:** I built an in-memory database that keeps data in my own B-tree and makes it durable with a checksummed write-ahead log plus periodic snapshots, with snapshot-isolation transactions and a tiny SQL layer for range queries. A commit is acknowledged only after its log record has been forced to disk, and group commit batches many transactions into one `force`, which multiplied throughput with 64 concurrent writers. Recovery loads the latest snapshot and replays the log, stopping at the first record whose CRC fails, which handles torn writes. A crash test kills a child JVM at random moments and checks that every acknowledged write survives, and a property test of a million random operations matches `TreeMap`.
+
+**Key terms to know:**
+- **B-tree** — a balanced search tree with many sorted keys per node, so it stays shallow; nodes split and merge to stay balanced. It is the index.
+- **Write-ahead log (WAL)** — an append-only file where every change is recorded and flushed before it is acknowledged, so state can be rebuilt after a crash.
+- **`fsync` / `FileChannel.force`** — forcing written bytes from the OS page cache to the storage device. Only then is data durable.
+- **Group commit** — many transactions' log records written and forced together, sharing one flush.
+- **Snapshot / checkpoint** — a full copy of the state at a log position, so recovery replays only the log after it.
+- **CRC32C** — a fast checksum used to detect torn or corrupted log records.
+- **MVCC (multi-version concurrency control)** — keeping several versions of each value tagged with commit timestamps, so readers see a consistent snapshot without blocking writers.
+- **Snapshot isolation / write skew** — each transaction reads as of its start time and conflicting writes abort (first committer wins); write skew is the anomaly it still allows.
+- **ACID** — atomicity, consistency, isolation, durability. The WAL gives A and D, MVCC gives I.
+
 **Q:** What is a write-ahead log?
 
-**A:** An append-only file where every change is recorded and flushed before it is applied or acknowledged, so after a crash the state can be rebuilt by replaying it.
+**A:** An append-only file where every change is recorded and forced to disk before the change is acknowledged (and, in disk-based databases, before data pages are written). After a crash, replaying the log from the last snapshot rebuilds exactly the committed state. Appends are sequential writes, which are much cheaper than updating data structures in place on disk.
 
 **Q:** Why B-trees instead of binary trees for databases?
 
-**A:** Each node holds many keys, so the tree is shallow and each level costs one page or cache-line fetch; binary trees are deep and pointer-heavy.
+**A:** Each node holds many keys, so a tree with millions of keys is only three or four levels deep, and each level costs one page read on disk or a few cache-line fetches in memory. A binary tree is about 20 levels deep for a million keys, with a pointer chase and likely cache miss per level. Sorted nodes also make range scans efficient.
 
 **Q:** What is group commit?
 
-**A:** Batching many transactions' log records into one write and one flush, sharing the cost of `fsync` among them.
+**A:** Batching many transactions' log records into one write and one `force`, sharing the flush cost among them. If a flush takes 1 ms, one-commit-per-flush caps you near 1,000 commits per second; with 100 transactions per batch the same device does around 100,000. Each commit waits a little longer, so you trade a small amount of latency for much higher throughput.
+```java
+List<Commit> batch = drainPending();               // all commits queued so far
+for (Commit c : batch) channel.write(c.record());
+channel.force(false);                               // one flush for the whole batch
+batch.forEach(c -> c.future().complete(null));      // acknowledge after force
+```
+
+**Q:** What exactly does "durable" mean, and where do people get it wrong?
+
+**A:** `write` only copies bytes into the operating system's page cache; a power cut can still lose them. Data is durable only after `force` (fsync) returns. Acknowledging before forcing is the classic bug; for brand-new files, the directory entry also needs to be synced so the file itself survives.
+
+**Q:** How do you handle a torn write at the end of the log?
+
+**A:** A crash can leave half a record at the tail. Frame every record as (length, CRC, payload). During recovery, read records in order and stop at the first one whose length runs past the file end or whose CRC does not match; everything before it is valid, and the tail is truncated. Records in the middle failing their CRC means real corruption, which must be reported, not silently skipped.
+
+**Q:** How does snapshot isolation work, and what anomaly does it allow?
+
+**A:** Each transaction gets a start timestamp and reads, for each key, the newest version committed at or before that timestamp, so it sees a frozen snapshot. At commit, if another transaction committed a newer version of any key it wrote, it aborts (first committer wins), which prevents lost updates. It still allows write skew: two transactions read overlapping data and write different keys, for example both doctors going off call because each saw the other on call. Serializable isolation must also track read-write conflicts.
+
+**Q:** How do you prove no acknowledged commit is lost?
+
+**A:** A child JVM writes keys and reports each acknowledged key to the parent process, and the parent kills it with `kill -9` at random moments. After recovery, every acknowledged key must be present. Corrupt-tail tests flip bytes at the end of the log, and a model-based property test compares a million random operations against `TreeMap`.
+
+**Q:** When can old versions be deleted?
+
+**A:** A version can be removed once no running transaction could still read it: find the oldest active transaction's start timestamp, and for each key keep only the newest version at or before it plus anything newer. A long-running transaction therefore blocks cleanup and makes memory grow, the same problem PostgreSQL's vacuum has with long transactions.
+
+**Q:** What changes when the data no longer fits in RAM?
+
+**A:** The B-tree moves to fixed-size pages on disk with a buffer pool caching hot pages, and the WAL then also protects page writes. For write-heavy workloads an LSM tree (log-structured merge tree) is the alternative, buffering writes in memory and writing sorted files, at the cost of background compaction. A single node also cannot survive disk loss, which is why databases replicate (project 40).
+
+**Common mistakes in answers:**
+- Saying `write()` makes data durable. Only `force`/`fsync` does.
+- Claiming snapshot isolation is serializable. It allows write skew.
+- Skipping every bad record during replay instead of stopping at the first bad tail record, which can apply a later record without an earlier one.
 
 ### TL;DR
 A B-tree in memory, a checksummed write-ahead log with group commit, snapshots for fast recovery, and MVCC for consistent reads.
@@ -4313,17 +6077,65 @@ More partitions increase parallelism but each costs file handles and memory, and
 - [Ch 10 — Collections](../chapters/10-collections/README.md) — skip lists and navigable maps
 
 ### In the interview
+**30-second answer:** I built a single-node, Kafka-style message log: producers append batches to partitioned topics, each partition is a sequence of segment files with a sparse offset index, and consumers fetch from any offset and commit their progress per consumer group. The key design decisions were batching everywhere, so one write call and one CRC per batch, and making the on-disk format equal to the wire format so fetches use `FileChannel.transferTo` for zero-copy sends. On restart the tail of the active segment is validated by CRC and truncated to the last good batch. It produces about 500,000 small messages per second on a laptop, and fetching from the middle of a 1 GB log takes milliseconds.
+
+**Key terms to know:**
+- **Topic / partition** — a named stream split into independent ordered logs. Ordering is guaranteed only within a partition.
+- **Offset** — a message's position number in its partition, used by consumers to say where to read from.
+- **Segment** — one file of the partition log (`.log` plus `.index`). Logs roll to a new segment at a size limit, and retention deletes whole old segments.
+- **Sparse index** — an index entry every ~4 KB mapping offset to file position; lookup is a binary search then a short scan.
+- **Record batch** — many messages stored and sent as one unit with one CRC. It is the main source of throughput.
+- **Zero-copy (`transferTo` / `sendfile`)** — the OS sends file bytes from the page cache straight to the socket without copying through the Java heap.
+- **Consumer group / committed offset** — a set of consumers sharing a topic, with durably stored progress per partition.
+- **High watermark** — the highest offset that is safe for consumers to read, such as the durable or replicated point.
+- **Consumer lag** — how far a consumer's committed offset trails the end of the log.
+
 **Q:** Why are append-only logs fast even on spinning disks?
 
-**A:** Appends and sequential reads avoid seeks; the OS page cache and read-ahead make sequential access very efficient.
+**A:** Appends and sequential reads avoid seeks, which dominate the cost of random I/O on spinning disks and still matter on SSDs. The OS page cache buffers writes and serves recent reads from memory, and read-ahead prefetches the next blocks. Batching reduces system calls, so throughput approaches the device's sequential bandwidth.
 
 **Q:** How does a consumer find message 1,000,000 quickly?
 
-**A:** Find the segment by base offset (floor lookup), binary-search its sparse index for the nearest position, and scan forward a few kilobytes.
+**A:** Find the segment whose base offset is the largest one not above the target, with a floor lookup in a sorted map of segments. Binary-search that segment's sparse index for the nearest entry at or below the offset, then scan forward at most a few kilobytes.
+```java
+Map.Entry<Long, Segment> e = segments.floorEntry(offset);   // ConcurrentSkipListMap
+Segment seg = e.getValue();
+long pos = seg.index().floorPosition(offset - seg.baseOffset());
+return seg.scanFrom(pos, offset);                            // short forward scan
+```
 
 **Q:** What does zero-copy mean here?
 
-**A:** Sending file data to a socket without copying it into application memory, using `transferTo`/`sendfile`.
+**A:** Sending file data to a socket without copying it into application memory. `FileChannel.transferTo(socketChannel)` maps to `sendfile` on Linux, so bytes go from the page cache to the network stack inside the kernel, saving CPU and memory bandwidth. It only works if you send the stored bytes unchanged, which is why the on-disk batch format is the wire format; TLS encryption usually prevents it because the bytes must be transformed.
+
+**Q:** When is a produced message "committed", and what can be lost?
+
+**A:** If the broker acknowledges before `force`, a power loss can lose acknowledged messages, though a process crash will not, because the data is in the OS page cache. Forcing per batch is safest but slowest; forcing every N ms bounds the loss window. Kafka itself relies mainly on replication across brokers rather than per-message fsync. On a single node the choice must be explicit and documented.
+
+**Q:** How do you guarantee ordering, and what breaks it?
+
+**A:** Appends to a partition are serialised and offsets are assigned in order, so each partition is totally ordered; producers choose the partition by key hash so all messages for a key stay ordered. There is no order across partitions. Producer retries can duplicate or reorder messages unless the producer limits in-flight requests or uses producer IDs and sequence numbers so the broker drops duplicates.
+
+**Q:** What happens if the broker crashes mid-append?
+
+**A:** The last batch may be partly written. On startup, scan the active segment's tail, validate each batch's length and CRC, truncate at the first invalid one, and rebuild the tail of the sparse index. Closed segments are never modified, so they need no repair.
+
+**Q:** What happens to a consumer that falls far behind?
+
+**A:** Retention deletes old segments by age or size whether or not anyone has read them. A consumer whose committed offset now points into a deleted segment has lost those messages and must reset to the earliest or latest offset by policy. Monitoring consumer lag and alerting before retention catches up is the operational answer.
+
+**Q:** How do you test it?
+
+**A:** Unit tests for segment rolling, index lookups at every boundary, and recovery with corrupted tails. Integration tests run real producers and consumers over sockets and check per-key ordering for 10 million messages. Retention tests use a fake clock, and benchmarks compare batch sizes and force policies, showing the gain over per-message writes.
+
+**Q:** What changes at 10x the traffic or with many machines?
+
+**A:** More partitions spread load across disks and consumers, but each costs file handles and memory, and ordering stays per partition. One broker is a single point of failure, so the next step is replication: each partition has a leader and followers, and the high watermark advances only when enough replicas have the data. Partitions are then spread across brokers for throughput.
+
+**Common mistakes in answers:**
+- Claiming the log guarantees global order across a topic. Order is only per partition.
+- Saying a message is durable once `write` returns, without `force` or replication.
+- Indexing every message, which wastes space; a sparse index plus a short scan is enough.
 
 ### TL;DR
 Partitions of append-only segments, sparse indexes, batches with CRCs, zero-copy fetches and committed offsets — the core of Kafka on one machine.
@@ -4420,17 +6232,68 @@ Allocation-free Java is harder to read and maintain; apply it only on the measur
 - [Ch 15 — Modern concurrency](../chapters/15-concurrency-2-modern/README.md) — memory model for ring-buffer publication
 
 ### In the interview
+**30-second answer:** I built a matching engine with price-time priority, supporting limit, market and immediate-or-cancel orders, cancels and partial fills, aimed at low and predictable latency on a normal JVM. The key design decision was a single engine thread that owns every order book, fed by ring buffers from gateway threads and journaling every input command, so matching needs no locks and replaying the journal rebuilds identical state. To reduce tail latency I removed allocation from the hot path with pooled orders, `long` prices in ticks and a primitive order-ID map, and confirmed zero allocation with JFR. I report p50, p99 and p99.9 from a fixed-rate load generator with a histogram, together with the hardware and JVM flags used.
+
+**Key terms to know:**
+- **Order book** — all resting buy orders (bids) and sell orders (asks) for an instrument, grouped into price levels.
+- **Price-time priority** — better prices match first; at the same price, the earliest order matches first.
+- **Limit / market / IOC order** — trade at this price or better; trade at any price; fill what you can now and cancel the rest.
+- **Single-writer principle** — one thread owns and mutates the state, so no locks or CAS are needed.
+- **Ring buffer** — a pre-allocated circular array used to pass events between threads (LMAX Disruptor, project 28).
+- **Event sourcing / journal** — storing input commands so state can be rebuilt by deterministic replay.
+- **Allocation-free hot path** — pooled objects, primitive collections and no boxing or lambdas on the matching path, so there is no garbage to collect.
+- **Tail latency (p99.9)** — the latency of the slowest 0.1% of operations. Jitter shows up here.
+- **Coordinated omission** — understating latency because the load generator pauses whenever the system stalls.
+
 **Q:** What is price-time priority?
 
-**A:** Orders at better prices match first; among orders at the same price, the earliest one matches first.
+**A:** Orders at better prices match first: the highest bid and the lowest ask. Among orders at the same price, the one that arrived first matches first. Each price level is therefore a FIFO queue, and an incoming order walks the opposite side from the best price inward until it is filled or no longer crosses.
 
 **Q:** Why run matching on a single thread?
 
-**A:** No locks or contention, deterministic ordering, and easy replay; throughput scales by sharding instruments.
+**A:** One thread that owns the books needs no locks or atomic operations, and there are no contention spikes from threads competing. Processing order is exactly the journal order, which makes the engine deterministic and replayable. Throughput scales by sharding instruments across engine threads, never by sharing one book between threads.
 
 **Q:** How do you reduce GC-related latency spikes in Java?
 
-**A:** Avoid allocation on the hot path (pools, primitives, reused buffers), size the heap well, choose a low-pause collector, and verify with JFR.
+**A:** Avoid allocation on the hot path: pool order objects, reuse ring-buffer slots, keep prices as `long` ticks, and use primitive maps so IDs are not boxed. Then size the heap well and choose a low-pause collector such as generational ZGC. Verify with JFR allocation events or JMH `-prof gc`, because autoboxing, lambdas capturing variables, iterators and string building all allocate silently.
+
+**Q:** How do you cancel an order in O(1)?
+
+**A:** Keep a hash map from order ID to the order object, and link orders within a price level as an intrusive doubly linked list (the `prev`/`next` fields live in the order itself). A cancel looks up the order and unlinks it in constant time. If the level becomes empty, remove it and update the cached best price.
+```java
+void cancel(long orderId) {
+    Order o = ordersById.remove(orderId);      // primitive long -> Order map
+    if (o == null) { reject(orderId); return; }
+    o.level().unlink(o);                       // O(1) with prev/next pointers
+    if (o.level().isEmpty()) book.removeLevel(o.level());
+    pool.release(o);
+}
+```
+
+**Q:** Why prices as `long` ticks instead of `BigDecimal` or `double`?
+
+**A:** `double` cannot represent most decimal prices exactly, so equal prices might compare unequal. `BigDecimal` is exact but allocates objects and is slow to compare. An instrument has a fixed tick size, so storing price × 10^k as a `long` is exact, allocation-free and compares with a single instruction; you convert at the edges only.
+
+**Q:** How do you measure latency honestly?
+
+**A:** Generate load at a fixed rate and measure each operation from its intended send time, so a stall is charged to every delayed request (avoiding coordinated omission). Record every value in a histogram rather than an average, warm up the JIT first, and report p50, p99, p99.9 and the maximum, with the hardware, OS and JVM flags.
+
+**Q:** What happens if the engine crashes?
+
+**A:** All state is in memory, so it is rebuilt by loading the latest snapshot and replaying the journal after it, which gives identical state because the engine is deterministic. For availability, exchanges feed the same input stream to a hot standby that processes it identically and can take over immediately. The journal must be written before results are published, or a published fill could be lost on replay.
+
+**Q:** How do you test a matching engine?
+
+**A:** Scenario tables of input orders and expected executions, covering partial fills, price improvement and FIFO at a level. Property tests check that quantity is conserved, the book is never crossed after processing (best bid below best ask), and replay is deterministic. Fuzz tests compare against a simple, obviously correct reference implementation, and latency benchmarks are kept separate from functional tests.
+
+**Q:** What breaks first at 10x the order rate?
+
+**A:** One core per shard is the hard limit, so a single very busy instrument saturates its engine thread first; you can only make the per-order path cheaper. Journal I/O is next, which is why journals batch writes. Busy-spinning threads give the lowest latency but burn a full CPU each, so the number of shards is limited by cores.
+
+**Common mistakes in answers:**
+- Using locks or concurrent collections inside the matching engine "for safety", which adds contention and nondeterminism with no benefit.
+- Reporting average latency. Averages hide the tail, which is what traders feel.
+- Saying "Java has GC, so it cannot do low latency". With an allocation-free hot path, a low-pause collector and warm-up, the JVM reaches stable microsecond-level latency.
 
 ### TL;DR
 A single-threaded, allocation-free matching engine with price-time priority, fed by ring buffers, journaled for replay, measured with real latency histograms.
@@ -4547,21 +6410,69 @@ Consensus costs a majority round trip per write (batching and pipelining help). 
 - [Ch 10 — Collections](../chapters/10-collections/README.md) — logs, maps and indexes
 
 ### In the interview
+**30-second answer:** I built a key-value store replicated across 3 or 5 nodes with the Raft consensus algorithm: leader election with randomised timeouts, log replication with consistency checks, commit by majority, snapshots, and client deduplication so retried writes apply once. Each node runs the algorithm on a single-threaded event loop, and term, vote and log are forced to disk before any RPC reply, because otherwise a restarted node could vote twice or forget acknowledged entries. Most of the effort went into testing: a deterministic in-process simulation with a seeded scheduler drives thousands of crash, partition and message-loss schedules, checks invariants after every step and runs a linearizability checker over client histories. A 3-node cluster survives one failure and fails over in about 1–2 seconds.
+
+**Key terms to know:**
+- **Consensus** — getting several machines to agree on one sequence of values despite crashes and network failures.
+- **Term** — Raft's logical clock: a numbered period with at most one leader. Stale terms are rejected.
+- **Leader / follower / candidate** — the three node roles. Only the leader accepts writes and replicates them.
+- **Majority (quorum)** — more than half of the nodes. Any two majorities overlap, which is what makes Raft safe.
+- **`AppendEntries` / `RequestVote`** — the replication-and-heartbeat RPC and the election RPC.
+- **Log matching (`prevLogIndex`, `prevLogTerm`)** — a follower accepts entries only if its log agrees with the leader's at the previous position, and conflicting entries are overwritten.
+- **Commit index / state machine** — the highest entry known stored on a majority; committed entries are applied in order to the KV store.
+- **Linearizability** — every operation appears to take effect at one instant between its start and end, so reads see all completed writes.
+- **Deterministic simulation testing** — running all nodes in one JVM with a seeded scheduler for messages and timers, so any failure can be replayed exactly.
+
 **Q:** How does Raft elect a leader?
 
-**A:** A follower that hears no heartbeat within a randomised timeout becomes a candidate, increments the term and requests votes; a node votes once per term for a candidate with an up-to-date log; a majority makes it leader.
+**A:** A follower that hears no heartbeat within a randomised election timeout (for example 150–300 ms) becomes a candidate, increments its term, votes for itself and requests votes. A node grants at most one vote per term, persisted, and only to a candidate whose log is at least as up to date as its own (higher last term, or equal term and at least as long). A candidate with votes from a majority becomes leader; randomised timeouts make split votes rare.
 
 **Q:** When is a log entry committed?
 
-**A:** When the leader has stored it on a majority of nodes and it is from the leader's current term (earlier entries commit with it).
+**A:** When the leader has stored it on a majority of nodes and it is from the leader's current term; earlier-term entries then become committed along with it. Counting replicas for an old-term entry directly is unsafe: the paper's Figure 8 shows such an entry can still be overwritten by a later leader. Committed entries are never lost, because any future leader must have them to win an election.
 
 **Q:** How do you serve linearizable reads?
 
-**A:** Route them through the log, or have the leader confirm it is still leader with a majority heartbeat (read index) before serving from its state machine.
+**A:** A leader cut off by a partition may not know a new leader exists, so answering from its local state can return stale data. Either put reads through the log like writes, or use read index: record the current commit index, confirm leadership with a heartbeat round acknowledged by a majority, wait until that index is applied, then answer. Leader leases based on clock timing are faster but depend on bounded clock drift.
 
 **Q:** What happens during a network partition?
 
-**A:** Only the side with a majority can elect a leader and commit; the minority side cannot make progress, so committed data stays consistent.
+**A:** Only the side with a majority can elect a leader and commit writes. An old leader on the minority side keeps accepting requests but can never commit them, and those clients time out. When the partition heals, the old leader sees a higher term, steps down, and its uncommitted entries are overwritten. Committed data stays consistent throughout.
+
+**Q:** Why must `votedFor` and the log be persisted before replying?
+
+**A:** If a node votes, crashes before saving its vote and restarts, it could vote again in the same term, allowing two leaders in one term. If it acknowledges entries it has not saved, the leader may count them toward a majority that does not really exist after a crash. So every RPC handler forces state to disk first and replies second.
+```java
+void onRequestVote(RequestVote rv) {
+    if (rv.term() > currentTerm) becomeFollower(rv.term());
+    boolean grant = rv.term() == currentTerm
+        && (votedFor == null || votedFor.equals(rv.candidateId()))
+        && candidateLogUpToDate(rv.lastLogTerm(), rv.lastLogIndex());
+    if (grant) { votedFor = rv.candidateId(); storage.persistVote(currentTerm, votedFor); } // force first
+    reply(new VoteReply(currentTerm, grant));                                                 // then reply
+}
+```
+
+**Q:** Why does a 4-node cluster tolerate no more failures than 3 nodes?
+
+**A:** A majority of 4 is 3, so it tolerates 1 failure, the same as 3 nodes (majority 2), while replicating to more machines and needing more acknowledgements per write. Odd sizes give the best fault tolerance per node: 3 nodes tolerate 1 failure, 5 tolerate 2.
+
+**Q:** How do retried client writes apply only once?
+
+**A:** A client may resend a `put` after a timeout even though the first attempt committed. Each request carries a client ID and sequence number, and the state machine keeps the last sequence number and result per client, included in snapshots. A duplicate returns the saved result instead of applying again, which makes operations like `cas` and increments safe to retry.
+
+**Q:** How do you test a consensus implementation?
+
+**A:** Bugs appear only under rare interleavings, so ordinary tests are not enough. Run all nodes in one JVM with a simulated network and fake clock driven by a seeded random scheduler that delays, drops, duplicates and reorders messages and crashes nodes. After every step check invariants (at most one leader per term, logs match up to the commit index, committed entries never change), and check client histories for linearizability. Log the seed so any failure replays exactly, then add real multi-process tests with `kill -9`.
+
+**Q:** How do you scale writes beyond one leader?
+
+**A:** Every write goes through one leader and needs a majority round trip, so batching and pipelining help but one group has a ceiling. Distributed databases shard the key space into many independent Raft groups ("multi-Raft"), each with its own leader on a different node, so writes spread across machines. Cross-shard transactions then need an extra protocol on top, such as two-phase commit.
+
+**Common mistakes in answers:**
+- Saying an entry is committed as soon as it is on a majority, regardless of term. The current-term rule matters.
+- Serving reads from the leader's local state and calling them linearizable.
+- Choosing even cluster sizes, or thinking more nodes always mean more fault tolerance.
 
 ### Self-check
 1. Why must `votedFor` be persisted before replying to `RequestVote`?
