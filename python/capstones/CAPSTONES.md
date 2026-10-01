@@ -27,6 +27,8 @@ A **capstone** is a project big enough to force you to combine many topics at on
 
 **Real-world examples** link to official documentation, PEPs, papers and open-source projects so you can compare your design with a production one. Treat them as reading, not as code to copy.
 
+**Using these projects in interviews.** Interviewers want proof you understand your build, not a tour of it. Lead with the **30-second answer**: what it does, the key design decision and why, the hardest problem and how you solved it, and one concrete number. Be able to explain every term in **Key terms to know** in one plain sentence, because follow-ups start there. Practise the Q&As out loud until you can answer without reading. Quote your own numbers from the build (latency, data size, throughput, test counts), not the brief's targets. Be ready for "what would you change at 10x?" and "what breaks first?".
+
 ## Project map
 
 | # | Project | Level | Time | Prerequisites (chapters) |
@@ -162,14 +164,64 @@ Loading and rewriting the whole file on every command is O(n), which is fine up 
 - [Ch 14 — Standard library tour](../chapters/14-standard-library-tour/README.md): `argparse`, `datetime`.
 
 ### In the interview
+**30-second answer:** I built `todo`, a zero-dependency task manager CLI that uses `argparse` sub-commands and keeps all state in one versioned JSON file. The main design decision was to put every byte of file I/O behind a `TaskStore` class, so handlers only ever deal with `Task` objects and the format can change later without touching them. The hardest part was not corrupting data, which I solved with a temp-file, `fsync`, `os.replace` atomic save that a test proves by crashing mid-save. Every command finishes in under 100 ms with 10,000 tasks.
+
+**Key terms to know:**
+- **Sub-command parser** — `argparse.add_subparsers()` gives `todo add`, `todo done` their own options and help. It builds the CLI layer.
+- **Namespace** — the object `parse_args()` returns, with one attribute per option. Handlers read it and never touch `sys.argv`.
+- **Atomic write** — the new file is written beside the old one and swapped in with `os.replace`, so readers see the old file or the new one, never half of one. Used by every save.
+- **`fsync`** — forces the operating system to push buffered bytes to the disk before the rename, so a power cut cannot leave a renamed but empty file.
+- **Exit code** — the number a process returns to the shell: 0 means success and non-zero means failure. `todo done 999` exits with 1 so scripts can detect the error.
+- **ISO 8601** — the `2026-10-03` / `2026-10-03T09:00:00+00:00` text format for dates. JSON has no date type, so the store converts at its boundary.
+- **Timezone-aware datetime** — a `datetime` that carries its UTC offset (`datetime.now(UTC)`). Used for `created_at`/`done_at` so sorting stays correct across zones.
+- **Monotonic id** — a `next_id` counter saved in the file and never reused, like a database sequence, so ids stay stable after deletes.
+- **Schema version** — the `"version": 1` key that lets a later release recognise and migrate old files.
+- **Lost update** — two processes both read, both change, and the second write erases the first. This is the known concurrency gap of this design.
+
 **Q:** How do you make sure a crash never corrupts the data file?
-**A:** Write to a temporary file in the same directory, fsync it, then `os.replace` it over the original. The rename is atomic, so readers see the old or the new file, never half of one.
+
+**A:** I write the whole document to `todo.json.tmp` in the same directory, call `flush()` and `os.fsync()`, then `os.replace(tmp, real)`. The rename is atomic on the same filesystem, so a reader sees either the complete old file or the complete new one. The temp file must be in the same directory, because a rename across filesystems is really a copy and is not atomic.
 
 **Q:** Why not use the list index as the task id?
-**A:** Indices shift when items are deleted, so a user's `todo done 3` could hit the wrong task. A persisted counter gives stable ids.
+
+**A:** Indices shift when items are deleted, so `todo done 3` could complete a different task after an `rm`. A persisted `next_id` counter gives permanent ids, the same idea as a database sequence or auto-increment column.
 
 **Q:** Where would you change the code to switch from JSON to SQLite?
-**A:** Only in `TaskStore`. Handlers depend on its methods, not on the file format, so the rest of the program is unaffected.
+
+**A:** Only in `TaskStore`. Handlers call `store.add()`, `store.get()` and `store.save()`, and the renderer only sees `Task` objects, so the file format is an implementation detail behind one interface. That is the repository pattern in its smallest form.
+
+**Q:** Why store the due date as a `date` but `created_at` as a timezone-aware `datetime`?
+
+**A:** A due date is a calendar day ("Friday"), not an instant, so a `date` avoids midnight and time-zone off-by-one bugs. `created_at` is a real moment, so it should be an aware `datetime` in UTC. A naive `datetime` has no offset and cannot be compared safely with an aware one: Python raises `TypeError` if you try.
+
+**Q:** Two terminals run `todo add` at the same moment. What happens?
+
+**A:** Both load the same file, each adds its task, and the second `os.replace` wins, so one task is silently lost. The atomic write prevents corruption but not lost updates. Fixes are a lock file (created with `O_CREAT | O_EXCL`, or `fcntl.flock` on POSIX) held across read-modify-write, or moving to SQLite, which serialises writers in transactions.
+
+**Q:** What breaks first at 100x the data, say a million tasks?
+
+**A:** Start-up time, because every command parses and re-serialises the whole JSON file, which is O(n) per command. At that size the 100 ms target is gone. The fix is a store with indexed, partial reads (SQLite), which the `TaskStore` boundary makes a local change.
+
+**Q:** How do you test a CLI without spawning processes?
+
+**A:** I make `main(argv: list[str] | None = None) -> int` and call it directly with lists like `["add", "x"]`, using pytest's `tmp_path` for the data file and `capsys` to capture output. The parser can also be tested alone with `parser.parse_args([...])`. For the crash test I monkeypatch `os.replace` to raise and assert the old file is still valid JSON.
+
+**Q:** How do you make `argparse` call the right handler without a long `if` chain?
+
+**A:** Attach the handler to each sub-parser with `set_defaults`, then dispatch once.
+```python
+add = sub.add_parser("add")
+add.add_argument("title")
+add.set_defaults(func=cmd_add)
+args = parser.parse_args(argv)
+return args.func(store, args)
+```
+A `match args.command:` statement works too, but `set_defaults` keeps each command's wiring in one place.
+
+**Common mistakes in answers:**
+- Saying "I open the file with `"w"` and write it": opening with `"w"` truncates the file first, so a crash leaves it empty. The correct answer is temp file plus `fsync` plus `os.replace`.
+- Claiming the atomic write also solves concurrent edits. It only prevents torn files; two writers can still lose an update without a lock.
+- Using `datetime.now()` (naive) for timestamps and then comparing them with parsed aware values, which raises `TypeError`.
 
 ### TL;DR
 A small, dependency-free CLI that teaches the full program loop: parse arguments, validate, load, mutate and atomically save state, with storage hidden behind one class.
@@ -264,14 +316,63 @@ First-match-wins is easy to explain but means rule order matters. A journal per 
 - [Ch 14 — Standard library tour](../chapters/14-standard-library-tour/README.md): `argparse`, `datetime`, `logging`.
 
 ### In the interview
+**30-second answer:** I built a rule-driven file organiser that reads rules from TOML and moves files from a messy folder through a scan → match → plan → execute → journal pipeline. The key decision was to separate planning from execution: the plan is a plain list of `Move` objects, so `--dry-run`, logging and tests are trivial, and the executor is a thin loop. The hardest part was doing destructive moves safely: clashes get ` (1)` suffixes, cross-disk moves are verified, and every real move is journalled so `undo` can reverse a run. It sorts 50,000 files in under 10 seconds.
+
+**Key terms to know:**
+- **TOML / `tomllib`** — a simple config format and the read-only standard-library parser for it (3.11+). The rules file is TOML.
+- **Glob pattern** — shell-style wildcards like `*.pdf` matched with `fnmatch` or `Path.match`. Rules use them on file names.
+- **First-match-wins** — rules are tried in order and the first one that matches decides. Simple to explain, but rule order matters.
+- **Dry run** — print the plan without changing anything. Possible here because planning is pure.
+- **Journal (JSON Lines)** — an append-only file with one JSON object per line recording each move. `undo` reads it backwards.
+- **Atomic rename vs copy-and-delete** — a move on the same filesystem is a rename (instant, atomic). Across disks it becomes copy then delete, which can fail halfway.
+- **TOCTOU** — time-of-check to time-of-use: checking `dst.exists()` and then moving leaves a gap where another process can create `dst`.
+- **Generator (lazy scan)** — the scanner yields one `FileInfo` at a time instead of building a list, so memory stays flat.
+- **`Path.move()` (3.14)** — the new `pathlib` method that renames, or copies and deletes when crossing filesystems.
+
 **Q:** Why separate planning from execution?
-**A:** The plan is pure data, so it is easy to test, to preview with `--dry-run` and to log. The executor becomes a thin loop with error handling.
+
+**A:** The plan is pure data computed from a snapshot of the folder and the rules, so I can unit-test it with no disk changes, print it for `--dry-run` and log it. The executor becomes a short loop with error handling. It is the same idea as Terraform's `plan` and `apply`.
 
 **Q:** What happens when the move crosses disks?
-**A:** It becomes copy then delete, which is not atomic. You must handle partial failures and verify the copy before deleting the source.
+
+**A:** It stops being a single rename and becomes copy then delete, which is not atomic. If it fails midway you can have a partial copy or two copies. I journal the intent before the move, check the copy's size (or hash) before deleting the source, and treat failures as a logged skip.
 
 **Q:** How does undo stay correct if the user moved files afterwards?
-**A:** Undo checks that each destination still exists and the source is free before moving back, and reports conflicts instead of guessing.
+
+**A:** Undo reads the journal for the run in reverse and, for each entry, checks that the destination still exists and the original path is free. Conflicts are reported instead of guessed, and the user can rerun once they are resolved. A partly applied undo is itself journalled.
+
+**Q:** What is a TOCTOU race here and how do you handle it?
+
+**A:** I check `dst.exists()`, decide the name is free, then move, but another process could create `dst` in between and I would overwrite it. I plan names against the set already chosen in this run and re-check right before each move. On POSIX, `os.rename` silently replaces an existing file, so for full safety you can create the destination exclusively first or use `os.link` plus unlink, which fails if the target exists.
+
+**Q:** Why TOML instead of JSON or YAML for the rules?
+
+**A:** TOML allows comments, is easy to hand-edit, and `tomllib` ships with Python, so there is no dependency. JSON has no comments and is noisy to edit. YAML is powerful but has surprising implicit typing (for example `no` becoming a boolean in YAML 1.1 parsers) and needs a third-party package. The trade-off is that `tomllib` is read-only, which is fine for config.
+
+**Q:** What changes at 10x, say 500,000 files, or with a network share?
+
+**A:** Scanning with `os.scandir` stays fast because it returns cached file type information, but each `stat` and move on a network share costs a round trip. I would batch the scan, show progress, and make the executor resumable from the journal. Rotating old journals also matters because they grow forever.
+
+**Q:** How do you test destructive file operations safely?
+
+**A:** Every test builds a fake folder in `tmp_path`, sets modification times with `os.utime`, and asserts on the plan first. Then it runs the executor and `undo` and compares a sorted listing of (relative path, size, hash) before and after. Rule matching is parametrized over many file names.
+
+**Q:** How do you resolve a clash name like `report (2).pdf`?
+
+**A:** Use `Path.stem` and `Path.suffix` and count up until a name is free both on disk and in this run's planned set.
+```python
+def free_name(dst: Path, taken: set[Path]) -> Path:
+    n, cand = 1, dst
+    while cand.exists() or cand in taken:
+        cand = dst.with_name(f"{dst.stem} ({n}){dst.suffix}")
+        n += 1
+    return cand
+```
+
+**Common mistakes in answers:**
+- Saying `shutil.move` or `Path.move` is always atomic. It is only a rename on the same filesystem; across disks it is copy plus delete.
+- Planning name clashes only against the disk and forgetting that two files in the same run can target the same name.
+- Treating `undo` as "move everything back" without checking whether the world changed since the run.
 
 ### TL;DR
 Rules in TOML drive a scan → plan → execute → journal pipeline, which makes destructive file moves previewable, safe on clashes and reversible.
@@ -363,14 +464,61 @@ Passphrases are easier to remember and type on phones but need more characters f
 - [Ch 15 — Testing and debugging](../chapters/15-testing-and-debugging/README.md): Hypothesis property tests.
 
 ### In the interview
+**30-second answer:** I built a password and passphrase generator, as a CLI and a small library, that draws every random choice from the `secrets` module and reports entropy in bits with a strength label. The key decision was to describe each request as a frozen policy dataclass and keep generation separate, so validation and maths are easy to test. The hardest part was the "at least one digit, one symbol" rule without biasing the output, which I solved with rejection sampling. A 16-character password over 94 symbols reports about 105 bits, and a 6-word EFF passphrase about 77.5 bits.
+
+**Key terms to know:**
+- **CSPRNG** — cryptographically secure pseudo-random number generator: its output cannot be predicted even after seeing earlier output. `secrets` uses the operating system's one.
+- **Mersenne Twister** — the algorithm behind `random`. Fast and good for simulations, but its full internal state can be reconstructed from 624 consecutive 32-bit outputs.
+- **Entropy (bits)** — `L × log2(N)` for L symbols drawn uniformly from N choices. Each extra bit doubles the attacker's guesses. Shown with every result.
+- **Uniform distribution** — every allowed output is equally likely. The entropy formula is only true when this holds.
+- **Rejection sampling** — generate, throw away outputs that break a constraint, try again. Keeps the accepted outputs uniform.
+- **Modulo bias** — turning random bytes into indices with `% N` makes small values more likely unless 256 is a multiple of N. `secrets.randbelow` avoids it.
+- **Frozen dataclass** — `@dataclass(frozen=True)` makes policy objects immutable and hashable, and validation runs in `__post_init__`.
+- **Passphrase / word list** — several random words from a list such as EFF's 7,776-word list, about 12.9 bits per word.
+- **Property-based test** — Hypothesis generates many random valid policies and checks invariants like length and allowed characters.
+
 **Q:** Why `secrets` and not `random`?
-**A:** `random` uses the Mersenne Twister, which is deterministic and predictable from its outputs. `secrets` reads the operating system's cryptographically secure generator.
+
+**A:** `random` uses the Mersenne Twister, which is deterministic: anyone who sees enough outputs (624 32-bit values) can reconstruct its state and predict all future ones. `secrets` draws from the operating system's CSPRNG (via `os.urandom` / `random.SystemRandom`), which is designed to be unpredictable. Use `random` for games and simulations, `secrets` for passwords, tokens and keys.
 
 **Q:** How strong is a 12-character password of lowercase letters?
-**A:** `12 × log2(26)` ≈ 56 bits, if it is truly random. That is a little more than four random words from a 7,776-word list (about 52 bits) and far less than 16 characters over 94 symbols (about 105 bits).
+
+**A:** `12 × log2(26)` ≈ 56.4 bits, if it is truly random. That is a little more than four words from a 7,776-word list (about 51.7 bits) and far less than 16 characters over 94 symbols (about 104.9 bits).
 
 **Q:** How do you force one digit without biasing the result?
-**A:** Rejection sampling: regenerate until the constraint holds. Every accepted password is then uniformly random among valid ones.
+
+**A:** Rejection sampling: generate from the full alphabet and regenerate if the constraint fails. Every accepted password is then uniformly random among all valid ones. The naive "overwrite a random position with a digit" makes some outputs more likely than others. Rejection is cheap here because most long random passwords already contain each class.
+
+**Q:** Why is the entropy number meaningless for a password a human chose?
+
+**A:** The formula assumes every character was picked uniformly at random. People pick words, names and patterns like `Summer2026!`, which attackers try first, so the real search space is far smaller than `L × log2(94)`. That is why the tool only reports entropy for passwords it generated.
+
+**Q:** Passphrase or password: which would you recommend and why?
+
+**A:** For something a human types and remembers, a passphrase: six random words give about 77.5 bits and are easy to type on a phone. For a password manager entry nobody types, a long random character password packs more entropy per character. NIST SP 800-63B also favours length over composition rules, which supports passphrases.
+
+**Q:** How do you test that output is random without flaky tests?
+
+**A:** I test properties, not values: length, allowed characters, each required class present, and that 1,000 outputs are distinct. A chi-squared test over 100,000 draws checks roughly equal character frequencies with a loose threshold so it practically never fails by chance. A source check asserts `random` is never imported.
+
+**Q:** What happens if the word list is short or has duplicates?
+
+**A:** Duplicates silently lower entropy because some words become more likely, and a short list gives weak phrases. The loader de-duplicates, refuses lists below a minimum size, and computes entropy from the de-duplicated count, never the raw line count.
+
+**Q:** How do you generate a password with `secrets` in a few lines?
+
+**A:** Build the alphabet from `string` constants and call `secrets.choice` per character.
+```python
+import secrets, string
+alphabet = string.ascii_letters + string.digits + string.punctuation
+pw = "".join(secrets.choice(alphabet) for _ in range(16))
+```
+For URL-safe tokens, `secrets.token_urlsafe(32)` gives 32 random bytes encoded as text.
+
+**Common mistakes in answers:**
+- Saying `random.seed(time.time())` makes `random` secure. Seeding with a guessable value makes it even easier to predict.
+- Computing entropy from the length of a human-chosen password, or from a word list without removing duplicates.
+- Claiming "replace one character with a digit" is fine. It biases the distribution; rejection sampling does not.
 
 ### TL;DR
 Secure generation is one line (`secrets.choice`) — the real lessons are entropy maths, unbiased constraints and why `random` is unsafe for anything security-related.
@@ -465,14 +613,63 @@ Keyword rules are transparent but need upkeep; a learned classifier (stretch) is
 - [Ch 14 — Standard library tour](../chapters/14-standard-library-tour/README.md): `decimal`, `datetime`.
 
 ### In the interview
+**30-second answer:** I built an expense reporter that imports CSV exports from several banks through per-bank profiles, normalises them into `Transaction` objects with `date` and `Decimal` amounts, categorises them with ordered rules and prints a monthly report. The key decision was profiles: each bank's column names, date format and decimal separator are config, so adding a bank needs no code. The hardest part was messy input, like `1.234,56`, BOMs, debit/credit columns and overlapping exports, which I solved with an explicit normaliser and an occurrence-counted de-duplication key. Totals match a spreadsheet to the cent, and 100,000 rows take under 2 seconds.
+
+**Key terms to know:**
+- **`Decimal`** — exact base-10 arithmetic from the `decimal` module. All amounts are `Decimal`, created from strings, never floats.
+- **Binary floating point** — `float` stores numbers in base 2, so `0.1 + 0.2 != 0.3`. That is why money is not a float.
+- **`csv.DictReader`** — reads rows as dicts keyed by header, handling quoting and commas inside quoted fields. The importer uses it.
+- **`newline=""`** — the required way to open a file for `csv`, so the module sees raw line endings, including newlines inside quoted fields.
+- **BOM / `utf-8-sig`** — Excel adds a byte-order mark at the start of UTF-8 files. `utf-8-sig` strips it so the first header is not `﻿Date`.
+- **Bank profile** — config describing one bank's columns, date format, separators and sign convention.
+- **De-duplication key** — `(date, amount, merchant, n)` where `n` counts repeats within one file, so real repeats survive but re-imports do not double-count.
+- **`Counter` / `defaultdict`** — dicts that count or create default values. Used to total by (month, category) in one pass.
+- **Golden-file test** — compare generated output with a committed expected file.
+
 **Q:** Why use `Decimal` for money?
-**A:** Floats are binary and cannot represent values like 0.10 exactly, so sums drift. `Decimal` does exact base-10 arithmetic with controllable rounding.
+
+**A:** Floats are binary and cannot represent values like 0.10 exactly, so sums of thousands of amounts drift by fractions of a cent. `Decimal` does exact base-10 arithmetic with controllable rounding (for example `ROUND_HALF_EVEN`, also called banker's rounding). An alternative is integer cents, which is also exact.
+
+**Q:** Why must you build `Decimal` from a string, not a float?
+
+**A:** `Decimal(0.1)` copies the float's exact binary value, `0.1000000000000000055511151231257827...`, so the error is already baked in. `Decimal("0.1")` is exactly one tenth. The importer passes the cleaned text from the CSV straight to `Decimal`.
 
 **Q:** Why open CSV files with `newline=""`?
-**A:** The `csv` module handles line endings itself, including newlines inside quoted fields. Letting Python translate them first can corrupt those rows.
+
+**A:** The `csv` module handles line endings itself, including newlines inside quoted fields. If Python's universal-newline translation runs first, a quoted multi-line field can be split or altered, and on Windows writing without it adds blank lines between rows.
 
 **Q:** How do you avoid double-counting overlapping exports?
-**A:** Build a deterministic key per transaction, including an occurrence count for genuine repeats, and skip keys already seen.
+
+**A:** Build a deterministic key per transaction and skip keys already seen. A plain `(date, amount, merchant)` key would drop two genuine identical coffees, so the key includes `n`, the occurrence number of that triple within its file. Importing the same file twice gives the same `n` values and is ignored, while two real coffees get `n=1` and `n=2`.
+
+**Q:** Why profiles in config instead of one smart auto-detecting parser?
+
+**A:** Auto-detection guesses, and a wrong guess about `1.234` (one thousand or one point two?) silently corrupts totals. Profiles make every assumption explicit and testable, and the importer validates headers so a bank changing its format fails loudly. The cost is writing a profile per bank.
+
+**Q:** What happens with a malformed row?
+
+**A:** The normaliser raises a specific error for that row, the importer catches it, records `file:line` and the reason as a warning, and continues. The report lists the skipped rows so totals are never silently wrong. Missing required columns, by contrast, stop the import immediately.
+
+**Q:** What changes at 100x, say ten million rows?
+
+**A:** Loading all rows into a list first becomes the memory problem. I would stream rows through generators straight into the aggregators, which only keep per-(month, category) totals, or switch to polars/pandas for vectorised parsing (Project 31). De-duplication keys still need memory, so a key set per month or a SQLite table helps.
+
+**Q:** How do you parse `1.234,56` and `(12.50)` correctly?
+
+**A:** Normalise the text using the profile, then build the `Decimal`.
+```python
+def parse_amount(s: str, thou: str, dec: str) -> Decimal:
+    s = s.strip()
+    neg = s.startswith(("(", "-")) or s.endswith("-")
+    s = s.strip("()-").replace(thou, "").replace(dec, ".")
+    d = Decimal(s)
+    return -d if neg else d
+```
+
+**Common mistakes in answers:**
+- Saying "I round floats at the end", which hides but does not remove accumulated errors and fails exact-to-the-cent checks.
+- Writing `Decimal(float_value)`, which keeps the binary error.
+- De-duplicating on `(date, amount, merchant)` alone and deleting genuine repeated purchases.
 
 ### TL;DR
 Map messy bank CSVs through profiles into clean `Transaction` objects with `Decimal` amounts, then categorise, de-duplicate and aggregate into a monthly report that is correct to the cent.
@@ -563,14 +760,67 @@ A single process is enough for a few GB. Beyond that, split files across process
 - [Ch 17 — Performance, memory and internals](../chapters/17-performance-memory-internals/README.md): profiling the hot loop.
 
 ### In the interview
+**30-second answer:** I built a log analyser that streams web server access logs, plain or gzipped, through a generator pipeline of read → parse → filter → aggregate and prints traffic, error rates, top paths and latency percentiles. The key decision was streaming: memory depends on the number of distinct keys, not on file size, so a 20 GB log works on a laptop. The hardest parts were throughput and accuracy, which I solved with one anchored, compiled regex, a cached timestamp parser, and histogram buckets for percentiles. It handles over 200,000 lines per second.
+
+**Key terms to know:**
+- **Combined Log Format** — the standard access-log line: IP, time, request, status, bytes, referrer, user agent.
+- **Generator pipeline** — each stage is a generator that yields to the next, so only one line is in memory at a time.
+- **Compiled regex with named groups** — `re.compile(r'(?P<ip>\S+) ...')` compiled once and read with `m["ip"]`. The parser uses it.
+- **Catastrophic backtracking** — a regex with ambiguous nested repetition tries exponentially many paths on a failing line. Avoided with precise classes like `[^"]*`.
+- **`Counter.most_common(k)`** — top-k from a counter, using a heap for small k.
+- **Percentile (p50/p95/p99)** — the value below which that share of requests fall. p95 latency shows what slow users feel.
+- **Histogram buckets** — fixed latency ranges with counts. Gives approximate percentiles in constant memory.
+- **Follow mode** — like `tail -f`, keep reading as new lines are appended, and handle log rotation.
+- **Mergeable aggregates** — counters add up, so per-process results can be combined. Enables parallel mode.
+
 **Q:** How do you process a 20 GB log on a machine with 8 GB of RAM?
-**A:** Stream it line by line with generators and keep only aggregates. Memory then depends on the number of distinct keys, not on file size.
+
+**A:** Stream it line by line with generators and keep only aggregates. Iterating a file object reads buffered chunks, and `gzip.open` decompresses on the fly. Memory then depends on the number of distinct paths and IPs, not on file size.
 
 **Q:** How would you find the top 10 IPs?
-**A:** `Counter` while streaming, then `most_common(10)`, which uses a heap internally — O(n log k).
+
+**A:** Count with a `Counter` while streaming, then call `most_common(10)`, which uses `heapq.nlargest` and runs in O(n log k) for n distinct keys. Sorting all keys would be O(n log n), which is wasteful when k is tiny.
 
 **Q:** What is catastrophic backtracking?
-**A:** A regex with ambiguous nested repetition can try exponentially many matches on a non-matching line. Use precise character classes and anchors.
+
+**A:** When a regex like `(.*)*x` or `(a+)+` fails to match, the engine tries every way to split the input between the nested quantifiers, which can take exponential time. One bad line can stall the analyser. Anchor the pattern, use precise character classes like `[^"]*` for quoted fields, and test with deliberately malformed long lines.
+
+**Q:** How do you compute p95 latency without storing every value?
+
+**A:** Exact percentiles need all values or a sort. For large logs I keep a fixed histogram of buckets per path (1, 2, 5, 10, 20, 50 ms ...) and walk the cumulative counts to the bucket containing the 95th percentile. Memory is constant per path and the error is bounded by bucket width. Sketches like HDR Histogram or t-digest are the production versions of this idea.
+
+**Q:** Why is `datetime.strptime` a bottleneck and how do you fix it?
+
+**A:** It is general-purpose and slow when called millions of times. Log timestamps have a fixed layout, so I slice the string and map the month name with a dict, or cache the parsed result by the minute prefix, since thousands of lines share the same minute. Profiling with `cProfile` shows this as one of the top costs before the fix.
+
+**Q:** How would you make it use all CPU cores?
+
+**A:** Parsing is CPU-bound, so threads do not help on the standard GIL build. I would split files (or byte ranges aligned to newlines) across a `ProcessPoolExecutor`, have each worker return its `Counter`s and histograms, and merge them with `+`. That works because counts are associative: the merge order does not matter.
+
+**Q:** What happens with a malformed line, or log rotation during `--follow`?
+
+**A:** A line the regex does not match increments a `malformed` counter and is skipped, so one bad line never stops a report. For follow mode, I watch the file's inode and size: if the inode changes or the size shrinks, the log was rotated or truncated, so I reopen the path from the start.
+
+**Q:** How do you test it?
+
+**A:** Parametrized parser tests over fixture lines for every field variant, including malformed ones. Each aggregator is tested alone. A synthetic log with a known distribution checks the whole report, and a benchmark measures lines per second with `time.perf_counter`, failing only on a large regression.
+
+**Q:** Write a streaming top-paths counter.
+
+**A:**
+```python
+LINE = re.compile(r'^(?P<ip>\S+) \S+ \S+ \[(?P<ts>[^\]]+)\] "(?P<m>\S+) (?P<path>\S+)[^"]*" (?P<st>\d{3})')
+def paths(lines):
+    for line in lines:
+        if m := LINE.match(line):
+            yield m["path"]
+top = Counter(paths(open("access.log"))).most_common(10)
+```
+
+**Common mistakes in answers:**
+- Reading the file with `readlines()` or `read()`, which loads everything into memory.
+- Proposing threads to speed up regex parsing; on the default build the GIL means only one thread runs Python bytecode at a time.
+- Averaging per-file p95 values to get an overall p95. Percentiles do not average; merge the histograms instead.
 
 ### TL;DR
 A streaming generator pipeline — read, parse with a compiled regex, filter, aggregate — that answers operational questions about huge logs in constant memory.
@@ -683,14 +933,68 @@ SM-2 is simple and predictable but ignores your actual forgetting curve; FSRS-st
 - [Ch 15 — Testing and debugging](../chapters/15-testing-and-debugging/README.md): deterministic tests with injected dates.
 
 ### In the interview
+**30-second answer:** I built a terminal flashcard app that shows only the cards due today and schedules each card's next review with the SM-2 spaced-repetition algorithm. The key design decision was making the scheduler a pure function, `schedule(state, grade, today) -> new_state`, with "today" passed in, so every rule is unit-testable without clocks or files. The hardest parts were card identity and the meaning of "today", solved with a hash-based card id and a configurable day boundary. Review state is saved after every answer, and a 10,000-card deck loads in under 300 ms.
+
+**Key terms to know:**
+- **Spaced repetition** — reviewing an item just before you would forget it, with gaps that grow as you remember it better.
+- **SM-2** — the SuperMemo 2 algorithm: intervals of 1 day, 6 days, then previous interval × ease. This is the scheduler.
+- **Ease factor** — a per-card multiplier starting at 2.5, nudged up for easy answers and down for hard ones, never below 1.3.
+- **Pure function** — output depends only on inputs and it has no side effects. `schedule()` is pure, so it is trivial to test and replay.
+- **Dependency injection of time** — passing `today` (or a clock) as a parameter instead of calling `date.today()` inside the code.
+- **Stable id** — a SHA-1 of deck name plus question, so re-importing a deck updates cards instead of duplicating them.
+- **Review log** — every grade stored with a timestamp. It lets you compute stats and re-run a better algorithm over history.
+- **Due queue** — cards with `due <= today`, oldest first, plus a capped number of new cards.
+- **FSRS** — Free Spaced Repetition Scheduler, a newer model (in Anki since 23.10) that fits a forgetting curve to your own history.
+
 **Q:** Why make the scheduler a pure function?
-**A:** Its output depends only on its inputs, so you can test every case without files, clocks or user input, and replay history later.
+
+**A:** Its output depends only on `(state, grade, today)`, so I can test every grade from every state with a table of cases and no files, clocks or user input. It also lets me replay the stored review history through a new scheduler to compare algorithms. Side effects like saving live in the review loop, not in the maths.
 
 **Q:** How do you test date-dependent code?
-**A:** Inject the current date (or a clock object) instead of calling `date.today()` internally.
+
+**A:** Inject the current date instead of calling `date.today()` internally. Tests pass fixed dates and can simulate 100 days in a loop in milliseconds. If a clock object is needed, a fake clock with an `advance()` method does the same job; libraries like `freezegun` exist, but injection is simpler and explicit.
 
 **Q:** Why store every review and not just the current state?
-**A:** History lets you compute statistics, debug odd schedules and re-run a better algorithm over the same data.
+
+**A:** History lets me compute retention and streaks, debug odd schedules ("why is this card due in 200 days?") and re-run an improved algorithm over the same data. Current state can always be rebuilt from history, but history cannot be rebuilt from state. It is the event-sourcing idea in miniature.
+
+**Q:** Walk me through SM-2 for one card.
+
+**A:** A new card has ease 2.5. Answered correctly, its interval goes 1 day, then 6 days, then the previous interval times ease, so 15, then about 38 days. Each grade adjusts ease slightly up or down, clamped at 1.3. A failed answer resets repetitions to zero and the interval to 1 day, but keeps the lowered ease, so a hard card grows slowly afterwards.
+
+**Q:** Hashing the question gives a stable id. What is the trade-off?
+
+**A:** Line numbers would shift when a card is inserted, so hashing fixes that. But editing the question now creates a "new" card and loses its history. I chose hashing, documented it, and added a `rename` command that moves history from the old id to the new one. Editing only the answer keeps the schedule.
+
+**Q:** What happens after a three-week holiday?
+
+**A:** Hundreds of cards become due at once, and showing them all in one day is discouraging. I cap daily reviews and order the backlog by how overdue each card is relative to its interval, so short-interval cards (most at risk) come first. The rest spill to following days.
+
+**Q:** What happens if the app is killed mid-session?
+
+**A:** Every grade is saved immediately with an atomic write (temp file plus `os.replace`), so at most the current card's answer is lost. On restart the due queue is rebuilt from stored due dates, so the session continues naturally.
+
+**Q:** How would you change storage to scale to 100,000 cards and years of reviews?
+
+**A:** A JSON file rewritten on every answer becomes the bottleneck. I would move to SQLite with an index on `due_date`, so "due today" is a range query and each answer is one small `UPDATE` plus one `INSERT` into the review table inside a transaction.
+
+**Q:** Write the core interval rule.
+
+**A:**
+```python
+def next_interval(reps: int, prev: int, ease: float) -> int:
+    if reps == 0:
+        return 1
+    if reps == 1:
+        return 6
+    return round(prev * ease)
+```
+`reps` is the number of successful reviews in a row before this one.
+
+**Common mistakes in answers:**
+- Calling `date.today()` inside the scheduler, which makes tests depend on the day they run.
+- Saying a failed card resets ease to 2.5. In SM-2 the interval and repetitions reset, but the lowered ease is kept.
+- Using the line number or list position as the card id.
 
 ### TL;DR
 A due-queue plus a pure SM-2 scheduler and a review log: small code, real usefulness, and a clean lesson in testable state transitions.
@@ -782,14 +1086,64 @@ Partial hashing saves time on big media but adds a pass; for many tiny files ski
 - [Ch 17 — Performance, memory and internals](../chapters/17-performance-memory-internals/README.md): measuring the funnel.
 
 ### In the interview
+**30-second answer:** I built a duplicate file finder that reports groups of identical files and can safely delete, hard-link or quarantine the extras. The key design is a funnel: group by size (free from the directory scan), then hash the first and last 64 KB, then BLAKE2b-hash the full content only for files that still collide, so most files are never read. The hardest part was safety: I group by `(device, inode)` so existing hard links are not "duplicates", default to dry run, and test that no group ever loses its last copy. It scans 100,000 files in under a minute on an SSD.
+
+**Key terms to know:**
+- **Funnel / staged filtering** — cheap checks first, expensive checks only on survivors. Size → partial hash → full hash.
+- **Cryptographic hash (BLAKE2b, SHA-256)** — a fixed-size fingerprint where finding two inputs with the same output is infeasible. Used for final grouping.
+- **Collision** — two different inputs with the same hash. Practically impossible for BLAKE2b, easy for CRC32.
+- **Inode** — the filesystem record for a file's data. `(st_dev, st_ino)` identifies the actual file, whatever its name.
+- **Hard link** — another directory entry for the same inode. Space is freed only when the last link is removed.
+- **Symlink** — a small file pointing to a path. The walker skips them to avoid loops and double counting.
+- **`os.scandir`** — directory iteration that returns entries with cached type information, cheaper than `listdir` plus `stat`.
+- **`hashlib.file_digest`** — hashes an open binary file efficiently in chunks (3.11+).
+- **Keep policy** — the rule for which copy survives: oldest, shortest path, or inside a preferred folder.
+
 **Q:** How do you find duplicate files among millions efficiently?
-**A:** Group by size, then by a hash of a small chunk, then by a full cryptographic hash. Each stage removes most candidates before the expensive one.
+
+**A:** Group by size, then by a hash of a small chunk, then by a full cryptographic hash. A file with a unique size cannot have a duplicate, which usually eliminates most files without reading a byte. Only the small remaining set is read in full, and each byte at most once.
 
 **Q:** Is a hash match proof of identical content?
-**A:** Practically yes for a strong hash, but for destructive actions a final byte comparison removes even the theoretical doubt.
 
-**Q:** What is a hard link?
-**A:** Another name for the same data on disk. Deleting one name does not free space until all names are gone.
+**A:** For BLAKE2b or SHA-256, an accidental collision is so unlikely it can be ignored for reporting. For destructive actions I offer a paranoid mode that does a final byte comparison with `filecmp.cmp(a, b, shallow=False)`, which removes even the theoretical doubt. A weak checksum like CRC32 must never be used for this decision.
+
+**Q:** What is a hard link and why does it matter here?
+
+**A:** It is another name for the same data on disk. Two paths with the same `(st_dev, st_ino)` are already one file, so deleting one name frees no space and reporting them as duplicates would show fake savings. So I collapse identical inodes into one entry before grouping, and the hard-link action itself creates exactly this situation on purpose.
+
+**Q:** Why hash the first and last chunk, not just the first?
+
+**A:** Many formats share identical headers: videos from one camera, ZIPs or database files can start with the same bytes. The end of the file often differs (trailers, indexes), so sampling both ends eliminates more candidates cheaply. Files that differ only in the middle still get caught by the full hash, and I have a test for exactly that case.
+
+**Q:** Would threads speed up hashing?
+
+**A:** Often yes. `hashlib` releases the GIL while hashing large buffers, and file reads release it while waiting on I/O, so a `ThreadPoolExecutor` overlaps work on SSDs and network drives. On a spinning disk, parallel reads cause seeks and can be slower, so I measure and make the worker count configurable.
+
+**Q:** What happens if a file changes during the scan?
+
+**A:** The group could be wrong: two files hashed equal, then one was edited. Before acting I re-check size and `st_mtime_ns` against the scan, and in paranoid mode re-compare bytes. Any mismatch turns the action into a skip with a warning.
+
+**Q:** How do you prove the tool never deletes the last copy?
+
+**A:** The action layer asserts that each group keeps at least one survivor, and a test runs every keep policy over fixture folders and checks each group still has one file. Results are also compared with a brute-force oracle that compares every pair of files byte by byte on small test folders.
+
+**Q:** Show the core grouping step.
+
+**A:**
+```python
+by_size: defaultdict[int, list[Path]] = defaultdict(list)
+for p in files:
+    by_size[p.stat().st_size].append(p)
+candidates = [g for g in by_size.values() if len(g) > 1]
+def digest(p: Path) -> bytes:
+    with p.open("rb") as f:
+        return hashlib.file_digest(f, "blake2b").digest()
+```
+
+**Common mistakes in answers:**
+- Comparing every file with every other file (O(n²)) instead of grouping by a key.
+- Following symlinks during the walk, which can loop forever or count one file twice.
+- Using a fast checksum like CRC32 or MD5-of-first-block as proof before deleting.
 
 ### TL;DR
 A size → partial hash → full hash funnel finds duplicates while reading as little data as possible, with careful identity checks so cleanup never destroys the last copy.
@@ -883,14 +1237,64 @@ A file-per-entry cache is simple but needs cleanup of old files. Short TTLs give
 - [Ch 15 — Testing and debugging](../chapters/15-testing-and-debugging/README.md): fakes instead of network calls.
 
 ### In the interview
+**30-second answer:** I built `wx`, a standard-library-only weather CLI that geocodes a place name, calls the Open-Meteo API and prints current conditions and a 7-day forecast. The key design decision was a TTL disk cache sitting in front of a small HTTP client, so callers do not know whether data was cached and the provider gets at most one request per location every 10 minutes. The hardest part was failure handling: I map DNS errors, timeouts, HTTP errors and bad JSON to clear messages, and fall back to stale cache when offline. A cached answer prints in under 50 ms.
+
+**Key terms to know:**
+- **REST/JSON API** — a URL that returns data (here JSON) instead of a web page.
+- **Query string / `urlencode`** — the `?lat=..&lon=..` part of a URL. `urllib.parse.urlencode` escapes values correctly.
+- **Timeout** — the maximum time to wait for the network. Every request has 5 seconds.
+- **TTL cache** — cached entries carry a "time to live" and become stale after it. Keyed by the full sorted request URL.
+- **Stale-if-error** — serving an expired cache entry, with a warning, when the network fails.
+- **`URLError` / `HTTPError`** — `urllib`'s exceptions for "could not reach the server" and "server answered with an error status". `HTTPError` is a subclass of `URLError`.
+- **HTTP 429 and `Retry-After`** — "too many requests" and the header telling you how long to wait.
+- **Geocoding** — turning a place name into latitude and longitude.
+- **`zoneinfo`** — the standard-library IANA time-zone database, used to show forecast days in the location's time zone.
+
 **Q:** How do you unit-test code that calls an HTTP API?
-**A:** Inject the HTTP layer and replace it with a fake that returns recorded responses or raises errors, so tests are fast and deterministic.
+
+**A:** Inject the HTTP layer (a function or small class) and replace it in tests with a fake that returns recorded JSON fixtures or raises specific errors. Tests are then fast, offline and deterministic. One optional live test, skipped by default, checks the real API still matches the fixtures.
 
 **Q:** What should happen when the API is down?
-**A:** Time out quickly, then serve a stale cached answer with a warning if one exists, otherwise exit with a clear message.
+
+**A:** Time out quickly, then serve a stale cached answer with a clear "data from 2 hours ago" warning if one exists. If not, exit non-zero with one friendly line, not a traceback. Stale weather is more useful than no weather.
 
 **Q:** Why always set a timeout?
-**A:** Without one a request can hang forever on a dead connection, freezing the whole program.
+
+**A:** Without one, `urlopen` waits on the global socket default, which is usually "forever", so a dead connection can hang the program. With a timeout the failure becomes an exception I can handle. The same rule applies to every network call in every project.
+
+**Q:** In what order do you catch `HTTPError` and `URLError`, and why?
+
+**A:** `HTTPError` first, because it is a subclass of `URLError`; if `URLError` came first it would swallow HTTP errors too.
+```python
+try:
+    with urlopen(req, timeout=5) as r:
+        body = json.load(r)
+except HTTPError as e:      # server answered, e.g. 404/429/503
+    ...
+except (URLError, TimeoutError) as e:  # DNS, refused, timeouts
+    ...
+```
+
+**Q:** How do you design the cache key and make the cache crash-safe?
+
+**A:** I sort the query parameters, build the full URL, hash it to a safe file name and store `fetched_at` with the body. Writes use a temp file plus `os.replace`, so a crash cannot leave a half-written entry. If an entry still fails to parse, I delete it and refetch, so one corrupt file never breaks every later run.
+
+**Q:** Why is the cache keyed on the full URL rather than the city name?
+
+**A:** The same city with different units or forecast days is a different response. Keying on the canonical URL means any parameter change is a cache miss automatically, and two names that geocode to the same coordinates share the forecast entry.
+
+**Q:** What changes if this became a web service with 10,000 users?
+
+**A:** The per-user disk cache becomes a shared cache (Redis or in-process LRU) so popular cities are fetched once for everyone. I would need connection pooling (`httpx`), retries with backoff, request coalescing so 100 simultaneous misses for Lisbon cause one upstream call, and an API key or paid tier to respect the provider's limits.
+
+**Q:** How do you handle forecast dates in the right time zone?
+
+**A:** Forecast days belong to the location's local day, not mine. I ask the API for the location's time zone and convert with `zoneinfo.ZoneInfo(name)`. Mixing local and UTC dates is the usual cause of "the forecast is shifted by one day" bugs.
+
+**Common mistakes in answers:**
+- Catching `URLError` before `HTTPError`, so 404s and 503s are reported as "no connection".
+- Caching responses forever or keying by city name only, then serving wrong-unit or stale data.
+- Letting tests hit the real API, which makes them slow and flaky and can get you rate-limited.
 
 ### TL;DR
 A stdlib-only API client that teaches URL building, timeouts, error mapping, typed parsing and a TTL disk cache that keeps the tool fast and polite.
@@ -995,14 +1399,59 @@ SQLite is perfect for a single user and many readers, and handles far more data 
 - [Ch 14 — Standard library tour](../chapters/14-standard-library-tour/README.md): `sqlite3`, `datetime`.
 
 ### In the interview
+**30-second answer:** I built a habit tracker CLI on SQLite that records daily check-ins and shows streaks, 30-day completion rates and a calendar grid. The key decision was to let the database enforce the rules that must never break, such as `UNIQUE (habit_id, day)` so a double check-in is impossible whatever the code does. The hardest part was a correct streak rule for schedules like "weekdays only", which I wrote down in plain sentences and turned into tests. Schema changes run as `PRAGMA user_version` migrations, and every command stays under 100 ms with five years of data.
+
+**Key terms to know:**
+- **SQLite** — a full SQL database in one file, built into Python as `sqlite3`. One writer at a time, many readers.
+- **Parameterised query** — SQL with `?` placeholders and values passed separately. Prevents SQL injection.
+- **SQL injection** — user input changing the meaning of a query, e.g. a name like `x' OR '1'='1`.
+- **Transaction / ACID** — a group of statements that all commit or all roll back. `with conn:` gives that.
+- **Constraint** — a rule the database enforces: `UNIQUE`, `NOT NULL`, `FOREIGN KEY`. Breaking one raises `sqlite3.IntegrityError`.
+- **`PRAGMA foreign_keys = ON`** — SQLite does not enforce foreign keys unless you turn this on for each connection.
+- **`PRAGMA user_version`** — an integer stored in the database file that the migration runner uses as the schema version.
+- **Repository** — the only class that contains SQL. It returns dataclasses to the service layer.
+- **WAL mode** — write-ahead logging, a journal mode that lets readers keep reading while one writer writes.
+
 **Q:** How do you prevent SQL injection?
-**A:** Always use parameter placeholders, never string formatting, so user input is treated as data, not SQL.
+
+**A:** Always use placeholders, never f-strings or `%` formatting, so the driver sends the SQL text and the values separately and input is always treated as data.
+```python
+conn.execute("SELECT id FROM habit WHERE name = ?", (name,))
+```
+Note the trailing comma: `(name,)` is a one-element tuple, while `(name)` is just a string.
 
 **Q:** Why put a unique constraint in the database when the code already checks?
-**A:** Code checks can race or have bugs. The database constraint is the last line of defence and is enforced for every client.
+
+**A:** A code check is check-then-insert, which can race with another process, and code can have bugs or be bypassed by another client. The constraint is enforced atomically for every writer, so it is the last line of defence. The code then catches `IntegrityError` and turns it into a friendly "already checked in today".
 
 **Q:** When would you outgrow SQLite?
-**A:** When many processes or servers need to write concurrently, or you need network access and roles — then a server database like PostgreSQL fits better.
+
+**A:** When many processes or servers need to write concurrently, since SQLite allows only one writer at a time, or when you need network access, users and roles. Then a server database like PostgreSQL fits better. For a single-user CLI, even years of data is tiny for SQLite.
+
+**Q:** What does `with conn:` do in `sqlite3`, and what does it not do?
+
+**A:** It commits the open transaction if the block succeeds and rolls back if it raises. It does not close the connection, which surprises people coming from file objects. I close connections explicitly or wrap them in `contextlib.closing`.
+
+**Q:** How do you define and compute a streak for a weekdays-only habit?
+
+**A:** Walk backwards from today over due days only: Saturday and Sunday are skipped, not counted as misses. Today without a check-in does not break the streak until the day ends. I wrote each rule as a sentence and turned each into a test, including streaks across month and year boundaries.
+
+**Q:** How do migrations work and what if one fails halfway?
+
+**A:** At start-up I read `PRAGMA user_version`, then apply each numbered migration above it in order, setting the new version in the same transaction as the schema change. SQLite supports transactional DDL, but in its default (legacy) mode Python's `sqlite3` does not open a transaction before `CREATE`/`ALTER`, so I issue an explicit `BEGIN` (or use `autocommit=False`, 3.12+). A failing migration then rolls back and leaves the old version intact. A test builds a version-1 file, runs the app and checks the data in version 2.
+
+**Q:** Why store dates as ISO text?
+
+**A:** SQLite has no native date type. ISO 8601 strings like `2026-10-01` sort correctly as text, are readable and work with SQLite's date functions. The rule is to always write the same format; mixing formats breaks sorting silently.
+
+**Q:** How do you test the repository quickly?
+
+**A:** Each test opens `sqlite3.connect(":memory:")`, runs the real migrations and then exercises the repository. In-memory databases take milliseconds, and using real migrations means tests cover the schema that ships. The streak calculator has pure unit tests with no database at all.
+
+**Common mistakes in answers:**
+- Assuming foreign keys are enforced in SQLite by default. They are not without `PRAGMA foreign_keys = ON`.
+- Believing `with conn:` closes the connection. It only commits or rolls back.
+- Using check-then-insert in code as the only protection against duplicates.
 
 ### TL;DR
 A habit tracker that moves you from files to a real database: schemas, constraints, parameterised queries, transactions, migrations and a carefully specified streak rule.
@@ -1094,14 +1543,63 @@ Whole-file objects re-store a 10 GB file if one byte changes; restic and Borg sp
 - [Ch 17 — Performance, memory and internals](../chapters/17-performance-memory-internals/README.md): measuring compression speed and ratio.
 
 ### In the interview
+**30-second answer:** I built an incremental backup tool: the first run stores everything, later runs store only changed files, and each run produces a restorable snapshot. The key design is content-addressed storage: each file's content is saved once, zstd-compressed with Python 3.14's `compression.zstd`, under its SHA-256 hash, and a snapshot is just a JSON manifest mapping paths to hashes. The hardest part was crash safety, which I solved by writing objects first and the manifest last, each atomically. A no-change run over 100,000 files finishes in under 10 seconds without reading any file contents.
+
+**Key terms to know:**
+- **Incremental backup** — only data changed since the last run is copied.
+- **Snapshot / manifest** — a JSON file listing every path in one backup with its hash, size, mtime and mode.
+- **Content-addressed storage** — data stored under the hash of its content. Gives de-duplication and integrity checks for free.
+- **Zstandard (zstd)** — a fast compression algorithm with tunable levels. `compression.zstd` is new in 3.14 (PEP 784).
+- **Compression level** — trades CPU time for smaller output. zstd's default is 3.
+- **Quick check** — treat a file as unchanged if size and `st_mtime_ns` match the previous manifest, as rsync does by default.
+- **Orphan object** — a stored object no manifest references, left by an interrupted backup. `prune` removes it.
+- **Retention policy** — rules like "keep 7 daily, 4 weekly" that decide which snapshots `prune` deletes.
+- **Content-defined chunking** — splitting files at boundaries chosen by a rolling hash so a small edit changes only nearby chunks.
+
 **Q:** What is content-addressed storage?
-**A:** Data is stored under the hash of its content. Identical content gets the same name, giving de-duplication and built-in integrity checks.
+
+**A:** Each object is stored under the hash of its content, like `objects/ab/cdef...`. Identical content gets the same name, so it is stored once wherever it appears. Re-hashing an object and comparing with its name detects corruption, which is how `verify` works. Git uses the same idea.
 
 **Q:** How does your backup stay consistent if it crashes?
-**A:** Objects are written first and the manifest last, each atomically, so a snapshot only becomes visible when everything it references exists.
+
+**A:** Objects are written first (temp file then rename), and the manifest is written last, also atomically. A snapshot only exists once its manifest exists, and by then every object it references is on disk. An interrupted run leaves only orphan objects, which `prune` cleans up. This "data first, pointer last" ordering is the same idea databases use with logs and commit records.
 
 **Q:** Why not compress everything at the highest level?
-**A:** Higher levels cost much more CPU for small gains, and already-compressed formats barely shrink.
+
+**A:** Higher zstd levels cost far more CPU for small extra savings, and already-compressed formats like JPEG, MP4 or ZIP barely shrink at any level. I measured ratio and speed on my own data and default to a low level, skipping known compressed extensions or files where a trial compression saves only a few percent.
+
+**Q:** How do you detect changes without reading every file?
+
+**A:** Compare size and `st_mtime_ns` with the previous manifest. If both match, reuse the old hash. Only changed files are read and hashed, in chunks to keep memory flat. Tools that preserve mtime can fool this, so `--checksum` forces a full re-hash.
+
+**Q:** What is the weakness of whole-file objects, and the fix?
+
+**A:** If one byte changes in a 10 GB file, the whole file is stored again. restic and Borg split files into content-defined chunks using a rolling hash, so boundaries move with the content and an edit changes only a few chunks. Fixed-size chunks would not work well because an insertion shifts every later boundary.
+
+**Q:** How does `prune` decide what is safe to delete?
+
+**A:** First apply the retention policy to choose snapshots to remove. Then build the set of every hash referenced by the remaining manifests (mark) and delete objects not in that set (sweep). An object shared by a kept snapshot is never deleted, and a test proves every kept snapshot still restores after pruning.
+
+**Q:** What failure modes does this design not protect against?
+
+**A:** A backup on the same disk does not survive disk failure, so a copy must live elsewhere. Without encryption anyone with the backup disk reads the files. Ransomware that encrypts the source will be backed up as "changes", so retention of old snapshots matters.
+
+**Q:** Show compressing an object with the 3.14 module.
+
+**A:**
+```python
+from compression import zstd
+data = path.read_bytes()
+digest = hashlib.sha256(data).hexdigest()
+blob = zstd.compress(data, level=3)
+assert zstd.decompress(blob) == data
+```
+For large files I stream with `zstd.open(dst, "wb")` and hash in chunks instead of reading everything into memory.
+
+**Common mistakes in answers:**
+- Writing the manifest before all objects are stored, so a crash produces a snapshot that cannot be restored.
+- Hashing the compressed bytes for the object name, which ties de-duplication to the compression level. Hash the original content.
+- Claiming a backup on the same disk protects against hardware failure.
 
 ### TL;DR
 Snapshots as manifests pointing at hash-named, zstd-compressed objects give incremental, de-duplicated, verifiable backups — and show off Python 3.14's new `compression.zstd`.
@@ -1200,17 +1698,67 @@ Asyncio scales to thousands of connections in one process, but parsing is CPU-bo
 - [Ch 14 — Standard library tour](../chapters/14-standard-library-tour/README.md): `urllib.parse`, `urllib.robotparser`.
 
 ### In the interview
+**30-second answer:** I built an async web crawler on `asyncio` and `httpx` that starts from seed URLs, fetches and parses pages, and follows links within depth and domain limits while writing results as JSON Lines. The key design is a frontier queue feeding N worker tasks in a `TaskGroup`, with one `asyncio.Semaphore` per host and a per-host delay, so the crawl is fast overall but polite to each site. The hardest parts were knowing when the crawl is finished, URL normalisation and backpressure, solved with `queue.join()`, a canonical URL function and a bounded queue. It reaches over 50 pages per second while never exceeding 2 concurrent requests per host.
+
+**Key terms to know:**
+- **Event loop** — the scheduler inside `asyncio` that runs one coroutine at a time and switches at each `await` that waits on I/O.
+- **Coroutine** — a function defined with `async def`. Calling it returns an object that runs only when awaited or wrapped in a task.
+- **`TaskGroup`** — structured concurrency (3.11+): tasks started in the group are awaited together, and if one fails the rest are cancelled and errors are raised as an `ExceptionGroup`.
+- **`asyncio.Semaphore`** — a counter that lets at most K holders in at once. One per host limits per-host concurrency.
+- **`asyncio.Queue` / `join()` / `task_done()`** — the frontier. `join()` returns when every item put has been marked done.
+- **Backpressure** — a bounded queue makes producers wait when consumers are behind, so memory cannot grow without limit.
+- **URL normalisation** — rewriting equivalent URLs to one canonical form so the seen-set works.
+- **robots.txt** — a site's crawl rules (RFC 9309), read with `urllib.robotparser`.
+- **Exponential backoff with jitter** — retry delays that grow (1, 2, 4 s...) with randomness so clients do not retry in waves.
+- **Bloom filter** — a compact probabilistic set: may say "seen" wrongly, never misses a seen item. For huge seen-sets.
+
 **Q:** Why asyncio rather than threads for a crawler?
-**A:** The work is I/O-bound with thousands of waits. Coroutines are much cheaper than threads, and one event loop can multiplex many sockets. Threads also work but cost more memory per connection.
+
+**A:** The work is I/O-bound: most of the time is spent waiting for servers. One event loop can keep thousands of sockets in flight with coroutines that cost a few KB each, while each OS thread reserves its own stack and adds scheduling overhead. Threads also work, and are simpler with blocking libraries, but asyncio gives explicit, cheap concurrency and easy cancellation.
 
 **Q:** How do you limit concurrency per host?
-**A:** A dict of `asyncio.Semaphore` objects keyed by host, acquired around each request, plus a per-host minimum delay.
+
+**A:** A `dict[str, asyncio.Semaphore]` keyed by host, acquired with `async with` around each request, plus a per-host "next allowed time" for the minimum delay. A global semaphore or the worker count bounds total concurrency. A test server counts simultaneous connections and the test asserts it never exceeds K.
 
 **Q:** How do workers know the crawl is finished?
-**A:** `queue.join()` returns when every item has been marked `task_done()`, then cancel the workers (or shut down the queue).
+
+**A:** Each worker calls `queue.task_done()` after processing an item, including enqueuing the links it found. `await queue.join()` returns only when every item ever put has been marked done, so no worker can still be about to add work. Then I cancel the workers, or on 3.13+ call `queue.shutdown()`, which makes blocked `get()` calls raise `QueueShutDown`.
 
 **Q:** What happens if you call `requests.get` inside a coroutine?
-**A:** It blocks the event loop, freezing every task until it returns. Use an async client or `asyncio.to_thread`.
+
+**A:** It blocks the event loop, so every other task freezes until it returns, and concurrency drops to one. Use an async client like `httpx.AsyncClient`, or push the blocking call to a thread with `await asyncio.to_thread(requests.get, url)`. asyncio debug mode (`PYTHONASYNCIODEBUG=1`) logs callbacks that run too long, which finds these bugs.
+
+**Q:** What is backpressure and how does your crawler apply it?
+
+**A:** Parsing can discover links much faster than fetching consumes them, so an unbounded frontier grows until memory runs out. With `asyncio.Queue(maxsize=N)`, `await queue.put()` suspends the producer until there is room. Beyond an in-memory limit I spill the frontier to disk. Careful: if every worker blocks on `put` while no one is getting, you deadlock, so workers put links into a separate overflow buffer rather than blocking.
+
+**Q:** What happens on Ctrl-C or when a task raises inside the `TaskGroup`?
+
+**A:** If one task raises, the `TaskGroup` cancels its siblings and re-raises all errors together as an `ExceptionGroup`, which I handle with `except*`. On Ctrl-C, `asyncio.run` cancels the main task; workers catch `CancelledError` only to clean up (save the frontier checkpoint) and then re-raise it. Swallowing `CancelledError` would stop shutdown from working.
+
+**Q:** What breaks first at 100x, say a billion URLs?
+
+**A:** The seen-set: a Python `set` of URL strings costs roughly 100 bytes or more per URL, so a billion URLs need hundreds of GB. Use a bloom filter or a key-value store, shard the frontier by host across machines (for example in Redis), and move parsing to a process pool because CPU becomes the limit before the network does.
+
+**Q:** How do you test a crawler without the internet?
+
+**A:** I run a local test site that serves a known link graph, robots rules, slow endpoints and failures, and assert exactly which URLs were fetched. Unit tests for the fetcher use `httpx.MockTransport` to script responses (500, then timeout, then 200). Fake clocks keep backoff tests instant.
+
+**Q:** Write the per-host limited fetch.
+
+**A:**
+```python
+limits: defaultdict[str, asyncio.Semaphore] = defaultdict(lambda: asyncio.Semaphore(2))
+async def fetch(client: httpx.AsyncClient, url: str) -> httpx.Response:
+    host = httpx.URL(url).host
+    async with limits[host]:
+        return await client.get(url, timeout=10)
+```
+
+**Common mistakes in answers:**
+- Saying asyncio runs coroutines in parallel. It runs one at a time on one thread and overlaps only the waiting.
+- Using `asyncio.gather` over every URL at once with no semaphore, which opens thousands of connections and gets you blocked.
+- Catching `CancelledError` (or bare `except BaseException`) and not re-raising, which breaks clean shutdown.
 
 ### TL;DR
 A frontier queue feeding N async workers, with per-host semaphores, robots.txt and backoff, teaches bounded and polite concurrency — the hard part of scraping is not fetching, it is restraint.
@@ -1334,17 +1882,70 @@ FastAPI plus async shines for I/O-heavy APIs, but CPU-heavy work in a handler bl
 - [Ch 15 — Testing and debugging](../chapters/15-testing-and-debugging/README.md): fixtures, integration tests.
 
 ### In the interview
+**30-second answer:** I built a reading-list REST API with FastAPI and PostgreSQL: users sign up, save and tag links, search them and page through results, with an OpenAPI spec generated from type hints. The key design is layering: routers only translate HTTP, a service layer owns business rules and transactions, and repositories own the SQL, with the current user and a pooled database connection injected as FastAPI dependencies. The hardest parts were async-safe database access and pagination that stays fast, solved with psycopg 3's async pool and keyset cursors. Reads hit a p95 under 50 ms at 200 requests per second, and integration tests run against a real PostgreSQL.
+
+**Key terms to know:**
+- **REST** — URLs name resources and HTTP methods name actions (GET, POST, PATCH, DELETE).
+- **ASGI / Uvicorn** — the async server interface Python web apps speak, and the server that runs FastAPI.
+- **Pydantic model** — a typed class that parses and validates request and response bodies. Invalid input becomes a 422.
+- **Dependency injection (`Depends`)** — FastAPI calls a function to provide the current user or a DB connection per request.
+- **Connection pool** — a set of open database connections reused across requests, because opening one per request is slow.
+- **Keyset (cursor) pagination** — "give me rows after `(created_at, id)`" instead of `OFFSET`. Every page costs the same with an index.
+- **Idempotency / `ON CONFLICT`** — saving the same URL twice has one effect, enforced by a unique constraint and `INSERT ... ON CONFLICT`.
+- **GIN index on `tsvector`** — PostgreSQL's full-text search index, used for search on title and notes.
+- **Password hashing (argon2/bcrypt)** — slow, salted hashes so stolen hashes are expensive to crack.
+- **Alembic migration** — a versioned, ordered schema change script.
+
 **Q:** What happens if an `async def` endpoint calls a blocking database driver?
-**A:** It blocks the event loop, so every concurrent request waits. Use an async driver or a sync `def` endpoint, which runs in a thread pool.
+
+**A:** The blocking call runs on the event loop thread, so every other request on that worker waits until it returns. Throughput collapses under load even though CPU is idle. Use an async driver (psycopg's `AsyncConnectionPool`) or declare the endpoint with plain `def`, which FastAPI runs in a thread pool.
 
 **Q:** Why cursor pagination over offset?
-**A:** Offset scans and discards rows, so deep pages get slower, and inserts shift pages. A keyset cursor uses an index and is stable.
+
+**A:** `OFFSET 50000` makes PostgreSQL read and discard 50,000 rows, so deep pages get slower, and new inserts shift rows between pages, causing duplicates or gaps. A keyset cursor encodes the last `(created_at, id)` and queries `WHERE (created_at, id) < (...)` with a matching index, so each page is an index range scan of constant cost and stable under inserts. The trade-off is no "jump to page 37".
 
 **Q:** How do you stop users seeing each other's data?
-**A:** Scope every query by the authenticated user id, enforce it in the repository layer, and return 404 for foreign resources.
+
+**A:** Every query includes `user_id = %(current_user)s` in the repository layer, rather than fetching a row and checking ownership afterwards. Foreign resources return 404, not 403, so the API does not reveal that an id exists. PostgreSQL row-level security is a defence-in-depth stretch goal.
 
 **Q:** Where do validation errors come from in FastAPI?
-**A:** Pydantic validates request data against the declared types and FastAPI turns failures into 422 responses.
+
+**A:** FastAPI reads the type hints on path, query and body parameters, and Pydantic parses the incoming data against them. Any failure becomes a 422 Unprocessable Content response listing each bad field. I add a custom exception handler so these follow the same `{"error": {...}}` shape as my other errors.
+
+**Q:** How do you handle saving the same URL twice, including two simultaneous requests?
+
+**A:** A `UNIQUE (user_id, url)` constraint plus `INSERT ... ON CONFLICT (user_id, url) DO NOTHING RETURNING id`, then fetch the existing row if nothing was returned, and answer 409 or the existing link. A check-then-insert in Python would race: both requests see "not found" and both insert. The database decides atomically.
+
+**Q:** JWT or opaque session tokens?
+
+**A:** A JWT is a signed token the server can verify without a database lookup, which is fast and stateless, but it cannot be revoked before it expires without adding a blocklist. An opaque random token stored (hashed) in a table costs one lookup per request but can be revoked instantly on logout or compromise. For this app I chose opaque tokens; short-lived JWTs plus refresh tokens are the usual compromise at larger scale.
+
+**Q:** What breaks first at 10x traffic?
+
+**A:** Usually the database: the connection pool runs out (requests queue) or PostgreSQL saturates. I would size the pool against PostgreSQL's `max_connections` across all app workers, add PgBouncer, check slow queries with `EXPLAIN ANALYZE`, cache hot reads and add read replicas. App servers scale horizontally because they are stateless.
+
+**Q:** How do you test it against a real database quickly?
+
+**A:** Start one PostgreSQL container per test session (Testcontainers), run the migrations once, and wrap each test in a transaction that is rolled back at the end, so tests are isolated and fast. Use `httpx` against the app for API tests, and override dependencies with `app.dependency_overrides` to inject a test user. Services get unit tests with fake repositories.
+
+**Q:** Show a dependency that provides the current user.
+
+**A:**
+```python
+async def current_user(token: str = Depends(oauth2_scheme), db=Depends(get_db)) -> User:
+    user = await users.by_token(db, token)
+    if user is None:
+        raise HTTPException(401, "invalid token")
+    return user
+
+@app.get("/links/{link_id}")
+async def get_link(link_id: int, user: User = Depends(current_user)): ...
+```
+
+**Common mistakes in answers:**
+- Saying `async def` makes every endpoint faster. It only helps if everything awaited inside is truly non-blocking.
+- Returning 403 for another user's resource, which leaks that it exists.
+- Making the connection pool as large as possible; too many connections overload PostgreSQL and slow everything down.
 
 ### TL;DR
 A production-shaped API — typed models, layered code, real constraints, keyset pagination, async-aware database access and integration tests — is the most job-relevant project in this book.
@@ -1440,14 +2041,66 @@ Static output cannot do per-user content or search on the server; client-side se
 - [Ch 14 — Standard library tour](../chapters/14-standard-library-tour/README.md): `http.server`, `datetime`.
 
 ### In the interview
+**30-second answer:** I built a static site generator that turns a folder of Markdown files with front matter into a complete site: pages from Jinja templates, an index, tag pages, an RSS feed, a sitemap and a live-reload preview server. The key design is a two-pass build: load every page into an in-memory site index first, then render, so pages can reference each other and broken links fail the build before anything is written. The hardest part was incremental rebuilds without stale output, solved with a conservative dependency graph and a test that incremental output equals a clean build. It builds 1,000 pages in under 5 seconds and rebuilds one edited page in under 300 ms.
+
+**Key terms to know:**
+- **Front matter** — a metadata block (title, date, tags) at the top of a Markdown file, parsed with `tomllib` or YAML.
+- **CommonMark** — a precise Markdown specification. markdown-it-py follows it.
+- **Template inheritance** — Jinja layouts with `{% block %}` sections that child templates override.
+- **Autoescaping** — Jinja converts `<` to `&lt;` in variables so data cannot inject HTML. Only rendered Markdown is marked safe.
+- **XSS (cross-site scripting)** — injecting a script into a page that runs in visitors' browsers.
+- **Two-pass build** — pass 1 loads everything into a site index, pass 2 renders.
+- **Dependency graph** — which outputs depend on which inputs (post, template, tag pages). Drives incremental rebuilds.
+- **Deterministic output** — the same input gives byte-identical output, so diffs and caches work.
+- **Slug / pretty URL** — `hello-world` and `/posts/hello-world/` generated from a title.
+
 **Q:** Why render in two passes?
-**A:** Pages reference each other, so you need the complete index before rendering any page, and you can validate links before writing.
+
+**A:** Pages reference each other (links, "related posts", the index lists every post), so no page can be rendered until all are loaded. Pass 1 builds the full site index; pass 2 renders from it. Having the whole index first also lets me validate every internal link and fail with file and line before writing output.
 
 **Q:** How do you prevent XSS in a static site generator?
-**A:** Autoescape all template variables and only mark trusted, already-rendered HTML as safe.
+
+**A:** Turn on Jinja autoescape for HTML templates, so every variable from front matter (titles, tags) is escaped. Only the rendered Markdown body is marked safe with `Markup` (or `|safe`), because that is trusted author content. A title like `<script>` then shows as text.
 
 **Q:** How do you know an incremental build is correct?
-**A:** Compare it with a clean build in tests, and track dependencies conservatively.
+
+**A:** The ground truth is a clean full build. A property-style test applies random edits, runs an incremental build, then a clean build into another folder and compares the trees byte for byte. Dependencies are tracked conservatively: a template change rebuilds everything that uses it, and a front-matter change rebuilds the index and tag pages.
+
+**Q:** Why make output deterministic, and what usually breaks it?
+
+**A:** Deterministic output makes golden-file tests possible, keeps git diffs of the output meaningful and lets CDNs cache unchanged files. Common culprits are iterating a `set` (string hashes are randomised per process), using the current time in the page, and file-system listing order. Sort everything and take dates from front matter.
+
+**Q:** What happens with malformed front matter or a missing date?
+
+**A:** The loader raises a `ContentError` with file and line, collects all such errors across the site, and fails the build listing them together. Silently skipping a page would publish a site with a missing post. Drafts are excluded deliberately, not by accident.
+
+**Q:** Why Jinja rather than f-strings or `string.Template`?
+
+**A:** Templates need inheritance, loops, includes, filters and autoescaping. Building HTML with f-strings mixes logic and markup and makes escaping manual, so one forgotten escape is an XSS bug. Jinja compiles templates to Python code, so it is also fast enough for thousands of pages.
+
+**Q:** What changes at 100x, say 100,000 pages with many images?
+
+**A:** Full builds become minutes, mostly image processing and template rendering. I would cache processed images by content hash, render pages in parallel with a process pool (rendering is CPU-bound), and rely on incremental builds. Memory for the site index also grows, so I would keep bodies on disk and only metadata in memory.
+
+**Q:** How does the watch-and-serve loop work?
+
+**A:** `watchfiles` yields batches of changed paths. The dependency graph maps them to affected outputs, which are rebuilt, and the preview server (`http.server` in a thread) serves the output folder. Batching matters because editors save several files at once.
+
+**Q:** Split front matter from the body.
+
+**A:**
+```python
+def split(text: str) -> tuple[dict, str]:
+    if not text.startswith("+++\n"):
+        return {}, text
+    meta, _, body = text[4:].partition("\n+++\n")
+    return tomllib.loads(meta), body
+```
+
+**Common mistakes in answers:**
+- Marking every template variable `|safe` to "fix" escaped HTML, which reopens XSS.
+- Claiming incremental builds are "obviously correct" without comparing against a clean build.
+- Rendering pages as they are loaded, then discovering links to pages not yet loaded.
 
 ### TL;DR
 Load everything, build a site index, render through templates, and track dependencies for fast rebuilds — a compact lesson in text pipelines and build systems.
@@ -1539,14 +2192,67 @@ Entry points need installation, so dropping a `.py` file in a folder will not wo
 - [Ch 9 — Errors, exceptions and files](../chapters/09-errors-exceptions-files/README.md): isolating failures.
 
 ### In the interview
+**30-second answer:** I built a format-conversion CLI whose readers and writers come from plugins: separately installed packages that advertise themselves under the `convertkit.formats` entry point group, so `pip install convertkit-yaml` adds YAML with no host change. The key design is a typed `FormatPlugin` Protocol plus lazy loading: listing plugins reads only metadata, and a plugin is imported only when its format is needed. The hardest part was robustness, solved with an API version check, validation at load time and catching plugin errors so one broken plugin is reported and skipped. Discovery adds under 50 ms to start-up.
+
+**Key terms to know:**
+- **Entry point** — a named object a package advertises in its metadata (`[project.entry-points."group"]` in `pyproject.toml`), discoverable without importing the package.
+- **`importlib.metadata.entry_points(group=...)`** — the standard-library call that lists entry points of installed distributions.
+- **`EntryPoint.load()`** — imports the module named in `value` (`pkg.module:attr`) and returns the object.
+- **Lazy loading** — import a plugin on first use and cache it, keeping start-up fast.
+- **`typing.Protocol`** — structural typing: any object with the right methods matches, no inheritance needed.
+- **`@runtime_checkable`** — lets `isinstance` check a Protocol, but only that the attributes exist, not their signatures.
+- **Plugin API version** — an integer the plugin declares so the host can reject incompatible ones.
+- **Editable install** — `pip install -e .` installs a package that points at its source folder, used while developing a plugin.
+- **pluggy** — the hook library behind pytest's plugins.
+
 **Q:** How does a program find plugins installed by pip?
-**A:** Plugins declare entry points in their package metadata. The host calls `importlib.metadata.entry_points(group=...)` and loads the ones it needs.
+
+**A:** Each plugin package declares an entry point in its `pyproject.toml`; at install time it is written into the distribution's `entry_points.txt` metadata. The host calls `importlib.metadata.entry_points(group="convertkit.formats")`, which reads that metadata for every installed distribution without importing their code, and calls `.load()` only on the ones it needs.
 
 **Q:** Why use `Protocol` instead of a base class?
-**A:** Plugins do not need to import or inherit from the host's class, which avoids version coupling, while type checkers still verify the shape.
+
+**A:** Plugins do not need to import or inherit from a host class, which avoids version coupling between the plugin and the host. Type checkers still verify the shape statically. The trade-off is that runtime checks are weak, so I validate `api_version` and required attributes explicitly at load time.
 
 **Q:** Can try/except make plugins safe?
-**A:** It contains bugs, not malice. Real isolation needs process boundaries or sandboxes.
+
+**A:** It contains bugs, not malice. A plugin runs in my process with my user's permissions, so it can read files, open sockets or call `os._exit()`. `try/except` around `load()` and each call stops an exception from crashing the host. Real isolation needs a separate process or a sandbox (Project 35 explores subinterpreters).
+
+**Q:** What does `isinstance(obj, MyProtocol)` actually check?
+
+**A:** With `@runtime_checkable`, it only checks that the named attributes exist on the object. It does not check method signatures or return types, so a `read` that takes the wrong arguments still passes. That is why I also call mypy on example plugins and keep explicit checks for `api_version`.
+
+**Q:** How do you evolve the plugin API without breaking existing plugins?
+
+**A:** Give it an integer `API_VERSION`, accept a range (for example 1 to 2), and add new methods as optional with defaults rather than changing existing signatures. The host checks with `getattr(plugin, "new_method", None)`. Breaking changes bump the major version with a documented deprecation window.
+
+**Q:** Two plugins both claim `.yaml`. What happens?
+
+**A:** There must be a deterministic rule, never "whichever loaded last". I pick the user's configured preference first, then a built-in, then sort by plugin name, and print a warning naming both. `plugins list` shows which one won.
+
+**Q:** How do you test discovery and lazy loading?
+
+**A:** Monkeypatch `entry_points` to return fake `EntryPoint` objects pointing at test modules, or build tiny plugin distributions in a temporary directory and install them. To prove laziness, assert the plugin module is not in `sys.modules` after listing, and is after first use. Bad plugins (raise on import, wrong version) must appear in the report as skipped.
+
+**Q:** Why not just scan a `plugins/` folder for `.py` files?
+
+**A:** A folder scan is friendlier for quick scripts but bypasses packaging: no dependency resolution, no versions, no uninstall. Entry points work with any installer and environment, and are the standard used by pytest, Flask and many other tools. The cost is that a plugin must be installed, even if only in editable mode.
+
+**Q:** Show discovery with lazy loading.
+
+**A:**
+```python
+from importlib.metadata import entry_points
+eps = {ep.name: ep for ep in entry_points(group="convertkit.formats")}
+
+@functools.cache
+def plugin(name: str) -> FormatPlugin:
+    return eps[name].load()
+```
+
+**Common mistakes in answers:**
+- Saying discovery imports every plugin. Listing reads metadata only; importing happens on `.load()`.
+- Believing `@runtime_checkable` verifies method signatures.
+- Calling `try/except` a security boundary.
 
 ### TL;DR
 Entry points give discovery without imports, a Protocol gives a typed contract, and lazy loading plus validation keeps the host fast and robust as the ecosystem grows.
@@ -1642,14 +2348,66 @@ Writing your own loader teaches typing internals but pydantic-settings is more c
 - [Ch 9 — Errors, exceptions and files](../chapters/09-errors-exceptions-files/README.md): `ExceptionGroup`, TOML.
 
 ### In the interview
+**30-second answer:** I built a typed configuration loader that merges defaults, a TOML file, environment variables and CLI flags into an immutable, validated settings object defined by a plain frozen dataclass. The key design is that the dataclass's type hints are the schema: the converter walks them at runtime with `annotationlib` and `typing.get_origin`/`get_args`, so `"8080"` becomes `int` and `"a,b"` becomes `list[str]`. The hardest part was useful errors: I collect every failure with its dotted path and source, like `db.port from env:APP_DB__PORT`, and report them all at once. A 100-field config loads in under 20 ms with no dependencies.
+
+**Key terms to know:**
+- **Layered configuration** — defaults < file < environment < CLI, where later layers override earlier ones.
+- **Provenance** — the record of which layer set each final value. The `explain` command prints it.
+- **Deferred annotations (PEP 649/749)** — in 3.14, annotations are evaluated lazily on first access, so forward references no longer fail at class creation.
+- **`annotationlib.get_annotations(format=...)`** — reads annotations as real values (`VALUE`), values with `ForwardRef` placeholders (`FORWARDREF`), or strings (`STRING`).
+- **`typing.get_origin` / `get_args`** — split `list[int]` into `list` and `(int,)`, and `int | None` into the union and its members.
+- **Frozen dataclass** — immutable settings, so no code can change config at runtime by accident.
+- **`ExceptionGroup`** — raise several errors at once (3.11+). Used to report every config mistake together.
+- **Secret wrapper** — a type with a masked `__repr__`/`__str__` and an explicit `.get()`.
+- **Fail fast** — validate everything at start-up, not when a value is first used.
+
 **Q:** What changed about annotations in Python 3.14?
-**A:** They are evaluated lazily (PEP 649/749). Forward references work without quotes, and the new `annotationlib` module can read annotations as values, forward references or strings.
+
+**A:** Annotations are no longer evaluated when the class or function is defined. The compiler stores an `__annotate__` function and evaluates it on first access of `__annotations__` (PEP 649, finalised by PEP 749). Forward references work without quotes, and `annotationlib.get_annotations()` can return values, `ForwardRef` placeholders or strings. `from __future__ import annotations` still works but is no longer needed for this.
 
 **Q:** Why validate all config at start-up?
-**A:** Fail fast: a bad value found at start-up is a deploy error, while one found at 3 a.m. in a rarely used code path is an outage.
+
+**A:** Fail fast: a bad value found at start-up is a failed deploy that the deployer sees immediately and can roll back. One found at 3 a.m. in a rarely used code path is an outage. Reporting all errors at once also saves the "fix one, run, find the next" loop.
 
 **Q:** How do you keep secrets out of logs?
-**A:** Wrap them in a type whose `__repr__` and `__str__` are masked, so accidental printing shows `***`.
+
+**A:** Wrap them in a `Secret[str]` type whose `__repr__` and `__str__` return `***`, so printing the settings object or an f-string shows nothing sensitive. Code that really needs the value calls `.get()`, which is easy to search for in review. Frozen dataclasses' generated `__repr__` calls the field's `repr`, so the mask carries through.
+
+**Q:** What is the `bool("0")` bug and how do you avoid it?
+
+**A:** `bool()` on any non-empty string is `True`, so `bool("0")` and `bool("false")` are both `True`. Environment variables are always strings, so naive conversion turns `DEBUG=false` into debug mode. I accept an explicit set (`true/false/1/0/yes/no/on/off`, case-insensitive) and raise a clear error for anything else.
+
+**Q:** How does the converter handle `list[int]` and `int | None`?
+
+**A:** It dispatches on `get_origin(tp)`: for `list` it splits the raw value and converts each item with `get_args(tp)[0]`; for a union it tries each member in order, treating an empty string or `null` as `None` when `NoneType` is a member, and reports all failures if none match. In 3.14, `int | None` and `Optional[int]` produce the same `typing.Union` object, but code that supports older versions must also check `types.UnionType`.
+
+**Q:** Strict unknown keys: is that a good idea?
+
+**A:** It catches typos like `prot = 8080` that would otherwise silently fall back to defaults, which is a common cause of outages. But during a rolling deploy, new config may reach old code that does not know the key yet. So the default is "error", with a warn-only mode for that situation.
+
+**Q:** Why frozen settings, and what does it cost?
+
+**A:** Frozen settings cannot be mutated by accident, are hashable and are safe to share between threads. The cost is hot reload: you cannot change one field, so a reload builds a whole new settings object and swaps a reference, notifying subscribers with old and new values.
+
+**Q:** How do you test it?
+
+**A:** Parametrized tests per type with valid and invalid raw strings, a test that a config with five mistakes reports five errors, and a property test that generates random settings, writes them as TOML and env vars, loads them back and compares. A typing test runs mypy on `load(Settings)` and checks the inferred type is `Settings`, which I get by annotating `def load[T](cls: type[T]) -> T`.
+
+**Q:** Show reading field types safely in 3.14.
+
+**A:**
+```python
+from annotationlib import get_annotations, Format
+def field_types(cls: type) -> dict[str, object]:
+    # then get_origin(list[int]) is list, get_args(list[int]) == (int,)
+    return get_annotations(cls, format=Format.VALUE)
+```
+At load time every class is defined, so `Format.VALUE` is right; `FORWARDREF` is for tooling that may run earlier.
+
+**Common mistakes in answers:**
+- Reading `cls.__annotations__` directly and claiming that is always safe; in 3.14 accessing it evaluates annotations and can raise `NameError` for undefined names, which `annotationlib` handles.
+- Converting env strings with `bool()` or `int()` without explicit, documented rules.
+- Raising on the first error, forcing users to fix config one mistake at a time.
 
 ### TL;DR
 Use dataclass type hints as the schema, merge layered sources with provenance, convert by walking the types, and report every error at once — a deep, practical tour of runtime typing in 3.14.
@@ -1746,14 +2504,70 @@ Pure-Python wheels are universal (`py3-none-any`); C extensions need a wheel per
 - [Ch 15 — Testing and debugging](../chapters/15-testing-and-debugging/README.md): CI test matrix.
 
 ### In the interview
+**30-second answer:** I took a small library and shipped it properly to PyPI: a `src/` layout, honest `pyproject.toml` metadata, a `py.typed` marker, a CI matrix on Python 3.12–3.14 across three operating systems, and tag-triggered publishing with uv and Trusted Publishing. The key decision was to test the built artifact, not the source tree: CI installs the wheel into a clean venv and runs a smoke test, which catches missing files. The hardest part was the release pipeline, which publishes to TestPyPI first and uses short-lived OIDC tokens so no API token is stored anywhere. A stranger can `pip install` it and follow the README.
+
+**Key terms to know:**
+- **`pyproject.toml`** — the standard project file: `[build-system]` names the build backend, `[project]` holds metadata and dependencies.
+- **Build backend (PEP 517)** — the tool that turns source into artifacts, e.g. hatchling or uv_build. `uv build` calls it.
+- **sdist** — source distribution (`.tar.gz`) that must be built on install.
+- **Wheel** — a pre-built `.whl` archive that installers just unpack. Its tag (`py3-none-any`) says which Pythons and platforms it fits.
+- **`src/` layout** — the package lives under `src/`, so tests cannot accidentally import the working copy.
+- **`py.typed`** — an empty marker file (PEP 561) telling type checkers the package ships inline type hints.
+- **`requires-python`** — the Python versions the package supports. Installers use it to pick a compatible release.
+- **Lock file (`uv.lock`)** — exact versions of the dev environment. Applications pin, libraries declare ranges.
+- **Trusted Publishing / OIDC** — PyPI trusts a specific CI workflow, which proves its identity with a short-lived OpenID Connect token instead of a stored password.
+- **Semantic versioning** — MAJOR.MINOR.PATCH, where a major bump signals breaking changes.
+
 **Q:** What is the difference between an sdist and a wheel?
-**A:** An sdist is source that must be built on install. A wheel is a pre-built archive that is simply unpacked, faster and needs no build tools.
+
+**A:** An sdist is source plus metadata that the installer must build, which may need compilers and runs build code. A wheel is a pre-built archive that is simply unpacked, so it is faster and needs no build tools. I publish both: the wheel for normal installs, the sdist for platforms without a matching wheel and for downstream packagers.
 
 **Q:** Why the `src/` layout?
-**A:** It stops tests from importing the working copy by accident, so they exercise the installed package and catch missing files.
+
+**A:** With the package at the repository root, the current directory is on `sys.path`, so `import yourpkg` in tests imports the working copy, not the installed one. Tests can then pass even when the wheel is missing a module or data file. Under `src/`, the only importable copy is the installed package, so packaging mistakes fail tests immediately.
 
 **Q:** How does trusted publishing work?
-**A:** PyPI is configured to trust a specific CI workflow. The job gets a short-lived OIDC token from the CI provider, exchanges it for a temporary upload token, and no long-lived secret exists.
+
+**A:** On PyPI I register the repository, workflow file and environment as a trusted publisher. When the release job runs, it requests an OIDC token from GitHub Actions (the job needs `id-token: write` permission), sends it to PyPI, and PyPI returns a short-lived upload token valid only for this project. No long-lived secret exists to leak.
+
+**Q:** Should a library pin its dependencies exactly?
+
+**A:** No. A library is installed alongside other libraries, so exact pins (`httpx==0.27.2`) make it impossible to satisfy everyone and cause resolver conflicts. Libraries declare the lowest version they need (`httpx>=0.27`) and avoid upper caps unless a known break exists. Applications pin exact versions with a lock file. The project's own `uv.lock` is for development only and is not shipped.
+
+**Q:** You published 1.2.0 with a broken wheel. What now?
+
+**A:** A file on PyPI can never be replaced, and a deleted filename cannot be re-uploaded, so I release 1.2.1 with the fix. I also yank 1.2.0, which hides it from resolvers that do not pin it exactly but keeps existing pinned installs working. Then I add the missing check (usually an artifact test) to CI.
+
+**Q:** How do you keep the version in one place?
+
+**A:** I keep it only in `pyproject.toml` (or derive it from the git tag with a plugin), and read it at runtime with `importlib.metadata.version("yourpkg")`. The release job checks that the tag matches the metadata version and fails otherwise. Two hard-coded copies always drift.
+
+**Q:** What changes if the library has a C extension?
+
+**A:** A pure-Python wheel works everywhere (`py3-none-any`), but a C extension needs a wheel per OS, CPU architecture and Python version, including free-threaded builds (`cp314t`). Tools like cibuildwheel build that matrix in CI. Without a matching wheel, users fall back to the sdist and need a compiler, which is the most common install failure.
+
+**Q:** How do you prove the published package works?
+
+**A:** CI builds the sdist and wheel, runs `twine check` (or uv's checks) on metadata, installs the wheel into a fresh venv on each OS and Python version, runs the test suite against it, and calls the console script as a subprocess. The first release goes to TestPyPI and is installed from there before the real one.
+
+**Q:** Show the minimum `pyproject.toml`.
+
+**A:**
+```toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+[project]
+name = "slugkit"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = []
+```
+
+**Common mistakes in answers:**
+- Saying you can re-upload a fixed file with the same version. PyPI never allows that.
+- Pinning exact dependency versions in a library's `[project.dependencies]`.
+- Testing only the source tree and never the built wheel.
 
 ### TL;DR
 Ship a small library the professional way: `src/` layout, honest metadata, artifact tests on a version matrix, and tag-triggered publishing through uv and trusted publishing.
@@ -1859,14 +2673,66 @@ Retries multiply load: three retries at each of four layers can turn one request
 - [Ch 15 — Testing and debugging](../chapters/15-testing-and-debugging/README.md): fake clocks and mock transports.
 
 ### In the interview
+**30-second answer:** I built a thin resilience layer on top of `httpx` that adds timeouts, classified retries with exponential backoff and full jitter, a per-host token-bucket rate limiter and a circuit breaker, exposed as a client wrapper and a `@resilient(policy)` decorator that works on both `def` and `async def`. The key decision was to retry only idempotent requests unless the caller passes an idempotency key, because retrying a POST can double-charge someone. The hardest part was testing time-based behaviour, which I solved by injecting a clock and sleep function so tests run instantly. Overhead per successful call is under 0.2 ms.
+
+**Key terms to know:**
+- **Transient failure** — an error that may succeed on retry: connection reset, timeout, 502/503/504, 429.
+- **Exponential backoff** — waiting `base × 2^attempt` between retries, capped at a maximum.
+- **Full jitter** — choosing a random delay between 0 and the backoff cap, so clients do not retry in sync.
+- **Idempotent request** — repeating it has the same effect as doing it once (GET, PUT, DELETE). POST usually is not.
+- **Idempotency key** — a unique id sent with a write so the server can detect and ignore duplicates.
+- **Token bucket** — a rate limiter: tokens refill at a fixed rate up to a capacity, and each call spends one.
+- **Circuit breaker** — a state machine (closed, open, half-open) that fails fast while a dependency is down.
+- **`Retry-After`** — a header on 429/503 giving seconds or an HTTP date to wait.
+- **Retry amplification** — retries at several layers multiplying load during an outage.
+- **`time.monotonic`** — a clock that never goes backwards, used for all delays and windows.
+
 **Q:** Which errors should you retry?
-**A:** Transient ones: connection errors, timeouts, 502/503/504 and 429 (after the indicated delay). Not 400, 401, 403 or 404 — retrying will not change the answer.
+
+**A:** Transient ones: connection errors, timeouts, 502, 503, 504 and 429 (after the indicated delay). Not 400, 401, 403, 404 or 422, because the same request will get the same answer. A timeout on a non-idempotent request is special: the server may have done the work, so only retry it with an idempotency key.
 
 **Q:** What is a circuit breaker?
-**A:** A state machine that stops calls to a failing dependency for a cool-down period, then lets a probe through to test recovery.
+
+**A:** A per-dependency state machine. Closed: calls pass and failures are counted. Open: after failures cross a threshold, calls fail immediately with `CircuitOpen` for a cool-down, protecting both my threads and the struggling service. Half-open: after the cool-down, a few probe calls go through; success closes it, failure re-opens it.
 
 **Q:** Why add jitter to backoff?
-**A:** To de-synchronise clients so retries do not arrive in waves that knock the service over again.
+
+**A:** Without jitter, 1,000 clients that failed together retry together at exactly 1, 2 and 4 seconds, hitting the recovering service in waves that knock it over again. Full jitter, `random.uniform(0, min(cap, base * 2**attempt))`, spreads retries evenly over the window. AWS's simulations show it cuts both total calls and completion time.
+
+**Q:** How does a token bucket work, and why not a fixed window?
+
+**A:** The bucket holds up to `capacity` tokens and refills at `rate` per second, computed lazily from `monotonic()` on each call. A call takes a token or waits until one is available. It allows short bursts up to capacity while keeping the long-run rate. A fixed per-second window lets a client send double the limit across a window boundary.
+
+**Q:** How does one decorator support both sync and async functions?
+
+**A:** Check `inspect.iscoroutinefunction(fn)` at decoration time and return an `async def` wrapper that uses `await asyncio.sleep`, or a plain wrapper that uses `time.sleep`. The retry decision (classify, compute delay) lives in shared pure functions, so the two wrappers differ only in how they wait. `functools.wraps` keeps the name and docstring.
+
+**Q:** What is retry amplification and how do you prevent it?
+
+**A:** If four layers each retry three times (four attempts), one user request can become 4^4 = 256 calls to the bottom service during an outage, making it worse. Retry at one layer only (usually closest to the failing call), use a total deadline across attempts, and consider a retry budget that caps retries at a percentage of recent traffic.
+
+**Q:** Is the limiter correct when shared by many threads, or many processes?
+
+**A:** Across threads, the refill-and-take step is a compound read-modify-write, so I protect it with a `threading.Lock` (an `asyncio.Lock` for the async version). A test with 50 threads asserts the rate is never exceeded. Across processes or servers each has its own bucket, so the combined rate is N times higher; a shared limiter in Redis or server-side limits are needed there.
+
+**Q:** How do you test retries without slow, flaky sleeps?
+
+**A:** Inject `clock` and `sleep` callables. Tests pass a fake clock and a fake sleep that records the requested delays and advances the clock, then assert the exact sequence. `httpx.MockTransport` scripts responses: two 503s then 200, or a 429 with `Retry-After: 3`.
+
+**Q:** Write the full-jitter delay.
+
+**A:**
+```python
+def delay(attempt: int, base: float = 0.1, cap: float = 10.0,
+          rnd: random.Random = random.Random()) -> float:
+    return rnd.uniform(0, min(cap, base * 2 ** attempt))
+```
+Using `random` here is fine: jitter needs spread, not unpredictability.
+
+**Common mistakes in answers:**
+- Retrying every error, including 400s and 401s, or retrying POSTs blindly.
+- Using `time.time()` for delays and windows, which breaks when the wall clock jumps.
+- Forgetting a total deadline, so retries outlive the caller's own timeout.
 
 ### TL;DR
 Timeouts, classified retries with jittered backoff, idempotency, a token bucket and a circuit breaker — packaged as one decorator that works for sync and async code.
@@ -1959,14 +2825,67 @@ One process holds all state, so it is a single point of failure and cannot scale
 - [Ch 9 — Errors, exceptions and files](../chapters/09-errors-exceptions-files/README.md): `finally` cleanup, exception groups.
 
 ### In the interview
+**30-second answer:** I built a multi-room chat server on raw `asyncio` streams with an IRC-style line protocol (`/nick`, `/join`, `/msg`), which you can use from `nc` or a small client. The key design is one reader task and one writer task per client, with a bounded outbound queue in between, so the room hub broadcasts with `put_nowait` and never waits on any socket. The hardest parts were slow consumers and cleanup on every exit path, solved with "disconnect when your queue is full" and `finally` blocks that release nicks and rooms. One process holds 5,000 idle connections in under 200 MB.
+
+**Key terms to know:**
+- **`asyncio.start_server` / streams** — the high-level TCP API giving a `StreamReader` and `StreamWriter` per connection.
+- **Framing** — how a byte stream is split into messages. Here: one message per `\n`-terminated line, max 4 KB.
+- **`write()` vs `drain()`** — `write` only buffers; `await drain()` waits until the OS buffer has room.
+- **Slow consumer** — a client that stops reading. Without protection it blocks broadcasts or grows memory.
+- **Bounded queue / backpressure** — each client's outbound `asyncio.Queue(maxsize=N)`. A full queue triggers a disconnect.
+- **Fan-out** — delivering one message to every member of a room.
+- **Cooperative scheduling** — asyncio switches tasks only at `await`, so code without `await` runs without interruption.
+- **`deque(maxlen=50)`** — a ring buffer for room history that drops the oldest message automatically.
+- **Graceful shutdown** — stop accepting, tell clients goodbye, cancel tasks, close sockets.
+- **Pub/sub broker** — Redis or NATS relaying room messages between server processes when scaling out.
+
 **Q:** Why do hub methods not need locks in asyncio?
-**A:** Only one task runs at a time and switches happen only at `await`. A method with no `await` runs atomically with respect to other tasks.
+
+**A:** Only one task runs at a time on the event loop, and a switch can only happen at an `await`. A hub method with no `await` (update dicts, `put_nowait` to queues) therefore runs atomically with respect to other tasks. If I ever added an `await` in the middle of a state change, I would need an `asyncio.Lock` or to restructure.
 
 **Q:** How do you stop one slow client slowing everyone?
-**A:** Give each client a bounded outbound queue and a writer task. Broadcasting never awaits a socket, and full queues trigger a disconnect or drop.
+
+**A:** Give each client a bounded outbound queue and a dedicated writer task that does `write` plus `await drain()`. The hub only calls `put_nowait`, so a broadcast never waits on any socket. When a queue is full (`QueueFull`), that client is disconnected or has messages dropped, a documented policy, while everyone else carries on.
 
 **Q:** How would you scale to several servers?
-**A:** Make servers stateless with respect to rooms by publishing messages to a shared broker and subscribing per room.
+
+**A:** Room state can no longer live in one process. Each server publishes room messages to a broker such as Redis pub/sub and subscribes to the rooms its local clients are in. Nickname uniqueness then needs a shared store, and a load balancer spreads TCP connections. History moves to a database.
+
+**Q:** Why use `readuntil(b"\n")` instead of `readline()`?
+
+**A:** `readuntil` raises `LimitOverrunError` when a line exceeds the stream limit and `IncompleteReadError` when the client disconnects mid-line, so I can reject abuse cleanly. `readline()` silently returns a partial line at EOF and turns an over-long line into a plain `ValueError`. I also pass a small `limit` to `start_server` to enforce the 4 KB maximum.
+
+**Q:** What happens when a client disconnects or the server is shut down mid-message?
+
+**A:** The reader gets EOF or an exception, or the task is cancelled. Either way the session's `finally` block removes the nick, leaves every room (announcing it) and closes the writer. `CancelledError` is a `BaseException`, so `except Exception` does not catch it; I re-raise it after cleanup so cancellation still completes.
+
+**Q:** Why a reader and writer task per client in a `TaskGroup`?
+
+**A:** They have different lifetimes for blocking: the reader waits for input, the writer waits for queue items and socket space. Putting both in a `TaskGroup` means if either fails (socket error, queue overflow), the other is cancelled too, so a session never half-lives with only one direction working.
+
+**Q:** What limits 5,000 connections, and what breaks at 50,000?
+
+**A:** Per connection there are two tasks, a queue and socket buffers, so memory is roughly tens of KB per client. At 50,000 the first limits are the OS file-descriptor limit (`ulimit -n`), memory for buffers and the single event loop's CPU for fan-out to big rooms. Then I would raise limits, use uvloop, and shard across processes behind a broker.
+
+**Q:** How do you test it?
+
+**A:** Start the server on port 0 so the OS picks a free port, connect real clients with `asyncio.open_connection`, and assert on received lines using `asyncio.timeout` so a bug fails instead of hanging. The hub is tested alone with fake sessions. A slow-consumer test has one client never read and checks it is disconnected while others still receive.
+
+**Q:** Show the per-client writer.
+
+**A:**
+```python
+async def writer_loop(q: asyncio.Queue[str], w: asyncio.StreamWriter) -> None:
+    while True:
+        line = await q.get()
+        w.write(line.encode() + b"\n")
+        await w.drain()
+```
+
+**Common mistakes in answers:**
+- Broadcasting with `await writer.drain()` per member inside the hub, so one stalled client freezes the room.
+- Saying asyncio code never needs locks. It needs them when a critical section spans an `await`.
+- Treating TCP as message-based and assuming one `read()` returns exactly one line.
 
 ### TL;DR
 One task pair per connection, a lock-free hub and bounded per-client queues give a fast, fair chat server — and a clear lesson in backpressure and cleanup.
@@ -2063,14 +2982,69 @@ t-strings need Python 3.14, so libraries supporting older versions must keep ano
 - [Ch 14 — Standard library tour](../chapters/14-standard-library-tour/README.md): `html`, `shlex`, `sqlite3`.
 
 ### In the interview
+**30-second answer:** I built safe template processors on Python 3.14's t-strings (PEP 750): `html(t"...")` escapes values, `sql(t"...")` turns them into driver parameters, and `shell(t"...")` builds an argument list. The key idea is that a t-string evaluates like an f-string but returns a `Template` that keeps literal text and values separate, so my processor knows which parts the programmer wrote and which came from data. The hardest parts were context rules (attributes, URLs, SQL identifiers), solved by supporting narrow contexts and explicit wrapper types like `Markup` and `Identifier`. Processors are typed to accept `Template`, so mypy rejects `sql(f"...")`.
+
+**Key terms to know:**
+- **t-string** — `t"..."` literal (3.14) that produces a `string.templatelib.Template`, not a `str`.
+- **`Template`** — has `.strings` (literal parts), `.interpolations` and `.values`. Iterating yields `str` and `Interpolation` in order, skipping empty strings.
+- **`Interpolation`** — one `{...}` slot, with `value`, `expression` (source text), `conversion` (`r`, `s`, `a` or `None`) and `format_spec`.
+- **Processor** — a function that walks a `Template` and decides how to treat each value for a target language.
+- **XSS** — cross-site scripting: user data inserted into HTML that runs as script.
+- **SQL injection** — user data changing the meaning of a query. Prevented by parameters.
+- **Command injection** — user data interpreted by a shell. Prevented by argument lists without `shell=True`.
+- **`Markup`** — a `str` subclass meaning "already safe HTML", so composition does not double-escape.
+- **Contextual escaping** — the correct escaping depends on where the value lands: text, attribute, URL, script.
+
 **Q:** What is the difference between an f-string and a t-string?
-**A:** Both evaluate expressions immediately. An f-string joins everything into a `str`. A t-string returns a `Template` with literal parts and values kept separate, so a function can process values safely.
+
+**A:** Both evaluate their expressions immediately, at the point the literal runs. An f-string then joins everything into a `str`, losing which parts were data. A t-string returns a `Template` with literal parts and values kept separate, so a function decides how to combine them. A `Template` has no built-in render-to-text method on purpose.
 
 **Q:** Why does that help with SQL injection?
-**A:** The processor knows exactly which parts are values and can send them as parameters instead of splicing them into the SQL text.
+
+**A:** The processor knows exactly which parts are values, so it replaces each interpolation with a placeholder and passes the values separately to the driver. `sql(t"SELECT * FROM users WHERE name = {name}")` becomes `("... WHERE name = ?", (name,))`. Whatever `name` contains, it is data and can never change the query.
 
 **Q:** Can you parametrise a table name?
-**A:** No — placeholders are for values. Use a validated identifier wrapper and quoting.
+
+**A:** No. Database placeholders work only for values, not identifiers or keywords. I allow identifiers only through `Identifier("users")`, validated against a strict pattern like `^[A-Za-z_][A-Za-z0-9_]*$` and quoted with double quotes. A plain value in an identifier position is an error.
+
+**Q:** Are t-strings lazy templates you fill in later?
+
+**A:** No, a common misconception. Expressions are evaluated eagerly when the t-string runs, exactly like an f-string. For reusable templates filled later you still need a function that returns a t-string, or a templating engine like Jinja.
+
+**Q:** Who applies `{price:.2f}` and `{x!r}` in a t-string?
+
+**A:** The processor, not Python. The `Interpolation` carries `conversion` and `format_spec` but the value is untouched. My processors apply `repr`/`str`/`ascii` for the conversion and then `format(value, spec)`, and only then escape the result, so formatting cannot bypass escaping.
+
+**Q:** Why is escaping `<`, `>`, `&` and quotes not enough for all HTML?
+
+**A:** It is correct for element text and quoted attribute values, but not for a URL attribute (`href="javascript:alert(1)"` contains no special characters), inline `<script>` or CSS. My `html()` refuses interpolations in `<script>`, `<style>` and `on*` attributes, and requires a validated `SafeURL` wrapper for `href`/`src`. Being explicit about supported contexts is part of the design.
+
+**Q:** How do you test that it is actually safe?
+
+**A:** Table tests with known malicious payloads per context (XSS strings, `' OR 1=1 --`, `; rm -rf ~`). SQL tests run the generated query against SQLite and assert injection attempts match nothing. A Hypothesis property: for any string value, `html()` output contains no unescaped `<` coming from that value. A mypy test asserts that passing a `str` to `sql()` is a type error.
+
+**Q:** What happens on Python 3.13 or earlier?
+
+**A:** `t"..."` is a syntax error, so the module will not even import. A library supporting older Pythons must keep another API (for example explicit parameter tuples) and guard the t-string module behind a version check. That migration cost is the main trade-off today.
+
+**Q:** Write a minimal HTML processor.
+
+**A:**
+```python
+from string.templatelib import Template, Interpolation
+def html(t: Template) -> Markup:
+    def one(part):
+        if isinstance(part, Interpolation):
+            v = part.value
+            return v if isinstance(v, Markup) else escape(str(v), quote=True)
+        return part
+    return Markup("".join(one(p) for p in t))
+```
+
+**Common mistakes in answers:**
+- Saying t-strings are evaluated lazily. They are evaluated eagerly; only the joining is deferred.
+- Assuming Python applies the format spec and conversion. The processor must.
+- Claiming `html.escape` makes any HTML context safe, including `href` and `<script>`.
 
 ### TL;DR
 PEP 750 t-strings keep code and data apart until a processor decides how to combine them, letting you build HTML, SQL and shell helpers where the safe way is the easy way.
@@ -2165,14 +3139,69 @@ JSON logs are verbose; at high volume, sampling and level control matter more th
 - [Ch 7 — Functions](../chapters/07-functions/README.md): processors as composable functions.
 
 ### In the interview
+**30-second answer:** I built a structured-logging library where every event is a dict of fields, rendered as JSON in production and coloured lines in development. The key design is an immutable bound logger plus a processor chain, a list of small functions that add timestamps, merge request context, redact secrets, sample and finally render. The hardest part was per-request context in async code, solved with `contextvars` so two concurrent requests never mix their ids, and a bridge so stdlib `logging` records go through the same chain. A disabled log call costs under 10 microseconds and a logging call can never raise into the app.
+
+**Key terms to know:**
+- **Structured log** — an event as key/value fields (`event="order_paid" order_id=42`) instead of free text.
+- **Correlation / request id** — an id attached to every log line of one request, so you can follow it across services.
+- **`contextvars.ContextVar`** — a variable whose value is per execution context. Each asyncio task gets a copy of the context when created.
+- **Thread-local** — per-thread storage. Wrong for asyncio, because all tasks on one thread share it.
+- **Bound logger** — an immutable logger carrying fixed fields. `bind()` returns a new logger.
+- **Processor chain** — functions `(logger, method, event_dict) -> event_dict` applied in order. The last one renders.
+- **Redaction** — replacing values of keys like `password` or `token` before output.
+- **Sampling** — keeping only a fraction of high-volume events, e.g. 1% of debug.
+- **`QueueHandler` / `QueueListener`** — stdlib pieces that move slow log I/O to a background thread.
+
 **Q:** What is structured logging and why use it?
-**A:** Logging events as key/value data instead of free text, so logs can be filtered, aggregated and correlated by field.
+
+**A:** Logging events as key/value data instead of sentences, so a log system can filter and aggregate by field: all errors for `order_id=42`, p95 of `duration_ms` per endpoint. Free-text logs need fragile regexes for the same questions. JSON lines are the usual transport format.
 
 **Q:** How do you attach a request id to every log line in an async app?
-**A:** Set it in a `ContextVar` at the start of the request. Each asyncio task gets its own copy of the context, so concurrent requests do not mix.
+
+**A:** Middleware sets it in a `ContextVar` at request start and resets it with the returned token at the end. Each asyncio task runs in a copy of the context taken when it was created, so concurrent requests on the same thread see their own ids. The logger merges that dict into every event.
 
 **Q:** How do you keep logging cheap?
-**A:** Check the level first, pass values as fields rather than pre-formatted strings, and move I/O to a background thread if needed.
+
+**A:** Check the level before doing anything else, before merging context or building strings. Pass values as fields instead of pre-formatted f-strings, so formatting happens only if the event is emitted. For slow sinks, a `QueueHandler` hands records to a background thread so the request path never waits on disk or network.
+
+**Q:** Why not use a thread-local for request context?
+
+**A:** All asyncio tasks on one thread share the same thread-local, so request B would overwrite request A's id mid-request and A's later lines would show B's id. `ContextVar` gives per-task isolation in asyncio and per-thread isolation for threads, so it is correct in both models.
+
+**Q:** Does context follow work into a thread pool?
+
+**A:** It depends on the API. `asyncio.to_thread` copies the current context into the worker, so the request id follows. `loop.run_in_executor` and a plain `ThreadPoolExecutor.submit` do not; you wrap the call with `contextvars.copy_context().run`. New `threading.Thread`s start with an empty context on the default build in 3.14 (the free-threaded build inherits it via the new `thread_inherit_context` flag), so I test each path.
+
+**Q:** What happens if a field cannot be serialised, or a processor crashes?
+
+**A:** `json.dumps(event, default=repr)` falls back to `repr` for unknown types, so sockets and custom objects never break rendering. The whole chain is wrapped in `try/except Exception`; on failure I write a minimal line with the error to stderr, once per error type. A logging library that can take down the app is worse than none.
+
+**Q:** Why `logger.info("x=%s", x)` rather than `logger.info(f"x={x}")` in stdlib logging?
+
+**A:** With `%s` arguments, the message is formatted only if the record is actually emitted, so disabled debug logs cost almost nothing. The f-string is always formatted, even when the level is off. Keeping the template constant also lets log tools group events by message.
+
+**Q:** What changes at 100x log volume?
+
+**A:** Cost moves from CPU to storage and ingestion bills. I would sample debug and info events, drop high-cardinality fields that do not answer real questions, ship logs asynchronously in batches, and alert on dropped-log counters. Redaction must stay on by default because logs end up in many systems.
+
+**Q:** Show setting and using request context.
+
+**A:**
+```python
+request_ctx: ContextVar[dict] = ContextVar("request_ctx", default={})
+async def middleware(request, call_next):
+    token = request_ctx.set({"request_id": new_id()})
+    try:
+        return await call_next(request)
+    finally:
+        request_ctx.reset(token)
+```
+The default `{}` is never mutated; the code always sets a new dict, which avoids sharing one dict between requests.
+
+**Common mistakes in answers:**
+- Using thread-locals or globals for request ids in async code.
+- Building f-string messages for debug logs that are usually disabled.
+- Letting a serialisation error in logging raise into business code.
 
 ### TL;DR
 Events as dicts, a processor pipeline, immutable bound loggers and `contextvars` for request context — the design behind modern Python logging, built and benchmarked yourself.
@@ -2279,14 +3308,66 @@ Loose objects (one file each) are simple but waste space; Git packs them into pa
 - [Ch 14 — Standard library tour](../chapters/14-standard-library-tour/README.md): `hashlib`, `zlib`, `difflib`.
 
 ### In the interview
+**30-second answer:** I built `pygit`, a mini Git with `init`, `add`, `commit`, `log`, `status`, `diff`, `branch`, `checkout` and a three-way `merge`. The key design is Git's own: a content-addressed object database of zlib-compressed blobs, trees and commits named by SHA-1, plus refs, which are tiny files holding a commit id. The hardest parts were three-way merge (finding the merge base with a BFS and marking conflicts) and a fast `status` using cached stat data in the index. My blob ids match real `git hash-object`, which is my interoperability test.
+
+**Key terms to know:**
+- **Blob** — an object holding raw file bytes. Its id is SHA-1 of `"blob <size>\0" + content`.
+- **Tree** — a sorted directory listing of (mode, name, object id). Subtrees are trees.
+- **Commit** — an object with a tree id, parent ids, author, committer and message.
+- **Ref / branch** — a file such as `refs/heads/main` containing a commit id.
+- **HEAD** — usually `ref: refs/heads/main`; when detached it holds a commit id directly.
+- **Index (staging area)** — the list of paths, blob ids and cached size/mtime that the next commit will record.
+- **Merge base** — the nearest common ancestor of two commits, the reference point for a three-way merge.
+- **Three-way merge** — compare each side with the base. One-sided changes win; overlapping different changes conflict.
+- **Fast-forward** — when the current branch is an ancestor of the other, just move the pointer, no merge commit.
+- **Myers diff** — the classic algorithm for the shortest edit script between two sequences, O(ND).
+
 **Q:** What is a Git branch?
-**A:** A file containing a commit id. Committing writes a new commit whose parent is that id and moves the pointer.
+
+**A:** A file containing a commit id, nothing more. Committing writes a new commit whose parent is that id and then moves the branch file to the new id. Creating a branch is writing a 41-byte file, which is why branches are cheap.
 
 **Q:** Why are Git snapshots cheap if each commit stores the whole tree?
-**A:** Objects are content-addressed, so unchanged files and subtrees have the same ids and are stored once and shared.
+
+**A:** Objects are content-addressed, so an unchanged file has the same blob id and an unchanged directory has the same tree id in every commit. A new commit only writes the changed blobs and the trees on the path from them to the root; everything else is shared by id.
 
 **Q:** How does a three-way merge decide what to keep?
-**A:** It compares each side with the common ancestor. Changes made on only one side win automatically. Overlapping different changes are conflicts.
+
+**A:** It compares each side with the merge base. If only one side changed a file (or a region of lines), that side wins. If both made the same change, take it. If both changed the same region differently, write conflict markers and stop for the user. Without the base, you could not tell "added on one side" from "deleted on the other".
+
+**Q:** What is a detached HEAD?
+
+**A:** `HEAD` holds a commit id directly instead of `ref: refs/heads/<branch>`. You can commit, but no branch moves, so once you check out something else those commits are reachable only by id (and later garbage-collected). Creating a branch at that point saves them.
+
+**Q:** How does `status` stay fast on 10,000 files?
+
+**A:** The index caches each file's size and `mtime_ns`. If both match the file on disk, I assume the content is unchanged and skip hashing. A file modified within the same timestamp tick as the index write is "racy", so those entries are re-hashed.
+
+**Q:** How do you find the merge base?
+
+**A:** Walk ancestors of both tips breadth-first, marking which side reached each commit; the first commits reached from both sides are common ancestors, and I pick one that is not an ancestor of another. Real Git handles criss-cross histories with several merge bases (its "recursive"/"ort" strategy merges them); I document that I take one.
+
+**Q:** What happens if two commands update a ref at the same time, or the process crashes mid-commit?
+
+**A:** Objects are written before the ref, so a crash leaves only unreferenced objects, never a ref pointing at missing data. Refs are written to a `.lock` file and renamed atomically, as Git does; a second command that finds the lock fails instead of racing.
+
+**Q:** What breaks at Linux-kernel scale?
+
+**A:** Millions of loose object files waste disk and inodes, and whole-file blobs make history huge. Git solves this with packfiles that delta-compress similar objects, commit-graph files to speed up history walks, and SHA-256 repositories because SHA-1 has practical collision attacks.
+
+**Q:** Compute a blob id like Git does.
+
+**A:**
+```python
+def blob_id(data: bytes) -> str:
+    header = f"blob {len(data)}\0".encode()
+    # stored at objects/<id[:2]>/<id[2:]> as zlib.compress(header + data)
+    return hashlib.sha1(header + data).hexdigest()
+```
+
+**Common mistakes in answers:**
+- Saying Git stores diffs between commits. It stores snapshots; deltas only appear inside packfiles as a storage optimisation.
+- Describing a branch as a copy of the code instead of a movable pointer.
+- Hashing only the file content without the `blob <size>\0` header, so ids never match real Git.
 
 ### TL;DR
 Git is a content-addressed store of blobs, trees and commits plus movable refs — build that core and branching, status, diff and merge stop being magic.
@@ -2381,14 +3462,70 @@ LRU suits most workloads; LFU (least frequently used) is better when a few keys 
 - [Ch 16 — Concurrency and async](../chapters/16-concurrency-and-async/README.md): locks, futures.
 
 ### In the interview
+**30-second answer:** I built a caching library with an O(1) LRU cache, TTL expiry, a `@cached` decorator for sync and async functions, hit/miss statistics and single-flight protection against the thundering herd. The key design is an `OrderedDict` for recency plus a monotonic-clock expiry per entry, with a separate in-flight table of futures so 100 concurrent misses for one key call the function once. The hardest parts were concurrency and correctness edge cases: compound operations under a lock, exceptions not cached, and methods not leaking `self`. A cache hit costs under 2 microseconds in pure Python.
+
+**Key terms to know:**
+- **LRU** — least recently used: when full, evict the entry unused the longest.
+- **TTL** — time to live: entries expire after a fixed time.
+- **Hash map + doubly linked list** — the O(1) LRU structure: lookup by key, move/remove nodes in constant time. `OrderedDict` combines both.
+- **Lazy expiry** — check expiry on read. Cheap but dead entries use memory until swept.
+- **Thundering herd / cache stampede** — many callers miss the same key at once and all recompute it.
+- **Single-flight** — the first caller computes; others wait on its future.
+- **`time.monotonic`** — a clock that never goes backwards, used for TTLs.
+- **Hit rate** — hits / (hits + misses). The number that says whether the cache helps.
+- **Cache invalidation** — removing entries when the source data changes.
+- **Stale-while-revalidate** — serve an expired value briefly while refreshing in the background.
+
 **Q:** Design an LRU cache with O(1) get and put.
-**A:** A hash map from key to node, plus a doubly linked list ordered by recency. Get moves the node to the front; put inserts at the front and evicts from the back when full.
+
+**A:** A hash map from key to node, plus a doubly linked list ordered by recency. `get` finds the node in O(1) and moves it to the front; `put` inserts at the front and, if over capacity, removes the tail node and its map entry. In Python, `OrderedDict.move_to_end(key)` and `popitem(last=False)` give the same O(1) operations.
 
 **Q:** What is the thundering herd problem?
-**A:** Many requests miss the same expired key at once and all recompute it. Single-flight makes one compute while the others wait for its result.
+
+**A:** When a hot key expires, hundreds of requests miss at the same moment and all hit the database to recompute the same value, which can take it down. Single-flight makes the first caller compute while the others await its future. Jittered TTLs also help, so many keys do not expire at once.
 
 **Q:** Why use `time.monotonic` for TTLs?
-**A:** It never goes backwards, unlike wall-clock time, which can jump with NTP or manual changes.
+
+**A:** It never goes backwards, unlike wall-clock time from `time.time()`, which can jump with NTP corrections or manual changes. If the clock jumped back an hour, entries would live an hour too long; jumping forward would expire everything at once.
+
+**Q:** Why is the thread-safe version not just "the GIL makes dict operations atomic"?
+
+**A:** A single dict operation is atomic on the GIL build, but `get` is a compound operation: look up, check expiry, move to end, update stats. Another thread can evict or replace the entry in between. So the whole operation runs under one `threading.Lock`. On the free-threaded build you cannot rely on the GIL at all.
+
+**Q:** What happens if the cached function raises?
+
+**A:** Nothing is cached, so the next call retries. With single-flight, every waiter receives the same exception through the shared future, and the in-flight entry is removed so a later caller starts fresh. Caching errors briefly ("negative caching") is a separate, opt-in policy.
+
+**Q:** What goes wrong when you decorate a method with `lru_cache`?
+
+**A:** `self` becomes part of the key, so the cache holds a strong reference to every instance and they are never garbage-collected, which is a memory leak. It also fails for unhashable instances. Use a per-instance cache (for example `functools.cached_property` for no-argument values) or a key function that excludes `self`.
+
+**Q:** LRU or LFU, and what changes at 10x data?
+
+**A:** LRU adapts quickly to changing access patterns and suits most workloads; LFU keeps always-hot keys but reacts slowly to change, and policies like W-TinyLFU combine both. When the working set no longer fits one process, or several servers need the same cache, I add Redis or memcached behind the in-process LRU as a two-level cache.
+
+**Q:** How do you test it?
+
+**A:** A fake clock tests TTL boundaries exactly. Hypothesis stateful testing runs random get/set/delete sequences against a simple reference model (a dict plus a list). Concurrency tests run 16 threads and `asyncio.gather` with 100 tasks on a cold key and assert the function ran once. `timeit` compares hit overhead with `functools.lru_cache`.
+
+**Q:** Write the `OrderedDict` LRU.
+
+**A:**
+```python
+class LRU:
+    def __init__(self, maxsize: int): self.d, self.max = OrderedDict(), maxsize
+    def get(self, k, default=None):
+        if k not in self.d: return default
+        self.d.move_to_end(k); return self.d[k]
+    def put(self, k, v):
+        self.d[k] = v; self.d.move_to_end(k)
+        if len(self.d) > self.max: self.d.popitem(last=False)
+```
+
+**Common mistakes in answers:**
+- Using a plain list for recency and calling it O(1); `list.remove` is O(n).
+- Using `time.time()` for expiry.
+- Claiming the GIL makes a cache with compound operations thread-safe.
 
 ### TL;DR
 An `OrderedDict`-backed LRU with lazy TTL expiry, a sync/async decorator and single-flight protection — the classic interview structure turned into a real, concurrency-safe library.
@@ -2487,14 +3624,69 @@ Stemming improves recall (finding more relevant documents) but can hurt precisio
 - [Ch 17 — Performance, memory and internals](../chapters/17-performance-memory-internals/README.md): object overhead, `array`, profiling.
 
 ### In the interview
+**30-second answer:** I built a full-text search engine with an inverted index, BM25 ranking, a small query language (AND, NOT, phrases, prefixes, field boosts) and highlighted snippets. The key design is Lucene's: the same analyzer for documents and queries, and immutable on-disk segments that are added and merged instead of updating one big index in place. The hardest parts were fast query execution and memory, solved with sorted postings intersected by a two-pointer merge, a top-K heap, and postings stored in `array('I')` instead of lists of Python ints. It indexes 100,000 documents in under a minute and answers queries at p95 under 50 ms.
+
+**Key terms to know:**
+- **Inverted index** — a map from each term to the sorted list of documents (and positions) containing it.
+- **Postings list** — the per-term list of (doc id, term frequency, positions).
+- **Analyzer** — the text pipeline: normalise Unicode, lower-case, tokenise, drop stop words, optionally stem. Must match on index and query.
+- **TF / IDF** — term frequency in a document, and inverse document frequency, which rewards rare terms.
+- **BM25** — the standard ranking formula with saturation (`k1`) and length normalisation (`b`).
+- **Segment** — an immutable mini-index on disk. New documents create new segments; merges combine them.
+- **Top-K heap** — `heapq.nlargest(k, ...)` keeps the k best scores in O(n log k).
+- **Precision / recall** — the share of results that are relevant, and the share of relevant documents that are found.
+- **Stemming** — reducing words to a root (`running` to `run`). Raises recall, can hurt precision.
+
 **Q:** What is an inverted index?
-**A:** A map from each term to the sorted list of documents (and positions) that contain it, so a query reads only the lists for its terms.
+
+**A:** A map from each term to the sorted list of documents (and positions) that contain it, like the index at the back of a book. A query reads only the postings for its terms instead of scanning every document. Positions make phrase queries possible.
 
 **Q:** Why does BM25 beat raw term counts?
-**A:** It rewards rare terms (IDF), saturates repeated terms and normalises for document length.
+
+**A:** It rewards rare terms through IDF, so "asyncio" matters more than "the". Term frequency saturates through `k1`, so the 20th repetition adds little. And `b` normalises by document length, so long documents do not win just by containing more words.
 
 **Q:** How do you answer an AND query quickly?
-**A:** Intersect sorted postings lists with a two-pointer merge, starting from the rarest term.
+
+**A:** Intersect sorted postings lists with a two-pointer walk, starting from the rarest term because the result can be no longer than the shortest list. For very unequal lengths, galloping (exponential) search or skip pointers jump ahead instead of stepping one by one. Phrase queries then check that positions are consecutive.
+
+**Q:** Why must the same analyzer run on documents and queries?
+
+**A:** Matching is exact on tokens. If documents are lower-cased and stemmed but the query is not, "Running" never matches the indexed `run`. Accents and Unicode forms are the same trap: `café` can be one code point or `e` plus a combining accent, so both sides use `unicodedata.normalize("NFKC", ...)` (or NFC) plus case folding.
+
+**Q:** Why immutable segments instead of updating the index in place?
+
+**A:** Inserting into sorted postings in a large file means rewriting it, which is slow and dangerous on crash. Writing a new small segment is append-only and atomic; deletes go into a per-segment deleted set; a background merge combines small segments and drops deleted documents. Readers see consistent segments without locks. It is the same idea as LSM trees (Project 36).
+
+**Q:** Why does memory explode with naive postings, and how do you fix it?
+
+**A:** Each Python `int` is an object of about 28 bytes, and each tuple or list adds pointers, so millions of postings cost many times their real size. Storing doc ids as `array('I')` uses 4 bytes each, and delta-encoding sorted ids (storing gaps) plus variable-length bytes shrinks them further. `tracemalloc` shows the before and after.
+
+**Q:** What are the trade-offs of stop-word removal and stemming?
+
+**A:** Removing stop words shrinks the index, but breaks phrase queries like "to be or not to be". Stemming finds more relevant documents (recall), but may merge unrelated words like `universe` and `university` (precision). Both are configurable per field and evaluated on a small labelled query set.
+
+**Q:** When would you not build your own engine?
+
+**A:** For most applications PostgreSQL full-text search or SQLite FTS5 is enough, and Elasticsearch/OpenSearch handle large clusters. A custom engine makes sense when you need full control over ranking or embedding. For synonyms and meaning, add vector search (Project 40) in a hybrid ranker.
+
+**Q:** Show the two-pointer intersection.
+
+**A:**
+```python
+def intersect(a: list[int], b: list[int]) -> list[int]:
+    i = j = 0; out = []
+    while i < len(a) and j < len(b):
+        if a[i] == b[j]: out.append(a[i]); i += 1; j += 1
+        elif a[i] < b[j]: i += 1
+        else: j += 1
+    return out
+```
+It runs in O(len(a) + len(b)) because both lists are sorted.
+
+**Common mistakes in answers:**
+- Proposing SQL `LIKE '%term%'` for search; it cannot use a normal index and has no ranking.
+- Forgetting to apply the same analyzer to queries.
+- Sorting all scored documents instead of keeping a top-K heap.
 
 ### TL;DR
 Analyzer, inverted index, BM25 and segment-based storage — the core of every search engine, small enough to build and measure in Python.
@@ -2611,14 +3803,64 @@ A database-backed inbox is simple and transactional; a message broker scales fur
 - [Ch 9 — Errors, exceptions and files](../chapters/09-errors-exceptions-files/README.md): retry and error recording.
 
 ### In the interview
+**30-second answer:** I built a reusable webhook receiver that verifies each provider's HMAC signature over the raw body, stores the event in an inbox table, answers 200 quickly, and dispatches it from a background worker to handlers registered with `@on("payment.succeeded")`. The key design is the inbox pattern: store first, acknowledge, process later, so slow handlers never cause provider timeouts and retries. The hardest parts were duplicates and ordering, solved with a `UNIQUE (provider, event_id)` constraint, idempotent handlers and version checks. Acknowledgement stays under 200 ms, and no event is lost after a 2xx even if the process crashes.
+
+**Key terms to know:**
+- **Webhook** — an HTTP POST a provider sends to your URL when something happens.
+- **HMAC** — a keyed hash (e.g. HMAC-SHA256) of the body with a shared secret. Proves the sender knows the secret and the body was not changed.
+- **Constant-time comparison** — `hmac.compare_digest` takes the same time wherever bytes differ, defeating timing attacks.
+- **Replay attack** — re-sending a captured valid request. Blocked by a signed timestamp and a 5-minute window.
+- **Inbox pattern** — store verified events durably before acknowledging, process them asynchronously.
+- **At-least-once delivery** — providers retry until they get a 2xx, so duplicates are normal.
+- **Idempotent handler** — running it twice has the same effect as once.
+- **Dead-letter list** — events whose handlers failed all retries, kept for inspection and replay.
+- **Registry decorator** — `@on("type")` appends the function to a `dict[str, list[Callable]]`.
+
 **Q:** How do you verify a webhook is genuine?
-**A:** Recompute the HMAC of the raw body with the shared secret and compare it with the header using a constant-time comparison. Check the signed timestamp to block replays.
+
+**A:** Read the raw request bytes, recompute the HMAC with the shared secret, and compare it with the header using `hmac.compare_digest`. Where the provider signs a timestamp (Stripe does), check it is within a few minutes to block replays. Only then parse the JSON.
 
 **Q:** Why respond before running handlers?
-**A:** Providers time out and retry slow endpoints. Storing then acknowledging prevents duplicate deliveries caused by your own slowness.
+
+**A:** Providers time out after a few seconds and retry. If handlers run before the response and take 10 seconds, the provider resends, and now the event is processed twice. Storing then acknowledging keeps the response fast and moves all slow work to the worker.
 
 **Q:** How do you handle duplicates?
-**A:** A unique constraint on the provider's event id, plus idempotent handlers for the cases that still slip through.
+
+**A:** A `UNIQUE (provider, event_id)` constraint with `INSERT ... ON CONFLICT DO NOTHING` makes a repeated delivery a harmless no-op that still gets 200. But a handler can still run twice (it succeeds, then the worker crashes before marking it done), so handlers are idempotent too, for example by upserting on a business key.
+
+**Q:** Why verify the raw bytes and not the parsed JSON?
+
+**A:** The signature covers the exact bytes sent. Parsing and re-serialising changes whitespace, key order and number formatting, so the recomputed HMAC would not match. In FastAPI that means `await request.body()` before any model parsing.
+
+**Q:** Why `hmac.compare_digest` instead of `==`?
+
+**A:** `==` on strings can stop at the first differing byte, so response time leaks how many leading bytes were right. An attacker could, in principle, guess a valid signature byte by byte. `compare_digest` takes time depending only on length.
+
+**Q:** Events arrive out of order. How do you cope?
+
+**A:** Providers do not guarantee order, so `subscription.updated` can arrive before `created`. Either the handler fetches the current state from the provider's API and acts on that, or it stores a version or timestamp per object and ignores updates older than what it has. Designing handlers as "sync to latest state" is the most robust.
+
+**Q:** What happens if the database is down when an event arrives?
+
+**A:** The receiver cannot store it, so it must return a 5xx, not a 2xx. The provider will retry later, and nothing is lost. Returning 200 without storing would silently drop the event, which breaks the main guarantee.
+
+**Q:** What changes at 100x, say 20,000 events per second?
+
+**A:** The receiver scales horizontally since it is stateless, but the inbox table and workers become the bottleneck. I would batch inserts, partition the table by time, claim work with `SKIP LOCKED` across many workers (Project 26), or put a durable broker like Kafka between receiver and handlers. Archiving old events keeps the hot table small.
+
+**Q:** Show GitHub-style verification.
+
+**A:**
+```python
+def verify(secret: bytes, body: bytes, header: str) -> bool:
+    expected = "sha256=" + hmac.new(secret, body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, header)
+```
+
+**Common mistakes in answers:**
+- Parsing the JSON body before verifying, then signing the re-serialised data.
+- Doing business logic synchronously in the request and then wondering why events are delivered twice.
+- Believing de-duplication by event id removes the need for idempotent handlers.
 
 ### TL;DR
 Verify raw bytes with constant-time HMAC, store before acknowledging, dispatch from a durable inbox with retries, and write idempotent, order-tolerant handlers.
@@ -2721,14 +3963,66 @@ Down migrations are nice in development but often impossible to make safe for da
 - [Ch 12 — Decorators, context managers and metaprogramming](../chapters/12-decorators-context-managers-metaprogramming/README.md): transactions and locks as context managers.
 
 ### In the interview
+**30-second answer:** I built `migrate`, a schema migration tool for PostgreSQL and SQLite that applies numbered SQL or Python migrations in order and records each one, with a checksum, in a `schema_migrations` table. The key design is that each migration and its history row commit in one transaction, so the database is always at a well-defined version. The hardest parts were concurrency and drift, solved with a PostgreSQL advisory lock around planning and applying, and checksums that flag edited migrations. CI applies every migration to an empty database on each push.
+
+**Key terms to know:**
+- **Migration** — a versioned, ordered schema change with an `up` and optionally a `down` step.
+- **History table** — `schema_migrations` records which versions ran, when, by whom and their checksum.
+- **DDL** — data definition language: `CREATE`, `ALTER`, `DROP`.
+- **Transactional DDL** — schema changes that can roll back. PostgreSQL supports most; MySQL commits implicitly on DDL.
+- **Advisory lock** — an application-defined lock in PostgreSQL (`pg_advisory_lock(key)`) used to serialise migration runs.
+- **Checksum** — SHA-256 of a migration file. A change after it was applied means environments may have diverged.
+- **Expand and contract** — add new schema, migrate code and data, then remove old schema in a later release, for zero downtime.
+- **Rolling deploy** — old and new code versions run at the same time during a deploy.
+- **`importlib.util.spec_from_file_location`** — loads a Python migration file that is not inside a package.
+
 **Q:** How do you stop two deploys from running migrations together?
-**A:** Take a database advisory lock before reading the history table and release it after applying.
+
+**A:** Take a session-level advisory lock with a fixed key before reading the history table, and release it after applying. The second runner waits, then re-reads the history and finds nothing pending. On SQLite, `BEGIN IMMEDIATE` takes the write lock up front for the same effect.
 
 **Q:** How do you rename a column without downtime?
-**A:** Expand and contract: add the new column, dual-write, backfill, switch reads, then drop the old column in a later release.
+
+**A:** Expand and contract: add the new column, deploy code that writes both, backfill old rows in batches, switch reads to the new column, then drop the old column in a later release. A direct `RENAME` breaks the old code that is still running during the rolling deploy.
 
 **Q:** Why record checksums of applied migrations?
-**A:** Editing an applied migration means environments that already ran it differ from new ones. The checksum detects that drift.
+
+**A:** If someone edits a migration that already ran, environments that ran the old version now differ from new ones built from scratch. The checksum detects that drift and `status` fails loudly. The fix is a new migration, never editing history.
+
+**Q:** What happens if a migration fails halfway?
+
+**A:** On PostgreSQL, the migration and its history insert run in one transaction, so the failure rolls back both and the database stays at the previous version. Some statements, like `CREATE INDEX CONCURRENTLY`, cannot run in a transaction, so those migrations are flagged "no transaction" and must be written to be safely re-runnable (`IF NOT EXISTS`). On MySQL partial failure is possible, which is why tools warn about it.
+
+**Q:** Are down migrations worth writing?
+
+**A:** They are handy in development, but in production many are not truly reversible: a dropped column's data is gone, and a down migration can lose data written since. Many teams roll forward only, fixing problems with a new migration. I support `down` but warn when it is missing or destructive.
+
+**Q:** How do you load a Python migration file?
+
+**A:**
+```python
+spec = importlib.util.spec_from_file_location(f"mig_{version}", path)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+mod.up(conn)
+```
+The file does not need to be in a package or on `sys.path`.
+
+**Q:** Two developers both create migration 0042 on different branches. Then what?
+
+**A:** Using timestamps as versions makes exact clashes rare. The planner also detects an unapplied migration older than the newest applied one and refuses by default, telling the user to renumber or explicitly allow out-of-order. Silent application in a different order on different machines is the real danger.
+
+**Q:** What breaks on a 500-million-row table?
+
+**A:** Some `ALTER TABLE` forms rewrite the whole table under a lock that blocks writes for minutes. Adding a nullable column with no default is fast in PostgreSQL; adding an index needs `CONCURRENTLY`; backfills run in small batches outside the schema transaction. A lint step warns about dangerous operations before review.
+
+**Q:** How do you test the tool?
+
+**A:** Integration tests against real PostgreSQL (in a container) and SQLite, including a migration with a syntax error halfway. A two-process test checks the lock. A round-trip test applies all, reverts all and applies all again, comparing schema dumps each time.
+
+**Common mistakes in answers:**
+- Assuming every database rolls back DDL; MySQL does not.
+- Editing an already-applied migration to "fix" it.
+- Renaming or dropping a column in the same release that changes the code using it.
 
 ### TL;DR
 Versioned files, a history table with checksums, one transaction per migration and an advisory lock — plus expand-and-contract discipline — make schema changes safe and repeatable.
@@ -2858,17 +4152,73 @@ PostgreSQL queues are simple, transactional and fine into thousands of jobs per 
 - [Ch 15 — Testing and debugging](../chapters/15-testing-and-debugging/README.md): integration and chaos tests.
 
 ### In the interview
+**30-second answer:** I built a background job queue that lives in PostgreSQL: application code calls `send_email.defer(user_id=7)`, and asyncio worker processes claim and run jobs with retries, scheduling, priorities, timeouts and a dead-letter state. The key design is claiming with `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED)`, so many workers take different jobs in parallel without blocking, plus transactional enqueue so a job exists only if the business change committed. The hardest part was crashes, solved with leases, a reaper and idempotent jobs, because the honest guarantee is at-least-once. With 8 workers it runs over 1,000 trivial jobs per second, and `kill -9` on a worker leads to the job re-running within a minute.
+
+**Key terms to know:**
+- **`FOR UPDATE SKIP LOCKED`** — lock the selected rows and skip rows another transaction already locked. The core of concurrent claiming.
+- **Transactional enqueue** — inserting the job in the same transaction as the business change (the outbox idea).
+- **At-least-once** — every job runs one or more times; a crash can cause a repeat. Exactly-once is not achievable in general.
+- **Idempotent job** — running it twice has the same effect as once.
+- **Lease / heartbeat** — `lease_until` says how long a worker owns a job; long jobs extend it periodically.
+- **Reaper** — a periodic task that re-queues `running` jobs whose lease expired.
+- **`LISTEN` / `NOTIFY`** — PostgreSQL pub/sub used to wake idle workers instantly instead of polling.
+- **Dead-letter** — the final state after max attempts, for humans to inspect.
+- **Partial unique index** — a unique index with a `WHERE` clause, enforcing "one pending job per key".
+- **Table bloat / autovacuum** — PostgreSQL keeps old row versions after updates; vacuum cleans them up.
+
 **Q:** How do several workers take jobs from one table without double-processing?
-**A:** Each claims rows with `FOR UPDATE SKIP LOCKED`, which locks the chosen rows and skips rows already locked by others, then marks them running in the same statement.
+
+**A:** Each claim is one statement: select the next available jobs with `FOR UPDATE SKIP LOCKED LIMIT n`, mark them `running` with a lease, and `RETURNING` them, then commit immediately. Rows locked by another worker's claim are skipped instead of waited on, so workers never take the same row and never queue behind each other. The row lock is released at commit; the `running` status and lease protect the job after that.
 
 **Q:** Can you guarantee exactly-once execution?
-**A:** Not across crashes in general. You get at-least-once delivery and make jobs idempotent so a repeat has no extra effect.
+
+**A:** Not across crashes in general. A worker can finish sending an email and die before recording success; the reaper re-queues it and it runs again. So I guarantee at-least-once and make jobs idempotent, or, when the job's effect is in the same database, record the effect and the status update in one transaction.
 
 **Q:** Why enqueue in the same transaction as the business change?
-**A:** So the job exists if and only if the change committed — no emails for rolled-back orders, no missing jobs for committed ones.
+
+**A:** So the job exists if and only if the change committed. No confirmation email for an order that was rolled back, and no missing email for one that committed. With Redis as a separate queue you would need an outbox table to get the same guarantee.
 
 **Q:** What happens if a worker dies mid-job?
-**A:** Its lease expires and the reaper re-queues the job for another worker.
+
+**A:** Its lease expires, and the reaper sets the job back to `queued` (incrementing attempts), so another worker picks it up. Long-running jobs heartbeat to extend their lease; otherwise a slow but healthy job would be handed to a second worker while the first is still running.
+
+**Q:** Why not hold the row lock for the whole job instead of using leases?
+
+**A:** That keeps a transaction open for minutes, which holds a connection per running job, blocks vacuum from cleaning old row versions and makes the table bloat. Claiming and committing quickly, then tracking ownership with a lease column, keeps transactions short.
+
+**Q:** How do workers learn about new jobs quickly?
+
+**A:** Enqueue runs `NOTIFY jobs` in the same transaction; PostgreSQL delivers notifications only when that transaction commits, so a worker is never woken for a job it cannot see yet. Idle workers `LISTEN` and wake immediately. Notifications are lost if no one is listening, so workers also poll slowly as a backstop.
+
+**Q:** What breaks first at 10x throughput?
+
+**A:** The jobs table: every status change writes a new row version, so dead rows pile up, indexes bloat and claims slow down. I keep the hot table small by moving finished jobs to an archive table or deleting them in batches, tune autovacuum, and use a partial index on queued jobs. Beyond that, the queue's load competes with the main database, and a dedicated broker becomes worth its complexity.
+
+**Q:** How do sync job functions run in an asyncio worker?
+
+**A:** Async jobs run as tasks in a `TaskGroup`, each wrapped in `async with asyncio.timeout(job.timeout)`. Sync functions go through `asyncio.to_thread` so they do not block the loop. Note that a timeout cannot kill a thread: the awaiting task is cancelled but the thread runs on, so CPU-heavy sync jobs belong in a process pool.
+
+**Q:** How do you test it?
+
+**A:** Against a real PostgreSQL container, because locking behaviour cannot be faked. A concurrency test runs 8 worker processes over 10,000 jobs and checks every job has exactly one successful attempt row. A chaos test kills workers randomly and asserts each job ends `done` or `dead` and none is lost. Scheduling uses an injectable clock.
+
+**Q:** Write the claim query.
+
+**A:**
+```sql
+UPDATE job SET status = 'running', attempts = attempts + 1,
+       lease_until = now() + interval '60 seconds'
+WHERE id IN (SELECT id FROM job
+             WHERE queue = %s AND status = 'queued' AND run_at <= now()
+             ORDER BY priority DESC, run_at
+             FOR UPDATE SKIP LOCKED LIMIT %s)
+RETURNING id, task_name, args;
+```
+
+**Common mistakes in answers:**
+- Claiming "my queue gives exactly-once delivery".
+- Using plain `FOR UPDATE` without `SKIP LOCKED`, so every worker blocks on the same first row.
+- Keeping the transaction open while the job runs.
 
 ### TL;DR
 `SKIP LOCKED` claims, leases with a reaper, retries with backoff and transactional enqueue turn PostgreSQL into a reliable at-least-once job queue for asyncio workers.
@@ -2995,17 +4345,70 @@ ORMs speed up common CRUD and keep SQL injection away, but hide query costs and 
 - [Ch 14 — Standard library tour](../chapters/14-standard-library-tour/README.md): `sqlite3`.
 
 ### In the interview
+**30-second answer:** I built a mini ORM where models are classes with typed fields, and queries are Python expressions like `User.objects.filter(User.age >= 18).order_by(User.name)` that compile to parameterised SQL for SQLite and PostgreSQL. The key design is that each `Field` is a data descriptor: on the class it returns itself so its overloaded operators build expression trees, and on an instance it returns the validated value. The hardest parts were Python data-model details (`__eq__` and `__hash__`, `and`/`or` not being overloadable, lazy annotations in 3.14) and the N+1 query problem, solved with `select_related` and a query-count test. It hydrates 10,000 rows in under 100 ms.
+
+**Key terms to know:**
+- **ORM** — object-relational mapper: maps rows to objects and builds SQL from Python code.
+- **Descriptor** — an object with `__get__`/`__set__`/`__delete__` stored on a class, controlling attribute access.
+- **Data descriptor** — defines `__set__` or `__delete__`; it wins over the instance `__dict__`. Non-data descriptors (only `__get__`, like functions) lose to it.
+- **`__set_name__`** — called at class creation so each field learns its attribute name.
+- **`__init_subclass__`** — a hook on the base class that runs for every subclass; the simpler alternative to a metaclass.
+- **Metaclass** — the class of a class (`type` by default); it can customise how classes are created.
+- **Expression tree** — `BinaryOp(Column, ">=", Value)` nodes built by overloaded operators and compiled to SQL plus parameters.
+- **Identity map** — one Python object per primary key per session.
+- **N+1 queries** — one query for a list, then one per item for a relation.
+- **Lazy annotations (3.14)** — annotations evaluated on access, so a metaclass must read them with `annotationlib`.
+
 **Q:** How does `User.age >= 18` become SQL?
-**A:** `User.age` is a descriptor that returns the field object on class access. Its `__ge__` returns an expression node, which the query compiles to `age >= ?` with 18 as a parameter.
+
+**A:** `User.age` is a descriptor; accessed on the class, `__get__` receives `instance=None` and returns the field itself. `Field.__ge__` then returns an expression node instead of a bool. The query compiles that node to `"age" >= ?` with `18` in the parameter list, so the value never enters the SQL text.
 
 **Q:** What is a data descriptor and why does it matter here?
-**A:** A descriptor defining `__set__` (or `__delete__`). It takes precedence over the instance dict, so validation and access always go through the field.
+
+**A:** A descriptor that defines `__set__` (or `__delete__`). Attribute lookup checks data descriptors on the type before the instance `__dict__`, so even though I store the value in `instance.__dict__["age"]`, `user.age` still goes through `Field.__get__` and `user.age = "x"` through validation in `__set__`. A non-data descriptor would be shadowed by the instance dict.
 
 **Q:** Metaclass or `__init_subclass__`?
-**A:** Prefer `__init_subclass__` — it customises subclasses without a metaclass and avoids metaclass conflicts. Use a metaclass only when you must control class creation itself, such as the namespace.
+
+**A:** Prefer `__init_subclass__` together with `__set_name__`: it runs for each subclass, collects fields and attaches the manager without a metaclass, and avoids metaclass conflicts when a model also inherits from another library's class. Use a metaclass only when you must control class creation itself, such as providing a custom namespace via `__prepare__`.
 
 **Q:** What is the N+1 problem?
-**A:** One query for a list, then one query per item for a relation. Fix with a join or a batched `IN` query.
+
+**A:** Fetching 100 posts is one query; touching `post.author` in a loop lazily loads each author, adding 100 more. Fix with `select_related` (a join that hydrates both objects) or `prefetch_related` (one extra `WHERE id IN (...)` query). A test hook counts queries and a debug mode warns when the same query shape repeats.
+
+**Q:** Why do ORMs use `&`, `|` and `~` instead of `and`, `or`, `not`?
+
+**A:** `and`, `or` and `not` cannot be overloaded; they call `__bool__` on the operands and short-circuit. So `(User.age > 18) and (User.active == True)` would silently evaluate to just one of the expressions. I overload `&`, `|`, `~`, and make `Expr.__bool__` raise `TypeError` so the mistake fails loudly. Parentheses are required because `&` binds tighter than `==`.
+
+**Q:** What does overloading `__eq__` on `Field` break?
+
+**A:** Defining `__eq__` in a class sets `__hash__` to `None`, so fields become unhashable and cannot go in sets or dict keys, which the metadata code needs. I define `__hash__` explicitly (identity-based). Also `field == other_field` no longer returns a bool, so code that compares fields must use `is`.
+
+**Q:** How do lazy annotations in 3.14 affect a hint-based model like `author: Mapped["User"]`?
+
+**A:** While the class body is being created, a referenced class may not exist yet, so evaluating annotations with `Format.VALUE` can raise `NameError`. I read them with `annotationlib.get_annotations(cls, format=Format.FORWARDREF)`, keep `ForwardRef` placeholders and resolve them lazily on first query, when all models are defined.
+
+**Q:** What happens with a huge session or long-running process?
+
+**A:** The identity map holds every loaded object, so a long session grows without limit and also serves stale data if another process changed rows. Sessions should be short (one per request or unit of work), and bulk operations should bypass object hydration and stream rows.
+
+**Q:** Write the descriptor's `__get__`.
+
+**A:**
+```python
+class Field:
+    def __set_name__(self, owner, name): self.name = name
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            return self                      # class access: build expressions
+        return instance.__dict__[self.name]  # instance access: the value
+    def __set__(self, instance, value):
+        instance.__dict__[self.name] = self.validate(value)
+```
+
+**Common mistakes in answers:**
+- Saying descriptors are looked up on the instance; they live on the class.
+- Writing filters with `and`/`or` and believing the ORM sees both sides.
+- Reaching for a metaclass when `__init_subclass__` plus `__set_name__` is enough.
 
 ### TL;DR
 Descriptors give fields both validation and query-building powers, class hooks collect them into table metadata, and immutable expression trees compile to safe SQL — the core of every Python ORM.
@@ -3105,17 +4508,68 @@ Tree-walking is simple and great for learning but 10–100× slower than a bytec
 - [Ch 19 — Python for coding interviews](../chapters/19-python-for-coding-interviews/README.md): recursion and tree traversal.
 
 ### In the interview
+**30-second answer:** I built an interpreter for a small dynamically typed language with variables, control flow, closures and classes with inheritance: a lexer, a recursive-descent parser producing an AST, a static resolver and a tree-walking evaluator, plus a REPL. The key design is the classic pipeline with a resolver pass that fixes, for each variable use, how many scopes up its declaration is, which makes closures correct and lookups fast. The hardest parts were precedence and associativity in the parser and protecting the host from deep recursion, solved with one function per precedence level and a language-level stack-overflow error. A golden suite of 100 small programs passes, and `fib(25)` runs in under 5 seconds.
+
+**Key terms to know:**
+- **Lexer (scanner)** — turns characters into tokens, tracking line and column.
+- **Parser** — turns tokens into an AST following the grammar.
+- **AST** — abstract syntax tree: the program's structure as nested nodes.
+- **Recursive descent** — one function per grammar rule, calling each other; precedence comes from the call order.
+- **Associativity** — `1 - 2 - 3` groups as `(1 - 2) - 3` (left); assignment groups right.
+- **Environment** — a dict of variables linked to its enclosing environment.
+- **Closure** — a function plus the environment where it was defined.
+- **Resolver** — a static pass that records each variable's scope depth.
+- **Tree-walking interpreter** — evaluates AST nodes directly, versus compiling to bytecode for a VM.
+- **Structural pattern matching** — `match node: case Binary(left, op, right):` used for dispatch.
+
 **Q:** What are the phases of an interpreter?
-**A:** Lexing into tokens, parsing into an AST, optional static analysis such as scope resolution, then evaluation by walking the tree or compiling to bytecode.
+
+**A:** Lexing into tokens, parsing into an AST, static analysis such as scope resolution and error checks, then evaluation, either by walking the tree or by compiling to bytecode and running a VM loop. CPython does the same: tokenizer, parser to AST, compiler to bytecode, then its evaluation loop.
 
 **Q:** How does a recursive-descent parser handle precedence?
-**A:** One function per precedence level, each calling the next tighter level for its operands, so tighter operators bind first.
+
+**A:** One function per precedence level, from loosest to tightest: `expression → assignment → or → and → equality → comparison → term → factor → unary → call → primary`. Each level calls the next tighter level for its operands, so tighter operators are grouped first. A loop at each level makes operators left-associative; recursion makes assignment right-associative.
 
 **Q:** How are closures implemented?
-**A:** A function value stores a reference to the environment in which it was created, and calls create a new environment whose parent is that captured one.
+
+**A:** A function value stores a reference to the environment in which it was declared. Each call creates a new environment whose parent is that captured one, not the caller's. That is lexical scoping, and it is why a counter-making function keeps its count between calls.
 
 **Q:** Why is a tree-walking interpreter slow?
-**A:** Every node evaluation is a dynamic dispatch and pointer chase; bytecode VMs flatten the program into compact instructions with a tight loop.
+
+**A:** Every node evaluation is a method call, a dynamic dispatch and pointer chasing through objects scattered in memory, and in Python each of those is itself slow. A bytecode VM flattens the program into compact instructions executed by one tight loop, typically 10–100 times faster.
+
+**Q:** Why do you need a resolver pass?
+
+**A:** Without it, the interpreter looks names up dynamically by walking environments at run time. If a block later declares a variable with the same name as an outer one, a closure created earlier can start seeing the new binding, which breaks lexical scoping. The resolver fixes each reference's depth once, statically, and also reports errors like reading a local in its own initialiser or `return` outside a function.
+
+**Q:** How do you implement `return` inside nested loops?
+
+**A:** Raise a private `ReturnSignal(value)` exception and catch it in the function-call code. It unwinds all nested statement evaluation simply and correctly. It is slow if used in hot loops, which is one reason bytecode VMs use explicit jump instructions instead.
+
+**Q:** What happens with a deeply recursive user program?
+
+**A:** The tree-walker uses Python recursion for every nested call, so the user program would hit Python's recursion limit and raise `RecursionError` from inside my interpreter. I count call depth myself and raise a language-level "stack overflow" with the user's line number well before that, rather than raising `sys.setrecursionlimit` and risking a real crash.
+
+**Q:** How do you report several syntax errors per run?
+
+**A:** Panic-mode recovery: when the parser hits an error, it records it, then skips tokens until a likely statement boundary (a `;` or a keyword like `var`, `fun`, `if`) and continues. Only errors are collected after that point, no AST is executed. Users fix several mistakes per run instead of one.
+
+**Q:** Show one precedence level.
+
+**A:**
+```python
+def term(self) -> Expr:
+    expr = self.factor()                 # tighter level first
+    while self.match("PLUS", "MINUS"):   # loop => left-associative
+        op = self.previous()
+        expr = Binary(expr, op, self.factor())
+    return expr
+```
+
+**Common mistakes in answers:**
+- Saying a closure captures the values of variables at creation time. It captures the environment, so later changes are visible.
+- Encoding precedence with a big table of `if`s in one function, which usually gets associativity wrong.
+- "Fixing" deep recursion by raising Python's recursion limit.
 
 ### TL;DR
 Lexer, recursive-descent parser, resolver and tree-walking evaluator with environments — the classic pipeline that explains how every language, including Python, actually runs.
@@ -3213,14 +4667,70 @@ Tracing gives exact counts but distorts timings; sampling gives realistic timing
 - [Ch 12 — Decorators, context managers and metaprogramming](../chapters/12-decorators-context-managers-metaprogramming/README.md): profiler as context manager.
 
 ### In the interview
+**30-second answer:** I built a profiler with two modes: a tracing mode using `sys.monitoring` (PEP 669) that records every call for exact counts and own/total time, and a sampling mode where a background thread snapshots every thread's stack 100 times a second and counts stacks. Both feed one aggregator that produces top-N tables, collapsed stacks and flame graphs. The key lesson was overhead: tracing cost grows with the number of calls, sampling costs a fixed amount per interval, which I measured at under 5% at 100 Hz. My tracing counts match cProfile on the same programs.
+
+**Key terms to know:**
+- **Tracing (deterministic) profiler** — runs code on every call and return. Exact counts, distorted timings.
+- **Sampling profiler** — records stacks at intervals. Low, bounded overhead; statistical results.
+- **`sys.monitoring` (PEP 669)** — the 3.12+ event API: tools register an id, enable events (`PY_START`, `PY_RETURN`...) globally or per code object, and can return `DISABLE` per location.
+- **`sys._current_frames()`** — returns the current frame of every thread, used by the sampler.
+- **Frame / `f_back`** — a frame object holds one function call's state; `f_back` points to the caller.
+- **Own (self) time vs total (cumulative) time** — time in the function's own code, versus including its callees.
+- **Flame graph** — stacked boxes per function, width proportional to samples.
+- **Collapsed stacks** — `root;child;leaf 42` lines, the input format for flame-graph tools.
+- **Wall-clock vs CPU time** — elapsed time (includes waiting) versus time on the CPU.
+- **Observer effect** — the profiler changing the program's timing by measuring it.
+
 **Q:** Sampling or tracing profiler for production?
-**A:** Sampling — its overhead is bounded and roughly constant, and it shows where time really goes. Tracing distorts call-heavy code.
+
+**A:** Sampling. Its cost is a fixed amount of work per interval regardless of how many calls happen, so overhead is bounded and low, and timings stay realistic. Tracing runs on every call and return, which can slow call-heavy code several times and distort where time appears to go.
 
 **Q:** What is the difference between own time and total time?
-**A:** Own time excludes callees; total time includes them. High own time means the function itself is slow; high total but low own means look at what it calls.
 
-**Q:** What does `sys.monitoring` improve over `sys.settrace`?
-**A:** Events can be enabled selectively and disabled per location, so tools pay only for what they monitor, and multiple tools can coexist.
+**A:** Own time counts only the function's own lines; total time includes everything it calls. High own time means the function itself is slow. High total but low own time means the cost is in its callees, so drill down.
+
+**Q:** What does `sys.monitoring` improve over `sys.settrace` / `sys.setprofile`?
+
+**A:** The old hooks call your Python function for every event in every frame. `sys.monitoring` lets a tool enable only the events it needs, globally or per code object, and return `sys.monitoring.DISABLE` from a callback to switch that event off at that location. Tools get separate ids, so a debugger and a profiler can run together.
+
+**Q:** How accurate is a sampling profiler?
+
+**A:** It is statistical: a function taking 1% of time gets about 1 sample per second at 100 Hz, so it needs a long enough run. Error shrinks roughly with the square root of the sample count. Very short, rare calls may never be sampled, which tracing would catch. Sampling exactly in step with a periodic workload can also bias results, which a small random jitter on the interval avoids.
+
+**Q:** What is the problem with in-process sampling on the GIL build?
+
+**A:** The sampler thread needs the GIL to read frames, so it runs only when the interpreter lets it switch, and a long C call holding the GIL delays samples, under-reporting that call. External samplers like py-spy read the process's memory from outside and avoid this. On the free-threaded build, frames of running threads change underneath you, so the sampler's guarantees must be documented.
+
+**Q:** How do you separate asyncio waiting from running?
+
+**A:** In a sampled stack, the event loop thread sitting in the selector call (waiting on I/O) is idle, not work. I label those samples idle. For tasks, 3.14's asyncio introspection (`python -m asyncio ps` / `pstree`) shows which tasks are awaiting what, which complements CPU samples.
+
+**Q:** How do you render a flame graph?
+
+**A:** Merge collapsed stacks into a tree where identical prefixes share nodes, then lay it out recursively: each node's width is its sample count divided by the total, children sit above their parent, and siblings are sorted alphabetically so the same code always lands in the same place. Colour carries no meaning beyond grouping.
+
+**Q:** How do you prove the profiler is right and cheap?
+
+**A:** Synthetic programs with known shapes (one function spinning 70% of the time, another 30%) must produce sample shares within tolerance. Tracing call counts are compared with cProfile. Overhead is measured by running a benchmark with and without the profiler, several times, reporting the median.
+
+**Q:** Show the sampler's core.
+
+**A:**
+```python
+def sample(counts: Counter, me: int) -> None:
+    for tid, frame in sys._current_frames().items():
+        if tid == me: continue          # skip the sampler thread
+        stack = []
+        while frame:
+            stack.append((frame.f_code.co_filename, frame.f_code.co_qualname))
+            frame = frame.f_back
+        counts[tuple(reversed(stack))] += 1
+```
+
+**Common mistakes in answers:**
+- Trusting cProfile timings of call-heavy code as "real"; the profiler's own overhead inflates them.
+- Confusing own time with total time when choosing what to optimise.
+- Forgetting to skip the sampler's own thread, so the profiler profiles itself.
 
 ### TL;DR
 Build both a `sys.monitoring` tracer and a stack sampler, compare them honestly, and render flame graphs — you will understand profiler overhead and Python frames for good.
@@ -3319,17 +4829,70 @@ Free-threading helps pure-Python CPU work; numpy-heavy code already releases the
 - [Ch 11 — Iterators, generators and functional tools](../chapters/11-iterators-generators-functional/README.md): staged processing.
 
 ### In the interview
+**30-second answer:** I built a CPU-bound data pipeline (reader, parser, transformer, aggregator, writer) where each stage runs on several threads connected by bounded queues, and benchmarked it on Python 3.14's free-threaded build (`python3.14t`) against the default build, `ProcessPoolExecutor` and `InterpreterPoolExecutor`. The key design is share-nothing: every worker aggregates into its own local `Counter` and results are merged once at the end, because a shared hot counter destroys scaling. The hardest part was trustworthy measurement, so the report prints `sys._is_gil_enabled()` and output is checked identical across all modes. On 8 cores the CPU-heavy stages reach over 5x speed-up on 3.14t, while the default build stays flat.
+
+**Key terms to know:**
+- **GIL** — global interpreter lock: on the default build only one thread runs Python bytecode at a time.
+- **Free-threaded build (3.14t)** — CPython built without the GIL (PEP 703). Officially supported but optional in 3.14 (PEP 779), not the default.
+- **Biased reference counting** — the free-threaded build's cheaper refcounting: the owning thread updates counts without atomics, others use atomic operations.
+- **Per-object locks** — built-in containers like `dict` and `list` lock internally, so they cannot be corrupted, but compound operations are still not atomic.
+- **Data race** — two threads access shared data, at least one writes, with no synchronisation.
+- **Contention** — threads waiting for the same lock or cache line, which flattens the speed-up curve.
+- **Share-nothing / local aggregation** — each worker keeps private state, merged once at the end.
+- **Bounded queue + `Queue.shutdown()`** — backpressure between stages, and clean shutdown (3.13+).
+- **`InterpreterPoolExecutor`** — 3.14 executor running tasks in isolated sub-interpreters, each with its own GIL.
+- **Amdahl's law** — the serial part of a program limits the maximum speed-up.
+
 **Q:** Is the free-threaded build the default in 3.14?
-**A:** No. PEP 779 made it officially supported but optional; you install and run `python3.14t` explicitly.
+
+**A:** No. PEP 779 made it officially supported but it is still optional: you install it separately and run `python3.14t`. The default `python3.14` still has the GIL. `sysconfig.get_config_var("Py_GIL_DISABLED")` tells you which build you have, and `sys._is_gil_enabled()` whether the GIL is actually off right now.
 
 **Q:** Does removing the GIL make my code thread-safe?
-**A:** The opposite: built-ins stay internally consistent, but compound operations race more often. You still need locks or share-nothing designs.
+
+**A:** No, rather the opposite. Built-in objects stay internally consistent thanks to per-object locks, but compound operations like `d[k] = d.get(k, 0) + 1` or check-then-act still race, and now they race on truly simultaneous threads, so bugs that were rare become frequent. You still need locks, queues or share-nothing designs.
 
 **Q:** Why did my free-threaded program not speed up?
-**A:** Common causes: an extension re-enabled the GIL, contention on shared state, the work was I/O-bound or already in C, or one stage is the bottleneck.
+
+**A:** The usual causes: a C extension that is not marked free-threading-compatible was imported and re-enabled the GIL for the whole process (with a warning); threads contend on shared state or one lock; the work is I/O-bound or already runs in C that releases the GIL; or one slow stage limits the whole pipeline. Check `sys._is_gil_enabled()` first, then measure scaling from 1 to N threads.
 
 **Q:** Threads, processes or sub-interpreters for CPU work?
-**A:** Free-threaded threads for shared-memory work with compatible dependencies, processes for isolation and compatibility, sub-interpreters for isolated parallelism with less overhead than processes.
+
+**A:** Free-threaded threads share memory directly, so passing data is free, but races are your problem and every dependency must support free-threading. Processes work on every build and isolate crashes, but pickling data between them costs time and memory. Sub-interpreters (`InterpreterPoolExecutor`) are cheaper than processes and isolated, each with its own GIL, but can share only limited kinds of objects and need extension support.
+
+**Q:** Why is a shared counter with a lock slow even on 3.14t?
+
+**A:** Every increment needs the same lock, so threads queue for it, and the lock's memory bounces between CPU cores' caches. The work becomes effectively serial, and Amdahl's law caps the speed-up. Per-thread `Counter`s merged at the end touch no shared data in the hot loop, which is why that fix improved scaling measurably.
+
+**Q:** What does free-threading cost?
+
+**A:** Single-threaded code runs somewhat slower on the free-threaded build (the 3.14 docs give roughly 5–10%, depending on platform), memory use is higher, and library support is still uneven. So it pays off only for CPU-bound pure-Python work that actually runs on several threads.
+
+**Q:** How do you test for data races?
+
+**A:** Run the pipeline many times with random thread counts and tiny queue sizes to force interleavings, and assert the output (sorted) is identical to the single-threaded baseline every time. A test fails if the GIL turns out to be enabled on the 3.14t run. Benchmarks are repeated and reported as median and spread.
+
+**Q:** How do stages shut down cleanly?
+
+**A:** When the reader finishes, it calls `queue.shutdown()` on its output queue (3.13+). Consumers get `queue.ShutDown` from `get()` once the queue is drained, finish, and shut down their own output queue, so shutdown flows down the pipeline. Before 3.13 you put one sentinel object per consumer thread.
+
+**Q:** Show per-thread aggregation.
+
+**A:**
+```python
+def worker(inq: Queue, partials: list[Counter]) -> None:
+    local = Counter()
+    try:
+        while True:
+            local.update(parse(inq.get()))
+    except ShutDown:
+        partials.append(local)    # list.append is safe; one call per thread
+total = sum(partials, Counter())
+```
+
+**Common mistakes in answers:**
+- Saying 3.14 removed the GIL. The free-threaded build is optional; the default build still has it.
+- Claiming free-threading makes `+=` on shared objects atomic.
+- Benchmarking without checking `sys._is_gil_enabled()`, and reporting a "no speed-up" result caused by an incompatible extension.
 
 ### TL;DR
 A staged, share-nothing pipeline benchmarked on 3.14t against the default build, processes and sub-interpreters — the practical way to learn what PEP 779's free-threading buys and costs.
@@ -3455,14 +5018,68 @@ pandas has the largest ecosystem and is familiar; polars is usually faster and m
 - [Ch 17 — Performance, memory and internals](../chapters/17-performance-memory-internals/README.md): measuring memory and speed.
 
 ### In the interview
+**30-second answer:** I built a batch ETL pipeline that ingests a year of bike-share trip CSVs plus hourly weather, validates and quarantines bad rows, joins and aggregates them, and writes partitioned Parquet plus a report. The key design is an engine `Protocol` with two implementations, pandas and polars, that must produce identical output, which made correctness testable and the speed and memory comparison honest. The hardest parts were silent data bugs (join explosions, time zones, type guessing), solved with join-key validation, row-count assertions at every stage and explicit dtypes. The polars lazy engine processes the full year of tens of millions of rows on a 16 GB laptop, and re-running a month atomically replaces only its partition.
+
+**Key terms to know:**
+- **ETL** — extract, transform, load: read raw data, clean and reshape it, write it somewhere useful.
+- **Parquet** — a compressed, column-oriented file format with a schema. Fast for reading a few columns of many rows.
+- **Eager vs lazy execution** — pandas runs each step immediately; polars' lazy API builds a plan and runs it optimised at `.collect()`.
+- **Predicate / projection pushdown** — moving filters and column selection into the file scan so less data is read.
+- **Join explosion** — duplicate keys on the "one" side of a join silently multiply rows.
+- **Idempotent run** — re-running gives the same output with no duplicates. Achieved by replacing whole partitions atomically.
+- **Partitioning** — storing data in folders like `year=2026/month=10/` so one month can be rewritten or read alone.
+- **Quarantine** — bad rows written aside with a reason, instead of crashing or silently dropping them.
+- **Apache Arrow** — the columnar in-memory format polars uses and pandas can use, enabling zero-copy exchange.
+- **Copy-on-write (pandas 3)** — derived DataFrames share data until modified, removing the "view or copy?" ambiguity.
+
 **Q:** Why might polars be faster than pandas on the same task?
-**A:** It is written in Rust, runs multithreaded, and its lazy engine optimises the whole query — pushing filters and column selection into the scan and avoiding intermediate copies.
+
+**A:** It is written in Rust, runs operations across all cores, and its lazy engine optimises the whole query: it pushes filters and column selection into the CSV/Parquet scan, avoids materialising intermediate DataFrames and can stream data in chunks. pandas executes step by step, mostly on one core, and each step can create a full copy. For small data the difference matters little.
 
 **Q:** How do you catch a join that duplicated rows?
-**A:** Validate join-key uniqueness before the join and assert row counts after it.
+
+**A:** Validate that the join key is unique on the "one" side before joining, and assert the row count after. In pandas, `trips.merge(weather, on="hour", validate="many_to_one")` raises if `weather` has duplicate hours. A daylight-saving repeated hour is a classic cause.
 
 **Q:** What makes a pipeline idempotent?
-**A:** Each run computes a partition from its inputs and atomically replaces the previous output, so re-running gives the same result without duplicates.
+
+**A:** Each run computes a whole partition from its inputs and atomically replaces the previous output: write to a temporary folder, then rename into place. Re-running the same month gives the same files without duplicates, and a crash never leaves a half-written partition. Appending rows to existing output is what breaks idempotency.
+
+**Q:** How do you handle local timestamps across daylight-saving changes?
+
+**A:** Trip data is usually local time without an offset. I localise with the city's zone and explicitly decide what to do with the non-existent spring hour (shift or flag) and the repeated autumn hour (infer from order or flag as ambiguous), then convert to UTC before joining with UTC weather. Joining naive local times to UTC is a silent one-hour error.
+
+**Q:** Why declare dtypes instead of letting the CSV reader guess?
+
+**A:** Guessing turns station id `"00123"` into the integer 123, makes a column with one blank a float, and can differ between files and engines. Explicit schemas make outputs reproducible and make the pandas and polars engines comparable. Unexpected types then fail validation instead of producing wrong joins.
+
+**Q:** What happens when upstream data quality drops?
+
+**A:** Each stage logs rows in and out, and a drop above 1% fails the run instead of publishing incomplete data. Bad rows go to a quarantine file with reasons, so I can see "40% of rows have negative duration" and contact the source. Pipelines more often fail silently than loudly, so these checks are the real safety net.
+
+**Q:** What changes at 100x data, beyond one machine?
+
+**A:** Even lazy streaming on one laptop eventually runs out of disk bandwidth and time. Next steps are DuckDB for larger-than-memory SQL on one machine, then Spark or a cloud warehouse. Partitioned Parquet carries over unchanged, which is one reason to choose it.
+
+**Q:** How do you test two engines for parity?
+
+**A:** One parametrised test suite runs every transformation with both engines on small fixture CSVs covering edge cases (DST boundaries, negative durations, missing stations). Outputs are converted to the same form, sorted, and compared with `polars.testing.assert_frame_equal` or `pandas.testing.assert_frame_equal`, with explicit tolerance for floats.
+
+**Q:** Write a lazy polars aggregation.
+
+**A:**
+```python
+daily = (pl.scan_parquet("trips/*.parquet")
+         .filter(pl.col("duration_min") > 0)
+         .group_by("start_station_id", pl.col("started_at").dt.date().alias("day"))
+         .agg(pl.len().alias("trips"), pl.col("duration_min").mean())
+         .collect())
+```
+Nothing is read until `collect()`, so the filter and column selection are pushed into the scan.
+
+**Common mistakes in answers:**
+- Calling `.collect()` after every step in polars, which throws away the optimiser's benefits.
+- Trusting a join without validating key uniqueness or checking row counts.
+- Making a pipeline "idempotent" by deleting and appending rows non-atomically.
 
 ### TL;DR
 A validated, partitioned, idempotent ETL pipeline implemented in both pandas and polars behind one interface — learn the data-quality habits and when lazy beats eager.
@@ -3573,17 +5190,67 @@ A single scheduler is simple and consistent but a single point of failure and a 
 - [Ch 19 — Python for coding interviews](../chapters/19-python-for-coding-interviews/README.md): topological ordering of graphs.
 
 ### In the interview
+**30-second answer:** I built a mini Dask: a scheduler accepts a DAG of Python function calls through `submit`, `map` and `gather`, and workers on one or more machines run tasks in process pools, keep results locally and fetch inputs directly from peers. The key design is a per-task state machine in the scheduler plus locality-aware placement, because moving large intermediate results often costs more than computing them. The hardest part was failure recovery, solved with heartbeats to detect dead workers and lineage to recompute exactly the lost results still needed. A killed worker is detected within 10 seconds and the graph still completes with correct results.
+
+**Key terms to know:**
+- **DAG** — directed acyclic graph: tasks with dependencies and no cycles.
+- **Future** — a handle to a result that will exist later; passing it to another task creates a dependency.
+- **Task state machine** — waiting → ready → processing → in memory, or erred.
+- **Data locality** — running a task on the worker that already holds its largest input.
+- **Heartbeat** — a periodic "I am alive" message. Missing heartbeats mark a worker dead.
+- **Lineage** — the graph of how each result was computed, used to recompute lost results.
+- **Work stealing** — idle workers take queued tasks from busy ones.
+- **Length-prefixed framing** — each message starts with its size, because TCP has no message boundaries.
+- **pickle / cloudpickle** — Python object serialisation; cloudpickle also handles lambdas and closures. Unsafe on untrusted data.
+- **Spilling** — writing results to disk when worker memory passes a limit.
+
 **Q:** How do you recover when a worker holding intermediate results dies?
-**A:** Use the task graph's lineage to recompute lost results that are still needed, re-scheduling their inputs if necessary.
+
+**A:** The scheduler moves that worker's running tasks back to ready. For results it held, any still needed by unfinished tasks are recomputed using the lineage, walking back to their inputs if those were also lost. Results nobody needs any more are simply forgotten. This is how Dask, Ray and Spark recover without replicating every result.
 
 **Q:** Why schedule tasks near their data?
-**A:** Moving large intermediate results over the network often costs more than the computation itself.
+
+**A:** Moving a 1 GB intermediate result over the network can take longer than the computation that uses it. Placing a task on the worker that holds its largest input avoids that transfer. The heuristic is balanced against load, otherwise one worker gets everything.
 
 **Q:** Why is unpickling untrusted data dangerous?
-**A:** Pickle can construct arbitrary objects and call functions during loading, so a crafted payload can execute code.
+
+**A:** Pickle can call arbitrary callables while loading (via `__reduce__`), so a crafted payload can run shell commands on the worker. The cluster must only accept connections from trusted peers on a private network, ideally with TLS and authentication. A pickle-speaking port must never be exposed to the internet.
 
 **Q:** When is a distributed runner slower than a single machine?
-**A:** When tasks are tiny or data movement dominates — scheduling and serialisation overhead outweigh the parallel speed-up.
+
+**A:** When tasks are tiny or data movement dominates. Each task pays scheduling, serialisation and network costs, roughly a millisecond or more, so microsecond tasks run far slower distributed. Tasks should take at least hundreds of milliseconds, and many tiny tasks should be batched.
+
+**Q:** How do you detect a dead worker, and what about a slow one?
+
+**A:** Workers send heartbeats every second or two; if none arrives within a timeout (say 10 seconds), the scheduler declares the worker dead and reschedules. A merely slow or partitioned worker may come back and report results for tasks already reassigned, so the scheduler ignores results for tasks no longer assigned to that worker. Duplicate execution therefore must be harmless.
+
+**Q:** What limits throughput on a single scheduler?
+
+**A:** Every task passes through it, so a millisecond of scheduler work per task caps the system near a thousand tasks per second. I keep state transitions O(1) with dicts and sets, batch messages, and avoid scanning all tasks on each event. Beyond that, the scheduler is also a single point of failure; Ray distributes scheduling to scale further.
+
+**Q:** Why process pools on workers rather than threads?
+
+**A:** Tasks are usually CPU-bound Python, which threads cannot parallelise on the GIL build, and a crashing task should not take down the worker's network loop. On 3.14t, threads become an option for shared-memory work if all libraries support free-threading.
+
+**Q:** How do you test a distributed system?
+
+**A:** Run the scheduler and workers as asyncio tasks in one process for fast state-machine tests, then multi-process tests over real sockets. Fault injection kills workers at random points and asserts the graph completes with the same results as local execution. Property tests generate random DAGs and compare distributed and local results.
+
+**Q:** How do you read one length-prefixed frame with asyncio?
+
+**A:**
+```python
+async def read_frame(reader: asyncio.StreamReader) -> bytes:
+    header = await reader.readexactly(4)
+    (size,) = struct.unpack("!I", header)   # 4-byte big-endian length
+    return await reader.readexactly(size)
+```
+`readexactly` raises `IncompleteReadError` if the peer disconnects mid-frame.
+
+**Common mistakes in answers:**
+- Assuming TCP delivers one `send` as one `recv`; you need framing.
+- Re-running only the dead worker's running tasks and forgetting the finished results it held.
+- Distributing microsecond tasks and expecting a speed-up.
 
 ### TL;DR
 A scheduler with a task state machine, locality-aware placement, heartbeats and lineage-based recovery — the essence of Dask and Ray in a few thousand lines.
@@ -3684,14 +5351,66 @@ Pure-Python AST linting is fine for most projects, but Ruff's speed comes from R
 - [Ch 14 — Standard library tour](../chapters/14-standard-library-tour/README.md): `ast`, `tokenize`, `json`.
 
 ### In the interview
+**30-second answer:** I built a Python linter on the standard `ast` module that reports unused imports and variables, bare `except:`, mutable default arguments, `== None` and more, with exact ranges and safe auto-fixes, and serves them to editors through a minimal Language Server Protocol server. The key design is one scope-analysis pass that records every binding and use, plus rule plugins that subscribe to node types, so the tree is walked once rather than once per rule. The hardest parts were Python's scoping rules and editor positions (UTF-8 byte columns versus UTF-16 in LSP), solved with a test per binding rule and explicit conversion. It lints 100,000 lines in under 10 seconds and shows diagnostics within 200 ms of a typing pause.
+
+**Key terms to know:**
+- **AST** — abstract syntax tree from `ast.parse`, with `lineno`, `col_offset`, `end_lineno`, `end_col_offset` on nodes.
+- **`ast.NodeVisitor`** — base class whose `visit_<NodeType>` methods are called during a traversal.
+- **Binding / use** — places a name is assigned (import, assignment, parameter, `def`) versus read.
+- **LEGB** — Python's name lookup order: Local, Enclosing function, Global, Built-in.
+- **Class scope rule** — methods cannot see class-body names by bare name.
+- **LSP** — Language Server Protocol: JSON-RPC messages like `textDocument/didChange` and `publishDiagnostics`.
+- **JSON-RPC over stdio** — messages framed with a `Content-Length` header on the server's stdin/stdout.
+- **Text edit fix** — a change expressed as a range plus replacement text on the original source.
+- **Debounce** — wait for a short pause in typing before re-linting.
+- **`# noqa`** — an inline comment that suppresses a rule on that line.
+
 **Q:** How does a linter know an import is unused?
-**A:** It records bindings and uses per scope while walking the AST. A binding from an import with no recorded use (and not exported in `__all__`) is unused.
+
+**A:** While walking the AST it records, per scope, every binding (the import creates one) and every use of a name, resolving each use to a binding by Python's scoping rules. An import binding with no recorded use, not listed in `__all__`, and not re-exported is unused. Names used only in annotations still count as used.
 
 **Q:** Why not fix code with `ast.unparse`?
-**A:** It discards comments and formatting. Fixes should be minimal text edits based on node positions.
+
+**A:** The AST does not keep comments, blank lines or formatting, so `ast.unparse` would rewrite the whole file in its own style and delete comments. Fixes must be minimal text edits on the original source using node ranges, with the `tokenize` module for details like the comma in `from x import a, b`.
 
 **Q:** How do you keep an LSP server responsive?
-**A:** Debounce changes, cancel stale analysis for older document versions, and never block the message loop on heavy work.
+
+**A:** Debounce changes (about 150 ms of inactivity), cancel analysis for document versions that are already stale, and run linting off the message loop so the server can still answer requests. Editors send a change on every keystroke, so doing full work each time would lag.
+
+**Q:** Why is a mutable default argument a bug worth a rule?
+
+**A:** Default values are evaluated once, when the `def` runs, not on each call. So `def add(x, items=[])` shares one list across all calls and items accumulate. The rule flags list, dict and set literals (and calls like `list()`) as defaults and suggests `items: list | None = None` with `if items is None: items = []`.
+
+**Q:** Name a scoping subtlety your linter must get right.
+
+**A:** A name assigned anywhere in a function is local for the whole function, so reading it before the assignment raises `UnboundLocalError` even if a global with that name exists. Also, methods cannot see class-body variables by bare name, and comprehensions have their own scope (PEP 709 inlined them in 3.12 for speed without changing what code can see).
+```python
+x = 1
+def f():
+    print(x)   # UnboundLocalError: x is local because of the next line
+    x = 2
+```
+
+**Q:** Why do squiggles land in the wrong column on lines with `é` or emoji?
+
+**A:** `ast` column offsets are UTF-8 byte offsets, while LSP positions default to UTF-16 code units. `é` is 2 bytes in UTF-8 but 1 UTF-16 unit, and an emoji is 4 bytes but 2 units. I negotiate the position encoding at initialisation (newer clients accept UTF-8) or convert per line.
+
+**Q:** What happens with a file that has a syntax error?
+
+**A:** `ast.parse` raises `SyntaxError` with a line and offset. I catch it and publish it as a single diagnostic instead of crashing, and keep the last good diagnostics for other rules hidden until the file parses again. A linter that crashes while you type is unusable.
+
+**Q:** What limits a pure-Python linter at 10x codebase size?
+
+**A:** Parsing and visiting in Python is CPU-bound, so I parallelise across files with a process pool and cache results by file hash. Ruff is far faster because it is written in Rust and does everything in a single pass; pure Python cannot close that gap, but caching makes re-runs cheap.
+
+**Q:** How do you test rules?
+
+**A:** Fixture files with inline expectations like `x = 1  # expect: PY010`, checked by one parametrised test. Fix tests compare against an expected fixed file and check the output parses and no longer triggers the rule. LSP tests drive the server over pipes with recorded JSON-RPC conversations, and running over a large real codebase finds crashes.
+
+**Common mistakes in answers:**
+- Proposing `ast.unparse` or regex rewriting for auto-fixes.
+- Forgetting the UTF-8 versus UTF-16 position mismatch.
+- Running one full tree traversal per rule instead of dispatching nodes to all interested rules in one pass.
 
 ### TL;DR
 Parse with `ast`, analyse scopes once, dispatch nodes to rule plugins, emit precise diagnostics and text-edit fixes, and serve them over LSP — how real linters and editors fit together.
@@ -3790,14 +5509,69 @@ Import hooks are powerful but fragile: other hooks, zip imports and caching laye
 - [Ch 11 — Iterators, generators and functional tools](../chapters/11-iterators-generators-functional/README.md): generator-based setup and teardown.
 
 ### In the interview
+**30-second answer:** I built `minitest`, a pytest-style runner with discovery by naming convention, fixtures injected by parameter name with function/module/session scopes and `yield` teardown, parametrisation, skip/xfail marks, JUnit XML output and parallel runs. The key design is an import hook on `sys.meta_path` that rewrites `assert` statements in test modules with an `ast.NodeTransformer`, so a bare `assert f(x) == [1, 2, 3]` reports the actual value and a diff. The hardest parts were preserving evaluation order and short-circuiting in rewritten asserts, and fixture teardown that never hides the original failure, solved with temporaries and per-scope `ExitStack`s. Framework overhead is under 1 ms per trivial test.
+
+**Key terms to know:**
+- **Discovery / collection** — finding `test_*.py` files, `test_*` functions and `Test*` classes, and turning them into test items.
+- **Fixture** — a function providing a resource to tests, injected by parameter name, with a scope and optional teardown.
+- **Fixture scope** — how long a fixture value lives: per test (`function`), per `module` or per `session`.
+- **Yield fixture** — setup before `yield`, teardown after, implemented by resuming the generator.
+- **Import hook (`MetaPathFinder`)** — an object on `sys.meta_path` that can take over how modules are found and loaded.
+- **Assertion rewriting** — transforming `assert` nodes so failures show intermediate values.
+- **`inspect.signature`** — reads a function's parameter names, used for fixture injection.
+- **`contextlib.ExitStack`** — collects cleanup callbacks and runs them in reverse order, even on errors.
+- **xfail / xpass** — expected failure, and a test marked xfail that unexpectedly passed.
+- **JUnit XML** — the result format CI systems parse.
+
 **Q:** How does pytest show values in a failing bare `assert`?
-**A:** An import hook rewrites assert statements in test modules into code that records intermediate values and builds a detailed message.
+
+**A:** An import hook intercepts imports of test modules, parses their source, and rewrites each `assert` into code that stores sub-expressions in temporary variables, checks the condition and, on failure, builds a message showing each value. The rewritten AST is compiled and executed as the module. A plain `assert` without rewriting only raises a bare `AssertionError`.
 
 **Q:** How are fixtures injected?
-**A:** The runner inspects the test function's parameter names and resolves each to a registered fixture, recursively, respecting scopes and caching.
+
+**A:** The runner reads the test function's parameter names with `inspect.signature`, looks up a registered fixture for each, and resolves the fixture's own parameters recursively, detecting cycles. Values are cached per scope, so a session fixture is created once and shared, and a wider-scoped fixture may not depend on a narrower one.
 
 **Q:** How is a yield fixture torn down?
-**A:** Setup runs until `yield`; the yielded value goes to the test; after the test the generator is resumed so code after `yield` runs, even if the test failed.
+
+**A:** Setup runs the generator up to `yield`, and the yielded value goes to the test. After the test, the runner resumes the generator with `next()` so the code after `yield` runs, even if the test failed; a `StopIteration` is the normal end. Teardowns are pushed on an `ExitStack` per scope, so they run in reverse order of setup.
+
+**Q:** What must assertion rewriting preserve?
+
+**A:** Evaluation order, evaluating each sub-expression exactly once (a function with side effects must be called once), short-circuiting of `and`/`or`, and line numbers so tracebacks point at the right line (`ast.copy_location`, `ast.fix_missing_locations`). Breaking any of these changes test behaviour, which is worse than a plain message.
+
+**Q:** Why does `python -O` matter for tests?
+
+**A:** With `-O`, Python strips `assert` statements entirely, so plain asserts in tests (and in code) silently stop checking anything. Test runners must not be run with `-O`, and application code should never use `assert` for real validation.
+
+**Q:** A test fails and then its fixture teardown also raises. What is reported?
+
+**A:** Both. The test is reported as failed with its assertion message, and the teardown error is reported as an error attached to it. Teardown errors must never replace the original failure, which is the most useful information. An exception during fixture setup is classified as an error, not a failure.
+
+**Q:** How does parallel execution work and what does it expose?
+
+**A:** The controller collects items, then sends node ids such as `tests/test_math.py::test_add[2-3-5]` to worker processes, which collect the same tests themselves and run the ids they receive. Functions do not pickle well, so only ids cross processes. Parallel runs expose hidden dependencies between tests (shared files, global state, ordering), which is useful but painful.
+
+**Q:** How do you test a testing framework?
+
+**A:** First with pytest, then with itself once stable (bootstrapping). Fixture projects in temp folders with known outcomes are run as subprocesses, asserting on the summary line and the JUnit XML. Rewrite tests cover many assert forms, including one that calls a counting function to prove single evaluation.
+
+**Q:** Show a fixture registry with injection.
+
+**A:** `@fixture` stores each fixture function in `FIXTURES` by name; the runner then injects by parameter name.
+```python
+def call_test(test, stack: ExitStack):
+    kwargs = {}
+    for name in inspect.signature(test).parameters:
+        gen = FIXTURES[name]()
+        kwargs[name] = next(gen) if inspect.isgenerator(gen) else gen
+        if inspect.isgenerator(gen): stack.callback(next, gen, None)
+    return test(**kwargs)  # stack.close() later runs teardowns in reverse
+```
+
+**Common mistakes in answers:**
+- Saying pytest "parses the traceback" to show values; it rewrites the assert AST at import time.
+- Rewriting asserts in a way that evaluates expressions twice.
+- Letting a teardown exception hide the original test failure.
 
 ### TL;DR
 Discovery, signature-based fixture injection with scopes, AST assertion rewriting through an import hook and process-parallel runs — the inner workings of pytest, built by hand.
@@ -3896,14 +5670,67 @@ Subinterpreters start faster and use less memory than processes and avoid pickli
 - [Ch 17 — Performance, memory and internals](../chapters/17-performance-memory-internals/README.md): measuring start-up cost and memory.
 
 ### In the interview
+**30-second answer:** I built a plugin host that runs each user plugin in its own subinterpreter using Python 3.14's `concurrent.interpreters` (PEP 734), with interpreter queues for requests and responses, a watchdog for time limits and automatic restarts, and an `InterpreterPoolExecutor` mode for stateless plugins. The key design is a protocol built on shareable types (bytes, str, ints and tuples), because objects cannot be passed by reference between interpreters and anything else is pickled. The hardest part was being honest about limits: an interpreter cannot be forcibly killed and is not a security sandbox, so a stuck plugin is abandoned and replaced, and hostile code goes to processes. Four CPU-bound plugins scale across four cores because each interpreter has its own GIL.
+
+**Key terms to know:**
+- **Subinterpreter** — a separate Python interpreter in the same process, with its own modules, builtins and globals.
+- **Per-interpreter GIL (PEP 684, 3.12)** — each interpreter can have its own GIL, so interpreters run Python in parallel.
+- **`concurrent.interpreters` (PEP 734, 3.14)** — the stdlib module to create interpreters, run code and call functions in them.
+- **Interpreter queue** — `interpreters.create_queue()`, a cross-interpreter queue for passing shareable objects.
+- **Shareable types** — `None`, `bool`, `int`, `float`, `str`, `bytes`, tuples of these, `memoryview` and queues; others are pickled or raise `NotShareableError`.
+- **`InterpreterPoolExecutor`** — a `concurrent.futures` executor backed by a pool of interpreters.
+- **Isolation vs sandbox** — separated Python state, but same process, files, memory space and permissions.
+- **Watchdog** — tracks call deadlines and recycles stuck interpreters.
+- **Extension-module compatibility** — C extensions with global state may fail to import in a subinterpreter.
+
 **Q:** What is a subinterpreter?
-**A:** A separate Python interpreter inside the same process with its own modules and globals; since 3.12 each can have its own GIL, and 3.14 adds the `concurrent.interpreters` module to use them from Python code.
+
+**A:** A separate Python interpreter inside the same process, with its own `sys.modules`, builtins and globals, so changes in one do not affect another. Since 3.12 each can have its own GIL, and 3.14 adds `concurrent.interpreters` so Python code can create and use them directly instead of only through the C API.
 
 **Q:** Are subinterpreters a security sandbox?
-**A:** No. They isolate Python-level state but share the process, files and memory space. Use OS isolation for untrusted code.
+
+**A:** No. They isolate Python-level state but share the process: a plugin can still read files, open sockets, call `os._exit()` or crash the whole process through a C extension bug. They protect against accidental interference, not malice. Untrusted code needs OS-level isolation, such as a separate restricted process or a container.
 
 **Q:** Subinterpreters vs processes vs free-threaded threads?
-**A:** Processes isolate best but cost most; subinterpreters isolate module state cheaply with parallelism; free-threaded threads share everything with the most race risk.
+
+**A:** Processes isolate best and work with every extension, but start slowest and pickle every message. Subinterpreters start faster, use less memory and run in parallel, but share only simple types cheaply and some extensions are not supported. Free-threaded threads share all objects directly and are fastest for shared data, but give no isolation and the most race risk.
+
+**Q:** How do you enforce a time limit on a plugin?
+
+**A:** You cannot interrupt code running in an interpreter; `close()` cannot stop code that is still executing. So each interpreter's loop runs in its own host thread; on timeout the watchdog marks the plugin dead, stops sending it work, reports the failure and starts a fresh interpreter. The stuck thread lingers until the code returns, which I document; plugins that may loop forever belong in a process that can be killed.
+
+**Q:** Why design the protocol around bytes and simple tuples?
+
+**A:** Those types are shared or copied cheaply between interpreters. Anything else is pickled behind the scenes, which costs time on every call and raises `NotShareableError` for objects that cannot be pickled. For large numeric batches, a `memoryview` over a shared buffer avoids copies entirely.
+
+**Q:** What happens if a plugin raises, calls `sys.exit` or imports an incompatible extension?
+
+**A:** An exception inside the interpreter is caught by the plugin loop and sent back as an error response, so the host reports it and keeps going; anything that escapes the loop surfaces in the host as `interpreters.ExecutionFailed`. `sys.exit` raises `SystemExit` inside that interpreter, which the loop also catches and treats as a crash, recreating the interpreter. An extension that does not support subinterpreters raises `ImportError` at bootstrap, which I report clearly at load time rather than at first call.
+
+**Q:** How do you prove isolation?
+
+**A:** A test plugin modifies a global, appends to `sys.path` and monkey-patches `json.dumps`; the test asserts the host and another plugin see none of it. Fault tests cover exceptions, `sys.exit`, infinite loops and huge outputs. The same plugins also run in a process pool and must produce identical results.
+
+**Q:** What changes with 100 plugins?
+
+**A:** Memory per interpreter adds up (each imports its own copy of modules), and one host thread per dedicated interpreter becomes heavy. I would pool stateless plugins with `InterpreterPoolExecutor`, keep dedicated interpreters only for stateful ones, start them lazily, and retire idle ones.
+
+**Q:** Run a function in a new interpreter.
+
+**A:**
+```python
+from concurrent import interpreters
+interp = interpreters.create()
+interp.exec("import plugin_a")
+q = interpreters.create_queue()
+t = interp.call_in_thread(plugin_loop, q)   # plugin_loop must be importable there
+```
+For one-off stateless calls, `InterpreterPoolExecutor().submit(fn, arg)` hides all of this.
+
+**Common mistakes in answers:**
+- Calling subinterpreters a sandbox for untrusted code.
+- Assuming arbitrary objects are shared by reference between interpreters.
+- Promising you can kill a runaway plugin in an interpreter the way you kill a process.
 
 ### TL;DR
 PEP 734's `concurrent.interpreters` gives each plugin its own interpreter and GIL in one process — learn the queue-based protocol, the parallelism gains and the honest limits of the isolation.
@@ -4006,17 +5833,71 @@ Bitcask needs all keys in memory, which limits it to key sets that fit in RAM bu
 - [Ch 19 — Python for coding interviews](../chapters/19-python-for-coding-interviews/README.md): k-way merge, skip lists, bit manipulation.
 
 ### In the interview
+**30-second answer:** I built an embedded key-value store in two stages: first a Bitcask-style append-only log with an in-memory hash index, then a small LSM tree with a write-ahead log, a sorted memtable, immutable SSTables, bloom filters and compaction. The key design is "append, never overwrite": writes are sequential appends with a CRC per record, which makes them fast and makes crash recovery a matter of replaying the log up to the first bad record. The hardest parts were proving durability and atomic file-set changes, solved with fault injection that truncates files at random offsets and an atomically replaced manifest. In fsync-every-write mode no acknowledged write is lost after `kill -9`, and batched fsync reaches over 50,000 writes per second in pure Python.
+
+**Key terms to know:**
+- **Append-only log** — records are only added at the end; updates and deletes are new records.
+- **Bitcask keydir** — an in-memory dict from key to (file, offset, size) of its latest value. One disk seek per read.
+- **WAL (write-ahead log)** — every write is logged durably before it is acknowledged, so it can be replayed after a crash.
+- **Memtable** — the in-memory sorted table of recent writes, flushed to disk when full.
+- **SSTable** — sorted string table: an immutable sorted file with a sparse index and a bloom filter.
+- **Tombstone** — a record meaning "deleted", needed because older files may still hold the key.
+- **Compaction** — merging files to drop overwritten values and tombstones, with a k-way merge.
+- **Bloom filter** — a bit array that says "definitely not here" or "maybe here". No false negatives.
+- **Write / read / space amplification** — extra bytes written, files read and disk used per user operation.
+- **Torn write** — a record only partly written when the process or power died; detected by CRC or length.
+
 **Q:** Why are LSM trees good for write-heavy workloads?
-**A:** Writes become sequential appends to a log plus an in-memory insert; sorting and merging happen later in the background.
+
+**A:** A write is a sequential append to the WAL plus an insert into the in-memory memtable, both cheap. Sorting to disk happens later in bulk when the memtable is flushed, and merging happens in background compaction. Disks and SSDs are much faster at sequential than random writes, so throughput is high.
 
 **Q:** How does a bloom filter help reads?
-**A:** It answers "definitely not in this file" without reading the file, so lookups for absent keys skip most disk reads. It can give false positives but never false negatives.
+
+**A:** Each SSTable has a bloom filter of its keys. Before reading a file, the store asks the filter; "definitely not here" skips the file without any disk read. It can give false positives (an unnecessary read) but never false negatives, so correctness is unaffected. Lookups for missing keys, which would otherwise touch every file, become nearly free.
 
 **Q:** How do you recover after a crash?
-**A:** Replay the write-ahead log, validating each record's checksum, and discard the incomplete tail.
+
+**A:** On open, read the WAL from the start, verifying each record's length and CRC, and rebuild the memtable (or the Bitcask keydir). Stop at the first incomplete or corrupt record and truncate the file there. Because records are only appended, everything before that point is intact.
 
 **Q:** What is write amplification?
-**A:** The ratio of bytes written to disk to bytes written by the user, caused by rewriting data during compaction.
+
+**A:** The ratio of bytes the engine writes to disk to bytes the user wrote. In an LSM tree, a value is written to the WAL, to an SSTable on flush, and again each time compaction moves it down a level, so one user byte can become 10 or more disk bytes. It costs SSD lifetime and I/O bandwidth, and is the price of fast writes.
+
+**Q:** LSM tree or B-tree?
+
+**A:** A B-tree updates pages in place, so reads are fast and predictable (one tree walk) but random writes cost more. An LSM tree makes writes sequential and cheap but a read may check several files and compaction adds background I/O. Write-heavy workloads such as logs, metrics and time series favour LSM (RocksDB, Cassandra); read-heavy transactional ones favour B-trees (PostgreSQL, SQLite).
+
+**Q:** How do you size a bloom filter?
+
+**A:** With `m` bits, `n` keys and `k` hash functions, the false-positive rate is about `(1 − e^(−kn/m))^k`, minimised at `k = (m/n) × ln 2`. About 10 bits per key with k of about 7 gives roughly 1% false positives. I derive the k positions from two hashes as `h1 + i × h2` instead of computing k separate hashes.
+
+**Q:** Why do you need tombstones?
+
+**A:** Deleting a key from the newest file is not enough, because an older SSTable may still hold an earlier value and a read would find it. A tombstone in a newer file shadows older values. Compaction can drop the tombstone only once it reaches the oldest level, where no older value can exist.
+
+**Q:** How do compaction and readers stay consistent?
+
+**A:** Compaction writes new SSTables first, then atomically replaces the manifest (temp file plus `os.replace`) listing the live files. Readers use the manifest version they started with, and old files are deleted only when no reader still references them (reference counting). Readers never see a mix of old and new file sets.
+
+**Q:** How do you test it?
+
+**A:** Model-based testing: random sequences of put, get, delete and scan applied to both the store and a plain dict, compared after every step, including after simulated crashes that truncate files at random byte offsets. A fuzzer feeds corrupted bytes to the decoder. Benchmarks compare reads of missing keys with and without bloom filters.
+
+**Q:** Encode one log record.
+
+**A:**
+```python
+def encode(key: bytes, value: bytes, tombstone: bool = False) -> bytes:
+    # layout: crc32 | key_len | value_len | flags | key | value
+    body = struct.pack(">IIB", len(key), len(value), tombstone) + key + value
+    return struct.pack(">I", zlib.crc32(body)) + body
+```
+The CRC covers lengths and data, so a torn or corrupted record fails the check.
+
+**Common mistakes in answers:**
+- Saying `write()` makes data durable. Without `fsync` it may still be in the OS page cache.
+- Deleting a key by removing it only from the memtable, so an older SSTable value reappears.
+- Claiming bloom filters can return false negatives.
 
 ### TL;DR
 Append-only logs with checksums, a memtable flushed to immutable SSTables, bloom filters and compaction — the storage-engine design behind RocksDB and friends, built and crash-tested in Python.
@@ -4114,14 +5995,70 @@ In-process debuggers are simple but can be broken by the program they debug (mon
 - [Ch 11 — Iterators, generators and functional tools](../chapters/11-iterators-generators-functional/README.md): generator suspension and resumption.
 
 ### In the interview
+**30-second answer:** I built `pydbg`, a command-line debugger on `sys.monitoring` (PEP 669) with line and conditional breakpoints, step into/over/out, variable inspection and editing, watchpoints, post-mortem mode, and attaching to a running process with 3.14's `sys.remote_exec` (PEP 768). The key design is selective events: `LINE` events are enabled only for code objects that contain breakpoints, and callbacks return `DISABLE` for locations they do not care about, so code without breakpoints runs at nearly full speed. The hardest part was stepping semantics across returns, generators and coroutines, solved with a small state machine that tracks the starting frame. Detaching removes every hook and the program continues at full speed.
+
+**Key terms to know:**
+- **`sys.monitoring`** — the 3.12+ event API: tools claim an id (`DEBUGGER_ID`), register callbacks and enable events globally or per code object.
+- **`LINE` / `PY_START` / `PY_RETURN` / `PY_YIELD` / `PY_RESUME` / `RAISE`** — the interpreter events a debugger listens to.
+- **`set_local_events`** — enables events for one code object only. The basis of cheap breakpoints.
+- **`DISABLE` and `restart_events()`** — a callback returns `DISABLE` to switch off an event at that location; `restart_events()` turns them back on.
+- **Frame** — one active call: `f_code`, `f_locals`, `f_globals`, `f_lineno`, `f_back`.
+- **Code object** — compiled bytecode plus a line table (`co_lines()`), shared by every call of a function.
+- **Step into / over / out** — stop at the next line anywhere, the next line in this frame or its caller, or when this frame returns.
+- **Post-mortem debugging** — inspect the frames of a traceback after an uncaught exception.
+- **PEP 667** — in 3.13, `frame.f_locals` became a write-through proxy, so setting locals from a debugger works.
+- **PEP 768 / `sys.remote_exec`** — 3.14's safe way for an external process to make a running interpreter execute a script.
+
 **Q:** How does a Python debugger stop on a line?
-**A:** It registers for line events from the interpreter; on each event it checks whether the location matches a breakpoint and, if so, enters an interactive loop with the current frame.
+
+**A:** It asks the interpreter for `LINE` events in the code objects that contain breakpoints. In the callback it checks whether the line matches a breakpoint (and its condition and hit count), and if so it gets the current frame and runs an interactive command loop until the user continues. The program is paused simply because the callback has not returned yet.
 
 **Q:** Why is `sys.monitoring` better for debuggers than `sys.settrace`?
-**A:** Events can be enabled only where needed and disabled per location, so code without breakpoints runs at nearly full speed.
+
+**A:** `settrace` calls the trace function for every line of every frame, so all code slows down even where there are no breakpoints. `sys.monitoring` enables events only where needed and can disable them per location, so functions without breakpoints run at nearly full speed. Tool ids also let a debugger and a profiler or coverage tool coexist.
 
 **Q:** How can you debug a process that is already running in 3.14?
-**A:** Use `python -m pdb -p PID`, which uses PEP 768's safe external debugger interface to inject the debugger at a safe point.
+
+**A:** `python -m pdb -p PID`. It uses PEP 768: the debugger asks the target interpreter, through `sys.remote_exec`, to run a small script at a safe point between bytecodes, which starts a debug server the CLI connects to. It needs OS permission to access the target, and can be disabled with `PYTHON_DISABLE_REMOTE_DEBUG`, `-X disable_remote_debug` or a build option.
+
+**Q:** How do you implement "step over"?
+
+**A:** Record the current frame when the user types `next`. On each `LINE` event, stop only if the event's frame is that frame (the next line here) or, after `PY_RETURN`, its caller. Lines in deeper frames are ignored. Generators complicate it: a `yield` looks like leaving the frame and resuming looks like a new start, so `PY_YIELD` and `PY_RESUME` are handled explicitly.
+
+**Q:** Why did setting a local variable from a debugger used to fail?
+
+**A:** Function locals live in fast slots, and before 3.13 `frame.f_locals` returned a snapshot dict, so writing to it often did not change the real variable. PEP 667 made `f_locals` a write-through proxy for function frames in 3.13, so `set x = 5` now changes the variable reliably. I test it explicitly.
+
+**Q:** How do you implement a watchpoint?
+
+**A:** Python has no hardware watchpoints, so I evaluate the watched expression in its frame on each `LINE` event of that code object and stop when the value changes. That is expensive, so watchpoints enable line events only for the code objects where the watched frame lives, and are documented as slow.
+
+**Q:** What happens if the debugged program is multi-threaded?
+
+**A:** `sys.monitoring` callbacks fire on whichever thread hits the event. I need a policy: stop only the thread that hit the breakpoint while others keep running (simple, but state can change underneath), or ask every thread to pause at its next event (consistent, slower). The command loop must also own the terminal, so other threads cannot interleave output.
+
+**Q:** How do you test a debugger?
+
+**A:** Scripted sessions: feed a list of commands to the debugger's input and compare the output transcript with an expected one. Each step mode is tested across functions, recursion, exceptions, generators and `async def`. Overhead is benchmarked on a hot loop with and without breakpoints, and attach tests start a subprocess, attach, break, and detach.
+
+**Q:** Register a line-event callback for one function.
+
+**A:**
+```python
+mon, TOOL = sys.monitoring, sys.monitoring.DEBUGGER_ID
+mon.use_tool_id(TOOL, "pydbg")
+def on_line(code, line):
+    if line not in breakpoints.get(code, ()):
+        return mon.DISABLE        # never call again for this location
+    command_loop(sys._getframe(1))
+mon.register_callback(TOOL, mon.events.LINE, on_line)
+mon.set_local_events(TOOL, target.__code__, mon.events.LINE)
+```
+
+**Common mistakes in answers:**
+- Describing a debugger that checks every line of every function against the breakpoint table.
+- Forgetting to call `restart_events()` after adding breakpoints, so previously disabled locations never fire again.
+- Assuming remote attach works without permissions or on a hardened build.
 
 ### TL;DR
 Selective `sys.monitoring` events, a stepping state machine, frame inspection and 3.14's remote attach — a debugger you understand down to the bytecode.
@@ -4221,14 +6158,66 @@ Building your own framework is a learning exercise; for production use Starlette
 - [Ch 4 — Strings](../chapters/04-strings/README.md): regex route compilation.
 
 ### In the interview
+**30-second answer:** I built a mini Starlette/FastAPI: an ASGI framework with routing and path converters, request and response objects, onion-style middleware, dependency injection driven by type hints and `Depends`, WebSockets, streaming responses, lifespan hooks and an in-process test client. The key design is that everything is an ASGI app, `async def app(scope, receive, send)`, so middleware is just an app that wraps another app. The hardest part was dependency injection, solved by inspecting handler signatures once at start-up, resolving dependencies per request with caching, and entering generator dependencies on an `AsyncExitStack` so cleanup always runs. Framework overhead allows over 10,000 simple requests per second under Uvicorn.
+
+**Key terms to know:**
+- **ASGI** — the async server-application interface: an app is an async callable taking `scope`, `receive` and `send`.
+- **`scope`** — a dict describing the connection: type (`http`, `websocket`, `lifespan`), method, path, query string, headers as byte pairs.
+- **`receive` / `send`** — async functions for incoming messages (`http.request` body chunks) and outgoing ones (`http.response.start`, `http.response.body`).
+- **Middleware (onion)** — an ASGI app wrapping the next one, optionally wrapping `send` to modify responses.
+- **Router** — maps method and path to an endpoint; compiled to regexes or a tree.
+- **Dependency injection** — parameters filled from path, query, body or dependency functions based on signature and type hints.
+- **`AsyncExitStack`** — collects async cleanups (from `yield` dependencies) and runs them in reverse order.
+- **Lifespan** — startup and shutdown messages for opening and closing shared resources like pools.
+- **Streaming response** — sending the body in several `http.response.body` messages with `more_body: True`.
+
 **Q:** What is ASGI?
-**A:** A standard interface between async servers and Python apps: an app is an async callable taking a connection scope plus receive and send functions for messages.
+
+**A:** A standard interface between async Python servers and applications. An app is an async callable taking a connection `scope` plus `receive` and `send` functions for messages, so any ASGI server (Uvicorn, Hypercorn) can run any ASGI app. Unlike WSGI it supports long-lived connections like WebSockets and streaming.
 
 **Q:** How does middleware modify a response in ASGI?
-**A:** It wraps the inner app and passes it a wrapped `send` function that intercepts and changes outgoing messages.
+
+**A:** It wraps the inner app and calls it with a wrapped `send` that intercepts outgoing messages: for example adding a header to `http.response.start`, or compressing `http.response.body` chunks. Order matters: error-handling middleware must be outermost so it can catch failures from other middleware too.
 
 **Q:** How does FastAPI-style dependency injection work?
-**A:** The framework inspects the handler's signature and type hints, resolves each parameter from the request or by calling dependency functions, caches them per request and runs cleanup afterwards.
+
+**A:** At start-up the framework inspects each handler's signature and type hints and decides where each parameter comes from: path parameter if the name matches the route, `Request` if annotated so, a dependency if the default is `Depends(fn)`, otherwise query or body. Per request it resolves them recursively, caching each dependency once per request, and runs generator dependencies' cleanup after the response.
+
+**Q:** Show the smallest valid ASGI app.
+
+**A:**
+```python
+async def app(scope, receive, send):
+    assert scope["type"] == "http"
+    await send({"type": "http.response.start", "status": 200,
+                "headers": [(b"content-type", b"text/plain")]})
+    await send({"type": "http.response.body", "body": b"hello"})
+```
+
+**Q:** Why are headers a list of byte pairs, not a dict?
+
+**A:** HTTP allows repeated headers (several `Set-Cookie` lines), header names are case-insensitive, and values are bytes on the wire. A dict would lose duplicates. My `Request` exposes a case-insensitive multi-dict on top of the raw list.
+
+**Q:** What happens if a handler is a plain `def` doing blocking work?
+
+**A:** Calling it directly on the event loop would freeze every other request until it finished. The framework detects non-async handlers and runs them with `asyncio.to_thread` (or anyio's thread pool), the same thing FastAPI does. CPU-heavy work still needs a process pool or separate workers.
+
+**Q:** What happens when the client disconnects mid-stream, or a handler raises?
+
+**A:** On disconnect, `receive()` returns `http.disconnect` and further `send` calls fail, so a streaming response must stop producing and close its generator, and dependency cleanups must still run via the `AsyncExitStack`. If a handler raises before the response started, the error middleware sends a clean 500 without a stack trace in production; if headers were already sent, all it can do is close the connection.
+
+**Q:** How do you keep routing fast with many routes?
+
+**A:** Compile each route pattern to a regex once at start-up and group routes by static prefix or build a tree keyed on path segments, so matching cost depends on the path, not the number of routes. Path converters (`{id:int}`) are applied after matching, and a 405 is returned when the path matches but the method does not.
+
+**Q:** How do you test the framework without a server?
+
+**A:** A test client builds ASGI scopes directly, feeds `receive` messages and collects what the app sends, or uses httpx's `ASGITransport`. Every test is in-process and fast. There are tests for chunked bodies, duplicate headers, client disconnect, middleware order and dependency cleanup when a handler raises.
+
+**Common mistakes in answers:**
+- Treating the request body as available in one piece; it may arrive in many `http.request` messages.
+- Putting error-handling middleware inside other middleware, so their failures escape.
+- Calling sync handlers directly on the event loop.
 
 ### TL;DR
 Speak raw ASGI, then layer routing, onion-style middleware, type-driven dependency injection and streaming on top — and frameworks like FastAPI stop being black boxes.
@@ -4352,17 +6341,68 @@ CRDTs converge without a central authority and work offline, but carry metadata 
 - [Ch 6 — Dicts, sets and collections](../chapters/06-dicts-sets-collections/README.md): indexes by id, state vectors as dicts.
 
 ### In the interview
+**30-second answer:** I built the backend of a collaborative text editor: clients edit the same document live or offline over WebSockets, and every replica converges to the same text. The key design is a sequence CRDT where each character has a permanent id `(replica_id, counter)` and inserts point at neighbouring ids instead of indexes, with deletes kept as tombstones and a deterministic tie-break for concurrent inserts. The hardest parts were causality and catch-up, solved by buffering operations until their dependencies arrive and by state vectors that tell the server exactly which operations a reconnecting client is missing. Property tests with random histories, reordering and duplicates prove convergence, and broadcast latency stays under 50 ms for 50 users.
+
+**Key terms to know:**
+- **CRDT** — conflict-free replicated data type: replicas that apply the same operations in any order reach the same state.
+- **Convergence** — all replicas end with identical state once they have seen the same operations.
+- **Operation-based vs state-based CRDT** — send operations that commute, or send whole states merged by an associative, commutative, idempotent function.
+- **Character id** — `(replica_id, counter)`, permanent and unique, used instead of positions.
+- **Origin left / right** — the neighbouring characters at insert time, used to place the character on every replica.
+- **Tombstone** — a deleted character kept as a marker so later operations can still reference it.
+- **State vector** — for each replica, the highest counter seen; comparing vectors gives the missing operations.
+- **Causal delivery** — an operation is applied only after the operations it depends on.
+- **Interleaving anomaly** — concurrent multi-character inserts at the same spot getting mixed letter by letter.
+- **OT (operational transformation)** — the alternative: a central server transforms concurrent operations against each other.
+
 **Q:** What is a CRDT?
-**A:** A replicated data type whose operations commute (or whose states merge associatively, commutatively and idempotently), so replicas that receive the same updates in any order reach the same state.
+
+**A:** A replicated data type whose operations commute (or whose states merge with an associative, commutative and idempotent function), so replicas that receive the same updates in any order, even duplicated, reach the same state. That removes the need for a central lock or ordering service and makes offline editing possible.
 
 **Q:** Why do CRDT text editors give each character an id?
-**A:** Indices shift under concurrent edits; ids are stable, so operations can refer to neighbours unambiguously on every replica.
+
+**A:** Indices shift under concurrent edits: "insert at 5" means different places on two replicas that have both changed the text. Ids never change, so "insert after character A-12" means the same thing everywhere. Ties, two inserts after the same character, are broken by a deterministic rule such as comparing replica ids.
 
 **Q:** CRDT or OT?
-**A:** CRDTs suit offline and peer-to-peer sync with no central ordering; OT needs a server to order operations but has less per-character metadata.
+
+**A:** CRDTs suit offline and peer-to-peer sync because no central ordering is needed, at the cost of per-character metadata and tombstones. OT, used by classic Google Docs, needs a server to order and transform operations but keeps less metadata; its correctness reasoning is notoriously hard. With one sync server per document, either works; offline-first strongly favours CRDTs.
 
 **Q:** What is a state vector used for?
-**A:** It summarises which operations a replica has seen, so sync sends exactly the missing ones.
+
+**A:** It summarises which operations a replica has seen, as a dict of replica id to highest counter. A reconnecting client sends its vector, and the server replies with exactly the operations above those counters, no more and no less. It is also how you know when every replica has seen a delete, so its tombstone can be garbage-collected.
+
+**Q:** What happens if an operation arrives before the one it depends on?
+
+**A:** An insert may reference a character created by a third user that this replica has not received yet. The replica buffers the operation until its origin exists, then applies it and re-checks the buffer. Without that, it would either crash or place the character in the wrong position.
+
+**Q:** Why keep deleted characters, and what does that cost?
+
+**A:** Another replica may concurrently insert after a character that was just deleted; if the character were gone, that insert would have no anchor. Tombstones keep the anchor. The cost is memory and load time growing with history, so snapshots drop tombstones that every replica is known to have seen.
+
+**Q:** What changes at 100x: many documents, many users per document?
+
+**A:** Each document's state lives on one server, so I route every document to an owner server by hashing its id, with pub/sub only for cross-server presence. Per-document fan-out uses per-client bounded queues like the chat server. Load time is controlled by periodic snapshots plus the tail of the operation log.
+
+**Q:** How do you prove convergence?
+
+**A:** Hypothesis generates random edit sessions on N replicas, then delivers the operations to each replica in a different random order with duplicates and delays, and asserts all replicas end with identical text. A specific test types two words concurrently at the same position to catch interleaving.
+
+**Q:** Compute what a client is missing from state vectors.
+
+**A:**
+```python
+def missing(server_log: dict[str, list[Op]], client_sv: dict[str, int]) -> list[Op]:
+    out = []
+    for replica, ops in server_log.items():      # ops sorted by counter
+        seen = client_sv.get(replica, 0)
+        out.extend(op for op in ops if op.counter > seen)
+    return out
+```
+
+**Common mistakes in answers:**
+- Saying "last write wins" is fine for text; it silently loses one user's typing.
+- Sending index-based operations and hoping they line up on other replicas.
+- Deleting characters outright, which breaks concurrent inserts that reference them.
 
 ### TL;DR
 Characters with stable ids, relative inserts, tombstones, causal buffering and state-vector sync over WebSockets give you a collaborative editor that converges no matter how messages arrive.
@@ -4464,17 +6504,67 @@ Exact search is simple and perfectly accurate but linear in data size. HNSW give
 - [Ch 13 — Type hints](../chapters/13-type-hints/README.md): a typed index interface for exact and approximate backends.
 
 ### In the interview
+**30-second answer:** I built a vector similarity search engine: exact search with numpy as ground truth, then an HNSW approximate index, plus metadata filters, soft deletes, persistence, an HTTP API and an evaluation tool for recall versus latency. The key design is normalising every vector to unit length and storing them in one `float32` matrix, so cosine similarity is a single matrix-vector product and the exact index is both fast and the reference for measuring HNSW. The hardest parts were tuning HNSW (`M`, `ef_construction`, `ef_search`) and selective filters, solved with an evaluation harness and a planner that switches to exact search on small filtered subsets. Exact search over 100,000 384-dimension vectors takes under 50 ms, and my HNSW reaches recall@10 above 0.95 against that ground truth.
+
+**Key terms to know:**
+- **Embedding** — a vector of numbers from a model, where similar meanings point in similar directions.
+- **Cosine similarity** — the cosine of the angle between two vectors; equal to the dot product for unit-length vectors.
+- **k-NN / ANN** — exact k nearest neighbours versus approximate nearest neighbours.
+- **HNSW** — hierarchical navigable small world: layered proximity graphs searched greedily from a sparse top layer down.
+- **`M`, `ef_construction`, `ef_search`** — links per node, candidate list size while building, candidate list size while searching.
+- **Recall@k** — the share of the true top-k that the approximate search returned.
+- **`np.argpartition`** — finds the k largest in O(n) without sorting everything.
+- **Best-first search with heaps** — the layer-0 search keeping a candidate min-heap and a result max-heap of size `ef_search`.
+- **Pre-filter vs post-filter** — apply metadata filters before or after vector search.
+- **Product quantisation** — compressing vectors into short codes to cut memory, trading accuracy.
+
 **Q:** How would you find the 10 most similar vectors among 100,000 quickly in Python?
-**A:** Normalise vectors, compute all similarities with one matrix multiplication in numpy, and use `argpartition` to get the top 10 without fully sorting.
+
+**A:** Normalise all vectors to unit length once, keep them in one `float32` matrix, compute every similarity with one `matrix @ query` in numpy, then `np.argpartition(-scores, 10)[:10]` and sort only those 10. Matrix multiplication runs in optimised BLAS code, so this takes milliseconds, while a Python loop would take seconds.
 
 **Q:** What does HNSW trade away?
-**A:** Exactness and memory: it may miss some true neighbours (recall below 1) and stores a graph, in exchange for logarithmic-like query time.
+
+**A:** Exactness and memory. It may miss some true neighbours (recall below 1), it stores a graph with up to `M` links per node per layer (2M on layer 0), and building it is slow. In exchange, queries visit only a small part of the data, with roughly logarithmic scaling instead of a full scan.
 
 **Q:** What is recall@k?
-**A:** The fraction of the true k nearest neighbours that the approximate search returned.
+
+**A:** The fraction of the true k nearest neighbours (from exact search) that the approximate search returned, averaged over many queries. Recall@10 of 0.95 means on average 9.5 of the true top 10 were found. It is always reported next to latency, because either alone is meaningless.
 
 **Q:** How do metadata filters interact with ANN search?
-**A:** Selective filters can starve post-filtered results, so you raise `ef`, filter during traversal or switch to exact search over the filtered subset.
+
+**A:** If the filter is applied after HNSW and only 1% of items match, most of the `ef_search` candidates are thrown away and fewer than k results come back. Options are raising `ef_search` adaptively, filtering during traversal (still walking through non-matching nodes but not returning them), or exact search over the filtered subset when it is small. A planner picks by estimated selectivity.
+
+**Q:** How does an HNSW search actually proceed?
+
+**A:** Start at the entry point on the top layer and greedily move to whichever neighbour is closest to the query until nothing improves; then drop one layer and repeat from there. On layer 0, run a best-first search keeping the `ef_search` best candidates in heaps, and return the top k. Higher layers are sparse "highways" that get you near the target quickly.
+
+**Q:** Why not just pick each node's M nearest neighbours when building?
+
+**A:** In clustered data that links every node only inside its own cluster, so the graph has few bridges and greedy search gets stuck. The paper's heuristic keeps a candidate neighbour only if it is closer to the new node than to any neighbour already chosen, which preserves longer links between clusters and raises recall at the same `M`.
+
+**Q:** What breaks at 100 million vectors?
+
+**A:** Memory first: 100 million × 384 floats × 4 bytes is about 150 GB before graph links. Options are product quantisation or `float16` to shrink vectors, IVF indexes that only scan a few clusters, and sharding the index across machines with a merge of per-shard top-k. Pure-Python graph traversal also becomes too slow, so production uses FAISS, hnswlib or a vector database.
+
+**Q:** What happens if you change the embedding model?
+
+**A:** Vectors from different models live in different spaces and are not comparable, so mixing them gives nonsense results without any error. I store the model name and version with the index, refuse queries from a different model, and rebuild the index when the model changes.
+
+**Q:** Write the exact top-k search.
+
+**A:**
+```python
+def top_k(matrix: np.ndarray, q: np.ndarray, k: int) -> np.ndarray:
+    q = q / np.linalg.norm(q)
+    scores = matrix @ q                       # rows already unit length
+    idx = np.argpartition(-scores, k)[:k]     # O(n), unordered top k
+    return idx[np.argsort(-scores[idx])]      # sort only k items
+```
+
+**Common mistakes in answers:**
+- Comparing cosine similarity without normalising, then wondering why long vectors always win dot products.
+- Reporting HNSW latency without recall, or recall without latency.
+- Using `np.argsort` on all scores for top-k, which is O(n log n) instead of O(n).
 
 ### TL;DR
 Start with vectorised exact search as ground truth, then build and tune HNSW, measure recall against latency honestly, and add filtering — the core of every vector database.
