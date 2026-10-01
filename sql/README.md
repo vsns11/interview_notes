@@ -81,6 +81,7 @@ The later chapters need different data, so they bring their own `00_schema.sql`:
 |---|---|
 | `SQL-Handbook.pdf` | The whole book as one PDF, with a cover and a table of contents. |
 | `interview/INTERVIEW.md` + `interview/SQL-Interview-Edition.pdf` | **Interview Edition**: the whole book in ~51 pages for fast revision — per chapter must-know facts, key tables, likely questions with short answers, gotchas, the Ch 18–19 pattern tables with 19 representative problems, plus a top-25 question list and a last-minute checklist. |
+| `capstones/CAPSTONES.md` + `capstones/SQL-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced (personal library and movie ratings → e-commerce checkout, SKIP LOCKED queues, row-level security, JSONB → serializable ledger, partitioning, Citus, CDC/outbox, zero-downtime migrations, PITR, failover), each with requirements, architecture, an ER diagram, milestones, deep dives and interview questions, all on PostgreSQL 14 with newer features marked. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
 | `chapters/NN-name/code/` | Runnable examples: `00_schema.sql` (the chapter's data), numbered `NN_topic.sql` files, `*.sqlite.sql` files for SQLite, and Python, Java or shell demos. |
 | `chapters/NN-name/img/` | Diagrams from the courses and charts made by the chapter's scripts. |
