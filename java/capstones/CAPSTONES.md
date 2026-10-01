@@ -85,7 +85,7 @@ The computer picks a secret whole number in a range (say 1 to 100). You type gue
 A first program has to teach the full write → compile → run cycle without burying you in ceremony. Java 25 made this much easier: with **compact source files** (JEP 512, final in Java 25) a file can contain just a `void main()` method — no class declaration, no `public static`, no `String[] args` — and the new `java.lang.IO` class gives you `IO.println` and `IO.readln` for console text. The game is also the simplest place to meet three ideas you will use forever: validating untrusted input, looping until a condition holds, and keeping state (the number of tries) across iterations.
 
 ### Real-world examples
-- The design notes of [JEP 512](https://openjdk.org/jeps/512) use exactly this kind of small program to explain why beginners should not have to learn classes and `static` before writing their first loop.
+- [JEP 512](https://openjdk.org/jeps/512) argues, with small programs like this one, that beginners should not have to learn classes and `static` before writing their first loop.
 - The "guess the number" game is binary search in disguise: the best strategy halves the range each time, which is why 100 numbers never need more than 7 guesses. Chapter 19 teaches the same pattern for interview problems.
 - [Oracle's dev.java learning path](https://dev.java/learn/) starts beginners with the same shape of console program.
 
@@ -728,7 +728,7 @@ A game world is a graph of states that the player changes with typed commands. B
 
 ### Real-world examples
 - [Colossal Cave Adventure](https://en.wikipedia.org/wiki/Colossal_Cave_Adventure) (1976) defined the genre: a two-word parser, rooms, items and treasures.
-- [JEP 441](https://openjdk.org/jeps/441) (pattern matching for `switch`) uses exactly this style — a sealed hierarchy plus an exhaustive switch — as its motivating example.
+- [JEP 441](https://openjdk.org/jeps/441) (pattern matching for `switch`) shows this style — a sealed hierarchy plus an exhaustive switch with no `default` — in its examples.
 
 ### Requirements
 **Functional**
@@ -1638,7 +1638,7 @@ A tool that keeps a target directory in sync with a source directory: an initial
 Copying a folder once is easy. Keeping two folders in sync is not: file-system events arrive in bursts, can be lost when too many happen at once, do not cover subdirectories automatically, and arrive before a big file has finished being written. Building a correct sync tool teaches the edge cases of NIO.2, idempotent operations (safe to repeat) and how to combine event-driven and periodic reconciliation.
 
 ### Real-world examples
-- The [rsync technical report](https://rsync.samba.org/tech_report/) explains how rsync transfers only changed parts of files with rolling checksums — the idea behind this project's delta stretch goal.
+- The [rsync technical report](https://www.samba.org/rsync/tech_report/) explains how rsync transfers only changed parts of files with rolling checksums — the idea behind this project's delta stretch goal.
 - [Syncthing](https://syncthing.net/) is an open-source continuous file synchroniser that combines file-system watching with periodic full rescans, the same hybrid design recommended here.
 - The [`WatchService` documentation](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/file/WatchService.html) warns that events may be lost and signals this with an `OVERFLOW` event.
 
@@ -2859,7 +2859,7 @@ Two connected tools. First, a **mini test runner**: it finds classes with method
 Every Java developer uses JUnit and Mockito; few know how they work. A test runner is reflection plus careful error handling. A mocking library is much trickier: it must intercept calls, record them, match arguments, and support the `when(mock.method())` syntax, which only works because of a clever trick with thread-local state. Building both turns "magic" into understood mechanics.
 
 ### Real-world examples
-- [Mockito](https://site.mockito.org/) creates mocks by generating subclasses at runtime with [Byte Buddy](https://bytebuddy.net/), and on modern JDKs can use an instrumentation agent for final classes.
+- [Mockito](https://site.mockito.org/) builds its mocks with [Byte Buddy](https://bytebuddy.net/). Since Mockito 5 the default "inline" mock maker rewrites the mocked class itself through an instrumentation agent (so final classes and static methods can be mocked); the older subclass mock maker, which generates a subclass per mock, is still available. On recent JDKs the agent should be attached with `-javaagent` at startup, as Chapter 18 shows.
 - [JUnit](https://junit.org/) separates the **Platform** (launching and reporting) from **engines** (discovering and running tests) — a split worth copying.
 
 ### Requirements
@@ -2928,7 +2928,7 @@ flowchart LR
 ### Deep dive: the hard parts
 - **How `when(mock.foo())` works.** Java evaluates `mock.foo()` first. The handler records "last invocation = foo()" in a thread-local and returns a default. Then `when(...)` ignores its argument, reads the last invocation from the thread-local, and creates a stubbing for it. Matchers like `any()` work the same way: each call pushes a matcher on a thread-local stack and returns a dummy value (`null` or 0); the next recorded invocation consumes them. This is why mixing matchers and raw values fails.
 - **Primitives and matchers.** `any()` returning `null` crashes when the parameter is `int` (unboxing). Provide `anyInt()` returning 0, and so on.
-- **Mocking classes.** A subclass can override non-final, non-private methods only. Final classes and methods need bytecode instrumentation of the class itself (Mockito's inline mock maker uses an agent). Constructors with side effects are a problem: generated subclasses should call the cheapest constructor or bypass it.
+- **Mocking classes.** A subclass can override non-final, non-private methods only. Final classes and methods need bytecode instrumentation of the class itself (Mockito's inline mock maker, the default since Mockito 5, uses an agent for this). Constructors with side effects are a problem: generated subclasses should call the cheapest constructor or bypass it.
 - **Test isolation.** A new instance per test method (as JUnit Jupiter does by default) prevents state leaking between tests. Reset the thread-local mocking state after every test, or a forgotten `when(` poisons the next test.
 
 ### Testing strategy
@@ -3473,7 +3473,7 @@ flowchart TD
 ### Deep dive: the hard parts
 - **One message at a time.** The guarantee that makes actor state safe is that the receive loop processes messages sequentially on one thread at a time. Never let a behaviour hand its mutable state to another thread (for example by capturing it in a `CompletableFuture` callback); results of async work must come back as messages.
 - **Restart semantics.** On failure, the actor's state is discarded and a fresh behaviour is created; the mailbox is usually kept, minus the message that failed. Decide whether the failing message is retried (risk of a crash loop) or dropped.
-- **Structured concurrency status.** In Java 25, `StructuredTaskScope` is a preview API (JEP 505): you open a scope with `StructuredTaskScope.open()` (or with a `Joiner` policy), `fork` subtasks onto virtual threads, `join`, then read results; closing the scope guarantees no subtask outlives it. Because preview APIs change between releases (JDK 26 and 27 changed it again), isolate it behind a small interface and keep a non-preview implementation.
+- **Structured concurrency status.** In Java 25, `StructuredTaskScope` is a preview API (JEP 505): you open a scope with `StructuredTaskScope.open()` (or with a `Joiner` policy), `fork` subtasks onto virtual threads, `join`, then read results; closing the scope guarantees no subtask outlives it. Because preview APIs change between releases (JDK 26 and JDK 27 changed it again, in JEP 525 and JEP 533), isolate it behind a small interface and keep a non-preview implementation.
 - **Mailbox overflow.** An unbounded mailbox hides overload until memory runs out. Bounded mailboxes force a policy decision and surface back-pressure to senders.
 - **ask deadlocks.** Actor A asking B while B asks A, both blocking their loops, deadlocks. `ask` from inside an actor should not block the receive loop; deliver the reply as a message.
 
@@ -3934,7 +3934,7 @@ flowchart LR
 ### Deep dive: the hard parts
 - **Out-parameters.** `sqlite3_open_v2(const char*, sqlite3** ppDb, int, const char*)` returns the handle through a pointer-to-pointer. Allocate a pointer-sized segment in an arena, pass it, then read the address back with `get(ValueLayout.ADDRESS, 0)`.
 - **Lifetimes.** Memory from a confined arena is invalid after the arena closes; using it throws `IllegalStateException` instead of crashing — the safety JNI lacked. But native objects SQLite allocates (statements) are not arena-managed: you must call `sqlite3_finalize` yourself, so wrap them in `AutoCloseable` and consider a `Cleaner` as a safety net (never as the main mechanism).
-- **Strings.** C strings are NUL-terminated bytes; SQLite uses UTF-8. Use `arena.allocateFrom(str)` for input. For output, returned pointers have zero length; `reinterpret` them to a size (or use `getString`) — `reinterpret` is a restricted method that needs native access enabled.
+- **Strings.** C strings are NUL-terminated bytes; SQLite uses UTF-8. Use `arena.allocateFrom(str)` for input. For output, returned pointers have zero length, so `reinterpret` them to a size before calling `getString` — `reinterpret` is a restricted method that needs native access enabled.
 - **Upcalls and exceptions.** An exception escaping an upcall crashes the JVM. Catch everything in your Java callback and report the error back through SQLite's `sqlite3_result_error`.
 
 ### Testing strategy
@@ -4448,7 +4448,7 @@ A single database server is a single point of failure. Copying data to replicas 
 ### Real-world examples
 - The Raft paper, [In Search of an Understandable Consensus Algorithm](https://raft.github.io/raft.pdf) (Ongaro and Ousterhout), specifies leader election, log replication and safety precisely — its Figure 2 is effectively your implementation checklist.
 - [etcd](https://etcd.io/), the key-value store behind Kubernetes, uses Raft; [Apache Ratis](https://ratis.apache.org/) is a Java Raft library.
-- MIT's [6.824 Distributed Systems](https://pdos.csail.mit.edu/6.824/) course has students implement Raft and a KV service on it, with strict tests.
+- MIT's [6.5840 Distributed Systems](https://pdos.csail.mit.edu/6.824/) (formerly 6.824) course has students implement Raft and a KV service on it, with strict tests.
 
 ### Requirements
 **Functional**
