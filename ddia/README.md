@@ -12,6 +12,7 @@ Beginner-friendly notes for Martin Kleppmann's *Designing Data-Intensive Applica
 | `interview/DDIA-Interview-Edition.pdf` | **Interview Edition** (~18k words, 38 pages): every chapter's must-know terms, comparison tables, top questions and gotchas for fast revision. Source: `interview/INTERVIEW.md`. |
 | `chapters/NN-name/README.md` | One chapter's notes (Markdown). |
 | `chapters/NN-name/ChapterNN-Notes.pdf` | That chapter as a standalone PDF. |
+| `capstones/CAPSTONES.md` + `capstones/DDIA-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced — Bitcask, LSM-tree, B-tree with WAL, Raft, Dynamo-style quorums, SSI, CDC to Kafka, event-time stream processing, CRDTs and more. |
 | `tools/` | PDF build (`md2pdf.mjs`, `regen_pdfs.sh`); same dark theme as the course notes. |
 
 ## Each chapter contains

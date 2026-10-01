@@ -11,3 +11,4 @@ for d in chapters/*/; do
 done
 node tools/md2pdf.mjs DDIA-Notes.pdf chapters/*/README.md
 COVER_TITLE="Designing Data-Intensive Applications — Interview Edition" COVER_SUB="Fast revision: every topic, key facts, top questions, gotchas" node tools/md2pdf.mjs interview/DDIA-Interview-Edition.pdf interview/INTERVIEW.md
+COVER_TITLE="Designing Data-Intensive Applications — Capstone Projects" node tools/md2pdf.mjs capstones/DDIA-Capstone-Projects.pdf capstones/CAPSTONES.md
