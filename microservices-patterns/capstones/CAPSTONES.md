@@ -25,7 +25,7 @@ A **capstone** is a project big enough to force you to use several patterns toge
 | Intermediate | Two or three patterns together, Kafka or Kubernetes, real tests | 1–3 weeks |
 | Advanced | A small platform, many patterns, failure testing, scaling decisions | 3–6 weeks |
 
-**Default stack.** Unless a brief says otherwise: Java 25, Spring Boot 4.1.1 (Spring Framework 7) with the matching Spring Cloud release train, PostgreSQL, Apache Kafka (current version, KRaft mode — no ZooKeeper), Docker Compose for local runs and Kubernetes (kind or k3d locally) for the advanced projects. The runnable, dependency-free demos in [../../demos/README.md](../../demos/README.md) show each mechanism in a single `main` method — several Beginner briefs tell you to start from one and grow it into a real service.
+**Default stack.** Unless a brief says otherwise: Java 25, Spring Boot 4.1.1 (Spring Framework 7) with the matching Spring Cloud release train (2025.1.x "Oakwood" is the train that supports Boot 4.1 at the time of writing — check the compatibility table on the Spring Cloud project page), Resilience4j through its Spring Boot 4 starter (`resilience4j-spring-boot4`, added in Resilience4j 2.4) or through Spring Cloud Circuit Breaker, PostgreSQL, Apache Kafka (current version, KRaft mode — no ZooKeeper), Docker Compose for local runs and Kubernetes (kind or k3d locally) for the advanced projects. The runnable demos in [../../demos/README.md](../../demos/README.md) use only the JDK (no Spring, no Resilience4j, no Kafka) and show each mechanism in a single `main` method. Their Gradle build pins a Java 21 toolchain, and each file also runs directly with `java File.java` on Java 25. Several Beginner briefs tell you to start from one and grow it into a real service — the demos use their own toy domains (a banking system for the strangler fig, a charge-and-refund ledger for the saga), so treat them as mechanism sketches, not starter code for the brief's domain.
 
 **A note on the briefs.** They describe *what* to build and *why*, and they explain the hard parts in prose. They deliberately do not give you the code — writing it is the point. When a brief names a library or a setting, look it up in the official docs linked from the chapter notes; versions change faster than this book.
 
@@ -269,7 +269,7 @@ flowchart LR
 1. **Three services on their own ports.** *Done when* each answers directly with curl.
 2. **Path routing.** *Done when* only the gateway port is published and all three services answer through it.
 3. **Filters.** API key check and request id. *Done when* a missing key gets 401 and the request id appears in all four logs.
-4. **Aggregation.** *Done when* `order-details` returns merged JSON, and with an artificial 300 ms delay in each service, total latency is about 300 ms, not 600 ms (compare with the numbers in [the demos README](../../demos/README.md)).
+4. **Aggregation.** *Done when* `order-details` returns merged JSON, and with an artificial 300 ms delay in each service, total latency is about 300 ms, not 600 ms (compare with the sequential-versus-parallel numbers printed by [ApiGatewayDemo.java](../../demos/chapters/03-api-gateway/ApiGatewayDemo.java), about 270 ms down to about 125 ms for three calls).
 5. **Timeouts.** *Done when* a service that sleeps 10 seconds causes a 504 from the gateway after 2 seconds.
 
 ### Deep dive: the hard parts
@@ -400,7 +400,7 @@ In a real split each table belongs to its own service database. The relationship
 1. **Shared services with seed data.** *Done when* 50 recipes and 500 reviews load.
 2. **One generic API used by both clients.** Measure payload size and calls per screen. *Done when* you have the "before" numbers written down.
 3. **Web BFF.** *Done when* the detail page needs one call.
-4. **Mobile BFF.** *Done when* the feed is under 5 KB and the detail call returns top 3 reviews only. Compare with the 7% figure in the [BFF demo](../../demos/README.md).
+4. **Mobile BFF.** *Done when* the feed is under 5 KB and the detail call returns top 3 reviews only. Compare with the [BFF demo](../../demos/chapters/04-bff/BffDemo.java), where the mobile BFF returns about 7% of the shared payload.
 5. **Independent deploy.** *Done when* you change the mobile response shape without touching the web BFF or any service.
 
 ### Deep dive: the hard parts
@@ -1306,7 +1306,7 @@ When each service owns its data, you cannot wrap "create order, charge card, res
 
 - The original 1987 paper by Garcia-Molina and Salem that defined sagas for long-lived transactions: [Sagas (PDF)](https://www.cs.cornell.edu/andru/cs711/2002fa/reading/sagas.pdf).
 - Chris Richardson's pattern page comparing orchestration and choreography: [Pattern: Saga](https://microservices.io/patterns/data/saga.html).
-- Microsoft's reference guide, including the problem of lost isolation between concurrent sagas: [Saga distributed transactions pattern](https://learn.microsoft.com/en-us/azure/architecture/reference-architectures/saga/saga).
+- Microsoft's reference guide, including the problem of lost isolation between concurrent sagas: [Saga distributed transactions pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/saga).
 
 ### Requirements
 
@@ -1386,7 +1386,7 @@ erDiagram
 
 ### Milestones
 
-1. **Happy path.** Start from [SagaDemo.java](../../demos/chapters/10-saga/SagaDemo.java). *Done when* an order goes PENDING → APPROVED across four services.
+1. **Happy path.** Read [SagaDemo.java](../../demos/chapters/10-saga/SagaDemo.java) first — it uses a charge and a refund rather than an authorisation and a void, but the reverse-order compensation is the same. *Done when* an order goes PENDING → APPROVED across four services.
 2. **Compensation.** *Done when* forcing inventory to fail produces a voided authorisation and REJECTED order, visible in the payment ledger as authorise then void.
 3. **Crash recovery.** *Done when* killing the orchestrator after step 2 and restarting it completes the saga, with no double charge.
 4. **Idempotent participants.** *Done when* replaying every command topic from the beginning changes nothing.
@@ -1450,7 +1450,7 @@ Same consistency problem as Project 11, but with a different trade: no orchestra
 
 ### Real-world examples
 
-- Microsoft's saga guide explains choreography and the risk of cyclic dependencies between participants: [Saga distributed transactions pattern](https://learn.microsoft.com/en-us/azure/architecture/reference-architectures/saga/saga).
+- Microsoft's saga guide explains choreography and the risk of cyclic dependencies between participants: [Saga distributed transactions pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/saga).
 - The microservices.io saga page gives a choreography example with events per step: [Pattern: Saga](https://microservices.io/patterns/data/saga.html).
 - Microsoft's compensating transaction pattern covers ordering and idempotency of undo steps: [Compensating Transaction pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/compensating-transaction).
 
@@ -1723,7 +1723,7 @@ A Kafka consumer processes a partition in order. If one message keeps failing an
 
 ### Real-world examples
 
-- Uber describes its retry-topic and DLQ design for insurance event processing: [Building Reliable Reprocessing and Dead Letter Queues with Apache Kafka](https://www.uber.com/blog/reliable-reprocessing/).
+- Uber describes the retry-topic and DLQ design it built for its Driver Injury Protection program: [Building Reliable Reprocessing and Dead Letter Queues with Apache Kafka](https://www.uber.com/blog/reliable-reprocessing/).
 - Spring for Apache Kafka has built-in non-blocking retry topics: [Non-Blocking Retries](https://docs.spring.io/spring-kafka/reference/retrytopic.html).
 - AWS on why backoff and limits on retries matter: [Timeouts, retries and backoff with jitter](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/).
 
@@ -2077,7 +2077,7 @@ Tracing costs CPU, network and storage. Head sampling (decide at the start) is c
 
 **Q:** How does a trace follow a request across services? **A:** Each service reads the trace context from the incoming `traceparent` header, creates child spans, and writes the context into outgoing HTTP headers or message headers.
 
-**Q:** Head versus tail sampling? **A:** Head sampling decides at the first span, so it is cheap but blind to outcome. Tail sampling decides after seeing the whole trace, so it can keep all errors and slow traces, at the cost of buffering.
+**Q:** Head versus tail sampling? **A:** Head sampling makes its keep-or-drop choice when the trace begins, before anyone knows whether the request will fail or be slow, which keeps it inexpensive but means errors are dropped as often as successes. Tail sampling decides after seeing the whole trace, so it can keep all errors and slow traces, at the cost of buffering.
 
 **Q:** How do you trace through Kafka? **A:** Put the context in record headers. The consumer extracts it and either continues the trace or links to it.
 
@@ -3114,7 +3114,7 @@ A common shortcut is "the gateway checks the user, services trust anything from 
 
 ### Real-world examples
 
-- Spring Authorization Server, an OAuth 2.1 and OIDC server you can run locally: [Spring Authorization Server reference](https://docs.spring.io/spring-authorization-server/reference/).
+- Spring's OAuth 2.1 and OIDC authorization server, which moved into Spring Security as of 7.0 (the Boot 4 generation): [Spring Security — OAuth2 Authorization Server](https://docs.spring.io/spring-security/reference/servlet/oauth2/authorization-server/index.html).
 - RFC 8693 defines OAuth token exchange for delegation between services: [OAuth 2.0 Token Exchange](https://www.rfc-editor.org/rfc/rfc8693).
 - Istio's security model applies mutual TLS and per-request authorization at the sidecar: [Istio security concepts](https://istio.io/latest/docs/concepts/security/).
 
@@ -4418,7 +4418,7 @@ erDiagram
 
 ### Deep dive: the hard parts
 
-**Determinism.** Replay only works if workflow code makes the same decisions every time. Calls to `System.currentTimeMillis()`, random numbers, direct HTTP calls or iterating a `HashMap` break it. Provide engine versions (`Workflow.now()`, `Workflow.random()`) that return recorded values, and detect non-determinism by comparing replayed commands with history.
+**Determinism.** Rebuilding state by re-running the code is safe only when, fed the same history, the code issues exactly the same commands as before. Calls to `System.currentTimeMillis()`, random numbers, direct HTTP calls or iterating a `HashMap` break it. Provide engine versions (`Workflow.now()`, `Workflow.random()`) that return recorded values, and detect non-determinism by comparing replayed commands with history.
 
 **Activities run at least once.** A worker can complete the side effect and crash before reporting. The engine retries, so activities must be idempotent — pass the workflow id and activity id as an idempotency key to downstream services.
 
