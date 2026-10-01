@@ -65,6 +65,7 @@ flowchart LR
 |---|---|
 | `HTML-CSS-Handbook.pdf` | The whole book as one PDF, with a cover and a table of contents (built by `tools/regen_pdfs.sh`). |
 | `interview/HTML-CSS-Interview-Edition.pdf` + `interview/INTERVIEW.md` | The **Interview Edition**: a ~32-page fast-revision summary of all 14 chapters (must-know facts, key numbers, likely questions, gotchas, top 25 questions, last-minute checklist). |
+| `capstones/CAPSTONES.md` + `capstones/HTML-CSS-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced (profile page and recipe page up to a cascade-layer component library, container-query cards, a WCAG 2.2 AA product page and multi-brand theming), each with requirements, architecture, milestones, deep dives and interview questions. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
 | `chapters/NN-name/code/` | The example pages (`.html`, `.css`) and the Node scripts (`.mjs`) that load them in headless Chrome or jsdom and print what the browser computed. |
 | `chapters/NN-name/img/` | Screenshots and figures rendered from those pages. |

@@ -12,3 +12,4 @@ for d in chapters/*/; do
 done
 COVER_TITLE="HTML & CSS Handbook" node tools/md2pdf.mjs HTML-CSS-Handbook.pdf chapters/*/README.md
 COVER_TITLE="HTML & CSS Handbook — Interview Edition" COVER_SUB="Fast revision: every topic, key facts, top questions, gotchas" node tools/md2pdf.mjs interview/HTML-CSS-Interview-Edition.pdf interview/INTERVIEW.md
+COVER_TITLE="HTML & CSS — Capstone Projects" node tools/md2pdf.mjs capstones/HTML-CSS-Capstone-Projects.pdf capstones/CAPSTONES.md
