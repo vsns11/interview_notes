@@ -27,6 +27,8 @@ A **capstone** is a project big enough to pull many chapters together and small 
 
 **Shared toolkit for every project.** Java 25 (records, sealed interfaces, pattern matching for `switch`, virtual threads), a build tool (Maven or Gradle, current version), **JUnit 6** for tests, **AssertJ** for readable assertions, **Mockito** for test doubles (fake collaborators). Advanced projects add **jcstress** (OpenJDK's harness for testing concurrent code) and **JMH** (OpenJDK's micro-benchmark harness). Keep the domain free of frameworks: a plain `main` method or a small command-line interface is enough.
 
+**Java version.** The capstones target **Java 25**, while the chapter examples are written and run on **Java 21**. Everything the chapters teach (records, sealed types, pattern matching for `switch`, virtual threads, `java.util.concurrent`) carries over unchanged, and almost every brief can be built on Java 21 as well. The few places that rely on something newer are flagged where they appear: **scoped values** (`ScopedValue`, final in Java 25 via JEP 506; projects 27 and 36), the **JEP 491** fix that stops `synchronized` from pinning virtual threads (Java 24+; project 40), and **structured concurrency** (`StructuredTaskScope`, still a preview API in Java 25 with a different API from Java 21's preview; projects 23, 39 and 40).
+
 > These briefs describe **what** to build and **why**. They contain no solution code on purpose — you write the code. The chapter links under *Skills practised* point to where each idea is taught.
 
 ## Project map
@@ -3164,7 +3166,7 @@ Reading attributes once per file into `FileInfo` avoids repeated system calls. P
 ### Stretch goals
 - `-exec` with `{}` substitution and batching (`+`).
 - Content search `-contains "text"` with a size cap.
-- Parallel walking with structured concurrency.
+- Parallel walking with structured concurrency (`StructuredTaskScope`, a preview API in Java 25 — needs `--enable-preview`).
 
 ### Skills practised
 - [Ch 21 — Machine coding](../chapters/21-case-machine-coding/README.md): the Unix find case.
@@ -3347,7 +3349,7 @@ A Q&A site's value comes from its incentive rules: votes surface good content, r
 - Users, questions (title, body, tags), answers, comments on both.
 - Upvote and downvote questions and answers; one vote per user per post; change or retract.
 - Accept one answer per question.
-- Reputation rules: e.g. +10 for an answer upvote, +5 for a question upvote, +15 for an accepted answer, -2 for a downvote received; daily cap on reputation from votes.
+- Reputation rules: e.g. +10 for an upvote on a question or answer, +15 for an accepted answer, -2 for a downvote received; daily cap on reputation from votes.
 - Privileges by threshold: comment, upvote, downvote, edit, close vote.
 - Search by tag and text. Feeds: newest, top-voted this week, active (recent answers).
 - Bounties (stretch).
@@ -3700,7 +3702,7 @@ stateDiagram-v2
     Stop --> Tidying : no workers
     Tidying --> Terminated
 ```
-Task future states: `NEW` → `COMPLETING` → `NORMAL` / `EXCEPTIONAL`, or `NEW` → `CANCELLED` / `INTERRUPTED`.
+Task future states (as in the JDK's `FutureTask`): `NEW` → `COMPLETING` → `NORMAL` / `EXCEPTIONAL`, or `NEW` → `CANCELLED`, or `NEW` → `INTERRUPTING` → `INTERRUPTED` for `cancel(true)`.
 
 ### Tech stack
 | Component | Choice | Why |
@@ -3731,7 +3733,7 @@ Task future states: `NEW` → `COMPLETING` → `NORMAL` / `EXCEPTIONAL`, or `NEW
 Stress tests counting executions with `LongAdder` and asserting exact totals. jcstress tests for the future's state machine. Tests with latches to control when tasks start and finish, so shutdown semantics can be checked precisely. A fake clock for cron next-time calculation.
 
 ### Trade-offs, scaling and failure modes
-Bounded queues provide backpressure but force a rejection policy; caller-runs is a neat throttle because the submitting thread slows itself. Thread-local state leaks between tasks on pooled threads — clear it or use scoped values ([JEP 506](https://openjdk.org/jeps/506)). A deadlock occurs when pool tasks wait on other tasks queued in the same full pool — a classic interview trap.
+Bounded queues provide backpressure but force a rejection policy; caller-runs is a neat throttle because the submitting thread slows itself. Thread-local state leaks between tasks on pooled threads — clear it or use scoped values ([JEP 506](https://openjdk.org/jeps/506), final in Java 25 — on Java 21 the API is preview-only, so clearing the `ThreadLocal` in a `finally` block is the portable fix). A deadlock occurs when pool tasks wait on other tasks queued in the same full pool — a classic interview trap.
 
 ### Stretch goals
 - A work-stealing pool with per-worker deques (the Fork/Join idea).
@@ -5130,7 +5132,7 @@ Graph tests with tiny test classes covering every binding type. Error-message te
 Auto-scanning is convenient but hides wiring; explicit modules are verbose but searchable. Field injection is tempting but hides dependencies and blocks immutability — support constructor injection first. Proxies only work for interfaces with the JDK `Proxy`; class proxies need bytecode generation libraries. Too much magic makes debugging hard: provide a `container.explain(Key)` that prints how a key is built.
 
 ### Stretch goals
-- Request scope backed by a `ScopedValue` (JEP 506).
+- Request scope backed by a `ScopedValue` (JEP 506, final in Java 25; a Java 25-only feature).
 - Compile-time wiring with an annotation processor generating factory classes.
 - Conditional bindings by environment (dev/prod).
 
@@ -5579,7 +5581,7 @@ Parser tests from tables of formulas and expected trees. Property test: after ra
 
 ### Stretch goals
 - Named ranges and cross-sheet references.
-- Parallel recalculation of independent subgraphs with structured concurrency.
+- Parallel recalculation of independent subgraphs with structured concurrency (a preview API in Java 25 — needs `--enable-preview`).
 - Formula auto-complete using the function registry.
 
 ### Skills practised
@@ -5710,7 +5712,7 @@ classDiagram
 ### Deep dive: the hard parts
 **A politeness-aware frontier.** A single global queue makes workers pick URLs from the same host back to back. Instead keep one queue per host and a priority queue of hosts keyed by the earliest time they may be fetched again. `next()` takes the host at the head; if its time has not arrived, the worker waits until it has (or until a new host is added). After a fetch, the host's next-allowed time is set to now plus the delay and it goes back into the priority queue. This guarantees politeness by construction.
 
-**Concurrency with virtual threads.** Blocking HTTP calls on virtual threads are cheap, so code can be simple and sequential per task. Limit global in-flight fetches with a `Semaphore` (sockets and memory are finite). Since [JEP 491](https://openjdk.org/jeps/491) (Java 24), `synchronized` blocks no longer pin virtual threads to carriers, but the frontier's waits are still clearer with `ReentrantLock` and `Condition` for timed waits.
+**Concurrency with virtual threads.** Blocking HTTP calls on virtual threads are cheap, so code can be simple and sequential per task. Limit global in-flight fetches with a `Semaphore` (sockets and memory are finite). Since [JEP 491](https://openjdk.org/jeps/491) (Java 24), blocking inside `synchronized` no longer pins a virtual thread to its carrier (platform) thread in most cases — pinning remains for native frames and class initialisation. On Java 21, `synchronized` around a blocking call *does* pin, so prefer `ReentrantLock` there. Either way, the frontier's timed waits are clearer with `ReentrantLock` and `Condition`.
 
 **De-duplication at scale.** A `ConcurrentHashMap.newKeySet()` of URL strings grows without bound. A Bloom filter uses a few bits per URL with a tunable false-positive rate (some new URLs are wrongly skipped, never duplicates fetched) — acceptable for many crawls. Also hash page content to skip duplicate pages under different URLs.
 
