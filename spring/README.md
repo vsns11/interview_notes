@@ -79,6 +79,7 @@ Details and links per component: [§19.2](chapters/19-cheatsheet-and-glossary/RE
 |---|---|
 | `Spring-Handbook.pdf` | The whole book as one PDF, with a cover and a table of contents (built by `tools/regen_pdfs.sh`). |
 | `interview/Spring-Interview-Edition.pdf` | **Interview Edition** (~18k words, 41 pages): every chapter's must-know terms, comparison tables, top questions and gotchas for fast revision. Source: `interview/INTERVIEW.md`. |
+| `capstones/CAPSTONES.md` + `capstones/Spring-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced (notes API and URL shortener → JWT blog, Kafka notifications, Framework 7 API versioning → multi-tenant SaaS, saga with outbox, Spring AI RAG, Modulith, Authorization Server), each with requirements, architecture, data model, milestones, trade-offs and interview Q&A linked to the chapters. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
 | `chapters/NN-name/code/<project>/` | Runnable examples: one small Maven project per topic group, with tests that print and assert what the chapter shows. |
 | `tools/` | `regen_pdfs.sh` (rebuild all PDFs) and `md2pdf.mjs` (Markdown → PDF). See [tools/README.md](tools/README.md). |
