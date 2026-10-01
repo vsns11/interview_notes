@@ -11,3 +11,4 @@ for d in modules/*/; do
 done
 node tools/md2pdf.mjs System-Design-Patterns-Notes.pdf modules/*/README.md
 COVER_TITLE="System Design Patterns — Interview Edition" COVER_SUB="Fast revision: every topic, key facts, top questions, gotchas" node tools/md2pdf.mjs interview/System-Design-Patterns-Interview-Edition.pdf interview/INTERVIEW.md
+COVER_TITLE="System Design Patterns — Capstone Projects" node tools/md2pdf.mjs capstones/System-Design-Patterns-Capstone-Projects.pdf capstones/CAPSTONES.md

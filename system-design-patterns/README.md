@@ -10,6 +10,7 @@ Condensed study notes for the DesignGurus course **System Design Patterns: From 
 |---|---|
 | `System-Design-Patterns-Notes.pdf` | **The whole book in one PDF**: cover, clickable contents, all 18 modules. |
 | `interview/System-Design-Patterns-Interview-Edition.pdf` | **Interview Edition** (~63 pages): one compact card per pattern and per case study, the interview framework, back-of-envelope numbers, top questions, gotchas and a pattern-selection table for fast revision (source: `interview/INTERVIEW.md`). |
+| `capstones/CAPSTONES.md` + `capstones/System-Design-Patterns-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced (URL shortener and webhook delivery up to a Dynamo-style KV store, Kafka-like log, multi-region ledger and AI copilot platform), each with requirements, architecture, data model, milestones, hard parts, testing and interview questions. |
 | `modules/NN-name/README.md` | One module's notes (Markdown, renders on GitHub/VS Code). |
 | `modules/NN-name/ModuleNN-Notes.pdf` | That module's notes as a standalone PDF. |
 | `modules/NN-name/images/` | The course's original diagrams for that module (modules 01–12). |
