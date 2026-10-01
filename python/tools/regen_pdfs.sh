@@ -12,3 +12,4 @@ for d in chapters/*/; do
 done
 COVER_TITLE="Python Handbook" node tools/md2pdf.mjs Python-Handbook.pdf chapters/*/README.md
 COVER_TITLE="Python Handbook — Interview Edition" COVER_SUB="Fast revision: every topic, key facts, top questions, gotchas" node tools/md2pdf.mjs interview/Python-Interview-Edition.pdf interview/INTERVIEW.md
+COVER_TITLE="Python — Capstone Projects" node tools/md2pdf.mjs capstones/Python-Capstone-Projects.pdf capstones/CAPSTONES.md
