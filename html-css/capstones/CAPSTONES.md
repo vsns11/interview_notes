@@ -779,7 +779,7 @@ flowchart LR
 Resize the window and count the columns. Lighthouse for CLS and image sizes. Throttled network in DevTools to watch lazy loading. Keyboard: Tab through tiles and check that focus is visible. Screen reader: read the alt texts in sequence. Do they describe, not just say "image"?
 
 ### Trade-offs, scaling and failure modes
-Square crops look tidy but can cut off the subject. `object-position` can shift the focus for individual images. True masonry (items of varied height packed tightly) isn't possible with Grid today; CSS masonry layout is still being specified and isn't Baseline. With hundreds of photos, add pagination rather than one huge list.
+Square crops look tidy but can cut off the subject. `object-position` can shift the focus for individual images. True masonry (items of varied height packed tightly) isn't possible with ordinary Grid. The new `display: grid-lanes` layout (the agreed name for CSS masonry) has shipped only in Safari 26.4 so far, so it isn't Baseline: treat it as an enhancement over a plain grid. With hundreds of photos, add pagination rather than one huge list.
 
 ### Stretch goals
 - A CSS-only lightbox using `:target`, or a `<dialog>` (project 24).
@@ -1280,7 +1280,7 @@ flowchart LR
 5. **Polish.** *Done when* anchor jumps land below the top bar and the target heading is briefly highlighted.
 
 ### Deep dive: the hard parts
-- **The `min-width: auto` trap.** Grid and flex items default to a minimum size equal to their content's minimum width. A `<pre>` with a long line has a huge minimum width, so the column grows and the page overflows. Fix it with `minmax(0, 1fr)` on the track (or `min-width: 0` on the item). Chapter 8 measures this.
+- **The `min-width: auto` trap.** Grid and flex items default to a minimum size equal to their content's minimum width. A `<pre>` with a long line has a huge minimum width, so the column grows and the page overflows. Fix it with `minmax(0, 1fr)` on the track (or `min-width: 0` on the item). Chapter 8 measures this for flex items, and Chapter 9 covers the grid version.
 - **Sticky + scroll.** A sticky sidebar taller than the viewport can never show its bottom. Limiting its height and giving it its own `overflow-y: auto` solves that, but it creates a nested scroll container. Make sure it is keyboard scrollable and that the current page's link is visible on load (put the current section near the top or use `scroll-margin`).
 - **Headings under a sticky bar.** `scroll-margin-top: calc(var(--topbar-h) + 1rem)` on headings (or `scroll-padding-top` on the root) offsets anchor jumps. This also matters for WCAG 2.4.11 when focus moves to a link under the bar.
 
@@ -1477,7 +1477,7 @@ flowchart TD
 ### Milestones
 1. **Plain FAQ.** *Done when* 6 items work with keyboard and screen readers, and only one opens at a time.
 2. **Custom marker.** *Done when* the chevron rotates on open and Safari's default marker is hidden (it needs `summary::-webkit-details-marker { display: none }` in older versions).
-3. **Animation.** *Done when* items slide open in Chrome, open instantly elsewhere, and reduced motion disables sliding.
+3. **Animation.** *Done when* items slide open in browsers that support your chosen technique, open instantly elsewhere, and reduced motion disables sliding.
 4. **Tab-like layout.** *Done when* on wide screens the settings group shows labels in a row with one panel visible, and on phones it's a normal accordion.
 5. **Honesty check.** Write down in your README how your "tabs" differ from the APG tabs pattern.
 
@@ -2515,7 +2515,7 @@ flowchart LR
 5. **Fallback and audit.** *Done when* screen readers announce the dialog role and name (via `aria-labelledby` pointing to the heading), and older browsers get a usable fallback.
 
 ### Deep dive: the hard parts
-- **Animating to and from `display: none`.** A closed dialog is `display: none`, which normally can't transition. `transition-behavior: allow-discrete` lets `display` and `overlay` flip at the right moment (at the end of an exit, at the start of an entry), and `@starting-style` gives the entry its "from" values. Exit animations of `display` currently work in Chromium and Safari but not Firefox, and the `overlay` property is Chromium-only. Treat exit motion as a bonus.
+- **Animating to and from `display: none`.** A closed dialog is `display: none`, which normally can't transition. `transition-behavior: allow-discrete` lets `display` and `overlay` flip at the right moment (at the end of an exit, at the start of an entry), and `@starting-style` gives the entry its "from" values. `transition-behavior` is Baseline (since August 2024), but the `overlay` property, which keeps a closing dialog or popover in the top layer until its exit transition ends, is Chromium-only. In other browsers the element leaves the top layer at once, so the exit animation may be cut short or not seen. Treat exit motion as a bonus.
 - **Modal vs popover.** A modal dialog makes the rest of the page inert, which is right when the user must respond. A popover doesn't, which is right for menus and tooltips. Using a popover where a modal is needed lets users wander off mid-task. Using a modal for a menu is heavy-handed.
 - **Light dismiss for modal dialogs.** `<dialog closedby="any">` closes a modal on backdrop click, but it isn't Baseline (no Safari yet). Without it, provide a visible close button. That is required anyway.
 
@@ -2622,7 +2622,7 @@ flowchart LR
 ### Deep dive: the hard parts
 - **Why not hide the input?** The old pattern was `opacity: 0` on the input and styling a sibling span. It works, but the real input and the visible one can get out of sync (focus ring on the wrong thing, a click target that doesn't match). `appearance: none` styles the input itself, so there's nothing to sync.
 - **Range inputs are fragmented.** WebKit/Blink and Gecko expose different pseudo-elements (`::-webkit-slider-thumb`, `::-moz-range-thumb`). You must write each rule separately. A selector list combining both is invalid in each browser and the whole rule is dropped.
-- **The customizable select.** `appearance: base-select` on `<select>` and its picker unlocks full styling of the dropdown, including rich option content. It is in Chromium and coming to Safari, but isn't Baseline. Write it as an enhancement, and the classic select remains the fallback.
+- **The customizable select.** `appearance: base-select` on `<select>` and its picker unlocks full styling of the dropdown, including rich option content. It is in Chromium and Safari 27 but not yet Firefox, so it isn't Baseline. Write it as an enhancement, and the classic select remains the fallback.
 
 ### Testing strategy
 Screen reader: each control's role, name and state. Keyboard: Space on checkboxes and switches, arrows in radio groups and on the range. Forced-colors emulation in DevTools. Zoom 200 %. Three browsers. Touch test on a phone for target sizes.
@@ -3382,7 +3382,7 @@ Keyboard: open, navigate, Escape, focus return for each component. Screen reader
 Native features reduce JS and bugs but move complexity into browser support matrices. JS positioning libraries offer more control (collision padding, virtual elements) and consistent behaviour today. Anchor positioning is the future, but check your audience's browsers. Many floating elements on a page (for example tooltips on every table cell) can clutter the top layer, so create them sparingly.
 
 ### Stretch goals
-- A customizable `<select>` using `appearance: base-select` (Chromium, coming to Safari) as an enhancement for the listbox.
+- A customizable `<select>` using `appearance: base-select` (Chromium and Safari 27, not Baseline) as an enhancement for the listbox.
 - An arrow pointing at the anchor using `anchor()` in the arrow's position.
 - Nested sub-menus with nested auto popovers.
 
@@ -4075,18 +4075,11 @@ CSS has no compiler to catch mistakes, and a one-line change can break a page yo
 ### The architecture
 ```mermaid
 flowchart TD
-    PR["Pull request"] --> LINT["Stylelint"]
-    PR --> BUILDCSS["Build CSS bundle"]
-    BUILDCSS --> SIZE["Size budget check"]
-    BUILDCSS --> SERVE["Static server for docs pages"]
-    SERVE --> VIS["Playwright screenshots vs baselines"]
-    SERVE --> AXE["axe-core per page and state"]
-    SERVE --> COMP["Computed-style assertions"]
-    LINT --> REPORT["PR summary"]
-    SIZE --> REPORT
-    VIS --> REPORT
-    AXE --> REPORT
-    COMP --> REPORT
+    PR["Pull request"] --> LINT["1 Stylelint - fails fast"]
+    LINT --> BUILD["2 Build CSS bundle and check size budget"]
+    BUILD --> SERVE["3 Serve the docs pages"]
+    SERVE --> TESTS["4 Browser tests: screenshots, axe-core, computed styles"]
+    TESTS --> REPORT["5 PR summary with screenshot diffs"]
 ```
 - **Stylelint**: fast and runs first, failing early on rule violations.
 - **Static server**: serves the docs pages built from the library, so tests run against real HTML and CSS.
