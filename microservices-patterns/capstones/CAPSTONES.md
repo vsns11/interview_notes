@@ -15,6 +15,8 @@ A **capstone** is a project big enough to force you to use several patterns toge
 5. *Testing strategy* and *Trade-offs, scaling and failure modes* are what separate a demo from a design.
 6. *Stretch goals* are for when the milestones are done. *Skills practised* links back to the chapter notes, and *In the interview* gives questions an interviewer would ask about this exact system.
 
+**Using these projects in interviews.** Every *In the interview* section has the same shape. Open with the **30-second answer**: what you built, the one design decision that mattered, the hardest problem and one number. Then make sure you can define every entry under **Key terms** in plain words, because interviewers probe vocabulary first ("what exactly is a compensating transaction?"). Practise the Q&As out loud until you can answer without reading. Replace the brief's targets with your own measured numbers — p95 latency, consumer lag, events per second, data size, how many tests run — since real figures are what make a project credible. Finally, prepare for the two follow-ups that always come: "what would you change at 10x the load?" and "what breaks first?".
+
 **Colour coding.** In the PDF, the recurring headings are coloured the same way as the chapter notes, so you can scan a brief quickly: *What it is* (definition), *The problem it solves* (problem), *The architecture* (how it works), *Trade-offs* (costs), *Real-world examples* (real world), *In the interview* (interview), *Self-check* (questions to test yourself) and *TL;DR* (the one-line summary).
 
 **Levels.**
@@ -189,11 +191,58 @@ The facade is now a single point of failure — run two instances behind a load 
 
 ### In the interview
 
-**Q:** Why not rewrite the whole monolith at once? **A:** A big-bang rewrite delivers no value until cut-over and carries all the risk on one day. Strangling ships each capability separately, and each step can be rolled back by routing.
+**30-second answer:** I put a strangler facade — a small Spring Cloud Gateway reverse proxy — in front of a legacy bookstore monolith and extracted the catalogue into its own service with its own PostgreSQL database. The key decision was routing by a hash of the user id, so a 20% rollout always shows the same users the new service and raising the percentage only adds users. The hardest part was data: the monolith still wrote books, so I made it the source of truth and copied data to the new service on a schedule. Rollback is a routing change that takes effect in under a second with no redeploy.
 
-**Q:** How do you roll back a migrated capability? **A:** Change the routing rule back to the old system. Because the facade owns the decision, rollback needs no deploy, as long as the old code path still exists and its data is still current.
+**Key terms to know:**
+- **Strangler fig pattern** — replacing a legacy system one capability at a time behind a stable front door. Here the catalogue is the first capability moved.
+- **Reverse proxy / facade** — a server that receives client calls and forwards them to one of several backends. The facade is the only thing clients see.
+- **Big-bang rewrite** — replacing the whole system in one cut-over. The approach this project avoids.
+- **Sticky routing** — the same user always goes to the same backend, here by hashing the user id into 0–99 and comparing it with the rollout percentage.
+- **Source of truth** — the one system whose copy of a record wins. The monolith owns book writes during the migration.
+- **Contract parity** — the new service returns the same JSON, status codes and null handling as the old one. Checked by a diff script.
+- **Rollback by routing** — undoing a migration by sending traffic back to the old system instead of redeploying.
+- **Shadow traffic** — copying requests to the new service and comparing results without returning them to users (a stretch goal).
 
-**Q:** What is the hardest part in practice? **A:** Data. Code is easy to route, but both systems may need the same records during the migration, so you need a clear owner per entity and a sync mechanism.
+**Q:** Why not rewrite the whole monolith at once?
+
+**A:** A big-bang rewrite delivers no value until cut-over and puts all the risk on a single day. Strangling ships one capability at a time, each step can be tested on real traffic, and each step can be undone by changing a route.
+
+**Q:** How do you roll back a migrated capability?
+
+**A:** Set the percentage for that path back to 0 through the admin endpoint. Because the facade owns the routing decision, no deploy is needed — but it only works while the old code path still exists and its data is still current, which is why you delete monolith code only after a quiet period at 100%.
+
+**Q:** Why hash the user id instead of routing each request randomly?
+
+**A:** Random per-request routing can show one user two different catalogues on consecutive page loads if the data has drifted. A stable hash puts each user on one side, so bugs reach a fixed, small group, and moving from 20% to 30% only adds users rather than reshuffling everyone.
+
+**Q:** What is the hardest part in practice?
+
+**A:** Data, not code. Both systems need the same book records during the migration, so you must pick one owner per entity and a sync mechanism. Here a scheduled copy is enough and staleness is accepted; in a real system you would use change data capture (Project 23).
+
+**Q:** How did you prove the new service is a safe replacement?
+
+**A:** A comparison script calls `/books` and `/books/{id}` on both backends for every book and diffs the JSON, including error cases like an unknown id. I also had an end-to-end test that flips the percentage and checks the `served-by` header changes.
+
+**Q:** The facade is in front of everything. What happens if it crashes?
+
+**A:** Every request fails, so it is a single point of failure. It must be stateless (the routing rule loaded from config or a small table), run as two or more instances behind a load balancer, and be kept free of business logic so it rarely needs changing.
+
+**Q:** What if the new catalogue service is down?
+
+**A:** For read-only paths the facade can fall back to the monolith, which still has the data. That is a first taste of a circuit breaker with a fallback. For writes you would not fall back silently, because the two databases would diverge.
+
+**Q:** What changes at 10x traffic, or with ten capabilities to move?
+
+**A:** The facade needs horizontal scaling and its overhead (target under 5 ms p95) matters more. With many capabilities, the routing rules move into a config server or flag service (Projects 8 and 21) and each team migrates its own path. Data synchronisation becomes the bottleneck long before the proxy does.
+
+**Q:** In Spring Cloud Gateway, how would you route `/books/**` to the new service?
+
+**A:** Declare a route with a `Path=/books/**` predicate. With the current 2025.x release train the Web MVC gateway's properties live under `spring.cloud.gateway.server.webmvc.routes` (the older `spring.cloud.gateway.mvc` prefix is deprecated). The percentage logic is a custom predicate or filter that hashes the user id.
+
+**Common mistakes in answers:**
+- Saying the strangler pattern is "about routing". Routing is the easy part — the real work is data ownership and keeping both sides consistent.
+- Claiming rollback is always instant. It is only instant while the old path is still deployed and its data is fresh.
+- Forgetting that the facade itself must be highly available and kept thin.
 
 ### TL;DR
 
@@ -301,11 +350,58 @@ The gateway is a single point of failure and a bottleneck, so it must be statele
 
 ### In the interview
 
-**Q:** What belongs in a gateway and what does not? **A:** Cross-cutting concerns — routing, authentication, rate limiting, logging, simple aggregation — belong there. Business rules do not, because then every team has to change and deploy the gateway.
+**30-second answer:** I built an edge gateway with Spring Cloud Gateway in front of three services: it routes by path, strips the `/api` prefix, rejects requests without a valid API key, adds an `X-Request-Id`, logs every call and serves one aggregated "order details" endpoint. The key decision was keeping the gateway free of business rules, so it stays a thin, stateless front door. The hardest problem was latency of the aggregate: I call orders and products in parallel on virtual threads, so with 300 ms per service the endpoint takes about 300 ms, not 600 ms. Every downstream call has a 2-second timeout, after which the gateway answers 504.
 
-**Q:** How do you stop the gateway being a single point of failure? **A:** Keep it stateless, run several instances behind a load balancer, and push state like rate-limit counters into a shared store.
+**Key terms to know:**
+- **API gateway** — the single public entry point that routes requests to internal services and handles cross-cutting concerns.
+- **Cross-cutting concern** — something every service needs, such as authentication, logging, CORS or rate limiting. Here: API key check, request id, access log.
+- **Route, predicate, filter** — a route maps a matching request (predicate, e.g. `Path=/api/users/**`) to a backend, and filters change the request or response on the way (e.g. `StripPrefix=1`).
+- **Request aggregation** — one gateway endpoint that calls several services and merges the result (`/api/order-details/{id}`).
+- **Correlation / request id** — a unique id attached at the edge and passed downstream so you can follow one request through all logs.
+- **Timeout and 504 Gateway Timeout** — the gateway stops waiting after 2 s and tells the client a downstream service did not answer.
+- **Virtual threads** — lightweight Java threads that make blocking parallel calls cheap. Used for the fan-out.
+- **Partial failure** — one of the aggregated services fails. You choose between failing the whole response or returning partial data with a flag.
 
-**Q:** Gateway versus load balancer? **A:** A load balancer spreads traffic across copies of one service. A gateway understands application paths, headers and identity, and routes to many different services.
+**Q:** What belongs in a gateway and what does not?
+
+**A:** Cross-cutting concerns — routing, authentication, rate limiting, logging, request ids, simple aggregation — belong there. Business rules do not, because then every team has to change and redeploy a shared component, and the gateway turns into a mini-monolith.
+
+**Q:** Gateway versus load balancer?
+
+**A:** A load balancer spreads traffic across copies of one service, usually without understanding the application. A gateway understands paths, headers and identity and routes to many different services. In practice a load balancer often sits in front of several gateway instances.
+
+**Q:** How do you stop the gateway being a single point of failure?
+
+**A:** Keep it stateless, run several instances behind a load balancer, and push any shared state, such as rate-limit counters, into a store like Redis. Health checks remove a bad instance from rotation.
+
+**Q:** Why does filter order matter?
+
+**A:** Filters run as a chain. If authentication runs after routing you forward unauthenticated calls, and if the request-id filter runs after logging your logs have no ids. I gave each filter an explicit order: request id first, then auth, then logging and routing.
+
+**Q:** What happens when the products service is down during aggregation?
+
+**A:** Without a decision, the whole endpoint fails. I return the order with product fields missing and a `partial: true` flag, because an order status without names is still useful. A circuit breaker can then stop calling products while it is down.
+
+**Q:** How do you make the aggregated call fast?
+
+**A:** Run both downstream calls in parallel, so total latency is roughly the slowest call rather than the sum. With virtual threads you can write plain blocking `RestClient` calls inside two tasks and join them, which keeps the code simple.
+
+**Q:** What breaks first at 10x traffic?
+
+**A:** Usually connection pools and slow downstreams, not the gateway's CPU: a slow service holds connections and threads until timeouts free them. Next is any per-request work like token validation. You scale gateway instances horizontally, add per-route timeouts and bulkheads, and add rate limiting (Project 19).
+
+**Q:** How did you test it?
+
+**A:** WireMock stands in for the downstream services, so tests can assert routing, prefix stripping, header propagation, 401 on a missing key and 504 on a delayed stub. One Docker Compose smoke test runs the real stack end to end.
+
+**Q:** Which Spring Cloud Gateway starter do you use with Spring Boot 4.1?
+
+**A:** In the 2025.x release trains the starters were renamed to `spring-cloud-starter-gateway-server-webmvc` (servlet stack, works well with virtual threads) and `spring-cloud-starter-gateway-server-webflux` (reactive). I used the Web MVC one because the rest of the stack is blocking.
+
+**Common mistakes in answers:**
+- Putting business logic or per-client shaping in the gateway. That belongs in services or BFFs.
+- Saying a gateway "adds no latency". It adds a hop and every filter costs time — measure it.
+- Forgetting timeouts. A gateway without timeouts lets one slow service tie up all its resources.
 
 ### TL;DR
 
@@ -432,11 +528,65 @@ More deployables to run and monitor. Logic can leak into BFFs and diverge — ke
 
 ### In the interview
 
-**Q:** BFF versus API gateway? **A:** A gateway is one entry point for all clients and handles cross-cutting concerns. A BFF is one backend per client type and shapes data for that client. They are often combined: gateway first, then BFFs behind it.
+**30-second answer:** I built a recipe platform with two Backends for Frontends — one for the web app and one for the mobile app — in front of shared recipe, review and user services. The key decision was letting each BFF shape responses for its own screens: the web detail page gets everything in one call, and the mobile feed returns 20 small cards under 5 KB. The hardest problem was the N+1 call trap — a feed of 20 recipes calling reviews 20 times — which I fixed with a batch ratings endpoint so the feed needs two downstream calls. Both BFFs fan out in parallel and stay under 150 ms p95 locally.
 
-**Q:** When is a BFF overkill? **A:** With one client, or several clients that need the same data. Then a single API is simpler.
+**Key terms to know:**
+- **Backend for Frontend (BFF)** — a thin server owned by one client team that calls shared services and returns exactly what that client needs.
+- **DTO (data transfer object)** — a plain class shaped for the wire. Each BFF has its own response DTOs.
+- **Over-fetching / under-fetching** — getting more data than the screen needs, or needing several calls to get enough. BFFs fix both.
+- **N+1 call problem** — one call to get a list plus one call per item. Solved here with `GET /ratings?recipeIds=…`.
+- **Fan-out** — calling several services in parallel and merging. Both BFFs do this.
+- **Graceful degradation** — returning a useful response when a non-critical part fails (cards without ratings).
+- **Payload budget** — a measured limit on response size (5 KB for 20 mobile cards), enforced by a test.
+- **Team ownership** — the client team owns its BFF, so it can change shape without waiting for a backend team.
 
-**Q:** How do you prevent BFFs from duplicating business logic? **A:** Keep rules in the domain services, keep BFFs to orchestration and mapping, and have the client team own each BFF.
+**Q:** BFF versus API gateway?
+
+**A:** A gateway is one entry point for all clients and handles cross-cutting concerns like auth and rate limiting. A BFF is one backend per client type and shapes data for that client. They are often combined: gateway first, then BFFs behind it.
+
+**Q:** When is a BFF overkill?
+
+**A:** With one client, or several clients that need the same data in the same shape. Then a single well-designed API is simpler, and every extra BFF is one more service to deploy, monitor and secure.
+
+**Q:** How do you prevent BFFs from duplicating business logic?
+
+**A:** Keep rules (pricing, permissions, rating maths) in the domain services and keep BFFs to orchestration and mapping. Share a small HTTP client library between BFFs, but not the response-shaping code — that is meant to differ.
+
+**Q:** What is the N+1 problem and how did you fix it?
+
+**A:** Fetching 20 recipes and then calling reviews once per recipe makes 21 calls, and latency grows with the list size. I added a batch endpoint to the review service that accepts many recipe ids and returns all averages in one response, so the feed makes exactly two calls.
+
+**Q:** What happens if the review service times out?
+
+**A:** The mobile feed still returns cards, with ratings left empty and a flag, rather than failing the screen. For the web detail page the reviews section is marked unavailable. Each downstream call has its own timeout so one slow service cannot hold the page.
+
+**Q:** Why separate BFF deployables rather than one service with `/web` and `/mobile` endpoints?
+
+**A:** Independence: the mobile team can change and deploy its response shape without coordinating with web, and a crash or bad deploy in one BFF does not affect the other client. The cost is more services to run.
+
+**Q:** How did you prove the mobile payload stays small?
+
+**A:** I measured the "before" numbers with the generic API (payload size and calls per screen), then added a test that builds the feed from WireMock stubs and asserts the serialized JSON is under 5 KB, so it cannot silently grow.
+
+**Q:** What changes at 10x users?
+
+**A:** BFFs are stateless, so you scale them horizontally. The pressure moves to the shared services, so you add short-lived caches in the BFF (for example the feed for 30 seconds) and batch endpoints. Many clients each with a BFF can also become a maintenance load — at that point some teams switch to GraphQL (Project 20).
+
+**Q:** How do you call two services in parallel in a Spring Boot 4 BFF?
+
+**A:** With virtual threads enabled (`spring.threads.virtual.enabled=true`), plain blocking `RestClient` calls in two tasks are cheap:
+```java
+try (var ex = Executors.newVirtualThreadPerTaskExecutor()) {
+  var recipe = ex.submit(() -> recipes.get(id));
+  var reviews = ex.submit(() -> reviewsClient.top3(id));
+  return map(recipe.get(), reviews.get());
+}
+```
+
+**Common mistakes in answers:**
+- Describing a BFF as "a gateway per client" that also handles auth and rate limits for everyone. Its job is shaping data for one client.
+- Saying one backend team should own all BFFs. That rebuilds the shared-API bottleneck the pattern exists to remove.
+- Ignoring the N+1 problem — fan-out per list item is the most common BFF performance bug.
 
 ### TL;DR
 
@@ -548,11 +698,54 @@ Client-side discovery (the client picks the instance) gives smart load balancing
 
 ### In the interview
 
-**Q:** Client-side or server-side discovery? **A:** Client-side lets the caller choose instances smartly but needs a library per language. Server-side, like Kubernetes Services, hides discovery behind a stable virtual address and is the default today.
+**30-second answer:** I wrote a service registry from scratch: instances register with a name, host and port, get a 10-second lease, renew it with heartbeats, and are evicted after three missed lease periods. A small client library registers on start-up, deregisters on shutdown, caches the instance list and picks instances round-robin. The key decision was caching on the client, so lookups take under 2 ms and calls keep working when the registry is down. The hardest part was the stale window between an instance dying and being evicted, which I closed by marking an instance bad locally on a connection error and retrying another.
 
-**Q:** What happens when the registry goes down? **A:** Clients keep using their cached list, so existing traffic continues. New instances cannot register until it returns, which is why registries run as clusters.
+**Key terms to know:**
+- **Service discovery** — finding a live instance's address from a logical name like `payment`.
+- **Service registry** — the lookup table of live instances. Here a `ConcurrentHashMap` in a Spring Boot app.
+- **Lease** — a registration that expires unless renewed. Each instance gets a 10 s lease.
+- **Heartbeat** — the periodic "I'm alive" call that renews the lease (`PUT /heartbeat/{id}`).
+- **Eviction** — removing instances whose lease has expired. A scheduled task runs it.
+- **Client-side vs server-side discovery** — the caller picks an instance (this project) versus a load balancer or Kubernetes Service picking for it.
+- **Client cache** — the local copy of instance lists, refreshed every 30 s and kept during registry outages.
+- **Self-preservation** — refusing to evict a large share of instances at once, because a mass loss of heartbeats more likely means a network problem at the registry.
 
-**Q:** Why heartbeats rather than just health checks? **A:** Heartbeats scale better because the registry does no outbound work. Pull-based health checks are more accurate about real readiness. Many systems use both.
+**Q:** Client-side or server-side discovery?
+
+**A:** Client-side lets the caller choose instances smartly (round-robin, zone-aware, skip known-bad ones) but needs a library in every language. Server-side, like a Kubernetes Service, hides discovery behind a stable virtual address so clients stay simple, and it is the usual default today.
+
+**Q:** What happens when the registry goes down?
+
+**A:** Clients keep using their cached lists, so existing traffic continues. New instances cannot register and dead ones are not removed, so the lists slowly go stale. That is why production registries run as replicated clusters.
+
+**Q:** Why heartbeats rather than registry-driven health checks?
+
+**A:** With heartbeats the registry does no outbound work, so it scales to many instances cheaply. Pull-based health checks are more accurate about real readiness (an app can heartbeat while its database is down). Many systems combine both.
+
+**Q:** How long can a client keep calling a dead instance, and how do you shorten it?
+
+**A:** Up to eviction time (three missed 10 s heartbeats) plus the client's 30 s cache refresh. I shorten it on the client: a connection error marks that instance bad locally and the call is retried on another. Graceful shutdown also deregisters immediately.
+
+**Q:** What is self-preservation and why would you want it?
+
+**A:** If the registry suddenly misses heartbeats from most instances, the likeliest cause is its own network, not every service dying. Evicting them all would make clients think nothing is running. My rule: if more than half would be evicted at once, evict none and log a warning — Eureka has a similar mode.
+
+**Q:** How did you test eviction without slow tests?
+
+**A:** I injected a `java.time.Clock` into the registry and used a controllable test clock, so a test can "advance" 40 seconds instantly and assert the instance is gone. A separate manual test kills containers and the registry under load.
+
+**Q:** What changes at 100x instances?
+
+**A:** Heartbeat traffic grows linearly: 10,000 instances every 10 s is 1,000 writes per second. You lengthen intervals, replicate the registry, and switch clients from polling full lists to receiving deltas. At that scale most teams use the platform's discovery (Kubernetes, Consul) rather than their own.
+
+**Q:** Why use a `ConcurrentHashMap` and what is the gotcha?
+
+**A:** Heartbeats, lookups and eviction run on different threads, and `ConcurrentHashMap` allows safe concurrent reads and updates without one global lock. The gotcha is that a check-then-act sequence ("if expired, remove") is not atomic across two calls — use `computeIfPresent` or `remove(key, value)` so a heartbeat that arrives during eviction is not lost.
+
+**Common mistakes in answers:**
+- Saying discovery gives you up-to-date addresses. It always lags reality, so clients still need timeouts and retries on another instance.
+- Forgetting the registry is itself a single point of failure without replication or client caching.
+- Confusing a heartbeat (the instance says it is alive) with a readiness check (someone verifies it can serve).
 
 ### TL;DR
 
@@ -663,11 +856,64 @@ Retries multiply load: 3 attempts at each of 3 layers is 27 calls. Breakers can 
 
 ### In the interview
 
-**Q:** Why add jitter to backoff? **A:** Without it, all clients that failed at the same moment retry at the same moments too, creating synchronized spikes. Random jitter spreads them out.
+**30-second answer:** I built a "what to wear" service that calls a public weather API through Resilience4j: a 1-second time limiter, up to three attempts with exponential backoff and full jitter, a circuit breaker that opens at 50% failures over 20 calls, and a fallback that returns the last good forecast flagged `stale: true`. The key decision was decorator order — retry outside the breaker — so every attempt is counted and an open breaker cuts retries short. The hardest part was deciding what counts as a failure: only timeouts, connection errors and 5xx are retried or recorded, never a 400. With a fault proxy failing every request, the endpoint still answers in under 1.5 s.
 
-**Q:** Which errors should you retry? **A:** Transient ones — timeouts, connection resets, 503, 429 with Retry-After. Never validation errors, and only non-idempotent operations if you have an idempotency key.
+**Key terms to know:**
+- **Timeout / time limiter** — the maximum time to wait for a call (1 s here). The first and most important protection.
+- **Retry with exponential backoff** — try again after waits that grow (100 ms, 200 ms, 400 ms).
+- **Jitter** — randomising each wait so many clients do not retry at the same instant. Full jitter picks a random wait between 0 and the backoff.
+- **Circuit breaker** — a state machine (CLOSED, OPEN, HALF_OPEN) that stops calling a failing dependency for a while so callers fail fast.
+- **Sliding window and failure-rate threshold** — the breaker judges the last 20 calls and opens at 50% failures.
+- **Half-open state** — after 30 s the breaker lets 3 trial calls through and closes only if they succeed.
+- **Fallback** — the answer returned when the call fails: the cached forecast with `stale: true`.
+- **Idempotent operation** — safe to repeat with the same effect. GET weather is, so retries are safe.
+- **Fault injection proxy** — Toxiproxy or a small app that adds delay or 503s on demand, to test the protections.
 
-**Q:** Retry inside or outside the circuit breaker? **A:** Usually retry outside, so each attempt goes through the breaker and an open breaker cuts retries short.
+**Q:** Why add jitter to backoff?
+
+**A:** Without it, all clients that failed at the same moment retry at the same moments too, creating synchronized spikes that hit a recovering service. Random jitter spreads the retries out over time.
+
+**Q:** Which errors should you retry?
+
+**A:** Transient ones — timeouts, connection resets, 502/503/504, and 429 after honouring `Retry-After`. Never validation errors like 400 or auth errors like 401. Non-idempotent operations (like "charge card") only if you send an idempotency key, so a repeat cannot double-charge.
+
+**Q:** Retry inside or outside the circuit breaker?
+
+**A:** Usually retry outside, so each attempt goes through the breaker and is recorded, and an open breaker makes the remaining attempts fail immediately instead of hitting the provider. The side effect is that one user request can count as three breaker failures, so the breaker opens sooner — accept it or tune the window.
+
+**Q:** Explain the three breaker states.
+
+**A:** CLOSED: calls pass through and results are recorded. OPEN: calls are rejected immediately (here for 30 s) without touching the provider. HALF_OPEN: a few trial calls go through; if enough succeed it closes, otherwise it opens again.
+
+**Q:** Why is the timeout the first thing you add?
+
+**A:** Without a timeout, a slow provider ties up a thread per request until it answers, and threads or connections run out — your service fails because theirs is slow. A timeout bounds the damage, and retries and breakers only work if calls actually end.
+
+**Q:** When is a stale fallback wrong?
+
+**A:** When "slightly old" is harmful. Yesterday's weather for an outfit suggestion is fine; a cached account balance or stock level could cause real errors. For those, fail clearly instead, and always mark fallback data as stale.
+
+**Q:** How do retries go wrong at scale?
+
+**A:** They multiply load: 3 attempts at each of 3 layers is 27 calls for one user request, just when the provider is struggling. Retry at one layer only, cap attempts, use jitter, and consider a retry budget (only a small percentage of traffic may be retries).
+
+**Q:** How did you test the breaker and retries?
+
+**A:** WireMock scenarios return failure, failure, success, and I assert the stub received exactly three calls. For the breaker I force failures, assert the state is OPEN through the Resilience4j registry, and assert the stub received no further calls. Test configs use millisecond waits so nothing sleeps for real.
+
+**Q:** Spring Framework 7 has `@Retryable` built in. Why use Resilience4j?
+
+**A:** Spring Framework 7's `@Retryable` (package `org.springframework.resilience.annotation`, enabled with `@EnableResilientMethods`) does retries with delay, multiplier and jitter, and `@ConcurrencyLimit` limits concurrency. It has no circuit breaker, so for breaker plus retry plus time limiter with metrics, Resilience4j is still the tool:
+```java
+@Retryable(includes = IOException.class, maxRetries = 2,
+           delay = 100, multiplier = 2, jitter = 50)
+public Forecast fetch(String city) { ... }
+```
+
+**Common mistakes in answers:**
+- Retrying everything, including 4xx errors and non-idempotent writes.
+- Treating the circuit breaker as a retry mechanism. It does the opposite — it stops calls.
+- Leaving out the timeout and assuming the breaker alone protects you from a slow dependency.
 
 ### TL;DR
 
@@ -775,11 +1021,64 @@ Too-small bulkheads reject good traffic during normal spikes. Too-large ones pro
 
 ### In the interview
 
-**Q:** Bulkhead versus circuit breaker? **A:** A bulkhead limits how much of your resources one dependency can use. A breaker stops calling a dependency that is clearly failing. Bulkheads protect against slowness, breakers against repeated failure — use both.
+**30-second answer:** I built a product-page service that fans out four calls — price, stock, reviews and recommendations — and gives each its own Resilience4j semaphore bulkhead (20, 20, 10 and 5 permits) plus a 200 ms time limiter. The key decision was treating price and stock as critical (503 if either fails) and the other two as optional sections listed in `degradedSections`. The hardest problem was that a bulkhead alone does not free permits held by calls stuck on a slow service, so I paired every bulkhead with a timeout. With recommendations delayed by 5 s, the page still answers in under 300 ms p95 at 50 requests per second.
 
-**Q:** How do you size a bulkhead? **A:** From measured rate and latency (Little's law) plus headroom, then validate under load and tune.
+**Key terms to know:**
+- **Bulkhead** — a bounded pool of threads or permits per dependency, so one slow dependency can use up only its own share. Named after ship compartments.
+- **Semaphore bulkhead** — a counter of permits: take one to start a call, return it after. Used here because it works with virtual threads.
+- **Thread-pool bulkhead** — a separate thread pool per dependency. The older style for platform threads.
+- **Resource exhaustion** — a slow dependency holds every shared thread or connection, so unrelated calls stop too. The failure this project prevents.
+- **Little's law** — concurrency = arrival rate × latency. Used to size each bulkhead.
+- **Graceful degradation** — returning the page with missing optional sections instead of failing.
+- **Fail fast** — a full bulkhead rejects in under 1 ms instead of queueing.
+- **Critical vs optional dependency** — price and stock must succeed; reviews and recommendations may be missing.
 
-**Q:** Do bulkheads matter with virtual threads? **A:** Yes. Threads stop being scarce, but connections, memory and the dependency's own capacity are still finite, so you limit concurrency instead of threads.
+**Q:** Bulkhead versus circuit breaker?
+
+**A:** A bulkhead limits how much of your capacity one dependency can occupy at once. A breaker stops calling a dependency that is clearly failing. Bulkheads protect you against slowness, breakers against repeated failure, and you normally use both.
+
+**Q:** How do you size a bulkhead?
+
+**A:** Start from Little's law: at 50 requests per second and 40 ms normal latency you need about 2 concurrent calls, so 5 permits gives headroom while still capping the damage when latency jumps to 5 s. Then validate under load and watch the available-permits metric.
+
+**Q:** Do bulkheads still matter with virtual threads?
+
+**A:** Yes. Threads stop being scarce, but connections, memory and the dependency's own capacity are still finite, and unbounded virtual threads can pile thousands of waiting calls onto a slow service. You limit concurrency with a semaphore instead of limiting threads.
+
+**Q:** Why does a bulkhead need a timeout?
+
+**A:** The bulkhead stops new calls once it is full, but the calls already inside keep their permits until the slow service answers — maybe never. A 200 ms time limiter ends those calls and returns the permits, so the bulkhead recovers.
+
+**Q:** What happens when the bulkhead is full?
+
+**A:** With `maxWaitDuration` at 0, the call is rejected immediately with a `BulkheadFullException`. I catch that and mark the section degraded. Queueing instead would just move the waiting from the dependency into your service.
+
+**Q:** What happens if the price service fails?
+
+**A:** Price is critical, so the whole page returns 503 rather than showing a product without a price. That rule is explicit in the code and tested, because "partial page" is only acceptable for optional sections.
+
+**Q:** What changes at 10x instances of the page service?
+
+**A:** Bulkheads are per instance, so the total load on recommendations is permits × instances — 5 permits on 50 instances is 250 concurrent calls. You size against the dependency's real capacity divided by instance count, or move limits to a shared layer such as the service mesh.
+
+**Q:** How did you prove the isolation works?
+
+**A:** A baseline with one shared pool of 20 threads: delaying recommendations by 5 s made the whole page time out under k6 load. With per-dependency bulkheads the same test kept price and stock fast, and an integration test with WireMock delays asserts the page returns in under 300 ms with `degradedSections: ["recommendations"]`.
+
+**Q:** What does the Resilience4j semaphore bulkhead config look like?
+
+**A:** In YAML, one instance per dependency:
+```yaml
+resilience4j.bulkhead.instances.recs:
+  max-concurrent-calls: 5
+  max-wait-duration: 0ms
+```
+Then wrap the call with `@Bulkhead(name = "recs", fallbackMethod = "noRecs")` or the functional `Bulkhead.decorateSupplier`.
+
+**Common mistakes in answers:**
+- Saying bulkheads make a slow dependency faster. They only stop it from harming the others.
+- Forgetting that limits are per instance, so total load scales with the number of replicas.
+- Using a bulkhead without a timeout, so permits stay held forever by hung calls.
 
 ### TL;DR
 
@@ -894,11 +1193,54 @@ Sidecars cost resources per instance and add a process that can crash. Writing t
 
 ### In the interview
 
-**Q:** Why put logging in a sidecar rather than a library? **A:** A sidecar works for any language, is upgraded independently of the app, and keeps the app simple. A library is cheaper at runtime but must be maintained per language.
+**30-second answer:** I took a small "quote of the day" app that knows nothing about logging infrastructure and added two sidecars next to it: Fluent Bit tails its log file from a shared volume, parses lines to JSON and ships them to Loki, and a small adapter turns its `/status` endpoint into Prometheus metrics. The key decision was keeping the app completely unchanged, so the same sidecars work next to a second app with no code change. The hardest problems were lifecycle and log rotation: I used Kubernetes native sidecar containers so the shipper starts before and stops after the app, and tracked inode plus offset so a restart loses no lines. A test of 100,000 lines with a sidecar restart halfway ends with exactly 100,000 records in Loki.
 
-**Q:** What does a sidecar share with its app? **A:** Network namespace (it can use localhost), storage volumes, and lifecycle — it is deployed and scaled with the app.
+**Key terms to know:**
+- **Sidecar** — a helper container deployed next to the main app, sharing its network and volumes and scaled with it.
+- **Adapter sidecar** — a sidecar that translates the app's output into a standard format (here `/status` to Prometheus `/metrics`).
+- **Ambassador sidecar** — a sidecar that proxies the app's outbound calls (e.g. an Envoy proxy). A stretch goal.
+- **Pod** — the Kubernetes unit of containers that share a network namespace and volumes.
+- **Shared volume / emptyDir** — a directory both containers mount. The app writes logs, the shipper reads them.
+- **Native sidecar container** — an init container with `restartPolicy: Always`, which Kubernetes starts before and stops after the main containers.
+- **Log rotation and offsets** — when a log file is renamed and a new one started, the shipper uses inode plus byte offset to avoid losing or rereading lines.
+- **Node-level agent (DaemonSet)** — one log collector per node reading all containers' stdout. The cheaper alternative to a per-pod sidecar.
 
-**Q:** When is a sidecar a bad idea? **A:** When the per-instance overhead is too high for very many small instances, or when latency-critical calls cannot afford an extra local hop.
+**Q:** Why put logging in a sidecar rather than a library?
+
+**A:** A sidecar works for any language, is upgraded independently of the app, and keeps the app simple — this app is not even allowed to change. A library is cheaper at runtime but must be built and kept up to date in every language you use.
+
+**Q:** What does a sidecar share with its app?
+
+**A:** The network namespace (it reaches the app on `localhost`), any volumes you mount into both, and lifecycle — it is deployed, scheduled and scaled together with the app.
+
+**Q:** When is a sidecar a bad idea?
+
+**A:** When per-instance overhead is too high: a 50 MB sidecar on 500 pods is 25 GB of memory. Also when the app can write to stdout, because a node-level DaemonSet collector is cheaper, or when a latency-critical path cannot afford an extra local hop.
+
+**Q:** Why were native sidecar containers added to Kubernetes?
+
+**A:** Ordinary containers in a pod start and stop in no guaranteed order, so a log shipper could stop before the app flushed its last lines, and a Job would never finish because the sidecar kept running. Native sidecars are declared as init containers with `restartPolicy: Always`: they start first, keep running, and are stopped after the main containers exit.
+
+**Q:** How do you avoid losing logs when the shipper restarts?
+
+**A:** The shipper saves the file identity (inode) and byte offset it has processed to a small database file on a volume. On restart it resumes from there, and on rotation it finishes the old file before switching. I proved it with the 100,000-line restart test.
+
+**Q:** What happens if the sidecar crashes?
+
+**A:** The app keeps running and keeps writing to the file — app start-up and serving must never depend on the sidecar. Kubernetes restarts the sidecar, which resumes from its saved offset, so you get delayed logs rather than lost ones.
+
+**Q:** What changes at 100x pods?
+
+**A:** Sidecar memory and CPU add up linearly, so you set requests and limits and compare with a DaemonSet collector. The log store becomes the bottleneck: you add labels carefully (high-cardinality labels hurt Loki) and may sample or drop debug logs.
+
+**Q:** How do you test the metrics adapter?
+
+**A:** Point it at a fake `/status` endpoint with known counters and assert the `/metrics` output is valid Prometheus text format with the expected names and values. Micrometer does the formatting, so the test focuses on the mapping.
+
+**Common mistakes in answers:**
+- Saying sidecars are free. Each one costs memory and CPU in every pod.
+- Claiming containers in a pod start in a defined order without native sidecars.
+- Choosing a per-pod log sidecar when the app could log to stdout for a node-level agent.
 
 ### TL;DR
 
@@ -1013,11 +1355,64 @@ The config server becomes critical infrastructure — run two instances. Live co
 
 ### In the interview
 
-**Q:** How do you change config without restarting? **A:** Load it from an external store and re-bind refreshable beans when a change event arrives, broadcast to all instances by a bus.
+**30-second answer:** I set up a Spring Cloud Config Server backed by a Git repo that serves config to three services, with live refresh: a push to Git triggers a webhook, and Spring Cloud Bus broadcasts a refresh over Kafka so every instance re-binds its settings within 30 seconds. Two values are feature flags, including one that turns express checkout on or off everywhere at once. The key decision was classifying each key as live-refreshable or restart-required, because properties like the datasource URL are only read when the pool is built. Secrets are stored in Git only as `{cipher}` values, and services start with local fallbacks when the config server is down.
 
-**Q:** What if the config server is down? **A:** Running services keep their current config. New instances start from cached or default values if allowed. Run the server highly available.
+**Key terms to know:**
+- **Externalized configuration** — settings live outside the deployable, so one build runs in every environment.
+- **Spring Cloud Config Server** — serves `application.yml`, `{service}.yml` and `{service}-{profile}.yml` from Git over HTTP.
+- **`spring.config.import`** — the Spring Boot way for a client to load remote config, e.g. `optional:configserver:http://config:8888`.
+- **Profile** — a named environment (`dev`, `prod`) that selects a different set of values from the same jar.
+- **`@RefreshScope`** — a bean that is rebuilt on refresh. `@ConfigurationProperties` beans are re-bound instead.
+- **Spring Cloud Bus** — broadcasts a refresh event to all instances over Kafka, so you trigger one refresh, not one per instance.
+- **Feature flag** — a runtime switch that changes behaviour without a deploy (`checkout.express-enabled`).
+- **`{cipher}` values** — encrypted strings in Git that the config server decrypts before serving.
 
-**Q:** Config versus secrets? **A:** Config can be visible and versioned in Git. Secrets need encryption, access control and rotation, so they belong in a secret manager.
+**Q:** How do you change config without restarting?
+
+**A:** Load it from an external store, then on a change event re-bind `@ConfigurationProperties` beans and rebuild `@RefreshScope` beans. The event is broadcast to all instances by Spring Cloud Bus, triggered by a Git webhook or a call to the bus refresh endpoint.
+
+**Q:** What cannot be refreshed live?
+
+**A:** Anything consumed once at start-up to build infrastructure — a database URL, pool size, server port. Changing the property does nothing to the existing connection pool. I documented every key as live or restart-required.
+
+**Q:** What if the config server is down?
+
+**A:** Running services keep their current config. A new instance with `optional:configserver:` starts with local defaults and logs a warning; without `optional:` it refuses to start. I chose per service — a payments service may rather fail than run with wrong settings. The server itself runs as two instances.
+
+**Q:** What happens during a refresh, while instances disagree?
+
+**A:** For a few seconds some instances have the new value and some the old, so a customer could see two different discounts. Either accept that for low-risk values, or include the config version in responses and logs so mixed states are visible.
+
+**Q:** Config versus secrets?
+
+**A:** Config can be visible and versioned in Git. Secrets need encryption, access control, auditing and rotation, so they belong in a secret manager like Vault or a cloud secret service. Encrypted values in Git are a step up from plain text but still leak if the key leaks.
+
+**Q:** Live config sounds powerful. What is the risk?
+
+**A:** A typo reaches every service within seconds. I protect against it with pull requests and review on the config repo, validation of properties with Bean Validation (`@Validated`) so bad values fail the refresh, and Git history for fast reverts.
+
+**Q:** What changes at 10x services?
+
+**A:** The config server is on every start-up path, so it needs high availability and caching of the Git clone. Refresh storms — hundreds of instances re-fetching at once — can overload it. Many teams move to Kubernetes ConfigMaps plus a flag service (Project 21) instead.
+
+**Q:** How did you test refresh?
+
+**A:** An integration test starts an embedded config server against a temporary Git repo, commits a change, triggers refresh, and asserts the new value is visible in the client. A second test starts the client with the server unreachable and checks it uses fallback values.
+
+**Q:** Show the client set-up.
+
+**A:** In `application.yml` of each service:
+```yaml
+spring:
+  application.name: pricing
+  config.import: "optional:configserver:http://config:8888"
+```
+and bind values with a `@ConfigurationProperties(prefix = "pricing")` record or class, which Spring re-binds on refresh.
+
+**Common mistakes in answers:**
+- Assuming every property refreshes live. Infrastructure built at start-up does not.
+- Storing secrets in plain text in the config repo.
+- Forgetting the window where instances run different config versions.
 
 ### TL;DR
 
@@ -1136,11 +1531,65 @@ You gain decoupling and resilience but lose a simple call stack: debugging "why 
 
 ### In the interview
 
-**Q:** Why events instead of direct calls? **A:** The producer does not wait for or know about consumers, so it stays fast and available, and new consumers can be added without changing it.
+**30-second answer:** I built a signup service that stores a user and publishes a `UserRegistered` event to a Kafka topic keyed by user id, with three independent consumer groups reacting: a welcome email, an analytics counter and a loyalty service that grants 100 points. The key decision was events instead of direct calls, so signup returns in under 100 ms even with every consumer down, and a new reaction is just a new consumer group. The hardest part was at-least-once delivery: consumers can see an event twice, so the loyalty ledger has a unique constraint on the event id. Replaying the topic from offset 0 grants zero extra points.
 
-**Q:** How do you handle duplicate events? **A:** Make consumers idempotent — record processed event ids or use natural unique keys so reprocessing has no extra effect.
+**Key terms to know:**
+- **Event** — an immutable record of something that already happened (`UserRegistered`).
+- **Topic, partition, offset** — a topic is a named log split into partitions, and each consumer tracks its position as an offset.
+- **Message key** — decides the partition. Keying by user id keeps one user's events in order.
+- **Consumer group** — a set of instances that share a topic's partitions. Each group gets every event, so three groups means three independent reactions.
+- **At-least-once delivery** — every event is delivered, possibly more than once, because offsets are committed after processing.
+- **Idempotent consumer** — processing an event twice has the same effect as once. Here via a unique `source_event_id`.
+- **Consumer lag** — how far a consumer's committed offset is behind the newest offset. The key metric to alert on.
+- **Dual-write problem** — saving to the database and publishing to Kafka are two systems, and a crash between them loses the event. Fixed by the outbox in Project 13.
+- **Rebalance** — Kafka reassigning partitions when consumers join or leave a group.
 
-**Q:** How does Kafka preserve order? **A:** Only per partition. Choose the message key so that events that must be ordered share a partition.
+**Q:** Why events instead of direct calls?
+
+**A:** The producer does not wait for or know about consumers, so it stays fast and available even when they are down, and new consumers can be added without changing it. The cost is eventual consistency and harder debugging.
+
+**Q:** How do you handle duplicate events?
+
+**A:** Make consumers idempotent — record processed event ids or rely on natural unique keys so reprocessing has no extra effect. In the loyalty service, inserting a ledger row with a duplicate `source_event_id` fails the unique constraint, and I treat that as "already done".
+
+**Q:** How does Kafka preserve order?
+
+**A:** Only within a partition. Choose the key so that events that must stay ordered share a partition — all events for one user use the user id as key. Across partitions there is no global order.
+
+**Q:** Why is delivery at-least-once and not exactly-once?
+
+**A:** The consumer processes, then commits its offset. If it crashes in between, it restarts from the last committed offset and sees the event again. Kafka transactions give exactly-once only for read-process-write within Kafka; side effects like sending email or writing to PostgreSQL still need idempotency.
+
+**Q:** What is the dual-write gap in your signup?
+
+**A:** Signup saves the user, then publishes. If the app crashes after the commit but before the send, the user exists and no event is ever sent, so they never get points or email. The fix is a transactional outbox: write the event to a table in the same transaction and relay it afterwards.
+
+**Q:** What happens if the loyalty consumer is down for 10 minutes?
+
+**A:** Events stay in the topic (retention is time- or size-based, not consumption-based), lag grows, and on restart the consumer reads from its last committed offset and catches up. Nothing is lost as long as the outage is shorter than retention.
+
+**Q:** What changes at 10x signups?
+
+**A:** Throughput scales with partitions: one partition is consumed by at most one instance in a group, so 3 partitions cap each group at 3 useful consumers. You add partitions early (adding later reshuffles keys to partitions), scale consumers, and watch lag per group.
+
+**Q:** How did you test it?
+
+**A:** Testcontainers runs real Kafka and PostgreSQL. I assert the published record has the user id as key, send the same event twice to the loyalty consumer and assert points equal 100, and produce 1,000 events before starting a consumer to test catch-up.
+
+**Q:** What does a Spring Kafka producer and consumer look like?
+
+**A:** Send with the key so ordering holds, and listen in a named group:
+```java
+kafka.send("user-registered", user.id().toString(), event);
+
+@KafkaListener(topics = "user-registered", groupId = "loyalty")
+void on(UserRegistered e) { ledger.grantOnce(e.eventId(), e.userId(), 100); }
+```
+
+**Common mistakes in answers:**
+- Saying Kafka guarantees global ordering. It is per partition only.
+- Claiming Kafka gives exactly-once to external systems. Side effects still need idempotent consumers.
+- Ignoring the dual write between the database and the broker.
 
 ### TL;DR
 
@@ -1280,11 +1729,58 @@ Two models means two things to keep in sync and to explain to new developers. Ev
 
 ### In the interview
 
-**Q:** Does CQRS require event sourcing or separate databases? **A:** No. The minimum is separate models for reads and writes. Separate stores and event sourcing are optional extras with their own costs.
+**30-second answer:** I built a library-lending app with CQRS: commands (borrow, return, add copy) enforce rules like "at most 5 loans" on normalised PostgreSQL tables, and a projector keeps a flat `title_availability` read table that the browse screen queries without joins. The key decision was keeping both models in one app and one database, with in-process events published after commit — CQRS without the cost of Kafka or separate stores. The hardest part was projection correctness: I made updates idempotent per event and kept a full rebuild, and a property test checks the incremental read model always equals a fresh rebuild. Browse stays under 20 ms p95 at 100,000 titles.
 
-**Q:** How do you deal with stale reads? **A:** Show the user their own change from the command result, version the read model so the UI can wait for it, and design screens that tolerate a short delay.
+**Key terms to know:**
+- **CQRS** — Command Query Responsibility Segregation: separate models for changing data and for reading it.
+- **Command** — a request to change state (`BorrowCopy`). Returns only success or failure plus an id.
+- **Query / read model** — a denormalised table shaped for one screen (`title_availability`).
+- **Projection / projector** — code that turns write-side events into read-model rows.
+- **Domain event** — a fact like `CopyBorrowed`, published here with `@TransactionalEventListener(phase = AFTER_COMMIT)`.
+- **Eventual consistency** — the read model catches up shortly after a write (target under 1 s).
+- **Read-your-own-writes** — a user sees their own change immediately, even if the read model lags.
+- **Rebuild** — truncating and regenerating the read model from the write tables. The safety net for projection bugs.
 
-**Q:** When is CQRS not worth it? **A:** For simple CRUD where reads and writes look the same. The extra model is pure cost there.
+**Q:** Does CQRS require event sourcing or separate databases?
+
+**A:** No. The minimum is separate models for reads and writes. Separate databases, Kafka and event sourcing are optional extras that buy scale and independence at a real complexity cost.
+
+**Q:** How do you deal with stale reads?
+
+**A:** Show the user their own change from the command result, version the read model so the UI can wait until it reaches the command's version, and design screens that tolerate a short delay — for example showing "updating" rather than wrong data.
+
+**Q:** When is CQRS not worth it?
+
+**A:** For simple CRUD where reads and writes look the same and load is low. The extra model is pure cost there: more code, more things to keep in sync, more to explain to new developers.
+
+**Q:** Why publish events after commit rather than inside the transaction?
+
+**A:** If you project before commit and the transaction then rolls back, the read model shows a loan that never happened. `AFTER_COMMIT` projects only committed changes. The catch is that a crash right after commit can skip the projection, which is why the rebuild exists.
+
+**Q:** How do projections drift and how do you stop it?
+
+**A:** Incremental updates like `available = available - 1` go wrong if an event is missed or applied twice. I store the last applied event id or version per row and skip anything older, and keep a full rebuild that must produce identical rows.
+
+**Q:** Where are the business rules enforced?
+
+**A:** Only on the command side, inside one transaction on the normalised tables — for example counting active loans before inserting a new one. The read model is never used to make decisions because it may be stale.
+
+**Q:** What changes at 100x reads?
+
+**A:** Reads scale independently: add read replicas, a cache, or move the read model to a search engine fed through Kafka (Project 15). Writes stay small and strict. Moving to a separate store means the in-process event becomes a published one, with all the delivery problems that brings.
+
+**Q:** How did you prove the read model is correct?
+
+**A:** A property-style test runs a random sequence of borrow and return commands, rebuilds the read model from scratch, and asserts it equals the incrementally maintained table. An integration test seeds 100,000 titles and measures query latency.
+
+**Q:** How do you enforce "max 5 loans" safely when two borrows arrive at once?
+
+**A:** A plain count-then-insert can let two concurrent transactions both see 4 loans. Lock the member row first (`SELECT … FROM member WHERE id = ? FOR UPDATE`) so the second borrow waits, then count and insert — or keep a loan counter on the member row with a check constraint.
+
+**Common mistakes in answers:**
+- Equating CQRS with event sourcing or with microservices.
+- Making decisions from the read model, which may be stale.
+- Ignoring the read-your-own-writes problem and blaming users for "seeing old data".
 
 ### TL;DR
 
@@ -1424,13 +1920,59 @@ Orchestration makes the flow readable in one place and easy to change, but the o
 
 ### In the interview
 
-**Q:** Why not use two-phase commit? **A:** It needs every participant to support a shared transaction protocol, holds locks while waiting, and blocks when the coordinator fails. Sagas use only local transactions and accept eventual consistency.
+**30-second answer:** I built a checkout across four services — order, payment, inventory and shipping, each with its own PostgreSQL database — coordinated by a saga orchestrator that sends commands over Kafka and stores progress in a `saga_instance` table. If inventory says "out of stock", the orchestrator runs compensations in reverse: void the payment authorisation, then reject the order. The hardest problem was crash safety: the orchestrator saves its new state and the outgoing command in one transaction, and every participant deduplicates by saga id, so a restart re-sends safely. A chaos test that kills the orchestrator during 1,000 sagas ends with every order either approved with exactly one payment or rejected with a net-zero charge.
 
-**Q:** What if a compensation fails? **A:** Compensations must be retryable and idempotent. Retry with backoff, and if it keeps failing, park the saga for manual action and alert — never silently give up.
+**Key terms to know:**
+- **Saga** — a sequence of local transactions, one per service, where each step has a compensating action if a later step fails.
+- **Compensating transaction** — a new business action that semantically undoes an earlier step (void an authorisation, release stock). Not a database rollback.
+- **Orchestrator** — a central service that tells each participant what to do next and records progress in a durable state machine.
+- **Two-phase commit (2PC)** — a protocol where a coordinator makes all databases prepare, then commit. Avoided here because it blocks and is rarely available across services.
+- **Pivot transaction** — the step after which the saga can only go forward. Put hard-to-undo steps (like shipping) after it.
+- **Idempotent participant** — a repeated command has no extra effect. `PAYMENT_AUTH.saga_id` is unique.
+- **Lost isolation** — other transactions can see a saga's intermediate state (stock reserved, then released).
+- **Semantic lock** — a status like PENDING that other operations respect, to limit the effects of lost isolation.
+- **Command/reply messaging** — the orchestrator sends commands to each participant's topic and listens on a reply topic.
 
-**Q:** Orchestration or choreography? **A:** Orchestration when the flow has many steps or changes often, because it is visible in one place. Choreography for short flows where services should stay fully independent.
+**Q:** Why not use two-phase commit?
 
-**Q:** How does the orchestrator survive a crash? **A:** It stores saga state durably and writes outgoing commands in the same transaction, then resumes from stored state and re-sends. Participants deduplicate.
+**A:** 2PC needs every participant to support a shared transaction protocol, holds locks while it waits, and blocks everyone if the coordinator fails between prepare and commit. Kafka and most cloud services do not take part in it anyway. Sagas use only local transactions and accept eventual consistency.
+
+**Q:** What if a compensation fails?
+
+**A:** Compensations must be retryable and idempotent, because "giving up" leaves money or stock in a wrong state. Retry with backoff, and if it keeps failing, park the saga in a FAILED_COMPENSATION state, alert, and let a human fix it — never silently drop it.
+
+**Q:** Orchestration or choreography?
+
+**A:** Orchestration when the flow has many steps or changes often, because the whole sequence lives in one place and is easy to read, test and monitor. Choreography for short flows where services should stay fully independent. The cost of orchestration is a central service that must be highly available and can attract business logic.
+
+**Q:** How does the orchestrator survive a crash?
+
+**A:** It never sends a command before recording it: new state and the outgoing command go into the database in one transaction (an outbox), and a relay publishes it. On restart it reads saga state and re-sends anything not yet acknowledged, and participants deduplicate.
+
+**Q:** Why authorise and void rather than charge and refund?
+
+**A:** An authorisation only reserves the money; voiding it before capture usually leaves no charge on the customer's statement. A refund after a real charge is visible, slower and may cost fees. Ordering steps so the reversible ones come first makes compensations cheaper.
+
+**Q:** A payment gateway times out. Do you compensate?
+
+**A:** Not immediately — a timeout is not a "no", the authorisation may have succeeded. Retry the same command with the same idempotency key, and only compensate on a definite failure or after a deadline. Compensating on a timeout risks voiding something you did not know existed, or leaving a charge behind.
+
+**Q:** What changes at 10x the saga rate?
+
+**A:** The orchestrator becomes the bottleneck, so run several instances and partition sagas by order id — the Kafka key decides which instance owns a saga. Optimistic locking on the `version` column catches two instances touching the same saga. The `saga_step_log` table grows fast and needs archiving.
+
+**Q:** How do you find stuck sagas?
+
+**A:** Every saga row has `updated_at`. A scheduled job finds sagas with no progress for 60 seconds and either times out the step (triggering compensation) or flags them on a dashboard. Tracing headers on every command make it easy to see where it stopped.
+
+**Q:** How did you test it?
+
+**A:** Component tests per participant with Testcontainers Kafka send each command twice and assert one effect. Orchestrator tests drive the state machine with fake, duplicate and out-of-order replies. The chaos test kills the orchestrator at random points and checks the invariant across all orders.
+
+**Common mistakes in answers:**
+- Calling compensation a "rollback". The original action happened and stays in history — compensation is a new action.
+- Saying sagas are ACID. They give atomicity through compensation but no isolation.
+- Compensating on timeouts instead of retrying with an idempotency key first.
 
 ### TL;DR
 
@@ -1563,11 +2105,66 @@ No coordinator to scale or lose, and each service is independent. But the flow i
 
 ### In the interview
 
-**Q:** Biggest risk of choreography? **A:** The flow becomes invisible and spread across services, so changes have surprising effects and failures are hard to trace. Mitigate with an event catalogue, tracing and a timeout watcher.
+**30-second answer:** I built a trip-booking system for flight, hotel and car as a choreographed saga: there is no coordinator, each service reacts to events on one Kafka topic keyed by trip id and publishes its own outcome. On any failure the trip service publishes a single `TripCancelled` and each service cancels its own booking. The key decision was that single cancellation event, so participants never need to know about each other's failures. The hardest part was visibility — the flow lives in subscriptions across four services — so I built a timeline projector and a timeout watcher; across 500 trips with random failures, every confirmed trip has three bookings and every cancelled trip has zero.
 
-**Q:** How do you know a choreographed saga finished? **A:** One service — usually the initiator — listens for terminal events and owns the final status, with a timer to flag sagas that never reach one.
+**Key terms to know:**
+- **Choreography** — services coordinate by reacting to each other's events, with no central controller.
+- **Domain event** — a fact like `FlightBooked`, published to `trip-events` with an envelope (eventId, tripId, type, occurredAt).
+- **Compensation by event** — a cancellation event that each service handles locally to undo its own step.
+- **Inbox / processed-event table** — a table of handled event ids written in the same transaction as the business change, making handlers idempotent.
+- **Partition key** — trip id, so all events for one trip stay in order within one partition.
+- **Timeline projector** — a read model built from every event, giving the only end-to-end view of a trip.
+- **Timeout watcher** — flags trips that never reach a final state (PENDING_TOO_LONG).
+- **Event catalogue** — documentation of every event type, producer and consumer.
+- **Cyclic dependency** — services reacting to each other in a loop. A risk to review in the subscription graph.
 
-**Q:** How do you avoid services knowing about each other? **A:** React to domain events, not to other services' internal failures, and use one cancellation event that everyone handles locally.
+**Q:** What is the biggest risk of choreography?
+
+**A:** The flow becomes invisible and spread across services, so a change in one handler has surprising effects elsewhere and failures are hard to trace. Mitigate with an event catalogue, distributed tracing, a timeline view and a timeout watcher.
+
+**Q:** How do you know a choreographed saga has finished?
+
+**A:** One service — here the trip service, which started it — listens for terminal events and owns the final status. A timer flags trips that never reach CONFIRMED or CANCELLED, because one dropped or ignored event can otherwise leave a trip pending forever.
+
+**Q:** How do you stop services knowing about each other?
+
+**A:** React to domain events, not to other services' internal failures, and use one `TripCancelled` that everyone handles locally. If hotel and flight both listened for `CarFailed`, adding a fourth step would mean changing every earlier service.
+
+**Q:** Orchestration versus choreography for this flow — which would you pick in production?
+
+**A:** For three steps that rarely change, choreography is fine and has no central service to run. Once I added a fourth step (travel insurance), the comparison showed changes in several services, so for flows that grow or need clear monitoring I would move to an orchestrator. Many teams use orchestration inside a domain and choreography between domains.
+
+**Q:** What happens when a cancellation races with a booking?
+
+**A:** A `TripCancelled` can arrive while hotel is processing `FlightBooked`. Same-partition ordering helps, but each handler still checks the trip's current status: if it is cancelled, book nothing, or book then cancel immediately. Handlers must be written for any order of events they can legally see.
+
+**Q:** What if the hotel service is down for two minutes?
+
+**A:** Events wait in Kafka, the trip stays pending and the watcher flags it. When hotel comes back it reads from its committed offset and the saga continues. Because handlers are idempotent, redelivered events cause no double bookings.
+
+**Q:** What changes at 10x trips?
+
+**A:** Throughput scales with the topic's partitions and each service's consumer count. One shared topic means every service reads every event type, which wastes work at scale — you may split topics by type while keeping the trip-id key. The timeline projector also needs storage planning.
+
+**Q:** How did you test it?
+
+**A:** Component tests feed events into one service and assert the events it emits. An end-to-end test with Testcontainers runs all four services, injects random failures across 500 trips and checks the invariant. Contract tests on event schemas catch renamed fields that would make a consumer silently ignore an event.
+
+**Q:** How do you write the idempotent handler?
+
+**A:** Insert into the processed-event table and do the business change in one transaction; a duplicate event fails the primary key and is skipped:
+```java
+@Transactional
+void on(FlightBooked e) {
+  if (!inbox.tryInsert(e.eventId(), "hotel")) return; // already done
+  bookings.bookHotelFor(e.tripId());
+}
+```
+
+**Common mistakes in answers:**
+- Saying choreography has "no single point of failure, so it is always better". You trade a central service for an invisible flow.
+- Forgetting the timeout watcher — choreographed sagas can stall forever on one lost event.
+- Having each participant listen for other participants' failure events, which couples them.
 
 ### TL;DR
 
@@ -1699,11 +2296,65 @@ Polling is simple and needs no extra infra but adds load and latency. CDC is fas
 
 ### In the interview
 
-**Q:** What problem does the outbox solve? **A:** The dual write between a database and a broker. Writing the event to the same database transaction guarantees an event exists if and only if the change committed.
+**30-second answer:** I built a reusable transactional outbox: the order service writes the business row and an `outbox` row in one PostgreSQL transaction, and a relay publishes the outbox to Kafka. I built two relays — a polling relay using `FOR UPDATE SKIP LOCKED`, and a Debezium CDC relay reading the write-ahead log with the outbox event router — and compared them. The key point is the guarantee: an event exists if and only if the change committed, delivered at least once, so consumers deduplicate with an inbox table. Crash tests found zero lost events, and CDC delivered under 200 ms p95 versus under 1 s for polling.
 
-**Q:** Does it give exactly-once delivery? **A:** No — at-least-once. The relay can resend after a crash, so consumers deduplicate by event id.
+**Key terms to know:**
+- **Dual write** — writing to two systems (database and broker) with no shared transaction. A crash between them loses or invents events.
+- **Transactional outbox** — storing the event in an `outbox` table in the same transaction as the business change.
+- **Relay** — the process that reads outbox rows and publishes them to Kafka.
+- **Polling relay and `SKIP LOCKED`** — a scheduled job that locks a batch of unsent rows. `SKIP LOCKED` lets several relay instances take different rows without blocking.
+- **Change data capture (CDC)** — reading the database's change log (PostgreSQL WAL through logical replication) to see committed changes.
+- **Debezium outbox event router** — a Kafka Connect transformation that turns outbox rows into Kafka messages keyed by aggregate id.
+- **Replication slot** — PostgreSQL keeps WAL until the slot's consumer confirms it. Unmonitored slots fill the disk.
+- **Inbox / idempotent consumer** — consumers record processed event ids so duplicates have no effect.
+- **At-least-once delivery** — never lost, sometimes duplicated.
 
-**Q:** Polling or CDC? **A:** Polling for simplicity and low volume. CDC for low latency, strict ordering and high volume, at the cost of operating Kafka Connect and replication slots.
+**Q:** What problem does the outbox solve?
+
+**A:** The dual write between a database and a broker. Writing the event in the same database transaction guarantees an event exists if and only if the change committed — no orders without events, and no events for rolled-back orders.
+
+**Q:** Does it give exactly-once delivery?
+
+**A:** No — at-least-once. The relay can publish and crash before marking the row sent, so the row is published again. Consumers deduplicate by event id with an inbox table; outbox plus inbox is the standard pairing.
+
+**Q:** Polling or CDC?
+
+**A:** Polling for simplicity and low volume: no new infrastructure, but it adds query load and latency. CDC for low latency, commit-order delivery and high volume, at the cost of operating Kafka Connect and replication slots.
+
+**Q:** Why not just publish to Kafka inside the database transaction?
+
+**A:** Kafka is not part of the database transaction. If you publish first and the commit fails, consumers act on an order that does not exist; if you commit first and crash before publishing, the event is lost. Kafka transactions only cover Kafka itself.
+
+**Q:** How can a polling relay publish events out of order?
+
+**A:** Two ways. Several workers with `SKIP LOCKED` can publish events for the same order in parallel, so lock or partition by aggregate. And a transaction that got a smaller id but committed later can be skipped by a relay that tracks "last id published" — so I select by `sent_at IS NULL` instead of a high-water mark.
+
+**Q:** What is the most common production incident with CDC?
+
+**A:** A replication slot holding WAL while Debezium is down: PostgreSQL cannot delete the log, so the disk fills and the database stops. Monitor slot lag and disk, alert early, and have a runbook for dropping and re-creating the slot.
+
+**Q:** What changes at 10x write volume?
+
+**A:** The outbox table becomes a hot table: index `sent_at IS NULL` (a partial index), delete or partition sent rows daily, and batch publishes. Polling query load grows with volume, which is where CDC wins because it reads the log rather than querying the table.
+
+**Q:** How did you prove no events are lost?
+
+**A:** Failure-injection tests kill the relay between publish and mark (expect a duplicate, no loss), stop Kafka during publish (expect retries), and roll back the business transaction (expect no event). A soak test with 100,000 orders and random kills compares the set of order ids in the database with the set in Kafka.
+
+**Q:** What does the polling query look like?
+
+**A:** Lock a batch of unsent rows so other relay instances skip them:
+```sql
+SELECT * FROM outbox WHERE sent_at IS NULL
+ORDER BY created_at LIMIT 100
+FOR UPDATE SKIP LOCKED;
+```
+Publish them, then `UPDATE outbox SET sent_at = now()` for those ids and commit.
+
+**Common mistakes in answers:**
+- Claiming the outbox gives exactly-once delivery.
+- Forgetting the consumer side — without idempotent consumers, the outbox's duplicates cause double effects.
+- Ignoring outbox table growth and replication-slot disk usage.
 
 ### TL;DR
 
@@ -1835,11 +2486,67 @@ Retry topics multiply topic count and operational surface. Long delays hold mess
 
 ### In the interview
 
-**Q:** Why not retry in place? **A:** Kafka processes a partition in order, so an in-place retry blocks every later message in that partition. Retry topics keep the main flow moving.
+**30-second answer:** I built non-blocking error handling for a Kafka billing consumer: a message that fails with a transient error moves to retry topics with delays of 10 s, 60 s and 600 s, and after the last attempt — or immediately for bad data — to a dead-letter topic. A small console lets operators search dead letters, edit and replay them, or discard them, with every action audited. The key decision was classifying exceptions into transient and permanent, so validation errors skip retries. The hardest trade-off was ordering: retry topics give up per-key order, which is fine for invoices but not for every domain. A soak test with 10% random failures ends with processed plus dead-lettered exactly equal to produced.
 
-**Q:** What goes into a dead-letter topic? **A:** Messages that are permanently bad or exhausted their retries, with headers recording the source position and error so they can be diagnosed and replayed.
+**Key terms to know:**
+- **Poison pill** — a message that always fails. Retried in place, it blocks every later message in its partition.
+- **Blocking vs non-blocking retry** — retrying in place on the main topic versus moving the message to a separate retry topic.
+- **Retry topic** — a topic where failed messages wait until their due time before being retried.
+- **Dead-letter topic (DLT)** — where messages go after their final failed attempt, with headers recording origin and error.
+- **Transient vs permanent error** — a timeout may succeed later; malformed data never will. Decides retry or DLT.
+- **`@RetryableTopic`** — Spring Kafka's annotation that creates retry topics, delays and a DLT declaratively.
+- **Replay** — sending a fixed dead letter back to the original topic. Must be idempotent and audited.
+- **Partition pause** — Spring Kafka pauses consumption of a retry partition until the message is due, instead of sleeping the thread.
 
-**Q:** What do you lose with retry topics? **A:** Per-key ordering. If ordering matters, you must hold back later messages for the same key.
+**Q:** Why not retry in place?
+
+**A:** Kafka processes a partition in order, so an in-place retry blocks every later message in that partition, and one poison message can stall a whole stream. Retry topics move the failure aside and keep the main flow moving.
+
+**Q:** What goes into a dead-letter topic?
+
+**A:** Messages that are permanently bad or exhausted their retries, with headers recording original topic, partition, offset, exception class, message and attempt count. That is enough to diagnose the problem and replay to the exact source.
+
+**Q:** What do you lose with retry topics?
+
+**A:** Per-key ordering: later messages for the same key may be processed before the retried one. For invoices that is fine; for "account opened" then "account closed" it is not. If order matters per key, park later messages for that key too, or block in place for that key only.
+
+**Q:** What happens when the tax service is down for an hour?
+
+**A:** Every message fails, runs through all three retry topics and ends in the DLT — retries cannot fix a hard outage and only add load. Pair the consumer with a circuit breaker that pauses consumption while the dependency is down, so messages wait in the main topic instead.
+
+**Q:** Why is replay dangerous?
+
+**A:** A replayed message is a duplicate from the system's point of view — it may already have been partly processed. Processing must be idempotent by event id, and the console warns when replaying something already marked processed. Every replay records who, when and what changed.
+
+**Q:** How do you decide which exceptions are retryable?
+
+**A:** Timeouts, connection errors and 5xx from dependencies are transient. Deserialization errors, validation failures and missing required fields are permanent and go straight to the DLT. In Spring Kafka you list permanent ones with `exclude` (or `notRetryOn`), and deserialization errors are non-retryable by default.
+
+**Q:** What changes at 10x volume?
+
+**A:** Retry topics need as many partitions as the main topic so retry consumers keep up, and the topic count multiplies across services. Watch DLT inflow rate rather than size, because a sudden rise means a new bug or outage. Bulk replay needs a rate limit so it does not flood the consumer.
+
+**Q:** How did you prove nothing is lost?
+
+**A:** Testcontainers tests assert a failing message lands on each retry topic with correct headers and in the DLT after the final attempt, using 100 ms delays. The soak test injects 10% random failures and checks processed + dead-lettered = produced.
+
+**Q:** Show the Spring Kafka set-up.
+
+**A:** `attempts` counts the first try, so 4 attempts means 3 retries. Spring Kafka 4 (the Boot 4 line) replaced Spring Retry's `@Backoff` with its own `@BackOff` and renamed the attribute to `backOff`. A multiplier of 6 gives 10 s, 60 s, 360 s; exact custom delays like 600 s need a `RetryTopicConfiguration` bean.
+```java
+@RetryableTopic(attempts = "4",
+  backOff = @BackOff(delayString = "10s", multiplier = 6),
+  exclude = InvalidInvoiceException.class)
+@KafkaListener(topics = "invoice-issued", groupId = "billing")
+void on(InvoiceIssued e) { billing.process(e); }
+
+@DltHandler void dead(InvoiceIssued e) { console.record(e); }
+```
+
+**Common mistakes in answers:**
+- Saying retry topics keep ordering. They give it up per key.
+- Sending every error through retries, including bad data that can never succeed.
+- Having a DLT that nobody monitors — it silently becomes data loss.
 
 ### TL;DR
 
@@ -1952,11 +2659,59 @@ The index is eventually consistent: a shopper may see "in stock" for an item tha
 
 ### In the interview
 
-**Q:** How do you search across data owned by several services? **A:** Each service publishes change events, and a projector builds a denormalised search index. Queries hit the index, never the services.
+**30-second answer:** I built product search over data owned by three services: product, pricing and inventory publish events to compacted Kafka topics, and a projector merges them into one OpenSearch document per product. Shoppers query the index, never the source services. The hardest problem was ordering across three topics: each part of the document carries its source version, so a stale `PriceChanged` never overwrites a newer price. Schema changes are done by rebuilding into a new index from offset 0 and swapping an alias with no failed searches, and search stays under 100 ms p95 at 1 million products.
 
-**Q:** How do you handle out-of-order events? **A:** Carry a version from the source and apply an update only if it is newer than what the document has for that part.
+**Key terms to know:**
+- **Read model across services** — CQRS where the read side joins data owned by several services.
+- **Projector** — consumes the three topics and upserts partial documents in OpenSearch.
+- **Log compaction** — Kafka keeps the latest message per key, so a topic is a full, rebuildable snapshot.
+- **Tombstone** — a message with a null value that tells compaction to delete a key.
+- **Per-source versioning** — `productVersion`, `priceVersion`, `stockVersion` so older events cannot overwrite newer data.
+- **Index alias** — a pointer name the search API queries, swapped atomically to a rebuilt index.
+- **Facets** — counts per value (colour, brand) returned with search results, via aggregations.
+- **Bulk indexing** — batching many document updates into one request, merging updates for the same product first.
+- **Eventual consistency** — the index lags the sources (target under 2 s), so checkout must re-check stock.
 
-**Q:** How do you change the index schema? **A:** Build a new index from replayable topics alongside the old one, then swap an alias.
+**Q:** How do you search across data owned by several services?
+
+**A:** Each service publishes change events, and a projector builds a denormalised search index. Queries hit the index, never the services, so search is fast and the services keep ownership of their data.
+
+**Q:** How do you handle out-of-order events?
+
+**A:** Carry a version from the source and apply an update only if it is newer than what the document holds for that part. Versions are compared per field group (price, stock, product), not per document, because the three topics have no shared order.
+
+**Q:** How do you change the index schema?
+
+**A:** Build a new index (`products_v2`) from the start of the replayable topics while the live projector keeps updating v1. When v2 has caught up to current offsets, swap the alias in one atomic call and stop the old projector.
+
+**Q:** Why compacted topics rather than normal retention?
+
+**A:** With time-based retention old events are deleted, so you cannot rebuild from the topic. Compaction keeps the latest value per product forever, which is exactly what a rebuild needs, and stays bounded by the number of products rather than the number of changes.
+
+**Q:** A shopper sees "in stock" but the item just sold out. Is that a bug?
+
+**A:** No, it is the eventual consistency of a read model. The index is for finding products; the decision is made at checkout, which calls inventory directly and can refuse. The UI should handle that case gracefully.
+
+**Q:** Why not call the three services at query time?
+
+**A:** One search can return hundreds of results, so you would make hundreds of calls, latency would be the slowest service, and search would fail when any service is down. You also cannot filter "in stock under 80 euros" without having all the data in one place.
+
+**Q:** What breaks first at 10x events?
+
+**A:** The projector: one OpenSearch request per event is far too slow. Batch each poll, merge updates per product in memory and send one bulk request. Then add partitions and projector instances, and alert on consumer lag as the freshness signal.
+
+**Q:** What happens if the projector crashes?
+
+**A:** Offsets are committed only after the bulk request succeeds, so on restart it reprocesses from the last commit. Version checks make reprocessing harmless, and search keeps serving the existing, slightly stale index.
+
+**Q:** How did you test it?
+
+**A:** Unit tests apply the same events in shuffled orders and assert the same final document. Integration tests use Testcontainers Kafka and OpenSearch. A freshness test measures publish-to-searchable time, and a rebuild test runs searches in a loop during the alias swap and asserts no errors.
+
+**Common mistakes in answers:**
+- Querying source services at search time "for freshness", which recreates the coupling the read model removes.
+- Using one version per document, which lets a newer price be overwritten by an older product event.
+- Trusting the index for decisions like stock reservation.
 
 ### TL;DR
 
@@ -2075,11 +2830,65 @@ Tracing costs CPU, network and storage. Head sampling (decide at the start) is c
 
 ### In the interview
 
-**Q:** How does a trace follow a request across services? **A:** Each service reads the trace context from the incoming `traceparent` header, creates child spans, and writes the context into outgoing HTTP headers or message headers.
+**30-second answer:** I added OpenTelemetry tracing to a five-service system — gateway, order, payment, inventory, notification — so one checkout request is one trace across HTTP calls and Kafka messages. Spans go over OTLP to an OTel Collector, which batches and buffers them and exports to Jaeger or Tempo, and every log line carries the trace id so Grafana jumps from a trace to its logs. The hardest parts were keeping context across thread hand-offs and Kafka hops, which I solved with context-propagating executors and `traceparent` in record headers. I proved it with a hidden 2-second retry loop in payment that a newcomer found from the trace in under a minute, with tracing adding under 2 ms p95.
 
-**Q:** Head versus tail sampling? **A:** Head sampling makes its keep-or-drop choice when the trace begins, before anyone knows whether the request will fail or be slow, which keeps it inexpensive but means errors are dropped as often as successes. Tail sampling decides after seeing the whole trace, so it can keep all errors and slow traces, at the cost of buffering.
+**Key terms to know:**
+- **Distributed trace** — the full path of one request across services, identified by a 16-byte trace id.
+- **Span** — one timed operation (HTTP call, SQL query, Kafka publish) with a parent span id, status and attributes.
+- **Context propagation** — passing trace id and parent span id to the next hop, here in the W3C `traceparent` header for HTTP and Kafka.
+- **OpenTelemetry (OTel)** — the vendor-neutral standard and SDKs for traces, metrics and logs.
+- **OTLP and the Collector** — OTLP is OTel's wire protocol; the Collector receives, batches, buffers and exports telemetry to backends.
+- **Head sampling** — deciding at the start of a trace whether to keep it (10% in production here).
+- **Span link** — a reference from one span to another trace, used when a batch consumer has many parents.
+- **Log correlation** — trace and span ids in every log line, so logs and traces join up.
+- **Cardinality** — the number of distinct values of a label. High-cardinality values belong on spans, not metric labels.
 
-**Q:** How do you trace through Kafka? **A:** Put the context in record headers. The consumer extracts it and either continues the trace or links to it.
+**Q:** How does a trace follow a request across services?
+
+**A:** Each service reads the trace context from the incoming `traceparent` header, creates child spans under it, and writes the context into outgoing HTTP headers or Kafka record headers. If any hop forgets to propagate, the trace splits in two.
+
+**Q:** Head versus tail sampling?
+
+**A:** Head sampling makes the keep-or-drop choice when the trace begins, before anyone knows whether the request will fail or be slow, so it is cheap but drops errors as often as successes. Tail sampling decides after seeing the whole trace, so it can keep all errors and slow traces, at the cost of buffering complete traces in the collector (Project 34).
+
+**Q:** How do you trace through Kafka?
+
+**A:** Put the context in record headers when producing; the consumer extracts it and either continues the trace as a child (simple, good for one message one action) or starts a new trace with a span link back (better for batches, fan-out and long delays).
+
+**Q:** Why send spans to a Collector instead of straight to Jaeger?
+
+**A:** The Collector decouples apps from the backend: it batches, retries and buffers when the backend is down (5 minutes here), can sample or drop attributes centrally, and lets you change backends without redeploying services.
+
+**Q:** Where can trace context get lost inside one service?
+
+**A:** When work moves to another thread — an executor, `CompletableFuture` or `@Async` — because context is stored per thread. Wrap executors with context propagation (Micrometer's context-propagation library does this for Spring) and test it, including with virtual threads.
+
+**Q:** What happens if the tracing backend is down?
+
+**A:** The app is unaffected: SDK exporters are asynchronous with bounded queues and drop spans when full rather than blocking requests. The Collector buffers for a while; beyond that, traces are lost — acceptable for telemetry, which must never take the business down.
+
+**Q:** What changes at 100x traffic?
+
+**A:** Storage and network cost: at 100% sampling, spans can outweigh business data. You lower head sampling, move to tail sampling to keep errors, scale Collectors horizontally, and drop noisy spans like health checks. Attribute cardinality starts to matter for any metrics derived from spans.
+
+**Q:** How did you test tracing?
+
+**A:** With the OTel in-memory span exporter I assert that a call produces spans with the right names and parent ids. An integration test sends one request through the stack and queries Jaeger's API for a trace with spans from all five services, and a benchmark compares p95 with tracing on and off.
+
+**Q:** How do you enable it in Spring Boot 4?
+
+**A:** Spring Boot 4 has a `spring-boot-starter-opentelemetry` that brings Micrometer Tracing with the OTel bridge and OTLP export. Set the sample rate and turn on Kafka observations:
+```yaml
+management.tracing.sampling.probability: 0.1
+spring.kafka.template.observation-enabled: true
+spring.kafka.listener.observation-enabled: true
+```
+Custom business spans use `@Observed` or the `ObservationRegistry` API.
+
+**Common mistakes in answers:**
+- Thinking a request id in logs is the same as tracing. Tracing adds timing, parent/child structure and async hops.
+- Saying head sampling keeps all errors. It cannot know about errors yet.
+- Putting user ids or order ids on metric labels, which explodes metric storage.
 
 ### TL;DR
 
@@ -2193,11 +3002,58 @@ Contract tests need discipline from consumer teams and a broker to run. They do 
 
 ### In the interview
 
-**Q:** Why contract tests instead of end-to-end tests? **A:** They are fast, run per service, and pinpoint which consumer a change breaks. End-to-end tests are slow, flaky and only fail after everything is assembled.
+**30-second answer:** I built a CI pipeline where two consumers — a web BFF and a mobile BFF — write Pact contracts describing exactly the fields they use from the product service, publish them to a Pact Broker, and the provider must verify all of them before it can merge or deploy. A `can-i-deploy` check gates every deploy against what is already in each environment, and Spring Cloud Contract covers one Kafka message contract. The key decision was matching on types and shapes rather than exact values, so contracts do not break when test data changes. A deliberate field rename now fails provider CI in under 60 seconds with a message naming the consumer that would break.
 
-**Q:** Who writes the contract? **A:** The consumer, describing only what it uses. The provider verifies all consumers' contracts in its build.
+**Key terms to know:**
+- **Contract** — an executable example of a request a consumer sends and the response it relies on.
+- **Consumer-driven contract testing** — consumers state what they need and the provider proves it still delivers.
+- **Pact and the Pact Broker** — Pact records contracts from consumer tests; the broker stores contracts, verification results and which versions are in which environment.
+- **Provider verification** — replaying every consumer interaction against the real provider controller.
+- **Provider state** — a set-up hook such as "product 42 exists" that prepares data before an interaction is replayed.
+- **Matchers** — rules like "a decimal" or "a string matching this pattern" instead of exact values.
+- **`can-i-deploy`** — a broker query: is this version verified against the versions of its counterparts already deployed to the target environment?
+- **Message contract** — a contract for an event payload (here `ProductUpdated`) rather than an HTTP call.
 
-**Q:** What does `can-i-deploy` check? **A:** That the version you want to deploy has successful verifications with the versions of its counterparts already in the target environment.
+**Q:** Why contract tests instead of end-to-end tests?
+
+**A:** They are fast, run per service without a shared environment, and pinpoint which consumer a change breaks. End-to-end tests are slow, flaky and only fail after everything is assembled. I still keep a few end-to-end smoke tests for whole flows.
+
+**Q:** Who writes the contract?
+
+**A:** The consumer, describing only the requests it makes and the fields it reads. The provider verifies every consumer's contract in its own build, so it learns exactly which changes are safe.
+
+**Q:** What does `can-i-deploy` check?
+
+**A:** That the version you want to deploy has successful verifications with the versions of its counterparts already recorded in the target environment. If the mobile BFF in production still needs `price`, the provider version that removed it is blocked.
+
+**Q:** How do you remove a field safely?
+
+**A:** Ask the broker which consumers still use it. Ask those teams to stop reading it and publish new pacts, wait until the versions using it are no longer deployed, and only then remove it. The broker turns "who uses this?" into a query instead of a meeting.
+
+**Q:** Why match on type instead of exact values?
+
+**A:** A contract that asserts `price == 19.99` breaks whenever test data changes, and teaches nothing about compatibility. A type matcher says "a decimal is present", which is what the consumer actually depends on.
+
+**Q:** What do contract tests not catch?
+
+**A:** Wrong business behaviour (the provider returns a decimal, but the wrong price) and problems in flows across many services. Contracts prove the interface fits; unit and integration tests prove the logic.
+
+**Q:** What happens with 30 consumers instead of two?
+
+**A:** Provider verification time grows with the number of pacts, so you verify only pacts for versions that are deployed or on main, and a broker webhook triggers verification when a new pact arrives. Too many provider states is a sign consumers are testing business logic.
+
+**Q:** When are consumer-driven contracts the wrong tool?
+
+**A:** For public APIs where you do not know your consumers. There you use versioning, an OpenAPI spec and backward-compatibility checks on the schema instead.
+
+**Q:** How did you prove the pipeline works?
+
+**A:** A script makes a breaking change (rename a field) and a non-breaking one (add a field) in turn, then asserts CI fails and passes respectively. I also measured contract-test time per service to stay under 60 seconds.
+
+**Common mistakes in answers:**
+- Saying the provider writes the contract. That is plain API documentation, not consumer-driven.
+- Treating contract tests as functional tests of business rules.
+- Asserting exact values instead of using matchers, which makes contracts brittle.
 
 ### TL;DR
 
@@ -2316,11 +3172,59 @@ Kubernetes discovery is simpler and language-neutral but less configurable per c
 
 ### In the interview
 
-**Q:** Do you need Eureka on Kubernetes? **A:** Usually not. Services and DNS provide discovery and basic load balancing. Keep a registry only if you need cross-cluster or non-Kubernetes instances.
+**30-second answer:** I migrated a Spring Cloud system that used Eureka for client-side discovery and Config Server onto Kubernetes, where a Service gives each app a stable DNS name and virtual IP and the platform load-balances. I moved in steps — first pods still registering with Eureka, then callers switched to `http://catalogue`, then Eureka and Config Server removed for ConfigMaps — with k6 load running at every step. The hardest part was zero-downtime rollouts: correct readiness probes, graceful shutdown and a short pre-stop sleep so endpoints update before the pod stops. Rolling updates at 100 requests per second finish with zero failed requests.
 
-**Q:** How do you get zero-downtime rolling updates? **A:** Readiness probes, a surge strategy, graceful shutdown with a pre-stop delay, and clients that retry idempotent requests once.
+**Key terms to know:**
+- **Client-side discovery (Eureka)** — the caller asks a registry for instances and picks one with Spring Cloud LoadBalancer.
+- **Server-side discovery (Kubernetes Service)** — the caller uses a stable name; DNS resolves it to a virtual IP and kube-proxy routes to a ready pod.
+- **EndpointSlice** — the Kubernetes object listing the current ready pod IPs behind a Service.
+- **Readiness probe** — "send me traffic". An unready pod is removed from the Service's endpoints.
+- **Liveness probe** — "am I stuck?". Failing it makes Kubernetes restart the container.
+- **Graceful shutdown and preStop hook** — finish in-flight requests on SIGTERM, after a short sleep so callers stop sending to the pod first.
+- **Rolling update with surge** — replace pods a few at a time, creating new ones before old ones go.
+- **ConfigMap** — non-secret config stored in Kubernetes, mounted as files or read through Spring Cloud Kubernetes.
+- **Headless Service** — a Service without a virtual IP, whose DNS returns pod IPs directly, for client-side balancing.
 
-**Q:** Readiness versus liveness? **A:** Readiness controls traffic. Liveness controls restarts. Downstream health belongs in neither liveness nor, usually, readiness.
+**Q:** Do you need Eureka on Kubernetes?
+
+**A:** Usually not. Services and DNS give discovery and basic load balancing in any language. Keep a registry only if you have instances outside the cluster or need cross-cluster discovery.
+
+**Q:** How do you get zero-downtime rolling updates?
+
+**A:** Readiness probes so new pods get traffic only when ready, a surge strategy, Spring Boot graceful shutdown, a pre-stop sleep of a few seconds so endpoint removal propagates before the app stops accepting connections, and clients that retry idempotent requests once.
+
+**Q:** Readiness versus liveness?
+
+**A:** Readiness controls traffic, liveness controls restarts. Downstream health (the database) belongs in neither liveness nor, usually, readiness: if every pod's readiness checks the database and it blips, the Service has no endpoints and you cause a total outage.
+
+**Q:** Why does a pod still get requests after it starts shutting down?
+
+**A:** Removing the pod from endpoints and sending it SIGTERM happen at about the same time, and kube-proxy rules and callers' connection pools update a little later. Without a pre-stop delay the app refuses connections that are still being routed to it.
+
+**Q:** What do you lose by dropping Eureka and Spring Cloud LoadBalancer?
+
+**A:** Per-client features like zone preference and retry on another instance. Kubernetes Services balance per connection, so long-lived HTTP/2 or gRPC connections stick to one pod. A service mesh, topology-aware routing or client-side balancing over a headless Service restores request-level balancing.
+
+**Q:** How did you migrate without breaking calls?
+
+**A:** Strangler-style: run both systems at once. Pods first registered with an in-cluster Eureka, then I switched callers one by one to DNS names, checked Eureka could be stopped with no errors, and only then removed it. Each step was verified under load.
+
+**Q:** What happens when a ConfigMap changes?
+
+**A:** Files mounted from a ConfigMap update after a delay (eventually consistent), and Spring Cloud Kubernetes can reload properties. Environment variables taken from a ConfigMap never change without a pod restart — a common surprise.
+
+**Q:** How did you test it?
+
+**A:** k6 runs during every change — rolling update, scale up, scale down, config change — and asserts zero non-2xx responses. I made the app report unready and checked its endpoint disappeared, and validated manifests with `kubectl apply --dry-run=server`.
+
+**Q:** Which Spring Boot settings support Kubernetes probes and shutdown?
+
+**A:** Actuator exposes `/actuator/health/liveness` and `/actuator/health/readiness` (auto-enabled when Boot detects Kubernetes). Graceful shutdown is the default in recent Boot versions (`server.shutdown=graceful`), with `spring.lifecycle.timeout-per-shutdown-phase` bounding the wait. Add `lifecycle.preStop` with a short sleep in the pod spec.
+
+**Common mistakes in answers:**
+- Putting database checks in the liveness probe, which turns a database blip into restart loops.
+- Assuming Kubernetes balances per request. A Service balances per connection.
+- Believing env vars from a ConfigMap update live.
 
 ### TL;DR
 
@@ -2435,11 +3339,58 @@ Global limits cost a network round trip per request. Local limits are free but i
 
 ### In the interview
 
-**Q:** How do you rate-limit across many gateway instances? **A:** Keep counters in a shared fast store like Redis and update them atomically with a script, or divide the quota per instance and accept inaccuracy.
+**30-second answer:** I built a distributed rate limiter for an API gateway that holds each API key to its plan — say 100 requests per second with a burst of 200 — across four gateway instances, using a token bucket stored in Redis. The whole read-refill-take step runs in one Lua script, so it is atomic and needs one round trip. The key decision was failing open to a local per-instance Bucket4j limit when Redis is down, instead of blocking everyone or removing protection. The result is global accuracy within 5% at 20,000 requests per second, with under 2 ms p95 added, plus `RateLimit-*` and `Retry-After` headers on every 429.
 
-**Q:** Token bucket versus fixed window? **A:** Fixed windows allow double bursts at window edges. Token buckets allow controlled bursts and smooth refill.
+**Key terms to know:**
+- **Rate limiter** — rejects requests above an agreed rate, usually with HTTP 429 Too Many Requests.
+- **Token bucket** — a bucket refills at a fixed rate up to a capacity; each request takes a token; an empty bucket means reject. Capacity is the allowed burst.
+- **Fixed window vs sliding window** — counting per clock window (allows double bursts at edges) versus counting over a rolling window (smoother, more memory).
+- **Atomic Lua script** — Redis runs a script without interleaving other commands, so two gateways cannot both take the last token.
+- **Fail open vs fail closed** — when the limiter store fails, allow traffic or reject it.
+- **Hot key** — one very busy client whose key concentrates load on one Redis shard.
+- **`Retry-After` and `RateLimit-*` headers** — tell clients how long to wait and how much quota remains.
+- **Concurrency limiter** — limits requests in flight rather than per second (a stretch goal).
 
-**Q:** What happens when Redis is down? **A:** Fall back to local approximate limits rather than blocking everything or removing protection entirely.
+**Q:** How do you rate-limit across many gateway instances?
+
+**A:** Keep counters in a shared fast store like Redis and update them atomically with a script, so all instances see one global count. The alternative is dividing the quota by instance count locally, which is free but inaccurate and changes whenever you scale.
+
+**Q:** Token bucket versus fixed window?
+
+**A:** A fixed window allows up to double the limit in a short burst across a window edge (end of one second plus start of the next). A token bucket allows controlled bursts up to its capacity and refills smoothly, which matches how real clients behave.
+
+**Q:** What happens when Redis is down?
+
+**A:** I fall back to a local token bucket per instance sized at quota divided by instance count — approximate limits without the dependency — and switch back when Redis returns. Failing closed would turn a Redis problem into a full outage; failing fully open would remove protection.
+
+**Q:** Why a Lua script instead of GET and SET from Java?
+
+**A:** "Read tokens, compute, write" from two gateways is a race: both read one token and both allow. The script runs atomically inside Redis and does it in one round trip, which also keeps latency low.
+
+**Q:** How do you deal with clock skew between gateways?
+
+**A:** Use one clock for refill maths: either Redis's own `TIME` inside the script or a consistent timestamp. If each gateway passes its own clock and they differ, a bucket can refill too fast or not at all.
+
+**Q:** What breaks first at 10x traffic?
+
+**A:** Redis round trips and hot keys. One very busy client sends all its traffic to one key on one shard. Fixes are leasing tokens in batches (a gateway takes 10 tokens at once and spends them locally) and splitting a hot key into sub-buckets. Redis itself must be replicated because it is now critical.
+
+**Q:** Why did four local-only gateways let a client through at 40 per second?
+
+**A:** Each instance enforced 10 per second independently, and the load balancer spread the client across all four, so the effective limit was 10 × 4. That is the scaling bug that shows why a shared counter is needed.
+
+**Q:** How did you test accuracy?
+
+**A:** Unit tests check the bucket maths with a fake clock. Integration tests run Testcontainers Redis with several gateway instances in one test. A k6 test drives 50 requests per second from one key across all gateways and asserts about 10 per second succeed.
+
+**Q:** Does Spring Cloud Gateway have this built in?
+
+**A:** Yes. The WebFlux gateway has a `RequestRateLimiter` filter with a Redis token-bucket limiter (`replenishRate`, `burstCapacity`) and a `KeyResolver` bean that picks the key; the Web MVC gateway has a rate-limit filter built on Bucket4j. I wrote my own to understand it and compared the two.
+
+**Common mistakes in answers:**
+- Limiting per instance and calling it a global limit.
+- Read-modify-write from the application instead of an atomic operation.
+- Failing closed when the limiter store is down.
 
 ### TL;DR
 
@@ -2551,11 +3502,67 @@ GraphQL moves query flexibility to clients and complexity to the server. Cost co
 
 ### In the interview
 
-**Q:** What is the N+1 problem in GraphQL and how do you fix it? **A:** Resolving a list then one field per item makes one call per item. Batch loaders collect the ids and make one bulk call per backend per level.
+**30-second answer:** I built a GraphQL BFF for a streaming-style catalogue that resolves shows, episodes, cast, ratings and watch progress from five REST services. The key decision was batch loading with Spring for GraphQL's `@BatchMapping`, so the `home` query with 40 shows makes five backend calls instead of hundreds. Each backend is wrapped in a Resilience4j breaker and timeout, so if ratings is down the response still returns with `rating: null` and one error entry. Depth and complexity limits plus persisted queries stop abusive queries, and `home` stays under 200 ms p95 with 30 ms backends.
 
-**Q:** How do you protect a GraphQL API from expensive queries? **A:** Depth and complexity limits, timeouts, and persisted queries so only known queries run in production.
+**Key terms to know:**
+- **GraphQL** — a query language where the client names exactly the fields it wants, and the server resolves each field.
+- **Resolver / schema mapping** — the code that produces one field's value, possibly from a different backend.
+- **N+1 problem** — resolving a list, then one backend call per item for a nested field.
+- **DataLoader / batch loader** — collects all ids requested at one level and makes one bulk call; created per request so caching never leaks between users.
+- **Partial result** — GraphQL returns data plus an `errors` array, so one failed field does not fail the query.
+- **Nullability** — whether a field may be null. A failing non-null field nulls its parent.
+- **Depth and complexity limits** — rejecting queries that nest too deeply or would cost too much, before execution.
+- **Persisted queries** — clients send a hash of a known query instead of query text; works as an allow-list and enables GET caching.
+- **Federation** — splitting one graph into subgraphs owned by different teams.
 
-**Q:** GraphQL BFF versus REST BFF? **A:** GraphQL lets clients compose data without new endpoints, at the cost of harder caching and cost control. REST BFFs are simpler when screens are few and stable.
+**Q:** What is the N+1 problem in GraphQL and how do you fix it?
+
+**A:** Resolving a list of 40 shows and then each show's rating calls the rating service 40 times. Batch loaders defer the call until all ids at that level are known and make one bulk call per backend per level — which means backends need bulk endpoints like `GET /ratings?showIds=`.
+
+**Q:** How do you protect a GraphQL API from expensive queries?
+
+**A:** Depth and complexity limits enforced before execution, timeouts per backend, and persisted queries so only known queries run in production.
+
+**Q:** GraphQL BFF versus REST BFF?
+
+**A:** GraphQL lets clients compose data without the BFF team adding endpoints for every screen, at the cost of harder caching and the need for cost control. REST BFFs are simpler when screens are few and stable.
+
+**Q:** Why does GraphQL return HTTP 200 when a field failed?
+
+**A:** Because the response is a mix of data and errors: other fields succeeded. The client must read the `errors` array and handle null fields. That is why I made `rating` nullable — a non-null rating would make a ratings outage null the whole `Show`.
+
+**Q:** Why is caching harder than with REST?
+
+**A:** Every query is usually a POST to one URL, so HTTP caches and CDNs cannot key on it. Persisted queries turn queries into stable GET requests with a hash that can be cached, and batch loaders give per-request caching inside the server.
+
+**Q:** What happens when the progress service is slow?
+
+**A:** Its breaker and timeout bound the wait, the `progress` fields come back null with an error entry, and the rest of `home` returns on time. Without per-backend timeouts, one slow service would stall the whole response because GraphQL waits for all fields.
+
+**Q:** What changes with ten teams and 10x the schema?
+
+**A:** One central BFF team becomes a bottleneck for every schema change. Federation lets each domain team own a subgraph while a router composes them. Field-level metrics show unused fields so they can be deprecated and removed.
+
+**Q:** How did you lock in the batching?
+
+**A:** Tests with `GraphQlTester` and mocked backend clients count calls per query and fail if `home` makes more than five backend calls. WireMock returning 500 for one backend tests partial results, and k6 load-tests `home`.
+
+**Q:** Show a batch mapping in Spring for GraphQL.
+
+**A:** One method resolves `rating` for every `Show` in the current level with one bulk call:
+```java
+@BatchMapping
+Map<Show, Rating> rating(List<Show> shows) {
+  var ids = shows.stream().map(Show::id).toList();
+  var byId = ratingsClient.forShows(ids);   // one HTTP call
+  return shows.stream().collect(toMap(s -> s, s -> byId.get(s.id())));
+}
+```
+
+**Common mistakes in answers:**
+- Saying GraphQL solves the N+1 problem by itself. It creates it unless you batch.
+- Sharing a DataLoader cache across requests, which leaks one user's data to another.
+- Making every field non-null, so one backend outage blanks large parts of the response.
 
 ### TL;DR
 
@@ -2691,11 +3698,67 @@ Local evaluation is fast and resilient but the SDK must be written per language.
 
 ### In the interview
 
-**Q:** How do you make a percentage rollout sticky? **A:** Hash a stable user id with the flag key into a bucket and compare with the percentage, so increasing the percentage only adds users.
+**30-second answer:** I built a self-hosted feature flag service: an admin API stores flags and targeting rules in PostgreSQL with an audit log, pushes changes to SDKs over Server-Sent Events, and a Java SDK implemented as an OpenFeature provider evaluates flags in-process. The key decision was local evaluation — the SDK holds all rules in memory, so a flag check takes microseconds, needs no network call, and keeps working when the flag server is down. The hardest part was sticky percentage rollouts: I hash flag key plus user id into 10,000 buckets, so going from 10% to 20% keeps every original user enabled. Changes reach all SDKs within 5 seconds, and a kill switch turns a feature off everywhere with one call.
 
-**Q:** Why evaluate flags locally in the SDK? **A:** Microsecond latency, no dependency on the flag server per request, and user attributes stay in the process.
+**Key terms to know:**
+- **Feature flag** — a runtime switch that separates deploying code from releasing a feature.
+- **Flag types** — release (temporary), experiment (A/B), ops (kill switch), permission (per customer tier).
+- **Targeting rule** — a condition like "country = NL" or "10% of users" that picks a variant.
+- **Sticky bucketing** — a stable hash of `flagKey + userId` so a user's bucket never changes as the percentage grows.
+- **Local (in-process) evaluation** — the SDK evaluates rules from an in-memory copy instead of calling the server per check.
+- **Server-Sent Events (SSE)** — a one-way HTTP stream from server to client, used to push rule changes.
+- **OpenFeature** — a CNCF vendor-neutral API for flag evaluation; your server is plugged in as a provider.
+- **Evaluation context** — the attributes (user id, country, plan) passed in for a flag check.
+- **Flag debt** — old flags that stay in code and multiply code paths.
 
-**Q:** What is the hidden cost of flags? **A:** Combinatorial code paths and stale flags. Track usage and remove release flags promptly.
+**Q:** How do you make a percentage rollout sticky?
+
+**A:** Hash a stable user id together with the flag key into a bucket from 0 to 9,999 and enable the user if the bucket is below `percent × 100`. Raising the percentage only adds users. Including the flag key means the same users are not always first for every flag, which would bias experiments.
+
+**Q:** Why evaluate flags locally in the SDK?
+
+**A:** Microsecond latency, no dependency on the flag server per request, and user attributes never leave the process. The cost is an SDK per language and a short delay before changes arrive.
+
+**Q:** What is the hidden cost of flags?
+
+**A:** Every flag is an `if` that doubles the code paths, and stale flags pile up. I track the last evaluation time per flag and list unused ones for removal; release flags should live weeks, not years.
+
+**Q:** What happens if the flag server is down?
+
+**A:** SDKs keep their last rules and keep evaluating. A new instance that cannot fetch rules uses the default coded at the call site, so the default must always be the safe choice — usually "off". SSE clients reconnect with backoff and fetch a full snapshot to catch up.
+
+**Q:** Why SSE rather than polling or WebSockets?
+
+**A:** SSE is plain HTTP, works through most proxies, reconnects automatically and only needs server-to-client messages, which is all flag updates need. Polling adds load and latency; WebSockets add two-way complexity we do not use.
+
+**Q:** Two services evaluate the same flag a second apart and disagree. How do you handle it?
+
+**A:** For features that span services, evaluate once at the edge and pass the result in a header, so checkout and payment act on the same decision. Otherwise, for a few seconds after a change, one request could take the new path in one service and the old in another.
+
+**Q:** Flags versus config values from Project 8?
+
+**A:** A config value is the same for everyone; a flag is evaluated per user or request with targeting rules and percentages. Flags also need audit, kill switches and usage tracking. Both are runtime configuration, but flags are about who gets what.
+
+**Q:** What changes at 100x SDK clients?
+
+**A:** Each holds an open SSE connection, so the server needs connection-friendly handling (virtual threads or a reactive stack) and several instances behind a load balancer. Snapshot fetches on mass restart can spike load, so cache them. Evaluation itself scales for free because it is local.
+
+**Q:** How did you test bucketing and evaluation?
+
+**A:** Table-driven unit tests cover rule cases. A distribution test hashes 100,000 random user ids at 25% and checks 25% within half a percent. A stickiness test raises the percentage and asserts no user drops out, and JMH benchmarks evaluation under 10 microseconds.
+
+**Q:** What does flag evaluation look like in code?
+
+**A:** Through the OpenFeature client, with a safe default and an evaluation context:
+```java
+var ctx = new MutableContext(userId).add("country", "NL");
+boolean express = client.getBooleanValue("checkout.express", false, ctx);
+```
+
+**Common mistakes in answers:**
+- Using `random()` per request for percentages, which flips users between variants.
+- Choosing an unsafe default, so an SDK that cannot reach the server turns a feature on for everyone.
+- Treating flags as permanent configuration and never removing them.
 
 ### TL;DR
 
@@ -2810,11 +3873,59 @@ A lab is safer than production chaos but less realistic: real networks, real tra
 
 ### In the interview
 
-**Q:** How do you choose timeouts in a chain of services? **A:** From the outside in: each caller's timeout must cover the callee's timeout plus retries, so the inner layers give up first.
+**30-second answer:** I built a chaos lab: four services under a steady 200 requests per second from k6, Toxiproxy between every caller and callee, and an experiment runner that reads YAML experiments, injects one fault, checks a written hypothesis against Prometheus metrics, and always removes the fault. The default settings failed: a 2-second latency fault caused thread pile-up and edge timeouts because inner timeouts were longer than outer ones. I fixed it by setting timeouts top-down and retrying at one layer only with a retry budget, which cut the retry amplification from up to 27 calls per request to at most 10% extra load. Every experiment now has a before-and-after report, and two run in CI on every resilience change.
 
-**Q:** Why can retries make an outage worse? **A:** Retries multiply load on a dependency that is already failing, especially when several layers retry. Retry at one layer, with backoff, jitter and a budget.
+**Key terms to know:**
+- **Chaos engineering** — deliberate, controlled failure experiments to learn how a system really behaves.
+- **Steady state** — measurable normal behaviour (p99, error rate) checked before injecting faults.
+- **Hypothesis** — a pass/fail statement such as "order p99 stays under 500 ms while inventory has 2 s latency".
+- **Toxiproxy and toxics** — a TCP proxy that adds latency, errors, timeouts or resets on demand via an HTTP API.
+- **Blast radius** — how much of the system an experiment can affect. Start with one dependency and one fault.
+- **Abort condition** — a threshold (error rate above 20%) that stops the experiment early.
+- **Timeout budget** — each layer's total time including retries must fit inside its caller's timeout.
+- **Retry amplification and retry budget** — retries at several layers multiply load; a budget caps retries at a share of traffic.
+- **Deadline propagation** — passing the remaining time in a header so downstream services skip expired work.
 
-**Q:** What makes a good chaos experiment? **A:** A steady-state baseline, a single fault, a measurable hypothesis, a limited blast radius and an abort condition.
+**Q:** How do you choose timeouts in a chain of services?
+
+**A:** From the outside in: each caller's timeout must cover the callee's timeout plus its retries, so inner layers give up first. If the gateway gives up at 1 s but order waits 2 s for payment, order keeps working on requests nobody is waiting for.
+
+**Q:** Why can retries make an outage worse?
+
+**A:** They multiply load on a dependency that is already failing: three layers retrying three times each turns one request into up to 27 calls. Retry at one layer only (usually closest to the failure), with backoff, jitter and a budget such as "retries may add at most 10% load".
+
+**Q:** What makes a good chaos experiment?
+
+**A:** A steady-state baseline, a single fault, a measurable hypothesis, a limited blast radius, an abort condition, and guaranteed clean-up of the fault in a `finally` step.
+
+**Q:** What did the first latency experiment actually show?
+
+**A:** With default settings, requests waiting on the slow service held threads and connections, queues grew, and the gateway timed out while inner services kept working on abandoned requests. Only after aligning timeouts and adding a bulkhead did p99 stay inside the hypothesis.
+
+**Q:** Why inject faults at the network with Toxiproxy instead of in code?
+
+**A:** Network-level faults test the real client stack — connection pools, timeouts, retries — without changing the services, and the same experiment works for any language. Faults coded into the app test only what you thought to code.
+
+**Q:** Why not just run chaos in production?
+
+**A:** Production is more realistic and teams like Netflix do it, but you need mature observability, small blast radius and quick aborts first. A lab is the safe place to find configuration bugs, and most resilience bugs are configuration bugs.
+
+**Q:** What happens if the runner crashes mid-experiment?
+
+**A:** The toxic stays in place and the system stays broken. The runner removes faults in a `finally` block, sets toxics with a duration where possible, and has a "reset all proxies" command — leftover faults are a real failure mode.
+
+**Q:** How do you make experiments reproducible?
+
+**A:** Fix the load (k6 constant arrival rate), define every fault in YAML, run each experiment from a clean steady state, and compare metrics over the same windows. The same YAML should give similar numbers each run.
+
+**Q:** How do you keep resilience settings from regressing?
+
+**A:** A CI job brings up the Compose stack and runs two short experiments whenever resilience configuration changes, failing the build if a hypothesis fails. The experiments are the tests.
+
+**Common mistakes in answers:**
+- Describing chaos engineering as "randomly breaking things". It is a controlled experiment with a hypothesis and an abort condition.
+- Adding retries at every layer "for safety".
+- Setting inner timeouts longer than outer ones.
 
 ### TL;DR
 
@@ -2946,11 +4057,59 @@ CDC is reliable but adds Kafka Connect, replication slots and lag. During migrat
 
 ### In the interview
 
-**Q:** How do you split a shared database during a migration? **A:** Give the new service its own copy, keep it in sync with CDC, move reads, then move write ownership with reverse sync, and finally remove the old table.
+**30-second answer:** I did the data half of a strangler migration: a monolith's `customers` table moved into a new customer service with its own database. Debezium streams every committed change from the monolith's write-ahead log to Kafka, the new service applies it idempotently using the log position as a version, and after reads moved I switched write ownership and reversed the sync so legacy monolith code still sees new data. The hardest problems were sync loops and single ownership: each row carries its origin so neither side re-applies its own changes, and a feature flag switches the single writer atomically. A daily reconciliation job compares chunk hashes on both sides and reported zero drift, with sync lag under 1 s p95 at 500 changes per second.
 
-**Q:** Why CDC rather than dual writes in the app? **A:** Dual writes can partially fail and need changes in every code path. CDC captures every committed change from the log, in order, without changing the monolith.
+**Key terms to know:**
+- **Change data capture (CDC)** — reading committed changes from the database's log instead of changing application code.
+- **Write-ahead log (WAL) and LSN** — PostgreSQL's change log and a position in it; `source_lsn` records the last applied change.
+- **Initial snapshot** — Debezium first copies all existing rows, then streams changes.
+- **Reverse sync** — after ownership moves, changes flow from the new database back to the monolith.
+- **Sync loop** — a change bouncing between databases forever. Prevented with an `origin` marker.
+- **Single writer** — only one side may accept writes for an entity at a time.
+- **Anti-corruption layer** — one mapping class that translates the monolith's model so it does not leak into the new service.
+- **Reconciliation** — comparing both copies (here by chunked hashes) and reporting mismatches.
+- **Replication slot** — the PostgreSQL object that holds WAL until Debezium confirms it.
 
-**Q:** How do you prevent sync loops? **A:** Mark each change with its origin and drop changes that came from the receiving side.
+**Q:** How do you split a shared database during a migration?
+
+**A:** Give the new service its own copy, keep it in sync with CDC, move reads first, then move write ownership with reverse sync, and finally make the old table read-only and remove it once nothing reads it.
+
+**Q:** Why CDC rather than dual writes in the app?
+
+**A:** Dual writes can partially fail and need changes in every monolith code path that touches customers, including ones you do not know about. CDC captures every committed change from the log, in commit order, without touching the monolith's code.
+
+**Q:** How do you prevent sync loops?
+
+**A:** Mark each write with its origin (a column or a transaction-level marker) and have each side drop changes that originated from itself. Without it, a change synced back to the monolith is captured again and sent forward forever.
+
+**Q:** Why not let both sides accept writes during the switch?
+
+**A:** Concurrent writes to the same customer on both sides produce conflicts that no sync can resolve correctly — which update wins? I switch the single writer with a feature flag, with a brief write freeze if needed, so there is always exactly one owner.
+
+**Q:** How do you roll back after moving writes?
+
+**A:** Flip the flag back so the monolith owns writes again, let reverse sync drain, and resume forward sync. Reconciliation confirms nothing was lost. I practised it as a drill, because a rollback you have never run is not a plan.
+
+**Q:** What happens if Debezium is down for hours?
+
+**A:** The replication slot keeps WAL on the monolith's disk, which grows until the database runs out of space. Changes are not lost — Debezium resumes from its stored offset — but you must monitor slot lag and disk and alert early.
+
+**Q:** What still couples the two systems in phase 2?
+
+**A:** Monolith queries that join customers with other tables. They work only because the replica copy exists. I listed every such query; each must be replaced by an API call or a local read model before the monolith's table can be removed.
+
+**Q:** What changes at 10x change volume?
+
+**A:** Lag grows if the consumer applies rows one by one, so batch apply and partition the topic by customer id for parallelism while keeping per-customer order. Long-running monolith transactions also delay changes, since CDC only sees commits.
+
+**Q:** How did you test it?
+
+**A:** Testcontainers runs PostgreSQL, Kafka and Debezium: insert, update and delete in the monolith and assert the new database. A loop test writes on each side and checks each change is applied exactly once per side, and a random-operation soak test ends with reconciliation reporting zero mismatches.
+
+**Common mistakes in answers:**
+- Thinking HTTP routing finishes a strangler migration. The shared data is the hard half.
+- Allowing writes on both sides at once.
+- Treating reconciliation as optional — with two copies, drift will happen and must be detected.
 
 ### TL;DR
 
@@ -3090,11 +4249,72 @@ You gain audit, replay and new read models for free. You pay with a harder menta
 
 ### In the interview
 
-**Q:** How do you handle concurrent updates in an event store? **A:** Optimistic concurrency: append with the expected next sequence number, and a unique constraint rejects the second writer, who retries.
+**30-second answer:** I built a wallet whose source of truth is an append-only event log — `WalletOpened`, `FundsDeposited`, `FundsWithdrawn`, `TransferSent` — stored in a PostgreSQL table, with the balance computed by replaying events. Concurrency is optimistic: every append carries the expected sequence number and a unique constraint on (stream id, sequence) rejects the second writer, so two concurrent withdrawals of the full balance give one success and one retry, never a negative balance. Snapshots every 100 events keep a 100,000-event wallet loading in under 20 ms. Read models such as the statement are projections that can be rebuilt from position 0, and old event versions are upcast at read time, never rewritten.
 
-**Q:** How do you keep loading fast with long histories? **A:** Snapshots of state every N events, then replay only events after the snapshot.
+**Key terms to know:**
+- **Event sourcing** — storing every change as an immutable event and deriving current state by replay.
+- **Event stream and sequence** — all events for one wallet, numbered 1, 2, 3 …
+- **Aggregate** — the wallet object rebuilt from its events, which checks rules like "no overdraft".
+- **Optimistic concurrency** — append with the expected next sequence; a unique constraint rejects conflicts, which are retried.
+- **Snapshot** — saved state at a sequence number, so loading replays only later events.
+- **Projection / read model** — statement and summary views built from events, each with its own checkpoint.
+- **Upcaster** — a function that converts an old event version to the current shape when loading.
+- **Correcting event** — fixing a mistake by appending a new event, never by editing an old one.
+- **Crypto-shredding** — encrypting personal data per user so deleting the key "forgets" it.
 
-**Q:** How do you change an event's schema? **A:** Version events and upcast old versions to the new shape at read time. Never rewrite history.
+**Q:** How do you handle concurrent updates in an event store?
+
+**A:** Optimistic concurrency: read the stream at sequence 41, decide, then insert events 42 and 43. If another request already inserted 42, the unique constraint fails and the command is retried with fresh state. No locks are held while deciding.
+
+**Q:** How do you keep loading fast with long histories?
+
+**A:** Snapshot the state every N events (100 here), then load the latest snapshot and replay only the events after it. Snapshots are a cache — you can delete and rebuild them from events at any time.
+
+**Q:** How do you change an event's schema?
+
+**A:** Give events a `schema_version` and upcast old versions to the new shape at read time. Never rewrite history, because the log is your audit trail and other consumers may have already read it.
+
+**Q:** Event sourcing versus a balance column with an audit table?
+
+**A:** With an audit table, the balance column is the truth and the audit can drift from it. With event sourcing the history is the truth, so it cannot disagree with the state, and you can build new read models from all past events later. The cost is a harder mental model, versioning forever and eventually consistent views.
+
+**Q:** How do you do a transfer between two wallets?
+
+**A:** It touches two streams. Appending to both in one database transaction works but couples the streams. The event-sourced way is a small saga: append `TransferSent` on the source, a reaction appends `TransferReceived` on the target, and a compensating event refunds the source if the target is closed.
+
+**Q:** A user asks to be deleted. Events are immutable — what now?
+
+**A:** Keep personal data out of events where possible (store an id, not the name), and encrypt what must be there with a per-user key. Deleting the key makes that data unreadable while the event log stays intact.
+
+**Q:** What happens if a projector has a bug?
+
+**A:** Fix the code, reset its checkpoint to 0 and replay all events into a fresh view. That is one of event sourcing's biggest advantages — read models are disposable.
+
+**Q:** What changes at 100x wallets and events?
+
+**A:** The single events table grows fast, so partition it by time or stream and archive old events behind snapshots. Projection rebuilds get slow, so build into a new table in the background and swap. Hot wallets with many concurrent writers see more optimistic-lock retries.
+
+**Q:** How did you test it?
+
+**A:** Given-when-then tests on the aggregate: given these past events, when this command, then these new events or this error. Parallel-thread tests for concurrency, and a property test that for any random command sequence the projected balance equals the replayed balance.
+
+**Q:** Why Java sealed interfaces for events?
+
+**A:** A sealed interface lists every event type, so a `switch` over events is checked for completeness by the compiler — add a new event and every `apply` that misses it fails to compile:
+```java
+sealed interface WalletEvent permits Deposited, Withdrawn {}
+Wallet apply(WalletEvent e) {
+  return switch (e) {
+    case Deposited d -> withBalance(balance.add(d.amount()));
+    case Withdrawn w -> withBalance(balance.subtract(w.amount()));
+  };
+}
+```
+
+**Common mistakes in answers:**
+- Equating event sourcing with "publishing events to Kafka". Event sourcing is about how state is stored.
+- Saying you can fix a bad event by updating it.
+- Recommending event sourcing for plain CRUD domains where history does not matter.
 
 ### TL;DR
 
@@ -3214,11 +4434,70 @@ Validating everywhere costs a little CPU and complexity, but removes the "soft i
 
 ### In the interview
 
-**Q:** Why validate tokens in every service if the gateway already did? **A:** Zero trust: a compromised pod or misrouted request should not be able to call services freely. Local validation is cheap with cached keys.
+**30-second answer:** I built a zero-trust auth setup: the gateway logs users in with OpenID Connect (authorization code flow with PKCE), keeps tokens server-side and gives the browser only an HttpOnly session cookie, then relays an access token to services. Every service validates the JWT itself — signature, issuer, expiry and especially audience — with public keys cached from the JWKS endpoint, so validation takes under 1 ms. When order calls payment it exchanges its token for a narrower one with audience `payment` and scope `payment:charge`, and the hop runs over mutual TLS. A stolen payment-scoped token is rejected by the order and user APIs, and signing keys rotate under load with zero errors.
 
-**Q:** What is token exchange for? **A:** Getting a narrower token for a downstream call, limited in audience and scope, while keeping the user's identity — so a leaked token is less dangerous.
+**Key terms to know:**
+- **Zero trust** — no call is trusted because of where it comes from; every call is authenticated and authorized.
+- **OAuth 2.0 / OpenID Connect** — OAuth issues access tokens; OIDC adds login and an ID token on top.
+- **Authorization code flow with PKCE** — the browser login flow; PKCE stops a stolen authorization code from being redeemed.
+- **JWT** — a signed JSON token with claims like `sub`, `aud`, `scope`, `exp`.
+- **Audience (`aud`)** — which service a token is for. Each service accepts only its own.
+- **Scope** — what the token allows (`payment:charge`).
+- **Token relay** — the gateway forwards the user's access token to downstream services.
+- **Token exchange (RFC 8693)** — swapping a token for a narrower one for a downstream call, keeping the user as subject and recording the caller in `act`.
+- **mTLS** — both sides present certificates, so the connection proves which service is calling and is encrypted.
+- **JWKS and key rotation** — the published list of public keys; new keys are published before use so services accept both.
 
-**Q:** mTLS or JWTs? **A:** Both. mTLS authenticates the calling service and encrypts the hop. JWTs carry the user and their permissions.
+**Q:** Why validate tokens in every service if the gateway already did?
+
+**A:** Zero trust: a compromised pod or a misrouted request should not be able to call services freely. Local validation is cheap — a signature check with cached public keys — and removes the "soft interior".
+
+**Q:** What is token exchange for?
+
+**A:** Getting a narrower token for a downstream call, limited in audience and scope, while keeping the user's identity. If payment leaks that token, it cannot be used against the order or user APIs, unlike the user's full token.
+
+**Q:** mTLS or JWTs?
+
+**A:** Both, because they answer different questions. mTLS authenticates which service is calling and encrypts the hop; the JWT says on whose behalf and with what permissions. A rule like "only order may charge, and only for this user's orders" needs both.
+
+**Q:** Why is the audience check so important?
+
+**A:** Every token signed by your auth server has a valid signature. Without an `aud` check, a token issued for a low-risk service can be replayed against payment. It is the most commonly forgotten check.
+
+**Q:** Why keep tokens in the gateway instead of the browser?
+
+**A:** Access tokens in browser storage can be stolen by cross-site scripting. With the gateway acting as a BFF for auth, the browser only holds an HttpOnly, Secure, SameSite cookie that scripts cannot read, and tokens never reach the browser. You then need CSRF protection on the cookie session.
+
+**Q:** How do you rotate signing keys without downtime?
+
+**A:** Publish the new public key in the JWKS first, wait until services have fetched it, then start signing with it, and remove the old key after the longest token lifetime has passed. Services refetch the JWKS when they see an unknown key id.
+
+**Q:** What happens if the auth server is down?
+
+**A:** Existing tokens still validate locally until they expire (5 minutes here), so running traffic continues. New logins and token exchanges fail. That is why the auth server runs highly available and exchanged tokens are cached until near expiry.
+
+**Q:** What changes at 10x traffic?
+
+**A:** Validation scales with services because it is local. Token exchange adds an auth-server call per new downstream token, so caching exchanged tokens per user and audience is essential, and the auth server must scale. Certificate issuance and rotation for mTLS is usually handed to a mesh or SPIFFE.
+
+**Q:** How did you test it?
+
+**A:** Spring Security test support gives mock JWTs for unit tests. Integration tests with a Keycloak Testcontainer cover wrong audience, expired token, missing scope and reuse of an exchanged token, and a rotation test switches signing keys during load.
+
+**Q:** How do you configure a Spring Boot resource server to check audience?
+
+**A:** Point it at the issuer and list accepted audiences; Spring Security then validates signature, issuer, expiry and audience:
+```yaml
+spring.security.oauth2.resourceserver.jwt:
+  issuer-uri: https://auth.local/realms/shop
+  audiences: payment
+```
+Endpoint rules then use `hasAuthority("SCOPE_payment:charge")`.
+
+**Common mistakes in answers:**
+- "The gateway checked it, so internal services can trust the request."
+- Forgetting the audience check and accepting any token from the issuer.
+- Passing the user's full, broad token to every downstream service.
 
 ### TL;DR
 
@@ -3363,13 +4642,59 @@ Shadow and parallel modes double load on whatever they touch — size the new se
 
 ### In the interview
 
-**Q:** How do you know the new service behaves like the old one? **A:** Shadow traffic first to check stability, then parallel run returning the old answer and diffing it with the new one, with an exit criterion on mismatch rate.
+**30-second answer:** I migrated an e-commerce monolith with about 20 endpoints into services, route by route, behind a strangler facade whose per-route mode — legacy, shadow, parallel, new, new-with-fallback — comes from a feature flag, so switching or rolling back is a config change that takes under a minute. Shadow mode copies traffic to the new service without affecting users; parallel mode calls both, returns the old answer and diffs the two with per-route ignore rules. The exit criterion for switching a route is a mismatch rate under 0.1% for 7 days. Data moved with CDC, side effects moved with event interception, and the migration counted as done only when the monolith's code and tables were deleted.
 
-**Q:** How do you handle writes during a parallel run? **A:** Do not double-commit. Run the new path in dry-run mode and compare its computed result, or replay writes against a copy.
+**Key terms to know:**
+- **Strangler facade with route modes** — one proxy that decides per route whether the old or new system answers, or both.
+- **Shadow traffic** — an asynchronous copy of a request sent to the new service; its response is discarded and only errors and latency are logged.
+- **Parallel run** — both systems handle the request, the old answer is returned, and differences are recorded.
+- **Diff normalisation and ignore rules** — removing timestamps, generated ids and list-order noise before comparing JSON.
+- **Exit criterion** — the measurable condition for switching a route (mismatch under 0.1% for 7 days).
+- **Dry-run write** — the new path validates and computes but does not commit, so writes can be compared safely.
+- **Event interception** — moving side effects (email, loyalty) from in-process calls to events that new services consume.
+- **Decommissioning** — deleting old code and tables, the real end of a migration.
+- **The long middle** — the stall at around 70% where the remaining parts are the hardest and two systems must be operated.
 
-**Q:** Which capability do you extract first? **A:** One that is valuable, loosely coupled and mostly read-only, so you build tooling and confidence with low risk.
+**Q:** How do you know the new service behaves like the old one?
 
-**Q:** When is the migration done? **A:** When the old code and tables are deleted, not when traffic is switched. Track decommissioning as a deliverable.
+**A:** Shadow traffic first to check it is stable under real load, then parallel run returning the old answer and diffing it with the new one. I switch only when the mismatch rate stays under the exit criterion for a week, and every remaining mismatch is either fixed or explicitly accepted.
+
+**Q:** How do you handle writes during a parallel run?
+
+**A:** Never double-commit, or you create two orders. Run the new path in dry-run mode and compare the computed result, or replay recorded writes against a copy of the database.
+
+**Q:** Which capability do you extract first?
+
+**A:** One that is valuable, loosely coupled and mostly read-only — here the catalogue — so you build the tooling and confidence with low risk. The most entangled capability, orders, comes last, and some parts may be better left in the monolith for good.
+
+**Q:** When is the migration done?
+
+**A:** When the old code and tables are deleted, not when traffic is switched. Until then you pay for two systems, sync jobs and on-call load. I track decommissioning as a deliverable on the migration dashboard.
+
+**Q:** How do you stop shadow traffic hurting users?
+
+**A:** It is fire-and-forget through its own bounded queue and bulkhead; when the queue is full, copies are dropped, never blocking the user's request. Shadow calls also double load on the new service, so I cap the shadow rate and size the service for it.
+
+**Q:** Why do diffs need so much normalisation?
+
+**A:** Raw diffs are full of false positives — timestamps, ids, float formatting, list order — and when the report is noisy people stop reading it. Each ignore rule is reviewed, because ignoring a field must be a decision, not a convenience.
+
+**Q:** What does CDC lag do to your diffs?
+
+**A:** If the new service's database is a second behind, a read right after a write differs and the diff engine reports a false mismatch. The engine needs to know about lag — retry the comparison after a delay, or compare only when the replica has caught up to the request's time.
+
+**Q:** What happens if a switched route starts failing?
+
+**A:** The `new-with-fallback` mode falls back to the monolith for reads automatically, and for anything else the flag goes back to `legacy` within a minute. Every route has a scripted rollback drill that runs before it is switched.
+
+**Q:** How did you test the migration tooling?
+
+**A:** Unit tests cover the normalisation rules. A recorded, production-like traffic file replayed through the facade in parallel mode acts as a regression suite. Contract tests cover facade-to-service APIs, and rollback drills are scripted.
+
+**Common mistakes in answers:**
+- Parallel-running writes in both systems.
+- Declaring victory when traffic is switched while the old code still runs.
+- Ignoring diff noise, so the mismatch report becomes useless.
 
 ### TL;DR
 
@@ -3499,11 +4824,63 @@ A mesh gives uniform security and traffic control for every language, at the cos
 
 ### In the interview
 
-**Q:** What does a service mesh give you? **A:** Uniform mTLS, authorization, retries, timeouts, traffic splitting and telemetry for all services without code changes, managed centrally.
+**30-second answer:** I moved a six-service Kubernetes system's networking concerns from application libraries into Istio: strict mutual TLS across the namespace, AuthorizationPolicies so only order may call payment, retries and timeouts in VirtualServices, outlier detection and connection pools in DestinationRules, and a 90/10 canary for payment v2 with header routing for testers. The key decision was splitting responsibilities: the mesh handles uniform transport concerns, and the app keeps anything that needs business meaning — fallbacks, idempotency and which calls are safe to retry. I measured the sidecars' cost in added p50/p99 latency per hop and memory per pod, and compared sidecar mode with ambient mode.
 
-**Q:** What should stay in the application? **A:** Anything that needs business knowledge: fallbacks, idempotency, partial responses and which operations are safe to retry.
+**Key terms to know:**
+- **Service mesh** — an infrastructure layer of proxies that intercept all service-to-service traffic, configured by a control plane.
+- **Data plane vs control plane** — the Envoy proxies that carry traffic, versus istiod, which turns Istio resources into Envoy config, issues certificates and distributes discovery data.
+- **Sidecar injection** — automatically adding an Envoy container to every pod in a labelled namespace.
+- **PeerAuthentication (STRICT mTLS)** — requires mutual TLS for all traffic to workloads.
+- **AuthorizationPolicy** — rules on which service identity may call which path.
+- **VirtualService / DestinationRule** — routing, retries, timeouts and traffic splits / subsets, connection pools and outlier detection.
+- **Outlier detection** — ejecting a misbehaving host (e.g. after 5 consecutive 5xx) for a while — a per-host breaker.
+- **North-south vs east-west traffic** — in and out of the cluster (ingress gateway) versus between services (sidecars).
+- **Ambient mode** — Istio without per-pod sidecars: a per-node proxy (ztunnel) for mTLS and optional waypoint proxies for L7.
 
-**Q:** What does it cost? **A:** CPU and memory per proxy, extra latency per hop, and operational complexity of the control plane and its upgrades.
+**Q:** What does a service mesh give you?
+
+**A:** Uniform mTLS, authorization, retries, timeouts, traffic splitting and telemetry for all services in any language, without code changes, and managed centrally so settings do not drift between teams.
+
+**Q:** What should stay in the application?
+
+**A:** Anything that needs business knowledge: fallbacks like "return cached price", idempotency keys, partial responses, bulkheads per business operation, and which operations are safe to retry. The mesh sees requests, not meaning.
+
+**Q:** What does it cost?
+
+**A:** CPU and memory per proxy, extra latency per hop (two proxies per call in sidecar mode), and the operational complexity of the control plane and its upgrades. A bad policy can also black-hole traffic cluster-wide in seconds.
+
+**Q:** What goes wrong if both the app and the mesh retry?
+
+**A:** The multiplication problem: app retries 3 times and mesh retries 3 times gives up to 9 calls per request. Pick one layer for each concern. The mesh cannot know whether `POST /charge` is idempotent, so turn mesh retries off for non-idempotent routes or limit them to connection failures.
+
+**Q:** Is outlier detection a circuit breaker?
+
+**A:** Partly. It ejects individual bad hosts from the load-balancing pool, which is great when one pod is broken. It does not give a fallback or stop calls when the whole service is down — that is still an application breaker's job.
+
+**Q:** What happens if istiod goes down?
+
+**A:** Existing proxies keep their last configuration and traffic keeps flowing. New pods cannot get configuration or certificates, config changes do not apply, and certificates eventually expire if it stays down. That is why the control plane runs replicated and is upgraded carefully, often canary-style.
+
+**Q:** Why did the app's first calls fail at start-up?
+
+**A:** The app started before its sidecar was ready, so outbound calls had no proxy. Istio's `holdApplicationUntilProxyStarts` or native sidecar containers fix start-up, and they also make the sidecar outlive the app on shutdown so in-flight requests finish.
+
+**Q:** How do you do a canary in the mesh?
+
+**A:** Define subsets v1 and v2 in a DestinationRule by pod label, then a VirtualService with weights 90/10 and a match rule that sends requests with a tester header to v2. Rollback is setting the weight back to 0 — one resource change, no redeploy.
+
+**Q:** What changes with 10x services?
+
+**A:** Sidecar memory adds up per pod, and the control plane pushes larger configs to every proxy. You scope config with `Sidecar` resources so each proxy only learns about services it calls, or move to ambient mode to remove per-pod proxies.
+
+**Q:** How did you test the policies?
+
+**A:** Scripted curl from different pods asserts allowed and denied calls, including from a debug pod without a sidecar (blocked by strict mTLS). `istioctl analyze` runs in CI to catch misconfigurations, and the Project 22 chaos experiments are re-run against mesh settings.
+
+**Common mistakes in answers:**
+- Saying a mesh removes the need for resilience code in apps. Business-aware behaviour stays in the app.
+- Enabling retries in both the app and the mesh.
+- Claiming a mesh is free. Measure latency and memory per pod.
 
 ### TL;DR
 
@@ -3654,11 +5031,64 @@ Pooled is cheapest and easiest to operate but has the weakest isolation and nois
 
 ### In the interview
 
-**Q:** Silo, pool or bridge? **A:** Pool for cost and scale with many small tenants, silo for strict isolation or large tenants, bridge as a middle ground. Many products offer more than one tier.
+**30-second answer:** I built a multi-tenant project-tracking SaaS with three isolation tiers from one codebase: pooled tenants share tables protected by PostgreSQL row-level security, bridge tenants get a schema each, and premium silo tenants get their own database and deployment. The gateway resolves the tenant from the subdomain or token and passes it on, and tenant id travels on every log line, span and Kafka message. The hardest problems were context leaks and noisy neighbours: the tenant setting is applied per transaction on each connection and cleared on return, and per-tenant rate limits and bulkheads keep a tenant at 10x load from raising others' p95 by more than 10%. A cross-tenant test suite runs every API as tenant B against tenant A's data in all three tiers.
 
-**Q:** How do you guarantee one tenant cannot see another's data? **A:** Tenant id on every row plus database-enforced row-level security, tenant context set per connection, and automated cross-tenant tests.
+**Key terms to know:**
+- **Tenant** — one customer organisation sharing the platform.
+- **Pool, bridge, silo** — shared tables with a tenant column, schema per tenant, dedicated database and services.
+- **Row-level security (RLS)** — a PostgreSQL policy that filters rows by `current_setting('app.tenant_id')`, even if the query forgets.
+- **Tenant context propagation** — carrying tenant id through threads, HTTP headers, Kafka headers, logs (MDC) and spans (OTel baggage).
+- **Noisy neighbour** — one tenant consuming shared resources and slowing others.
+- **Per-tenant rate limit and bulkhead** — caps on requests per second and on concurrent heavy operations per tenant.
+- **Control plane vs application plane** — onboarding, tiers and billing versus serving users.
+- **Tier migration** — moving a tenant from pooled to silo by copying its rows with CDC, then switching routing.
+- **Usage metering** — per-tenant usage events aggregated hourly for billing.
 
-**Q:** How do you deal with noisy neighbours? **A:** Per-tenant rate limits and bulkheads, separate pools for heavy work, and moving very large tenants to their own resources.
+**Q:** Silo, pool or bridge?
+
+**A:** Pool for cost and scale with many small tenants, silo for strict isolation, compliance or very large tenants, bridge as a middle ground. Many products offer more than one tier and price them accordingly.
+
+**Q:** How do you guarantee one tenant cannot see another's data?
+
+**A:** Tenant id on every row, database-enforced row-level security as the safety net, tenant context set per connection, and automated cross-tenant tests. Application filters alone are not enough — one forgotten `WHERE` leaks data.
+
+**Q:** How do you deal with noisy neighbours?
+
+**A:** Per-tenant rate limits and concurrency bulkheads, separate pools or read replicas for heavy work like reports, and moving very large tenants to their own resources.
+
+**Q:** How can tenant context leak?
+
+**A:** Two ways. A thread-local is lost when work moves to another thread or a Kafka consumer, so requests run with no tenant. Worse, a pooled connection can keep the previous tenant's setting, so the next request reads the wrong tenant's rows. I set the tenant at the start of every transaction and test with interleaved tenants on the same thread.
+
+**Q:** What is the RLS gotcha in PostgreSQL?
+
+**A:** Superusers and roles with `BYPASSRLS` always skip policies, and by default so does the table owner — use `ALTER TABLE … FORCE ROW LEVEL SECURITY` and run the app as a non-owner role. Set the tenant per transaction so it cannot outlive the request:
+```sql
+CREATE POLICY tenant_rows ON task
+  USING (tenant_id = current_setting('app.tenant_id')::uuid);
+SELECT set_config('app.tenant_id', :tenant, true); -- true = this transaction only
+```
+
+**Q:** How do you move a tenant from pooled to silo?
+
+**A:** Provision the new database through the control plane, copy the tenant's rows with CDC while they keep working, take a short write freeze to let it catch up, switch routing in the tenant registry, and keep the old rows until reconciliation passes.
+
+**Q:** What breaks at 10x tenants?
+
+**A:** In the bridge tier, thousands of schemas strain migrations and connection pools. In the pool, one database cluster fills up, so you shard tenants across clusters with the tenant registry as the map. Silos multiply upgrade work, so everything must be automated through the control plane.
+
+**Q:** How do you verify noisy-neighbour protection?
+
+**A:** A load test drives one tenant at 10x its normal rate and measures other tenants' p95 against a baseline, which must stay within 10%. Dashboards per tenant show rate-limit rejections and bulkhead usage.
+
+**Q:** How did you test isolation?
+
+**A:** A suite creates two tenants, writes data as A, then calls every API and runs representative queries as B, expecting nothing back — against all three tiers. It runs in CI with onboarding and tier-migration tests on a kind cluster.
+
+**Common mistakes in answers:**
+- Relying only on `WHERE tenant_id = ?` in application code.
+- Forgetting async paths (Kafka consumers, executors) when propagating tenant context.
+- Assuming rate limits alone stop noisy neighbours; expensive queries need concurrency limits too.
 
 ### TL;DR
 
@@ -3826,11 +5256,59 @@ Many services mean many deploys, dashboards and on-call paths. Gains: kitchen, d
 
 ### In the interview
 
-**Q:** How would you design order placement across payment, restaurant and courier? **A:** An orchestrated saga in the order service with durable state, compensations per step, durable timers for restaurant acceptance, and outbox-published events for status.
+**30-second answer:** I built a food-delivery backend in the style of FTGO: consumer, restaurant, order, kitchen, delivery, payment and notification services. Placing an order is an orchestrated saga in the order service — validate, authorise payment, restaurant accepts within 3 minutes, kitchen ticket, courier assigned — with compensations for every step and durable timers stored in the database. Status changes go out as events through outboxes and feed CQRS read models for order history, the restaurant board and a live tracker. The key design decision was separating hot from cold data: 10,000 couriers' location updates go through their own ingest service and topic to a Kafka Streams ETA processor, so they never slow down order processing. A daily reconciliation proves every charged order was delivered or refunded.
 
-**Q:** How do you handle courier location updates at scale? **A:** A separate, stateless ingest path to a high-throughput topic with short retention, a stream processor for ETAs, and a cache-backed read model — isolated from order processing.
+**Key terms to know:**
+- **Orchestrated saga** — the order service drives the create-order steps and compensations from a durable state machine.
+- **Durable timer** — "restaurant did not answer in 3 minutes" stored in a table or workflow engine, not in memory.
+- **Order state machine** — the allowed transitions between ACCEPTED, PREPARING, READY, PICKED_UP, DELIVERED and CANCELLED.
+- **Outbox per service** — each service publishes status events reliably with its business change.
+- **CQRS read models** — history, restaurant board and tracker views built from events, used for display only.
+- **Hot vs cold data** — high-volume, short-lived courier locations versus low-volume, must-not-lose orders.
+- **Kafka Streams** — a library for stateful stream processing; used to join courier location with order destination for ETAs.
+- **Reconciliation** — a daily job that checks every charge against delivery or refund.
+- **Server-Sent Events** — pushing tracker updates from the BFF to apps.
 
-**Q:** Can the tracker view be used to make decisions? **A:** No. It is eventually consistent and for display. Decisions read the owning service's data.
+**Q:** How would you design order placement across payment, restaurant and courier?
+
+**A:** An orchestrated saga in the order service with durable state, compensations per step, durable timers for restaurant acceptance, and outbox-published events for status. Orchestration fits because the flow has many steps, timeouts and branches that need to be visible in one place.
+
+**Q:** How do you handle courier location updates at scale?
+
+**A:** A separate, stateless ingest path writes to a high-throughput topic with short retention, a stream processor computes ETAs, and a cache-backed read model serves the tracker — fully isolated from order processing.
+
+**Q:** Can the tracker view be used to make decisions?
+
+**A:** No. It is eventually consistent and for display only. Decisions such as "can this order still be cancelled?" read the owning service's data.
+
+**Q:** A consumer cancels while the saga is waiting for a courier. What happens?
+
+**A:** The order aggregate defines which transitions are allowed from each state; cancellation before PREPARING is allowed. The saga checks the order state before each step, sees CANCELLED, stops, and runs compensations — void payment, cancel the kitchen ticket. After PREPARING, cancellation is refused.
+
+**Q:** Why can't the restaurant timeout be an in-memory timer?
+
+**A:** It disappears when the instance restarts, leaving the order stuck forever. I store a deadline in a table that the orchestrator scans, or use a workflow engine with durable timers (Project 33).
+
+**Q:** What happens during a payment provider outage?
+
+**A:** A circuit breaker opens and new orders are refused politely at the start ("try again shortly") instead of failing halfway through the saga. Orders already past payment continue, and nothing is charged without a matching delivery or refund.
+
+**Q:** Why are order and kitchen separate services?
+
+**A:** They change for different reasons and at different rates: order owns the customer's purchase and its lifecycle, kitchen owns preparation and restaurant workflow. Keeping them separate lets the restaurant side evolve and scale independently, at the cost of one more saga step.
+
+**Q:** What breaks first at peak?
+
+**A:** Read models lag as event volume spikes, so the tracker shows old states; the location stream can flood consumers; and notification duplicates appear on retries. Partitioning, separate consumers per topic and idempotent notifications address them.
+
+**Q:** How did you prove correctness?
+
+**A:** Saga tests with fake participants cover every branch, contract tests cover all events, and a domain simulator drives consumers, restaurants and couriers with realistic failures. After every chaos run the reconciliation job must show zero orders charged but neither delivered nor refunded.
+
+**Common mistakes in answers:**
+- Putting courier locations through the same service and topic as orders.
+- Using in-memory timers for business deadlines.
+- Making saga decisions from a read model that lags.
 
 ### TL;DR
 
@@ -3979,11 +5457,64 @@ In-memory, partitioned state is fast but must be rebuilt on failover and require
 
 ### In the interview
 
-**Q:** How do you find nearby drivers quickly? **A:** Index drivers by a geospatial cell id like H3 in memory, partitioned by region, and search the pickup cell plus its neighbours.
+**30-second answer:** I built the core of a ride-hailing dispatch: 50,000 simulated drivers stream locations at 12,500 updates per second, each mapped to an H3 hexagon cell and published to Kafka keyed by region. Each dispatch instance owns a set of regions and keeps an in-memory index of available drivers per cell, so "5 nearest drivers" takes under 5 ms. The hardest guarantee was never assigning a driver twice: the in-memory index is only a candidate list, and the real assignment is one atomic conditional update on the driver's status and version in PostgreSQL. When an instance dies, Kafka reassigns its partitions and the new owner rebuilds its index from a compacted status topic within 10 seconds.
 
-**Q:** How do you prevent assigning one driver to two riders? **A:** Make assignment a single atomic conditional update on the driver's status with a version check. The in-memory index is only a candidate list.
+**Key terms to know:**
+- **Geospatial index / H3** — a hexagonal grid that maps a latitude and longitude to a cell id; "nearby" becomes the same or neighbouring cells.
+- **Partitioning by geography** — all updates for one region go to one Kafka partition and one dispatch instance.
+- **Consumer-group assignment as discovery** — Kafka decides which instance owns which regions.
+- **In-memory state built from streams** — the dispatch index is rebuilt from a compacted topic of latest driver status.
+- **Conditional update / optimistic locking** — assign only if the driver is still AVAILABLE at the version you read.
+- **Offer with timeout** — a trip is offered to one driver at a time for 10 s.
+- **Border (halo) handling** — pickups near a region edge also need neighbouring regions' drivers.
+- **Backpressure** — keeping location bursts from delaying trip requests; stale locations may be dropped.
+- **Surge** — a price multiplier per cell from demand and supply over a sliding window.
 
-**Q:** What happens when a dispatch node dies? **A:** Its partitions are reassigned by the consumer group, and the new owner rebuilds its index from a compacted status topic plus the live stream.
+**Q:** How do you find nearby drivers quickly?
+
+**A:** Index drivers by a geospatial cell id like H3 in memory, partitioned by region, and search the pickup cell plus its ring of neighbours, widening the ring if too few are found. A distance sort over all drivers in a database on every request would not scale.
+
+**Q:** How do you prevent assigning one driver to two riders?
+
+**A:** Make assignment a single atomic conditional update on the driver's status with a version check; if zero rows change, someone else won and you try the next candidate. The in-memory index is only a hint:
+```sql
+UPDATE driver_status SET state = 'ON_TRIP', current_trip_id = :trip,
+       version = version + 1
+WHERE driver_id = :d AND state = 'AVAILABLE' AND version = :v;
+```
+
+**Q:** What happens when a dispatch node dies?
+
+**A:** Its partitions are reassigned by the consumer group, and the new owner rebuilds its index from a compacted status topic plus the live stream, reading only the latest record per driver. Rebuild time is your failover time, so I measured it.
+
+**Q:** Why hexagons rather than square grid cells?
+
+**A:** Every hexagon's six neighbours are the same distance from its centre, while a square's corner neighbours are farther than its edge neighbours. That makes "ring of neighbours" a fair approximation of a radius and keeps neighbour lookups simple.
+
+**Q:** What about a pickup right on a region border?
+
+**A:** The owning instance only knows its own region's drivers. Either it asks the neighbouring region's owner for candidates, or each instance also consumes a read-only halo of neighbouring cells. The atomic assignment still protects against two regions choosing the same driver.
+
+**Q:** What if the driver accepts just as the offer times out?
+
+**A:** Both events race. The offer row has an `expires_at` and an outcome, and the assignment is a conditional write, so only one result commits: either the accept wins and the trip is MATCHED, or the timeout wins and the accept gets "offer expired".
+
+**Q:** What breaks first at 10x?
+
+**A:** Hot regions — an airport or stadium overloads one partition. Split hot regions into finer cells or more partitions. Location volume also grows, so the ingest stays stateless and scaled, and only the latest location per driver is kept.
+
+**Q:** Why keep state in memory instead of a database?
+
+**A:** Speed: thousands of location writes per second and sub-5 ms lookups are easy in memory and expensive in a database. It is safe because the state is recoverable from Kafka, and the one thing that needs strong consistency — assignment — still goes to the database.
+
+**Q:** How did you test it?
+
+**A:** Unit tests cover H3 neighbour lookups and offer state transitions. A concurrency test fires 1,000 requests over a small area and asserts zero double assignments. The full simulation reports match latency and match rate, and failover tests kill dispatch instances under load.
+
+**Common mistakes in answers:**
+- Trusting the in-memory index for the final assignment.
+- Forgetting region borders, so riders near an edge get poor matches.
+- Using one global database query sorted by distance for every request.
 
 ### TL;DR
 
@@ -4144,13 +5675,63 @@ Correctness costs latency (synchronous idempotency inserts, serializable ledger 
 
 ### In the interview
 
-**Q:** How do you prevent double charges on retries? **A:** Clients send an idempotency key. The server records it before doing work and returns the stored result for repeats. Calls to the provider carry our payment id as their idempotency key too.
+**30-second answer:** I built an internal payments platform that charges, refunds and pays out through two external providers. Every client request carries an `Idempotency-Key` that is inserted with a unique constraint before any work, and every provider call carries our payment id as the provider's own idempotency key, so retries at either end can never charge twice. The hardest problem was timeouts: a timed-out charge goes to an UNKNOWN state and a resolver asks the provider for the real outcome, instead of failing or retrying blindly. Every movement posts balanced entries to an append-only double-entry ledger, and a daily reconciliation against settlement files lists every mismatch. 100 parallel identical requests produce exactly one provider call.
 
-**Q:** What do you do when the provider times out? **A:** Mark the payment unknown, do not retry blindly, and resolve it by querying the provider before taking any further action.
+**Key terms to know:**
+- **PSP (payment service provider)** — the external company that actually moves money, such as a card processor.
+- **Idempotency key** — a client-chosen id that makes a repeated request return the original result instead of acting again.
+- **Request hash** — stored with the key, so the same key with a different body is rejected.
+- **UNKNOWN state** — the outcome after a timeout: the charge may or may not have happened.
+- **Resolver** — a job that queries providers for UNKNOWN payments and settles them within 15 minutes.
+- **Monotonic state machine** — payment states only move forward; late or duplicate webhooks cannot move them back.
+- **Double-entry ledger** — every movement is a debit and a credit that sum to zero, and entries are never updated.
+- **Reconciliation and breaks** — matching ledger entries with the provider's settlement lines; each mismatch is a break.
+- **PSP routing and failover** — choosing a provider per payment, and sending new payments to the other provider during an outage.
 
-**Q:** Why double-entry? **A:** Every movement is balanced, so errors show up as a non-zero sum, and balances are derived from an immutable history that auditors can verify.
+**Q:** How do you prevent double charges on retries?
 
-**Q:** What is reconciliation for? **A:** Proving your records match the provider's settlements, and catching anything the online path missed.
+**A:** Clients send an idempotency key. The server records it with status IN_PROGRESS before doing any work and returns the stored result for repeats. Calls to the provider carry our payment id as their idempotency key too, so even our own retries to the provider are safe.
+
+**Q:** What do you do when the provider times out?
+
+**A:** Mark the payment UNKNOWN, do not retry blindly and do not send it to the other provider. The resolver queries the provider for that payment id and acts only on the real answer. A timeout is "I don't know", not "no".
+
+**Q:** Why double-entry?
+
+**A:** Every movement is balanced, so errors show up as a non-zero sum, and balances are derived from an immutable history that auditors can verify. A refund posts new reversing entries rather than editing old ones.
+
+**Q:** What is reconciliation for?
+
+**A:** Proving your records match the provider's settlements and catching anything the online path missed — a webhook that never arrived, a partial capture, a rounding difference. It is the final safety net for correctness.
+
+**Q:** What happens when two identical requests arrive at the same moment?
+
+**A:** Both try to insert the same key; the unique constraint lets only one win. The loser sees IN_PROGRESS and either waits for the stored response or gets 409 Conflict. Exactly one provider call is made — my test fires 100 in parallel to prove it.
+
+**Q:** What if the process crashes after inserting the key but before the provider answers?
+
+**A:** The key stays IN_PROGRESS. A duplicate must not start a second attempt; instead, the resolver finds stuck payments and asks the provider, then completes the key with the real outcome so later retries get the right answer.
+
+**Q:** How do you handle duplicate or out-of-order webhooks?
+
+**A:** Store processed webhook ids to drop duplicates, and only allow forward transitions — a late "authorised" after "captured" is ignored. Each transition and its ledger entries are written in one transaction with a version check.
+
+**Q:** Provider A goes down. What happens?
+
+**A:** A's circuit breaker opens and the router sends new payments to B. Payments already in flight on A stay with A and are resolved there later, because moving them could charge twice.
+
+**Q:** What changes at 10x volume?
+
+**A:** The ledger becomes a write hotspot, so partition entries by account or time and keep posting transactions short. Idempotency keys need expiry and cleanup. Reconciliation moves from one daily job to streaming matching, and per-provider rate limits start to matter.
+
+**Q:** How did you test "zero double charges"?
+
+**A:** Property-based tests generate random sequences of client retries, timeouts, crashes and webhook orders against fake providers in WireMock, and check invariants: the provider charged at most once per payment, the ledger is balanced, and the final state matches the provider. Reconciliation is tested with crafted settlement files.
+
+**Common mistakes in answers:**
+- Treating a timeout as a failure and retrying with a new provider request.
+- Generating the idempotency key on the server per request — it must come from the client and stay the same across retries.
+- Updating ledger rows instead of posting reversing entries.
 
 ### TL;DR
 
@@ -4296,11 +5877,59 @@ Active-active doubles infrastructure and operational complexity, and forces you 
 
 ### In the interview
 
-**Q:** Active-active or active-passive? **A:** Active-passive is simpler but the passive side is untested and failover is slow. Active-active keeps both sides proven and serves users nearby, at the cost of multi-region write conflicts.
+**30-second answer:** I deployed a profile and shopping-list service active-active in two simulated regions — two kind clusters with 80 ms of injected latency between them. Both regions take reads and writes, a global router sends each user to their home region if healthy, and changes replicate asynchronously through an outbox, Kafka and MirrorMaker 2 to an applier in the other region. The hardest problem was concurrent edits: simple fields use last-writer-wins with hybrid logical clocks, shopping lists merge as sets with tombstones, and data that cannot conflict stays home-region only. Replication lag is under 2 s p95, and one command drains a region in under 60 s; after cutting the inter-region link for 10 minutes, both regions converged with no lost writes.
 
-**Q:** How do you resolve conflicting writes? **A:** Per data type: last-writer-wins with hybrid clocks for simple fields, merges or CRDTs for sets and counters, and a single home region for data that must be strongly consistent.
+**Key terms to know:**
+- **Active-active** — every region serves reads and writes at the same time.
+- **Active-passive** — one region serves; the other waits to take over.
+- **Asynchronous replication** — changes are copied after commit, so regions can briefly disagree (eventual consistency).
+- **Home region** — the one region allowed to write a user's strongly consistent data.
+- **Last-writer-wins (LWW)** — the change with the later timestamp wins; simple but silently drops one edit.
+- **Hybrid logical clock (HLC)** — wall-clock time plus a counter, giving a consistent order despite small clock skew.
+- **CRDT and tombstones** — data types that merge concurrent changes without conflict; a tombstone marks a delete so a late add does not undo it.
+- **Region evacuation** — draining all traffic from a region through config.
+- **RPO / RTO** — how much data you can lose and how long recovery takes.
 
-**Q:** What must you test? **A:** Evacuation and failover under load, link partitions and convergence afterwards, and that one region can carry all traffic.
+**Q:** Active-active or active-passive?
+
+**A:** Active-passive is simpler but the passive side is rarely tested under real load and failover is slow, so it often fails exactly when needed. Active-active keeps both sides proven and serves users nearby, at the cost of multi-region write conflicts and double infrastructure.
+
+**Q:** How do you resolve conflicting writes?
+
+**A:** Per data type: last-writer-wins with hybrid clocks for simple fields, merges or CRDTs for sets and counters, and a single home region for data that must be strongly consistent, such as account balances or unique usernames.
+
+**Q:** What must you test?
+
+**A:** Evacuation and failover under load, link partitions and convergence afterwards, clock skew, and that one region can carry all traffic.
+
+**Q:** Why can't usernames be multi-master?
+
+**A:** Two regions can both accept "alice" for different users during the replication delay, and no merge rule makes both correct. Uniqueness needs one place that decides, so those writes go to a home region or a global strongly consistent store.
+
+**Q:** How do you prevent replication loops?
+
+**A:** Tag each change with its origin region and change id. Appliers skip changes that originated locally and record applied change ids, so a change from A applied in B is never re-published back to A.
+
+**Q:** Why is a hybrid logical clock better than wall-clock time?
+
+**A:** Wall clocks on different machines drift; with plain timestamps, a write that happened later can lose because its machine's clock was behind. An HLC moves forward past any timestamp it has seen, so causally later changes always have larger values, even with small skew.
+
+**Q:** What happens during a network partition between regions?
+
+**A:** Both regions keep serving their users and queue changes for replication. Conflicting edits are possible (split-brain writes for multi-master data). When the link returns, MirrorMaker catches up, appliers merge by the conflict rules, and the convergence test checks both databases are identical.
+
+**Q:** What breaks if each region normally runs at 70% load?
+
+**A:** On failover the surviving region gets 140% and falls over too — a cascading failure. Keep each region under 50%, or be able to scale up very quickly, and prove it with a capacity test at 100% of traffic.
+
+**Q:** How did you prove convergence?
+
+**A:** Random concurrent edits in both regions, then wait and assert both databases are identical. Partition tests cut the link, clock-skew tests shift one region by 500 ms, and failover drills under load check error rates.
+
+**Common mistakes in answers:**
+- Making cross-region synchronous calls on the hot path, which ties both regions' latency and availability together.
+- Using last-writer-wins everywhere without admitting it silently loses edits.
+- Never testing that one region can carry all the traffic.
 
 ### TL;DR
 
@@ -4448,11 +6077,60 @@ Durable execution makes complex processes readable and reliable, but imposes det
 
 ### In the interview
 
-**Q:** How does a durable workflow survive a crash? **A:** Every step's result is stored in a history. On recovery, the code is replayed from the beginning with recorded results substituted, until it reaches the first step that has not happened yet.
+**30-second answer:** I built a small durable execution engine in the style of Temporal: developers write a workflow as plain sequential Java — charge, reserve, ship, sleep, wait for a signal — and the engine records every step's result in a PostgreSQL event history. After a crash, a worker replays the code from the start, feeding recorded results back, until it reaches new work. Activities, the steps with side effects, are retried with backoff and must be idempotent because they run at least once. The hardest rule is determinism, which I enforce by replaying recorded histories against new code in CI. I ported the Project 11 order saga into one readable method with try/catch compensations, and 1,000 workflows complete correctly while workers are killed at random.
 
-**Q:** Why must workflow code be deterministic? **A:** Replay must make the same decisions as the original run, or the recorded history no longer matches. Time, randomness and I/O must go through the engine.
+**Key terms to know:**
+- **Durable execution** — code whose progress survives crashes and deploys because every step is recorded.
+- **Workflow vs activity** — the deterministic orchestration code versus the side-effecting steps it calls.
+- **Event history** — the append-only record of a workflow: started, activity scheduled/completed, timer fired, signal received.
+- **Replay** — re-running workflow code with recorded results substituted to rebuild its state.
+- **Determinism** — given the same history, the code issues the same commands. Time, randomness and I/O must go through the engine.
+- **Task queue** — workflow and activity tasks in PostgreSQL tables, taken with `FOR UPDATE SKIP LOCKED`.
+- **Durable timer** — a sleep stored as a row with `fire_at`, so it survives restarts.
+- **Signal and query** — sending an external event into a running workflow, and reading its current state.
+- **Workflow versioning** — `getVersion` markers so old histories follow old code paths.
+- **Continue-as-new** — ending a long-running workflow and starting a fresh one to bound history size.
 
-**Q:** When would you use a workflow engine instead of choreography? **A:** For long-running, multi-step processes with timers, human steps and compensations, where readability and recovery matter more than full decoupling.
+**Q:** How does a durable workflow survive a crash?
+
+**A:** Every step's result is stored in a history. On recovery, the code is replayed from the beginning with recorded results substituted, until it reaches the first step that has not happened yet, and continues from there.
+
+**Q:** Why must workflow code be deterministic?
+
+**A:** Replay must make the same decisions as the original run, or the recorded history no longer matches the commands the code produces. `System.currentTimeMillis()`, random numbers, direct HTTP calls and `HashMap` iteration order all break it, so the engine provides `Workflow.now()` and `Workflow.random()` that return recorded values.
+
+**Q:** When would you use a workflow engine instead of choreography?
+
+**A:** For long-running, multi-step processes with timers, human steps and compensations, where readability and recovery matter more than full decoupling.
+
+**Q:** Why do activities run at least once?
+
+**A:** A worker can perform the side effect and crash before reporting completion; the engine sees no result and retries. So activities pass the workflow id plus activity id as an idempotency key to downstream services.
+
+**Q:** How do you change workflow code while old workflows are still running?
+
+**A:** A workflow started last week replays with today's code, and inserting a step shifts every later event. Wrap the change in a version marker — `Workflow.getVersion("add-fraud-check", 1)` — that is recorded in history, so old runs take the old branch and new runs the new one.
+
+**Q:** How does a one-hour (or one-week) sleep work?
+
+**A:** `Workflow.sleep` records a timer with a `fire_at` time and the workflow stops running. The timer service scans for due timers and enqueues a workflow task; a worker replays the history, sees the timer fired, and continues. Nothing sits in memory, so restarts do not matter.
+
+**Q:** Hand-written saga versus workflow engine?
+
+**A:** The hand-written saga spreads one process across state tables, timers and message handlers. The engine lets you write it as one method with try/catch compensations, at the cost of determinism rules and a critical new dependency.
+
+**Q:** What breaks first at 100x workflows?
+
+**A:** PostgreSQL task queues and history writes become hot, and replaying long histories gets slow. Real engines shard history and queues by workflow id, cache workflow state in workers to avoid full replays, and use continue-as-new to bound history.
+
+**Q:** How did you test it?
+
+**A:** Replay tests record histories from real runs and replay them against the current code in CI — any mismatch is a non-determinism bug. Crash-injection tests kill workers at every engine step, and a time-skipping clock tests long timers instantly.
+
+**Common mistakes in answers:**
+- Thinking the workflow code itself runs once. It is re-executed on every replay; only activities have real effects.
+- Calling external services or reading the clock directly in workflow code.
+- Saying activities run exactly once. They run at least once and must be idempotent.
 
 ### TL;DR
 
@@ -4574,11 +6252,60 @@ Tail sampling needs memory for buffered traces and a stateful routing tier. Deci
 
 ### In the interview
 
-**Q:** Why tail sampling instead of head sampling? **A:** It decides after seeing the whole trace, so it can keep all errors and slow requests while dropping most normal ones.
+**30-second answer:** I built an observability pipeline for a 10-service system: OpenTelemetry collector agents on every node send to a load-balancing tier that routes all spans of a trace, by trace id, to the same gateway collector, which tail-samples — keeping every error and slow trace but only 5% of normal ones. Span metrics are computed at the agent from every span before sampling, so request rates stay exact while trace storage dropped by over 80%. On top I defined SLOs for checkout with error budgets, and multi-window burn-rate alerts that page within 5 minutes for a real incident but stay quiet for a 2-minute blip. The pipeline handles 20,000 spans per second with under 1% drop.
 
-**Q:** What is an error budget? **A:** The amount of failure the SLO allows over a window. When it is being spent quickly, reliability work takes priority. When there is budget left, teams can ship faster.
+**Key terms to know:**
+- **Tail-based sampling** — deciding whether to keep a trace after it is complete, so errors and slow traces can always be kept.
+- **Agent vs gateway collector** — a per-node collector close to the apps, and a central tier that does heavier processing such as tail sampling.
+- **Load-balancing exporter** — routes all spans of a trace to the same gateway by hashing the trace id.
+- **Span metrics** — rate, errors and duration computed from spans, before sampling, so they count every request.
+- **SLI** — service level indicator: good events divided by valid events.
+- **SLO** — a target for an SLI over a window (99.5% over 28 days).
+- **Error budget** — 1 minus the SLO; the amount of failure you are allowed.
+- **Burn rate** — how fast the budget is being spent relative to plan; 1 means exactly on budget.
+- **Multi-window alert** — requires a long and a short window to both exceed the burn-rate threshold.
+- **Cardinality** — number of distinct label combinations; high-cardinality labels explode metric storage.
 
-**Q:** Why multi-window burn-rate alerts? **A:** They page quickly for severe problems, ignore short blips, and stop alerting soon after recovery.
+**Q:** Why tail sampling instead of head sampling?
+
+**A:** Tail sampling decides after seeing the whole trace, so it can keep all errors and slow requests while dropping most normal ones. Head sampling decides before anything has happened and drops errors at the same rate as successes.
+
+**Q:** What is an error budget?
+
+**A:** The amount of failure the SLO allows over a window — at 99.5%, 0.5% of requests may be bad. When it is being spent quickly, reliability work takes priority; when there is budget left, teams can ship faster. It turns reliability into a shared, measurable agreement.
+
+**Q:** Why multi-window burn-rate alerts?
+
+**A:** They page quickly for severe problems, ignore short blips, and stop alerting soon after recovery. The long window (for example 1 hour) proves the burn is significant; the short window (5 minutes) proves it is still happening.
+
+**Q:** What does a burn rate of 14.4 mean?
+
+**A:** You are spending budget 14.4 times faster than the steady rate that would use it exactly over the window. With a 30-day window, that empties the whole month's budget in about two days — and spends 2% of it in a single hour, which is why it is a common "page now" threshold.
+
+**Q:** Why must spans of one trace reach the same gateway?
+
+**A:** Tail sampling needs the whole trace to decide. If spans land on different gateways, each sees a partial trace and they may make different decisions, leaving broken traces. Hashing by trace id fixes it; scaling the gateway tier reshuffles the hash briefly.
+
+**Q:** Why compute metrics before sampling?
+
+**A:** If request rates come from sampled traces, they count only the kept 5% plus all errors, which makes rates far too low and error ratios far too high. Generating span metrics from every span at the agent keeps them exact.
+
+**Q:** What happens when gateway collectors run out of memory?
+
+**A:** Tail sampling buffers traces for the decision window (10 s here), so memory grows with throughput × window. Under pressure the collector's memory limiter refuses data and spans are dropped. Watch the collector's own drop metrics, scale the tier, or shorten the window.
+
+**Q:** What changes at 10x span volume?
+
+**A:** Scale agents and gateways horizontally, shorten decision windows, drop noisy spans (health checks) at the agent, and keep metric labels on an allow-list. Storage moves to cheap object storage like Tempo uses.
+
+**Q:** How do you test alerts without waiting for an incident?
+
+**A:** Prometheus rule unit tests (`promtool test rules`) feed synthetic series — a 10% error rate for 10 minutes, a 2-minute blip — and assert which alerts fire. Pipeline tests send synthetic traces with known properties and assert which are kept.
+
+**Common mistakes in answers:**
+- Alerting whenever the error rate exceeds the SLO, which pages on every short spike.
+- Deriving request-rate metrics from sampled traces.
+- Choosing SLOs without product owners, so they do not reflect what users care about.
 
 ### TL;DR
 
@@ -4697,11 +6424,59 @@ Adaptive limits are self-tuning but can oscillate or react slowly. Priority shed
 
 ### In the interview
 
-**Q:** Why limit concurrency instead of request rate? **A:** Concurrency reflects resources actually in use. When latency grows, a concurrency limit automatically admits fewer requests per second.
+**30-second answer:** I built a gateway filter and a matching server-side filter that protect services under overload with adaptive concurrency limits: the limit on in-flight requests rises while latency stays near its no-load baseline and drops when latency climbs, because rising latency means queues are forming. Requests are classified CRITICAL, DEFAULT or SHEDDABLE, and when the limit is reached the least important traffic is rejected first with a fast 503 and `Retry-After`. The key decision was shedding at the very start of the request, before authentication or database work. At 3x capacity, CRITICAL requests still succeed over 99% with p99 under twice normal, and the limit tracks a halved backend capacity within 30 seconds.
 
-**Q:** How does an adaptive limiter know the system is overloaded? **A:** Latency rises above its no-load baseline because queues are forming. The limiter lowers the limit until latency recovers.
+**Key terms to know:**
+- **Load shedding** — deliberately rejecting some requests early so the rest are served well.
+- **Concurrency limit** — a cap on requests in flight rather than requests per second.
+- **Adaptive (gradient) limit** — adjusting the limit by comparing current latency with a baseline, like TCP congestion control.
+- **AIMD** — additive increase, multiplicative decrease: raise the limit slowly, cut it sharply on overload.
+- **Goodput** — successful requests per second that also meet the latency target.
+- **Priority classes** — CRITICAL, DEFAULT, SHEDDABLE, with reserved shares of the limit.
+- **Little's law** — concurrency = throughput × latency, the link between rate and concurrency limits.
+- **Open vs closed load model** — fixed arrival rate regardless of responses versus a fixed number of users who wait; only open models show real overload.
+- **Retry storm** — shed requests retried immediately, cancelling out the shedding.
 
-**Q:** What is load shedding by priority? **A:** Under overload, reject the least important traffic first so critical operations keep working, rather than degrading everything equally.
+**Q:** Why limit concurrency instead of request rate?
+
+**A:** Concurrency reflects resources actually in use. When latency grows, a concurrency limit automatically admits fewer requests per second (Little's law), whereas a fixed rate limit keeps admitting the same number while each request now holds resources longer.
+
+**Q:** How does an adaptive limiter know the system is overloaded?
+
+**A:** Latency rises above its no-load baseline because queues are forming. The limiter lowers the limit until latency recovers, then probes upward again while latency stays near baseline.
+
+**Q:** What is load shedding by priority?
+
+**A:** Under overload, reject the least important traffic first — prefetch and analytics before checkout and login — so critical operations keep working, rather than degrading everything equally and letting chance choose.
+
+**Q:** Why not just set a static limit?
+
+**A:** A static limit is right for one capacity only. When the backend slows (a noisy neighbour, a degraded node, CPU throttling) the old limit lets queues build until everything times out; when it gets faster, you waste capacity. I showed a static limit failing when capacity halved.
+
+**Q:** Why must shedding be cheap?
+
+**A:** Rejecting a request after reading its body, authenticating and querying the database spends the very capacity you are trying to save. The filter runs first in the chain and rejects in under 1 ms.
+
+**Q:** How can the baseline go wrong?
+
+**A:** During a long overload, an averaged baseline drifts upward and the limiter starts treating overloaded latency as normal. Use a windowed minimum or reset the baseline periodically, and smooth noisy samples.
+
+**Q:** Shed requests are retried immediately. What happens?
+
+**A:** The retries add load and can cancel out the shedding entirely. Clients must honour `Retry-After`, back off with jitter and use retry budgets, and the server can mark some rejections as "do not retry".
+
+**Q:** What changes with 10x gateway instances?
+
+**A:** Limits are per instance, so the total admitted load grows with instance count. That is why the services run their own server-side limiter: they protect themselves no matter how many callers there are. Priorities also need governance — every team wants CRITICAL.
+
+**Q:** How did you test it?
+
+**A:** Open-model k6 tests at a fixed arrival rate, because closed-model tests slow down with the server and hide overload. Scenarios cover steady overload, a sudden spike, capacity halved mid-test and recovery, measuring goodput and success rate per priority. Unit tests feed synthetic latency sequences to the limiter algorithm.
+
+**Common mistakes in answers:**
+- Confusing load shedding with rate limiting. Rate limits enforce per-client fairness; shedding protects capacity regardless of who is calling.
+- Measuring overload with a closed-model load test.
+- Shedding late in the request path.
 
 ### TL;DR
 
@@ -4850,11 +6625,70 @@ Speed comes from moving the counter out of the database, which adds a reconcilia
 
 ### In the interview
 
-**Q:** How do you avoid overselling under massive concurrency? **A:** Decrement stock atomically in a fast store with a check-and-decrement script, record reservations durably, and reconcile the two. Never read-then-write from application code.
+**30-second answer:** I built the backend for a flash sale where 500,000 people try to buy 10,000 units in a minute. A virtual waiting room turns the spike into a steady admitted rate, and the reservation service decrements stock with an atomic decrement-if-positive Lua script in Redis, split across 16 shards so not every buyer queues on one counter. Each reservation is then recorded durably in PostgreSQL and holds stock for 10 minutes, and a checkout saga confirms it or releases it on payment failure or expiry. The hardest guarantee was "never oversell": 1 million concurrent reserve attempts produced exactly 10,000 successes, and a reconciliation pass keeps Redis and the database in agreement. The sale runs in its own bulkhead, so normal shopping p95 did not change.
 
-**Q:** How do you deal with the hot row? **A:** Move the counter to memory, shard it, or pre-allocate units as tokens, and put an admission queue in front so demand arrives at a rate the system can handle.
+**Key terms to know:**
+- **Hot row / contention** — every buyer updating the same stock count, which serialises on one lock.
+- **Overselling / underselling** — selling stock you do not have, or holding stock for buyers who never pay.
+- **Atomic check-and-decrement** — a Lua script that decrements only if the count is above zero, in one step.
+- **Sharded counter** — stock split into 16 buckets; a buyer tries a random shard, then others when it is empty.
+- **Reservation with TTL** — a time-bounded hold (10 minutes) in states HELD, CONFIRMED, RELEASED, EXPIRED.
+- **Conditional state transition** — `HELD → CONFIRMED` or `HELD → EXPIRED` only if still HELD, so exactly one wins.
+- **Virtual waiting room** — signed queue tokens admitted at N per second (admission control).
+- **Reconciliation** — comparing Redis remaining with total minus active reservations, and correcting drift.
+- **Bulkhead for a hot event** — separate deployment and connection pools so the sale cannot starve normal traffic.
 
-**Q:** How do reservations expire safely? **A:** Conditional state transitions: confirm only if still held and not expired, expire only if still held. Exactly one wins.
+**Q:** How do you avoid overselling under massive concurrency?
+
+**A:** Decrement stock atomically in a fast store with a check-and-decrement script, record reservations durably, and reconcile the two. Never read-then-write from application code, because two requests can both read "1 left".
+
+**Q:** How do you deal with the hot row?
+
+**A:** Move the counter to memory, shard it, or pre-allocate units as tokens, and put an admission queue in front so demand arrives at a rate the system can handle.
+
+**Q:** How do reservations expire safely?
+
+**A:** Conditional state transitions: confirm only if still held and not expired, expire only if still held. Exactly one wins, and the loser fails cleanly — a buyer whose hold expired on the payment page gets a clear "reservation expired".
+
+**Q:** Redis says the unit is reserved, but the PostgreSQL insert fails. What now?
+
+**A:** Increment Redis back immediately so the unit returns to stock. If the process crashes before that, the periodic reconciliation sees Redis lower than "total minus active reservations" and corrects it. PostgreSQL is the source of truth; Redis is the fast gate.
+
+**Q:** What problem do shards create?
+
+**A:** Near the end, some shards are empty while others still have units, so a buyer who hits an empty shard must try the others before seeing "sold out". Sharding raises throughput but makes "exactly sold out" harder to report, so the last units are found by scanning remaining shards.
+
+**Q:** Why a waiting room instead of just rejecting excess requests?
+
+**A:** Letting 500,000 requests hit the reserve endpoint and rejecting most wastes capacity and frustrates users who retry in a loop, which adds even more load. A waiting room admits at a steady rate and gives honest feedback about position.
+
+**Q:** What happens if a Redis primary fails over mid-sale?
+
+**A:** Asynchronous replication can lose the most recent decrements, so the new primary shows more stock than really remains. Reconciliation from PostgreSQL reservations corrects it, and until then the per-reservation insert with a unique (sale, user) index still stops one user taking extra units.
+
+**Q:** What changes at 10x buyers?
+
+**A:** The waiting room serves a static page from a CDN and its admission rate stays the same, which is the point. More shards or pre-generated unit tickets in a queue raise reserve throughput, and bot defences (per-user limits, challenges) matter more.
+
+**Q:** How did you prove "never oversell"?
+
+**A:** An invariant check under load: at every moment, confirmed plus held is at most total units. The 1-million-attempt test must give exactly 10,000 successes, chaos tests kill reservation instances and Redis replicas during the spike, and expiry tests use a controllable clock.
+
+**Q:** Show the atomic decrement.
+
+**A:** A Lua script runs atomically in Redis, so no other command interleaves:
+```lua
+local left = tonumber(redis.call('GET', KEYS[1]) or '0')
+if left >= tonumber(ARGV[1]) then
+  return redis.call('DECRBY', KEYS[1], ARGV[1])
+end
+return -1
+```
+
+**Common mistakes in answers:**
+- Using `SELECT qty` then `UPDATE` in application code.
+- Treating Redis as the system of record without reconciliation.
+- Forgetting expiry: unpaid holds silently undersell the event.
 
 ### TL;DR
 
@@ -4978,11 +6812,59 @@ Canaries slow releases down and need good metrics per version. Baseline pods cos
 
 ### In the interview
 
-**Q:** How does automated canary analysis decide? **A:** It compares the canary's metrics with a baseline running the old version under the same conditions, over enough samples, against thresholds, and fails if any key metric is significantly worse.
+**30-second answer:** I built a progressive-delivery pipeline on Kubernetes: every version goes through Argo Rollouts canary steps of 5%, 25%, 50% and 100%, with Istio setting the traffic weights and an automated analysis at each step comparing the canary with a freshly started baseline of the old version on error rate, p99 latency and checkout conversion. Failed analysis rolls back automatically and posts the evidence. Database changes use expand and contract so both versions run on the same schema. Over 20 good and 5 deliberately bad releases, bad builds with 2% extra errors were rolled back before 25%, good ones reached 100% in under 30 minutes, and I recorded the false-rollback rate.
 
-**Q:** Why a separate baseline instead of comparing with stable? **A:** Long-running stable pods differ in warm caches, memory and traffic mix. A fresh baseline removes that bias.
+**Key terms to know:**
+- **Canary release** — sending a small share of real traffic to the new version first.
+- **Progressive delivery** — releasing in steps with automated checks at each step.
+- **Automated canary analysis** — metric queries with pass conditions that promote or roll back without a human.
+- **Baseline** — a fresh copy of the old version receiving the same traffic share as the canary, for a fair comparison.
+- **Argo Rollouts / AnalysisTemplate** — a Kubernetes controller replacing the Deployment; templates define the PromQL checks.
+- **GitOps** — the desired version lives in Git and Argo CD applies it.
+- **Expand and contract** — schema changes in steps (add, dual write, migrate readers, drop later) so old and new code both work.
+- **Blast radius** — the share of users exposed to a bad version.
+- **False positive / negative rollback** — rolling back a good version, or promoting a bad one.
 
-**Q:** How do you handle database changes during canaries? **A:** Expand and contract, so every schema version works with both the old and the new code.
+**Q:** How does automated canary analysis decide?
+
+**A:** It compares the canary's metrics with a baseline running the old version under the same conditions, over enough samples, against thresholds, and fails if any key metric is significantly worse.
+
+**Q:** Why a separate baseline instead of comparing with stable?
+
+**A:** Long-running stable pods differ in warm caches, memory state and traffic share. A fresh baseline started at the same time and given the same share removes that bias, so differences come from the code.
+
+**Q:** How do you handle database changes during canaries?
+
+**A:** Expand and contract, so every schema version works with both the old and the new code: add a new column, write both, move readers, and drop the old column several releases later. A rename in one step would break the stable version mid-rollout.
+
+**Q:** What if the canary only gets 50 requests in a step?
+
+**A:** One error is 2%, so the result is noise. Require a minimum sample size before judging, compare against the baseline rather than fixed thresholds, and lengthen early steps instead of lowering standards.
+
+**Q:** Why include business metrics like conversion?
+
+**A:** Technical metrics catch crashes and slowness; business metrics catch "works but wrong", such as a broken add-to-cart button that returns 200. They are noisier, so they get wider thresholds or longer windows.
+
+**Q:** What happens to a user who bounces between versions?
+
+**A:** With random per-request splits, a user can see old and new behaviour in one session. I use header or cookie-based routing so each user stays on one version during the rollout.
+
+**Q:** What does a canary not catch?
+
+**A:** Bugs that only appear at 100% load, slowly growing problems like a memory leak after hours, and anything the chosen metrics do not measure. I deliberately built a version with a 10-minute memory leak to see which step caught it.
+
+**Q:** What changes with 100 services releasing daily?
+
+**A:** Analysis templates must be shared and generated from each service's SLOs, baseline pods cost resources during every rollout, and release records become an audit trail. Low-traffic services need longer steps or synthetic traffic.
+
+**Q:** How did you test the pipeline itself?
+
+**A:** I built intentionally bad versions — higher error rate, slower responses, a conversion-only bug, a memory leak — ran each through the pipeline and recorded whether and at which step it was caught. CI also runs both versions against the migrated schema.
+
+**Common mistakes in answers:**
+- Comparing the canary against fixed thresholds only, with no baseline.
+- Renaming or dropping columns in the same release that stops using them.
+- Judging a canary on too few requests.
 
 ### TL;DR
 
@@ -5105,11 +6987,64 @@ Governance slows schema changes slightly and adds a registry to operate, but pre
 
 ### In the interview
 
-**Q:** How do you evolve an event schema without breaking consumers? **A:** Use a registry with a compatibility rule, make additive changes with defaults, and for breaking changes publish a new topic version alongside the old and migrate consumers.
+**30-second answer:** I built schema governance for an event-driven system with 30 topics and 15 teams. Every topic's Avro schema is registered in a schema registry with a compatibility mode — usually BACKWARD_TRANSITIVE — and producers cannot publish an incompatible schema. A CI check fails any pull request that would break compatibility and names the subject, and an event catalogue generated from schemas, owner metadata and live consumer groups shows who produces and consumes every field. Breaking changes go through a new topic version, `orders.v2`, with `v1` derived from it by a stream processor until every consumer has moved. A projection rebuilds correctly from events spanning five schema versions using upcasters.
 
-**Q:** Backward versus forward compatibility? **A:** Backward: new readers can read old data. Forward: old readers can read new data. Full is both. Transitive applies the rule across all past versions.
+**Key terms to know:**
+- **Schema registry** — stores versioned schemas per subject, assigns ids and checks compatibility.
+- **Subject** — the name under which versions of one schema are stored (`orders-value`).
+- **Schema id in each message** — a small prefix so consumers fetch the writer's schema once and cache it.
+- **Backward compatibility** — new readers can read old data (e.g. adding a field with a default). Consumers upgrade first.
+- **Forward compatibility** — old readers can read new data (e.g. removing an optional field). Producers upgrade first.
+- **Full and transitive** — full is both directions; transitive checks against every previous version, not just the last.
+- **Topic versioning** — publishing a breaking change to a new topic and migrating consumers.
+- **Upcaster** — converts old event versions to the current model during replay.
+- **Semantic change** — same type, different meaning (cents to euros), which no registry can catch.
+- **Event catalogue** — generated documentation of topics, owners, schemas, producers, consumers and PII flags.
 
-**Q:** What can a registry not catch? **A:** Semantic changes — same type, different meaning. Those need review, documentation and consumer contracts.
+**Q:** How do you evolve an event schema without breaking consumers?
+
+**A:** Use a registry with a compatibility rule, make additive changes with defaults, and for breaking changes publish a new topic version alongside the old and migrate consumers one by one.
+
+**Q:** Backward versus forward compatibility?
+
+**A:** Backward: new readers can read old data. Forward: old readers can read new data. Full is both. Transitive applies the rule across all past versions, which matters for topics replayed from the beginning.
+
+**Q:** What can a registry not catch?
+
+**A:** Semantic changes — same type, different meaning, like `amount` switching from cents to euros. Those need human review, field descriptions and consumer contracts.
+
+**Q:** Why BACKWARD_TRANSITIVE for shared topics?
+
+**A:** Consumers can upgrade first and still read every historical event, which is what projections replaying from offset 0 need. Non-transitive checks allow version 3 to be incompatible with version 1 even if each step was compatible.
+
+**Q:** How do you dual-publish v1 and v2 without inconsistency?
+
+**A:** Publishing both from application code is a dual write — one can succeed and the other fail. Publish v2 through the outbox and derive v1 from it with a small stream processor, so both topics come from one source.
+
+**Q:** What happens if the registry is down?
+
+**A:** Producers and consumers that have already cached their schemas keep working, because the registry is not on the per-message path. New schema registrations and fresh clients that need an uncached schema fail, so the registry runs replicated.
+
+**Q:** How do you know nobody reads `orders.v1` any more?
+
+**A:** The catalogue combines consumer-group data with lag and offsets: once every group on `v1` has migrated and no group has committed offsets for a period, you have evidence to retire it, rather than asking in a channel.
+
+**Q:** Why Avro or Protobuf rather than JSON?
+
+**A:** They have explicit schemas with evolution rules, are compact, and generate typed classes. The cost is that messages are harder to inspect by eye, and teams sometimes bypass governance with "just JSON" topics — which the CI check and catalogue make visible.
+
+**Q:** What changes at 10x topics and teams?
+
+**A:** Manual review cannot keep up, so ownership metadata, PII flags and the catalogue must be generated and enforced in CI. Data contracts with value-range rules and lineage (which projections use which fields) become worth building.
+
+**Q:** How did you test it?
+
+**A:** CI tests run the compatibility checker on fixture pairs of allowed and forbidden changes. Consumer tests deserialise golden sample messages from every historical schema version, and an end-to-end test performs the topic-version migration with live consumers.
+
+**Common mistakes in answers:**
+- Mixing up backward and forward compatibility.
+- Believing a passing compatibility check means the change is safe in meaning.
+- Dual-publishing two topic versions directly from application code.
 
 ### TL;DR
 
@@ -5250,11 +7185,63 @@ Cells cost more (duplicated infrastructure) and make global features harder. The
 
 ### In the interview
 
-**Q:** What is a cell and why use one? **A:** A complete, independent copy of the stack serving a subset of customers. It limits the blast radius of any failure or bad deploy to that subset.
+**30-second answer:** I split a SaaS application into cells — complete, independent copies of the stack, each with its own gateway, services, PostgreSQL and Kafka, serving a fixed subset of customers — behind a thin cell router that maps each customer to a cell from a cached, versioned mapping. A separate control plane places new customers by capacity and migrates customers between cells with CDC and a write freeze under a minute. Deployments roll out to one canary cell, then waves, halting automatically on errors. The key result is blast radius: a poison request that crashes services takes down only its cell, and the router keeps routing even with the control plane stopped, adding under 2 ms p95.
 
-**Q:** What is the riskiest component? **A:** The router, because it is shared. Keep it thin, stateless, cached and dependency-free.
+**Key terms to know:**
+- **Cell** — a full, independent copy of the system serving a subset of customers; a bulkhead at system scale.
+- **Blast radius** — the share of customers affected by one failure or bad deploy.
+- **Cell router** — the thin, shared component that maps customer to cell and forwards.
+- **Control plane vs data plane** — placement and migrations (off the request path) versus serving requests.
+- **Versioned mapping** — customer-to-cell entries with a version so stale router caches can be detected.
+- **Wave deployment** — deploy to one cell, wait, then increasingly large groups of cells.
+- **Customer migration** — copy data, freeze writes, switch mapping, invalidate router caches.
+- **Shuffle sharding** — giving each customer a different random subset of shared resources so failures overlap less.
+- **Shared fate** — when one problem can affect every customer at once; what cells remove.
 
-**Q:** How do you deploy to cells? **A:** In waves: one canary cell, then increasing groups, halting automatically when health checks fail.
+**Q:** What is a cell and why use one?
+
+**A:** A complete, independent copy of the stack serving a subset of customers. It limits the blast radius of any failure, poison request or bad deploy to that subset, and gives a natural unit for scaling and safe rollout.
+
+**Q:** What is the riskiest component?
+
+**A:** The router, because it is shared by all cells — its failure is everyone's failure. Keep it thin, stateless, cached and dependency-free, with no business logic and no database lookup per request, and deploy it more carefully than any cell.
+
+**Q:** How do you deploy to cells?
+
+**A:** In waves: one canary cell, then increasing groups, halting automatically when health checks or SLOs fail. A bad build hurts one cell's customers for a few minutes instead of everyone.
+
+**Q:** How is a cell different from a microservice or a region?
+
+**A:** A microservice splits by function, so every customer still depends on every service. A cell splits by customer and contains all functions. A region is a location; cells can live inside one region, and a region can hold many cells.
+
+**Q:** How do you move a customer between cells?
+
+**A:** Copy their data with CDC while they keep working, freeze writes briefly, switch the mapping with a new version, and invalidate router caches. Routers reject stale mapping versions after the switch, so no request lands in the old cell.
+
+**Q:** What happens if the control plane is down?
+
+**A:** Nothing on the request path: routers use their cached mapping. You cannot place new customers or migrate existing ones until it returns. That separation is deliberate.
+
+**Q:** What about features that need data across cells?
+
+**A:** Global search, billing or a user in two customers weaken isolation. Serve them from separate global services fed asynchronously from cells and keep them off the critical path, so a global-service outage does not stop cells serving.
+
+**Q:** How do you choose cell size?
+
+**A:** Small cells mean small blast radius but more overhead and more cells to operate; large cells are efficient but each failure hurts more. I sized from the largest customer and the blast radius we can accept, and fixed a maximum so cells stay testable — a full cell triggers a new one.
+
+**Q:** What breaks first as you grow?
+
+**A:** A very large customer outgrowing a cell, cross-cell dependencies creeping in, and cells drifting apart in version or config. Templates (one Kustomize base), Argo CD ApplicationSets and per-cell dashboards keep them identical and visible.
+
+**Q:** How did you test isolation?
+
+**A:** Blast-radius tests per failure type — poison request, database overload, bad config, crash loop — assert that other cells' error rates are unchanged. Migration tests run under load, router tests run with the control plane down, and the pipeline is tested with deliberately bad builds.
+
+**Common mistakes in answers:**
+- Putting logic or per-request database lookups in the router.
+- Calling a microservice split "cells" — cells partition customers, not functions.
+- Allowing synchronous cross-cell calls, which re-creates shared fate.
 
 ### TL;DR
 
@@ -5401,11 +7388,69 @@ A platform team becomes a dependency for everyone — keep it responsive or team
 
 ### In the interview
 
-**Q:** How do you keep 50 services consistent without central control of every team? **A:** Provide a golden path — a template plus versioned libraries with good defaults, a deployment base and a catalogue — that is easier than the alternative, and measure adoption.
+**30-second answer:** I built an internal developer platform whose golden path creates a new Spring Boot 4.1 service with one command: a thin generated repository that depends on a versioned platform starter, a Kustomize deployment base, a CI pipeline and a catalogue entry. The key decision was putting behaviour in the starter, not the template — tracing, metrics, health groups for probes, graceful shutdown, Resilience4j defaults, outbox and inbox, and a standard error format are auto-configured with documented overrides — so a fleet upgrade is a version bump opened as pull requests by a bot. Scorecards show which services are on the latest starter and have SLOs and contract tests. A new service goes from command to running in dev in under 15 minutes.
 
-**Q:** Template or shared library? **A:** Both, but behaviour goes in the library so it can be upgraded centrally. Templates stay thin.
+**Key terms to know:**
+- **Golden path** — a supported, opinionated way to build and run services that is easier than the alternatives.
+- **Service template** — a generator for a new repository; frozen at generation time, so kept thin.
+- **Platform starter** — a Spring Boot auto-configuration library that wires the patterns with safe defaults.
+- **Auto-configuration** — `@AutoConfiguration` classes listed in `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`, applied conditionally.
+- **Conditional beans** — `@ConditionalOnMissingBean` and similar, so a team's own bean or property overrides the default.
+- **Service catalogue** — every service with owner, dependencies, APIs and events (e.g. Backstage).
+- **Scorecard** — automated checks per service: latest starter, SLO, contract tests, runbook.
+- **Upgrade bot** — opens pull requests that bump the starter across the fleet.
+- **Platform as a product** — measuring adoption and developer time, not just shipping features.
 
-**Q:** What are the risks of a platform starter? **A:** A bug affects every service, and teams may feel boxed in. Release it carefully, make defaults overridable, and treat the platform as a product.
+**Q:** How do you keep 50 services consistent without central control of every team?
+
+**A:** Provide a golden path — a template plus versioned libraries with good defaults, a deployment base and a catalogue — that is easier than the alternative, and measure adoption with scorecards.
+
+**Q:** Template or shared library?
+
+**A:** Both, but behaviour goes in the library so it can be upgraded centrally. Anything only in generated code is frozen at generation time and drifts. Templates stay thin — wiring and examples.
+
+**Q:** What are the risks of a platform starter?
+
+**A:** A bug affects every service at once, and teams may feel boxed in. Release the starter itself with canaries, make every default overridable and documented, and treat the platform as a product with users.
+
+**Q:** What defaults do you pick for HTTP clients?
+
+**A:** From the earlier experiments: short timeouts set below the caller's budget, retries only for idempotent calls with backoff, jitter and a budget, a breaker on by default, and a bulkhead per client. The reasoning is documented next to each default so teams know when to change it.
+
+**Q:** How do teams opt out of a default?
+
+**A:** Every default is a bean guarded by `@ConditionalOnMissingBean` or a documented property, so a team defines its own bean or sets a property. Overrides are allowed but tracked in scorecards rather than forbidden — a batch job may rightly skip breakers.
+
+**Q:** What does a minimal auto-configuration look like?
+
+**A:** A class registered in the `AutoConfiguration.imports` file that backs off when the app supplies its own bean:
+```java
+@AutoConfiguration
+@EnableConfigurationProperties(PlatformHttpProperties.class)
+class PlatformHttpAutoConfiguration {
+  @Bean @ConditionalOnMissingBean
+  RestClient.Builder platformRestClientBuilder(PlatformHttpProperties p) {
+    return RestClient.builder().requestFactory(timeouts(p)); // timeouts() is a helper
+  }
+}
+```
+
+**Q:** How do you upgrade Spring Boot across the fleet?
+
+**A:** Upgrade and test the starter once, release it, and let the bot open pull requests on every service; CI on each repo proves compatibility. Services that fail show up in the scorecard. Without a starter, this is 50 separate migrations.
+
+**Q:** How do you know the platform is working?
+
+**A:** Measure time to first deploy, share of services on the latest starter, scorecard pass rates, and incidents traced to non-standard setups. If teams route around the golden path, it is harder than doing it themselves, and that is the platform's bug.
+
+**Q:** How did you test the platform?
+
+**A:** Each auto-configuration has tests with Spring Boot's `ApplicationContextRunner`, which starts small contexts with and without user beans and properties. CI generates a service from the template and runs its build, and a nightly job generates, deploys and smoke-tests a fresh service on a kind cluster.
+
+**Common mistakes in answers:**
+- Putting behaviour into templates, where it can never be upgraded.
+- Building a platform that forbids exceptions, so teams work around it.
+- Treating the platform as done once built, instead of a product with adoption metrics.
 
 ### TL;DR
 
