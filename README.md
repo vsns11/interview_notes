@@ -6,23 +6,23 @@ Personal study handbooks for software-engineering interviews, from beginner to i
 
 ## Books
 
-| Book | Folder | Interview Edition |
-|---|---|---|
-| System Design Patterns | [system-design-patterns/](system-design-patterns/) | [interview/](system-design-patterns/interview/) |
-| Designing Data-Intensive Applications (study notes) | [ddia/](ddia/) | [interview/](ddia/interview/) |
-| Microservices Patterns | [microservices-patterns/](microservices-patterns/) · runnable demos in [demos/](demos/) | [interview/](microservices-patterns/interview/) |
-| Low-Level Design (Java) | [lld/](lld/) | [interview/](lld/interview/) |
-| Python | [python/](python/) | [interview/](python/interview/) |
-| Machine Learning | [ml/](ml/) | [interview/](ml/interview/) |
-| AI & GenAI | [ai/](ai/) | [interview/](ai/interview/) |
-| SQL | [sql/](sql/) | [interview/](sql/interview/) |
-| Java | [java/](java/) | [interview/](java/interview/) |
-| Spring | [spring/](spring/) | [interview/](spring/interview/) |
-| HTML & CSS | [html-css/](html-css/) | [interview/](html-css/interview/) |
-| JavaScript | [javascript/](javascript/) | [interview/](javascript/interview/) |
-| React | [react/](react/) | [interview/](react/interview/) |
+| Book | Folder | Interview Edition | Capstones |
+|---|---|---|---|
+| System Design Patterns | [system-design-patterns/](system-design-patterns/) | [interview/](system-design-patterns/interview/) | [capstones/](system-design-patterns/capstones/) |
+| Designing Data-Intensive Applications (study notes) | [ddia/](ddia/) | [interview/](ddia/interview/) | [capstones/](ddia/capstones/) |
+| Microservices Patterns | [microservices-patterns/](microservices-patterns/) · runnable demos in [demos/](demos/) | [interview/](microservices-patterns/interview/) | [capstones/](microservices-patterns/capstones/) |
+| Low-Level Design (Java) | [lld/](lld/) | [interview/](lld/interview/) | [capstones/](lld/capstones/) |
+| Python | [python/](python/) | [interview/](python/interview/) | [capstones/](python/capstones/) |
+| Machine Learning | [ml/](ml/) | [interview/](ml/interview/) | [capstones/](ml/capstones/) |
+| AI & GenAI | [ai/](ai/) | [interview/](ai/interview/) | [capstones/](ai/capstones/) |
+| SQL | [sql/](sql/) | [interview/](sql/interview/) | [capstones/](sql/capstones/) |
+| Java | [java/](java/) | [interview/](java/interview/) | [capstones/](java/capstones/) |
+| Spring | [spring/](spring/) | [interview/](spring/interview/) | [capstones/](spring/capstones/) |
+| HTML & CSS | [html-css/](html-css/) | [interview/](html-css/interview/) | [capstones/](html-css/capstones/) |
+| JavaScript | [javascript/](javascript/) | [interview/](javascript/interview/) | [capstones/](javascript/capstones/) |
+| React | [react/](react/) | [interview/](react/interview/) | [capstones/](react/capstones/) |
 
-Each book folder has a `README.md` (contents), `chapters/` (or modules), `interview/INTERVIEW.md` and `tools/` (the PDF builder).
+Each book folder has a `README.md` (contents), `chapters/` (or modules), `interview/INTERVIEW.md`, `capstones/` (40 build-it-yourself project briefs, beginner to advanced, as `CAPSTONES.md` and `<Name>-Capstone-Projects.pdf`) and `tools/` (the PDF builder).
 
 ## Running the code
 
@@ -42,7 +42,7 @@ Shared runners live at the root:
 cd <book> && (cd tools && npm install) && bash tools/regen_pdfs.sh
 ```
 
-This needs Google Chrome installed; `puppeteer-core` drives it. It writes the per-chapter PDFs, the combined Handbook and `interview/<Name>-Interview-Edition.pdf`.
+This needs Google Chrome installed; `puppeteer-core` drives it (on Linux, point `CHROME_PATH` at a Chrome or Chromium binary). It writes the per-chapter PDFs, the combined Handbook, `interview/<Name>-Interview-Edition.pdf` and `capstones/<Name>-Capstone-Projects.pdf`.
 
 ## Note on sources
 

@@ -14,7 +14,7 @@ import { marked } from 'marked';
 import puppeteer from 'puppeteer-core';
 import hljs from 'highlight.js';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const [outPdf, ...inputs] = process.argv.slice(2);
 if (!outPdf || !inputs.length) {
@@ -232,7 +232,7 @@ window.__errors = [];
 
 const htmlPath = outPdf.replace(/\.pdf$/, '.html');
 fs.writeFileSync(htmlPath, html);
-const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--allow-file-access-from-files'] });
+const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--allow-file-access-from-files', ...(process.env.CHROME_PATH ? ['--no-sandbox'] : [])] });
 try {
   const page = await browser.newPage();
   await page.goto('file://' + path.resolve(htmlPath), { waitUntil: 'load', timeout: 0 });
