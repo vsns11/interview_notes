@@ -13,7 +13,7 @@ A **capstone** is a project big enough to force you to combine many topics at on
 4. Only then attempt the **stretch goals**. They are where most of the learning about scale and polish happens.
 5. Finally, answer the **In the interview** questions out loud without looking at the answers, and do the self-check where there is one.
 
-**Versions.** Every brief targets **Python 3.14** (released October 2025), and most projects run on 3.12+. Where a brief uses a 3.14 feature it says so and names the PEP: template strings (t-strings, PEP 750), deferred evaluation of annotations and the `annotationlib` module (PEP 649 and PEP 749), the officially supported but still optional free-threaded build (PEP 779), the `concurrent.interpreters` module for multiple interpreters (PEP 734), the `compression.zstd` module for Zstandard compression (PEP 784), plus smaller additions such as `Path.copy()`/`Path.move()`, `uuid.uuid7()`, `python -m pdb -p PID` remote attach (PEP 768) and `asyncio` task introspection. Third-party libraries are named without version numbers — use their current release.
+**Versions.** Every brief targets **Python 3.14** (released 7 October 2025), and most projects run on 3.12+. Where a brief uses a 3.14 feature it says so and names the PEP: template strings (t-strings, PEP 750), deferred evaluation of annotations and the `annotationlib` module (PEP 649 and PEP 749), the officially supported but still optional free-threaded build (PEP 779), the `concurrent.interpreters` module for multiple interpreters (PEP 734), the `compression.zstd` module for Zstandard compression (PEP 784), plus smaller additions such as `Path.copy()`/`Path.move()`, `uuid.uuid7()`, `python -m pdb -p PID` remote attach (PEP 768) and `asyncio` task introspection. Third-party libraries are named without version numbers — use their current release.
 
 **Colour code (in the PDF).** Section headings are coloured by role so you can scan a page: green for **What it is**, coral for **The problem it solves** and **Requirements**, violet for **Real-world examples**, blue for **The architecture** and the **Deep dive**, amber for **Trade-offs**, pink for **In the interview**, teal for **Self-check** and a yellow box for **TL;DR**.
 
@@ -705,7 +705,7 @@ A CLI that scans one or more folders and reports groups of files with identical 
 Disks fill up with copies. Comparing every file with every other file byte by byte is O(n²) and hopelessly slow. The project teaches a classic engineering technique: use cheap filters first (size), then progressively more expensive ones (partial hash, full hash), so expensive work only happens on real candidates.
 
 ### Real-world examples
-- [rmlint](https://rmlint.readthedocs.io/) finds duplicates and other "lint" on filesystems and documents its staged approach (size grouping, then hashing) in detail.
+- [rmlint](https://rmlint.readthedocs.io/) finds duplicate files and directories plus other filesystem "lint" (empty files, broken symlinks), and lets you choose the hash function or demand a byte-by-byte comparison — the same knobs this project exposes.
 - The [`hashlib` documentation](https://docs.python.org/3/library/hashlib.html) covers `hashlib.file_digest`, which hashes a file efficiently in chunks.
 
 ### Requirements
@@ -1725,7 +1725,7 @@ flowchart LR
 5. **Real release.** Tag `v1.0.0`, publish, docs live. *Done when* a stranger can install and follow the README.
 
 ### Deep dive: the hard parts
-- **Why `src/` layout.** With the package at the repository root, `import yourpkg` in tests imports the source folder from the current directory, not the installed package. Tests pass even when the wheel is missing files. Putting code under `src/` forces tests to use the installed version, catching packaging mistakes early.
+- **Why `src/` layout.** With the package at the repository root, `import yourpkg` in tests imports the source folder from the current directory, not the installed package. Tests pass even when the wheel is missing files. Moving the package one level down into `src/` takes it off the default import path, so the only copy tests can find is the one you installed — and a wheel with missing files fails its tests straight away.
 - **Version bounds.** Libraries should declare **loose** dependency ranges (`httpx>=0.27`) so they can coexist with other libraries; applications pin exactly via lock files. Upper bounds like `<2` on dependencies often cause more harm than good because they block users from upgrading. Set `requires-python` honestly — pip uses it to pick a compatible version of your package.
 - **Single source of version.** The version must match in metadata, the tag and the changelog. Either keep it only in `pyproject.toml` and read it at runtime with `importlib.metadata.version("yourpkg")`, or derive it from git tags with a plugin. Never hard-code it in two places.
 
@@ -1939,7 +1939,7 @@ flowchart LR
 
 ### Deep dive: the hard parts
 - **Slow consumers.** `writer.write()` only buffers; `await writer.drain()` waits until the OS buffer has room. If the hub awaited `drain()` for each member during a broadcast, one stalled client would freeze the room. With per-client bounded queues, the hub uses `put_nowait` and, on `QueueFull`, disconnects (or drops messages for) that client. Choose and document the policy.
-- **Framing and limits.** TCP is a byte stream, not messages. Line-based framing uses `readline()`, which by default raises if a line exceeds the stream limit (64 KiB) — set a smaller `limit` in `start_server` and handle `LimitOverrunError` and `IncompleteReadError` (client disconnected mid-line).
+- **Framing and limits.** TCP is a byte stream, not messages. For line-based framing, prefer `readuntil(b"\n")` over `readline()`: it raises `LimitOverrunError` when a line exceeds the stream limit (64 KiB by default — pass a smaller `limit` to `start_server`) and `IncompleteReadError` when the client disconnects mid-line, whereas `readline()` silently returns a partial line at EOF and turns an over-long line into a plain `ValueError`.
 - **Cleanup on every exit path.** A session can end by `/quit`, network error, server shutdown or cancellation. Put the leave-rooms and release-nick logic in `finally` so state never keeps ghosts. Remember `CancelledError` is a `BaseException` in modern Python — do not swallow it with `except Exception` hopes, and re-raise it after cleanup.
 
 ### Testing strategy
@@ -2553,7 +2553,7 @@ erDiagram
     INBOX_EVENT {
         bigint id PK
         text provider
-        text event_id UK
+        text event_id
         text event_type
         jsonb payload
         timestamptz received_at
@@ -2561,7 +2561,7 @@ erDiagram
     }
     HANDLER_RUN {
         bigint id PK
-        bigint event_id FK
+        bigint inbox_event_id FK
         text handler_name
         int attempts
         text last_error
@@ -2569,6 +2569,7 @@ erDiagram
         text status
     }
 ```
+`event_id` is the provider's own id and is unique only per provider, so the de-duplication rule is a composite `UNIQUE (provider, event_id)` constraint (an erDiagram cannot mark a two-column key, hence no `UK` tag). `HANDLER_RUN.inbox_event_id` points at the inbox row's own `id`.
 
 ### Tech stack
 | Component | Choice | Why |
@@ -2797,7 +2798,7 @@ erDiagram
         int max_attempts
         timestamptz run_at
         timestamptz lease_until
-        text unique_key UK
+        text unique_key
         timestamptz created_at
     }
     JOB_ATTEMPT {
@@ -2815,7 +2816,7 @@ erDiagram
         timestamptz last_enqueued_at
     }
 ```
-Index `(queue, status, priority, run_at)` for claims. Make `unique_key` a partial unique index over pending statuses only.
+Index `(queue, status, priority, run_at)` for claims. `unique_key` deliberately has no `UK` tag in the diagram: a plain unique constraint would forbid ever enqueuing the same key again, even after the first job finished. The rule is "at most one *pending* job per key", so enforce it with a **partial unique index** — an index that covers only rows matching a `WHERE` clause: `CREATE UNIQUE INDEX job_unique_pending ON job (unique_key) WHERE status IN ('queued', 'running')`. Rows with a NULL `unique_key` never conflict, so ordinary jobs are unaffected. An erDiagram has no notation for partial indexes, which is why the rule lives here.
 
 ### Tech stack
 | Component | Choice | Why |
@@ -3874,7 +3875,7 @@ flowchart LR
 ### Deep dive: the hard parts
 - **What is shared and what is not.** Each interpreter has its own modules, builtins and objects; Python objects cannot simply be passed by reference between them. Only certain types are shared or cheaply copied (`None`, `bool`, `int`, `float`, `str`, `bytes`, tuples of these, `memoryview` and queues themselves). Most other objects are copied with `pickle` behind the scenes, which costs time, and objects that cannot be pickled raise `NotShareableError`. Design your plugin protocol around bytes or simple tuples from day one.
 - **Isolation is not a security sandbox.** Subinterpreters share the process: a plugin can still read files, open sockets, call `os._exit`, or crash the whole process through a C extension bug. They protect against accidental interference, not against malicious code. For hostile code you need OS-level isolation (separate processes with restricted permissions, containers).
-- **Timeouts.** There is no way to forcibly kill code running in an interpreter the way you kill a process — `close()` only finalises an idle interpreter. A pragmatic design runs each interpreter's loop in its own host thread; on timeout the host marks the plugin dead, stops sending it work and starts a fresh interpreter. The stuck thread may linger until the code returns — document this, or fall back to processes for plugins that may loop forever.
+- **Timeouts.** There is no way to forcibly kill code running in an interpreter the way you kill a process — `close()` finalises and destroys an interpreter but cannot interrupt code that is still executing in it. A pragmatic design runs each interpreter's loop in its own host thread; on timeout the host marks the plugin dead, stops sending it work and starts a fresh interpreter. The stuck thread may linger until the code returns — document this, or fall back to processes for plugins that may loop forever.
 - **Extension modules.** Many C extensions do not yet support multiple interpreters (they keep global state). Importing such a module in a subinterpreter typically fails with an `ImportError`. Check plugin dependencies early and fail with a clear message.
 
 ### Testing strategy
@@ -4328,7 +4329,7 @@ Each character's identity is `(replica_id, counter)`. An insert records which ch
 5. **Persistence and snapshots.** *Done when* restart restores documents and load time meets the target with long histories.
 
 ### Deep dive: the hard parts
-- **Why positions do not work.** "Insert 'x' at index 5" means different things on two replicas that have both changed the text. Sequence CRDTs give every character a unique, immutable id and describe inserts relative to neighbours ("after character A-12"). Ties — two inserts after the same character — are broken by a deterministic rule (for example comparing replica ids), so every replica orders them the same way.
+- **Why positions do not work.** "Insert 'x' at index 5" means different things on two replicas that have both changed the text. The fix is to stop talking about positions at all: each character is born with a permanent name, and an insert says where it goes by pointing at the named character beside it ("after character A-12"). Ties — two inserts after the same character — are broken by a deterministic rule (for example comparing replica ids), so every replica orders them the same way.
 - **Deletes as tombstones.** Removing a character entirely would break inserts that reference it. Instead mark it deleted and keep it in the structure (a **tombstone**). This makes merges correct but grows memory — snapshots can garbage-collect tombstones once every replica has seen the delete, which requires knowing what everyone has seen.
 - **Causality and delivery.** An operation may reference a character a replica has not received yet (an insert after a character created by a third user). Buffer such operations until their dependencies arrive. State vectors make catch-up efficient: a reconnecting client sends its vector, the server replies with exactly the missing operations.
 - **Interleaving anomalies.** Some simple sequence CRDTs interleave characters when two users type words at the same spot concurrently ("hweolrlod"). Designs like YATA (used by Yjs) and recent research avoid this; test for it explicitly with concurrent multi-character inserts.
