@@ -13,7 +13,7 @@ Beginner-friendly notes for Martin Kleppmann's *Designing Data-Intensive Applica
 | `chapters/NN-name/README.md` | One chapter's notes (Markdown). |
 | `chapters/NN-name/ChapterNN-Notes.pdf` | That chapter as a standalone PDF. |
 | `capstones/CAPSTONES.md` + `capstones/DDIA-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced — Bitcask, LSM-tree, B-tree with WAL, Raft, Dynamo-style quorums, SSI, CDC to Kafka, event-time stream processing, CRDTs and more. |
-| `tools/` | PDF build (`md2pdf.mjs`, `regen_pdfs.sh`); same dark theme as the course notes. |
+| `tools/` | PDF build (`md2pdf.mjs`, `regen_pdfs.sh`); same sepia (Kindle-style) theme as the other books. |
 
 ## Each chapter contains
 Overview (with analogy) → Key terms → every book section and sub-section explained step by step → redrawn figures → own code/query examples → Chapter summary → Interview angle (30-second answers + follow-ups) → Self-check (Q → A).
