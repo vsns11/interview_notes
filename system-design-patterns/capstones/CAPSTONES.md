@@ -198,7 +198,7 @@ erDiagram
 **A:** The single Redis key becomes hot. Add a small in-process cache (a few seconds TTL) in each API instance so most requests never leave the process.
 
 ### TL;DR
-A shortener is a read-heavy key lookup. A unique index makes it correct, cache-aside makes it fast, and negative caching plus stampede control keep it alive under bots and viral links.
+Redirects vastly outnumber new links, so optimise the lookup path: the unique index guarantees correctness, cache-aside supplies speed, and negative caching with stampede control protects the database from bots and viral spikes.
 
 ## 2. Unique ID generator service
 
@@ -249,6 +249,7 @@ flowchart LR
 | 12 | sequence | 4,096 IDs per worker per millisecond |
 
 ```mermaid
+%%{init: {"er": {"useMaxWidth": false}}}%%
 erDiagram
   WORKER_LEASE {
     int worker_id PK
@@ -448,6 +449,7 @@ flowchart LR
 
 ### Data model
 ```mermaid
+%%{init: {"er": {"useMaxWidth": false}}}%%
 erDiagram
   JOB {
     bigint id PK
@@ -884,7 +886,7 @@ Polling every few seconds wastes requests and still feels slow. Push needs a per
 
 ### Real-world examples
 - MDN's [Server-sent events guide](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events) documents `EventSource`, automatic reconnection and the `Last-Event-ID` header.
-- Uber's [real-time push platform](https://www.uber.com/blog/real-time-push-platform/) describes moving from polling to a push system for its apps.
+- Uber's [real-time push platform](https://www.uber.com/us/en/blog/real-time-push-platform/) describes RAMEN, the push system that replaced polling in its apps (its first version was built on SSE).
 
 ### Requirements
 **Functional**
@@ -915,6 +917,7 @@ flowchart LR
 
 ### Data model
 ```mermaid
+%%{init: {"er": {"useMaxWidth": false}}}%%
 erDiagram
   NOTIFICATION {
     bigint id PK
@@ -1094,7 +1097,7 @@ Deploying and releasing are different things. Flags let you deploy code dark, re
 - Changes reach SDKs within 5 s.
 
 **Non-functional**
-- Evaluation under 1 µs-scale (in memory, no network).
+- Evaluation takes around a microsecond (pure in-memory work, no network call).
 - If the server is down, SDKs keep the last rules and keep working for days.
 - Same user always lands in the same bucket for a given flag.
 
@@ -1721,7 +1724,7 @@ erDiagram
   ROOM_TYPE_INVENTORY {
     bigint hotel_id PK
     bigint room_type_id PK
-    timestamptz night PK
+    date night PK
     int total
     int reserved
     int overbook_pct
@@ -1731,8 +1734,8 @@ erDiagram
     text idempotency_key UK
     bigint hotel_id
     bigint room_type_id
-    timestamptz check_in
-    timestamptz check_out
+    date check_in
+    date check_out
     text status
     timestamptz hold_expires_at
     text payment_ref
@@ -2382,7 +2385,7 @@ A "find nearby" service for places (restaurants, shops): given a latitude, longi
 A normal B-tree index handles one dimension. "Within 2 km of here" is two-dimensional, so filtering latitude and longitude separately scans a huge strip of the map. Spatial indexes turn the plane into cells or bounding boxes so a query touches only nearby data. The read path is heavy and latency-sensitive, while place data changes rarely.
 
 ### Real-world examples
-- Uber's [H3 blog post](https://www.uber.com/blog/h3/) explains why they built a hexagonal hierarchical grid: hexagons have uniform neighbour distances, which squares do not.
+- Uber's [H3 blog post](https://www.uber.com/us/en/blog/h3/) explains why they built a hexagonal hierarchical grid: hexagons have uniform neighbour distances, which squares do not.
 - Redis's [geospatial docs](https://redis.io/docs/latest/develop/data-types/geospatial/) describe `GEOADD` and `GEOSEARCH`, built on sorted sets with geohash-encoded scores.
 
 ### Requirements
@@ -2414,6 +2417,7 @@ flowchart LR
 
 ### Data model
 ```mermaid
+%%{init: {"er": {"useMaxWidth": false}}}%%
 erDiagram
   PLACE {
     bigint id PK
@@ -2598,7 +2602,7 @@ erDiagram
 **A:** Partition by hostname hash so each host belongs to one node.
 
 ### TL;DR
-The frontier is the crawler: per-host queues for politeness, a global heap for throughput, normalisation plus Bloom filters for dedup, and limits against traps.
+Most crawler design lives in the URL frontier: per-host queues keep you polite, a ready-time heap keeps throughput high, normalisation plus Bloom filters stop repeats, and hard limits contain traps.
 
 ## 23. Real-time clickstream analytics
 
@@ -2667,7 +2671,7 @@ erDiagram
 | Component | Choice | Why |
 |---|---|---|
 | Broker | Kafka | Replayable, partitioned |
-| Processor | Apache Flink (Java 25) or Kafka Streams, or Python with Bytewax | Event-time windows and state |
+| Processor | Apache Flink (Java 25) or Kafka Streams, or PyFlink for Python | Event-time windows and state |
 | Results | ClickHouse or PostgreSQL | Fast aggregates for dashboards |
 | Load | A generator that injects late, duplicate and out-of-order events | Test the hard cases |
 
@@ -3389,6 +3393,7 @@ flowchart TB
 
 ### Data model
 ```mermaid
+%%{init: {"er": {"useMaxWidth": false, "fontSize": 10, "entityPadding": 8, "minEntityHeight": 20, "diagramPadding": 8}}}%%
 erDiagram
   ACCOUNT {
     uuid id PK
@@ -4008,7 +4013,7 @@ The real-time core of a ride-hailing app: drivers stream GPS locations every few
 Location data changes constantly (every driver, every 4 seconds), queries are spatial ("available drivers within 2 km"), and matching must be fast and must never assign one driver to two riders. It is a two-sided marketplace with real-time state, where staleness, races and partial failures directly cost money and trust. Module 12 designs it at whiteboard level. This project makes you feel the race conditions.
 
 ### Real-world examples
-- Uber's [H3: Uber's Hexagonal Hierarchical Spatial Index](https://www.uber.com/blog/h3/) describes the grid they built for analysing and partitioning location data.
+- Uber's [H3: Uber's Hexagonal Hierarchical Spatial Index](https://www.uber.com/us/en/blog/h3/) describes the grid they built for analysing and partitioning location data.
 - Lyft's [Matchmaking in Lyft Line](https://eng.lyft.com/matchmaking-in-lyft-line-9c2635fe62c4) series discusses matching riders for shared rides and the cost of each matching approach.
 
 ### Requirements
@@ -4263,7 +4268,7 @@ Post IDs come from Project 2's generator, so they sort by time and merges are si
 **A:** Rebuild from the follow graph and posts on demand, so users see slower loads instead of errors.
 
 ### TL;DR
-Fan-out on write for the many, fan-out on read for the few, time-sortable IDs to merge, and a cache that can always be rebuilt from the source of truth.
+Push posts into timelines for ordinary authors, pull celebrity posts at read time, merge by time-sortable IDs, and treat the timeline cache as rebuildable from the posts and follow graph.
 
 ## 36. Stock exchange matching engine
 
@@ -4325,6 +4330,7 @@ flowchart LR
 | Journal record: `seq, type, payload, checksum` | The source of truth |
 
 ```mermaid
+%%{init: {"er": {"useMaxWidth": false}}}%%
 erDiagram
   TRADE {
     bigint id PK
