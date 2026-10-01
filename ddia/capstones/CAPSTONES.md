@@ -8,6 +8,8 @@ A **capstone** is a project big enough to force you to use several ideas from th
 
 **How to use a brief.** Read *What it is*, *The problem it solves* and *Requirements* first, then sketch your own design before reading *The architecture*. Build the **Milestones** in order: each has a "done when" check you can turn into an automated test. Only then read *Deep dive: the hard parts* again — it will make far more sense once you have tripped over one of them. Finish with the **Stretch goals** if you want to go further, and rehearse the **In the interview** questions out loud.
 
+**Using these projects in interviews.** Each project's *In the interview* section is built for rehearsal. Lead with the **30-second answer**: what you built, the key design decision and why, the hardest problem and how you solved it, and one concrete number. Make sure you can explain every entry in **Key terms** in plain words, because interviewers probe vocabulary first. Practise the Q&As out loud until the answers come without notes, then replace the target numbers with your own measurements from the build — latency percentiles, data sizes, throughput, test counts and crash-loop runs. Finally, be ready for the two follow-ups that always come: "what would you change at 10x?" and "what breaks first?"
+
 **Colour coding.** In the PDF, the sections that frame the problem (*What it is*, *The problem it solves*, *Real-world examples*, *Requirements*) share one accent colour, the design sections (*The architecture*, *Deep dive*) another, and the review sections (*Trade-offs*, *In the interview*, *Self-check*, *TL;DR*) a third, so you can flip to the part you need.
 
 **Level legend.**
@@ -154,14 +156,54 @@ All keys must fit in memory — with 100 million 20-byte keys plus about 30 byte
 - Crash recovery and durability vocabulary — [Ch 1 — Reliable, Scalable, Maintainable](../chapters/01-reliable-scalable-maintainable/README.md)
 
 ### In the interview
+**30-second answer:** I built a Bitcask-style key-value store: every put, including deletes as tombstones, is appended to a log file, and an in-memory hash map called the KeyDir points each key at the byte offset of its newest record. I chose append-only because sequential writes are fast and a crash can only tear the last record, which a CRC detects and recovery truncates. The hard part was compaction running alongside live traffic, which I solved by writing merged segments plus hint files and updating KeyDir entries with a compare-and-set. With batched fsync it sustains around 50,000 puts per second, and hint files rebuild the index for 1 GB of data in a few seconds.
+
+**Key terms to know:**
+- **Append-only log** — a file you only ever add to the end of. Every write and delete in this store goes there, never overwriting earlier bytes.
+- **Hash index (KeyDir)** — an in-memory map from key to (file, offset, size). It makes reads a single seek but requires every key to fit in RAM.
+- **Segment** — one data file in a sequence. The active segment takes writes and is closed at 64 MB, after which it is immutable.
+- **Tombstone** — a special record meaning "this key was deleted". It must survive until compaction is sure no older value exists.
+- **Compaction / merge** — rewriting only the latest live record of each key from closed segments into new files, to reclaim disk space.
+- **Hint file** — a compact key-to-offset list written next to a merged segment so startup does not have to read every value.
+- **fsync and group commit** — fsync forces buffered writes to the physical disk. Group commit shares one fsync among many writes, trading a small loss window for throughput.
+- **Torn write and CRC** — a crash can leave a half-written record. A checksum stored with each record lets recovery spot it and truncate the file there.
+
 **Q:** Why is an append-only design faster than updating in place?
-**A:** Appends are sequential writes, which disks and SSDs handle far better than random writes, and crash recovery is simpler because only the tail can be torn.
+
+**A:** Appends are sequential writes, which both spinning disks and SSDs handle far better than random writes. Crash recovery is also simpler: since nothing is overwritten, only the very last record can be damaged, and the CRC tells you exactly where valid data ends.
 
 **Q:** What is the biggest limitation of a hash index?
-**A:** The key set must fit in memory and you cannot do range queries because hash order is random.
 
-**Q:** How do you reclaim space?
-**A:** Compaction: rewrite only the latest value of each key from closed segments into a new file, then atomically switch the index and delete old files.
+**A:** Every key must fit in memory, because the KeyDir holds one entry per key. With 100 million keys at about 50 bytes each that is roughly 5 GB of RAM. It also cannot do range queries, because a hash map has no key order.
+
+**Q:** How do you reclaim space, and how do you do it without stopping reads?
+
+**A:** A background merge reads closed segments, keeps only the newest record per key and writes a fresh segment plus hint file. For each key it updates the KeyDir with a compare-and-set, only if the entry still points at the old location, so a newer write that arrived during the merge is not overwritten. Old files are deleted only once no reader can still hold an offset into them.
+
+**Q:** Why fsync in batches instead of after every write?
+
+**A:** An fsync per write caps throughput at a few hundred to a few thousand writes per second, because each one waits for the device. Group commit acknowledges a batch after one fsync, so throughput rises sharply. The cost is that if writes are acknowledged before their batch's fsync completes, they could be lost on power failure, so I made it a configuration flag and documented the window.
+
+**Q:** What happens if the process is killed halfway through a write?
+
+**A:** The tail of the active file may hold a partial record. On restart the recovery loader scans records, verifies each CRC, stops at the first one that fails and truncates the file there. Earlier records are untouched because they were never rewritten, so no acknowledged and synced write is lost.
+
+**Q:** How long does recovery take, and how did you make it faster?
+
+**A:** Without hints, recovery reads every record in every file to rebuild the KeyDir, which is proportional to total data size. Hint files store only keys and offsets for merged segments, so startup reads far fewer bytes. My target was at least 5x faster than a full scan on 1 GB.
+
+**Q:** What changes at 10x the key count, and what breaks first?
+
+**A:** RAM breaks first, because the KeyDir grows linearly with the number of keys. Next is merge I/O, since compaction temporarily doubles disk traffic. Beyond one machine you partition keys across nodes (Project 17) and replicate them (Project 15), or switch to a sorted structure such as an LSM-tree that does not need every key in memory.
+
+**Q:** How did you prove the store is correct?
+
+**A:** Property-based tests ran random put, get and delete sequences against the store and a plain dictionary and compared every result, including across simulated restarts. A crash loop killed the process with SIGKILL at random points and checked that no corrupted value was ever returned.
+
+**Common mistakes in answers:**
+- Saying deletes "remove the record". Nothing is removed in place: a tombstone is appended, and space is reclaimed only by compaction.
+- Claiming the store supports range scans. A hash index has no order, so ranges need a sorted structure such as SSTables (Project 2).
+- Forgetting the durability trade-off: with group commit, "acknowledged" does not mean "on disk" unless sync-per-write is enabled.
 
 ### TL;DR
 Append every write, remember where each key's latest record lives, and compact in the background — the simplest durable storage engine, and the seed of every log-structured design.
@@ -251,14 +293,54 @@ Bigger blocks mean a smaller index but more bytes read per lookup. More filter b
 - Binary format design and versioning — [Ch 4 — Encoding and Evolution](../chapters/04-encoding-and-evolution/README.md)
 
 ### In the interview
+**30-second answer:** I built an SSTable library: immutable files of key-sorted records split into about 4 KB data blocks, followed by a sparse index, a Bloom filter and a fixed-size footer. Because keys are sorted, I only need one index entry per block, and a point lookup reads at most one data block once the index is cached. The hardest part was sizing the Bloom filter, so I measured false-positive rate against bits per key instead of trusting the formula. At 10 bits per key my measured false-positive rate was about 1%, and every block carries a CRC so corruption raises an error rather than returning bad data.
+
+**Key terms to know:**
+- **SSTable** — Sorted String Table, an immutable file of records sorted by key. It is the on-disk unit of every LSM-tree.
+- **Data block** — a chunk of about 4 KB of sorted records, the unit read from disk, compressed and checksummed.
+- **Sparse index** — the first key and offset of each block, not of every key. Binary search finds the one block that could hold a key.
+- **Bloom filter** — a bit array set by k hash functions per key. It answers "definitely absent" or "maybe present", never a false negative.
+- **False-positive rate** — how often the filter says "maybe" for an absent key, costing a wasted block read. It falls as bits per key rise.
+- **Footer** — a fixed-size trailer at a known position holding the index and filter offsets, a format version and a magic number.
+- **Prefix compression with restart points** — store only the part of a key that differs from the previous one, with periodic full keys so search can jump in.
+- **Format versioning** — a version number in the footer so newer readers can still open old files, the Chapter 4 evolution idea.
+
 **Q:** Why can an SSTable use a sparse index?
-**A:** Keys are sorted, so knowing the first key of each block is enough to find the only block that could hold a key.
+
+**A:** Keys are sorted, so if you know the first key of each block you know the only block that could contain any given key. Binary search over block start keys finds it, then you scan inside one block. That needs one entry per 4 KB block instead of one per key.
 
 **Q:** Can a Bloom filter give a false negative?
-**A:** No. Bits are only ever set, so if a key was added all its bits are 1. It can give false positives.
+
+**A:** No. Adding a key only sets bits to 1 and nothing ever clears them, so every bit for an added key is still set when you query it. It can give false positives, when other keys happened to set all k bits.
+
+**Q:** How do you choose the number of hash functions and bits?
+
+**A:** For n keys and m bits, the optimal number of hash functions is about (m/n) times ln 2, which is about 7 for 10 bits per key and gives roughly 1% false positives. I derived k hashes from two base hashes (the Kirsch-Mitzenmacher trick) to keep it cheap, then plotted measured rate against bits per key.
 
 **Q:** What does the footer do?
-**A:** It sits at a known position (end of file) and points to the index and filter, so a reader can open the file without scanning it.
+
+**A:** It sits at a known position, the end of the file, and points to the index and filter blocks. A reader opens the file by reading the footer first, so it never has to scan the file. The magic number catches someone opening the wrong file, and the version supports format evolution.
+
+**Q:** Bigger or smaller blocks?
+
+**A:** Bigger blocks mean a smaller index and better compression but more bytes read and decompressed per point lookup. Smaller blocks make point reads cheaper but grow the index. Around 4 KB matches the page size and is a common default, and range-heavy workloads often use larger blocks.
+
+**Q:** Why are SSTables immutable, and how do you update a key?
+
+**A:** Immutability means no locking for readers, easy caching and simple crash safety, since a file is either fully written or ignored. To update you write a new SSTable with the new value and let reads prefer the newer file. That is exactly what an LSM-tree (Project 11) organises.
+
+**Q:** What happens if a byte on disk is flipped?
+
+**A:** Each block has a CRC computed at write time. The reader recomputes it on load and raises a checksum error on mismatch instead of returning wrong data. I tested this by flipping a byte in a block and asserting the error.
+
+**Q:** How did you test the filter statistically, and what breaks at 100x data?
+
+**A:** I inserted 1 million keys, queried 1 million absent keys and checked the false-positive rate was within 0.3 percentage points of the formula. At 100x keys, the filters and indexes for many files no longer fit in memory, so you partition filters and cache only the parts in use, which is what RocksDB's partitioned filters do.
+
+**Common mistakes in answers:**
+- Saying a Bloom filter "stores the keys". It stores only bits, so it cannot list or return keys and cannot delete them.
+- Claiming a sparse index works on unsorted data. It relies entirely on sort order.
+- Ignoring that the filter helps only point lookups, not range scans.
 
 ### TL;DR
 Sorted, immutable, block-structured files with a tiny index and a probabilistic "definitely not here" filter — the building block of every LSM-tree.
@@ -356,14 +438,54 @@ Higher precision means more buckets and memory. Sketches like t-digest use less 
 - Derived, mergeable aggregates — [Ch 11 — Stream Processing](../chapters/11-stream-processing/README.md)
 
 ### In the interview
+**30-second answer:** I built a latency monitor that ingests request timings and reports p50, p95, p99, p99.9 and max over 1, 5 and 60 minute windows. The key decision was to store mergeable log-linear histograms per endpoint per minute instead of raw samples or pre-computed percentiles, because histograms can be added bucket by bucket across hosts and minutes. The hardest lesson was that you cannot average percentiles, which I proved by showing averaged per-host p99s give a different, wrong answer. Each histogram stays under 50 KB and reported percentiles were within 1% of the exact values on 10 million samples.
+
+**Key terms to know:**
+- **Percentile** — the value below which a given share of samples fall. p99 is the latency that 99% of requests beat.
+- **Tail latency** — the high percentiles (p99, p99.9) that a minority of users feel. It is what the monitor reports instead of the mean.
+- **Fan-out amplification** — when one page calls many backends, it is as slow as the slowest, so rare slow calls become common slow pages.
+- **Log-linear histogram** — buckets grouped by power of two with a fixed number of sub-buckets in each, giving constant relative error.
+- **Mergeable aggregate** — a summary where merge(A, B) equals the summary of the combined data. Histograms are, percentiles are not.
+- **Coordinated omission** — a load-generator bug where it waits for slow responses and so never records the requests that should have been sent during the stall.
+- **Sliding window and ring buffer** — the last 60 one-minute histograms in a circular array. A 5-minute window merges five of them.
+- **Sketch (t-digest)** — a compact approximate summary, smaller than a histogram but with probabilistic error.
+
 **Q:** Why not report mean latency?
-**A:** It hides the tail. A few very slow requests barely move the mean but ruin experience for those users, and fan-out makes them common.
+
+**A:** The mean hides the tail. If 99 requests take 20 ms and one takes 3 seconds, the mean is about 50 ms, which describes nobody. Users feel the slow requests, and with fan-out a single page often hits at least one slow backend.
 
 **Q:** Can you average p99 across servers?
-**A:** No. Percentiles are not additive. Merge the histograms and compute the percentile from the merged distribution.
 
-**Q:** What is coordinated omission?
-**A:** A measurement bug where the load generator slows down with the system and so never records the requests that would have waited the longest.
+**A:** No. Percentiles are not additive, so the average of per-host p99s is not the p99 of all requests. You merge the underlying histograms by adding bucket counts and compute the percentile from the merged distribution.
+
+**Q:** Why log-linear buckets rather than equal-width buckets?
+
+**A:** Equal-width buckets waste space at low values and lose precision at high ones. Log-linear buckets keep a fixed number of sub-buckets per power of two, so the error is a constant percentage of the value. Choosing the number of sub-buckets is how I guaranteed under 1% relative error.
+
+**Q:** What is coordinated omission and how do you avoid it?
+
+**A:** If a load generator waits for each response before sending the next, a 2-second stall hides all the requests that would have been sent and delayed during it, so the tail looks better than reality. You avoid it by recording latency from the intended send time on a fixed schedule, not the actual send time.
+
+**Q:** How do you make minute rotation correct?
+
+**A:** The swap from the current-minute histogram into the ring buffer must be atomic, so every sample lands in exactly one minute. I swapped a reference to a fresh histogram under a short lock, so no sample was counted twice or lost.
+
+**Q:** What changes at 100x the number of hosts?
+
+**A:** Shipping raw samples would overwhelm the ingest API first. Instead each host keeps its own histograms and ships them every few seconds, and the central service only merges. Merge cost depends on bucket count, not traffic, so it scales well.
+
+**Q:** Histogram or t-digest?
+
+**A:** A fixed log-linear histogram gives a guaranteed relative error and exact, simple merges, at the cost of more memory. A t-digest uses less memory and is accurate at the extremes but its error is probabilistic. I chose histograms because the requirement was a guaranteed 1% bound.
+
+**Q:** How did you prove it works?
+
+**A:** I compared every percentile against an exact sort-based baseline on uniform, log-normal and bimodal data. I unit-tested that merging is associative, and showed that merging three hosts' histograms matched p99 of the combined raw data within error.
+
+**Common mistakes in answers:**
+- Averaging or summing percentiles across hosts or time windows. Only the underlying distributions can be combined.
+- Treating p99 as "the worst case". It ignores the slowest 1%, which is why p99.9 and max are also reported.
+- Forgetting coordinated omission when quoting benchmark numbers.
 
 ### TL;DR
 Measure latency as mergeable histograms and report high percentiles — the honest way to describe performance from Chapter 1.
@@ -478,14 +600,54 @@ Documents win for self-contained, read-whole records (locality). Relational wins
 - Indexes and query plans — [Ch 3 — Storage and Retrieval](../chapters/03-storage-and-retrieval/README.md)
 
 ### In the interview
+**30-second answer:** I stored one "professional profile" dataset, 10,000 people and 50,000 edges, three ways in a single PostgreSQL database: normalised tables, one jsonb document per person, and a vertices-and-edges graph queried with recursive SQL. Using one engine made the data model the only variable, so I could compare lines of SQL, runtime and indexes for the same five queries. The hardest queries were the region-containment and friend-of-friend traversals, where I needed a cycle guard to stop the recursion looping forever. Every query ran under 100 ms with the right indexes, and a test asserted all three models returned identical id sets.
+
+**Key terms to know:**
+- **Relational model** — normalised tables linked by foreign keys and joined at query time. Here: person, organisation and position tables.
+- **Document model** — self-contained JSON trees, here one jsonb row per person. Great for "load the whole profile" queries.
+- **Graph model** — vertices and edges with labels, here two tables traversed with recursive SQL.
+- **Normalisation** — storing each fact once and referring to it by id. Renaming a company is one update instead of thousands.
+- **Many-to-one and many-to-many** — relationships the relational model handles with joins and documents handle poorly.
+- **Schema-on-read vs schema-on-write** — jsonb accepts any shape and readers interpret it, while tables enforce structure at write time.
+- **Recursive CTE** — WITH RECURSIVE, which repeatedly joins the edge table to walk paths of unknown length.
+- **GIN index** — PostgreSQL's inverted index type, used here to search inside jsonb documents.
+
 **Q:** When would you choose a document model?
-**A:** When records are mostly loaded whole, have a tree shape and few many-to-many relationships — for example a résumé or an order with line items.
+
+**A:** When records are mostly loaded whole, are tree-shaped and have few many-to-many relationships, such as a résumé or an order with its line items. You get locality, since one read fetches everything. It hurts when you need joins or need to update shared data like a company name.
 
 **Q:** What is schema-on-read?
-**A:** The database accepts any structure, and the reading code interprets it. The schema exists, but only implicitly in the application.
+
+**A:** The database accepts any structure and the reading code interprets it, so the schema exists only implicitly in the application. Adding a "pronouns" field needed no ALTER TABLE in jsonb, but every reader must handle documents with and without it.
 
 **Q:** How do you query a graph in SQL?
-**A:** With a recursive CTE that starts from seed vertices and repeatedly joins the edge table, guarding against cycles.
+
+**A:** With a recursive CTE that starts from seed vertices and repeatedly joins the edge table to find the next hop. You must guard against cycles, either by carrying an array of visited ids or with PostgreSQL 14's CYCLE clause.
+
+**Q:** What went wrong with company names in the document model?
+
+**A:** Each person's document embedded the company name, which duplicates it. Renaming one company meant rewriting every employee's document, which is the normalisation argument in practice. Storing a company id instead brings back joins, which documents do poorly.
+
+**Q:** Which model won which query?
+
+**A:** The document model won the full-profile fetch, a single-row read. The relational model won "people at company X" and ad hoc joins. The graph model won variable-length traversals such as friends of friends and region containment, where the depth is not known in advance.
+
+**Q:** Which model coped best with the schema change?
+
+**A:** jsonb needed no migration but pushed the work to readers. The relational model needed an ALTER TABLE adding a nullable column, which in PostgreSQL 11+ is a fast metadata-only change when there is no default or a constant default. The graph model stored properties in jsonb, so it behaved like the document model.
+
+**Q:** What changes at 100x the data?
+
+**A:** Large documents become expensive because any small update rewrites the whole document. Deep graph traversals explode in fan-out, so a two-hop query can touch a huge share of the graph. A dedicated graph database or pre-computed adjacency becomes worth it at that point.
+
+**Q:** How did you check correctness?
+
+**A:** For each query I asserted all three models returned the same set of ids. I ran the loader twice and checked row counts were unchanged, proving it was idempotent. EXPLAIN (ANALYZE, BUFFERS) confirmed which indexes each query used.
+
+**Common mistakes in answers:**
+- Saying document databases are "schemaless". The schema still exists, just enforced by readers instead of the database.
+- Claiming SQL cannot query graphs. Recursive CTEs can, they are just more verbose than a graph query language like Cypher.
+- Ignoring update cost: documents are cheap to read whole but expensive to change in shared parts.
 
 ### TL;DR
 Store the same facts three ways and feel why each model exists — the fastest route to really understanding Chapter 2.
@@ -576,14 +738,54 @@ JSON is self-describing and human-readable but large and vague about numbers. Pr
 - Message brokers and schemas in logs — [Ch 11 — Stream Processing](../chapters/11-stream-processing/README.md)
 
 ### In the interview
+**30-second answer:** I built a schema evolution lab that encodes a User record in JSON, Protocol Buffers and Avro, evolves the schema through ten versions, and tests every writer-reader version pair for backward and forward compatibility. The key insight is that Protobuf identifies fields by number while Avro carries no field identifiers at all, so Avro must resolve the writer's schema against the reader's. The most striking result was showing that reusing a deleted Protobuf field number silently corrupts data instead of failing. The full matrix runs in under 30 seconds and ends in a compat-check CLI that flags the four classic breaking changes.
+
+**Key terms to know:**
+- **Backward compatibility** — new code can read data written by old code. Needed as soon as new readers see stored or in-flight old data.
+- **Forward compatibility** — old code can read data written by new code. Needed during rolling upgrades when old instances still run.
+- **Field number (tag)** — Protobuf's on-the-wire identity for a field. Names are not encoded, so renames are safe but reuse is dangerous.
+- **Writer's and reader's schema** — Avro decodes using the exact schema that wrote the data and maps it onto the reader's schema by field name.
+- **Default value** — what Avro fills in when the reader expects a field the writer did not write. Missing defaults break compatibility.
+- **Unknown fields** — fields a reader's schema does not know. Current Protobuf runtimes preserve them so a read-modify-write does not drop them.
+- **Schema registry** — a service that stores schemas by id and rejects incompatible changes. Kafka messages carry the id.
+- **Rolling upgrade** — deploying a new version node by node, so old and new code run side by side.
+
 **Q:** Why can Protobuf fields be renamed safely?
-**A:** Only the field number is encoded. The name lives only in the schema and generated code.
+
+**A:** Only the field number and wire type are encoded. The name exists only in the .proto file and generated code, so changing it does not change any bytes on the wire.
 
 **Q:** How does an Avro reader know the writer's schema?
-**A:** It must be supplied: in a file header, by version negotiation on a connection, or via a schema id looked up in a registry.
+
+**A:** It has to be supplied. Avro container files embed it in the header, RPC connections negotiate it, and Kafka setups prefix each message with a schema id that the reader looks up in a schema registry.
+
+**Q:** Why is Avro the smallest encoding?
+
+**A:** Avro writes values back to back in schema order with no field names or tags. JSON repeats every field name as text, and Protobuf writes a tag before each field. The cost is that Avro bytes are meaningless without the writer's schema.
 
 **Q:** What change is never safe?
-**A:** Reusing a field number (Protobuf) or adding a field with no default that new readers require (Avro), because existing data can no longer be interpreted correctly.
+
+**A:** Reusing a Protobuf field number, because old data with a different meaning for that number decodes as the new field, silently. In Avro, adding a field with no default breaks backward compatibility, because new readers cannot fill it in for old records. Use reserved numbers in Protobuf and defaults in Avro.
+
+**Q:** Is changing int32 to int64 safe?
+
+**A:** Only in one direction. In Protobuf, int32 and int64 share the same varint encoding, so new code reads old data fine. Old code reading a value larger than 2^31 truncates it silently. I wrote a test that encodes such a value and reads it with the old schema.
+
+**Q:** What happens if old code reads a record with a new field and writes it back?
+
+**A:** Current Protobuf runtimes keep unknown fields and re-emit them, so the new field survives. But if your own code maps the message to a plain object and back, the field is usually dropped. I tested this explicitly because it causes silent data loss during rolling upgrades.
+
+**Q:** How does this scale to many teams and Kafka topics?
+
+**A:** Manual review breaks first. A schema registry with a compatibility mode per topic (BACKWARD, FORWARD or FULL) rejects incompatible schemas at registration time, so producers cannot publish breaking changes. My CLI performs the same check locally in CI.
+
+**Q:** How did you test it?
+
+**A:** The matrix itself is the test suite: for every writer and reader pair it encodes, decodes and records success, data loss or failure, compared with my predictions. I also ran round-trip property tests so decode(encode(x)) equals x for random records at every version.
+
+**Common mistakes in answers:**
+- Mixing up the directions: backward means new readers handle old data, forward means old readers handle new data.
+- Saying Avro needs no schema at read time. It needs the writer's exact schema to decode anything.
+- Assuming renaming is unsafe in Protobuf or safe in Avro. It is the opposite unless Avro aliases are used.
 
 ### TL;DR
 Turn Chapter 4's compatibility rules into an automated matrix so you can prove, not hope, that a schema change is safe for rolling upgrades.
@@ -683,14 +885,58 @@ Stronger isolation costs more aborts and retries under contention. Explicit lock
 - Precise vocabulary — [Ch 13 — Glossary](../chapters/13-glossary/README.md)
 
 ### In the interview
+**30-second answer:** I built a harness that drives two or three PostgreSQL sessions through precisely interleaved statements from YAML scenarios, and records which anomalies happen at Read Committed, Repeatable Read and Serializable. The key design choice was running each session on its own thread with a short timeout, so a statement waiting on a lock is reported as "blocked" instead of hanging the run. The most instructive result was write skew: the two-doctors story commits wrongly under Repeatable Read and fails with SQLSTATE 40001 under Serializable. All eight scenarios run deterministically in under 2 seconds each and in CI against a PostgreSQL container.
+
+**Key terms to know:**
+- **Isolation level** — how much concurrent transactions can see of each other. PostgreSQL offers Read Committed, Repeatable Read and Serializable.
+- **Dirty read / dirty write** — reading or overwriting another transaction's uncommitted data. PostgreSQL prevents both at every level.
+- **Read skew (non-repeatable read)** — seeing different parts of the database at different moments, so totals do not add up.
+- **Lost update** — two read-modify-write cycles race and one overwrites the other. Fixed with atomic UPDATE, FOR UPDATE or conflict detection.
+- **Write skew** — two transactions read the same data, then write different rows, together breaking an invariant. The doctors-on-call story.
+- **Phantom** — a write by one transaction changes the result of another's search query, such as a new overlapping room booking.
+- **Snapshot isolation** — each transaction reads a consistent snapshot. PostgreSQL's Repeatable Read is implemented this way.
+- **Serialization failure (40001)** — the error Serializable raises when it cannot guarantee a serial order. The application must retry.
+
 **Q:** What is write skew?
-**A:** Two transactions read the same data, make decisions based on it, and write to *different* rows, together breaking an invariant that each alone preserved.
+
+**A:** Two transactions read the same data, make decisions based on it, and write to different rows, together breaking an invariant that each alone preserved. In my scenario both doctors see two on call, each removes themselves, and nobody is left on call.
 
 **Q:** Does snapshot isolation prevent write skew?
-**A:** No. Each transaction sees a consistent snapshot, but neither sees the other's write. You need serializable isolation or explicit locking.
+
+**A:** No. Each transaction sees a consistent snapshot, but neither sees the other's write, and because they update different rows there is no write-write conflict to detect. You need Serializable, explicit locks with SELECT ... FOR UPDATE, or a materialised conflict row.
+
+**Q:** Why does PostgreSQL never show a dirty read?
+
+**A:** PostgreSQL accepts READ UNCOMMITTED but runs it as Read Committed, because its MVCC design never exposes uncommitted row versions. My results table shows this and explains it rather than reporting a missing anomaly as a bug.
+
+**Q:** What does PostgreSQL do about lost updates under Repeatable Read?
+
+**A:** If a transaction tries to update a row that a concurrent transaction updated and committed after the first one's snapshot, PostgreSQL aborts it with "could not serialize access due to concurrent update". That is stronger than many engines, where Repeatable Read lets the lost update through.
+
+**Q:** How do you fix each anomaly without Serializable?
+
+**A:** Lost update: an atomic UPDATE ... SET x = x + 1, or SELECT ... FOR UPDATE before modifying. Write skew: lock the rows the decision depended on with FOR UPDATE. Phantoms on bookings: an exclusion constraint, or materialise the conflict by locking a row per room and time slot.
 
 **Q:** What must application code do under Serializable?
-**A:** Catch serialization failures and retry the entire transaction.
+
+**A:** Catch serialization failures (SQLSTATE 40001) and retry the entire transaction from BEGIN, including its reads, because the decision was made on data that may now be different. Retrying only the failed statement is wrong.
+
+**Q:** How did you make the harness deterministic?
+
+**A:** Each step runs on a named session in a fixed order. A step that does not return within a short timeout is marked blocked, and the runner continues with the other session, then collects the blocked result later. With no randomness in scheduling, every run gives the same table.
+
+**Q:** What changes under heavy contention?
+
+**A:** Stronger isolation turns anomalies into aborts and lock waits. Under Serializable with hot rows the abort rate climbs, so retries multiply load. Keeping transactions short and touching hot rows last reduces conflicts.
+
+**Q:** How would you extend it to another database?
+
+**A:** The YAML scenarios are engine-neutral, so you swap the driver and expected outcomes. Running them on MySQL shows different behaviour: InnoDB's Repeatable Read uses locking reads for UPDATE, so some anomalies appear or disappear differently.
+
+**Common mistakes in answers:**
+- Assuming the SQL standard names mean the same thing everywhere. PostgreSQL's Repeatable Read is snapshot isolation, and other engines differ.
+- Saying snapshot isolation is serializable. It allows write skew.
+- Retrying only the failed statement instead of the whole transaction after a serialization failure.
 
 ### TL;DR
 Script real interleavings against PostgreSQL and build a truth table of anomalies by isolation level — the cure for vague isolation intuition.
@@ -779,14 +1025,54 @@ Lamport clocks are one integer but cannot detect concurrency. Vector clocks dete
 - Ordering and causality — [Ch 9 — Consistency and Consensus](../chapters/09-consistency-and-consensus/README.md)
 
 ### In the interview
+**30-second answer:** I built a seeded discrete-event simulator of processes exchanging messages with random delays, and attached Lamport and vector clocks to every event. The key design choice was a causality oracle that computes the true happens-before relation by graph reachability, so I could test what each clock claims against ground truth. The hardest part was the replicated register demo, where vector clocks detect concurrent writes as siblings and a later write that saw both replaces them. Vector-clock comparisons agreed with the oracle on every pair of events across 1,000 random runs, and the same seed always reproduces the same event log.
+
+**Key terms to know:**
+- **Happens-before** — event a happens before b if they are on the same process in order, or a is a send and b its receive, or a chain of these links them.
+- **Concurrent events** — neither happens before the other. Neither could have known about the other.
+- **Lamport clock** — one counter per process, incremented per event and set to max(local, received) + 1. Consistent with causality but cannot detect concurrency.
+- **Vector clock** — one counter per process. Comparing element-wise tells you before, after, equal or concurrent.
+- **Version vector** — the same idea attached to a stored value in a database, used to detect conflicting writes.
+- **Siblings** — concurrent versions of one key kept side by side for the application to merge.
+- **Total order by Lamport** — Lamport time with ties broken by process id, which respects causality.
+- **Discrete-event simulation** — a priority queue of (simulated time, event) that makes runs deterministic from a seed.
+
 **Q:** Why can't you use timestamps to order writes on different machines?
-**A:** Clocks drift and can jump backwards after synchronisation, so a later event can get an earlier timestamp and last-write-wins silently discards data.
+
+**A:** Clocks drift and can jump backwards after NTP synchronisation, so a later event can get an earlier timestamp. Last-write-wins then silently discards the write that actually happened later.
 
 **Q:** What can a vector clock tell you that a Lamport clock cannot?
-**A:** Whether two events are concurrent. With Lamport clocks, L(a) < L(b) does not imply a happened before b.
+
+**A:** Whether two events are concurrent. If a happened before b then L(a) < L(b), but the converse fails: L(a) < L(b) does not imply a happened before b. Vector clocks give an exact test in both directions.
+
+**Q:** What are the comparison rules for vector clocks?
+
+**A:** V(a) is before V(b) if every entry of V(a) is less than or equal to the matching entry of V(b) and at least one is strictly less. If neither is before the other and they are not equal, the events are concurrent. Handling the equal case correctly was a common bug.
 
 **Q:** How does a database use this?
-**A:** It attaches a version vector to each value. On a write, it discards versions the writer has seen and keeps concurrent ones as siblings for the application to merge.
+
+**A:** It stores a version vector with each value. When a client writes with the context it read, the database discards versions that context has seen and keeps concurrent ones as siblings. My register demo showed this: a write that saw both siblings replaced them.
+
+**Q:** What is the cost of vector clocks?
+
+**A:** Size grows with the number of writers, O(N) per value. Dynamo truncated old entries to bound it, which can create false conflicts. Dotted version vectors reduce sibling explosion when many clients write through a few servers.
+
+**Q:** How did you prove Lamport clocks cannot detect concurrency?
+
+**A:** The checker found pairs of events that the oracle says are concurrent but that have different Lamport values. That one counterexample is enough to show L(a) < L(b) does not imply causality.
+
+**Q:** How would this scale to 1,000 processes?
+
+**A:** Vector clocks would hold 1,000 entries per event, which is costly to store and send. Real systems use version vectors per replica rather than per client, or hybrid logical clocks (Project 31) when they only need a causally consistent timestamp, not concurrency detection.
+
+**Q:** How did you test edge cases?
+
+**A:** Property tests against the reachability oracle over random seeds, plus targeted cases: messages to self, duplicated messages, reordered messages, and a process that never communicates. Determinism was tested by running the same seed twice and diffing the logs.
+
+**Common mistakes in answers:**
+- Claiming Lamport timestamps reveal causality in both directions. They only guarantee causal order implies smaller timestamps.
+- Calling concurrent events "simultaneous". Concurrent means neither knew of the other, regardless of wall-clock time.
+- Using wall-clock last-write-wins and calling it conflict resolution. It silently loses data.
 
 ### TL;DR
 Simulate messages, attach logical clocks, and check them against true causality — the clearest way to understand happens-before and concurrency.
@@ -871,14 +1157,54 @@ Lower thresholds detect faster but misfire more. All-to-all heartbeats cost O(N�
 - Failover risks — [Ch 5 — Replication](../chapters/05-replication/README.md)
 
 ### In the interview
+**30-second answer:** I built a phi accrual failure detector: nodes send UDP heartbeats, the monitor keeps a sliding window of the last 1,000 gaps, and computes a suspicion level phi from how unlikely the current silence is given that history. I chose this over a fixed timeout because it adapts to each link's normal jitter. The hardest part was a chaos proxy that adds delay, jitter, loss and garbage-collection-style pauses, so I could compare false positives fairly on the same trace. My target was detecting a crash within 3 seconds at a 500 ms heartbeat interval with under one false positive per hour under 50 ms jitter.
+
+**Key terms to know:**
+- **Failure detector** — a component that decides whether a remote node is alive. In an asynchronous network it can only suspect, never know.
+- **Heartbeat** — a periodic "I am alive" message. The detector learns from the gaps between them.
+- **Phi (φ)** — minus log10 of the probability that a heartbeat would still arrive after the current silence. φ = 1 means about a 10% chance of being wrong, φ = 2 about 1%.
+- **Inter-arrival window** — the last N gaps with running sum and sum of squares, so mean and variance update in O(1).
+- **Fixed timeout** — declare dead after T seconds of silence. Simple, but either slow or trigger-happy.
+- **False positive** — declaring a healthy node dead. It causes needless and risky failovers.
+- **Process pause** — a stop-the-world pause, for example garbage collection, that silences a healthy node.
+- **Asynchronous network** — one with no upper bound on delay, which is why slow and dead are indistinguishable.
+
 **Q:** Why not just use a short timeout?
-**A:** Network delay and process pauses are unbounded, so a short timeout declares healthy nodes dead, triggering failovers that add load and can cascade.
+
+**A:** Network delay and process pauses are unbounded, so a short timeout declares healthy nodes dead. That triggers failovers that add load and can cascade, and a long timeout means slow recovery after a real crash.
 
 **Q:** What does φ represent?
-**A:** A suspicion level on a log scale derived from how unlikely the current silence is, given the history of heartbeat gaps.
+
+**A:** A suspicion level on a log scale: how unlikely the current silence is, given the observed distribution of heartbeat gaps. If you convict at φ = 8, the chance the node is actually alive is about 10^-8 under the model.
 
 **Q:** Can a failure detector be perfect?
-**A:** Not in an asynchronous network. It trades detection speed against false positives.
+
+**A:** Not in an asynchronous network. A dead node and a very slow one look identical from outside, so every detector trades detection speed against false positives.
+
+**Q:** Why does a normal distribution misbehave, and how did you fix it?
+
+**A:** With very regular heartbeats the standard deviation becomes tiny, so a small delay produces a huge φ. Following Akka, I added a minimum standard deviation and an acceptable heartbeat pause, which soften the reaction to small hiccups.
+
+**Q:** How do you handle a brand-new node with no history?
+
+**A:** φ is meaningless without data, so I seeded the window with a few assumed gaps around the configured heartbeat interval. Real samples replace them as heartbeats arrive.
+
+**Q:** What happens during a 2-second GC pause?
+
+**A:** Heartbeats stop, φ rises and the node becomes suspected. When heartbeats resume φ drops and the node is marked alive again. The point is that suspicion is only a probability: what you do with it, such as failing over a leader, needs a separate decision and fencing (Project 28).
+
+**Q:** What breaks at 1,000 nodes?
+
+**A:** All-to-all heartbeats cost O(N²) messages, which is about a million streams. Large clusters switch to gossip-based membership like SWIM (Project 32), where each node probes one random peer per period.
+
+**Q:** How did you test it deterministically?
+
+**A:** I recorded heartbeat arrival traces and replayed them, so tests do not depend on real timing. I unit-tested φ against hand-computed values and ran timeouts of 1, 2 and 5 seconds against φ thresholds of 3, 8 and 12 on the same jitter trace.
+
+**Common mistakes in answers:**
+- Saying φ tells you a node is dead. It only measures suspicion, and acting on it needs fencing.
+- Believing a long enough timeout makes detection reliable. Delays have no upper bound.
+- Ignoring asymmetric partitions, where A suspects B while B still hears A.
 
 ### TL;DR
 Replace a fixed timeout with a statistical suspicion level learned from heartbeat history — Chapter 8's "you can't tell slow from dead" made practical.
@@ -963,14 +1289,54 @@ One machine is limited by disk throughput. A crash mid-sort means rerunning from
 - Sorted files and merging — [Ch 3 — Storage and Retrieval](../chapters/03-storage-and-retrieval/README.md)
 
 ### In the interview
+**30-second answer:** I built a set of small Unix-style tools (parse, filter, sortx, groupcount, topk and join) that stream tab-separated records through pipes to answer questions like "top five URLs" over 10 GB of logs. The key piece is sortx, an external merge sort that sorts memory-sized chunks, spills them as sorted runs and then k-way merges them with a heap. The hardest parts were merging many runs without running out of file handles, and making every tool agree on one byte-order comparison. sortx sorted 5 GB with a 500 MB limit and produced output identical to GNU sort.
+
+**Key terms to know:**
+- **Unix philosophy** — small programs that do one thing, connected through a uniform interface (lines on stdin and stdout).
+- **External merge sort** — sort chunks that fit in memory, write them as runs, then merge the runs. Lets you sort data far larger than RAM.
+- **Sorted run (spill file)** — one sorted chunk written to disk during the first phase.
+- **K-way merge** — merging k sorted inputs with a heap of (current record, run index), taking the smallest each time.
+- **Sort-based grouping** — once data is sorted, equal keys are adjacent, so groupcount only remembers the current key.
+- **Sort-merge join** — sort both inputs by the join key and walk them together.
+- **Top-k with a heap** — keep a heap of size k so memory stays constant regardless of input size.
+- **Collation / byte order** — the comparison rule for sorting. All tools must use the same one or grouping and joins break.
+
 **Q:** Why sort rather than use a hash map to count?
-**A:** A hash map must fit in memory. Sorting works on disk with sequential I/O, so grouping scales to data much larger than RAM.
+
+**A:** A hash map must fit in memory. Sorting works on disk with sequential I/O, so grouping scales to data much larger than RAM, and once sorted, equal keys sit next to each other and can be counted in one pass.
 
 **Q:** What makes Unix pipelines composable?
-**A:** A uniform interface (lines of text on stdin and stdout) and programs that do one thing without side effects on their input.
+
+**A:** A uniform interface, lines of text on stdin and stdout, and programs that read input and write output without side effects on their input. Any tool can feed any other, and you can insert, remove or debug stages easily.
 
 **Q:** How do you join two big files without a database?
-**A:** Sort both by the join key and walk them together — a sort-merge join.
+
+**A:** Sort both by the join key and walk them together, advancing whichever side has the smaller key and emitting matches when keys are equal. Memory stays small because only the current group of equal keys is held.
+
+**Q:** What happens with thousands of sorted runs?
+
+**A:** Opening them all exhausts file handles and makes the heap large. You merge in multiple passes, for example 100 runs at a time into bigger runs, then merge those. Each pass is sequential I/O, so it stays efficient.
+
+**Q:** Why did locale matter?
+
+**A:** Unicode collation and raw byte order sort strings differently. If sortx sorts one way and join compares another, matching keys are missed. I fixed one comparison rule, raw bytes, across all tools, which is also what LC_ALL=C does for GNU tools.
+
+**Q:** What happens if the sort crashes halfway?
+
+**A:** You rerun it from the start. Inputs are immutable, so a rerun produces the same result, and that is the same reasoning MapReduce uses to retry failed tasks.
+
+**Q:** What breaks at 100x data?
+
+**A:** One machine's disk throughput is the ceiling. The next step is splitting input across machines and partitioning by key, which is MapReduce (Project 24). Skew also matters: a sort handles a dominant key fine, but a later hash-partitioned stage would overload one bucket.
+
+**Q:** How did you test it?
+
+**A:** Golden-file tests against an equivalent awk, sort, uniq and head pipeline. A property test checked sortx output is a sorted permutation of its input. A profile showed whether time went to parsing, I/O or comparisons.
+
+**Common mistakes in answers:**
+- Saying sorting is "too slow" for big data. External sort uses sequential I/O and is how big data is grouped.
+- Forgetting that every stage must agree on the sort order and key format.
+- Assuming you need a cluster. Adam Drake showed one machine with pipes beating a Hadoop cluster on a moderate dataset.
 
 ### TL;DR
 Build sort, group and join as streaming Unix tools to see that MapReduce is "Unix pipes plus a distributed filesystem".
@@ -1078,14 +1444,58 @@ Read models lag behind writes, so a user may not see their own deposit immediate
 - Optimistic concurrency — [Ch 7 — Transactions](../chapters/07-transactions/README.md)
 
 ### In the interview
+**30-second answer:** I built a bank-account service where the source of truth is an append-only events table in PostgreSQL, and balances, statements and fraud alerts are projections rebuilt by replaying those events. The key design choice was optimistic concurrency per account: a unique constraint on (stream_id, version) makes two concurrent appends at the same version conflict, so overdrafts cannot happen without locks. The hardest bug was gaps in the global sequence, where a lower sequence number can commit after a higher one and a projector can skip it forever. Rebuilding projections from 1 million events took under 60 seconds and produced identical tables.
+
+**Key terms to know:**
+- **Event sourcing** — storing every change as an immutable event and deriving current state by replaying them.
+- **Event vs command** — a command is a request that can be rejected, an event is a fact that already happened and must never be rejected.
+- **Aggregate** — the account state rebuilt from its own event stream to validate a command.
+- **Optimistic concurrency** — append with an expected version and fail if someone else appended first. Enforced here by a unique constraint.
+- **Projection (read model)** — a derived table built from events, which can be dropped and rebuilt.
+- **Checkpoint** — the last global sequence a projector has processed, stored so it can resume after a crash.
+- **Upcasting** — converting old event versions to the new shape when reading, instead of rewriting history.
+- **Snapshot** — saved aggregate state at a version, so commands do not replay thousands of events.
+
 **Q:** What is the difference between event sourcing and change data capture?
-**A:** Event sourcing records application-level intent as the source of truth. CDC extracts low-level row changes from a database that is still mutable.
+
+**A:** Event sourcing records application-level intent, such as MoneyWithdrawn, as the source of truth. CDC extracts low-level row changes from a database that is still mutable. Event sourcing captures why, CDC captures what changed.
 
 **Q:** How do you enforce "no overdraft" without locks?
-**A:** Load the account at version v, check the rule, append with expected version v. A concurrent writer causes a uniqueness violation and a retry.
+
+**A:** Load the account by replaying its events at version v, check the balance, and append the new event with version v + 1. If another withdrawal appended v + 1 first, the unique constraint fails and the command reloads and retries, so two withdrawals can never both pass the check on stale state.
 
 **Q:** What is a projection?
-**A:** A read-optimised view derived from the event log, which can be dropped and rebuilt deterministically.
+
+**A:** A read-optimised view derived from the event log, such as current balances. It can be dropped and rebuilt deterministically by replaying events from the start.
+
+**Q:** Why can a projector skip events, and how did you fix it?
+
+**A:** PostgreSQL sequences are assigned at insert time but transactions commit in any order. A projector that sees event 101 committed while 100 is still in flight may advance its checkpoint past 100 and never read it. I only read events older than a small safety lag, and you can alternatively track in-flight transactions.
+
+**Q:** How do you handle a user who cannot see their own deposit?
+
+**A:** Projections are eventually consistent, so they lag writes. The command returns the global sequence number of its event, and a read waits until the projection's checkpoint reaches that number. That gives read-your-writes without making projections synchronous.
+
+**Q:** How do you change an event's shape?
+
+**A:** Old events are never rewritten. Each has a schema_version, and the reader upcasts old versions to the new shape on load, for example adding a default currency to old MoneyDeposited events.
+
+**Q:** What changes at 100x events?
+
+**A:** Replaying a busy account's history per command gets slow, so you add snapshots. Full projection rebuilds take longer, so you rebuild a new version alongside the old one and switch. Publishing events to Kafka lets many projections consume independently.
+
+**Q:** How do you delete personal data from an immutable log?
+
+**A:** Either rewrite the log without that data, or use crypto-shredding: encrypt each person's data with their own key and delete the key, which makes their events unreadable. This matters for privacy laws like GDPR.
+
+**Q:** How did you test it?
+
+**A:** Given-when-then tests: given past events, when a command runs, then expect specific new events or an error. A rebuild-equivalence test compared live and rebuilt projections, and killing the projector mid-run must still produce the same balances.
+
+**Common mistakes in answers:**
+- Treating events as commands that consumers may reject. Events are facts.
+- Saying event sourcing gives strong consistency for reads. Projections lag unless you wait for a sequence number.
+- Assuming the global sequence has no gaps or commits in order.
 
 ### TL;DR
 Make the append-only event log the truth and every table a rebuildable view — Chapter 11's event-sourcing ideas on a single PostgreSQL database.
@@ -1184,17 +1594,59 @@ Leveled compaction gives low space and read amplification but high write amplifi
 - Snapshots as a basis for isolation — [Ch 7 — Transactions](../chapters/07-transactions/README.md)
 
 ### In the interview
+**30-second answer:** I built an LSM-tree key-value engine: writes go to a write-ahead log and an in-memory skip-list memtable, full memtables are flushed as SSTables, and background leveled compaction merges them into levels about 10x larger each. I chose this design because every disk write is sequential, which suits write-heavy workloads. The hardest parts were the merging iterator, which must hide older versions, tombstones and anything newer than the reader's snapshot, and crash safety during compaction, which I solved with an atomic manifest. I measured and reported write amplification, targeting under 20 with leveled compaction while sustaining around 100,000 random writes per second.
+
+**Key terms to know:**
+- **Memtable** — the sorted in-memory buffer (a concurrent skip list) that takes writes. When full it becomes immutable and is flushed.
+- **Write-ahead log (WAL)** — an append-only file of every write, used only to rebuild the memtable after a crash.
+- **SSTable** — an immutable sorted file (Project 2). Flushes and compactions produce them.
+- **Leveled compaction** — L0 files may overlap, L1 and deeper hold non-overlapping files, each level about 10x larger.
+- **Size-tiered compaction** — merge several similar-sized files together. Less rewriting, more space and more files per read.
+- **Write, read and space amplification** — bytes written to disk per user byte, files touched per read, and disk used per live byte.
+- **Tombstone** — a delete marker that hides older values until compaction reaches the bottom level.
+- **Manifest** — a log of add-file and remove-file edits recording which SSTables are live, updated atomically.
+- **Sequence number and snapshot** — every write gets a sequence number. A reader pins one and ignores anything newer.
+
 **Q:** Why are LSM-trees good for writes?
-**A:** All disk writes are sequential — WAL appends, memtable flushes and compaction outputs — so throughput is high and SSDs wear less per byte than with random rewrites.
+
+**A:** All disk writes are sequential: WAL appends, memtable flushes and compaction outputs. Sequential I/O is much faster than random in-place updates, so throughput is high. The price is extra rewriting during compaction.
 
 **Q:** How does a read find the latest value?
-**A:** Memtable first, then SSTables newest to oldest, using Bloom filters to skip files. The first version found wins, and a tombstone means "deleted".
+
+**A:** It checks the active memtable, the immutable memtable, then L0 files newest first, then at most one file per deeper level. Bloom filters skip files that cannot hold the key. The first version found wins, and a tombstone means "deleted".
+
+**Q:** Why do internal keys sort sequence numbers descending?
+
+**A:** Internal keys are (user key, sequence number, kind). Sorting the sequence descending puts the newest version of a key first, so a lookup or iterator finds the latest visible version without scanning all of them.
 
 **Q:** What goes wrong if compaction falls behind?
-**A:** Files pile up, reads must check more of them, and disk fills. Engines throttle writes to let compaction catch up.
+
+**A:** L0 accumulates files, every read has to check more of them, and disk fills with obsolete data. Real engines throttle or stall writers when L0 passes a threshold so compaction can catch up. I implemented and graphed these write stalls.
 
 **Q:** Leveled versus size-tiered?
-**A:** Leveled keeps one sorted run per level for cheaper reads and less space, at the cost of more rewriting. Size-tiered rewrites less but reads and space suffer.
+
+**A:** Leveled keeps one sorted run per level for cheaper reads and less space, at the cost of rewriting data more often, so higher write amplification. Size-tiered rewrites less but keeps more overlapping files, so reads and space suffer. I measured both on the same workload.
+
+**Q:** When can a tombstone be dropped?
+
+**A:** Only when compaction reaches the bottom level for that key range, or when no older version exists below. Dropping it earlier lets an older value in a lower level resurrect, which is one of the classic LSM bugs.
+
+**Q:** What happens if the process crashes during compaction?
+
+**A:** New files are written first, then the manifest edit is appended and synced, and only then are old files deleted. On restart the manifest is the source of truth, so orphaned new files from an unfinished compaction are just garbage-collected.
+
+**Q:** What changes at 10x data?
+
+**A:** More levels means more write amplification and more SSD wear. Bloom filters and index blocks no longer fit in memory, so the block cache matters more. Large values are expensive to rewrite during compaction, which is why designs like WiscKey separate values into their own log.
+
+**Q:** How did you prove it correct?
+
+**A:** Model-based tests ran random operations against the engine and an in-memory sorted map, with crashes injected between operations. A stress test ran readers, writers and compaction together, and I compared checksums of full scans before and after compaction.
+
+**Common mistakes in answers:**
+- Saying LSM-trees have no write amplification because they only append. Compaction rewrites data many times.
+- Claiming Bloom filters speed up range scans. They only help point lookups.
+- Deleting old SSTables before the manifest edit is durable, which can lose data on crash.
 
 ### TL;DR
 Memtable plus WAL plus levels of SSTables plus compaction — build the write-optimised engine behind RocksDB, Cassandra and HBase and measure its amplification trade-offs.
@@ -1288,14 +1740,59 @@ B-trees give fast, predictable reads and natural range scans but write each chan
 - Atomicity and durability — [Ch 7 — Transactions](../chapters/07-transactions/README.md)
 
 ### In the interview
+**30-second answer:** I built a disk-based B+ tree of 4 KB pages with a buffer pool and a write-ahead log, using redo recovery in the style of ARIES. The central rule I enforced is the WAL rule: a dirty page can only be written to disk once the log record describing its latest change is durable. The hardest part was page splits, which change three pages at once, so I logged all three changes and added full-page images to survive torn pages. A crash loop that killed the process 1,000 times never left a corrupt tree or lost a committed key, and lookups touch at most the tree height, three or four pages.
+
+**Key terms to know:**
+- **B+ tree** — a balanced tree of fixed-size pages. Interior pages hold keys and child pointers, leaves hold key-value pairs linked left to right.
+- **Page split** — when a page is full, half its entries move to a new sibling and a separator key goes up to the parent.
+- **Buffer pool** — a fixed set of in-memory frames caching pages, with pin counts, dirty flags and LRU or clock eviction.
+- **Write-ahead log (WAL)** — a log of every change, forced to disk before the changed page may be written.
+- **Log sequence number (LSN)** — the position of a log record. Each page stores the LSN of its latest change.
+- **Redo recovery** — after a crash, replay log records newer than each page's LSN.
+- **Checkpoint** — flushing dirty pages and recording where recovery must start, so recovery time is bounded.
+- **Torn page and full-page image** — a 4 KB write can be half on disk after power loss. Logging the whole page the first time it changes after a checkpoint fixes it.
+- **Latch vs lock** — a latch is a short mutex on an in-memory page, a lock protects logical data for a transaction.
+
 **Q:** What is the WAL rule?
-**A:** A modified page may only be written to disk after the log records describing the change are durable, so recovery can always redo or undo it.
+
+**A:** A modified page may only be written to disk after the log records describing that change are durable. Then, whatever state the page is in after a crash, recovery can redo the change from the log.
 
 **Q:** Why is a B-tree's depth small?
-**A:** High branching factor: a 4 KB page holds hundreds of child pointers, so four levels address billions of keys.
+
+**A:** The branching factor is high: a 4 KB page holds hundreds of child pointers. With a branching factor of 500, four levels address over 60 billion keys, so a lookup reads only a handful of pages.
+
+**Q:** How does redo recovery decide what to replay?
+
+**A:** It starts from the last checkpoint and reads log records forward. For each record it compares the record's LSN with the page's stored LSN, and only reapplies the change if the page is older. That makes redo idempotent, safe to run twice.
+
+**Q:** Why do splits need special care?
+
+**A:** A leaf split modifies the full leaf, its new sibling and the parent. If a crash leaves only some of those on disk, the tree is inconsistent. Logging all three before any page is written lets redo restore a consistent tree.
+
+**Q:** What is a torn page and how did you handle it?
+
+**A:** Power loss can leave a 4 KB page partly old and partly new, and redo cannot apply a change to a garbled page. Like PostgreSQL, I log a full page image the first time a page is modified after each checkpoint, and measured how much extra log volume that costs.
+
+**Q:** How do readers and writers run concurrently?
+
+**A:** With latch crabbing: take a child's latch before releasing the parent's, and release ancestors early once a node is known to be safe from splitting. Latches are short and never held while waiting for unrelated I/O if you can avoid it.
 
 **Q:** B-tree or LSM for a read-heavy workload?
-**A:** Usually B-tree, because each key lives in one place and lookups follow one root-to-leaf path.
+
+**A:** Usually a B-tree, because each key lives in exactly one place and a lookup follows one root-to-leaf path with predictable latency. LSM-trees win for write-heavy workloads. I compared both on identical workloads.
+
+**Q:** What changes at 10x data?
+
+**A:** The working set no longer fits in the buffer pool, so random reads hit disk and eviction policy matters. Checkpoints write more dirty pages at once, causing I/O spikes, so you spread them out. Random page writes and fragmentation after deletes become the main costs.
+
+**Q:** How did you test it?
+
+**A:** An invariant checker walks the whole tree: sorted keys, equal leaf depth and correct parent separators. A crash-loop harness used a fault-injecting file layer that drops unflushed writes to simulate power loss.
+
+**Common mistakes in answers:**
+- Saying the WAL is written after the data page. The log must be durable first.
+- Confusing latches with transaction locks.
+- Claiming B-trees have no write amplification. Changing one byte rewrites a whole page.
 
 ### TL;DR
 Fixed-size pages, a buffer pool, and a write-ahead log with redo recovery — the in-place update engine behind PostgreSQL and SQLite.
@@ -1386,14 +1883,58 @@ Column stores are poor for point lookups and single-row updates. Very wide `SELE
 - Batch processing of analytics data — [Ch 10 — Batch Processing](../chapters/10-batch-processing/README.md)
 
 ### In the interview
+**30-second answer:** I built a column store that splits imported CSV data into row groups, stores each column separately with automatically chosen plain, dictionary, run-length or bit-packed encoding, and runs filter, group-by and aggregate queries over batches of up to 2,048 values. Column orientation was the key decision, because analytical queries read few columns but many rows. The hardest parts were operating directly on compressed data and using zone maps and late materialisation so most row groups were never touched. A selective filter on a sorted column skipped over 90% of row groups, and a sorted low-cardinality column compressed more than 5x.
+
+**Key terms to know:**
+- **OLTP vs OLAP** — transaction processing touches few rows by key, analytics scans many rows but few columns.
+- **Column-oriented storage** — each column in its own file so queries read only the columns they need.
+- **Row group / column chunk** — a horizontal slice of rows (say 1 million), and one column's data within it.
+- **Dictionary encoding** — replace repeated strings with small integer codes plus a lookup table.
+- **Run-length encoding (RLE)** — store (value, count) for runs of equal values. Excellent on sorted columns.
+- **Zone map** — min and max per column chunk, letting the planner skip chunks that cannot match a filter.
+- **Vectorised execution** — operators pass arrays of values, so each runs a tight loop that is cache-friendly and SIMD-friendly.
+- **Late materialisation** — filter first to get a selection vector of matching rows, then fetch other columns only for those rows.
+
 **Q:** Why are column stores faster for analytics?
-**A:** Queries read only the needed columns, those columns compress well, and processing contiguous arrays of one type uses the CPU efficiently.
+
+**A:** Queries read only the columns they need, values of one type next to each other compress very well, and processing contiguous arrays uses CPU caches and SIMD efficiently. A row store would read every column of every row.
 
 **Q:** What is a zone map?
-**A:** Per-chunk min and max values that let the engine skip chunks that cannot satisfy a filter.
+
+**A:** Per-chunk minimum and maximum values. If a filter asks for x > 1000 and a chunk's max is 900, the chunk is skipped without reading it. They are most powerful on the sort key.
+
+**Q:** Why does sort order matter so much?
+
+**A:** Sorting by a column makes its equal values contiguous, so RLE becomes tiny and zone maps become precise. Only the first sort key benefits fully, which is why C-Store and Vertica kept several copies sorted differently.
+
+**Q:** How can you filter without decompressing?
+
+**A:** With dictionary encoding you translate the predicate, for example country = 'FR', into its code once and compare integers. With RLE you test each run once instead of each row. Group-by can use dictionary codes directly as array indexes.
 
 **Q:** How do column stores handle writes?
-**A:** Usually by buffering in a write-optimised in-memory structure and merging into columnar files in bulk.
+
+**A:** Badly in place, because inserting into sorted compressed columns means rewriting them. They buffer inserts in a row-oriented in-memory store and periodically merge into new column files in bulk, which is the LSM idea again.
+
+**Q:** What is vectorised execution and why is it fast?
+
+**A:** Instead of passing one row at a time through operators, each operator processes a batch of a few thousand values in a tight loop. That removes per-row function-call overhead, keeps data in CPU cache and lets the compiler use SIMD instructions.
+
+**Q:** What breaks at 100x data or with high-cardinality keys?
+
+**A:** Hash aggregates over a high-cardinality group key can exceed memory, so they must spill partitions to disk. Single-machine scan bandwidth becomes the limit, so you parallelise across cores and then partition across machines. Very wide SELECT * queries also lose the I/O advantage.
+
+**Q:** When is a column store a bad choice?
+
+**A:** For point lookups and single-row updates, because one logical row is spread across many files. Fetching or changing one row touches every column.
+
+**Q:** How did you test correctness?
+
+**A:** Differential testing: generate random queries, run them on my engine and on DuckDB or PostgreSQL, and compare results. Encoding round-trip property tests checked decode(encode(x)) equals x for every encoding.
+
+**Common mistakes in answers:**
+- Saying column stores are just "faster databases". They are slower for OLTP-style point reads and updates.
+- Confusing a column store with a wide-column store like Bigtable, which is row-oriented within column families.
+- Ignoring that compression depends heavily on sort order and cardinality.
 
 ### TL;DR
 Store columns separately, compress them cleverly and process them in vectors — the design behind Parquet, DuckDB and ClickHouse.
@@ -1482,14 +2023,59 @@ More segments mean faster refresh but slower queries. Document-partitioned (loca
 - Partitioning secondary indexes — [Ch 6 — Partitioning](../chapters/06-partitioning/README.md)
 
 ### In the interview
+**30-second answer:** I built a mini Lucene: documents are analysed into terms, indexed into an in-memory buffer, and flushed as immutable segments, each with a term dictionary and delta-encoded posting lists with positions. I chose immutable segments merged in the background, the same log-structured idea as an LSM-tree, so indexing never blocks queries and deletes are just bitmap entries. The hardest parts were fast posting-list intersection with skip pointers and fuzzy search with edit distance up to 2. My targets were new documents searchable within 1 second and two-term AND queries under 50 ms at p99, with BM25 ranking and two shards merged by score.
+
+**Key terms to know:**
+- **Inverted index** — a map from each term to the documents that contain it, so queries look up terms instead of scanning documents.
+- **Posting list** — the sorted doc ids for one term, with term frequencies and positions, delta-encoded to compress.
+- **Analyser** — the pipeline that lowercases, splits, stems and removes stop words. Indexing and querying must use the same one.
+- **Segment** — an immutable mini-index. New documents create new segments and a merger combines them.
+- **Near-real-time refresh** — flushing the buffer into a searchable segment frequently, here within 1 second.
+- **BM25** — a relevance score based on term frequency, inverse document frequency and document length.
+- **Skip pointers** — shortcuts in a posting list so intersection can jump ahead instead of reading every entry.
+- **Levenshtein automaton** — a state machine accepting all strings within edit distance k, intersected with the term dictionary for fuzzy search.
+- **Document-partitioned shard** — each shard indexes its own documents, so queries scatter to all shards.
+
 **Q:** What is an inverted index?
-**A:** A mapping from each term to the list of documents (and positions) containing it, so queries look up terms instead of scanning documents.
+
+**A:** A mapping from each term to the list of documents, and positions, that contain it. A query for "distributed database" looks up two posting lists and intersects them, instead of scanning every document.
 
 **Q:** Why are search segments immutable?
-**A:** They can be cached, compressed and read without locks. Updates create new segments and deletes mark bitmaps, and merging cleans up — the LSM idea.
+
+**A:** They can be cached, compressed and read without locks. Updates create new segments, deletes set bits in a per-segment deleted-docs bitmap, and merging cleans up, which is the LSM idea applied to search.
+
+**Q:** How do you intersect two long posting lists quickly?
+
+**A:** Walk both sorted lists together, always advancing the one with the smaller doc id. Skip pointers let you jump ahead to the next candidate instead of reading every entry, so an AND of a rare and a common term costs roughly the size of the rare list.
+
+**Q:** How do phrase queries work?
+
+**A:** Positions are stored per term per document. For "data systems", find documents containing both terms, then check that some position of "systems" is exactly one more than a position of "data".
 
 **Q:** How do you run a query across shards?
-**A:** Scatter it to every shard, have each return its top-k, and merge into a global top-k.
+
+**A:** Scatter it to every shard, have each return its own top-k with scores, and merge into a global top-k with a heap. Latency is set by the slowest shard, which is the tail amplification from Project 3.
+
+**Q:** Why do scores differ between shards?
+
+**A:** BM25 uses document frequency, and each shard only knows its own. A rare term on one shard looks common on another, so scores are not quite comparable. You either accept it or run a pre-query that collects global statistics.
+
+**Q:** What is the trade-off in refresh frequency?
+
+**A:** Frequent refreshes make new documents searchable sooner but create many small segments, and every query must search all of them. The merger keeps the segment count down at the cost of background I/O.
+
+**Q:** What changes at 100x documents?
+
+**A:** One machine cannot hold the index, so you add document-partitioned shards and replicas. Merges of huge segments become I/O-heavy and need throttling. A term-partitioned global index would make reads cheaper but writes touch many shards (Project 18).
+
+**Q:** How did you test it?
+
+**A:** A brute-force oracle scanned every document of a small corpus for each query type and compared results. I checked search results were identical before and after merging, and ran relevance sanity checks with hand-labelled queries.
+
+**Common mistakes in answers:**
+- Saying a B-tree index can serve full-text search well. It finds exact keys or prefixes, not words inside text ranked by relevance.
+- Forgetting that indexing and querying must use the same analyser.
+- Thinking deletes remove documents immediately. They are masked by a bitmap until a merge.
 
 ### TL;DR
 Tokenise, invert, segment, merge and rank — a mini Lucene that shows how log-structured ideas power full-text search.
@@ -1581,14 +2167,59 @@ Synchronous replication protects data but stalls writes when a follower is slow.
 - Fencing and process pauses — [Ch 8 — The Trouble with Distributed Systems](../chapters/08-trouble-with-distributed-systems/README.md)
 
 ### In the interview
+**30-second answer:** I built a leader-follower replicated key-value service: the leader appends each write to a log with an increasing position and streams it to followers, which apply it in order and serve reads. It supports fully asynchronous, semi-synchronous and fully synchronous followers, snapshot catch-up for new followers, and automatic failover fenced by epoch numbers. The hardest part was failover safety: choosing the most up-to-date follower, and making every node reject writes stamped with an old epoch so a paused old leader cannot cause split brain. With one synchronous follower, killing the leader lost zero acknowledged writes, and failover completed within 10 seconds.
+
+**Key terms to know:**
+- **Leader and followers** — one node accepts writes and ships its replication log, the others replay it and serve reads.
+- **Replication log position** — a monotonically increasing index of each write, used to measure lag and pick a new leader.
+- **Synchronous vs asynchronous replication** — whether the leader waits for a follower's ack before acknowledging the client.
+- **Semi-synchronous** — exactly one follower is synchronous, so at least two nodes have every acknowledged write.
+- **Replication lag** — how far a follower's applied position trails the leader's.
+- **Failover** — promoting a follower when the leader dies, then redirecting clients.
+- **Split brain** — two nodes both believing they are leader and accepting writes.
+- **Epoch (fencing)** — a number incremented on each failover. Every receiver rejects requests with an older epoch.
+- **Read-your-writes** — a user always sees their own earlier writes, even when reading from a follower.
+
 **Q:** What happens to un-replicated writes when an async leader fails?
-**A:** They are lost if a follower is promoted, and if the old leader rejoins its extra writes must be discarded.
+
+**A:** Writes acknowledged by the leader but not yet shipped are lost when a follower is promoted. If the old leader rejoins, its extra writes conflict with the new leader's history, and the simple safe choice is to truncate them.
 
 **Q:** How do you prevent split brain?
-**A:** Use a monotonically increasing epoch or term stored in a consensus-backed config, and have every node reject requests carrying an older epoch.
+
+**A:** Store a monotonically increasing epoch in a consensus-backed config store, increment it on every failover, and have every node and storage layer reject requests carrying an older epoch. A paused old leader cannot be trusted to check its own status, so receivers must check.
 
 **Q:** How do you give read-your-writes with followers?
-**A:** Track the log position of the user's last write and only read from a follower that has applied at least that position, or read from the leader.
+
+**A:** Return the log position of each write to the client, and have a follower serve that client's read only once it has applied at least that position. Otherwise route the read to the leader.
+
+**Q:** Synchronous or asynchronous replication?
+
+**A:** Synchronous protects every acknowledged write but stalls writes if a follower is slow or down. Asynchronous is fast but loses recent writes on failover. Semi-synchronous, one sync follower, is the usual compromise: no loss on single-node failure without waiting for everyone.
+
+**Q:** How does a new follower join without stopping writes?
+
+**A:** Take a consistent snapshot at a known log position, copy it to the follower, then stream log entries from that position onward. Because the snapshot is tied to a position, nothing is missed or applied twice.
+
+**Q:** What happens if the failover timeout is too short?
+
+**A:** A load spike or GC pause makes the leader look dead, triggering an unnecessary failover. That adds load and can lose async writes, so it can make an incident worse. Timeouts must balance recovery time against false failovers.
+
+**Q:** What breaks at 10x write load?
+
+**A:** The single leader is the write ceiling, since every write goes through it. Followers fall further behind, increasing stale reads and potential loss on failover. Scaling writes means partitioning the keyspace with a leader per partition (Projects 17 and 38).
+
+**Q:** What did the GitHub incident teach?
+
+**A:** In 2018 a 43-second network partition triggered a cross-data-centre MySQL failover, leaving some writes on the old primary that never reached the new one. They had to reconcile them by hand, which shows why lost or divergent writes must be visible in metrics.
+
+**Q:** How did you test it?
+
+**A:** Docker Compose plus a fault script that kills nodes, pauses them with SIGSTOP and partitions them with iptables. After each run I checked that every acknowledged write in sync mode survived and no two leaders acknowledged writes in the same epoch.
+
+**Common mistakes in answers:**
+- Saying followers can always serve reads safely. They lag, so reads can be stale without position tracking.
+- Trusting the old leader to notice it was demoted. Fencing must happen at the receivers.
+- Claiming async replication with failover loses no data.
 
 ### TL;DR
 One writer, an ordered log, followers that replay it, and epoch-fenced failover — build it to feel every trap Chapter 5 warns about.
@@ -1689,14 +2320,59 @@ Multi-leader gives low-latency local writes and partition tolerance, but conflic
 - Convergence and integrity — [Ch 12 — The Future of Data Systems](../chapters/12-future-of-data-systems/README.md)
 
 ### In the interview
+**30-second answer:** I built a three-replica document store where every replica accepts writes locally and replicates asynchronously to the others through change feeds. Each document carries a version vector, so a replica can tell whether a remote change is newer, older or concurrent, and concurrent ones go to a pluggable resolver: last-write-wins, keep-both siblings, or a per-field merge. The hardest parts were making merges deterministic regardless of arrival order and handling deletes that race with updates. Local writes stayed under 5 ms with 100 ms simulated inter-replica latency, all replicas converged within 2 seconds after healing, and a test proved LWW losing an edit.
+
+**Key terms to know:**
+- **Multi-leader replication** — several nodes accept writes and replicate to each other asynchronously.
+- **Write conflict** — two replicas change the same record concurrently, without either seeing the other's change.
+- **Version vector** — per-replica counters on each document. If neither vector dominates, the writes were concurrent.
+- **Last-write-wins (LWW)** — keep the version with the highest timestamp and discard the other. Simple but loses data.
+- **Siblings** — keeping all concurrent versions and letting the client resolve them.
+- **Deterministic merge** — a merge that is commutative and associative, so every replica gets the same result in any order.
+- **Replication topology** — all-to-all, ring or star. Affects how many hops a change takes and whether it can loop.
+- **Tombstone with version** — a delete record carrying its own vector, so a concurrent update cannot silently resurrect it.
+- **Convergence** — all replicas holding identical data once writes stop and messages are delivered.
+
 **Q:** Why is last-write-wins dangerous?
-**A:** It picks one of two concurrent writes by timestamp and silently discards the other, and clock skew can even make an older write win.
+
+**A:** It picks one of two concurrent writes by timestamp and silently discards the other. With clock skew it can even make the older write win. My test tracked every client write and showed edits disappearing under LWW.
 
 **Q:** How do you detect a conflict?
-**A:** Compare version vectors. If neither dominates, the writes were concurrent.
+
+**A:** Compare version vectors. If one is less than or equal to the other in every entry, it is older and can be replaced. If neither dominates, the writes were concurrent, which is a conflict.
 
 **Q:** When is multi-leader worth it?
-**A:** Multi-data-centre deployments needing local write latency, offline clients, and collaborative editing — where you can accept and resolve conflicts.
+
+**A:** For multi-data-centre deployments needing local write latency, offline-capable clients, and collaborative editing, where you can accept and resolve conflicts. If you cannot tolerate conflicts, a single leader is simpler.
+
+**Q:** What makes a merge function safe?
+
+**A:** It must give the same result on every replica regardless of the order changes arrive, so it must be commutative and associative, and ideally idempotent. Union of tags and max of counters are safe. Appending two strings is not, unless you sort them first.
+
+**Q:** How do you stop changes looping forever in a ring?
+
+**A:** Tag each change with the replicas it has already passed through, or its origin replica and sequence, and drop changes a replica has already applied. Version vectors also make re-applying an already-seen change a no-op.
+
+**Q:** What goes wrong with all-to-all topologies?
+
+**A:** Messages can overtake each other, so an update can arrive before the insert it depends on. Version vectors detect that a dependency is missing, and the replica buffers the update until the insert arrives.
+
+**Q:** How do you handle a delete that races an update?
+
+**A:** Store the delete as a tombstone with its own version vector. If the delete and update are concurrent, the resolver sees both and applies a rule. Without the tombstone, the update would recreate the document.
+
+**Q:** What cannot be enforced locally?
+
+**A:** Global constraints such as unique usernames or a non-negative balance, because two replicas can each accept a write that is valid locally but invalid together. Many systems avoid this by giving each record a "home" leader that handles all its writes.
+
+**Q:** How did you test convergence?
+
+**A:** Randomised partition schedules with concurrent writes, then heal the network and assert all replicas hold byte-identical documents. A ledger of client writes reported exactly which ones LWW lost.
+
+**Common mistakes in answers:**
+- Using wall-clock timestamps to detect conflicts. Timestamps order writes but cannot tell you they were concurrent.
+- Assuming conflicts are rare enough to ignore. Any partition guarantees them.
+- Writing merge functions whose result depends on arrival order.
 
 ### TL;DR
 Let every replica accept writes, detect concurrency with version vectors, and merge deterministically — and see exactly why LWW loses data.
@@ -1788,14 +2464,59 @@ Consistent hashing adapts automatically but random token placement can be uneven
 - Replication across partitions — [Ch 5 — Replication](../chapters/05-replication/README.md)
 
 ### In the interview
+**30-second answer:** I built a partitioned key-value cluster that places nodes and keys on a hash ring with consistent hashing, giving each physical node many virtual nodes, and stores each key on the next R distinct physical nodes. The key decision was that adding or removing a node moves only the ranges next to its tokens, unlike hash mod N, which reshuffles nearly everything. The hardest part was ownership handover during a move: snapshot, forward writes that arrive during the copy, then flip ownership with a versioned ring. With 128 vnodes per node imbalance across 10 nodes stayed under 10%, and adding an eleventh node moved about 1/11 of the data with no failed requests.
+
+**Key terms to know:**
+- **Consistent hashing** — nodes and keys hashed onto a ring, each key owned by the next node clockwise. Membership changes move only nearby ranges.
+- **Virtual node (vnode)** — one physical node owning many ring positions, for smoother balance and spread-out recovery.
+- **Token** — a position on the ring. The routing table is a sorted array of (token, node).
+- **Replication factor (R)** — each key stored on the next R distinct physical nodes.
+- **Rebalancing** — moving ranges when nodes join or leave, here by streaming while the cluster stays online.
+- **Fixed partitions** — a set number of partitions (here 1,024) assigned to nodes by a coordinator, moved whole.
+- **Ring version** — a version number for the ownership map, so requests routed with an old map are rejected.
+- **Hot key / skew** — one key or range taking a disproportionate share of load. Mitigated here by salting.
+- **Request routing** — how a request reaches the owner: any node forwards, a routing tier, or a client with the map.
+
 **Q:** Why not use hash mod N?
-**A:** Changing N changes the owner of almost every key, forcing a near-total data reshuffle.
+
+**A:** Changing N changes the owner of almost every key. Going from 10 to 11 nodes would move about 10/11 of the data instead of about 1/11.
 
 **Q:** What do virtual nodes buy you?
-**A:** More even load, and when a node fails its load spreads across many nodes rather than one neighbour.
+
+**A:** More even load, because many small ranges average out random placement. When a node fails or joins, its load is shared across many nodes instead of one neighbour. The cost is a bigger routing table and more, smaller transfers.
 
 **Q:** How do clients find the right node?
-**A:** Either any node forwards, a routing tier does it, or the client caches the partition map from a coordination service.
+
+**A:** Either any node forwards to the owner, a routing tier does it, or the client caches the partition map from a coordination service like etcd and watches for changes. I supported forwarding and a client library doing binary search on tokens.
+
+**Q:** How do you avoid losing writes during a move?
+
+**A:** Copy a snapshot of the range to the new owner, forward or double-write updates that arrive during the copy, then flip ownership in a new ring version. Requests stamped with the old version are rejected and retried against the new owner.
+
+**Q:** How do you make sure R replicas are on different machines?
+
+**A:** Walk clockwise from the key's token and skip tokens belonging to physical nodes already chosen, until you have R distinct nodes. Otherwise two vnodes of one machine could hold both copies.
+
+**Q:** Consistent hashing or fixed partitions?
+
+**A:** Consistent hashing adapts automatically to any node count but random tokens can be uneven. Fixed partitions are simple and predictable, and moving a whole partition is easy, but the count must be chosen up front. Too few limits growth, too many adds overhead.
+
+**Q:** What does hash partitioning cost you?
+
+**A:** Range scans, because adjacent keys land on random nodes. A compound key that hashes only the first part and sorts by the rest keeps scans possible within one partition key.
+
+**Q:** How do you handle a celebrity hot key?
+
+**A:** Hashing cannot spread one key. I detected the hot key and salted it for writes, appending a small random suffix so writes spread over several partitions. Reads must then gather all salted variants, so this only pays for very hot keys.
+
+**Q:** What fails at scale, and how did you test it?
+
+**A:** Automatic rebalancing combined with an eager failure detector can trigger cascading moves, which is why many systems ask a human to approve them. I tested balance statistically, ran a writer incrementing known keys during rebalancing with a verifier checking no acknowledged write disappeared, and killed the destination mid-transfer to check it restarts.
+
+**Common mistakes in answers:**
+- Saying consistent hashing balances load perfectly. Without vnodes it is quite uneven.
+- Forgetting that vnodes of the same machine can be adjacent when choosing replicas.
+- Ignoring writes that arrive during a range transfer.
 
 ### TL;DR
 Hash keys onto a ring with many vnodes, move only the ranges that change, and hand over ownership carefully — Chapter 6 rebalancing made real.
@@ -1892,14 +2613,54 @@ Local indexes: cheap writes, expensive reads (fan-out, tail latency). Global ind
 - Asynchronous derived data — [Ch 11 — Stream Processing](../chapters/11-stream-processing/README.md)
 
 ### In the interview
+**30-second answer:** I built a used-car listings store partitioned by listing id across 8 partitions, with secondary indexes on colour and make implemented two ways: local, where each partition indexes its own rows and queries scatter to all partitions, and global, where the index is partitioned by term and updated through an asynchronous queue. The key result was the read/write trade-off: local indexes make writes cheap but reads fan out, global indexes make reads one lookup but writes touch other partitions. The hardest part was keeping the async global index correct when a car changes colour and when backfilling an index while writes continue. I measured index lag under 1 second at 2,000 writes per second.
+
+**Key terms to know:**
+- **Secondary index** — an index on a non-key attribute, such as colour, that cannot be routed by the partition key.
+- **Local (document-partitioned) index** — each partition indexes only its own rows. Queries must scatter to all partitions.
+- **Global (term-partitioned) index** — the index is partitioned by the indexed value, so "red" lives on one index partition.
+- **Scatter-gather** — sending a query to every partition and merging the results.
+- **Tail latency amplification** — a scatter query waits for the slowest partition, so p99 grows with partition count.
+- **Asynchronous index maintenance** — base writes emit index updates to a queue applied later, giving stale index reads.
+- **Backfill** — building an index over existing data while new writes keep arriving.
+- **Index lag** — how far the global index trails the base table.
+
 **Q:** What is the downside of a document-partitioned index?
-**A:** Reads must query every partition and wait for the slowest, so tail latency grows with partition count.
+
+**A:** Reads must query every partition and wait for the slowest one, so tail latency grows with partition count. I showed p99 rising from 8 to 32 partitions and jumping when one partition had an extra 50 ms.
 
 **Q:** Why are global indexes usually updated asynchronously?
-**A:** A single write may touch several index partitions on other nodes. Making that atomic needs a distributed transaction, which is slow and fragile.
+
+**A:** A single base write may need to update index partitions on other machines, for example removing "red" and adding "blue". Making that atomic needs a distributed transaction, which adds latency and fails when any participant is down.
 
 **Q:** How do you build an index on existing data online?
-**A:** Start capturing new changes, scan existing data, and merge the two idempotently using versions.
+
+**A:** Start consuming the change stream before scanning, then scan the existing rows, and apply both idempotently using row versions so the newer one wins. That is the same trick CDC snapshots use (Project 22).
+
+**Q:** What goes wrong when a car changes colour?
+
+**A:** The update must delete the "red" entry and add the "blue" one, possibly on two index partitions. If an async consumer applies them out of order you get stale entries. I ordered index updates per base key and stored the base version so older updates are rejected.
+
+**Q:** Why re-check the predicate after an index lookup?
+
+**A:** A lagging global index may point to a row that no longer matches, for example a car that is now blue. After fetching the base row you re-check colour = red and drop mismatches.
+
+**Q:** Which would you choose for a read-heavy search page?
+
+**A:** A global index, because each query hits one index partition and avoids the fan-out tail. You accept eventual consistency on the index, as DynamoDB does with its global secondary indexes. For write-heavy data or when reads must be consistent with writes, local indexes are simpler.
+
+**Q:** What breaks at 100x partitions?
+
+**A:** Local index queries degrade badly, since fan-out to hundreds of partitions makes some partition slow almost every time. Global indexes then win for reads, but a popular term like "black" becomes a hot index partition, which you split by range or salt.
+
+**Q:** How did you verify correctness?
+
+**A:** A consistency checker periodically rebuilt the index from base data and diffed it against the maintained index. Latency benchmarks injected a controlled slow partition to measure tail effects.
+
+**Common mistakes in answers:**
+- Claiming global indexes are strictly better. They move cost to writes and are usually stale.
+- Forgetting to remove the old index entry when an indexed value changes.
+- Backfilling by scanning first and only then subscribing to changes, which loses writes in between.
 
 ### TL;DR
 Index locally and scatter reads, or index globally and scatter writes — measure both and learn the core trade-off of partitioned secondary indexes.
@@ -1987,14 +2748,59 @@ MVCC trades storage and garbage collection for concurrency. First-committer-wins
 - Storage engine internals — [Ch 3 — Storage and Retrieval](../chapters/03-storage-and-retrieval/README.md)
 
 ### In the interview
+**30-second answer:** I built an in-memory key-value store with multi-version concurrency control: every write creates a new version tagged with its transaction id, and each transaction reads a consistent snapshot of versions committed before it began. Readers never block writers and writers never block readers, while write-write conflicts are resolved with first-committer-wins. The hardest parts were the visibility rules, especially keeping transactions that were in progress at snapshot time invisible, and vacuum, which can only remove versions older than the oldest active snapshot. My target was 200,000 single-key transactions per second on 8 cores, and the doctors scenario demonstrated that snapshot isolation still allows write skew.
+
+**Key terms to know:**
+- **MVCC** — keeping several versions of each row so transactions can read old versions while new ones are written.
+- **Snapshot** — the set of committed transactions a reader can see: everything below xmin, nothing at or above xmax, minus the in-progress set.
+- **Visibility rule** — a version is visible if its creator committed before the snapshot and its deleter did not.
+- **First-committer-wins** — if two concurrent transactions write the same key, the second to commit aborts.
+- **Commit log (status table)** — one entry per transaction: in progress, committed or aborted. Flipping it makes all writes visible at once.
+- **Vacuum** — garbage collection of versions no active snapshot can see.
+- **xmin horizon** — the oldest snapshot still active. Nothing newer than it can be vacuumed.
+- **Write skew** — two transactions read overlapping data and write different keys, breaking an invariant. SI allows it.
+- **Transaction id wraparound** — 32-bit ids eventually wrap, so old versions must be "frozen".
+
 **Q:** How do MVCC readers avoid blocking?
-**A:** They read older versions that match their snapshot, so they never wait for a writer to finish.
+
+**A:** They read the version that matches their snapshot, which may be older than the latest one. They never wait for a writer to finish, because the writer's new version is simply invisible to them until it commits.
 
 **Q:** What anomaly does snapshot isolation still allow?
-**A:** Write skew (and phantoms causing write skew), because concurrent transactions do not see each other's writes to different rows.
+
+**A:** Write skew, including phantoms that cause write skew, because concurrent transactions do not see each other's writes to different keys and no write-write conflict is detected. My doctors-on-call test committed both transactions.
 
 **Q:** Why does PostgreSQL need vacuum?
-**A:** Updates leave old row versions behind. Vacuum removes those no active snapshot can still see.
+
+**A:** Updates and deletes leave old row versions behind. Vacuum removes those that no active snapshot can still see and makes the space reusable. Without it, tables bloat and version chains get long.
+
+**Q:** How do you make a transaction's writes appear atomically?
+
+**A:** The versions are written early but are invisible while the transaction is "in progress". Commit is a single update of its status in the commit log, so every reader sees either all or none of its writes.
+
+**Q:** Why does a snapshot need the in-progress set and not just a number?
+
+**A:** A transaction with a smaller id may still be running when you start. If it commits later, it must remain invisible to you, otherwise your snapshot changes under you. Recording which transactions were in progress makes that rule checkable.
+
+**Q:** How does a long-running transaction hurt everyone?
+
+**A:** Its snapshot holds back the xmin horizon, so vacuum cannot remove any version created after it started. Version chains grow, reads walk longer chains and storage bloats. I showed growth while a long read was open and reclamation after it finished.
+
+**Q:** What happens under a hot key?
+
+**A:** First-committer-wins means many concurrent writers to the same key abort and retry, so throughput collapses on that key. Atomic increments or partitioning the counter help.
+
+**Q:** How do you make it durable?
+
+**A:** Write each committed transaction's write set to a write-ahead log and fsync before acknowledging the commit. On recovery, replay committed write sets and ignore transactions with no commit record.
+
+**Q:** How did you test it?
+
+**A:** I ran every Project 6 scenario against my engine. Randomised concurrent bank transfers checked that the total balance stayed constant, and a history checker verified each read saw a consistent snapshot.
+
+**Common mistakes in answers:**
+- Calling snapshot isolation serializable. It allows write skew.
+- Saying MVCC needs no locks at all. Writers still conflict with writers.
+- Forgetting the cost: storage overhead, vacuum and long-transaction bloat.
 
 ### TL;DR
 Never overwrite, always version, and decide visibility per snapshot — build the concurrency control at the heart of PostgreSQL and most modern databases.
@@ -2097,14 +2903,58 @@ Deterministic crash points via injectable hooks, run in a loop. Invariant checke
 - Atomicity and durability — [Ch 7 — Transactions](../chapters/07-transactions/README.md)
 
 ### In the interview
+**30-second answer:** I built a two-phase commit coordinator that atomically commits money transfers across two separate PostgreSQL databases using PREPARE TRANSACTION and COMMIT PREPARED. The key design point is the commit point: the moment the coordinator's commit record is durable in its log, after which commit must eventually happen everywhere. The hardest part was recovery: crashing at each of six critical points and making both the coordinator and participants finish or roll back correctly, using presumed abort. Across 10,000 transfers with random crashes there were zero atomicity violations, and I also demonstrated the blocking problem with a prepared transaction holding row locks while the coordinator was down.
+
+**Key terms to know:**
+- **Atomic commit** — all participants commit or all abort, even across separate databases.
+- **Two-phase commit (2PC)** — phase one asks every participant to prepare and vote, phase two broadcasts the decision.
+- **Prepare** — a participant makes its changes durable and promises it can commit if told to. After voting yes it cannot abort alone.
+- **Coordinator log** — the durable record of each global transaction's state and decision.
+- **Commit point** — the coordinator's commit record reaching disk. Before it, failure means abort, after it, commit.
+- **In-doubt transaction** — a prepared transaction whose outcome the participant does not know yet. It holds locks while waiting.
+- **Presumed abort** — if the coordinator has no commit record for a transaction, the answer is abort.
+- **Heuristic decision** — an operator forcing an in-doubt transaction to commit or abort, risking atomicity.
+
 **Q:** Why does 2PC block?
-**A:** After voting yes, a participant cannot decide alone. If the coordinator crashes before telling it the outcome, it must wait, holding locks.
+
+**A:** After voting yes, a participant cannot decide on its own, because the coordinator might already have decided commit. If the coordinator crashes before sending the outcome, the participant must wait, still holding its locks, until the coordinator recovers.
 
 **Q:** What is the commit point?
-**A:** When the coordinator durably records its commit decision. From then on, commit must eventually happen everywhere.
+
+**A:** The moment the coordinator durably records its commit decision. From then on, it must keep retrying phase two until every participant has committed, and no failure can turn it into an abort.
 
 **Q:** How is 2PC different from consensus?
-**A:** 2PC needs every participant to vote yes and is not fault-tolerant to coordinator failure. Consensus needs only a majority and keeps working if a minority fails.
+
+**A:** 2PC needs every participant to vote yes, and a single coordinator failure blocks it. Consensus needs only a majority to agree and keeps working if a minority fails. You can make 2PC non-blocking by replicating the coordinator with consensus, as Spanner does.
+
+**Q:** Why must phase two be idempotent?
+
+**A:** A recovering coordinator may resend COMMIT PREPARED for a transaction that already committed. Participants must treat "already committed" as success, otherwise recovery itself causes errors.
+
+**Q:** What does presumed abort buy you?
+
+**A:** The coordinator never has to force abort decisions to disk or remember aborted transactions. If it crashes before writing a commit record, every participant asking about that transaction gets "abort". It reduces log writes and makes recovery rules simple.
+
+**Q:** What happens if a participant crashes after preparing?
+
+**A:** The prepared transaction survives the restart, because PostgreSQL makes it durable and lists it in pg_prepared_xacts. On recovery the participant, or the coordinator's recovery job, looks up the outcome and finishes it.
+
+**Q:** What is the latency and scaling cost?
+
+**A:** Each transaction needs at least two extra round trips and extra fsyncs, and locks are held across those network round trips. With more participants the chance that one is slow or down grows, so throughput and availability both drop.
+
+**Q:** What are the alternatives?
+
+**A:** Replicate the coordinator with consensus (Spanner), store the decision in the data itself (Percolator, Project 30), or avoid cross-database atomicity with an outbox and idempotent consumers (Project 23).
+
+**Q:** How did you test it?
+
+**A:** Injectable crash hooks at every step, run in a loop. After each scenario an invariant checker verified total money was constant and pg_prepared_xacts was empty after recovery.
+
+**Common mistakes in answers:**
+- Saying a participant can abort after a timeout once it has voted yes. That breaks atomicity.
+- Calling 2PC a consensus algorithm. It is atomic commit and is not fault-tolerant to coordinator failure.
+- Forgetting that prepared transactions hold locks for as long as they are in doubt.
 
 ### TL;DR
 Prepare, log the decision, then commit everywhere — and learn by crashing it why 2PC is atomic but blocking.
@@ -2196,14 +3046,59 @@ Ordering is only per partition. One slow message blocks its partition (head-of-l
 - Partitioning and replication — [Ch 6 — Partitioning](../chapters/06-partitioning/README.md)
 
 ### In the interview
+**30-second answer:** I built a Kafka-like broker from scratch: topics split into partitions, each an append-only log of segment files with a sparse offset index, consumers that track their own offsets, and consumer groups whose coordinator assigns partitions and rebalances when members change. The key decision was keeping messages after delivery, which preserves order per partition and lets any consumer replay history, unlike a traditional queue. The hardest parts were rebalancing safely, which I fenced with generation ids, and making at-least-once and at-most-once modes explicit. My target was 200 MB per second of batched sequential appends on one SSD, and a killed consumer's partitions were reassigned within 10 seconds.
+
+**Key terms to know:**
+- **Log-based broker** — messages are appended to a durable log and retained, and consumers read sequentially by offset.
+- **Partition** — one ordered log within a topic. Order is guaranteed only within a partition, and keys pick the partition.
+- **Offset** — a message's position in its partition. Consumers commit offsets to record progress.
+- **Consumer group** — consumers sharing a topic, each partition read by exactly one member at a time.
+- **Rebalance and generation id** — reassigning partitions when members change. The generation id fences commits from stale members.
+- **Segment and offset index** — the log is split into files, each with a sparse index from offset to file position.
+- **Retention vs log compaction** — delete old segments by time or size, or keep only the latest record per key.
+- **At-least-once vs at-most-once** — commit after processing (duplicates possible) or before (losses possible).
+- **Zero-copy** — sending file bytes from the page cache straight to the socket without copying through the application.
+
 **Q:** How does a log broker differ from a traditional queue?
-**A:** It retains messages and tracks per-consumer offsets, so ordering per partition is kept and consumers can replay. Queues delete on ack and spread messages across consumers.
+
+**A:** It retains messages and tracks per-consumer offsets, so order within a partition is kept and consumers can replay from any point. A traditional queue deletes messages on acknowledgement and hands them to whichever consumer is free, so order is lost and replay is impossible.
 
 **Q:** What is log compaction?
-**A:** Discarding older records for a key, keeping only the latest — turning the log into a durable snapshot of a key-value table.
+
+**A:** Discarding older records for a key and keeping only the latest one. It turns the log into a durable snapshot of a key-value table, and a tombstone (null value) eventually removes the key entirely.
 
 **Q:** How do you scale consumption?
-**A:** Add partitions and consumers in a group. Each partition is consumed by one member at a time.
+
+**A:** Add partitions and add consumers to the group. Each partition is consumed by one member at a time, so the partition count is the upper limit on parallelism within a group.
+
+**Q:** At-least-once or at-most-once?
+
+**A:** Committing the offset after processing gives at-least-once: a crash before the commit means reprocessing and duplicates. Committing before processing gives at-most-once: a crash means skipped messages. Most systems choose at-least-once with idempotent consumers.
+
+**Q:** How do you avoid two consumers processing one partition during a rebalance?
+
+**A:** Every group membership round gets a generation id. A consumer that was removed but has not noticed still carries the old generation, and the coordinator rejects its offset commits. That is the same fencing idea as epochs and fencing tokens.
+
+**Q:** Why rely on the OS page cache?
+
+**A:** The kernel already caches file pages, so an application-level cache would duplicate memory. A restarted broker also keeps a warm cache, and zero-copy sends work straight from it. I measured the difference.
+
+**Q:** What does one slow message do?
+
+**A:** It blocks everything behind it in that partition, which is head-of-line blocking. You can only process a partition in order, so a poison message must be retried a few times and then moved to a dead-letter topic.
+
+**Q:** What breaks at 10x traffic?
+
+**A:** A single broker's disk and network are the limit, and a disk failure loses data. You spread partitions across brokers and replicate each partition with a leader and in-sync followers. Partition count must also be planned, since it caps consumer parallelism.
+
+**Q:** How did you test it?
+
+**A:** Per-key ordering tests, crash tests in both commit modes counting duplicates and losses, and a long soak test with segment rollover, retention and compaction running together.
+
+**Common mistakes in answers:**
+- Claiming Kafka guarantees global ordering. It orders only within a partition.
+- Saying more consumers than partitions increases throughput. Extra consumers sit idle.
+- Calling at-least-once delivery "exactly-once" without idempotent processing.
 
 ### TL;DR
 Partitioned append-only logs, offsets and consumer groups — build Kafka's core and you understand the backbone of stream processing.
@@ -2300,14 +3195,59 @@ CDC is asynchronous: derived stores lag. It captures row changes, not business i
 - Replication logs — [Ch 5 — Replication](../chapters/05-replication/README.md)
 
 ### In the interview
+**30-second answer:** I built a change data capture pipeline that reads every committed insert, update and delete from PostgreSQL's write-ahead log through logical decoding and a replication slot, publishes them to Kafka with Debezium, and keeps a search index, a Redis cache and an audit table in sync. The key decision was replacing application dual writes with one ordered change log, so every derived store sees changes in commit order. The hardest parts were lining up the initial snapshot with the streaming start point and making sinks idempotent using the primary key and LSN. End-to-end lag stayed under 2 seconds p99 at 1,000 changes per second, and replaying a topic twice produced an identical index.
+
+**Key terms to know:**
+- **Change data capture (CDC)** — turning a database's committed changes into a stream of events for other systems.
+- **Dual writes** — the application writing to the database and another store separately. Races and partial failures make them diverge.
+- **Logical decoding** — PostgreSQL decoding its WAL into row-level changes, here with the pgoutput plugin.
+- **Replication slot** — server-side bookmark of how far a consumer has read. PostgreSQL keeps WAL until the slot confirms it.
+- **LSN** — log sequence number, the WAL position of a change. Monotonic per database, used as a version by sinks.
+- **Initial snapshot** — copying existing rows before streaming, aligned with the slot's start LSN so nothing is missed or doubled.
+- **Idempotent sink** — applying an event twice has the same effect as once, here via upserts keyed by primary key and LSN.
+- **Replica identity** — what PostgreSQL logs as the "before" image. FULL logs all columns.
+- **Derived data** — stores computed from the source of truth that can be rebuilt from the log.
+
 **Q:** Why not write to the database and the search index from the application?
-**A:** Dual writes race and partially fail, so the stores diverge. CDC derives all writes from one ordered log.
+
+**A:** Dual writes race and partially fail. Two concurrent updates can reach the two stores in different orders, and a crash between the writes leaves one store updated and the other not. CDC derives all writes from one ordered log, so stores converge.
 
 **Q:** How does CDC read changes from PostgreSQL?
-**A:** Via logical decoding of the WAL through a replication slot, which tracks the consumer's position.
+
+**A:** Through logical decoding of the WAL via a replication slot, which tracks the consumer's confirmed position. Only committed changes are emitted, in commit order.
 
 **Q:** How do sinks handle redelivery?
-**A:** Upserts by primary key, with the source LSN as a version to ignore older events.
+
+**A:** They upsert by primary key and store the source LSN as a version, ignoring any event with an LSN older than the one already applied. Replaying the whole topic then has no effect.
+
+**Q:** How do you take the initial snapshot without gaps or duplicates?
+
+**A:** Create the slot and export a snapshot at the slot's starting LSN, read existing rows from that exact snapshot, then stream from the slot. Debezium does this automatically, and my own reader used EXPORT_SNAPSHOT to do the same.
+
+**Q:** What is the danger of a replication slot?
+
+**A:** If the consumer stops, the slot makes PostgreSQL keep WAL forever and the disk fills. I monitored retained WAL bytes and alerted, and PostgreSQL 13+ can cap it with max_slot_wal_keep_size, at the cost of invalidating the slot.
+
+**Q:** How is ordering preserved?
+
+**A:** Topics are keyed by primary key, so all changes to one row land in one Kafka partition in order. Changes spanning several rows in one transaction are not grouped unless you add transaction metadata.
+
+**Q:** CDC or event sourcing?
+
+**A:** CDC captures row changes, what changed, from a mutable database and needs no application change. Event sourcing records business intent, why, as the source of truth. CDC is easier to retrofit, events carry more meaning.
+
+**Q:** What changes at 10x write volume?
+
+**A:** A single slot and connector become the bottleneck, and large transactions arrive as bursts. You add Kafka partitions and parallel sinks, and at very large scale capture per shard, as Shopify did across 100+ MySQL shards.
+
+**Q:** How did you test it?
+
+**A:** A workload generator wrote to PostgreSQL, then I compared row counts and checksums between the source and each derived store. I killed each component in turn mid-run and re-checked, and stopped the connector for 10 minutes to watch slot lag grow and recover.
+
+**Common mistakes in answers:**
+- Saying CDC is synchronous. Derived stores always lag the source.
+- Forgetting to monitor replication slots, which can fill the database disk.
+- Taking the snapshot and starting the stream at unrelated points.
 
 ### TL;DR
 Tap PostgreSQL's WAL with logical decoding and Debezium, stream changes through Kafka, and keep every derived store in sync from one ordered log.
@@ -2414,14 +3354,58 @@ Outbox adds a table write per business operation and some latency. Polling adds 
 - Atomic transactions — [Ch 7 — Transactions](../chapters/07-transactions/README.md)
 
 ### In the interview
+**30-second answer:** I built an order service that inserts the order and an OrderPlaced event into an outbox table in the same database transaction, with a relay that publishes outbox rows to Kafka, and a payment service that consumes them idempotently. The key decision was never talking to Kafka from the order transaction, so the only atomic unit is the database commit, and duplicates are handled downstream by recording processed message ids in the same transaction as the state change. The hardest part was the external payment call, which I made safe by passing an idempotency key to the provider. Across 100,000 orders with random kills of every component, orders and charges matched exactly.
+
+**Key terms to know:**
+- **Transactional outbox** — writing an event row in the same transaction as the business change, so both commit or neither does.
+- **Relay** — the process moving outbox rows to Kafka, by polling or by CDC. It publishes at least once.
+- **SKIP LOCKED** — a PostgreSQL clause that lets several relay instances claim different rows without blocking each other.
+- **Idempotent consumer** — processing a message twice has the effect of processing it once, here via a processed_messages table.
+- **Idempotency key** — a client-supplied unique id so a retried request returns the original result instead of repeating it.
+- **End-to-end argument** — exactly-once effects come from ids carried through the whole pipeline, not from one component.
+- **Dead-letter topic** — where poison messages go after repeated failures, so they do not block a partition.
+- **Exactly-once effect** — the observable result happens once, even though delivery may happen several times.
+
 **Q:** Why not publish to Kafka inside the database transaction?
-**A:** Kafka is not part of the transaction. Crashes between the two steps lose or invent messages.
+
+**A:** Kafka is not part of the database transaction. If you publish then the commit fails, you have sent a phantom event, and if you commit then crash before publishing, the event is lost.
 
 **Q:** Is "exactly-once delivery" possible?
-**A:** Delivery is at least once in practice. Exactly-once *effects* come from idempotent processing keyed by a unique message or request id.
+
+**A:** In practice delivery is at least once, because a sender that does not get an ack must retry. Exactly-once effects come from idempotent processing keyed by a unique message or request id.
 
 **Q:** How do you dedupe in the consumer?
-**A:** Insert the message id into a processed table in the same transaction as the state change, so both commit or neither does.
+
+**A:** Insert the message id into processed_messages in the same transaction as the state change. A duplicate hits the primary key, so the transaction does nothing, and both records commit or neither does.
+
+**Q:** Why does the polling relay risk skipping rows?
+
+**A:** Outbox ids are assigned at insert time, but transactions commit in any order. A relay reading "id greater than the last one I published" can pass an id whose transaction commits later and never see it. Either mark rows published individually and accept unordered delivery, or use CDC, which follows commit order.
+
+**Q:** What about the call to the payment provider?
+
+**A:** It sits outside the payment database transaction. If you charge then crash before recording, the retry charges again, unless the provider deduplicates by an idempotency key. That is why real payment APIs accept one, and I passed the message id through.
+
+**Q:** Polling relay or CDC relay?
+
+**A:** Polling is simple and needs no extra infrastructure but adds database load and latency. CDC with Debezium's outbox router pushes changes in commit order with no polling, at the cost of running Kafka Connect. My targets were 500 ms p99 for polling and under 2 seconds for CDC.
+
+**Q:** How long must you keep dedup records?
+
+**A:** For as long as redelivery is possible, which is at least the topic retention plus retry windows. Delete them too early and a replay causes duplicate effects.
+
+**Q:** What changes at 10x order volume?
+
+**A:** The outbox table and processed_messages table grow quickly, so you delete published rows in batches or partition by day and drop old partitions. Relays scale with SKIP LOCKED or by moving to CDC.
+
+**Q:** How did you test it?
+
+**A:** Fault injection at every boundary: after the database commit, before and after publishing, before the consumer commit. A reconciliation job compared orders and charges by id and had to find an exact match.
+
+**Common mistakes in answers:**
+- Claiming Kafka's exactly-once feature covers the database write and external calls. It covers Kafka-to-Kafka processing only.
+- Deduplicating in memory, which forgets everything on restart.
+- Recording the processed id in a separate transaction from the state change.
 
 ### TL;DR
 Write events in the same transaction as state, relay them at least once, and make consumers idempotent — the practical route to exactly-once effects.
@@ -2512,14 +3496,59 @@ Materialising every intermediate result to disk makes MapReduce robust but slow 
 - Partitioning by hash — [Ch 6 — Partitioning](../chapters/06-partitioning/README.md)
 
 ### In the interview
+**30-second answer:** I built a small MapReduce framework: a master splits input into map tasks, workers run user map functions and write one sorted, partitioned file per reducer, and reducers fetch their partition from every map output, merge-sort it and run reduce. Fault tolerance comes from immutable inputs and deterministic tasks, so a failed or slow task is simply re-run, with output written to a temporary file and atomically renamed. On top I built reduce-side sort-merge joins, broadcast hash joins and skew handling for hot keys. Word count over 10 GB ran at least 3x faster on 4 workers than on 1, and killing any worker at any time still gave identical output.
+
+**Key terms to know:**
+- **Map and reduce** — map turns each input record into key-value pairs, reduce processes all values for one key.
+- **Shuffle** — partitioning map output by key hash, sorting it, and moving each partition to its reducer.
+- **Combiner** — a map-side pre-aggregation, such as partial word counts, to shrink shuffle traffic.
+- **Speculative execution** — running a backup copy of a straggling task and taking whichever finishes first.
+- **Atomic task output** — write to a temporary name, rename on success. The master accepts only the first completion.
+- **Reduce-side sort-merge join** — both inputs keyed by join key, the shuffle brings matches together, the reducer merges them.
+- **Broadcast hash join** — load the small input into a hash table on every mapper, avoiding a shuffle of the big input.
+- **Secondary sort** — ordering values within a key so, for example, the user record arrives before activity records.
+- **Skew** — a hot key that overloads one reducer, handled by sampling and splitting that key across reducers.
+
 **Q:** Why is MapReduce fault tolerant?
-**A:** Inputs are immutable and tasks are deterministic, so any failed task can simply be re-run, and outputs are committed atomically.
+
+**A:** Inputs are immutable and tasks are deterministic, so any failed task can simply be re-run and produce the same output. Outputs are committed atomically by rename, so a half-written file never becomes visible.
 
 **Q:** How does a reduce-side join work?
-**A:** Both inputs are keyed by the join key, the shuffle brings matching records to the same reducer sorted together, and the reducer merges them.
+
+**A:** Both inputs emit records keyed by the join key and tagged with their source. The shuffle brings matching records to the same reducer, and a secondary sort puts the user record first, so the reducer can stream activity records without buffering them.
 
 **Q:** When use a broadcast hash join?
-**A:** When one side is small enough to load into memory on every mapper, avoiding the shuffle of the big side.
+
+**A:** When one side is small enough to fit in memory on every mapper. Each mapper loads it into a hash table and joins the big side as it reads it, so the big side never needs to be shuffled.
+
+**Q:** What happens if the same task runs twice?
+
+**A:** That happens with retries and speculative execution. Each attempt writes to its own temporary file and renames on completion, and the master records only the first successful completion, so output is never duplicated.
+
+**Q:** Why must map and reduce be deterministic and side-effect free?
+
+**A:** Retries are only safe if re-running gives the same output. A mapper that calls a random function or an external API could produce different results or repeat side effects on each attempt.
+
+**Q:** How did you handle a hot key?
+
+**A:** I sampled the input to find keys with far more records than average, then split that key's records across several reducers and sent the matching records from the other side to all of them. One reducer was 10x slower before the fix.
+
+**Q:** Why do Spark and Flink beat MapReduce for multi-stage jobs?
+
+**A:** MapReduce writes every intermediate result to disk between jobs, which is robust but slow. Dataflow engines pipeline stages and keep data in memory, recomputing lost partitions from lineage instead of reading materialised files.
+
+**Q:** What dominates job time at scale?
+
+**A:** Stragglers: the job finishes only when the slowest task finishes, and at scale some machine is always slow. Speculative execution limits that. Shuffle network traffic is the other big cost, which combiners reduce.
+
+**Q:** How did you test it?
+
+**A:** I compared output with a single-process reference implementation, ran test loops that killed and paused workers at random, and used a property test: output equals the reference for random inputs and random failure schedules.
+
+**Common mistakes in answers:**
+- Saying MapReduce recovers by checkpointing. It recovers by re-running deterministic tasks on immutable input.
+- Using a broadcast join when the "small" side does not fit in memory.
+- Ignoring skew, which makes one reducer dominate the whole job.
 
 ### TL;DR
 Map, partition, sort, reduce, retry — build the framework that turned Unix-pipe thinking into cluster-scale batch processing.
@@ -2607,14 +3636,58 @@ BSP is simple to reason about but slow workers hold up every barrier. Whole-grap
 - Graph data models — [Ch 2 — Data Models and Query Languages](../chapters/02-data-models-and-query-languages/README.md)
 
 ### In the interview
+**30-second answer:** I built a Pregel-style graph engine using the bulk synchronous parallel model: vertices are hash-partitioned across workers, and in each superstep every active vertex reads its incoming messages, updates its value and sends messages along its edges, with a barrier between supersteps. I chose this over MapReduce because vertex state stays in memory across iterations and only messages move. The hardest parts were knowing when a superstep is truly finished and recovering from failures by rolling all workers back to a checkpoint. PageRank matched NetworkX within 1e-6, and killing a worker mid-job still finished with correct results.
+
+**Key terms to know:**
+- **Bulk synchronous parallel (BSP)** — computation in supersteps separated by global barriers.
+- **Superstep** — one round in which every active vertex runs compute on the messages from the previous round.
+- **Vertex program** — the user's compute function, "think like a vertex".
+- **Barrier** — everyone waits until all workers finish and all messages are delivered before the next superstep.
+- **Vote to halt** — a vertex becomes inactive until a new message wakes it. The job ends when all are halted and no messages are in flight.
+- **Combiner** — merges messages to the same vertex before sending, such as summing PageRank contributions.
+- **Aggregator** — a global value computed each superstep, such as total rank change, used to detect convergence.
+- **Checkpoint and rollback** — saving vertex state and inboxes every K supersteps, and restoring all workers from it after a failure.
+
 **Q:** Why is MapReduce bad for iterative graph algorithms?
-**A:** Each iteration rewrites and reshuffles the whole graph. BSP keeps vertex state in memory and only sends messages.
+
+**A:** Each iteration is a full job that reads, shuffles and rewrites the entire graph. BSP keeps vertex state in memory across iterations and only sends messages along edges, so each iteration costs roughly the number of messages.
 
 **Q:** How does Pregel recover from failure?
-**A:** By periodically checkpointing all vertex state and rolling every worker back to the last checkpoint when one fails.
+
+**A:** It checkpoints all vertex values and pending messages every K supersteps. When a worker fails, every worker rolls back to the last checkpoint and re-runs from there, which is correct only if compute is deterministic.
 
 **Q:** What is a combiner here?
-**A:** A function that merges messages to the same vertex before sending, like summing PageRank contributions.
+
+**A:** A function that merges messages addressed to the same vertex before they are sent, like summing PageRank contributions or taking the minimum distance in shortest paths. It cuts network traffic, and it must be commutative and associative.
+
+**Q:** How do you know a superstep is really over?
+
+**A:** Every worker must have finished computing and every message must have been delivered. I counted messages sent and received per worker, and the master only releases the barrier when totals match, so no message is still in the network.
+
+**Q:** How does PageRank map onto this model?
+
+**A:** Each vertex holds its rank. Every superstep it sends rank divided by its out-degree to each neighbour, then sets its new rank to a damping term plus the damped sum of incoming messages. An aggregator tracks total change to stop when it converges.
+
+**Q:** Why does hash partitioning hurt?
+
+**A:** Random placement means most edges cross workers, so most messages travel over the network. Graph-aware partitioning keeps neighbours together and cuts traffic, but computing a good partition is itself a hard problem.
+
+**Q:** What breaks at 10x graph size or workers?
+
+**A:** Barriers make every superstep as slow as the slowest worker, and with more workers that tail gets worse. Whole-graph rollback also becomes expensive, which is why confined recovery logs messages and recomputes only the failed partition.
+
+**Q:** When would you not use a distributed graph engine?
+
+**A:** When the graph fits in one machine's memory. A single-node implementation often beats a cluster because it avoids network messages and barriers entirely.
+
+**Q:** How did you test it?
+
+**A:** I compared results with NetworkX for PageRank, shortest paths and connected components on small graphs, and killed workers in different supersteps to check recovery gave the same answers.
+
+**Common mistakes in answers:**
+- Saying Pregel recovers only the failed worker. Basic Pregel rolls back every worker to the checkpoint.
+- Ending a superstep when computation finishes but messages are still in flight.
+- Assuming a distributed graph engine is always faster than one big machine.
 
 ### TL;DR
 Think like a vertex, exchange messages in supersteps, checkpoint for recovery — the Pregel model for iterative graph computation.
@@ -2708,17 +3781,59 @@ High write availability and low latency, but only eventual consistency, sibling 
 - Failure detection under partitions — [Ch 8 — The Trouble with Distributed Systems](../chapters/08-trouble-with-distributed-systems/README.md)
 
 ### In the interview
+**30-second answer:** I built a Dynamo-style leaderless key-value store: keys are placed on N=3 replicas by consistent hashing, any node can coordinate a request, and a write succeeds after W acknowledgements while a read waits for R responses, both tunable per request. Concurrent writes are detected with version vectors and kept as siblings. Divergence is repaired three ways: read repair, hinted handoff with sloppy quorums, and Merkle-tree anti-entropy. The hardest lesson was that quorums are not linearizable, so my harness deliberately exhibits stale reads even with W + R > N. Writes kept succeeding with one replica down at W=2, and after a 10-minute partition healed, replicas converged within 5 minutes.
+
+**Key terms to know:**
+- **Leaderless replication** — any replica accepts reads and writes, and the client or a coordinator talks to several replicas.
+- **Quorum (N, W, R)** — N replicas per key, a write needs W acks, a read needs R replies. W + R > N makes read and write sets overlap.
+- **Sloppy quorum** — counting acks from stand-in nodes outside the key's usual N replicas when those are unreachable.
+- **Hinted handoff** — the stand-in stores the write with a hint and delivers it when the real replica returns.
+- **Read repair** — during a read, writing the newest version back to replicas that returned stale data.
+- **Anti-entropy with Merkle trees** — background comparison of hash trees per key range so only differing ranges are streamed.
+- **Version vector and siblings** — detecting concurrent writes and keeping both values for the client to merge.
+- **Tombstone and grace period** — deletes are versioned markers kept until every replica has them, like Cassandra's gc_grace_seconds.
+- **Eventual consistency** — replicas converge once writes stop, but reads in between may be stale.
+
 **Q:** Does W + R > N guarantee you read the latest write?
-**A:** Usually, but not always: sloppy quorums, concurrent writes, failed writes that partly succeeded, and restored stale replicas can all break it. It is not linearizable.
+
+**A:** Usually, but not always. Sloppy quorums, concurrent writes, a write that failed overall but succeeded on some replicas, and a replica restored from stale data can all break it. Quorums alone are not linearizable.
 
 **Q:** What is hinted handoff?
-**A:** When a replica is unreachable, another node stores the write with a hint and delivers it when the replica comes back.
+
+**A:** When a replica is unreachable, another node accepts the write on its behalf, stores it with a hint naming the intended replica, and delivers it when that replica comes back. It keeps writes available during short outages.
 
 **Q:** Why Merkle trees for anti-entropy?
-**A:** Comparing tree hashes top-down finds differing key ranges with little data transferred, instead of comparing every key.
+
+**A:** Two replicas compare root hashes first. If they match, the whole range matches and nothing else is sent. If not, they descend only into mismatched subtrees, so data transferred is proportional to the differences, not to the total data.
 
 **Q:** How are concurrent writes handled?
-**A:** Version vectors detect concurrency, and both values are kept as siblings for the client or a merge function to resolve.
+
+**A:** Version vectors detect that neither write saw the other, and both values are kept as siblings. The next read returns both with a merged context, and a write using that context replaces them.
+
+**Q:** How do you pick W and R?
+
+**A:** W = R = 2 with N = 3 balances latency and freshness and tolerates one slow or down replica. W = 1 makes writes fast and highly available but reads more often stale. W = N makes writes fail when any replica is down. I demonstrated a stale read with W = 1, R = 1.
+
+**Q:** Why are deletes tricky?
+
+**A:** A delete must be a tombstone with a version, kept until all replicas have it. If you purge it too early, anti-entropy sees the old value on a replica that missed the delete and copies it back, so deleted data resurrects.
+
+**Q:** What happens during a long outage?
+
+**A:** Hints pile up on stand-in nodes and can fill their disks, so real systems cap hint storage time and fall back to anti-entropy. When the node returns, repair traffic competes with live traffic.
+
+**Q:** Siblings or last-write-wins?
+
+**A:** Siblings never lose a concurrent write but push merging onto the client. LWW, Cassandra's default, is simpler but silently drops one of two concurrent writes, and clock skew decides which.
+
+**Q:** How did you test it?
+
+**A:** A Jepsen-style harness recorded histories under partitions and counted lost writes for each N, W and R setting. A convergence checker compared full replica contents after healing, and I wiped a replica's data directory to prove Merkle repair restored only differing ranges.
+
+**Common mistakes in answers:**
+- Saying W + R > N gives strong consistency. It gives overlap, not linearizability.
+- Forgetting that sloppy quorums break the overlap guarantee entirely.
+- Purging tombstones before all replicas have seen them.
 
 ### TL;DR
 Write to N, wait for W, read from R, then repair with read repair, hints and Merkle trees — build Dynamo and see exactly how far quorums go.
@@ -2822,17 +3937,63 @@ Consensus needs a majority, so a 5-node cluster tolerates 2 failures and a minor
 - Replication logs — [Ch 5 — Replication](../chapters/05-replication/README.md)
 
 ### In the interview
+**30-second answer:** I implemented Raft: a cluster of 3 or 5 servers elects a leader per term with randomised timeouts, the leader replicates log entries with an AppendEntries consistency check, and an entry is committed once stored on a majority and then applied to a key-value state machine. That gives a linearizable service that survives a minority of failures without losing committed writes. The hardest parts were the subtle rules: persisting votes and log entries before replying, committing only current-term entries by counting, and confirming leadership before serving reads. A new leader was elected within 1 second of the old one dying, and thousands of randomised fault runs found zero safety violations.
+
+**Key terms to know:**
+- **Consensus** — getting several nodes to agree on a value, here the order of log entries, despite crashes.
+- **Term** — a numbered election period. Terms only increase, and seeing a higher term turns any server into a follower.
+- **Leader election** — a follower whose election timeout fires becomes a candidate and needs votes from a majority.
+- **Up-to-date check** — a server only votes for a candidate whose log is at least as up-to-date as its own.
+- **AppendEntries consistency check** — each entry is sent with the previous index and term, and a follower rejects it if they do not match.
+- **Commit index** — the highest entry stored on a majority. Committed entries are applied to the state machine in order.
+- **Linearizability** — the service behaves as if there were one copy and each operation took effect at one instant between start and end.
+- **Read index / leader lease** — ways for a leader to confirm it is still leader before answering reads.
+- **Snapshot and InstallSnapshot** — compacting the log into state machine bytes and sending them to lagging followers.
+
 **Q:** How does Raft ensure a committed entry is never lost?
-**A:** Commits need a majority, and a candidate only wins votes from a majority if its log is at least as up-to-date as theirs, so any new leader already contains every committed entry.
+
+**A:** A commit needs a majority, and a candidate only wins if a majority votes for it, which they only do if its log is at least as up-to-date as theirs. Any two majorities overlap, so every new leader already contains every committed entry.
 
 **Q:** Why are election timeouts randomised?
-**A:** To make it unlikely that several followers become candidates at once and split the vote repeatedly.
+
+**A:** If all followers timed out together they would all become candidates, split the vote, and repeat. Random timeouts, here 150 to 300 ms, make it likely one server times out first and wins before others start.
 
 **Q:** Can a Raft leader serve reads locally?
-**A:** Only after confirming it is still leader (a heartbeat round) or under a time-based lease. Otherwise a deposed leader could serve stale data.
+
+**A:** Only after confirming it is still leader, by a heartbeat round to a majority (read index), or under a time-based lease that assumes bounded clock drift. Otherwise a deposed leader cut off by a partition could serve stale data.
 
 **Q:** How many failures can 5 nodes tolerate?
-**A:** Two, because three nodes are still a majority.
+
+**A:** Two, because the remaining three are still a majority. A 4-node cluster also tolerates only one failure, which is why odd sizes are used.
+
+**Q:** Why can't a leader commit an old-term entry just by counting replicas?
+
+**A:** An entry from an earlier term stored on a majority can still be overwritten by a later leader, which is Figure 8 in the Raft paper. A leader first commits an entry from its own term, and that commits all earlier entries indirectly.
+
+**Q:** Why must state be persisted before replying?
+
+**A:** If a server votes, crashes before saving the vote, restarts and votes again in the same term, two candidates could each get a majority and you would have two leaders. Current term, voted-for and log entries must be fsynced before the RPC reply.
+
+**Q:** How do you avoid applying a client's command twice?
+
+**A:** Clients tag each request with (client id, sequence number). The state machine remembers the last sequence applied per client and returns the stored result for a duplicate, so a retry after a timeout does not apply the write twice.
+
+**Q:** What limits throughput, and what changes at 10x load?
+
+**A:** Every write needs a round trip to a majority and an fsync, and all writes go through one leader. Batching and pipelining AppendEntries help, but past one leader's capacity you split the keyspace into many Raft groups (Project 38).
+
+**Q:** What problem do PreVote and check-quorum solve?
+
+**A:** A partitioned node keeps timing out and raising its term. When it rejoins, its higher term forces the healthy leader to step down. PreVote makes it check it could win before incrementing its term, and check-quorum makes a leader that cannot reach a majority step down.
+
+**Q:** How did you test it?
+
+**A:** A deterministic simulator controlled message delivery, drops, reordering and crashes from a seed and checked election safety, log matching, leader completeness and state machine safety after every step. Then Project 33's checker ran against real processes with partitions.
+
+**Common mistakes in answers:**
+- Saying a minority partition can keep accepting writes. It cannot commit anything.
+- Treating a leader's local state as always fresh for reads.
+- Saying an entry is committed as soon as the leader writes it, before a majority stores it.
 
 ### TL;DR
 Terms, majority votes and a replicated log with careful commit rules — implement Raft and you understand the core of etcd, Consul, CockroachDB and Kafka's KRaft.
@@ -2939,14 +4100,58 @@ Consensus-backed locks are correct but add latency to every acquire. Short TTLs 
 - Linearizable locks, coordination services — [Ch 9 — Consistency and Consensus](../chapters/09-consistency-and-consensus/README.md)
 
 ### In the interview
+**30-second answer:** I built a distributed lock service on my Raft log: clients acquire a lock as a lease that expires unless renewed, and every grant returns a fencing token, a number that increases with each grant, such as the Raft log index. The protected storage keeps the highest token seen per resource and rejects any write with a lower one. The key lesson, which I demonstrated, is that leases alone are unsafe: a client paused by garbage collection wakes up after its lease expired and writes anyway, and only the resource can stop it. Across 10,000 randomised runs with pauses, partitions and leader kills, no write with a stale token was accepted.
+
+**Key terms to know:**
+- **Lease** — a lock that expires after a TTL unless renewed, so a crashed holder does not block others forever.
+- **Fencing token** — a monotonically increasing number issued with each grant. The resource rejects lower tokens.
+- **Process pause** — GC, VM migration or SIGSTOP stops a process without it noticing time passed.
+- **Monotonic clock** — a clock that only moves forward and measures durations, used for expiry instead of wall-clock time.
+- **Linearizable lock state** — lock grants go through consensus so all nodes agree who holds each lock generation.
+- **Conservative lease takeover** — a new leader assumes every lease was just renewed and waits a full TTL before re-granting.
+- **Coarse-grained coordination** — the right use for lock services: leader election and ownership, not per-request locking.
+- **Conditional write** — UPDATE ... WHERE max_token_seen < token, which checks and records the token atomically.
+
 **Q:** Why isn't a lease enough to protect a resource?
-**A:** A client can pause after checking its lease and resume after it expired, then write while another client holds the lock.
+
+**A:** A client can check its lease, pause for a long GC, and resume after the lease expired and another client got the lock. It then writes believing it still holds the lock, and the lock service has no way to stop it.
 
 **Q:** What is a fencing token?
-**A:** A monotonically increasing number issued with each lock grant. The resource rejects operations with a token lower than one it has already seen.
+
+**A:** A monotonically increasing number issued with each lock grant. The resource remembers the highest token it has seen and rejects operations carrying a lower one, so a stale holder's writes bounce.
 
 **Q:** Why build locks on consensus?
-**A:** So that lock state survives node failures and only one client can be granted a given lock generation, even across leader changes.
+
+**A:** So lock state survives node failures and only one client is granted a given lock generation, even across leader changes. Tokens from the Raft log index are naturally monotonic across failovers.
+
+**Q:** How does the storage check the token safely?
+
+**A:** In one atomic statement, for example an UPDATE that sets the data and max_token_seen only WHERE max_token_seen < the request's token, and returns the number of rows changed. A separate read-then-write would race.
+
+**Q:** Who decides when a lease has expired?
+
+**A:** The lock service, using its own monotonic clock. Clients should treat their lease as shorter than the TTL, subtracting clock drift and RPC time, and never compare wall-clock timestamps across machines.
+
+**Q:** What happens to leases when the lock service's leader fails?
+
+**A:** The new leader does not know exactly when each lease was last renewed. It assumes every lease was renewed just before the failover and extends all deadlines by a full TTL before granting expired locks to someone else.
+
+**Q:** What if the resource cannot check tokens?
+
+**A:** Then fencing is impossible and the lock alone cannot guarantee safety. You need idempotent operations, a resource-side compare-and-set, or a design that avoids exclusive access, which is why a third-party API is the hard case.
+
+**Q:** Short TTL or long TTL?
+
+**A:** Short TTLs give fast failover but more renew traffic and false expiry when a client is merely slow. Long TTLs are stable but leave a lock unusable for longer after a crash. Neither removes the need for fencing.
+
+**Q:** How did you test it?
+
+**A:** Randomised runs injected client pauses, client clock jumps, partitions and leader kills. From the storage log I verified accepted writes had strictly increasing tokens per resource and never overlapped, and I first showed a store without token checks being corrupted.
+
+**Common mistakes in answers:**
+- Believing the lock holder can check its lease right before writing and be safe. It can pause right after the check.
+- Using wall-clock timestamps from clients to decide expiry.
+- Thinking the lock service can revoke a client's access. Only the resource can enforce it.
 
 ### TL;DR
 Grant leases through a replicated log, attach increasing fencing tokens, and make the resource reject stale tokens — the only safe way to use distributed locks.
@@ -3033,14 +4238,59 @@ Randomised concurrent workloads, record full histories, build the dependency ser
 - Ordering and dependency graphs — [Ch 9 — Consistency and Consensus](../chapters/09-consistency-and-consensus/README.md)
 
 ### In the interview
+**30-second answer:** I extended my MVCC engine with Serializable Snapshot Isolation: transactions still read snapshots without locking, but the engine records what each one read with non-blocking SIREAD locks, tracks read-write dependencies between concurrent transactions, and aborts the pivot of any "dangerous structure" at commit. For comparison I also implemented two-phase locking with deadlock detection. The hardest parts were keeping conflict data for committed transactions until all overlapping ones finish, and range tracking to catch phantoms like overlapping room bookings. A dependency-graph checker found zero serializability violations under SSI and 2PL, and showed cycles under plain SI.
+
+**Key terms to know:**
+- **Serializability** — the result equals some serial order of the transactions. The strongest isolation level.
+- **Two-phase locking (2PL)** — shared locks for reads and exclusive for writes, all held to commit. Readers block writers and vice versa.
+- **Deadlock** — transactions each waiting for a lock the other holds. Detected by cycles in a waits-for graph and broken by aborting one.
+- **Serializable Snapshot Isolation (SSI)** — optimistic: run on snapshots, track dependencies, abort only when a cycle might form.
+- **rw-antidependency** — T1 read a version that a concurrent T2 overwrote, so T1 must come before T2 in any serial order.
+- **SIREAD lock** — a non-blocking marker of what a transaction read, including key ranges.
+- **Dangerous structure** — two consecutive rw-antidependencies T1 → T2 → T3 among concurrent transactions. T2 is the pivot.
+- **Phantom / predicate lock** — a new row matching an earlier search. Range SIREAD locks catch it.
+- **False positive abort** — SSI aborts on a possible cycle even when no real cycle exists.
+
 **Q:** How does SSI differ from 2PL?
-**A:** 2PL blocks: readers take shared locks that stop writers. SSI never blocks: it tracks read-write dependencies and aborts transactions at commit if they might have broken serializability.
+
+**A:** 2PL is pessimistic and blocks: readers take shared locks that stop writers until commit. SSI is optimistic and never blocks: it tracks read-write dependencies and aborts a transaction at commit if it might have broken serializability.
 
 **Q:** What is the dangerous structure?
-**A:** Two consecutive rw-antidependencies between concurrent transactions (T1 → T2 → T3). Every non-serializable SI history contains one.
+
+**A:** Two consecutive rw-antidependencies between concurrent transactions, T1 → T2 → T3, where T1 and T3 may be the same transaction. Every non-serializable history under snapshot isolation contains one, so aborting the pivot is enough.
 
 **Q:** What must applications do with SSI?
-**A:** Retry aborted transactions, and keep transactions short to reduce conflicts.
+
+**A:** Retry aborted transactions from the start, and keep transactions short to reduce conflicts and the amount of tracking data.
+
+**Q:** Why must you keep data about committed transactions?
+
+**A:** A committed transaction can still be part of a dangerous structure with one that is still running. If you dropped its read set and conflict flags at commit, you would miss anomalies, so they are kept until every overlapping transaction finishes.
+
+**Q:** Why does SSI abort transactions that would have been fine?
+
+**A:** It detects the dangerous structure, not a confirmed cycle, and tracking granularity can be coarse, such as a page or table instead of a key. Both cause false positives, and I measured how granularity affects the abort rate.
+
+**Q:** How do you prevent phantoms?
+
+**A:** Range scans record a range SIREAD lock, such as room 7 between 12:00 and 13:00. An insert into that range creates an rw-edge from the reader, so the booking scenario becomes serializable.
+
+**Q:** Which performed better in your benchmark?
+
+**A:** On read-heavy workloads SSI won because readers never wait. On write-heavy, high-contention workloads both suffer: 2PL from lock waits and deadlocks, SSI from aborts and retries. I reported throughput and abort rate per mode per workload.
+
+**Q:** What is the third route to serializability?
+
+**A:** Actual serial execution: run each transaction one after another on a single thread, usually as stored procedures over in-memory data. It works when transactions are tiny and fast, and it scales by partitioning.
+
+**Q:** How did you test it?
+
+**A:** I recorded full histories of randomised concurrent workloads, built the serialisation graph and asserted it was acyclic under SSI and 2PL, and showed cycles appear under SI. Unit tests covered each known anomaly.
+
+**Common mistakes in answers:**
+- Saying SSI takes locks that block. SIREAD locks never block.
+- Claiming SSI only aborts genuinely non-serializable transactions. It has false positives.
+- Forgetting that read-only transactions can also be part of an anomaly.
 
 ### TL;DR
 Keep snapshots, track who read what others overwrote, and abort the pivot of any dangerous structure — serializability without blocking, as in PostgreSQL.
@@ -3131,14 +4381,58 @@ Many round trips per transaction (two timestamps, prewrite, commit), so latency 
 - Partitioned stores — [Ch 6 — Partitioning](../chapters/06-partitioning/README.md)
 
 ### In the interview
+**30-second answer:** I built Percolator-style cross-shard snapshot-isolation transactions on top of a plain partitioned key-value store that only offers single-row compare-and-set. A timestamp oracle hands out strictly increasing start and commit timestamps, each transaction picks one written cell as its primary, prewrites data and locks everywhere, then commits by atomically replacing the primary's lock with a write record. The key idea is that the commit decision lives in the data, so any reader that finds an abandoned lock can check the primary and roll forward or back, with no coordinator to lose. Killing clients after prewrite or after primary commit never left permanent locks or half-applied transfers.
+
+**Key terms to know:**
+- **Timestamp oracle (TSO)** — a service issuing strictly increasing timestamps, persisted so restarts never go backwards.
+- **Start timestamp / commit timestamp** — the snapshot a transaction reads at, and the point its writes become visible.
+- **Primary cell** — one written cell whose single-row state decides the fate of the whole transaction.
+- **Prewrite** — writing data and a lock (pointing to the primary) on every cell, failing on write conflicts.
+- **Commit point** — the atomic replacement of the primary's lock with a write record at the commit timestamp.
+- **Column families data, lock and write** — data holds values at start ts, lock holds in-progress locks, write maps commit ts to start ts.
+- **Lock resolution** — roll a stale secondary forward if its primary committed, or back if the primary's lock expired uncommitted.
+- **Snapshot isolation** — reads see a consistent snapshot, and concurrent writes to the same cell conflict.
+
 **Q:** How does Percolator avoid 2PC's blocking coordinator?
-**A:** The commit decision lives in the primary cell. Anyone encountering a lock can check the primary and roll forward or back.
+
+**A:** The commit decision lives in the primary cell, not in a coordinator's memory or log. Anyone encountering a lock can read the primary and roll the transaction forward or back, so a crashed client blocks others only until its lock TTL expires.
 
 **Q:** What does the timestamp oracle provide?
-**A:** A global total order of start and commit timestamps, needed for snapshot reads across shards.
+
+**A:** A single global order of start and commit timestamps. Snapshot reads across shards need it to agree on which writes happened before which.
 
 **Q:** What is the commit point?
-**A:** The atomic replacement of the primary's lock with a write record at the commit timestamp.
+
+**A:** The atomic single-row update on the primary that replaces its lock with a write record at the commit timestamp. Before it the transaction can be rolled back, after it every secondary must be rolled forward.
+
+**Q:** How does a read work?
+
+**A:** Read at the start timestamp. If a lock with an earlier start timestamp exists on the cell, wait or resolve it, because that transaction might commit before our snapshot. Otherwise find the latest write record with commit timestamp at most our start timestamp and read the data it points to.
+
+**Q:** Why does the primary make this safe?
+
+**A:** The single-row compare-and-set on the primary is the only atomic step, and every secondary's fate is derived from it. There is never disagreement because there is only one place the decision is recorded, using the store's own single-row linearizability.
+
+**Q:** What happens to a slow but alive client?
+
+**A:** Another reader may decide its lock has expired and roll it back. When the slow client later tries to commit the primary, its compare-and-set checks the lock is still its own and fails, so it aborts cleanly.
+
+**Q:** Why do write conflicts abort during prewrite?
+
+**A:** Prewrite fails if the cell has a write record newer than our start timestamp or any lock from another transaction. That is first-committer-wins, which prevents lost updates.
+
+**Q:** What limits it at scale?
+
+**A:** Each transaction needs two oracle calls plus prewrite and commit round trips, so latency is higher than single-node. The oracle is a bottleneck and single point of failure, so you batch timestamps and replicate it with Raft. Spanner avoids an oracle using TrueTime (Project 31).
+
+**Q:** How did you test it?
+
+**A:** Fault injection at every protocol step across thousands of runs, a bank-transfer invariant that total balance stays constant, and a snapshot-isolation checker over recorded histories from Project 33.
+
+**Common mistakes in answers:**
+- Saying Percolator gives serializability. It gives snapshot isolation and allows write skew.
+- Thinking secondaries must be committed before the client returns. They are committed asynchronously after the primary.
+- Ignoring the oracle as a single point of failure.
 
 ### TL;DR
 Use a timestamp oracle and a primary cell as the commit record to get cross-shard snapshot-isolation transactions over a plain KV store — Percolator, as used by TiKV.
@@ -3231,14 +4525,59 @@ Commit wait: simple reads, slower writes, needs tight clock bounds (atomic clock
 - Snapshot isolation with timestamps — [Ch 7 — Transactions](../chapters/07-transactions/README.md)
 
 ### In the interview
+**30-second answer:** I built a multi-node MVCC store whose versions are stamped with hybrid logical clock timestamps, and a simulator with configurable clock offset, drift and jumps so I know the true order of events. On top I implemented two answers to clock uncertainty: CockroachDB-style uncertainty intervals, where a read that sees a value slightly in its future restarts at a higher timestamp, and Spanner-style commit wait, where a writer waits out the clock error bound before acknowledging. The hardest part was a real-time-order checker that proves stale reads disappear while skew stays inside the bound and reappear when it is exceeded. I graphed the latency commit wait adds at 1, 7 and 50 ms of uncertainty.
+
+**Key terms to know:**
+- **Clock skew and drift** — skew is the difference between two clocks, drift is how fast a clock gains or loses time.
+- **Hybrid logical clock (HLC)** — a timestamp of (wall time, logical counter) that stays close to physical time but respects causality like a Lamport clock.
+- **Linearizability / real-time order** — if a write completes before a read starts, the read must see it.
+- **Stale read** — a read with a timestamp below an already-committed write, caused by a slow clock on the reader's node.
+- **Uncertainty interval** — [start ts, start ts + max offset]. Values in it might have happened before the read in real time.
+- **Read restart** — moving a transaction's timestamp above an uncertain value and retrying the read.
+- **TrueTime** — Spanner's API returning an interval [earliest, latest] guaranteed to contain true time.
+- **Commit wait** — after choosing commit timestamp s, waiting until TrueTime's earliest is past s before acknowledging.
+- **Max offset** — the configured bound on clock error that both schemes rely on.
+
 **Q:** Why can't you use NTP timestamps for transaction order?
-**A:** Clock offsets mean a later transaction on another node can get a smaller timestamp, so a snapshot read can miss an already-committed write.
+
+**A:** Clock offsets mean a transaction that starts later on another node can get a smaller timestamp. A snapshot read at that timestamp then misses a write that had already committed, which violates real-time order. I demonstrated exactly this with two skewed nodes.
 
 **Q:** What does Spanner's commit wait do?
-**A:** It delays acknowledging a commit until the clock uncertainty has passed, so its timestamp is guaranteed to be in the past for everyone.
+
+**A:** The writer picks commit timestamp s and waits until every clock is certainly past s before acknowledging. Any transaction that starts after the acknowledgement therefore gets a timestamp greater than s and sees the write. The cost is roughly twice the uncertainty on every write.
 
 **Q:** What is a hybrid logical clock?
-**A:** A timestamp combining physical time with a logical counter so it tracks causality like a Lamport clock while staying close to real time.
+
+**A:** A timestamp combining physical time with a logical counter. On each event it takes the max of its own value, the physical clock and any received timestamp, and bumps the counter on ties, so it tracks causality while staying within the max offset of real time.
+
+**Q:** How do uncertainty restarts work?
+
+**A:** A reader at timestamp t treats any value with a timestamp in (t, t + max offset] as possibly earlier than itself in real time. It moves its timestamp above that value and re-reads, so it cannot miss a write that really happened first. Reads may restart, but writers never wait.
+
+**Q:** Commit wait or uncertainty intervals?
+
+**A:** Commit wait gives simple reads but slower writes and needs a tight bound, which Spanner gets from GPS and atomic clocks, with uncertainty of a few milliseconds. Uncertainty intervals need no special hardware but cause occasional read restarts. Both are only as safe as the max offset assumption.
+
+**Q:** What happens if clock error exceeds the bound?
+
+**A:** Both schemes silently lose their guarantee and stale reads become possible, which my checker showed. Production systems monitor offsets and a node that detects excessive offset shuts itself down, as CockroachDB does, rather than serve wrong answers.
+
+**Q:** How would a timestamp oracle compare?
+
+**A:** A central oracle (Project 30) makes no clock assumptions at all because one service hands out every timestamp. The price is a round trip to it on every transaction and a component that must be highly available.
+
+**Q:** What changes across continents?
+
+**A:** Larger distances usually mean larger clock uncertainty, which directly increases commit wait or the restart window. You also pay cross-region round trips for consensus, so closed timestamps and follower reads become attractive for read-mostly data.
+
+**Q:** How did you test it?
+
+**A:** Deterministic simulation across thousands of seeds varying skew, drift and jumps, with an injectable clock everywhere so nothing called the system clock directly. I reported violations, restarts and latency distributions per mode.
+
+**Common mistakes in answers:**
+- Saying NTP keeps clocks "close enough" for ordering. It gives no hard bound.
+- Thinking HLC alone gives linearizability. It gives causality, and real-time order still needs uncertainty handling.
+- Believing commit wait makes reads wait. It delays the writer's acknowledgement.
 
 ### TL;DR
 Stamp versions with HLCs and either wait out clock uncertainty or restart reads inside it — the two practical answers to "clocks lie" in distributed databases.
@@ -3327,14 +4666,59 @@ Weakly consistent: different nodes briefly disagree on membership. Gossip gives 
 - Request routing via membership — [Ch 6 — Partitioning](../chapters/06-partitioning/README.md)
 
 ### In the interview
+**30-second answer:** I built cluster membership with the SWIM protocol: each period a node pings one random peer, asks k helpers to ping it indirectly if there is no reply, marks it suspect if still silent, and declares it dead only if the suspicion is not refuted in time. Membership changes are piggybacked on the ping messages as gossip, so every node learns them in about log N rounds with constant per-node load. The hardest part was the incarnation-number rules that let a falsely suspected node refute the suspicion without stale gossip resurrecting dead nodes. With 100 nodes, a crashed node was known dead by everyone within 10 protocol periods, with near-zero false positives at 5% packet loss.
+
+**Key terms to know:**
+- **Membership protocol** — keeps every node's view of which nodes are in the cluster and alive.
+- **Direct and indirect probe** — ping the target, and if no ack arrives, ask k other nodes to ping it on your behalf (ping-req).
+- **Suspect state** — an intermediate state before dead, giving the node time to refute.
+- **Incarnation number** — a counter only the node itself increments to refute suspicion. Higher incarnation wins.
+- **Gossip (infection-style dissemination)** — piggybacking updates on regular messages so they spread like an epidemic.
+- **Protocol period** — the fixed interval in which each node probes exactly one peer.
+- **Full-state sync** — periodically exchanging whole member lists over TCP to repair missed gossip and heal partitions.
+- **Weak consistency** — nodes can briefly disagree about membership.
+- **Lifeguard** — extensions that adapt timeouts to a node's own health to reduce false positives.
+
 **Q:** Why indirect pings?
-**A:** A missing ack might be due to the link between two nodes, not the target. Asking others to probe reduces false positives.
+
+**A:** A missing ack might be caused by the link between two nodes, not by the target. Asking several other nodes to probe it reduces false positives caused by one bad path.
 
 **Q:** What are incarnation numbers for?
-**A:** They let a falsely suspected node refute the suspicion with a newer, authoritative "I am alive" message.
+
+**A:** They let a falsely suspected node refute the suspicion with a newer, authoritative "I am alive" message. Only the node itself may increase its incarnation, so nobody else can fake a refutation.
 
 **Q:** Why is gossip scalable?
-**A:** Each node sends a constant number of messages per period, yet updates reach everyone in about log N rounds.
+
+**A:** Each node sends a constant number of messages per period regardless of cluster size, yet updates reach everyone in about log N rounds. All-to-all heartbeats would cost O(N²) messages.
+
+**Q:** What are the precedence rules for conflicting updates?
+
+**A:** Higher incarnation always wins. At equal incarnation, suspect overrides alive and dead overrides both. Getting this wrong lets stale gossip kill live nodes or bring dead ones back.
+
+**Q:** How many times is each update gossiped?
+
+**A:** About λ times log N, enough to reach everyone with high probability without sending it forever. When messages are size-limited, I prioritised the least-transmitted updates.
+
+**Q:** What happens in a network partition?
+
+**A:** Each half declares the other dead. When the partition heals, they would never talk again unless something reconnects them, so periodic full-state sync with nodes marked dead, or with seed nodes, re-merges the cluster.
+
+**Q:** When is gossip membership not enough?
+
+**A:** When you need agreement, such as exactly one leader or one owner of a lock. Gossip gives eventual, weakly consistent views, so those decisions need consensus (Projects 27 and 28).
+
+**Q:** What breaks at 1,000 nodes or under load?
+
+**A:** Detection time still grows only slowly, but overloaded nodes respond late and get suspected, causing flapping. Lifeguard-style local health multipliers make a struggling node slower to accuse others.
+
+**Q:** How did you test it?
+
+**A:** A simulated network of 100 to 1,000 nodes with packet loss, delays, pauses and partitions, measuring detection time, false positives, messages per node and convergence time. I plotted rounds to full knowledge against N and confirmed logarithmic growth.
+
+**Common mistakes in answers:**
+- Saying SWIM gives every node the same view at all times. It is weakly consistent.
+- Letting any node increase another node's incarnation.
+- Using gossip membership for leader election without consensus.
 
 ### TL;DR
 Probe one random peer at a time, ask friends when in doubt, suspect before declaring dead, and gossip the news — scalable membership the SWIM way.
@@ -3427,14 +4811,58 @@ Black-box testing finds real bugs but cannot prove absence of bugs. Deterministi
 - Isolation anomalies as testable properties — [Ch 7 — Transactions](../chapters/07-transactions/README.md)
 
 ### In the interview
+**30-second answer:** I built a Jepsen-style test harness: concurrent clients run workloads against a cluster while a nemesis injects partitions, kills, pauses and clock skew, every operation's invocation and completion is recorded in a history, and checkers verify the history afterwards. The core is a linearizability checker that searches for a single-copy order consistent with real time, with pruning and per-key partitioning to keep the search tractable. The hardest part was indeterminate operations: a timed-out write may or may not have happened, and the checker must consider both. It found violations in Project 15's async mode and Project 26 at W=1, R=1, and none in my Raft store.
+
+**Key terms to know:**
+- **History** — the log of operations with invoke, ok, fail and info (unknown outcome) entries and their times.
+- **Nemesis** — the fault injector: partitions via iptables, kills, SIGSTOP pauses, clock skew, packet loss.
+- **Linearizability** — there is one total order of operations, consistent with real time, in which every read returns the latest write.
+- **Indeterminate operation (:info)** — a request whose outcome is unknown, usually a timeout. It may take effect any time after invocation.
+- **Linearizability checking** — a search for a valid order. NP-complete in general, so you prune and split by key.
+- **P-compositionality** — linearizability is local, so each key can be checked independently.
+- **Consistency model** — a rule about which histories are allowed, from linearizable down to eventual.
+- **Deterministic simulation** — running the system in a controlled simulator from a seed, an alternative to black-box testing.
+
 **Q:** What does it mean for a history to be linearizable?
-**A:** There is a single total order of operations, consistent with real time (non-overlapping operations keep their order), in which every read returns the latest write.
+
+**A:** There is a single total order of all operations, consistent with real time, so if one operation finished before another started it comes first, in which every read returns the value of the latest preceding write. Concurrent operations may be ordered either way.
 
 **Q:** How do you treat a timed-out write?
-**A:** As indeterminate: it may have taken effect at any point after invocation, so the checker considers both outcomes.
+
+**A:** As indeterminate. It may have taken effect at any point after its invocation, or never, so the checker considers both. Treating it as failed causes false alarms, treating it as succeeded misses bugs.
 
 **Q:** Why inject pauses as well as kills?
-**A:** A paused process comes back with stale beliefs (for example that it is still leader), which exposes fencing bugs that clean crashes do not.
+
+**A:** A killed process restarts clean, but a paused process comes back with stale beliefs, for example that it is still leader or still holds a lock. That exposes fencing bugs that clean crashes never trigger.
+
+**Q:** How do you make checking fast enough?
+
+**A:** Split the history by key, since each register is independent, then search with memoisation of (set of linearised operations, model state) to prune repeated states. Keeping concurrency windows small also limits the branching.
+
+**Q:** Which clock do you use for history timestamps?
+
+**A:** A monotonic clock on the controller machine. The cluster nodes' clocks are being deliberately skewed, so using them would corrupt the real-time order the checker depends on.
+
+**Q:** How do you test the tester?
+
+**A:** Generate histories from a known-correct model with random concurrency, which must all pass, then mutate them to break real-time order, which must all fail. The checker also returns a minimal failing sub-history as a counterexample.
+
+**Q:** What can't this approach do?
+
+**A:** Black-box testing can find bugs but never prove their absence, because it only explores the interleavings that happened. Deterministic simulation explores far more but requires designing the system for it, as FoundationDB did.
+
+**Q:** How would you check transactional databases?
+
+**A:** Linearizability is for single objects. For transactions you check isolation levels such as snapshot isolation or serializability by building a dependency graph from the history and looking for cycles, which is what Elle does.
+
+**Q:** How do you reproduce a failure?
+
+**A:** Every run is driven by a seed that fixes the workload and nemesis schedule, and the HTML timeline shows the faults next to the failing operations. Real network timing still varies, so you rerun a seed several times.
+
+**Common mistakes in answers:**
+- Confusing linearizability with serializability. One is about single objects in real time, the other about transactions.
+- Recording timeouts as failures.
+- Timestamping events with the skewed nodes' clocks.
 
 ### TL;DR
 Record histories under injected faults and search for a legal single-copy order — the Jepsen method, built yourself and pointed at your own databases.
@@ -3543,14 +4971,59 @@ CRDTs guarantee convergence but not that the merged result is what users wanted 
 - Client-side state as derived data — [Ch 12 — The Future of Data Systems](../chapters/12-future-of-data-systems/README.md)
 
 ### In the interview
+**30-second answer:** I built a collaborative text editor where every user edits a local replica, can work offline, and syncs through a relay server, with convergence guaranteed by CRDTs. I started with counters and an observed-remove set, then built an RGA-style sequence CRDT where every character has a unique (replica id, counter) id and inserts reference the character they follow. The hardest parts were causal delivery, garbage-collecting tombstones only once every replica has seen a delete, and keeping per-character metadata small. Replicas were byte-identical after sync in 100% of randomised tests, and local edits applied in under 1 ms.
+
+**Key terms to know:**
+- **CRDT** — a conflict-free replicated data type whose concurrent updates always merge to the same result in any order.
+- **Commutative, associative, idempotent merge** — order, grouping and duplicates do not change the result. Required for convergence.
+- **State-based vs operation-based CRDT** — ship whole states and merge them, or ship operations that must be delivered causally.
+- **G-Counter / PN-Counter** — per-replica counters for increments only, or a pair of them to allow decrements.
+- **OR-Set (observed-remove set)** — each add gets a unique tag and remove deletes only observed tags, so add wins over a concurrent remove.
+- **Sequence CRDT (RGA)** — characters with unique ids referencing their predecessor. Concurrent inserts at one spot are ordered deterministically.
+- **Tombstone** — a deleted character kept as a hidden marker because other operations may still reference it.
+- **Causal delivery** — an operation is applied only after the operations it depends on, using vector clocks.
+- **Local-first** — data lives primarily on the client and works offline, with the server as a relay.
+
 **Q:** What properties must a CRDT merge have?
-**A:** Commutative, associative and idempotent, so replicas converge regardless of order or duplication of updates.
+
+**A:** It must be commutative, associative and idempotent, so replicas converge regardless of the order or duplication of updates. My property tests checked all three for every type.
 
 **Q:** How does a sequence CRDT handle concurrent inserts at the same spot?
-**A:** Each character has a unique id and references its predecessor. Concurrent siblings are ordered by a deterministic rule such as replica id and counter.
+
+**A:** Each character has a unique id and references its predecessor. When two inserts share a predecessor, they are ordered by a deterministic rule such as the higher (counter, replica id) first, so every replica produces the same order.
 
 **Q:** What can CRDTs not do?
-**A:** Enforce invariants that need global agreement, like uniqueness or "balance never negative".
+
+**A:** Enforce invariants that need global agreement, such as a unique username or a balance that never goes negative. They also guarantee convergence, not that the merged result is what users wanted, like two people fixing the same typo differently.
+
+**Q:** Why do deletes leave tombstones?
+
+**A:** Another replica may concurrently insert a character after the one you deleted, referencing its id. If the deleted character were gone, that insert would have nowhere to attach.
+
+**Q:** When can tombstones be removed?
+
+**A:** Only once every replica has seen the delete, so no future operation can reference it. That causal stability condition is hard to know when replicas can come back after weeks offline, which is why many systems compact only with a known set of replicas.
+
+**Q:** Why is causal delivery needed?
+
+**A:** Operation-based CRDTs assume an operation's dependencies were applied first, for example a delete of a character must come after its insert. The causal buffer holds remote operations until their vector clock dependencies have arrived.
+
+**Q:** How did you keep memory under control?
+
+**A:** Storing a full id per character explodes memory. Like Yjs and Automerge, I stored runs of consecutive inserts by the same replica as one item with a starting id and length, and compacted the operation log into snapshots.
+
+**Q:** What is the interleaving problem?
+
+**A:** When two users type words at the same position concurrently, some CRDTs interleave the letters, mixing "abc" and "xyz" into "axbycz". RGA keeps each run together better, and I tested with realistic typing traces, not just single characters.
+
+**Q:** How did you test convergence?
+
+**A:** Randomised fuzzing: N replicas apply random edits, exchange operations in random orders with duplicates and delays, and must end with identical text. Real editing traces were replayed to check load time and memory.
+
+**Common mistakes in answers:**
+- Saying CRDTs resolve conflicts "correctly". They resolve them deterministically, which is not always what users meant.
+- Claiming the relay server is the authority. It only stores and forwards.
+- Garbage-collecting tombstones as soon as the local replica deletes.
 
 ### TL;DR
 Give every edit a unique id, deliver causally and merge with order-independent rules — a local-first collaborative editor built on CRDTs.
@@ -3646,14 +5119,59 @@ Completeness versus latency is the fundamental trade-off. Large windows or many 
 - Batch versus stream equivalence — [Ch 10 — Batch Processing](../chapters/10-batch-processing/README.md)
 
 ### In the interview
+**30-second answer:** I built a stream processor that reads click events from Kafka, assigns them to tumbling, hopping and session windows by event time, and emits per-window aggregates to PostgreSQL with idempotent upserts. Watermarks, the processor's estimate that no older events will arrive, decide when a window fires, and late events are either applied within an allowed-lateness period or sent to a side output. The hardest parts were choosing the watermark delay, merging session windows when a late event bridges two sessions, and stopping an idle partition from stalling the watermark forever. Results matched a batch recomputation over the same events, at a target of 100,000 events per second on one machine.
+
+**Key terms to know:**
+- **Event time vs processing time** — when the event happened on the device, versus when the system sees it.
+- **Window** — a time bucket for aggregation: tumbling (fixed, non-overlapping), hopping (fixed, overlapping) or session (gap-based, per key).
+- **Watermark** — an assertion that no more events earlier than time t are expected, so windows ending before t can fire.
+- **Bounded out-of-orderness** — watermark = max event time seen minus a fixed delay.
+- **Allowed lateness** — how long after the watermark a window keeps accepting late events and re-emitting results.
+- **Side output** — a separate stream for events too late to include.
+- **Trigger** — when a window emits: on watermark, early speculative firings, or late firings.
+- **Idle partition** — a source partition with no events, which would hold the minimum watermark back forever without a timeout.
+- **Straggler** — an event that arrives much later than its event time.
+
 **Q:** Event time versus processing time?
-**A:** Event time is when the event happened, processing time is when the system sees it. Windows by processing time give wrong answers whenever there is lag or replay.
+
+**A:** Event time is when the event happened, processing time is when the system sees it. Windows by processing time give wrong answers whenever there is lag, a consumer restart or a replay. I showed wrong counts after pausing the consumer for a minute.
 
 **Q:** What is a watermark?
-**A:** A timestamp asserting that no more events earlier than it are expected, allowing windows up to that time to be finalised.
+
+**A:** A timestamp asserting that no more events earlier than it are expected, so windows ending before it can be finalised. It is a heuristic, which is why late data handling is still needed.
 
 **Q:** How do you handle events after the watermark?
-**A:** Either update results within an allowed-lateness period, drop them, or route them to a side output for correction.
+
+**A:** Update results within an allowed-lateness period, emitting a corrected value, and send anything later to a side output, or drop it. The sink upserts by (window, key) so corrections replace earlier results.
+
+**Q:** How did you choose the watermark delay?
+
+**A:** Too small and many events arrive late, too large and results are delayed. I measured the distribution of lateness in the input and chose a high percentile of it. That trade-off between completeness and latency is the fundamental one in stream processing.
+
+**Q:** Why is the watermark the minimum across partitions?
+
+**A:** Each partition may be at a different point in event time, and the operator cannot finalise a window until every input has passed it. One slow partition holds everyone back, which is correct, but an idle one needs a timeout so it is ignored.
+
+**Q:** Why are session windows hard?
+
+**A:** A session is defined by a gap of inactivity, so a late event can fall between two existing sessions and join them into one. Window state must be mergeable, combining the two partial aggregates.
+
+**Q:** What happens with a malformed far-future timestamp?
+
+**A:** A naive watermark jumps forward to it, and every subsequent normal event looks late. I clamped event timestamps to a plausible range relative to ingest time.
+
+**Q:** What breaks at 10x events or keys?
+
+**A:** Window state grows with keys times open windows, which overflows memory. You spill state to RocksDB, checkpoint it (Project 36), and scale out by partitioning on the key.
+
+**Q:** How did you prove correctness?
+
+**A:** I generated events with known out-of-order distributions and compared streaming results with a batch GROUP BY over the same data in PostgreSQL. Reprocessing the topic from the start had to give the same results.
+
+**Common mistakes in answers:**
+- Treating the watermark as a guarantee. It is an estimate, and late data still happens.
+- Windowing by arrival time and calling it real-time analytics.
+- Forgetting that device clocks can be wrong. Logging device event time, device send time and server receive time lets you estimate the offset.
 
 ### TL;DR
 Assign events to windows by when they happened, close windows with watermarks, and handle the stragglers explicitly — the core of correct stream processing.
@@ -3751,14 +5269,63 @@ Exactly-once costs latency (output visible only after checkpoints commit) and co
 - Embedded storage engines — [Ch 3 — Storage and Retrieval](../chapters/03-storage-and-retrieval/README.md)
 
 ### In the interview
+**30-second answer:** I built a stateful stream processor that performs the three stream join types: stream-stream (impressions joined with clicks within an hour), stream-table (orders enriched from a customer CDC stream) and table-table (a materialised join of two changelogs), with keyed state in RocksDB. Exactly-once results come from Chandy-Lamport-style checkpoint barriers that snapshot all operator state together with source offsets, plus a transactional Kafka sink that commits output only when a checkpoint completes. The hardest parts were barrier alignment on two-input operators and fencing zombie producers after restarts. Across 1,000 crash-and-recover cycles there were no duplicate or missing join results, with checkpoints every 10 seconds.
+
+**Key terms to know:**
+- **Stream-stream join** — both sides buffered in state within a time window, so a click can find its impression.
+- **Stream-table join** — each event is enriched from a local copy of a table kept current by a changelog.
+- **Table-table join** — a materialised view of two changelogs updated whenever either side changes.
+- **Checkpoint barrier** — a marker injected into every source that splits the stream into before and after a checkpoint.
+- **Barrier alignment** — a multi-input operator waits for the barrier on all inputs before snapshotting.
+- **Consistent cut** — a global snapshot where state and offsets match, so restoring and rewinding reproduces the same output.
+- **Transactional sink** — output is pre-committed per checkpoint and committed only when it completes, a two-phase commit with Kafka.
+- **Zombie producer fencing** — Kafka transactional ids carry an epoch, so a restarted task fences off its stalled predecessor.
+- **Exactly-once (effectively once)** — every input affects the output exactly once despite failures and replays.
+
 **Q:** What are the three stream join types?
-**A:** Stream-stream (windowed, both sides buffered), stream-table (enrich events with a local copy of a table kept up to date by a changelog), and table-table (maintain a materialised join of two changelogs).
+
+**A:** Stream-stream joins two event streams within a window, buffering both sides. Stream-table enriches events with a local copy of a table kept up to date by a changelog. Table-table maintains a materialised join of two changelogs.
 
 **Q:** How do checkpoint barriers give consistent snapshots?
-**A:** Barriers split each stream into before and after. Each operator snapshots state once it has seen the barrier on all inputs, so the global snapshot corresponds to one consistent cut.
+
+**A:** Barriers split each stream into before and after. Each operator snapshots its state once it has seen the barrier on all inputs, so the global snapshot corresponds to one consistent cut, and the source offsets stored with it say exactly where to resume.
 
 **Q:** How is output made exactly-once?
-**A:** By committing output transactionally together with the checkpoint, or by idempotent writes keyed so replays overwrite rather than duplicate.
+
+**A:** By committing output transactionally together with the checkpoint, so consumers reading with read_committed only see output from completed checkpoints. Or by idempotent writes keyed so a replay overwrites rather than duplicates.
+
+**Q:** What does barrier alignment cost?
+
+**A:** An operator with two inputs must stop consuming the input whose barrier arrived first until the other arrives, otherwise its snapshot mixes pre- and post-checkpoint data. Under skew that adds latency and backpressure. Unaligned checkpoints avoid the wait by storing in-flight data in the snapshot.
+
+**Q:** Which customer version should an order join with?
+
+**A:** In a processing-time join it is whatever version is current when the order is processed, which is nondeterministic on replay. Joining by event time against a versioned table makes results reproducible. This is the slowly changing dimension problem.
+
+**Q:** What is a zombie producer?
+
+**A:** A task that was declared dead and replaced but is actually still running, for example after a long pause. Both could write output. Kafka gives each transactional id an epoch, and initialising a new producer with that id fences the old one, so its writes are rejected.
+
+**Q:** What is the cost of exactly-once?
+
+**A:** Output only becomes visible when a checkpoint commits, so latency is at least the checkpoint interval. Large state makes checkpoints slower. I benchmarked throughput and latency with 1, 10 and 60 second intervals.
+
+**Q:** What does exactly-once not cover?
+
+**A:** External side effects such as sending an email or calling an API. Replaying from a checkpoint would repeat them, so they need their own idempotency keys or deduplication.
+
+**Q:** What changes at 10x state?
+
+**A:** State of 10 million or more customers no longer fits in memory, so it lives in RocksDB on local disk. Full snapshots become slow, so incremental checkpoints upload only new SSTables. Rescaling means redistributing keyed state from a checkpoint.
+
+**Q:** How did you test it?
+
+**A:** A crash-loop harness killed random operators at random moments, and the final output set was compared with a batch join over the same input, requiring an exact match. Restoring a checkpoint into a debug job checked its consistency.
+
+**Common mistakes in answers:**
+- Saying exactly-once means each message is delivered once. It means its effect on state and output appears once.
+- Snapshotting operators at independent times without barriers.
+- Forgetting to expire stream-stream join state after the window, which grows state forever.
 
 ### TL;DR
 Keep join state locally, snapshot it with aligned barriers, and commit output with the checkpoint — exactly-once stateful stream joins, Flink-style.
@@ -3873,14 +5440,59 @@ Derived views are eventually consistent. Rebuilds need spare capacity. Deleting 
 - Batch reprocessing — [Ch 10 — Batch Processing](../chapters/10-batch-processing/README.md)
 
 ### In the interview
+**30-second answer:** I built an "unbundled database" where Kafka topics fed by CDC and event-sourced services are the source of truth, and a search index, a Redis cache and a reporting table are derived views maintained by deterministic stream processors. The key feature is reprocessing: a new view version is built from offset zero alongside the old one, compared, and then the read alias is switched with no downtime, which is the Kappa architecture. The hardest parts were keeping builders deterministic so rebuilds match, and giving clients read-your-writes across views by waiting for offsets. A full rebuild produced checksum-identical content, and the version switch caused zero failed reads.
+
+**Key terms to know:**
+- **Unbundling the database** — replacing one database's built-in indexes and caches with separate specialised stores fed from a log.
+- **System of record vs derived data** — the log is the truth, every view is computed from it and can be rebuilt.
+- **Kappa architecture** — one streaming code path, with reprocessing done by replaying the retained log.
+- **Lambda architecture** — the older alternative with separate batch and stream code paths.
+- **Blue-green view deployment** — build v2 next to v1, verify, then switch reads atomically.
+- **Read alias** — a pointer telling queries which view version is active.
+- **Deterministic builder** — no wall-clock time, random ids or external lookups, so replay gives identical output.
+- **Log compaction and retention** — keeping the latest value per key, or everything, which decides what can be rebuilt.
+- **Lineage** — which topics, offsets and code version produced each view.
+
 **Q:** What is the Kappa architecture?
-**A:** Using a single stream-processing code path for everything, with reprocessing done by replaying the retained log into a new view version.
+
+**A:** Using a single stream-processing code path for everything, with reprocessing done by replaying the retained log into a new view version. It replaces Lambda's separate batch and streaming implementations of the same logic.
 
 **Q:** Why prefer derived views over distributed transactions across stores?
-**A:** Logs give a single order that every view applies deterministically, faults are handled by replay, and views stay loosely coupled.
+
+**A:** The log gives a single order that every view applies deterministically, failures are handled by replay rather than by atomic commit, and views stay loosely coupled. A slow search index does not block writes to the cache.
 
 **Q:** How do you evolve a derived view's schema safely?
-**A:** Build the new version from the log alongside the old, verify, then switch reads atomically.
+
+**A:** Build the new version from the log alongside the old, verify it with a diff report, then switch reads atomically through the alias. If something is wrong, you switch back and the old view is still there.
+
+**Q:** Why must builders be deterministic?
+
+**A:** A rebuilt view only matches if the same input always produces the same output. Calling the wall clock, generating random ids or looking up a mutable external service during processing makes each rebuild different.
+
+**Q:** How do you give read-your-writes across views?
+
+**A:** Each write returns the source offset it was stored at. A query can wait until the view's committed offset passes that value, so the client sees its own write. That replaces cross-store transactions with explicit per-request consistency.
+
+**Q:** Infinite retention or compaction?
+
+**A:** Infinite retention lets you rebuild any view but costs storage. Compaction keeps the latest value per key, which is enough for current-state views but loses history needed for questions like "how many times did the price change". I decided per topic and documented it.
+
+**Q:** How do you delete personal data?
+
+**A:** The deletion must reach the source log, as a tombstone that compaction eventually applies, and every derived view. Lineage metadata tells you which views hold data from which topics.
+
+**Q:** What breaks at 10x data?
+
+**A:** Rebuild time grows with history, so the one-hour rebuild target needs more parallelism (more partitions and builder instances) and spare capacity. Ordering is only per partition, so views that depend on cross-key order need careful design.
+
+**Q:** How did you test it?
+
+**A:** Rebuild-equivalence tests in CI checksummed a view built live against one rebuilt from offset zero. A chaos test killed builders during rebuilds, and diff tooling compared old and new versions before switching.
+
+**Common mistakes in answers:**
+- Saying derived views are always consistent with each other. A user may see an item in search before the cache.
+- Assuming you can rebuild anything from a compacted topic. History is lost.
+- Using non-deterministic logic in builders and expecting identical rebuilds.
 
 ### TL;DR
 Make the log the source of truth, treat every store as a rebuildable view, and deploy view changes by replaying history — Chapter 12's unbundled database in practice.
@@ -3982,14 +5594,59 @@ Strong consistency per range costs a consensus round per write. Hot keys still o
 - Replication membership changes — [Ch 5 — Replication](../chapters/05-replication/README.md)
 
 ### In the interview
+**30-second answer:** I built a horizontally scalable, strongly consistent key-value database by splitting the key space into ranges of up to about 64 MB, each replicated by its own three-replica Raft group, which is Multi-Raft. Range descriptors live in a Raft-replicated meta range that clients cache, and a placement driver splits, moves and rebalances ranges and leaders. The hardest parts were making splits atomic as a single Raft command, moving replicas without ever dropping below a majority, and sharing resources across thousands of groups. Throughput scaled close to linearly from 3 to 9 nodes, and with any single node killed every range recovered within 10 seconds without data loss.
+
+**Key terms to know:**
+- **Range (region)** — a contiguous key interval, the unit of replication and movement.
+- **Multi-Raft** — one Raft group per range, many groups per node, sharing storage and transport.
+- **Range descriptor and generation** — start key, end key, replicas and a version number that changes on every split or move.
+- **Meta range** — a Raft-replicated range mapping key ranges to replica sets, the consistent routing table.
+- **Placement driver** — collects size and load statistics and issues split, move and leader-transfer commands.
+- **Range split** — executed as one Raft command on the parent, after which the right half becomes a new group.
+- **Learner** — a non-voting replica that catches up from a snapshot before being promoted to voter.
+- **Leader balancing** — spreading Raft leaders so no node handles too many writes.
+- **Heartbeat coalescing and quiescing** — batching heartbeats per node pair and silencing idle ranges.
+
 **Q:** Why one Raft group per range instead of one for the whole database?
-**A:** One group's leader becomes a bottleneck. Many groups spread leadership and data across all nodes while each range stays strongly consistent.
+
+**A:** One group's leader handles every write and becomes a bottleneck, and one machine's disk limits size. Many groups spread leadership and data across all nodes while each range stays strongly consistent on its own.
 
 **Q:** How do clients find the right range?
-**A:** They cache range descriptors from a consistent meta range and refresh on "wrong range" errors.
+
+**A:** They cache range descriptors read from the consistent meta range. If a node replies "wrong range" or "range moved", the client refreshes from the meta range and retries.
 
 **Q:** How do you move a replica without losing safety?
-**A:** Add the new replica, let it catch up, then remove the old one, one membership change at a time.
+
+**A:** Add the new replica as a non-voting learner, let it catch up from a snapshot plus log, promote it to voter, then remove the old one, one membership change at a time. The group never drops below a majority of healthy voters.
+
+**Q:** How does a split stay atomic?
+
+**A:** The split is one Raft command on the parent range, so every replica applies it at the same log position. After it applies, the right half starts a new Raft group with the same replicas, and requests carrying the old descriptor generation are rejected.
+
+**Q:** What happens with thousands of ranges per node?
+
+**A:** Each group's timers, heartbeats and fsyncs would overwhelm the node. I batched heartbeats per node pair, quiesced idle ranges so they send nothing, and shared one storage engine and write batch across all groups.
+
+**Q:** How are hot spots handled?
+
+**A:** Load-based splitting divides a busy range so its load spreads across leaders. It does not help if the hotspot is a single key, which still lands on one range's leader.
+
+**Q:** What about transactions across ranges?
+
+**A:** Single-key operations are linearizable within one range. Multi-range transactions need an atomic commit protocol on top, such as Percolator-style transactions (Project 30), which adds 2PC-like latency.
+
+**Q:** How do you scale reads?
+
+**A:** By default reads go through the leaseholder or leader to stay linearizable. Leader leases avoid a Raft round trip per read but rely on bounded clock drift, and follower reads at slightly stale timestamps add read capacity.
+
+**Q:** How did you test it?
+
+**A:** Jepsen-style runs from Project 33 forced splits and moves during partitions and node kills, with no linearizability violations allowed. Invariant checks verified ranges tile the key space with no gaps or overlaps and every range has exactly the configured number of voters.
+
+**Common mistakes in answers:**
+- Saying more nodes make one hot key faster. A single key still lives on one range.
+- Removing the old replica before the new one has caught up.
+- Forgetting that routing metadata itself must be consistent and replicated.
 
 ### TL;DR
 Split keys into ranges, give each range its own Raft group, and let a placement driver split and move them — the Multi-Raft architecture behind CockroachDB and TiKV.
@@ -4110,14 +5767,58 @@ Frequent audits catch problems sooner but cost I/O. Tree granularity trades comp
 - CDC and derived data — [Ch 11 — Stream Processing](../chapters/11-stream-processing/README.md)
 
 ### In the interview
+**30-second answer:** I built an auditor that continuously verifies data is not silently lost or corrupted as it flows from PostgreSQL through CDC and Kafka to derived stores and replicas. Each row gets a checksum over a canonical encoding at the source, which derived stores carry along with the source version, and Merkle trees per key range let the auditor find mismatches by comparing hashes top-down and descending only into differing subtrees. The hardest part was separating real corruption from in-flight lag, which I solved by comparing against a source snapshot at a known LSN. It detected 100% of injected faults in one audit cycle with zero false corruption alarms during heavy writes.
+
+**Key terms to know:**
+- **End-to-end argument** — only a check computed at the origin and verified at the final destination catches errors introduced anywhere between.
+- **Trust, but verify** — assume components can corrupt data and check continuously instead of hoping.
+- **Row checksum** — a stable hash over a canonical encoding of a row, carried end to end.
+- **Canonical encoding** — one agreed byte representation, so the same logical row hashes identically in every store.
+- **Merkle tree** — a tree of hashes where each parent hashes its children, so equal roots mean equal data.
+- **Difference classes** — missing, extra, stale version, or corrupted (same version, different checksum).
+- **Lag-aware comparison** — only flag rows whose source version is older than the pipeline's processed position.
+- **Repair by replay** — re-emit source rows through the normal pipeline so fixes use the normal code path.
+
 **Q:** Why aren't TCP checksums and disk ECC enough?
-**A:** They protect individual hops. Bugs in application code, serializers or replication can still corrupt data, and only an end-to-end check detects that.
+
+**A:** They protect individual hops, the network link or the disk sector. Bugs in application code, serializers, replication or human operations can still corrupt data, and only an end-to-end check catches that.
 
 **Q:** How do Merkle trees make comparison cheap?
-**A:** Matching root hashes mean the whole range matches. Only mismatched subtrees are explored, so data transferred is proportional to the differences.
+
+**A:** Matching root hashes mean the whole range matches. Only mismatched subtrees are explored, so data transferred is proportional to the differences. My target was under 1% of data transferred when fewer than 0.1% of rows differ.
 
 **Q:** How do you avoid false alarms from replication lag?
-**A:** Compare against a snapshot and only report differences for changes the pipeline should already have processed.
+
+**A:** Read the source from a consistent snapshot at a known LSN, and only report differences for rows whose source change the pipeline should already have processed. Anything newer is in flight, not corrupt.
+
+**Q:** Why do you need a canonical encoding?
+
+**A:** Stores reformat data: timestamps lose precision, numerics change scale, JSON keys are reordered. If each store hashed its native format, every row would mismatch, so every builder serialises the same canonical form before hashing.
+
+**Q:** Why repair by replay instead of patching the store directly?
+
+**A:** Replaying source rows sends the fix through the same code path as normal writes, so it is consistent with how every other row was produced. Direct patches are allowed but logged, because they bypass the pipeline.
+
+**Q:** How do you classify a difference?
+
+**A:** Missing means the target lacks the key, extra means the source lacks it, stale means the target has an older version, and corrupted means the same version with a different checksum. Each class suggests a different cause and fix.
+
+**Q:** How often should you audit?
+
+**A:** Frequent audits catch problems sooner but cost I/O on the source and stores. I targeted auditing 100 million rows in under an hour while slowing the source by less than 5%, and incremental Merkle updates driven by CDC reduce the cost further.
+
+**Q:** How do you know the auditor itself works?
+
+**A:** A fault injector flips bytes at rest, drops, duplicates and reorders messages, and makes a replica stale. Every release must detect and correctly classify every fault class, because a bug in checksum code could otherwise hide corruption.
+
+**Q:** What changes at 100x data?
+
+**A:** Full scans become too slow, so trees are updated incrementally from the change stream and audits run per range in parallel. Tree granularity becomes a memory versus precision trade-off.
+
+**Common mistakes in answers:**
+- Assuming each component's local checks add up to end-to-end integrity.
+- Calling every mismatch corruption without accounting for lag.
+- Hashing different serialisations of the same row in different stores.
 
 ### TL;DR
 Checksum at the origin, compare Merkle summaries everywhere downstream, and repair by replay — Chapter 12's "trust, but verify" as a running service.
@@ -4214,14 +5915,60 @@ Single-owner tablets give strong per-row consistency without per-write consensus
 - Locks, leases and coordination — [Ch 9 — Consistency and Consensus](../chapters/09-consistency-and-consensus/README.md)
 
 ### In the interview
+**30-second answer:** I built a Bigtable-style wide-column store: a sparse sorted map from (row, column family:qualifier, timestamp) to value, split into row-range tablets, each served by exactly one tablet server running my LSM engine, with SSTables and the commit log on replicated shared storage. Durability comes from shared storage, while single ownership comes from a lock service: a tablet server that loses its session must stop serving, and the master reassigns its tablets. The hardest part was making single ownership safe when a server pauses, which I solved with session checks and epoch fencing on the commit log. A failed server's tablets were reassigned within 15 seconds, and single-row operations stayed linearizable.
+
+**Key terms to know:**
+- **Wide-column store** — rows sorted by key, with column families and arbitrary qualifiers, and timestamped versions per cell.
+- **Tablet** — a contiguous range of rows, the unit of assignment and splitting.
+- **Tablet server** — serves a set of tablets using a memtable, commit log and SSTables.
+- **Master** — assigns tablets to servers and reassigns them on failure. It is not on the data path.
+- **Lock-service session** — each server holds a lock while its session is alive, and the master watches these locks.
+- **Shared storage** — replicated storage holding SSTables and logs, so any server can recover a tablet.
+- **Commit log per server** — one log shared by all a server's tablets for sequential writes, sorted by tablet during recovery.
+- **Minor and major compaction** — flushing the memtable to an SSTable, and merging all SSTables into one while dropping deleted data.
+- **Metadata table** — tablets mapping row ranges to servers, cached by clients.
+- **Locality group** — column families stored in separate SSTables so scans can skip unneeded ones.
+
 **Q:** How does Bigtable make data durable if each tablet has one server?
-**A:** The commit log and SSTables live on replicated shared storage, so another server can recover the tablet by loading its SSTables and replaying the log.
+
+**A:** The commit log and SSTables live on replicated shared storage, not on the server's local disk. Another server can recover the tablet by loading its SSTables and replaying the log from the last flush point.
 
 **Q:** What role does the lock service play?
-**A:** It tracks live tablet servers and elects a single master. A server that loses its lock stops serving, which prevents two owners.
+
+**A:** It tracks live tablet servers and elects a single master. A server that loses its lock, because its session expired, must stop serving, which prevents two servers owning the same tablet.
 
 **Q:** Why partition by key range rather than hash?
-**A:** Range partitioning supports efficient scans over sorted row keys, at the risk of hot spots for sequential keys.
+
+**A:** Range partitioning keeps rows sorted, so scans over row-key prefixes are efficient. The risk is hot spots for sequential keys such as timestamps, which you avoid by designing row keys, for example prefixing with a hashed or reversed id.
+
+**Q:** How do you prevent a paused server from writing after reassignment?
+
+**A:** Servers check their session before each commit-log append, and the log rejects appends from a stale epoch. A paused server cannot reliably notice its session expired, so the log must enforce it, which is fencing again.
+
+**Q:** Why one commit log per server instead of per tablet?
+
+**A:** One log keeps writes sequential and reduces the number of files and fsyncs. The cost is on recovery: the log is sorted by tablet so each new owner reads only its own entries, a small batch-processing job.
+
+**Q:** How does single ownership compare with per-write consensus?
+
+**A:** Single-owner tablets give strong per-row consistency without a consensus round on every write, so writes are cheap. The trade-off is that a tablet is unavailable during reassignment, whereas a Raft group (Project 38) fails over within its own group.
+
+**Q:** Is the master a single point of failure?
+
+**A:** For assignment, yes, but not for reads and writes, because clients find tablets through the metadata table and talk directly to tablet servers. A new master is elected through the lock service and rebuilds assignments by scanning live servers.
+
+**Q:** What changes at 10x data or traffic?
+
+**A:** Tablets split by size and spread over more servers, so throughput grows with servers. Shared storage must scale and stay highly available. A single hot row still overloads one server, because a row is never split.
+
+**Q:** How did you test it?
+
+**A:** Fault injection killed and paused tablet servers and partitioned the master, with Project 33's checker confirming single-row operations stayed linearizable. Long-running scans ran during splits to check consistency.
+
+**Common mistakes in answers:**
+- Saying Bigtable replicates each tablet across servers. Durability comes from shared storage, serving is single-owner.
+- Putting the master on the read and write path.
+- Confusing a wide-column store with a column-oriented analytics store.
 
 ### TL;DR
 Sorted sparse maps split into tablets, served by LSM-based servers over shared storage, coordinated by locks — Bigtable, the ancestor of HBase and many wide-column stores.
