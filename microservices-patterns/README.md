@@ -34,6 +34,10 @@ All 93 lessons across 14 chapters were read; the 12 patterns are written up belo
 
 **PDFs** — the whole book with a cover and contents: [Microservices-Patterns-Handbook.pdf](Microservices-Patterns-Handbook.pdf) · each pattern: `chapters/NN-name/ChapterNN-Notes.pdf` · rebuild everything with `bash tools/regen_pdfs.sh`. Runnable Java demos: [../demos/](../demos/) (chapter numbers match).
 
+## Capstone projects
+
+**Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced — from a strangler facade and a Resilience4j weather client to sagas, outbox, CQRS read models, OpenTelemetry tracing, Istio, multi-tenant SaaS and cell-based architecture (Java 25, Spring Boot 4.1.1, Kafka, PostgreSQL, Kubernetes): [capstones/CAPSTONES.md](capstones/CAPSTONES.md) · PDF: [capstones/Microservices-Patterns-Capstone-Projects.pdf](capstones/Microservices-Patterns-Capstone-Projects.pdf)
+
 ---
 
 ## Quick reference — grouped by concern

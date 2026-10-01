@@ -12,3 +12,4 @@ for d in chapters/*/; do
 done
 COVER_TITLE="Microservices Patterns Handbook" node tools/md2pdf.mjs Microservices-Patterns-Handbook.pdf chapters/*/README.md
 COVER_TITLE="Microservices Patterns — Interview Edition" COVER_SUB="Fast revision: every topic, key facts, top questions, gotchas" node tools/md2pdf.mjs interview/Microservices-Patterns-Interview-Edition.pdf interview/INTERVIEW.md
+COVER_TITLE="Microservices Design Patterns — Capstone Projects" node tools/md2pdf.mjs capstones/Microservices-Patterns-Capstone-Projects.pdf capstones/CAPSTONES.md
