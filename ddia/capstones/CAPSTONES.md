@@ -135,7 +135,7 @@ flowchart LR
 5. **Crash safety.** *Done when* killing the process with `SIGKILL` mid-write and restarting never returns a corrupted value (the torn tail record is detected by CRC and skipped).
 
 ### Deep dive: the hard parts
-- **Durability versus speed.** `fsync` after every write makes data durable but caps you at a few hundred to a few thousand writes per second. Batch several writes per `fsync` ("group commit") and document what can be lost on a crash. Make the choice a configuration flag.
+- **Durability versus speed.** `fsync` (the system call that forces the OS to flush a file's buffered writes to the physical disk) after every write makes data durable but caps you at a few hundred to a few thousand writes per second. Batch several writes per `fsync` ("group commit") and document what can be lost on a crash. Make the choice a configuration flag.
 - **Atomic swap after merge.** Readers may hold an offset into an old segment while merge produces a new one. Update each KeyDir entry only if it still points at the old location (a compare-and-set), then delete the old file only after no reader can reference it.
 - **Torn writes.** A crash can leave half a record at the end of the active file. Recovery must stop at the first record whose CRC fails and truncate the file there.
 
@@ -271,7 +271,7 @@ Sorted, immutable, block-structured files with a tiny index and a probabilistic 
 A small service that receives request timings from applications and reports **percentiles** — p50 (median), p95, p99, p99.9 — over sliding time windows, using a mergeable histogram so that many servers' numbers can be combined correctly.
 
 ### The problem it solves
-Averages hide pain: a mean of 50 ms can coexist with 1 in 100 users waiting 3 seconds. Chapter 1 argues that **tail latency** (high percentiles) is what users feel, especially when one page fans out to many backends and is as slow as the slowest. A common bug is averaging percentiles across servers, which is mathematically meaningless — you must merge the underlying distributions.
+The mean is a poor summary of latency: if 99 requests take 20 ms and one takes 3 seconds, the mean is about 50 ms, yet one user in a hundred waited 3 seconds. Chapter 1 argues that **tail latency** (high percentiles) is what users feel, especially when one page fans out to many backends and is as slow as the slowest. A common bug is averaging percentiles across servers, which is mathematically meaningless — you must merge the underlying distributions.
 
 ### Real-world examples
 - Google's [The Tail at Scale](https://research.google/pubs/the-tail-at-scale/) (Dean and Barroso, CACM 2013) shows how fan-out amplifies rare slow responses.
@@ -565,7 +565,7 @@ flowchart LR
 The matrix itself is the test suite. Add a round-trip property test: decode(encode(x)) equals x for random records at every version.
 
 ### Trade-offs, scaling and failure modes
-JSON is self-describing and human-readable but large and vague about numbers. Protobuf is compact and robust to renames but depends on careful field-number discipline. Avro is compactest and great for dynamically generated schemas (for example, from database tables) but needs schema distribution.
+JSON is self-describing and human-readable but large and vague about numbers. Protobuf is compact and robust to renames but depends on careful field-number discipline. Avro is the most compact and great for dynamically generated schemas (for example, from database tables) but needs schema distribution.
 
 ### Stretch goals
 - Run Schema Registry with Kafka and watch it reject an incompatible schema.
@@ -796,7 +796,7 @@ Simulate messages, attach logical clocks, and check them against true causality 
 **Level:** Beginner · **Time:** 1 weekend · **Prerequisites:** Ch 8
 
 ### What it is
-A heartbeat-based **failure detector**: each node periodically sends "I am alive" messages, and the monitor computes a suspicion level **φ (phi)** from the statistical distribution of past heartbeat gaps, instead of a fixed timeout. φ = 1 means about a 10% chance the node is actually alive, φ = 2 about 1%, and so on. You compare it against fixed-timeout detection under realistic network jitter.
+A heartbeat-based **failure detector**: each node periodically sends "I am alive" messages, and the monitor computes a suspicion level **φ (phi)** from the statistical distribution of past heartbeat gaps, instead of a fixed timeout. Roughly, if you declare the node dead at φ = 1 there is about a 10% chance you are wrong, at φ = 2 about 1%, and so on (φ is a base-10 logarithm). You compare it against fixed-timeout detection under realistic network jitter.
 
 ### The problem it solves
 Chapter 8 explains that in an asynchronous network you cannot tell a dead node from a slow one. Short timeouts cause false alarms (and needless, risky failovers). Long timeouts mean slow recovery. An adaptive detector learns the normal jitter of each link and tunes itself.
@@ -1102,7 +1102,7 @@ Project 1 needed all keys in RAM and could not do range scans. A B-tree (Project
 
 ### Real-world examples
 - O'Neil et al., [The Log-Structured Merge-Tree](https://www.cs.umb.edu/~poneil/lsmtree.pdf) (1996), the original paper.
-- [RocksDB](https://rocksdb.org/) (from Facebook, based on LevelDB) is embedded in many systems. LinkedIn's [FollowFeed](https://engineering.linkedin.com/blog/2016/03/followfeed--linkedin-s-feed-made-faster-and-smarter) stores timelines in RocksDB.
+- [RocksDB](https://rocksdb.org/) (from Facebook, based on LevelDB) is embedded in many systems. LinkedIn's [FollowFeed](https://www.linkedin.com/blog/engineering/feed/followfeed-linkedin-s-feed-made-faster-and-smarter) stores timelines in RocksDB.
 - Cassandra and HBase use the same memtable plus SSTable design, as described in the [Bigtable paper](https://research.google/pubs/bigtable-a-distributed-storage-system-for-structured-data/).
 
 ### Requirements
@@ -1506,7 +1506,7 @@ A single node is a single point of failure and a throughput ceiling for reads. R
 
 ### Real-world examples
 - PostgreSQL [log-shipping and streaming replication](https://www.postgresql.org/docs/current/warm-standby.html) is the canonical leader-follower design (primary and standbys).
-- GitHub's [October 21 post-incident analysis](https://github.blog/news-insights/company-news/oct21-post-incident-analysis/) describes how a brief network partition led to a cross-data-centre MySQL failover with writes that existed on one side but not the other.
+- GitHub's [October 21 post-incident analysis](https://github.blog/news-insights/company-news/oct21-post-incident-analysis/) describes how a 43-second network partition triggered a cross-data-centre MySQL failover, leaving some writes on the old primary that never reached the new one and had to be reconciled manually.
 
 ### Requirements
 **Functional**
@@ -1563,7 +1563,7 @@ flowchart LR
 
 ### Deep dive: the hard parts
 - **Choosing the new leader.** With async replication the most up-to-date follower may still miss writes. Those writes are lost, or must be reconciled. Make this visible in metrics rather than hiding it.
-- **Old leader comes back.** It may have writes no follower has. They must be discarded (truncate the log to the new leader's history) — exactly what happened to GitHub's MySQL data.
+- **Old leader comes back.** It may have writes no follower has. A simple design discards them (truncate the log to the new leader's history). Keeping them means reconciling by hand — the painful path GitHub took in 2018, replaying the stranded writes from MySQL binary logs.
 - **Fencing.** Epoch numbers must be checked by *every* receiver of a write (followers and storage), not just by the old leader itself, because a paused process cannot be trusted to check the time.
 
 ### Testing strategy
@@ -2120,7 +2120,7 @@ A Kafka-like broker built from scratch: **topics** split into **partitions**, ea
 Traditional queues (AMQP/JMS style) delete a message once acknowledged and deliver to whichever consumer is free, so ordering is lost and replay is impossible. A log-based broker keeps messages, preserves order within a partition, and lets a new consumer replay history from offset zero. Chapter 11 contrasts the two and shows why logs are the backbone of stream processing.
 
 ### Real-world examples
-- The [Apache Kafka design documentation](https://kafka.apache.org/documentation/#design) explains the reliance on sequential disk I/O, the page cache and zero-copy transfer, and [log compaction](https://kafka.apache.org/documentation/#compaction).
+- The [Apache Kafka design documentation](https://kafka.apache.org/documentation/#design) explains the reliance on sequential disk I/O, the page cache and zero-copy transfer (sending file bytes straight from the OS cache to the network socket without copying them through the application), and [log compaction](https://kafka.apache.org/documentation/#compaction).
 - Confluent's essay [It's Okay To Store Data In Apache Kafka](https://www.confluent.io/blog/okay-store-data-apache-kafka/) argues for logs as long-term storage, mentioning The New York Times' use of Kafka for its published content.
 
 ### Requirements
@@ -2639,7 +2639,7 @@ Leader-based systems stop accepting writes for a partition during failover. Lead
 - Ring with N=3 replication. Coordinator is whichever node receives the request.
 - Tunable consistency per request: W and R from 1 to N.
 - Versioning with vector clocks or dotted version vectors. Concurrent versions returned as siblings.
-- Read repair (synchronous on quorum reads), hinted handoff with sloppy quorum, and Merkle-tree anti-entropy per key range.
+- Read repair (synchronous on quorum reads), hinted handoff with **sloppy quorum** (counting acks from stand-in nodes outside the key's usual N replicas when those are unreachable), and Merkle-tree anti-entropy per key range.
 - Membership and failure detection via gossip (simplified, or Project 32).
 
 **Non-functional**
@@ -2728,7 +2728,7 @@ Write to N, wait for W, read from R, then repair with read repair, hints and Mer
 **Level:** Advanced · **Time:** 4–6 weeks · **Prerequisites:** Ch 8, Ch 9
 
 ### What it is
-A full implementation of the **Raft** consensus algorithm: a cluster of (typically) 3 or 5 servers agrees on a single ordered log of commands, even if a minority crash or the network partitions. Raft elects a **leader** per **term** (a numbered election period), the leader replicates entries, and an entry is **committed** once stored on a majority. Each server applies committed entries to a **state machine** — here a key-value store — giving a linearizable replicated service.
+A full implementation of the **Raft** consensus algorithm: a cluster of (typically) 3 or 5 servers agrees on a single ordered log of commands, even if a minority crash or the network partitions. Raft elects a **leader** per **term** (a numbered election period), the leader replicates entries, and an entry is **committed** once stored on a majority. Each server applies committed entries to a **state machine** — here a key-value store — giving a **linearizable** replicated service (one that behaves as if there were a single copy of the data, with every operation taking effect at one instant between its start and finish).
 
 ### The problem it solves
 Project 15's failover relied on an outside config store and could lose writes. Consensus solves leader election and log agreement inside the cluster with proven safety: no committed entry is ever lost or reordered while a majority survives. Chapter 9 shows that consensus is equivalent to total order broadcast and underpins linearizable storage, locks and membership.
@@ -3585,7 +3585,7 @@ Events arrive out of order: mobile clients go offline, networks delay, consumers
 
 ### The architecture
 ```mermaid
-flowchart LR
+flowchart TD
   K["Kafka partitions"] --> SRC["Source with per-partition watermarks"]
   SRC --> KB["Key by user"]
   KB --> WA["Window assigner"]
