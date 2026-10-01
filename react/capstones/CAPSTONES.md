@@ -19,6 +19,8 @@ A **capstone** is a project big enough to pull several chapters together into on
 5. Only then attempt the **stretch goals**. They turn a portfolio piece into an interview story.
 6. Finish by answering the *In the interview* questions out loud, without notes.
 
+**Using these projects in interviews.** Each *In the interview* section is built so you can talk about the project with confidence. Lead with the **30-second answer**: what you built, the one design decision that mattered, the hardest problem and how you solved it. Then make sure you can explain every entry in **Key terms to know** in plain words, because interviewers probe those first. Practise the Q&As out loud until the answers come without notes, and swap in your own numbers from the build: render times, INP, bundle size, row counts, test counts. Finally, prepare two follow-ups that come up in almost every interview: "what would you change at 10x scale?" and "what breaks first?"
+
 **Colour code.** In the PDF, section headings are coloured by role so you can scan a page: green for **What it is**, coral for **The problem it solves**, violet for **Real-world examples**, amber for **Trade-offs**, pink for **In the interview**, teal for **Self-check**, yellow (boxed) for **TL;DR**. Requirements, architecture and deep-dive headings use the "how it works" blue.
 
 **Level legend.**
@@ -164,17 +166,67 @@ Two hundred cards are trivial; 20,000 are not — at that size you need paginati
 - [Ch 3 — State and events](../chapters/03-state-and-events/README.md): lifting state, derived state
 
 ### In the interview
+**30-second answer:** I built a team directory that renders a responsive grid of profile cards from a typed data array, where clicking a skill tag highlights everyone who shares it. The key decision was keeping exactly one piece of state, `selectedTag`, in `App` (the closest common parent of the summary and the cards) and deriving everything else, such as the match count, during render. The subtle problem was list identity: I key every card by `person.id`, never by index, so sorting or filtering never moves an avatar or open panel onto the wrong person. 200 cards render in well under 100 ms, and an RTL test clicks "TypeScript" and checks the count.
+
+**Key terms to know:**
+- **Component** — a function that takes props and returns UI. `ProfileCard`, `TagList` and `CardGrid` are components.
+- **Props** — read-only inputs a parent passes to a child. Each card receives a `person` and an `isHighlighted` flag.
+- **Pure component** — same props in, same output out, no side effects during render. `ProfileCard` is pure, so React can re-render it safely at any time.
+- **Key** — the identity React uses to match list items between renders. `key={person.id}` on each card.
+- **Reconciliation** — React comparing the new element tree with the previous one to work out the smallest DOM change. Keys guide it for lists.
+- **Lifting state up** — moving state to the closest common parent of everything that reads it. `selectedTag` lives in `App`.
+- **Derived state** — values computed from existing state or props instead of stored. The match count and highlight flags.
+- **Callback prop** — a function passed down so a child can ask the parent to change state. `onSelectTag`.
+- **`aria-pressed`** — tells assistive tech that a button is a toggle and whether it is on. Used on each tag button.
+- **Cumulative layout shift (CLS)** — content jumping as images load. Prevented with fixed `width`/`height` on avatars.
+
 **Q:** Why not use the array index as a key?
 
-**A:** The key tells React which item is which between renders. If the list is reordered or filtered, index keys point at different items and React keeps the wrong component state and DOM. A stable id avoids that.
+**A:** The key tells React which item is which between renders. If the list is reordered or filtered, an index key now points at a different person, so React reuses the wrong component state and DOM node (an expanded panel or a loading image "sticks" to the wrong card). A stable, unique id such as `person.id` keeps identity attached to the data. Index keys are only safe for a static list that never reorders, filters or inserts.
 
-**Q:** Where should `selectedTag` live?
+**Q:** Where should `selectedTag` live, and how does a deeply nested tag change it?
 
-**A:** In the closest common parent of every component that reads it — here `App` — and be passed down with a callback to change it.
+**A:** In the closest common parent of every component that reads it, which is `App`, because both `Summary` and the cards need it. `App` passes the value down as a prop and passes `onSelectTag` down as a callback. The `TagList` calls the callback; it never owns or mutates the state itself, so there is one source of truth.
 
-**Q:** Why is the match count not state?
+**Q:** Why is the match count not stored in state?
 
-**A:** It can be computed from existing state and props, so storing it creates two sources of truth that can disagree.
+**A:** It can be computed from `people` and `selectedTag`, which you already have. Storing it creates two sources of truth that can disagree, for example after the data changes but the count is not updated. Filtering 200 items costs microseconds, so computing it on every render is the simpler and safer choice.
+
+**Q:** What actually happens when I click a tag?
+
+**A:** The click handler calls `setSelectedTag`, which schedules a re-render of `App`. React calls `App` and its children again to produce a new element tree, reconciles it against the previous tree using component types and keys, and commits only the changed DOM attributes (the highlight class and `aria-pressed`). The cards are not destroyed and recreated.
+
+**Q:** Why is a clickable tag a `<button>` and not a `<span onClick>`?
+
+**A:** A button is focusable, works with Enter and Space, and is announced as a button by screen readers, all for free. Adding `aria-pressed={isSelected}` announces it as a toggle with its on/off state. A `span` needs `tabIndex`, a role and key handlers just to reach the same baseline.
+
+**Q:** What changes at 20,000 profiles? What breaks first?
+
+**A:** Rendering 20,000 DOM nodes is what breaks first: the initial render and every highlight change get slow and memory grows. The fix is pagination or virtualization (render only the visible rows, Project 28). Wrapping `ProfileCard` in `memo` helps only re-renders, not the cost of mounting thousands of nodes.
+
+**Q:** An avatar URL is broken. What happens and how do you handle it?
+
+**A:** The browser shows a broken-image icon and the alt text. I add an `onError` handler that switches the card to an initials fallback, kept in that card's local state because nobody else cares about it. The fixed width and height mean the layout does not jump either way.
+
+**Q:** How do you prove the highlighting works?
+
+**A:** An RTL test renders `App`, clicks `getByRole('button', { name: 'TypeScript' })` with `user-event`, then asserts the summary text ("4 know TypeScript") and that the right `article` elements have the highlighted state. Querying by role tests what a user perceives, not internal class names, so refactors do not break the test.
+
+**Q:** Hands-on: what is wrong with this code?
+
+**A:** The key is on the inner element instead of the element returned from `map`, so React still warns and uses index order. The key must sit on the outermost element in the callback.
+
+```tsx
+// wrong
+people.map(p => <div><ProfileCard key={p.id} person={p} /></div>)
+// right
+people.map(p => <ProfileCard key={p.id} person={p} />)
+```
+
+**Common mistakes in answers:**
+- Saying keys are "for performance". They are for identity and correctness; wrong keys cause wrong state, not just slow renders.
+- Putting `isHighlighted` in each card's own state. The summary also needs it, so it must be derived from state in the common parent.
+- Claiming `Math.random()` or `crypto.randomUUID()` called during render makes a good key. A new key every render remounts every card.
 
 ### TL;DR
 Turn one card into a pure component, render a list with stable keys, keep the single piece of state in the common parent and derive everything else.
@@ -262,17 +314,65 @@ RTL tests for each rule: add, toggle, filter, edit-cancel with Escape, "clear co
 - [Ch 15 — Interview and machine coding](../chapters/15-react-interview-and-machine-coding/README.md): the to-do build
 
 ### In the interview
+**30-second answer:** I built a counter and a TodoMVC-style to-do list to drill React's core state rules. The key decision was treating state as an immutable snapshot: every update creates a new array or object (`map`, `filter`, spread), enforced by `readonly` types, and any update that depends on the previous value uses the updater form `setCount(c => c + step)`. The trap I designed around was "+3 quickly" adding only 1, which the updater form fixes because React batches the three queued updates into one render. The filter lives in the URL hash so it survives refresh, and 1,000 to-dos still type in under 16 ms per keystroke.
+
+**Key terms to know:**
+- **State snapshot** — during one render, state values are constants. `count` inside a click handler does not change after `setCount`.
+- **Updater function** — `setX(prev => next)`, which React applies to the latest queued value. Used for +1, +step and "+3 quickly".
+- **Batching** — React groups state updates and re-renders once. Three `setCount` calls in one click cause one render.
+- **Immutable update** — creating a new array or object instead of changing the old one. `[...todos, t]`, `todos.map(...)`.
+- **Referential equality** — React decides whether state changed with `Object.is` on the reference. A pushed array is the same reference.
+- **Local UI state** — state only one component needs. `isEditing` and the draft text in `TodoItem`.
+- **Derived state** — "N items left" and the visible list are computed from `todos` and `filter`.
+- **Controlled input** — an input whose `value` comes from state. The new-todo box and the edit field.
+- **Hash routing** — keeping a small piece of state in `location.hash` (`#/active`) so it survives reloads.
+
 **Q:** Why does calling `setCount(count + 1)` three times add only one?
 
-**A:** `count` is the value from the current render. All three calls ask for the same next value. Use the updater form so each call builds on the queued result.
+**A:** `count` is the value from the current render, say 0, so all three calls ask React to "set to 1". React batches them and the final value is 1. The updater form `setCount(c => c + 1)` queues "add one" three times, and React applies each to the previous result, giving 3.
 
 **Q:** Why must you not `push` into state?
 
-**A:** React detects changes by reference. Mutation keeps the reference, so React may skip the render, and other code holding the old array sees it change underneath.
+**A:** React compares old and new state by reference with `Object.is`. `todos.push(x)` keeps the same array reference, so React may bail out of the render and the screen does not change. Mutation also breaks anything holding the old array, such as a memoized child or an undo history. Create a new array: `setTodos(t => [...t, x])`.
 
-**Q:** What is batching?
+**Q:** What is batching, and when does it apply?
 
-**A:** React groups all state updates from one event (and since React 18, from timeouts and promises too) into a single re-render.
+**A:** Batching means React collects all state updates made in the same tick and re-renders once. Since React 18 this is automatic everywhere: in event handlers, timeouts, promises and native event listeners. If you truly need the DOM updated synchronously in the middle of a handler, `flushSync` opts out, but that is rare.
+
+**Q:** How do you toggle one to-do immutably?
+
+**A:** Map over the array and replace only the matching item with a new object; every other item keeps its reference, so memoized rows can skip re-rendering.
+
+```ts
+setTodos(ts => ts.map(t =>
+  t.id === id ? { ...t, done: !t.done } : t
+));
+```
+
+**Q:** Why does `isEditing` live in `TodoItem` and not in `TodoApp`?
+
+**A:** Only that one row needs it, so keeping it local avoids re-rendering the whole list on every keystroke of an edit. State should live as low as possible and only be lifted when a sibling or parent needs to read it. The trade-off is that "only one item editable at a time" would require lifting it as `editingId`.
+
+**Q:** Why not store `itemsLeft` and `visibleTodos` in state?
+
+**A:** Both are pure functions of `todos` and `filter`. Storing them means every handler must remember to update them too, and the first time one forgets, the footer lies. Computing them during render keeps one source of truth.
+
+**Q:** What happens with 10,000 to-dos? What breaks first?
+
+**A:** Typing in the new-todo input is what slows first, because every keystroke re-renders `TodoApp` and therefore the whole list. Fixes in order: keep the draft text in the form component so typing does not re-render the list, wrap `TodoItem` in `memo` (or enable the React Compiler), and virtualize if the DOM itself is too large.
+
+**Q:** Index keys and editing: what bug appears?
+
+**A:** If rows are keyed by index and you delete item 2 while item 3 has an open draft, React keeps the component at position 2 and gives it item 3's data, so the draft and `isEditing` appear on the wrong row. Keying by `todo.id` moves the component state with the item.
+
+**Q:** How do you test the batching rule?
+
+**A:** An RTL test clicks "+3 quickly" with `user-event` and asserts the display reads 3, not 1. Because it fails with the naive `setCount(count + 1)` version, the test proves the updater form is actually needed and guards against a regression.
+
+**Common mistakes in answers:**
+- Saying `setState` is "async" as the explanation. The real reason is that state is a per-render snapshot and updates are queued, not that the setter returns a promise (it does not).
+- Thinking batching only happens in React event handlers. Since React 18 it is automatic in timeouts, promises and native handlers too.
+- Using `todos.splice` or `sort()` directly on state. Both mutate; copy first (`toSorted()`, `toSpliced()` or spread).
 
 ### TL;DR
 Use updater functions when the next state depends on the previous one, never mutate arrays or objects, and key list items by a stable id.
@@ -359,17 +459,66 @@ Controlled inputs re-render on every keystroke; for a form this small that is fr
 - [Ch 11 — TypeScript with React](../chapters/11-typescript-with-react/README.md): discriminated unions
 
 ### In the interview
+**30-second answer:** I built a tip calculator where results update live as you type and never show `NaN`, `Infinity` or floating-point noise. The key design decision is minimal state: I store only the raw strings the user typed plus the tip choice as a discriminated union, and derive validation errors and results with a pure function during render. Money is calculated in integer cents and formatted once with `Intl.NumberFormat`, and I decided explicitly where the leftover cent goes when the bill does not divide evenly. The calculator is covered by table-driven unit tests and the form scores 100 on Lighthouse accessibility.
+
+**Key terms to know:**
+- **Controlled input** — an input whose `value` comes from React state and changes through `onChange`. Bill, custom tip and people fields.
+- **Uncontrolled input** — the DOM keeps the value and you read it on submit (`FormData`, `defaultValue`). Not used here because every keystroke changes the output.
+- **Minimal state** — store only what cannot be computed. Here: `billText`, `tip`, `peopleText`.
+- **Derived state** — values computed from state during render. `errors`, tip per person, total per person.
+- **Discriminated union** — a TypeScript union tagged by a field such as `kind: 'preset' | 'custom'`, so impossible combinations cannot be typed.
+- **Integer minor units** — doing money maths in cents to avoid binary floating-point error (`0.1 + 0.2 !== 0.3`).
+- **`Intl.NumberFormat`** — built-in, locale-aware number and currency formatting.
+- **`inputMode="decimal"`** — tells phones to show a numeric keypad with a decimal point.
+- **`aria-describedby` / `aria-invalid`** — link an error message to its input and mark the input invalid for screen readers.
+
 **Q:** Why keep the bill as a string in state?
 
-**A:** So partial input like "12." is preserved. Parse it during render and show an error if it is not a valid number.
+**A:** If state is a number, typing "12." is parsed to 12 and the dot disappears, and clearing the field becomes 0 instead of empty. Keeping the raw string preserves exactly what the user typed. I parse it during render and show an error if it is not a valid number.
 
 **Q:** How do you avoid floating-point errors with money?
 
-**A:** Work in integer minor units (cents), round once, and format with `Intl.NumberFormat`.
+**A:** Convert input to integer cents once, do all arithmetic in integers, round once at the end, and format with `Intl.NumberFormat`. JavaScript numbers are binary floating point, so decimals like 0.1 cannot be represented exactly and errors pile up if you round at every step.
 
 **Q:** What is derived state and why avoid storing it?
 
-**A:** Values computable from other state; storing them creates two sources of truth.
+**A:** Derived state is any value you can compute from other state or props, like the total per person. Storing it means every change must update two things, and a missed update shows a stale total. Computing it on render costs nothing here and removes that whole class of bugs.
+
+**Q:** Why model the tip as `{ kind: 'preset', pct } | { kind: 'custom', text }` instead of two fields?
+
+**A:** With two independent fields (`presetPct` and `customText`) you can accidentally have both set, and the UI must guess which wins. The union makes "exactly one tip source" a type rule, so choosing a preset automatically discards the custom text. TypeScript then forces the calculation to handle both cases.
+
+**Q:** Controlled or uncontrolled inputs here, and what is the trade-off?
+
+**A:** Controlled, because results must update on every keystroke and reset must clear everything. The cost is a re-render per keystroke, which is free for a form this small. For a large submit-only form, uncontrolled inputs read with `FormData` (Project 7) are simpler and re-render less.
+
+**Q:** A $100 bill split three ways: how do the per-person amounts add up?
+
+**A:** 10,000 cents divided by 3 is 3,333 with 1 cent left over. If I show $33.33 three times, the group pays $99.99. I compute the remainder with `%` and either assign the extra cent to the first person or show "one person pays $33.34", so the parts always sum to the bill.
+
+**Q:** What happens if the user types "abc", "0" or pastes "1,234.50"?
+
+**A:** "abc" fails parsing and shows a field error, and the results panel shows a placeholder rather than `NaN`. "0" people shows "Can't be zero" because dividing by zero would give `Infinity`. Thousands separators and comma decimals vary by locale, so I either strip known group separators or restrict input; the parse function is the single place where that rule lives and is unit-tested.
+
+**Q:** How do you test it?
+
+**A:** Table-driven Vitest tests for `parse` and `calculate` (zero, rounding, huge bills, remainder cents) need no DOM. Then one RTL test types "142.55", picks 15 %, types "5", and asserts the formatted results. A second checks the error is linked to the input via `aria-describedby`.
+
+**Q:** Hands-on: what does this print, and how do you fix it?
+
+**A:** It prints `0.30000000000000004`, because 0.1 and 0.2 have no exact binary representation. Work in cents and format at the end.
+
+```ts
+console.log(0.1 + 0.2);           // 0.30000000000000004
+const cents = 10 + 20;            // 30
+new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+  .format(cents / 100);           // "$0.30"
+```
+
+**Common mistakes in answers:**
+- "Just use `toFixed(2)`." That only formats; it does not fix accumulated errors, and it returns a string that people then do maths on.
+- Storing `tipPerPerson` in state and updating it in a `useEffect`. That adds an extra render and a window where the result is stale; derive it instead.
+- Assuming `type="number"` solves parsing. Its `value` is `""` whenever the browser considers the text invalid (such as "1e" or "--"), and browsers differ on intermediate input, which is why a text input with `inputMode="decimal"` plus your own parser is more predictable.
 
 ### TL;DR
 Keep raw input as state, derive results with a pure function in cents, and format with `Intl` — no `NaN`, no stored totals.
@@ -465,17 +614,71 @@ Hand-rolled fetching teaches the mechanics but you will rewrite caching, retries
 - [Ch 12 — Testing React](../chapters/12-testing-react/README.md): mocking `fetch` and MSW
 
 ### In the interview
+**30-second answer:** I built a weather widget that searches a city, fetches a forecast from Open-Meteo and never shows data for a city that is not the one selected. The key decision was a `useWeather` custom Hook that owns one Effect: it fetches with an `AbortController`, aborts the previous request in cleanup, and exposes a single `status` union instead of separate loading and error flags. The hardest part was the race where a slow response for an old city arrives last; a test with mocked 300 ms and 50 ms responses proves it can no longer win. Responses are cached for 10 minutes, and °C/°F is derived on render with no refetch.
+
+**Key terms to know:**
+- **Effect** — code that runs after React commits, to synchronize with something outside React (here, the network). The fetch in `useWeather`.
+- **Effect cleanup** — the function an Effect returns, run before the next Effect and on unmount. It calls `controller.abort()`.
+- **Race condition** — two async operations finishing in an unexpected order. City A's slow response overwriting city B.
+- **`AbortController` / `AbortSignal`** — browser API to cancel a `fetch`; an aborted fetch rejects with an `AbortError`.
+- **StrictMode double-invoke** — in development React mounts, unmounts and remounts components to expose missing cleanup.
+- **Status union** — `'idle' | 'loading' | 'error' | 'success'` as one value, so impossible combinations cannot exist.
+- **Custom Hook** — a function starting with `use` that bundles Hooks into reusable logic. `useWeather`.
+- **Dependency array** — the values an Effect re-runs on. Here `[lat, lon]`.
+- **TTL cache** — cached data with a time-to-live. A `Map` keyed by `lat,lon` with a 10-minute expiry.
+- **MSW (Mock Service Worker)** — intercepts network requests in tests so the real `fetch` code runs against fixtures.
+
 **Q:** How do you prevent a slow old response from overwriting a new one?
 
-**A:** Abort the previous request (or set an ignore flag) in the Effect's cleanup, which runs before the next Effect.
+**A:** In the Effect I create an `AbortController`, pass its signal to `fetch`, and call `abort()` in the cleanup. When the selected city changes, React runs the old Effect's cleanup before the new Effect, so the old request is cancelled. I catch and ignore `AbortError`. An `ignore` boolean flag set in cleanup works too, but abort also saves bandwidth.
 
 **Q:** Why does my Effect fetch twice in development?
 
-**A:** StrictMode mounts, unmounts and remounts to surface missing cleanup. Production runs it once.
+**A:** StrictMode deliberately mounts, unmounts and remounts each component once in development to prove your cleanup works. You see two requests and the first is aborted, which is correct behaviour. Production runs the Effect once; you should fix the cleanup, not remove StrictMode.
 
 **Q:** Should the °C/°F conversion be in an Effect?
 
-**A:** No. It is derived from data you already have; compute it during render.
+**A:** No. It is a pure calculation from data you already have, so compute it during render. Putting it in an Effect that sets state adds a second render with a stale value in between. Effects are only for synchronizing with external systems.
+
+**Q:** Why one `status` field instead of `isLoading`, `error` and `data`?
+
+**A:** Three independent fields allow nonsense combinations like loading and error at the same time, and every render must guess priority. A tagged union makes the UI a simple `switch` and lets TypeScript check that each branch has what it needs, for example `data` only exists when `status === 'success'`.
+
+**Q:** Why hand-roll fetching instead of using TanStack Query?
+
+**A:** To learn the mechanics: cleanup, races and caching. The trade-off is that a hand-rolled Hook will lack deduplication, retries, refetch-on-focus and garbage collection that a library has solved. For production I would switch (Project 12); the stretch goal is to compare both versions.
+
+**Q:** What happens if the API is down, or geolocation is denied?
+
+**A:** The fetch rejects or returns a non-OK status, so the Hook sets `status: 'error'` and the widget shows a message and a "Retry" button that bumps a counter in the dependency array to re-run the Effect. Note that `fetch` does not reject on HTTP 500, so I check `response.ok` myself. Denied geolocation falls back to the search box.
+
+**Q:** What changes at 10x the users, or if search hits the API on every keystroke?
+
+**A:** The geocoding API would be hammered and rate-limited first. I debounce the search input (around 300 ms) and abort superseded requests, and the 10-minute cache absorbs repeats. With many users the next step is a small proxy or edge cache so all clients share cached forecasts and the API key stays server-side.
+
+**Q:** How do you test the race condition?
+
+**A:** With MSW, I make city A respond after 300 ms and city B after 50 ms, select A then B, wait, and assert that only B's data is on screen and A's never appears. Without the abort in cleanup the test fails, which proves the guard works.
+
+**Q:** Hands-on: write the Effect.
+
+**A:** The cleanup aborts the request for the previous coordinates.
+
+```ts
+useEffect(() => {
+  const c = new AbortController();
+  setState({ status: 'loading' });
+  fetchForecast(lat, lon, c.signal)
+    .then(data => setState({ status: 'success', data }))
+    .catch(e => { if (e.name !== 'AbortError') setState({ status: 'error', error: e }); });
+  return () => c.abort();
+}, [lat, lon]);
+```
+
+**Common mistakes in answers:**
+- "Use an empty dependency array so it only fetches once." Then changing city does nothing; the dependencies must include `lat` and `lon`.
+- "Make the Effect callback `async`." An Effect must return a cleanup function or nothing, not a promise; define an async function inside instead.
+- Treating the double fetch in development as a bug to suppress with a ref guard, instead of writing correct cleanup.
 
 ### TL;DR
 Fetch in an Effect with an `AbortController` cleaned up on change, model status as one union, and derive everything else during render.
@@ -566,17 +769,71 @@ A reducer adds ceremony for a two-field form but pays off here. For very complex
 - [Ch 6 — State management](../chapters/06-state-management/README.md): `useReducer`
 
 ### In the interview
+**30-second answer:** I built a timed quiz on the Open Trivia DB where the whole game is a typed state machine inside a `useReducer` reducer. Phases are Setup, Loading, Question, Answered, Results and Error, and the reducer ignores any action that is not allowed in the current phase, so "answer twice" or "results before the last question" cannot happen. The hard parts were a 20-second timer that stays accurate in background tabs, which I solved by storing a deadline and computing remaining time from `Date.now()`, and shuffling answers once on load instead of in render. The reducer has 100 % branch coverage from plain function tests with no DOM.
+
+**Key terms to know:**
+- **Reducer** — a pure function `(state, action) => newState`. All quiz rules live in one.
+- **`useReducer`** — the Hook that holds reducer state and gives you `dispatch`.
+- **Action** — a plain object describing what happened, such as `{ type: 'ANSWER', choice }`.
+- **Finite state machine** — a fixed set of states (phases) with allowed transitions. The `stateDiagram` of the quiz.
+- **Impossible state** — a combination of values that should never exist, such as "answered" with no current question. A phase union prevents it.
+- **Render purity** — rendering must not have side effects or randomness. Why shuffling happens on load, not in render.
+- **Effect cleanup for intervals** — `clearInterval` in the Effect's cleanup, keyed on the question index.
+- **Timer drift** — `setInterval` callbacks fire late, especially in background tabs. Fixed by using a stored deadline.
+- **Exhaustive check** — a TypeScript `never` check in the `switch` so a new action type that is not handled fails to compile.
+- **Fake timers** — Vitest's `vi.useFakeTimers()` to advance time deterministically in tests.
+
 **Q:** When do you prefer `useReducer` over `useState`?
 
-**A:** When several values change together or the next state depends on rules; the reducer puts all transitions in one pure, testable function.
+**A:** When several values change together or the next state depends on rules about the current state. A reducer puts every transition in one pure function, so the rules can be unit-tested without rendering, and components just dispatch intents. For one or two independent values, `useState` is simpler.
 
 **Q:** Why not shuffle answers in render?
 
-**A:** Render must be pure; shuffling there gives a different order on every re-render.
+**A:** Render must be pure: same inputs, same output. Shuffling in render gives a new order on every re-render, and the timer re-renders every second, so answers would jump around. I shuffle once when the questions load and store the shuffled `choices` in state.
 
 **Q:** How do you make a countdown accurate?
 
-**A:** Store a deadline and compute remaining time from the clock each tick, rather than decrementing a counter.
+**A:** Store a deadline (`startedAt + 20000`) and on every tick compute `deadline - Date.now()`. Counting ticks drifts because interval callbacks can be delayed, and browsers throttle timers in hidden tabs to about once a second or less. The timestamp approach is correct no matter how late a tick arrives.
+
+**Q:** What does the reducer do with an action that is not valid in the current phase?
+
+**A:** It returns the current state unchanged. For example, `ANSWER` during `Answered` is ignored, which naturally prevents double-answering from a double click or a timeout landing at the same moment as a click. Returning the same reference also lets React skip the re-render.
+
+**Q:** Why a typed reducer and not XState?
+
+**A:** Seven phases and seven actions fit comfortably in a `switch` with TypeScript unions, and that adds no dependency. XState pays off when you need nested or parallel states, guards, delayed transitions and a visualizer. The trade-off is ceremony versus power; I would switch if the flow grew multiplayer or branching rules.
+
+**Q:** Where do side effects like the timer and fetching go if the reducer must be pure?
+
+**A:** In Effects outside the reducer. One Effect keyed on `phase` and `index` starts the interval and clears it in cleanup, dispatching `TICK` or `TIMEOUT`. Another fetches questions when the phase becomes Loading and dispatches `LOADED` or `FAILED`. The reducer only describes the new state.
+
+**Q:** What happens if the API fails, returns no results or rate-limits?
+
+**A:** The fetch dispatches `FAILED`, moving to the Error phase with "Try again". Open Trivia DB returns a `response_code` in the JSON body (for example 1 for "not enough questions" and 5 for rate limiting) even with HTTP 200, so I check it and map each code to a friendly message.
+
+**Q:** How do you decode `&quot;` in question text safely?
+
+**A:** Parse it with `DOMParser` and read `textContent`, then render the result as plain text. Setting it with `dangerouslySetInnerHTML` would execute any injected markup. `DOMParser` creates an inert document, so scripts do not run.
+
+**Q:** How do you test the timeout?
+
+**A:** Reducer tests call the function directly: given Question state plus `TIMEOUT`, expect Answered with `choice: null`. For the UI, an RTL test with `vi.useFakeTimers()` advances 20 seconds and asserts the correct answer is revealed and marked wrong.
+
+**Q:** Hands-on: write the guard pattern in the reducer.
+
+**A:** Switch on the action, and check the phase before changing anything.
+
+```ts
+case 'ANSWER':
+  if (state.phase !== 'question') return state;
+  return { ...state, phase: 'answered',
+    answers: [...state.answers, { questionId: q.id, choice: action.choice, ms: action.now - state.startedAt }] };
+```
+
+**Common mistakes in answers:**
+- Calling `Date.now()` or `Math.random()` inside the reducer. That makes it impure; pass `now` in the action payload instead.
+- Using one `useState` per field (`isAnswered`, `showResults`, `currentIndex`) and claiming it is simpler. It allows impossible states the machine rules out.
+- Forgetting to clear the interval on answer, so the timer keeps dispatching and a TIMEOUT overrides a correct answer.
 
 ### TL;DR
 Model the game as a typed state machine in a reducer, test it without the DOM, and drive an accurate, cleaned-up timer from timestamps.
@@ -665,17 +922,66 @@ URL state makes views shareable but means every navigation is a history entry �
 - [Ch 14 — Patterns and architecture](../chapters/14-patterns-and-architecture/README.md): portals, accessibility
 
 ### In the interview
+**30-second answer:** I built a responsive photo gallery with a lightbox that is fully keyboard- and screen-reader-accessible and shareable by URL (`?photo=7`). The key decision was using the native `<dialog>` element with `showModal()`, which gives me the top layer, an inert background and Escape-to-close for free, instead of a hand-made overlay with a portal and focus trap. The fiddly part was returning focus to the exact thumbnail that opened it, which I solved with a map of thumbnail refs kept tidy by React 19 ref-callback cleanups. Thumbnails use `srcset` and `loading="lazy"`, the first load is under 1 MB, and axe-core reports zero violations.
+
+**Key terms to know:**
+- **Modal dialog** — a window that blocks interaction with the page behind it until closed. The lightbox.
+- **`<dialog>` + `showModal()`** — native modal: rendered in the browser's top layer, background made inert, Escape fires `cancel`.
+- **Focus management** — moving focus into the dialog on open and back to the opener on close.
+- **Ref** — a handle to a DOM node. Thumbnail buttons are stored in a `Map` of refs so `.focus()` can be called.
+- **Ref callback cleanup (React 19)** — a ref callback may return a function that runs when the node is detached.
+- **Portal (`createPortal`)** — renders children into another DOM node (such as `document.body`) while keeping React context and event bubbling.
+- **`inert`** — HTML attribute that makes a subtree unfocusable and hidden from assistive tech.
+- **URL search params as state** — `?photo=7` is the source of truth for which photo is open.
+- **Lazy loading / `srcset`** — load images only near the viewport and let the browser pick the right size.
+- **Layout shift** — avoided by giving each image an aspect ratio or width and height.
+
 **Q:** What must an accessible modal do?
 
-**A:** Move focus inside on open, keep it there, close on Escape, hide the background from assistive tech, and return focus to the opener.
+**A:** Move focus inside on open, keep Tab cycling inside it, close on Escape, hide the background from assistive tech, have an accessible name (via `aria-labelledby` or `aria-label`), and return focus to the element that opened it. `showModal()` covers the top layer, inertness and Escape; I still handle the label and the focus return.
 
 **Q:** Why use a portal for a custom modal?
 
-**A:** To render outside parents whose `overflow` or `z-index` would clip or bury it, while keeping React's event bubbling and context.
+**A:** To render outside ancestors whose `overflow: hidden`, `transform` or `z-index` would clip or bury the overlay. A portal moves the DOM node but keeps the React tree, so context still works and synthetic events still bubble to React parents. With a native modal `<dialog>`, the top layer solves stacking, so the portal is optional.
 
 **Q:** What changed for refs in React 19?
 
-**A:** `ref` is a normal prop on function components, and ref callbacks can return a cleanup function.
+**A:** `ref` is now an ordinary prop on function components, so `forwardRef` is no longer needed. Ref callbacks can return a cleanup function, which React calls when the element is removed, instead of calling the callback again with `null`. That makes a `Map` of many refs easy to keep accurate.
+
+**Q:** Why native `<dialog>` instead of a library or a div overlay?
+
+**A:** The platform already implements the hard parts correctly: top-layer stacking, inert background, Escape and the `::backdrop`. A div overlay needs a portal, a focus trap, `inert` on siblings and scroll locking, each a source of bugs. The trade-off is less control over animations and older-browser quirks, which a mature library like Radix handles.
+
+**Q:** Why is the open photo in the URL, and why use `replace` for next/previous?
+
+**A:** The URL makes a view shareable and reload-safe, and Back closes the lightbox, which is what users expect on mobile. If every "next" pushed a history entry, Back would step through 20 photos before closing. So opening pushes one entry and next/previous use `replace`.
+
+**Q:** What happens when an image fails to load or the user is on a slow connection?
+
+**A:** `onError` swaps in a placeholder with the alt text so the grid never shows a broken icon. Because every image has a fixed aspect ratio, the layout does not shift while images arrive. I preload only one neighbour in each direction to make "next" instant without wasting data.
+
+**Q:** What changes at 5,000 photos?
+
+**A:** Mounting 5,000 image nodes is what breaks first: memory and scroll performance degrade even with lazy loading. I would paginate or virtualize the grid (Project 28) and fetch photo metadata in pages. The lightbox itself is fine because it shows one image.
+
+**Q:** How do you test focus return?
+
+**A:** RTL: click a thumbnail, assert `getByRole('dialog')` is present, press Escape with `user-event`, then assert `document.activeElement` is that thumbnail button (`toHaveFocus()`). jsdom's `<dialog>` support is incomplete, so I also run a Playwright test in a real browser, plus an `@axe-core/playwright` scan.
+
+**Q:** Hands-on: keep a map of thumbnail refs.
+
+**A:** A ref callback adds the node and returns a cleanup that removes it when the thumbnail unmounts.
+
+```tsx
+const refs = useRef(new Map<string, HTMLButtonElement>());
+<button ref={el => { refs.current.set(p.id, el!);
+  return () => { refs.current.delete(p.id); }; }} />
+```
+
+**Common mistakes in answers:**
+- Saying `aria-modal="true"` alone makes a modal accessible. It is a hint; you still need focus containment and an inert background.
+- Using `<div onClick>` thumbnails. They are not focusable or announced as buttons; wrap the image in a `<button>`.
+- Claiming portals change event bubbling to follow the DOM. React events bubble through the React tree, not the DOM position.
 
 ### TL;DR
 Use a native dialog (or a portal plus focus trap), return focus on close, keep the open photo in the URL and load images lazily with fixed aspect ratios.
@@ -767,17 +1073,71 @@ Actions shine for submit-and-show-result forms. For live per-keystroke validatio
 - [Ch 14 — Patterns and architecture](../chapters/14-patterns-and-architecture/README.md): accessible errors
 
 ### In the interview
+**30-second answer:** I built a sign-up form the React 19 way: `<form action={formAction}>` where the Action is wrapped by `useActionState`, so the Action receives the previous state and the `FormData` and returns the next state, including field errors. There is no `useState` for pending or errors: the submit button uses `useFormStatus` from a child component, and errors are announced with `aria-describedby`. The trickiest behaviour was that React resets uncontrolled fields after the Action finishes even when it returns errors, so I return the submitted values and feed them back as `defaultValue`. The fake API is slow (800 ms) and fails 20 % of the time, and the UI handles both paths.
+
+**Key terms to know:**
+- **Action** — a function passed to `<form action>` or run in a transition; React tracks its pending state. `signUp` is an Action.
+- **Transition** — a non-urgent update React can keep pending without blocking input.
+- **`useActionState(fn, initial)`** — returns `[state, formAction, isPending]`; `fn` gets `(prevState, formData)` and returns the next state.
+- **`useFormStatus`** — returns `{ pending, data, method, action }` for the parent `<form>`; must be called in a component rendered inside the form.
+- **`FormData`** — the browser's key/value snapshot of a form's named fields.
+- **Uncontrolled input** — the DOM holds the value; React only sets `defaultValue`. All fields here.
+- **Automatic form reset** — after an Action passed to `<form action>` completes, React resets uncontrolled fields.
+- **Server Function** — a function marked `'use server'` that a framework lets the client call; the same form can post to one.
+- **Progressive enhancement** — the form works before JavaScript loads when its action is a Server Function.
+- **Schema validation (Zod)** — one schema defines rules and TypeScript types.
+
 **Q:** What does `useActionState` return?
 
-**A:** The current state (the last value the Action returned), a wrapped action to pass to the form, and an `isPending` flag.
+**A:** A tuple: the current state (the initial state, then whatever the Action last returned), a wrapped action to pass to `<form action>` or `formAction`, and an `isPending` boolean. Calls are queued, so each Action receives the state returned by the previous one.
 
 **Q:** Why must `useFormStatus` be in a child component?
 
-**A:** It reads the status of the nearest parent `<form>`, so the calling component must render inside that form.
+**A:** It reads the status of the nearest parent `<form>`, like a context provided by the form. The component that renders the `<form>` is not inside it, so calling the Hook there always reports not pending. Putting it in a `SubmitButton` rendered inside the form fixes that.
 
 **Q:** Does the form reset after an Action?
 
-**A:** Yes. Uncontrolled fields reset once the Action completes without throwing, even if it returned validation errors, so return the submitted values and use them as `defaultValue` to restore them.
+**A:** Yes. Uncontrolled fields reset once the Action completes without throwing, and returning an error object still counts as completing. So on validation failure I return the submitted values in the state and use them as `defaultValue`, or the user retypes everything. Passwords I deliberately do not echo back.
+
+**Q:** Why Actions instead of `onSubmit` with `useState`?
+
+**A:** Actions remove the plumbing: no `preventDefault`, no manual `isSubmitting`, and errors come from the returned state. The same form can later point at a Server Function and work without JavaScript. The trade-off is less fine-grained control for live per-keystroke validation, where React Hook Form is more ergonomic.
+
+**Q:** What is the order of arguments in the Action, and what bug comes from getting it wrong?
+
+**A:** With `useActionState` the Action is `(previousState, formData)`. A plain `<form action={fn}>` without the Hook calls `fn(formData)`. If you wrap an existing `(formData)` function with `useActionState`, it receives the state object as `formData`, and `formData.get` is undefined.
+
+**Q:** What happens if the Action throws instead of returning an error?
+
+**A:** The error propagates to the nearest error boundary, replacing the UI with the fallback, and the form is not reset. That is right for unexpected bugs, but expected failures such as "email taken" should be returned as state so they render inline.
+
+**Q:** Is client validation enough?
+
+**A:** No. Anything in the browser can be bypassed, so the server must validate again with the same rules. Sharing the Zod schema between client and server keeps them in sync. Client validation is only for quick feedback.
+
+**Q:** How do you make errors accessible?
+
+**A:** Each error message gets an id, and its input gets `aria-invalid="true"` and `aria-describedby` pointing at that id, so screen readers read the error when the field is focused. After a failed submit I move focus to the first invalid field. A form-level error lives in a `role="alert"` region.
+
+**Q:** How do you test the pending and failure paths?
+
+**A:** With the fake API mocked to fail, RTL fills valid values, clicks submit, and asserts the button shows "Creating account…" and is disabled (via `findByRole`), then that "email taken" appears and the email field still holds its value. A second test mocks success and asserts the welcome screen.
+
+**Q:** Hands-on: write the submit button.
+
+**A:** The Hook must be in a component inside the `<form>`.
+
+```tsx
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return <button disabled={pending}>{pending ? 'Creating account…' : 'Sign up'}</button>;
+}
+```
+
+**Common mistakes in answers:**
+- Saying the form only resets on success. It resets whenever the Action completes without throwing, including when it returns errors.
+- Calling `useFormStatus` in the same component that renders the `<form>` and wondering why `pending` is always false.
+- Claiming Actions replace server validation. They change client plumbing; trust still requires server checks.
 
 ### TL;DR
 Let the form's Action return the next state, render errors from it, show pending with `useFormStatus` in a child, and keep values on failure.
@@ -863,17 +1223,70 @@ A Web Worker or the Page Visibility API can make timing even more robust, but ti
 - [Ch 6 — State management](../chapters/06-state-management/README.md): reducers
 
 ### In the interview
+**30-second answer:** I built a Pomodoro timer with work, short-break and long-break phases that stays accurate to within a second over 25 minutes, even in a background tab. The key decision was storing `endsAt` as a timestamp in a reducer and computing remaining time from `Date.now()` on each tick, rather than counting ticks, because browsers throttle timers in hidden tabs. The classic bug I solved was the stale closure in `setInterval`: my `useInterval` Hook subscribes once and reads the latest callback through `useEffectEvent`, so changing settings neither resets nor duplicates the interval. Side effects like the end-of-phase sound happen outside the reducer, so they play exactly once even in StrictMode.
+
+**Key terms to know:**
+- **Stale closure** — a function that captured state from an old render. An interval set up once sees the first `seconds` forever.
+- **`useEffectEvent`** — (stable in 19.2) wraps a function so an Effect can call it and always see the latest props and state without listing them as dependencies.
+- **`useRef`** — a mutable box that survives renders and does not trigger a render when changed. The classic way to store the latest callback.
+- **Custom Hook** — `useInterval`, `useDocumentTitle`, `useLocalStorage` package reusable Effect logic.
+- **Timer throttling** — browsers delay timers in hidden tabs to save power.
+- **Timestamp-based timing** — store a deadline and compute remaining time, so late ticks do not cause drift.
+- **Reducer purity** — the reducer only computes state; sounds and notifications run elsewhere.
+- **Notification permission** — must be requested after a user gesture.
+- **Effect cleanup** — `clearInterval` when stopped, paused or unmounted.
+
 **Q:** Why does my interval always see the initial state?
 
-**A:** The callback closed over the state from the render when the Effect ran. Use an updater, a ref to the latest callback, or `useEffectEvent`.
+**A:** The Effect ran once with `[]` dependencies, so the interval callback closed over the state from that first render. Fix it with the updater form (`setSeconds(s => s - 1)`), a ref holding the latest callback, or `useEffectEvent`, which gives the Effect a stable function that reads current values.
 
 **Q:** How do you keep a timer accurate in a background tab?
 
-**A:** Store an end timestamp and compute the remaining time from the clock, because intervals get throttled.
+**A:** Store an end timestamp and compute the remaining time from the clock on every tick. Browsers throttle hidden-tab timers (to once per second or even less often after a while), so counting ticks drifts. With timestamps, a late tick just shows the correct, smaller number.
 
 **Q:** What is `useEffectEvent` for?
 
-**A:** To read the latest props or state inside an Effect's callback without making them dependencies that restart the Effect.
+**A:** To read the latest props or state inside an Effect's callback without adding them as dependencies that would restart the Effect. Here the interval Effect depends only on whether the timer is running, while the tick function reads the current settings. Effect Events should only be called from inside Effects, not passed to children or called during render.
+
+**Q:** Why not just put `callback` in the dependency array?
+
+**A:** If the parent creates a new callback every render, the interval would be torn down and re-created every second, which drifts and can skip ticks. Separating "when to subscribe" (running and delay) from "what to do on tick" (the latest callback) is the whole point of `useInterval`.
+
+**Q:** Why can't the reducer play the sound?
+
+**A:** Reducers must be pure; React may call them more than once (StrictMode does in development) and the sound would play twice. The reducer records that the phase ended, and the tick handler or an Effect that sees the change plays the sound and shows the notification.
+
+**Q:** Why keep `endsAt` in state but the interval id in a ref?
+
+**A:** `endsAt` affects what is rendered, so it is state. The interval id is bookkeeping that never appears on screen, and changing it should not cause a render, so a ref or a local variable inside the Effect fits.
+
+**Q:** What happens if the laptop sleeps for 10 minutes during a work phase?
+
+**A:** On wake, the next tick computes `endsAt - Date.now()` as negative, so the reducer moves to the next phase immediately. That is honest about elapsed time. A stricter design could pause on `visibilitychange` or ask "you were away, count it?"; I chose the honest behaviour and documented it.
+
+**Q:** How do you test 25 minutes without waiting?
+
+**A:** Vitest fake timers: `vi.useFakeTimers()`, start the timer, then `vi.advanceTimersByTime(25 * 60_000)`, which also advances the mocked `Date.now()`. Assert the phase switched to a break and the round incremented. Pause tests advance time while paused and assert the remaining time did not change.
+
+**Q:** Hands-on: write `useInterval` with `useEffectEvent`.
+
+**A:** The Effect re-subscribes only when the delay changes; `null` pauses it.
+
+```ts
+function useInterval(cb: () => void, delay: number | null) {
+  const onTick = useEffectEvent(cb);
+  useEffect(() => {
+    if (delay === null) return;
+    const id = setInterval(() => onTick(), delay);
+    return () => clearInterval(id);
+  }, [delay]);
+}
+```
+
+**Common mistakes in answers:**
+- "Use `setTimeout` recursively and it will be accurate." It still drifts and is throttled; only timestamps fix accuracy.
+- Listing the Effect Event function in the dependency array or passing it as a prop. It is not meant to be a dependency and must be called only from Effects.
+- Asking for notification permission on page load. Browsers may block or auto-deny prompts without a user gesture.
 
 ### TL;DR
 Drive the timer from timestamps, wrap `setInterval` in a declarative Hook, keep side effects out of the reducer and read fresh values with `useEffectEvent`.
@@ -963,17 +1376,68 @@ Unit-test the reducer and the migrations. Test the Hook with `renderHook`: set a
 - [Ch 7 — Custom Hooks](../chapters/07-custom-hooks-and-hook-rules/README.md): `useLocalStorage`, `useSyncExternalStore`
 
 ### In the interview
+**30-second answer:** I built an expense tracker that persists in `localStorage`, stays in sync live across browser tabs, and never crashes on corrupted data. The key decision was treating `localStorage` as an external store and reading it through a `useLocalStorage` Hook built on `useSyncExternalStore`, which subscribes to the `storage` event and guarantees every component sees the same value in a render. The subtle bug was that `getSnapshot` must return a cached object until the raw string changes, otherwise React re-renders forever. Stored data is versioned and validated with Zod on load, and 5,000 expenses filter in under 50 ms.
+
+**Key terms to know:**
+- **External store** — data that lives outside React (here `localStorage`) and can change without React knowing.
+- **`useSyncExternalStore(subscribe, getSnapshot)`** — Hook that subscribes a component to an external store and re-renders on change.
+- **Snapshot caching** — `getSnapshot` must return the same reference when the data has not changed.
+- **Tearing** — different components showing different values of the same data during one render. `useSyncExternalStore` prevents it.
+- **`storage` event** — fired in *other* tabs of the same origin when `localStorage` changes.
+- **Schema versioning and migration** — `{ version: 1, items }` plus a `migrate()` function to upgrade old shapes.
+- **Runtime validation** — checking unknown JSON with Zod before trusting it. Used for loading and imports.
+- **Derived data** — monthly totals and per-category sums computed from `items`, never stored.
+- **Quota** — `localStorage` is commonly limited to about 5 MB per origin and writes can throw.
+
 **Q:** Why not just write to `localStorage` in a `useEffect`?
 
-**A:** It works for one tab, but other tabs won't update and components can read different values. `useSyncExternalStore` subscribes properly and keeps reads consistent.
+**A:** It works for one tab, but other tabs never hear about the change, and components reading storage directly can see different values. You also get an extra render and a moment where state and storage disagree. `useSyncExternalStore` subscribes to changes and keeps every reader consistent.
 
 **Q:** What must `getSnapshot` guarantee?
 
-**A:** It returns the same value (by reference) when nothing changed; otherwise React thinks the store changed every render.
+**A:** It must return the same value, compared with `Object.is`, when nothing has changed. If it parses JSON into a new object every call, React sees a "change" on each check and re-renders in a loop (React warns about this). I cache the last raw string and its parsed value and only re-parse when the string differs.
 
 **Q:** How do you evolve stored data safely?
 
-**A:** Version it, validate on load and run migrations.
+**A:** Store a version number with the data, validate with a schema on load, and run migrations step by step (v1 to v2 to v3). If validation fails, I keep the raw string, show a recovery banner and offer export, instead of crashing or silently overwriting the user's data.
+
+**Q:** The `storage` event: when does it fire and what does that mean for the current tab?
+
+**A:** It fires only in other tabs of the same origin, never in the tab that made the change. So my setter writes to storage and then notifies the current tab's subscribers itself. Without that, the tab you typed in would not update.
+
+**Q:** Why keep dates as `YYYY-MM-DD` strings?
+
+**A:** A date-only string has no time zone, but `new Date('2026-10-01')` is parsed as UTC midnight, which shows as 30 September in time zones west of UTC. Grouping by month on the string prefix (`date.slice(0, 7)`) avoids that bug entirely.
+
+**Q:** `localStorage` vs IndexedDB: when would you switch?
+
+**A:** `localStorage` is synchronous, string-only and roughly 5 MB, which is fine for thousands of small expenses. Above that, or with attachments, the synchronous JSON parse blocks the main thread and the quota fills. IndexedDB is asynchronous, stores structured data and has much larger quotas, so Project 31 uses it.
+
+**Q:** What happens if a write fails, for example in private browsing or when the quota is full?
+
+**A:** `setItem` throws a `QuotaExceededError` (or a security error when storage is disabled). I wrap writes in try/catch, keep the in-memory state so the user does not lose the current session, and show a warning that changes are not being saved.
+
+**Q:** How do you test cross-tab sync?
+
+**A:** With `renderHook`, I render the Hook, write a new value to `localStorage` directly, then dispatch `new StorageEvent('storage', { key, newValue })` on `window` and assert the Hook returns the new value. Separate unit tests cover the migrations and the "corrupt JSON shows the banner" path.
+
+**Q:** Hands-on: what is wrong with this snapshot?
+
+**A:** It returns a new object every call, so React loops. Cache by raw string.
+
+```ts
+// wrong
+const getSnapshot = () => JSON.parse(localStorage.getItem(KEY) ?? '[]');
+// right
+let lastRaw: string | null = null, last: Stored = EMPTY;
+const getSnapshot = () => { const raw = localStorage.getItem(KEY);
+  if (raw !== lastRaw) { lastRaw = raw; last = parse(raw); } return last; };
+```
+
+**Common mistakes in answers:**
+- Saying the `storage` event keeps the current tab in sync. It only fires in other tabs.
+- Storing monthly totals alongside items. They drift; derive them.
+- Trusting imported JSON because "the app exported it". Users edit files; always validate.
 
 ### TL;DR
 Treat `localStorage` as an external store, subscribe with `useSyncExternalStore`, version and validate what you store, and derive every summary.
@@ -1062,17 +1526,68 @@ Client-side filtering is fine to a few thousand items. Beyond that, filter on th
 - [Ch 10 — Performance](../chapters/10-performance/README.md): `memo`
 
 ### In the interview
+**30-second answer:** I built a 2,000-product catalogue with search, category, price, stock and sort filters, where the URL is the single source of truth so every view is bookmarkable and Back/Forward work. The key decisions were a pure `applyFilters` function with a URL parse/serialize pair that round-trips, and `useDeferredValue` plus `memo` on the results list so typing stays smooth even when rendering results is slow. The hardest part was understanding why deferral needs `memo`: the urgent render passes the old deferred value, and `memo` lets React skip the expensive list in that render. Filtering 2,000 items takes under 20 ms and keystrokes stay under 16 ms.
+
+**Key terms to know:**
+- **URL state** — filters stored in search params (`?q=shoe&min=20`) via `URLSearchParams` or `useSearchParams`.
+- **Round-trip serialization** — `parse(serialize(f))` equals `f`, so URLs and state never disagree.
+- **`useDeferredValue`** — returns a value that may lag behind; React renders urgent updates first, then the deferred one in the background.
+- **Concurrent rendering** — React can prepare a render, interrupt it for more urgent input, and throw it away.
+- **`memo`** — skips re-rendering a component when its props are shallowly equal to last time.
+- **Debounce** — wait until input pauses for N ms before acting. Used for network calls, not here.
+- **Pure filter function** — `applyFilters(products, filters)` with no side effects, table-tested.
+- **Stale indicator** — dim results while `filters !== deferredFilters`.
+- **`aria-live="polite"`** — announces the result count without interrupting the user.
+- **Text normalization** — lower-casing and stripping accents with `normalize('NFD')` once per product.
+
 **Q:** `useDeferredValue` or debounce?
 
-**A:** Defer when the work is local rendering — it adapts to the device. Debounce when you want to limit network calls.
+**A:** Defer when the slow part is local rendering: it renders as soon as the CPU allows, adapts to fast and slow devices, and abandons outdated work if you keep typing. Debounce when you want to limit how often something expensive and external happens, such as network calls, because deferral does not reduce the number of requests.
 
 **Q:** Why keep filters in the URL?
 
-**A:** Shareable links, Back/Forward, and refresh all work, and there is one source of truth.
+**A:** Shareable links, Back/Forward and refresh all work, and there is exactly one source of truth instead of state that must be synced to the URL. The trade-off is that every filter must be serializable and parsed defensively, because users can edit the URL by hand.
 
 **Q:** Why does `useDeferredValue` need `memo` on the slow child?
 
-**A:** The urgent render passes the old deferred value; `memo` lets React skip the slow list in that render.
+**A:** On a keystroke React first does an urgent render where the deferred value is still the old one. Without `memo`, the slow list re-renders anyway in that urgent render, so the input still lags. With `memo`, its props are unchanged and React skips it; the real update happens in the background render.
+
+**Q:** What does `useDeferredValue` actually do step by step?
+
+**A:** When the source value changes, React re-renders immediately with the old deferred value, then schedules a low-priority re-render with the new one. If another keystroke arrives during that background render, React throws the work away and starts again with the latest value. Nothing is delayed by a fixed time.
+
+**Q:** How do you handle a garbage URL like `?min=abc&sort=evil`?
+
+**A:** `parseFilters` validates each param, falls back to defaults for anything invalid, and ignores unknown keys. Defaults are omitted when serializing, so the URL stays short and canonical. The page never throws on a hand-edited link.
+
+**Q:** What changes at 200,000 products? What breaks first?
+
+**A:** Shipping and filtering the whole dataset in the browser breaks first: download size, memory and filter time all grow linearly. I would move filtering, sorting and pagination to the server (Project 25), debounce requests, and keep the URL as the query. Rendering also needs virtualization (Project 28).
+
+**Q:** Why not store `filteredProducts` in state and update it in an Effect?
+
+**A:** It is derived from products and filters, so an Effect would cause an extra render with stale results in between, and two sources of truth. Computing it during render, optionally wrapped in `useMemo` or left to the React Compiler, is simpler and correct.
+
+**Q:** How do you prove typing stays smooth?
+
+**A:** I add an artificial slowdown to each tile, record with the React Profiler and Chrome Performance panel, and check keystroke tasks stay under about 16 ms. Functional tests: table tests for `applyFilters` and the URL round-trip, RTL for counts, and Playwright to copy the URL into a new page and expect the same results.
+
+**Q:** Hands-on: write the deferred list.
+
+**A:** The list is memoized and the stale state is shown by comparing the two values.
+
+```tsx
+const deferred = useDeferredValue(filters);
+const isStale = filters !== deferred;
+<div style={{ opacity: isStale ? 0.6 : 1 }}>
+  <ResultsList filters={deferred} />   {/* ResultsList = memo(...) */}
+</div>
+```
+
+**Common mistakes in answers:**
+- Saying `useDeferredValue` is a debounce with a built-in delay. It has no fixed delay and does not reduce the number of renders or requests.
+- Using `useDeferredValue` without `memo` (or the React Compiler) and expecting a speed-up.
+- Creating a new `filters` object every render from the URL without memoizing it, so `memo` always sees new props. Parse with `useMemo` keyed on the search string.
 
 ### TL;DR
 Make the URL the source of truth for filters, compute results with a pure function, and keep typing smooth with `useDeferredValue` plus `memo`.
@@ -1191,17 +1706,70 @@ Context + reducer re-renders every consumer on any change; with hundreds of card
 - [Ch 14 — Patterns and architecture](../chapters/14-patterns-and-architecture/README.md): portals, accessibility
 
 ### In the interview
+**30-second answer:** I built a Trello-style kanban board where cards and columns can be reordered by mouse, touch and keyboard, and every move persists to a REST API. The key design decisions were a normalized reducer store (cards by id plus ordered id lists per column) and fractional-index string ranks, so a move updates one card's `column_id` and `rank` and sends one small PATCH. The hardest part was optimistic saving: moves apply instantly, go through an ordered save queue, and on failure roll back with a toast while later queued moves are replayed or the board is refetched. Drag stays at 60 fps with 300 cards and screen readers announce "Over column Doing, position 2 of 5".
+
+**Key terms to know:**
+- **Normalized state** — entities stored once by id (`cards: Record<id, Card>`) and referenced by id lists (`column.cardIds`). A move edits two arrays and one card.
+- **Fractional indexing** — order stored as a sortable string; a new key is generated strictly between two neighbours so no other rows change.
+- **Optimistic update** — apply the change locally before the server confirms, then roll back on failure.
+- **Rollback** — restoring the remembered previous position when the save fails.
+- **Save queue** — sends moves one at a time in order so a later move cannot overtake an earlier one.
+- **dnd-kit sensors** — pluggable input sources (pointer, touch, keyboard) that start and drive a drag.
+- **Collision detection** — the algorithm that decides which droppable is "over" during a drag.
+- **`DragOverlay`** — renders the dragged card in a portal so scroll containers do not clip it.
+- **Live region announcements** — `aria-live` text describing pick-up, position and drop for screen readers.
+- **Rebalancing** — rewriting ranks in the background when fractional keys grow long.
+
 **Q:** How do you store order so that a move updates one row?
 
-**A:** Use a fractional index — a sortable string between the neighbours' keys — instead of integer positions.
+**A:** Use a fractional index: each card's `rank` is a sortable string, and inserting between "a" and "b" generates something like "an". Only the moved card's `rank` and `column_id` change. Integer positions would force renumbering every card after the insert point, which means more writes and more conflicts.
 
 **Q:** How do you make drag and drop accessible?
 
-**A:** Provide a keyboard sensor (pick up, move, drop, cancel), visible focus, and live-region announcements of the item and its position.
+**A:** Provide a keyboard sensor (Space to pick up, arrows to move, Space to drop, Escape to cancel), visible focus on the card, and live-region announcements of the item and its position on pick-up, move and drop. dnd-kit supplies the keyboard sensor and an announcements API; I write human-friendly messages that include column names and "position 2 of 5".
 
 **Q:** What happens if the save fails?
 
-**A:** Roll back to the remembered position, tell the user, and keep later queued moves consistent by replaying or refetching.
+**A:** The reducer dispatches a reverse move to the remembered position and a toast tells the user. Because later moves in the queue were computed on top of the optimistic state, I either replay the remaining queued moves on the restored state or simply refetch the board from the server, which is simpler and always correct.
+
+**Q:** Why normalize the board instead of nesting cards inside columns?
+
+**A:** With nesting, moving a card means deep-copying two columns' card arrays inside the board object, and finding a card by id means searching every column. Normalized, a card is updated in one place, lookups are O(1), and memoized card components keep their references when unrelated cards change.
+
+**Q:** Why a save queue rather than firing requests in parallel?
+
+**A:** If move 1 and move 2 race and the server applies 2 before 1, the final order on the server differs from the screen. A queue serializes requests so the server sees moves in the same order the user made them. The trade-off is latency under bursts, which is fine for drag-and-drop frequency.
+
+**Q:** What changes with 5,000 cards or many users? What breaks first?
+
+**A:** A single context-plus-reducer store breaks first, because every change re-renders every consumer. I would move to Zustand with selectors so a card subscribes only to itself, and virtualize long columns, which needs care with dnd-kit. With many concurrent users, I need real-time sync over WebSocket and a conflict rule such as last-writer-wins per card (Project 27).
+
+**Q:** Two users move the same card at once. What happens?
+
+**A:** Without real-time sync, each sees their own move until refresh, and the server keeps whichever PATCH arrived last. Ranks cannot become invalid, but one user's move is silently overwritten. Pushing server events to clients and rebasing local optimistic moves on top of them fixes the visibility problem.
+
+**Q:** How do you test drag and drop?
+
+**A:** Unit-test the reducer and rank generation, including that generated ranks always sort strictly between neighbours. Playwright performs real mouse drags and a keyboard-only drag, then reloads to check persistence. MSW returns a 500 for the failure path to prove rollback and the toast.
+
+**Q:** Hands-on: what is the reducer for a move?
+
+**A:** Remove the id from the source list, insert it into the target list, and update the card's column, without touching other cards.
+
+```ts
+case 'MOVE': {
+  const { id, from, to, index } = action;
+  const src = state.columns[from].cardIds.filter(c => c !== id);
+  const dst = from === to ? src : [...state.columns[to].cardIds];
+  dst.splice(index, 0, id);
+  return { ...state, columns: { ...state.columns, [from]: { ...state.columns[from], cardIds: src }, [to]: { ...state.columns[to], cardIds: dst } } };
+}
+```
+
+**Common mistakes in answers:**
+- Using float positions (1.5, 1.25 …) and calling it fractional indexing. Floats run out of precision after a few dozen inserts; string keys can always grow.
+- Saying accessibility is handled because the cards are focusable. Drag needs a keyboard alternative and spoken position updates.
+- Rolling back with "undo the last move" when several moves are queued; you must handle the moves made after the failed one.
 
 ### TL;DR
 Normalize the board, order with fractional indexes, apply moves optimistically with rollback, and make drag work by keyboard with announcements.
@@ -1297,17 +1865,74 @@ Polling is simple and cheap at 30 s; real-time push (WebSocket or Server-Sent Ev
 - [Ch 15 — Interview and machine coding](../chapters/15-react-interview-and-machine-coding/README.md): infinite scroll build
 
 ### In the interview
+**30-second answer:** I built a Twitter-like infinite feed with TanStack Query's `useInfiniteQuery`: cursor-paginated pages, auto-loading through an `IntersectionObserver` sentinel, optimistic likes with rollback, a "N new posts" pill and exact scroll restoration when coming back from a post. The key decision was cursor pagination ("posts older than id X") instead of page numbers, because new posts at the top shift offsets and cause duplicates. The trickiest part was patching one post inside nested cached pages during an optimistic like and cancelling in-flight refetches so they do not overwrite it. Memory is bounded with `maxPages`, and taps respond within the 200 ms INP target.
+
+**Key terms to know:**
+- **Server state** — data owned by the server that the UI caches temporarily; it can go stale. Managed by TanStack Query.
+- **`useInfiniteQuery`** — stores `pages[]` and `pageParams[]` under one key and exposes `fetchNextPage` and `hasNextPage`.
+- **Cursor pagination** — each request asks for items after a stable anchor, not "page 3".
+- **Sentinel + `IntersectionObserver`** — an empty element near the end of the list; when it comes within `rootMargin`, load the next page.
+- **Optimistic mutation** — `onMutate` writes the expected result to the cache before the server replies.
+- **`cancelQueries` / `setQueryData` / `invalidateQueries`** — stop in-flight fetches, write to the cache, mark data stale to refetch.
+- **`staleTime` vs `gcTime`** — how long data counts as fresh vs how long unused cache entries are kept.
+- **`maxPages`** — caps how many pages an infinite query keeps.
+- **Scroll restoration** — returning the user to the same scroll position after Back.
+- **INP (Interaction to Next Paint)** — the delay from a user interaction to the next frame.
+
 **Q:** Why cursor pagination for feeds?
 
-**A:** New items shift offsets and cause duplicates or gaps; a cursor anchors to a specific item.
+**A:** With offsets, a new post at the top pushes every item down by one, so page 2 repeats the last item of page 1 (and deletions cause gaps). A cursor anchors to a specific item ("older than id X"), so inserts at the top do not affect the next page. It is also cheaper for the database, which can seek on an index instead of skipping rows.
 
 **Q:** How does an optimistic update roll back in TanStack Query?
 
-**A:** `onMutate` cancels queries, snapshots the cache, writes the optimistic value and returns the snapshot; `onError` restores it; `onSettled` invalidates.
+**A:** `onMutate` cancels in-flight queries for the key, snapshots the current cache, writes the optimistic value and returns the snapshot as context. `onError` restores the snapshot from context. `onSettled` invalidates the key so the cache is reconciled with the server either way.
 
 **Q:** How do you trigger loading the next page?
 
-**A:** Observe a sentinel element with `IntersectionObserver` using a generous `rootMargin`.
+**A:** Observe a sentinel element at the end of the list with `IntersectionObserver` using a generous `rootMargin` (about one screen), and call `fetchNextPage()` when it intersects, guarded by `hasNextPage && !isFetchingNextPage`. This starts loading before the user reaches the bottom without listening to scroll events.
+
+**Q:** Why TanStack Query instead of `useEffect` plus `useState`?
+
+**A:** Feeds need caching, deduplication, background refetch, retries, pagination state and optimistic updates. Hand-rolling these in Effects (Project 4) gets several wrong. The trade-off is a dependency and learning its cache model, which pays off as soon as more than one component reads the same server data.
+
+**Q:** Why cancel queries in `onMutate`?
+
+**A:** If a background refetch of the feed is in flight when the user taps like, it may resolve after the optimistic write and replace the cache with the server's old count. Cancelling first guarantees the optimistic value stays until `onSettled` triggers a fresh fetch.
+
+**Q:** How does the "N new posts" pill work without disturbing the list?
+
+**A:** A small query polls every 30 seconds for "anything newer than my first post id" and shows a count. New posts are not merged automatically, because content jumping under the user's thumb is a bad experience. Clicking the pill scrolls to the top and refetches the first page.
+
+**Q:** What happens to memory after 100 pages, and what changes at scale?
+
+**A:** Without limits, both cached data and DOM nodes grow without bound, and the DOM is what hurts first. `maxPages` drops old pages (they refetch on scroll back) and virtualization keeps only visible posts mounted. At server scale, 30-second polling from millions of clients is expensive, so push (WebSocket or Server-Sent Events) becomes worth its infrastructure.
+
+**Q:** Two devices like the same post at the same time. What do users see?
+
+**A:** Each device shows its own optimistic count, which may be off by one briefly. `onSettled` invalidates and refetches, so both converge on the server's count. Likes should be idempotent on the server (a user can like a post once), so a retry cannot double-count.
+
+**Q:** How do you test infinite scroll?
+
+**A:** MSW returns deterministic pages. In RTL I mock `IntersectionObserver`, trigger the callback manually and assert page 2 renders with no duplicate ids. The like rollback test makes the handler return 500 and asserts the count goes back. Playwright scrolls to page 5, opens a post, goes Back and checks the same post is in view.
+
+**Q:** Hands-on: what does the optimistic like look like?
+
+**A:**
+
+```ts
+useMutation({ mutationFn: likePost,
+  onMutate: async id => { await qc.cancelQueries({ queryKey: ['feed'] });
+    const prev = qc.getQueryData(['feed']);
+    qc.setQueryData(['feed'], (old: Feed) => toggleLikeIn(old, id));
+    return { prev }; },
+  onError: (_e, _id, ctx) => qc.setQueryData(['feed'], ctx?.prev),
+  onSettled: () => qc.invalidateQueries({ queryKey: ['feed'] }) });
+```
+
+**Common mistakes in answers:**
+- Listening to `scroll` events and measuring offsets on every frame. `IntersectionObserver` is cheaper and simpler.
+- Confusing `staleTime` with `gcTime`: stale data is still shown and refetched in the background; `gcTime` controls when unused data is removed.
+- Mutating the cached page objects in place inside `setQueryData`. The updater must return new objects or components will not re-render.
 
 ### TL;DR
 Use cursor-based `useInfiniteQuery`, an observed sentinel, cache-patching optimistic likes with rollback, and bound memory with `maxPages` or virtualization.
@@ -1434,17 +2059,69 @@ Context is fine for one cart. With many independent slices (wishlist, recently v
 - [Ch 9 — Routing and data fetching](../chapters/09-routing-and-data-fetching/README.md): loaders and actions
 
 ### In the interview
+**30-second answer:** I built a small shop whose cart is a pure reducer shared through context, with variants, quantity limits, promo codes, persistence across reloads and tabs, and a guest-to-account cart merge on sign-in. The key decision was splitting state and dispatch into two contexts, so the many "Add to cart" buttons, which only dispatch, never re-render when the cart changes. The rule I held to is that the server is the source of truth for prices: the client stores variant ids and quantities, and the checkout Action is repriced on the server, which can return a "price changed" error. All money maths is in integer cents and matches the server to the cent.
+
+**Key terms to know:**
+- **Context** — React's built-in way to pass a value down the tree without props. Two contexts here: state and dispatch.
+- **Context re-render rule** — every component that reads a context re-renders when its value changes (compared with `Object.is`).
+- **Reducer** — pure `(state, action) => state` holding cart rules: add, update quantity, remove, apply promo.
+- **Stable `dispatch`** — the function from `useReducer` never changes identity, which makes a dispatch-only context free.
+- **`use(Context)` (React 19)** — reads context like `useContext`, but can be called conditionally.
+- **Server repricing** — the server recalculates totals from its catalogue on checkout; client totals are display only.
+- **Cart merge** — combining a guest cart with an account cart on sign-in under a defined rule (add or max, capped at stock).
+- **Price snapshot** — order lines copy the unit price at purchase so history never changes.
+- **Integer cents** — all money in integer minor units to avoid floating-point error.
+- **Hosted payment fields** — the payment provider's iframes collect card data so your app never touches it.
+
 **Q:** Why two contexts for one store?
 
-**A:** Consumers re-render when the context value changes; dispatch is stable, so components that only dispatch avoid re-rendering on state changes.
+**A:** Every consumer of a context re-renders when its value changes. If one context held `{ state, dispatch }`, the value object would change on every cart update and every "Add" button would re-render. `dispatch` is stable, so putting it in its own context means dispatch-only components never re-render from cart changes.
 
 **Q:** Should the client calculate the order total?
 
-**A:** For display only. The server reprices from its catalogue and validates promos when the order is placed.
+**A:** Only for display. Anyone can modify client code or requests, so the server reprices from its catalogue, validates promos and stock, and computes the charged total when the order is placed. If the price changed since the item was added, the Action returns an error and the UI asks the user to confirm.
 
 **Q:** What changed for context in React 19?
 
-**A:** You can render the context object directly as a provider and read context with `use()`, even conditionally.
+**A:** You can render the context object itself as the provider (`<CartContext value={...}>` instead of `<CartContext.Provider>`), and you can read context with `use()`, which, unlike `useContext`, may be called inside conditions and loops. Re-render behaviour is unchanged.
+
+**Q:** Context + reducer or Zustand/Redux here?
+
+**A:** One cart with a handful of consumers is a good fit for built-in context; there is no dependency and the reducer is easy to test. With many independent slices (wishlist, compare, recently viewed) and components that need tiny pieces, a store with selectors avoids re-render storms because components subscribe to just what they read. Context has no selectors.
+
+**Q:** How do you merge a guest cart into an account cart?
+
+**A:** On sign-in, for each guest line I add it to the account cart, keyed by variant id, using an agreed rule: either sum quantities or take the larger, and always cap at available stock and per-item limits. It runs on the server so two devices cannot double-merge, then the client replaces its cart with the server's result and clears the guest copy.
+
+**Q:** An item sells out between "add" and "checkout". What happens?
+
+**A:** The checkout Action sends variant ids and quantities; the server checks stock, finds it insufficient and returns a field-level error for that line. The cart shows "Only 1 left" or "Sold out" with an option to adjust. I never reserve stock on add-to-cart, because abandoned carts would lock inventory.
+
+**Q:** How do you apply a 15 % promo across three lines without rounding errors?
+
+**A:** Pick one rule and apply it everywhere, client and server. I compute the discount on the subtotal in cents, round once, and, if per-line discounts are needed for receipts, distribute the rounded total across lines so they sum exactly. Rounding each line separately can be a cent off from the subtotal method.
+
+**Q:** How do you prove buttons don't re-render?
+
+**A:** Record a quantity change in the React DevTools Profiler and check that `AddToCartButton` does not appear in the commit. Functional tests: table-driven reducer and pricing tests, an RTL flow (add, open drawer, change quantity, apply promo) and a Playwright checkout with MSW returning "price changed".
+
+**Q:** Hands-on: write the provider.
+
+**A:** React 19 lets you render the context directly as the provider.
+
+```tsx
+function CartProvider({ children }: { children: React.ReactNode }) {
+  const [state, dispatch] = useReducer(cartReducer, initialCart);
+  return <CartDispatch value={dispatch}>
+    <CartState value={state}>{children}</CartState>
+  </CartDispatch>;
+}
+```
+
+**Common mistakes in answers:**
+- Passing `value={{ state, dispatch }}` and wondering why everything re-renders. A new object every render changes the context value.
+- Trusting a total sent from the client. The server must recompute it.
+- Saying `memo` stops context re-renders. `memo` only compares props; a component that reads a context still re-renders when that context changes.
 
 ### TL;DR
 Keep cart rules in a pure reducer, share it with split state/dispatch contexts, compute money in cents, and let the server reprice at checkout.
@@ -1542,17 +2219,67 @@ Many parallel queries are fine over HTTP/2; batching them into one request saves
 - [Ch 14 — Patterns and architecture](../chapters/14-patterns-and-architecture/README.md): error boundaries
 
 ### In the interview
+**30-second answer:** I built a SaaS analytics dashboard with KPI tiles, Recharts line and bar charts and a top-customers table, all driven by filters in the URL and auto-refreshing every minute while the tab is visible. The key decision was making each widget independent: its own TanStack Query, its own Suspense boundary and its own error boundary with a retry, so one failing endpoint shows one error card instead of a blank page. The hardest part was keeping the UI calm on filter changes; wrapping the URL update in `startTransition` keeps the old charts visible (dimmed) until new data is ready instead of flashing skeletons. Every chart has a text summary and a "View as table" toggle.
+
+**Key terms to know:**
+- **Error boundary** — a component that catches errors thrown while rendering its subtree and shows a fallback. One per widget.
+- **Suspense boundary** — shows a fallback while something inside is waiting (suspended) for data or code.
+- **Transition (`startTransition`)** — marks an update as non-urgent so React keeps showing current UI instead of falling back to a loading state.
+- **Query key** — the cache identity of a request in TanStack Query; includes metric and filters.
+- **Structural sharing** — TanStack Query keeps unchanged parts of new data referentially identical, so memoized charts skip re-rendering.
+- **Refetch interval and visibility** — polling every 60 s, paused while the tab is hidden.
+- **Pre-aggregation** — the API returns ready-made series; the browser never crunches raw events.
+- **Downsampling** — reducing thousands of points to a few hundred for SVG charts.
+- **Accessible chart** — a text summary, a data table alternative, labelled axes and not relying on colour alone.
+- **Time-zone buckets** — daily buckets computed in the user's zone; DST days have 23 or 25 hours.
+
 **Q:** How do you stop one widget's error from breaking the page?
 
-**A:** Wrap each widget in its own error boundary and Suspense boundary, with a retry that resets that widget's query.
+**A:** Wrap each widget in its own error boundary (with Suspense inside it). An error thrown in that widget is caught by the nearest boundary, so only that card shows "Couldn't load revenue — Retry". The retry resets the boundary and that widget's query key. Without boundaries, an uncaught render error unmounts the whole app.
 
 **Q:** Why wrap filter changes in a transition?
 
-**A:** So React keeps the current UI visible while the new data loads instead of falling back to skeletons.
+**A:** Changing filters gives each query a new key, and suspending components would normally show their Suspense fallbacks again, making the page flash skeletons. Inside a transition, React keeps showing the already-revealed content until the new data is ready, and `isPending` lets me dim it. Skeletons appear only on first load.
 
 **Q:** How do you make charts accessible?
 
-**A:** Provide a text summary and a data-table alternative, label axes, and don't rely on colour alone.
+**A:** Give each chart a one-sentence text summary ("Revenue up 12 % vs previous 30 days"), a "View as table" toggle with a real `<table>`, labelled axes and units, and distinguish series by shape or pattern as well as colour. SVG charts are otherwise read as a pile of unlabelled shapes.
+
+**Q:** Why do error boundaries not catch every error?
+
+**A:** They catch errors during rendering, lifecycle methods and in children's constructors. They do not catch errors in event handlers, in async code like a `setTimeout`, or in the boundary itself. TanStack Query rethrows query errors during render when you opt in (for example with `useSuspenseQuery` or `throwOnError`), which is how fetch failures reach the boundary.
+
+**Q:** Many small requests or one batched dashboard request?
+
+**A:** Separate queries load and fail independently, cache per widget and parallelize well over HTTP/2. One batched request saves round-trips but couples failures (one slow metric delays all) and invalidation. I chose per-widget queries; a backend-for-frontend endpoint is the next step if round-trip latency dominates.
+
+**Q:** What changes at 10x users or 10x data points?
+
+**A:** Auto-refresh load scales with open dashboards, so the API breaks first: I would cache aggregates server-side, increase the interval or back off when idle, and pause hidden tabs (already done). On the client, SVG charts slow past a few thousand points, so the server downsamples or I switch the busiest chart to canvas.
+
+**Q:** Why does a daily chart look wrong around daylight-saving changes?
+
+**A:** If the server buckets by UTC and the client labels in local time, a "day" can contain 23 or 25 hours, or bars can shift to the wrong date. I ask the API to bucket in the user's IANA time zone and label from the bucket's own date string.
+
+**Q:** How do you test the dashboard?
+
+**A:** RTL per widget with MSW for loading, data, error and empty states, including "one widget 500s, others render". A round-trip test for URL filters. Playwright visual snapshots with fixed data catch chart regressions, and an axe scan checks accessibility.
+
+**Q:** Hands-on: make a filter change a transition.
+
+**A:** Update the URL inside `startTransition` and dim the content while pending.
+
+```tsx
+const [isPending, startTransition] = useTransition();
+const setRange = (r: Range) =>
+  startTransition(() => setSearchParams(p => { p.set('range', r); return p; }));
+<section style={{ opacity: isPending ? 0.6 : 1 }}>{widgets}</section>
+```
+
+**Common mistakes in answers:**
+- One error boundary around the whole page. It contains the crash but still blanks every widget.
+- Claiming error boundaries catch `fetch` failures automatically. Only errors thrown during render reach them.
+- Aggregating raw events in the browser "to save backend work". It moves heavy computation and huge payloads to the weakest machine.
 
 ### TL;DR
 Give every widget its own query, Suspense and error boundary, keep filters in the URL, change them in transitions, and offer tables for charts.
@@ -1667,17 +2394,73 @@ Local IndexedDB means no sync; adding a server introduces conflicts (two devices
 - [Ch 12 — Testing React](../chapters/12-testing-react/README.md): testing routers
 
 ### In the interview
+**30-second answer:** I built a Markdown notes app with nested routes on React Router in data mode: a sidebar layout that persists while the editor route changes, loaders that fetch a note before it renders, and a route action that saves it. The key decision was autosaving through a fetcher (`useFetcher`), so saves run in the background without navigation or history entries, debounced to at most once per second and flushed on navigation and `pagehide`. Two subtle problems were revalidation cost, since every action reloads loaders, which I cut with `shouldRevalidate`, and safety, since user Markdown is rendered to React elements with raw HTML disabled. 1,000 notes load in under 300 ms.
+
+**Key terms to know:**
+- **Nested routes / layout route** — a parent route renders shared UI (the sidebar) and an `<Outlet>` where child routes appear.
+- **Loader** — a function on a route that fetches its data before the route renders; read with `useLoaderData`.
+- **Action** — a function on a route that handles a form submission (POST, PUT, DELETE); loaders revalidate afterwards.
+- **Fetcher (`useFetcher`)** — calls a loader or action without navigating, with its own pending state.
+- **Revalidation / `shouldRevalidate`** — re-running loaders after an action; `shouldRevalidate` lets a route opt out.
+- **Route error element** — the UI shown when a loader throws, such as a 404 response.
+- **Debounced autosave** — wait for a pause before saving, and flush on route change and `pagehide`.
+- **XSS** — cross-site scripting: user content executing script. Prevented by not rendering raw HTML.
+- **`useDeferredValue`** — keeps the textarea responsive while the preview renders.
+- **Derived index** — links and tags re-extracted from the body on every save so they never drift.
+
 **Q:** Why a fetcher instead of a `<Form>` for autosave?
 
-**A:** A fetcher calls the route action without navigating or adding history entries, which suits background saves.
+**A:** A `<Form>` submission is a navigation: it changes the location state and can add history entries. A fetcher calls the route action without navigating, keeps its own `state` ('idle', 'submitting', 'loading'), and can run alongside typing. That suits background saves where the user should not notice anything.
 
 **Q:** How do you render user Markdown safely?
 
-**A:** Render to React elements, keep raw HTML disabled or sanitized, and never use `dangerouslySetInnerHTML` on unsanitized input.
+**A:** Parse it to React elements with react-markdown, which ignores raw HTML by default, so `<script>` or `onerror` attributes become text. If I enable HTML I add rehype-sanitize with an allow-list. I never pass unsanitized output to `dangerouslySetInnerHTML`, and I check link protocols so `javascript:` URLs are dropped.
 
 **Q:** What is a loader?
 
-**A:** A function attached to a route that fetches its data before the route renders, so components receive ready data.
+**A:** A function attached to a route that fetches its data before the route renders, so the component receives ready data from `useLoaderData` and never renders a half-loaded state. Loaders for nested routes run in parallel, which avoids the request waterfall you get when each component fetches in its own Effect.
+
+**Q:** How do you guarantee the last keystroke is never lost?
+
+**A:** The draft lives in local state and is saved by a debounced fetcher submit. On route change I flush the pending save immediately, and `useBlocker` warns if a save is still in flight. On `pagehide` (tab close or mobile background) I flush with `navigator.sendBeacon` or a write to IndexedDB, because normal requests may be cancelled.
+
+**Q:** Why add `shouldRevalidate`, and what is the trade-off?
+
+**A:** After every action React Router re-runs active loaders, so autosaving every second would refetch the 1,000-note sidebar every second. `shouldRevalidate` on the sidebar route returns false unless the title or folder changed. The trade-off is that I must be sure no other sidebar data depends on the body, or it will go stale.
+
+**Q:** What happens on `/notes/unknown-id`?
+
+**A:** The loader throws a 404 `Response` (or `data(null, { status: 404 })`), React Router renders the nearest route error element, and because that element belongs to the note route, the sidebar layout stays visible with a friendly "Note not found". `useRouteError` and `isRouteErrorResponse` distinguish 404s from crashes.
+
+**Q:** What changes with 50,000 notes or sync across devices?
+
+**A:** Browser full-text search and loading the whole list break first; I would paginate or virtualize the sidebar and index search on a server. Syncing devices introduces conflicts when two edit the same note: last-writer-wins per note is simple but loses edits, while CRDTs (Project 27) merge concurrent edits safely.
+
+**Q:** Why is typing slow in a long note, and how do you fix it?
+
+**A:** Parsing and rendering Markdown for a 20,000-word note on every keystroke takes longer than a frame. Passing `useDeferredValue(text)` to a memoized preview lets the textarea update first and the preview catch up in an interruptible background render. Splitting the preview by block and memoizing unchanged blocks helps further.
+
+**Q:** How do you test routes?
+
+**A:** `createMemoryRouter` with fixture loaders renders real route trees in RTL, including the 404 path. Link and tag extraction is unit-tested. A Playwright test types, navigates away immediately, comes back and asserts the text is intact.
+
+**Q:** Hands-on: a debounced fetcher save.
+
+**A:**
+
+```tsx
+const fetcher = useFetcher();
+useEffect(() => {
+  const t = setTimeout(() =>
+    fetcher.submit({ body: draft }, { method: 'post' }), 1000);
+  return () => clearTimeout(t);
+}, [draft]);
+```
+
+**Common mistakes in answers:**
+- Saying `react-markdown` is unsafe "because it renders HTML". It does not render raw HTML unless you add a plugin like rehype-raw.
+- Fetching each note in a `useEffect` inside the component. That shows a loading flash and creates waterfalls that loaders avoid.
+- Forgetting that saves on unload need `pagehide` plus `sendBeacon` or local persistence; `beforeunload` is unreliable on mobile.
 
 ### TL;DR
 Nest routes under a sidebar layout, load notes with loaders, autosave with debounced fetchers, defer the preview and render Markdown safely.
@@ -1769,17 +2552,71 @@ Client-side filtering is better for small static lists (no network). For huge re
 - [Ch 15 — Interview and machine coding](../chapters/15-react-interview-and-machine-coding/README.md): autocomplete build
 
 ### In the interview
+**30-second answer:** I built a reusable, generic `Autocomplete<T>` that searches a remote API as you type and follows the WAI-ARIA combobox pattern. The key decisions were combining a 250 ms debounce (to cut requests) with aborting the previous request (to guarantee correctness when responses arrive out of order), and keeping DOM focus in the input while `aria-activedescendant` points at the active option. All key handling lives in one reducer, so Up, Down, Home, End, Enter and Escape are tested as pure transitions. It sends at most one request in flight, has zero axe violations, and the same component powers both a city search and a user search.
+
+**Key terms to know:**
+- **Combobox pattern** — an input with `role="combobox"` that controls a pop-up `role="listbox"` of `role="option"` items.
+- **`aria-activedescendant`** — on the focused input, the id of the visually active option, so screen readers announce it without moving focus.
+- **`aria-expanded` / `aria-controls`** — tell assistive tech whether the pop-up is open and which element it is.
+- **Debounce** — run the search only after the user pauses typing for 250 ms.
+- **Throttle** — run at most once per interval while events continue. Not the right fit for search-as-you-type.
+- **Request cancellation** — `AbortController` aborts the previous fetch when the query changes.
+- **Live region (`role="status"`)** — politely announces "5 results available".
+- **Generic component** — `Autocomplete<T>` with `getLabel`, `renderOption` and `fetchOptions`, typed by the caller.
+- **Regex escaping** — escaping user text before building a highlight regex.
+- **Headless component** — logic and ARIA without styling, the model used by Downshift and React Aria.
+
 **Q:** Debounce or throttle for search-as-you-type?
 
-**A:** Debounce: you want the request after the user pauses, not at regular intervals during typing.
+**A:** Debounce: you want one request after the user pauses, with the final query, not requests at regular intervals during typing. Throttle fits continuous signals where you want periodic updates, such as scroll position or resize. A combined "debounce with max wait" is a reasonable refinement for very long typing bursts.
 
 **Q:** Why is debouncing not enough?
 
-**A:** Responses can still arrive out of order; abort the previous request or ignore stale responses.
+**A:** Debouncing reduces how many requests you send, but responses can still arrive out of order: the request for "par" may finish after "paris". Aborting the previous request (or ignoring responses whose query is no longer current) guarantees the list always matches the latest input. You need both.
 
 **Q:** How does a screen reader know which option is active?
 
-**A:** The focused input's `aria-activedescendant` holds the active option's id; the listbox and options have proper roles.
+**A:** The input keeps focus, and its `aria-activedescendant` is set to the active option's id. The listbox has `role="listbox"` and each item `role="option"` with `aria-selected` on the active one. The screen reader announces that option as you arrow, while the caret stays in the input so typing continues to work.
+
+**Q:** Why not move real DOM focus into the list?
+
+**A:** Moving focus would take the caret out of the input, so typing another letter would go nowhere and the user would have to tab back. `aria-activedescendant` gives the announcement of a focused option while keeping focus in the input. I also call `scrollIntoView({ block: 'nearest' })` on the active option so it stays visible.
+
+**Q:** Clicking an option closes the list before the click registers. Why, and how do you fix it?
+
+**A:** `mousedown` on the option blurs the input first, and my blur handler closes the pop-up, so the option is gone before `click` fires. Calling `preventDefault()` in the option's `onMouseDown` stops the blur, and the click then selects normally.
+
+**Q:** Why build it instead of using Downshift or React Aria?
+
+**A:** In production I would usually use a headless library, because they are tested across screen readers and edge cases. Building one once teaches what they solve, which is a very common machine-coding question. The trade-off is maintenance: every browser and screen-reader quirk becomes mine.
+
+**Q:** What happens if the API is slow, errors or rate-limits?
+
+**A:** The pop-up shows a loading row after a short delay, an inline error with a retry on failure, and "No results" for an empty list, each announced through the live region. A 429 response shows "Too many searches, try again" and I can increase the debounce. The previous valid results stay visible while loading so the list does not flicker.
+
+**Q:** What changes for 10x traffic or huge result sets?
+
+**A:** Request volume to the search API breaks first, so I cache results per term (TanStack Query with the term in the key) so backspacing does not refetch, and enforce the minimum two characters. For huge result sets, cap the server response at maybe 20 items and virtualize the list if more must be shown.
+
+**Q:** How do you test it?
+
+**A:** RTL with fake timers: type "par", advance 250 ms, assert exactly one request. Arrow down and assert `aria-activedescendant` equals the first option's id, press Enter and assert the selection. MSW returns out-of-order responses to prove the latest query wins. Playwright plus axe covers the real browser and a manual screen-reader check covers announcements.
+
+**Q:** Hands-on: highlight the match safely.
+
+**A:** Escape regex characters, split with a capturing group, and wrap matches in `<mark>` as React elements, never as an HTML string.
+
+```tsx
+const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const parts = label.split(new RegExp(`(${esc})`, 'ig'));
+return parts.map((p, i) =>
+  p.toLowerCase() === q.toLowerCase() ? <mark key={i}>{p}</mark> : p);
+```
+
+**Common mistakes in answers:**
+- Saying "debounce solves the race condition". It reduces requests; only cancellation or stale-response checks fix ordering.
+- Using `role="menu"` for suggestions. Menus are for actions; the combobox pattern uses `listbox` and `option`.
+- Building the highlight with `dangerouslySetInnerHTML` and a string replace, which turns search results into an XSS hole.
 
 ### TL;DR
 Debounce the query, abort stale requests, keep focus in the input with `aria-activedescendant`, and handle every APG key in one reducer.
@@ -1875,17 +2712,72 @@ Drafts in `localStorage` are device-bound and may contain personal data — encr
 - [Ch 15 — Interview and machine coding](../chapters/15-react-interview-and-machine-coding/README.md): wizard build
 
 ### In the interview
+**30-second answer:** I built a five-to-six-step application wizard with a URL per step, per-step validation, branching steps, draft resume, a review page with edit links and a final submit through a form Action. The key decision was one Zod schema and one React Hook Form instance per step, plus a pure `computeSteps(answers)` function that decides which steps apply. The hardest part was branching: when an answer removes a step, the same reducer action deletes that step's data so the server never receives contradictory answers. Typing re-renders only the field being typed in, failed Next moves focus to an error summary, and the server validates the whole schema again on submit.
+
+**Key terms to know:**
+- **React Hook Form (RHF)** — a form library that registers mostly uncontrolled inputs with refs, so typing does not re-render the form.
+- **Zod schema / `zodResolver`** — runtime validation rules that also produce TypeScript types, plugged into RHF.
+- **Per-step validation** — Next validates only the current step's schema.
+- **`computeSteps`** — a pure function from answers to the ordered list of steps that apply.
+- **Branching** — answers that add or remove steps, such as "self-employed".
+- **Stale branch data** — answers from a step that no longer applies; deleted in the same update.
+- **Deep-link guard** — on entering a step URL directly, validate earlier steps and redirect to the first invalid one.
+- **Error summary** — a list at the top of a step linking to each invalid field; receives focus on failed Next.
+- **Server error mapping** — mapping error paths like `address.postcode` back to a step and field.
+- **`watch`** — RHF API to subscribe to a value; causes re-renders, so used only for fields that drive UI.
+
 **Q:** How do you validate only the current step?
 
-**A:** Give each step its own schema and form instance; Next runs that step's validation and only then saves to the shared store.
+**A:** Each step has its own schema and its own `useForm` with `zodResolver(stepSchema)`. Clicking Next runs `handleSubmit`, which validates only that step; if valid, it writes the step's values to the shared wizard store and navigates to the next step's URL. The full schema runs again on the review page and on the server.
 
 **Q:** What happens to answers in a step that no longer applies?
 
-**A:** Delete them in the same update that removes the step, so the final submission is consistent.
+**A:** They are deleted in the same reducer action that changes the branching answer, so the store can never hold "employed" plus self-employment details. Doing it later, for example in an Effect, leaves a window where the data is inconsistent, and a submit in that window would send contradictory data.
 
 **Q:** Why React Hook Form for big forms?
 
-**A:** It keeps inputs uncontrolled and subscribes narrowly, so typing doesn't re-render the whole form.
+**A:** It registers inputs as uncontrolled and reads values from the DOM through refs, so typing in one field does not re-render the whole form. It subscribes components narrowly (`useWatch`, `useFormState`) so only what depends on a value updates. With dozens of controlled fields, every keystroke would re-render everything.
+
+**Q:** Why give each step its own URL?
+
+**A:** The browser Back button, refresh and analytics all work, and users can be sent a link to resume. The trade-off is that someone can open `/wizard/documents` directly, so each step must guard: validate previous steps from the store and redirect to the first invalid one.
+
+**Q:** Where should the wizard's shared answers live?
+
+**A:** In a reducer-plus-context or a small Zustand store above the step routes, because every step and the review page read it and it must survive step navigation. Each step's `useForm` holds only the in-progress values for that step. Drafts are persisted from the store.
+
+**Q:** The server rejects `address.postcode` on final submit. What happens?
+
+**A:** The Action returns errors keyed by path. I map the path's first segment to the step that owns it, navigate there, and set the error on the field with RHF's `setError`, so the user lands exactly where the problem is. Unknown paths go to a form-level error on the review page.
+
+**Q:** Is storing drafts in `localStorage` acceptable?
+
+**A:** It is convenient but the data is device-bound, readable by any script on the origin, and these forms often contain personal data. For sensitive data, store drafts server-side tied to the session with an expiry, or at least avoid saving fields like ID numbers locally.
+
+**Q:** What changes if the business needs 50 different wizards?
+
+**A:** Hand-coding steps stops scaling first. I would move to a server-driven definition: a JSON description of steps, fields, conditions and schemas that a generic renderer turns into steps. Sharing schemas between client and server prevents validation drift.
+
+**Q:** How do you test branching?
+
+**A:** Unit-test `computeSteps` with a table of answers to step lists, and the reducer to prove switching the branch deletes the removed step's data. RTL fills a step, goes Next then Back and checks values are intact. Playwright runs the full flow, refreshes mid-way to test resume, and does a keyboard-only pass.
+
+**Q:** Hands-on: what does `computeSteps` look like?
+
+**A:** A pure function of the answers.
+
+```ts
+const computeSteps = (a: Answers): StepId[] => [
+  'personal', 'address', 'employment',
+  ...(a.employment?.type === 'self-employed' ? ['business' as const] : []),
+  'documents', 'review',
+];
+```
+
+**Common mistakes in answers:**
+- Validating the entire final schema on every Next, which shows errors for steps the user has not reached.
+- Hiding removed steps in the UI but keeping their data, so the server receives answers for questions that no longer apply.
+- Calling `watch()` with no arguments at the top of a step, which subscribes to every field and re-renders on every keystroke.
 
 ### TL;DR
 One schema and form per step, a pure function deciding the step list, URLs per step, cleared data for removed branches, and server-side validation of the whole.
@@ -1978,17 +2870,73 @@ Cookie-based preference makes SSR correct but adds a cookie to every request. CS
 - [Ch 13 — Server rendering](../chapters/13-server-rendering-and-frameworks/README.md): hydration mismatches
 
 ### In the interview
+**30-second answer:** I built a theming system with design tokens compiled to CSS custom properties for light, dark and high-contrast themes, a "system" mode that follows the operating system, and generated brand accents. The key decision was that switching themes changes one `data-theme` attribute on `<html>` and React holds only the mode, so a switch restyles the page with zero component re-renders. The hardest problem was the flash of the wrong theme with server rendering, which I solved with the preference in a cookie the server can read plus a tiny blocking script in `<head>` that sets the attribute before first paint. An automated script checks every text pair meets WCAG AA 4.5:1.
+
+**Key terms to know:**
+- **Design token** — a named design decision (`--color-surface`, `--space-3`) used instead of raw values.
+- **CSS custom properties** — CSS variables that cascade and can be changed at runtime without JavaScript re-rendering.
+- **`data-theme` attribute** — the single switch on `<html>` that selects a set of token values.
+- **`prefers-color-scheme` / `matchMedia`** — the media query reporting the OS theme, and its JavaScript listener for live changes.
+- **FOUC / theme flash** — a frame painted in the wrong theme before scripts run.
+- **Blocking head script** — a small inline script in `<head>` that runs before the body paints.
+- **Hydration mismatch** — server HTML and the first client render disagree; React warns and patches.
+- **`suppressHydrationWarning`** — silences the mismatch warning for one element's attributes or text, one level deep.
+- **WCAG AA contrast** — at least 4.5:1 for normal text and 3:1 for large text.
+- **OKLCH** — a perceptual colour space used to generate accent shades with predictable lightness.
+
 **Q:** How do you avoid the dark-mode flash with SSR?
 
-**A:** Store the preference where the server can read it (a cookie) or run a tiny blocking script in `<head>` that sets the theme attribute before paint.
+**A:** Put the preference where the server can read it, a cookie, so the server renders the right `data-theme` immediately. For "system" mode the server cannot know the OS setting, so a tiny synchronous script in `<head>` reads the cookie and `matchMedia('(prefers-color-scheme: dark)')` and sets the attribute before the first paint. It must not wait for React or a bundle.
 
 **Q:** Why CSS variables instead of a theme object in context?
 
-**A:** Switching variables restyles everything without re-rendering React components.
+**A:** Changing variables restyles everything through the cascade with no React work. A theme object in context re-renders every consumer on switch, and components that style with inline values from context must re-run. Context still holds the mode so the switcher can show it, but colours never pass through React.
 
 **Q:** What is a design token?
 
-**A:** A named design decision (colour, spacing, radius) used by components instead of raw values, so themes can swap them.
+**A:** A named design decision, such as a colour, spacing step or radius, used by components instead of raw values. Components say `var(--color-text-muted)`, and each theme supplies a value, so designers change the look in one place and themes swap values without touching components.
+
+**Q:** Why do you get a hydration mismatch with the theme switcher, and how do you fix it?
+
+**A:** If the server rendered "Light" but the client reads "Dark" from `localStorage` during the first render, the HTML differs and React warns. Fixes: render from a value both sides share (the cookie), render the label only after mount, or put `suppressHydrationWarning` on that one element (it applies one level deep). The head script handles the attribute on `<html>`, which React does not manage.
+
+**Q:** How does "system" mode stay live when the OS switches?
+
+**A:** I subscribe to `matchMedia('(prefers-color-scheme: dark)')` with a `change` listener (ideally via `useSyncExternalStore`) and update the effective theme attribute. The user's stored choice is still "system", so the next OS change is followed too.
+
+**Q:** Cookie or `localStorage` for the preference?
+
+**A:** With SSR, a cookie, because the server sees it on the request and renders the correct theme. The cost is a few bytes on every request and it cannot be read by a CDN cache key without care. For a pure SPA, `localStorage` plus the head script is enough.
+
+**Q:** What happens with third-party widgets or a JavaScript failure?
+
+**A:** If the head script fails, the page falls back to the CSS default plus a `@media (prefers-color-scheme: dark)` rule, so system dark still works. Third-party embeds such as maps often ignore your tokens, so I pass them a theme option where they have one or frame them in a neutral surface.
+
+**Q:** What changes at 10x scale, with many brands or apps?
+
+**A:** Hand-written theme CSS breaks first. Tokens become a package with a build step emitting CSS per brand and theme, versioned and consumed by every app (Project 29). Accents are generated in OKLCH and automatically checked for contrast so a new brand cannot ship unreadable text.
+
+**Q:** How do you test it?
+
+**A:** Playwright with `colorScheme: 'dark'` and `'light'` takes screenshots per theme, and a throttled-network run checks that no frame is captured in the wrong theme. The token build and contrast checker are unit-tested, and an RTL test checks the switcher sets the attribute and persists.
+
+**Q:** Hands-on: what is the head script?
+
+**A:** It runs before paint and touches only the attribute.
+
+```html
+<script>
+  const m = document.cookie.match(/theme=(\w+)/)?.[1] ?? 'system';
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.dataset.theme =
+    m === 'system' ? (dark ? 'dark' : 'light') : m;
+</script>
+```
+
+**Common mistakes in answers:**
+- Setting the theme in a `useEffect`. Effects run after paint, so the wrong theme is always visible for at least one frame.
+- Inverting colours for dark mode. Dark themes need their own tokens and contrast checks, not `filter: invert()`.
+- Saying `suppressHydrationWarning` fixes mismatches. It only hides the warning for one element; it does not make the values agree.
 
 ### TL;DR
 Define tokens, emit CSS variables per theme, set the theme attribute before paint, keep only the mode in context, and audit contrast automatically.
@@ -2110,17 +3058,70 @@ Server sessions need a lookup per request (cache them); stateless JWTs avoid tha
 - [Ch 12 — Testing React](../chapters/12-testing-react/README.md): providers and routers
 
 ### In the interview
+**30-second answer:** I built a complete auth flow for a single-page app: login, sign-up, logout, password reset, session expiry, roles and protected routes that redirect to `/login?next=…` and back. The key decision was server-side sessions in an `HttpOnly; Secure; SameSite=Lax` cookie, so no token is ever readable by JavaScript or stolen through XSS, with the session check done in router middleware before any protected route renders, so private content never flashes. The point I always stress is that client route guards are UX; the API authorizes every request, and I have API tests proving a normal user gets 403 on admin endpoints. Logout clears every cache so Back shows nothing private.
+
+**Key terms to know:**
+- **Authentication vs authorization** — who you are vs what you may do. Login vs role checks.
+- **Session cookie** — a random session id the server maps to a user; revocable by deleting the row.
+- **`HttpOnly` / `Secure` / `SameSite`** — cookie flags: no JS access, HTTPS only, and limits on cross-site sending.
+- **XSS** — cross-site scripting: injected script running in your origin. `HttpOnly` stops it reading the cookie.
+- **CSRF** — cross-site request forgery: another site makes the browser send a request with your cookie. Mitigated by `SameSite`, CSRF tokens or `Origin` checks.
+- **Protected route** — a route that resolves auth before rendering and redirects if unauthenticated.
+- **Router middleware / loader** — code that runs before route components render; where the `/me` check lives.
+- **Open redirect** — a `?next=` parameter that can send users to another site. Only same-origin paths are allowed.
+- **Session fixation** — reusing a pre-login session id; prevented by issuing a new id at login.
+- **Password hashing (Argon2/bcrypt)** — slow, salted one-way hashes so a leaked table is hard to crack.
+
 **Q:** Where should an SPA keep its session token?
 
-**A:** Preferably in an `HttpOnly`, `Secure`, `SameSite` cookie, so JavaScript (and XSS) cannot read it.
+**A:** Preferably in an `HttpOnly`, `Secure`, `SameSite` cookie set by the server, so JavaScript, and therefore any XSS payload, cannot read it. `localStorage` is readable by any script on the page, so one XSS bug leaks the token. The cookie approach then requires CSRF protection, which `SameSite=Lax` plus an `Origin` check largely provides.
 
 **Q:** Is a protected route enough to secure data?
 
-**A:** No. It is a UX guard; the server must check authorization on every request.
+**A:** No. It is a UX guard that stops honest users seeing pages they cannot use; anyone can call the API directly or edit the JavaScript. The server must authenticate and authorize every request, and I test that at the API level, including role checks.
 
 **Q:** How do you avoid flashing private content?
 
-**A:** Resolve the session before rendering protected routes — in router middleware or loaders — not in an Effect after render.
+**A:** Resolve the session before rendering protected routes, in router middleware or a parent loader that calls `/me` and redirects on 401. If you check in a `useEffect`, the protected component has already rendered once with no user, so private UI or a loading flash appears.
+
+**Q:** How do you validate the `?next=` redirect?
+
+**A:** Accept only relative paths on the same origin: it must start with a single `/`, not `//` or `/\`, and not contain a scheme. The safest approach is to parse it with `new URL(next, location.origin)` and check that the resulting origin equals `location.origin`, otherwise fall back to `/app`.
+
+**Q:** Server sessions or JWTs?
+
+**A:** Server sessions need a lookup per request, but are instantly revocable ("log out everywhere" is one delete) and the cookie is small. Stateless JWTs avoid the lookup but cannot be revoked before they expire without adding a deny-list, which reintroduces state. For a typical web app I prefer sessions with a cache in front of the session store.
+
+**Q:** The session expires while the user is filling a form. What happens?
+
+**A:** The next API call returns 401. A central fetch wrapper catches it, keeps the unsaved input (in memory or a local draft), and shows "Session expired — sign in again" with a login dialog or a redirect carrying `next`. After login, the draft is restored and the user retries.
+
+**Q:** What must logout clear on the client?
+
+**A:** Call the logout endpoint so the server deletes the session, then clear the TanStack Query cache, in-memory stores and drafts with personal data, and replace the history entry so Back does not show cached private pages. Pages should be served with `Cache-Control: no-store` for the same reason.
+
+**Q:** What breaks first at 10x users, and under attack?
+
+**A:** The per-request session lookup becomes the hot path, so I put sessions in a fast store such as Redis or cache them briefly. Under credential-stuffing attacks, login is the target: rate limits per IP and per account, slow password hashing, and later MFA or passkeys.
+
+**Q:** How do you test auth?
+
+**A:** API tests for every endpoint with no session, a user session and an admin session, asserting 401 and 403 where expected. RTL uses a custom render that injects auth state. Playwright saves a logged-in storage state for speed, with separate tests for expiry, admin access and "Back after logout shows nothing".
+
+**Q:** Hands-on: what cookie does the server set at login?
+
+**A:**
+
+```http
+Set-Cookie: sid=3f9c…; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=1209600
+```
+
+`HttpOnly` blocks JavaScript access, `Secure` sends it only over HTTPS, `SameSite=Lax` stops it on most cross-site POSTs, and `Max-Age` sets "remember me" (here 14 days).
+
+**Common mistakes in answers:**
+- "We store the JWT in `localStorage` and it's fine because we sanitize input." One missed XSS leaks every session.
+- Treating hidden admin links as access control. Authorization must be enforced by the API.
+- Forgetting CSRF once you use cookies. Cookies are attached automatically, so state-changing requests need `SameSite` plus a token or `Origin` check.
 
 ### TL;DR
 Use server sessions in HttpOnly cookies, check auth before protected routes render, validate redirects, and remember the server is the real gate.
@@ -2214,17 +3215,72 @@ Zustand is minimal; Redux Toolkit adds devtools time-travel and stricter structu
 - [Ch 10 — Performance](../chapters/10-performance/README.md): avoiding re-renders
 
 ### In the interview
+**30-second answer:** I built a Spotify-style web player where playback continues while you navigate, with a queue, shuffle, repeat, seek, keyboard shortcuts and OS media keys. The key decision was splitting responsibilities: a Zustand store holds intent (what should play), one `AudioEngine` component mounted at the root reconciles that intent with the single `<audio>` element, and the element's reported reality (buffering, ended, play rejected) is written back. The performance trick was putting `currentTime` in its own tiny store, so only the seek bar and clock re-render four times a second while the rest of the app stays still, which I verified in the Profiler. Autoplay rejections from `play()` are caught and shown as paused.
+
+**Key terms to know:**
+- **Zustand** — a small store where components subscribe with a selector and re-render only when the selected value changes.
+- **Selector** — a function picking a slice of the store, such as `s => s.queue[s.index]`.
+- **`useShallow`** — compares selected objects or arrays shallowly so a selector returning `{ a, b }` does not re-render every time.
+- **Intent vs reality** — the store says what should happen; the `HTMLMediaElement` reports what is happening.
+- **Imperative bridge** — a component whose Effects call DOM APIs like `audio.play()` in response to state.
+- **High-frequency updates** — `timeupdate` fires several times per second; isolated in a separate store.
+- **Autoplay policy** — browsers block `play()` without a user gesture; it returns a rejecting promise.
+- **Media Session API** — connects OS media keys and lock-screen controls to your actions.
+- **Shuffle order** — a separate shuffled index array so turning shuffle off restores the original order.
+- **Persist with throttle** — saving position every few seconds instead of on every update.
+
 **Q:** Why Zustand instead of context here?
 
-**A:** Components subscribe to selected slices, so high-frequency updates re-render only the components that read them, and no provider is needed.
+**A:** Context re-renders every consumer when its value changes and has no selectors. Zustand lets each component subscribe to just the slice it reads, so a volume change re-renders the volume slider only. It also needs no provider, so the store can be used from non-React code like the Media Session handlers and keyboard shortcut module.
 
 **Q:** How do you keep `timeupdate` from re-rendering the app?
 
-**A:** Put the current time in its own small store and subscribe only the seek bar and clock to it.
+**A:** Put the current time in its own small store, written by the engine on `timeupdate`, and subscribe only the seek bar and clock to it (via `useSyncExternalStore` or a second Zustand store). Everything else subscribes to the main store, which does not change during normal playback.
 
 **Q:** What if `audio.play()` is blocked?
 
-**A:** It returns a rejected promise; catch it, show paused, and ask for a user gesture.
+**A:** It returns a promise that rejects with `NotAllowedError` when there has been no user gesture. I catch it, set the store status to paused and show "Press play to start", which is common after a reload restores a queue. Calling `play()` directly inside a click handler satisfies the gesture rule.
+
+**Q:** Why is the audio element the source of truth for playback status?
+
+**A:** The element changes on its own: it buffers, stalls, ends or errors without your code asking. If the store also decided "playing", the two could disagree. So the store holds the user's intent, the engine issues commands, and status comes back from media events. Exactly one place decides each fact.
+
+**Q:** Why does a selector like `s => ({ a: s.a, b: s.b })` re-render on every store change?
+
+**A:** It builds a new object every time, and Zustand compares selector results with `Object.is`, so the result always looks different. Use two separate selectors or wrap it with `useShallow`, which compares the object's keys one by one.
+
+**Q:** How does shuffle work without losing "previous"?
+
+**A:** I keep the queue in its original order and store a separate shuffled `order` array of indices. Next and previous walk `order`; turning shuffle off maps the current track back to its original position. Shuffling the queue itself would destroy the original order.
+
+**Q:** What happens if the next track 404s or the network drops mid-song?
+
+**A:** The element fires `error` or stalls with `waiting`. The engine writes "error" or "buffering" status, shows it in the bar, and on error skips to the next track after a short notice rather than stopping the queue. If every track fails, it stops and shows a connection message.
+
+**Q:** What would change with HLS streaming or a much larger app?
+
+**A:** Native `<audio>` cannot play HLS everywhere, so I would add a library like hls.js inside the engine; the store API stays the same, which is the benefit of the intent/engine split. For a large team, Redux Toolkit offers stricter structure and time-travel devtools, at the cost of more boilerplate.
+
+**Q:** How do you test the player?
+
+**A:** Unit-test the store directly by calling actions and asserting state, which covers shuffle and repeat. In jsdom, `HTMLMediaElement.prototype.play` is not implemented, so I mock it to resolve or reject. Playwright plays a short real audio file to verify `ended` advances with each repeat mode.
+
+**Q:** Hands-on: create the store and a selective subscription.
+
+**A:**
+
+```ts
+const usePlayer = create<Player>()(set => ({
+  queue: [], index: 0, intent: 'paused',
+  playAt: i => set({ index: i, intent: 'playing' }),
+}));
+const track = usePlayer(s => s.queue[s.index]);   // re-renders only when the track changes
+```
+
+**Common mistakes in answers:**
+- Rendering an `<audio>` element inside each page. Navigating unmounts it and stops playback; mount one at the root.
+- Saving `currentTime` to `localStorage` on every `timeupdate`. Throttle to every few seconds.
+- Claiming Zustand avoids all re-renders. It only re-renders subscribers whose selected value changed; bad selectors still re-render everything.
 
 ### TL;DR
 Store intent in Zustand, let one engine component reconcile it with the audio element, isolate high-frequency time updates, and handle autoplay rejections.
@@ -2353,17 +3409,71 @@ Client-side slot computation is fast but risks disagreement if the client's zone
 - [Ch 14 — Patterns and architecture](../chapters/14-patterns-and-architecture/README.md): accessible grids
 
 ### In the interview
+**30-second answer:** I built a Calendly-style scheduler: hosts define weekly availability and meeting types, guests see free slots in their own time zone and book, and hosts manage a week view with drag-to-move and resize. The key decision was storing availability rules as wall-clock times plus the host's IANA time zone, and bookings as absolute instants, then converting per date with Temporal so daylight-saving changes are handled correctly. The hardest problem was double booking: the guest's slot list is only a hint, so the server re-checks inside a transaction backed by a PostgreSQL exclusion constraint, and a concurrency test proves two simultaneous bookings yield one success and one "slot taken". Overlapping events in the week view are laid out side by side with a column algorithm.
+
+**Key terms to know:**
+- **Wall-clock time** — a local time like "Monday 09:00" with no fixed UTC meaning until combined with a date and zone. Availability rules.
+- **Instant** — an exact point on the global timeline (stored as `timestamptz`). Bookings.
+- **IANA time zone** — a named zone such as `Europe/London` that encodes DST rules; not the same as a fixed offset like +01:00.
+- **DST gap and overlap** — on spring-forward some local times do not exist; on fall-back some happen twice.
+- **Temporal** — the modern JavaScript date-time API (`PlainDate`, `ZonedDateTime`, `Instant`) with explicit zones and a `disambiguation` option.
+- **Exclusion constraint** — a PostgreSQL constraint that rejects overlapping ranges, used to forbid double bookings.
+- **Transaction** — a group of database operations that succeed or fail together.
+- **Overlap layout** — clustering events that overlap transitively and assigning each a column.
+- **Roving `tabIndex`** — only one cell in a grid is tabbable; arrow keys move focus between cells.
+- **Server-side slot computation** — computing free slots on the server so every guest sees the same result.
+
 **Q:** How do you store weekly availability?
 
-**A:** As wall-clock times plus the host's IANA time zone, converted to instants per specific date.
+**A:** As wall-clock times (Monday 09:00–17:00) plus the host's IANA time zone. For each specific date I combine the date, the wall time and the zone into a `ZonedDateTime`, then into an instant. That way 09:00 London stays 09:00 London all year even though its UTC offset changes with DST.
 
 **Q:** Why not add 24 hours to get "tomorrow at 9"?
 
-**A:** DST days are 23 or 25 hours long; use calendar arithmetic in a zone-aware API.
+**A:** DST days are 23 or 25 hours long, so adding 24 hours to an instant lands at 08:00 or 10:00 local time across a transition. Calendar arithmetic in a zone-aware API (`zdt.add({ days: 1 })` in Temporal) keeps the wall time fixed and adjusts the instant.
 
 **Q:** How do you prevent double bookings?
 
-**A:** Re-check on the server inside a transaction or with a database constraint; the client's slot list is only a hint.
+**A:** The client's slot list can be stale the moment it renders, so the server re-checks inside a transaction, and an exclusion constraint on the host's booked time ranges makes the database itself reject an overlap. The losing request gets a "slot taken" error and the UI refreshes the slots.
+
+**Q:** What happens to a booking at 02:30 on the spring-forward night?
+
+**A:** 02:30 does not exist that night in zones that jump from 02:00 to 03:00. Temporal's `disambiguation` option forces a choice: 'compatible' moves it forward to 03:30, 'reject' throws. For availability, I prefer generating slots only from times that exist, so guests never see a nonexistent slot.
+
+**Q:** Why compute slots on the server instead of the browser?
+
+**A:** All guests then see the same answer, the server's time-zone database is up to date, and the server already has the bookings. Computing in the browser is fast but risks disagreement if a device's zone data is old or its clock is wrong. The browser only formats instants in the guest's zone.
+
+**Q:** How do you lay out three overlapping meetings in the week view?
+
+**A:** Sort by start time, group events into clusters that overlap transitively, and within each cluster give each event the first column that is free at its start. Each event's width is 1 divided by the cluster's column count, and its top and height come from minutes since midnight.
+
+**Q:** What changes at 100x hosts or with Google Calendar sync?
+
+**A:** Slot computation per request becomes the hot path, so I cache computed availability per host and day and invalidate on booking or rule change. External calendar sync adds busy times from webhooks, which must be merged into the same conflict check and can arrive late, so the transactional check remains the final authority.
+
+**Q:** How do you make the month grid accessible?
+
+**A:** It follows the grid pattern: `role="grid"` with rows and `gridcell`s, roving `tabIndex` so Tab enters the grid once, arrow keys move by day and week, Home/End and Page Up/Down jump, and Enter selects. Each day has an accessible label with the full date and availability.
+
+**Q:** How do you test time-zone logic?
+
+**A:** Unit tests use explicit zones and a fixed "now", covering both DST weekends for a London host and a New York guest. Playwright projects run with different `timezoneId` and `locale` settings, and a concurrency test fires two simultaneous booking requests and expects exactly one success.
+
+**Q:** Hands-on: turn a rule into an instant for a date.
+
+**A:**
+
+```ts
+const start = Temporal.PlainDate.from('2026-10-25')
+  .toZonedDateTime({ timeZone: 'Europe/London', plainTime: '09:00' });
+start.toInstant();            // the exact moment, DST-correct
+start.withTimeZone('America/New_York').toLocaleString(); // what the guest sees
+```
+
+**Common mistakes in answers:**
+- Storing availability in UTC. "09:00–17:00" then drifts by an hour twice a year.
+- Treating an offset like `+02:00` as a time zone. Offsets do not know DST rules; IANA names do.
+- Trusting the client's slot list. Two guests can see the same free slot; only the server check is authoritative.
 
 ### TL;DR
 Store rules as wall time plus zone and bookings as instants, compute slots on the server with Temporal, lay out overlaps by columns, and enforce conflicts in the database.
@@ -2457,17 +3567,72 @@ Server-Sent Events are simpler for one-way streams and reconnect automatically; 
 - [Ch 10 — Performance](../chapters/10-performance/README.md): Profiler, `memo`, re-render triggers
 
 ### In the interview
+**30-second answer:** I built a live watchlist of 50 symbols updating over one WebSocket at up to 1,000 messages per second while scrolling stays at 60 fps. The key decision was keeping the high-frequency data outside React: messages go into a buffer that keeps only the latest quote per symbol, the buffer flushes once per animation frame into an external store, and each row subscribes to its own symbol with `useSyncExternalStore`, so one tick re-renders one row. The connection manager reconnects with exponential backoff plus jitter, detects dead sockets with heartbeats and resubscribes automatically. Price flashes use a CSS class toggled through a ref, so they cost no renders.
+
+**Key terms to know:**
+- **WebSocket** — a long-lived, two-way connection between browser and server.
+- **Server-Sent Events (SSE)** — a one-way server-to-client stream over HTTP with built-in reconnection.
+- **Coalescing** — keeping only the latest value per key within a window, here one animation frame.
+- **`requestAnimationFrame` batching** — flushing buffered updates once per frame, matching the display refresh.
+- **External store + `useSyncExternalStore`** — data outside React that components subscribe to with a consistent snapshot.
+- **Per-key subscription** — listeners stored per symbol so only that row is notified.
+- **Exponential backoff with jitter** — reconnect delays that double up to a cap, randomized so clients do not reconnect in lockstep.
+- **Heartbeat** — periodic ping/pong to detect a connection that is open but dead.
+- **Staleness indicator** — marking data that has not updated within 5 seconds.
+- **Reference counting** — opening a shared socket once and closing it only when the last user unsubscribes.
+
 **Q:** How do you render 1,000 updates per second?
 
-**A:** Buffer messages outside React, flush once per frame, and subscribe each row only to its own key.
+**A:** Do not call `setState` per message. Buffer messages outside React and keep only the latest per symbol, flush once per animation frame, and notify only the symbols that changed. Each row subscribes to its own key, so per frame React renders at most the rows that actually changed, and never more than the display can show.
 
 **Q:** WebSocket or Server-Sent Events?
 
-**A:** SSE for simple server-to-client streams over HTTP; WebSocket when the client also sends messages, such as subscriptions.
+**A:** SSE is simpler for one-way streams: plain HTTP, automatic reconnection, works through most proxies. WebSocket is needed when the client also sends messages on the same connection, such as subscribe and unsubscribe per symbol. Here the client changes subscriptions often, so WebSocket fits; for a fixed feed I would pick SSE.
 
 **Q:** How should reconnection work?
 
-**A:** Exponential backoff with jitter, a cap, heartbeats to detect dead connections, and automatic resubscription.
+**A:** Exponential backoff with jitter and a cap (1 s, 2 s, 4 s … up to 30 s), heartbeats to detect dead connections quickly, and automatic resubscription to the current symbol set after reconnecting. The UI shows "reconnecting" and marks rows stale rather than pretending prices are live.
+
+**Q:** Why a per-symbol subscription instead of one store that notifies everyone?
+
+**A:** With a global notification, every row runs its selector and bails out on each flush. That is 50 comparisons per frame here, but with 5,000 rows the bookkeeping alone becomes the bottleneck. Per-key listener sets make the work proportional to what changed.
+
+**Q:** Why does my socket open twice in development, and how do you avoid leaks?
+
+**A:** StrictMode mounts, unmounts and remounts components in development, so an Effect that opens a socket opens, closes and reopens it. The fix is correct cleanup or a module-level connection manager with reference counting, so components subscribe to the manager, and the single socket outlives any one component.
+
+**Q:** What happens on a flaky mobile network?
+
+**A:** The heartbeat misses, the manager closes the socket and starts backoff, the indicator shows "reconnecting", and rows not updated for 5 seconds are marked stale. After reconnecting it resubscribes and the next snapshot overwrites stale values. Showing staleness honestly matters more than hiding the gap.
+
+**Q:** What breaks first at 10x symbols or 10x message rate?
+
+**A:** First, JSON parsing on the main thread: at tens of thousands of messages per second, parsing alone eats the frame budget. I would move parsing and coalescing into a Web Worker, switch to binary messages, and virtualize the table so only visible rows subscribe. On the server, fan-out to many clients needs a pub/sub layer.
+
+**Q:** Why does sorting a live table need throttling?
+
+**A:** If the table re-sorts every frame by price change, rows jump constantly and become unreadable and unclickable. I re-sort at most once a second while values keep updating in place.
+
+**Q:** How do you test this without a real market feed?
+
+**A:** Inject a fake WebSocket class into the manager that emits scripted messages, and assert that only the changed row re-renders. Backoff timing is unit-tested with fake timers and a seeded random for jitter. Playwright runs against the simulated server and measures frame times with the Performance API.
+
+**Q:** Hands-on: the row's subscription.
+
+**A:**
+
+```ts
+function useQuote(symbol: string) {
+  return useSyncExternalStore(
+    cb => quotes.subscribe(symbol, cb),
+    () => quotes.get(symbol));        // same object until it changes
+}
+```
+
+**Common mistakes in answers:**
+- "Use `useDeferredValue` to handle the stream." Deferral does not reduce the number of updates; coalescing does.
+- Backoff without jitter. Thousands of clients then reconnect at the same moment and knock the server over again.
+- Assuming `onclose` fires promptly when the network dies. It may not; heartbeats are needed to detect half-open connections.
 
 ### TL;DR
 Keep high-frequency data outside React, coalesce per frame, subscribe per symbol with `useSyncExternalStore`, and reconnect with jittered backoff.
@@ -2558,17 +3723,73 @@ Direct-to-storage uploads (pre-signed URLs to object storage) remove your server
 - [Ch 7 — Custom Hooks](../chapters/07-custom-hooks-and-hook-rules/README.md): `useUploadQueue`
 
 ### In the interview
+**30-second answer:** I built a drag-and-drop uploader for large files with per-file progress, pause, resume, cancel, automatic retries and resume after a page reload, using the tus resumable-upload protocol. The key decision was letting the server be the source of truth for progress: after any error the client asks the server for its current offset with a HEAD request and continues from there, instead of guessing. The queue is a reducer with a scheduler that runs at most three uploads at once, and progress events are buffered in a ref and pushed to state at most ten times a second, so typing elsewhere never stutters. Object URLs for thumbnails are revoked in Effect cleanup to avoid memory leaks.
+
+**Key terms to know:**
+- **Resumable upload (tus)** — an HTTP protocol where the server tracks received bytes so the client can continue after failure.
+- **Chunking** — sending a file in 5–10 MB pieces so a failure loses one chunk, not the whole file.
+- **Offset** — how many bytes the server has stored; read with a `HEAD` request in tus.
+- **Fingerprint** — an identifier for a local file (name, size, modified time) used to find its upload URL after reload.
+- **Concurrency limit** — at most three files uploading at once, managed by a scheduler.
+- **Throttled progress** — writing progress to a ref and committing to state on an interval.
+- **Object URL** — `URL.createObjectURL(file)` gives a temporary URL for previews; must be revoked.
+- **Drag-and-drop events** — `dragenter`, `dragover`, `dragleave`, `drop`; `dragover` must call `preventDefault`.
+- **Pre-signed URL** — a time-limited URL that lets the browser upload directly to object storage.
+- **Backoff retry** — retrying after increasing delays on network errors.
+
 **Q:** How does a resumable upload know where to continue?
 
-**A:** The server tracks the received offset; the client asks for it and sends the remaining bytes from there.
+**A:** The server records how many bytes it has received for that upload. After an error or reload, the client sends a HEAD request to the upload URL, reads the `Upload-Offset` header, and sends the remaining bytes from that offset with `file.slice(offset)`. It never assumes how much arrived.
 
 **Q:** Why throttle progress updates?
 
-**A:** Progress events fire far more often than the screen can show; updating state each time wastes renders.
+**A:** Upload progress events can fire many times per second per file; with three files that is far more renders than the screen can show, and it competes with typing for the main thread. Writing the latest numbers to a ref and committing them at most ten times a second gives smooth bars at a fraction of the cost.
 
 **Q:** What must you clean up when previewing files?
 
-**A:** Revoke object URLs created with `URL.createObjectURL`.
+**A:** Revoke object URLs created with `URL.createObjectURL`, because each one keeps the file's data reachable in memory until revoked or the page unloads. I create the URL in an Effect and call `URL.revokeObjectURL` in its cleanup, so removing a file or unmounting frees it.
+
+**Q:** Why limit concurrency to three?
+
+**A:** More parallel uploads do not make a single connection faster; they split the same bandwidth and increase the chance of timeouts, and browsers limit connections per host on HTTP/1.1. Three keeps the pipe full while letting each file finish in a reasonable time, and the user sees steady progress.
+
+**Q:** Why does `drop` never fire, and why does the highlight flicker?
+
+**A:** The browser only allows a drop if `dragover` calls `preventDefault()`. Flicker happens because `dragenter` and `dragleave` fire every time the pointer crosses a child element. I keep a counter (increment on enter, decrement on leave, highlight while above zero) or check the zone's bounding box.
+
+**Q:** Upload through your server or directly to object storage?
+
+**A:** Direct to storage with pre-signed URLs removes your server from the data path, which saves bandwidth and scales better. The cost is that resumability then depends on the storage provider's multipart API, and validation happens after upload. A tus server is simpler to reason about and gives a standard resume protocol.
+
+**Q:** What happens if the user goes offline mid-upload or closes the tab?
+
+**A:** Offline: the chunk request fails, the uploader retries with backoff, and when `online` fires it asks the server for the offset and continues. Closing the tab stops the upload, but the fingerprint store keeps the upload URL, so re-adding the same file resumes from the server's offset.
+
+**Q:** What changes at 100x users or 50 GB files?
+
+**A:** Server bandwidth and storage I/O break first, so I would move to direct-to-storage uploads and keep my server only for authorization and metadata. For very large files, hashing for integrity or deduplication must run in a Web Worker to avoid freezing the page.
+
+**Q:** How do you test pause, resume and reload?
+
+**A:** Reducer and scheduler unit tests prove only three uploads run and the next starts when one finishes. RTL drops files with `fireEvent.drop` and a synthetic `DataTransfer`. Playwright against a real tus server calls `context.setOffline(true)` mid-upload, then back online, and asserts completion; another test reloads and re-adds the file.
+
+**Q:** Hands-on: a thumbnail without leaks.
+
+**A:**
+
+```tsx
+function Thumb({ file }: { file: File }) {
+  const [url, setUrl] = useState<string>();
+  useEffect(() => { const u = URL.createObjectURL(file); setUrl(u);
+    return () => URL.revokeObjectURL(u); }, [file]);
+  return url ? <img src={url} alt={file.name} /> : null;
+}
+```
+
+**Common mistakes in answers:**
+- Creating the object URL during render. Every render leaks a new URL; create and revoke it in an Effect.
+- Resuming from the client's last known progress. Bytes in flight may or may not have arrived; always ask the server.
+- Using name plus size as a deduplication key. It is fine for finding a resumable upload, not for deciding two files are identical.
 
 ### TL;DR
 Queue files in a reducer, upload in resumable chunks with limited concurrency, throttle progress, ask the server for offsets after failures, and revoke object URLs.
@@ -2663,17 +3884,70 @@ Bundling all locales is simpler but grows linearly; lazy per-locale loading adds
 - [Ch 14 — Patterns and architecture](../chapters/14-patterns-and-architecture/README.md): accessibility
 
 ### In the interview
+**30-second answer:** I built a recipe site in English, Spanish, German and Arabic with the locale in the URL, ICU messages for plurals, `Intl` formatting for numbers, dates and units, a serving scaler, and a proper right-to-left layout for Arabic. The key decisions were never concatenating translatable sentences, lazy-loading only the active locale's messages in the route loader so a page never renders with missing strings, and using logical CSS properties so layout mirrors automatically when `dir="rtl"`. Units are converted in a pure function in base units and only then formatted, because unit conversion is maths, not translation. Every locale scores 100 on Lighthouse accessibility.
+
+**Key terms to know:**
+- **i18n / l10n** — internationalization (making the app translatable) vs localization (the translated, formatted result).
+- **Locale** — a language plus region code such as `es-ES` or `ar-EG`, driving text and formatting.
+- **ICU MessageFormat** — a message syntax with placeholders, plural and select branches.
+- **Plural categories** — CLDR categories (zero, one, two, few, many, other); English uses two, Arabic all six.
+- **`Intl` APIs** — `NumberFormat`, `DateTimeFormat`, `PluralRules`, `RelativeTimeFormat` built into JavaScript.
+- **RTL (right-to-left)** — scripts like Arabic; set with `dir="rtl"` on `<html>`.
+- **Logical CSS properties** — `margin-inline-start`, `inset-inline-end` instead of left and right, so layout follows `dir`.
+- **Lazy-loaded messages** — code-splitting translation bundles per locale.
+- **`hreflang`** — alternate links telling search engines which URL serves which language.
+- **`prefers-reduced-motion`** — the user setting to reduce animation.
+
 **Q:** Why are concatenated strings bad for i18n?
 
-**A:** Languages differ in word order and plural rules; a single message with placeholders and plural branches lets translators produce correct sentences.
+**A:** `"You have " + n + " recipes"` hard-codes English word order and English plurals. Other languages put the number elsewhere, inflect nouns differently, and have more plural forms. One message with a placeholder and plural branches, like `{count, plural, one {# recipe} other {# recipes}}`, lets translators write a correct full sentence.
 
 **Q:** How do you support RTL without a second stylesheet?
 
-**A:** Set `dir` on `<html>` and use logical CSS properties so layout mirrors automatically.
+**A:** Set `dir="rtl"` on `<html>` for Arabic and write all spacing and positioning with logical properties (`padding-inline-start`, `text-align: start`). Flexbox and grid already follow the writing direction. Only icons that imply direction, like arrows, are mirrored; a clock or a check mark is not.
 
 **Q:** How do you avoid shipping every language?
 
-**A:** Lazy-load the message bundle for the active locale, typically in the route loader.
+**A:** Lazy-load the message bundle for the active locale with a dynamic `import()`, typically in the route loader, so the page renders only once its strings are ready. During a language switch, the previous locale stays on screen until the new bundle loads, instead of flashing message keys.
+
+**Q:** How do plurals work in Arabic, and how do you test them?
+
+**A:** Arabic uses all six CLDR plural categories: zero, one, two, few (3–10), many (11–99) and other (for example 100–102 and fractions); the rules look at `n % 100`, so 103 is "few" again. `Intl.PluralRules('ar').select(n)` picks the category, and ICU messages provide a branch for each. I test 0, 1, 2, 3, 11 and 100 to hit every branch.
+
+**Q:** Why are units not translation?
+
+**A:** Converting 250 g to cups or 4 to 6 servings is arithmetic that must be identical in every language. I store quantities in base units, scale and convert in a pure function, then format the result with `Intl.NumberFormat` using `style: 'unit'` for the locale. Mixing conversion into translation files leads to inconsistent maths.
+
+**Q:** Locale in the URL or in a cookie?
+
+**A:** In the URL (`/es/recetas/...`), because each language version is then a separate, shareable, cacheable and indexable page, and `hreflang` can link them. A cookie or `Accept-Language` is only used to pick a default on the first visit, followed by a redirect to the locale URL.
+
+**Q:** What happens when a translation is missing?
+
+**A:** The message function falls back to the default locale's string and logs the missing key, so the page never crashes or shows a raw key. CI can also fail the build if the default locale has keys that another locale lacks, with an allow-list during translation.
+
+**Q:** What changes with 30 locales and 10x content?
+
+**A:** Manual handling of message files breaks first. I would add an extraction step that pulls messages from code into a translation management system, and server-render each locale for SEO. Bundle size stays flat because each visitor downloads only one locale.
+
+**Q:** How do you test i18n?
+
+**A:** Unit tests for plural messages and unit conversion. RTL renders key pages in each locale and asserts specific strings. Playwright switches to Arabic, asserts `dir="rtl"` and `lang="ar"`, takes a visual snapshot, and runs axe on every locale.
+
+**Q:** Hands-on: format a quantity per locale.
+
+**A:**
+
+```ts
+new Intl.NumberFormat('de-DE', { style: 'unit', unit: 'gram' }).format(1250.5);
+// "1.250,5 g"
+new Intl.PluralRules('ar').select(11);   // "many"
+```
+
+**Common mistakes in answers:**
+- "Just translate the strings at the end." Concatenation, physical CSS and hard-coded formats then need rewriting everywhere.
+- Mirroring every icon in RTL, including media play buttons or clocks that should not flip.
+- Assuming every language has singular and plural only. Many have more categories; use `Intl.PluralRules`.
 
 ### TL;DR
 Put the locale in the URL, lazy-load ICU messages, format with `Intl`, use logical CSS for RTL, and never concatenate translatable sentences.
@@ -2792,17 +4066,71 @@ Server-side everything scales but costs a round-trip per interaction; for under 
 - [Ch 14 — Patterns and architecture](../chapters/14-patterns-and-architecture/README.md): headless components, accessibility
 
 ### In the interview
+**30-second answer:** I built an admin table over 500,000 orders with server-side pagination, multi-column sorting, filters and search, column preferences, cross-page selection and bulk actions. TanStack Table runs in manual mode as a headless engine, so the server does all sorting and filtering against indexed queries, and the whole query lives in the URL. The two hardest parts were deep pagination, where `OFFSET 400000` is slow, so I use keyset pagination for deep pages, and "select all 12,345 matching", which I send as the filter plus an exclusion list rather than thousands of ids. Page changes keep the previous page visible and dimmed with `keepPreviousData`, and the API p95 is under 300 ms.
+
+**Key terms to know:**
+- **Headless table library** — manages table state and logic but renders no markup. TanStack Table.
+- **Manual mode** — the table does not sort, filter or paginate data itself; it reports state and the server does the work.
+- **Offset pagination** — `LIMIT 25 OFFSET N`; simple but slow for large N because skipped rows are still read.
+- **Keyset (cursor) pagination** — `WHERE (created_at, id) < (x, y) ORDER BY ... LIMIT 25`; fast at any depth using an index.
+- **Composite index** — an index on several columns such as `(status, created_at)` that matches common filters and sorts.
+- **`placeholderData: keepPreviousData`** — TanStack Query shows the old page while the next one loads.
+- **Selection semantics** — explicit id set vs "all matching filter except these ids".
+- **`aria-sort`** — announces the sort direction on the sorted column header.
+- **Idempotent bulk job** — a server job safe to retry without applying twice.
+- **`ColumnDef<T>`** — typed column definitions that give typed cell renderers.
+
 **Q:** What does "headless" mean for a table library?
 
-**A:** It manages state and logic (sorting, pagination, selection) but renders nothing; you write the markup and styles.
+**A:** It manages state and logic (sorting state, pagination, selection, column visibility) but renders nothing, so you write the `<table>` markup and styles. The benefit is full control over semantics and design; the cost is that accessibility is your job.
 
 **Q:** How do you avoid empty flashes when paging?
 
-**A:** Keep the previous page's data as placeholder while the next page loads, and dim it.
+**A:** Set `placeholderData: keepPreviousData` on the query, so when the page number in the key changes, the previous page's rows stay on screen while the new one loads. `isPlaceholderData` lets me dim the table and disable "Next" until the real data arrives.
 
 **Q:** How do you implement "select all matching"?
 
-**A:** Send the filter and an exclusion list to the server, which applies the action to the current matching set.
+**A:** Send the current filter plus a list of excluded ids to the server, which applies the action to whatever matches at execution time. Sending 12,345 ids is slow, may hit request limits, and would miss or wrongly include rows that changed since the page loaded.
+
+**Q:** Offset or keyset pagination?
+
+**A:** Offset is simple and allows jumping to page N, but the database must scan and discard all skipped rows, so deep pages get slower. Keyset seeks directly via an index and stays fast at any depth, and it is stable when rows are inserted, but it cannot jump to an arbitrary page. I use offset for the first few pages and next/previous with keyset for deep browsing.
+
+**Q:** Why keep everything in the URL?
+
+**A:** The URL fully defines the query, so links can be shared ("unshipped orders this week, sorted by amount"), refresh keeps the view, and Back works. It also makes the TanStack Query key a direct function of the URL.
+
+**Q:** Server-side or client-side table?
+
+**A:** Under about 5,000 rows, load everything and sort and filter in the browser: interactions are instant and there is no round-trip. At 500,000 rows, the data cannot be shipped to the browser, so the server must do the work. The cost is latency per interaction, which indexes and `keepPreviousData` hide.
+
+**Q:** What happens if a bulk "mark shipped" fails halfway?
+
+**A:** It runs as a server-side job with progress, processing in batches and recording which ids are done. It is idempotent, since marking a shipped order as shipped again changes nothing, so a retry continues safely. The UI polls progress and reports successes and failures separately.
+
+**Q:** What breaks first at 50 million rows?
+
+**A:** `COUNT(*)` for "page 1 of N" becomes slow, and unindexed filter combinations do full scans. I would show estimated counts or cap at "10,000+", restrict sortable and filterable columns to indexed ones, and move free-text search to a dedicated search index.
+
+**Q:** How do you test it?
+
+**A:** API tests for sort and filter correctness and pagination edges (empty pages, last page, ties in sort keys), with `EXPLAIN` checks for index use. RTL clicks a header and asserts the URL and request parameters. Playwright selects across pages, runs a bulk action and checks the counts.
+
+**Q:** Hands-on: write a keyset query.
+
+**A:** Sort by a unique tie-breaker so no row is skipped or repeated.
+
+```sql
+SELECT * FROM orders
+WHERE status = $1 AND (created_at, id) < ($2, $3)
+ORDER BY created_at DESC, id DESC
+LIMIT 25;
+```
+
+**Common mistakes in answers:**
+- Sorting by a non-unique column only. Rows with equal values can repeat or vanish between pages; add the id as a tie-breaker.
+- Letting TanStack Table sort the 25 rows on the client while the server sends unsorted pages. Use manual mode.
+- Rendering the table as `div`s with no `<th>` or `aria-sort`, because "headless" does not provide semantics.
 
 ### TL;DR
 Keep table state in the URL, let the server page/sort/filter with indexes, render headless tables with real semantics, and express bulk selection as filters.
@@ -2932,17 +4260,77 @@ RSC reduce client JavaScript but tie you to a framework and its caching model; a
 - [Ch 10 — Performance](../chapters/10-performance/README.md): React Compiler
 
 ### In the interview
+**30-second answer:** I built a multi-author blog on the Next.js App Router where public pages are React Server Components that query the database directly, stream HTML and ship no JavaScript for the post body. Interactivity lives in small Client Component leaves: the editor, comment form and like button, with writes going through Server Actions validated by Zod and authorized against the session inside every action. Likes use `useOptimistic` so they update instantly, and comments work with JavaScript disabled. Publishing revalidates the post's cache tags so the home and tag pages update within seconds without a rebuild, and post pages hit an LCP under 2.5 s on a mid-range phone.
+
+**Key terms to know:**
+- **React Server Component (RSC)** — a component that runs only on the server, can be `async`, reads data and secrets directly, and adds no JavaScript to the bundle.
+- **Client Component (`'use client'`)** — a component that is server-rendered to HTML and also hydrates and runs in the browser; can use state, Effects and browser APIs.
+- **Server/client boundary** — the point where a Server Component renders a Client Component; props crossing it must be serializable.
+- **Server Function / Server Action** — an async function marked `'use server'` that the client can call over HTTP; called a Server Action when used for mutations such as form actions.
+- **`useOptimistic`** — shows a temporary value while an Action is in progress; it reverts to the real state when the Action finishes.
+- **Streaming** — sending HTML in chunks as Suspense boundaries resolve, so the shell appears first.
+- **Revalidation by tag** — cached reads are tagged (for example `post:42`), and a mutation invalidates those tags.
+- **Data-access layer** — server-only functions that query the database and perform authorization checks.
+- **LCP** — Largest Contentful Paint, the time until the main content is visible.
+- **Progressive enhancement** — forms posting to Server Actions work before JavaScript loads.
+
 **Q:** What can a Server Component do that a Client Component can't?
 
-**A:** Run only on the server, read databases and secrets directly, use `async`/`await` in render, and contribute no JavaScript to the bundle. It can't use state, Effects or browser APIs.
+**A:** It runs only on the server, so it can read databases and secrets directly, `await` data in render, and import heavy libraries (like a Markdown parser) without shipping them to the browser. It cannot use state, Effects, event handlers or browser APIs; anything interactive goes in a Client Component.
 
 **Q:** Is a Server Action secure because it runs on the server?
 
-**A:** No. It is an HTTP endpoint anyone can call; validate and authorize inside it.
+**A:** No. Every Server Action is a public HTTP endpoint that anyone can call with any arguments, not just from your button. Inside each action I validate input with Zod, read the session, and check that this user may perform this change, for example that they own the post.
 
 **Q:** Where does `'use client'` go?
 
-**A:** At the top of the module that starts a client subtree, as low in the tree as possible.
+**A:** At the top of the module that starts a client subtree, and as low in the tree as possible. Everything that module imports also becomes client code, so marking a layout as client would ship the whole page's code. Server Components can still be passed as `children` into a Client Component.
+
+**Q:** What can and cannot be passed as props from a Server to a Client Component?
+
+**A:** Props must be serializable by React: strings, numbers, plain objects, arrays, Dates, Maps, Sets, promises, JSX and Server Functions. Regular functions, class instances and things like database connections cannot cross the boundary. Passing a promise lets the client component unwrap it with `use()` inside Suspense.
+
+**Q:** How does `useOptimistic` work for likes?
+
+**A:** `useOptimistic(likes, (state, delta) => state + delta)` returns an optimistic value and a setter. Inside the Action I call the setter, so the count updates immediately, then await the Server Action. When the Action finishes, the optimistic value is discarded and the component shows the real value from the server's re-render; on error it simply reverts.
+
+**Q:** How do you make publishing show up within seconds without rebuilding?
+
+**A:** Reads for a post and its listings are cached and tagged by post id, author and tag. The publish Server Action writes to the database, then invalidates those tags (in Next.js 16, `updateTag` for read-your-own-writes inside an action, or `revalidateTag` for stale-while-revalidate). Caching APIs have changed across Next.js versions, so I check the current docs.
+
+**Q:** What is the biggest risk with caching here?
+
+**A:** Serving user-specific content from a shared cache, for example caching a page that includes "Edit" buttons for the logged-in author and showing it to everyone. Personalized parts must stay dynamic (read cookies at request time) or live in Client Components, and only public data is cached.
+
+**Q:** What happens if the database is slow for one section?
+
+**A:** That section is wrapped in Suspense, so the shell and the post body stream immediately and the slow part (say, related posts) streams in later with a fallback. An error boundary (`error.tsx`) around it shows a fallback instead of failing the whole page.
+
+**Q:** What changes at 100x traffic?
+
+**A:** Public pages are cached at the CDN and served from cache, so the database sees mostly writes and revalidation. Server Actions and dynamic parts run on my servers, so they need rate limiting and connection pooling. Comments become the hot write path, so I would queue moderation and paginate comment loading.
+
+**Q:** How do you test it?
+
+**A:** Unit-test the data-access layer and Server Actions by calling them as functions against a test database, including permission failures. RTL tests Client Components with actions mocked. Playwright runs the publish flow and posts a comment with `javaScriptEnabled: false` to prove progressive enhancement.
+
+**Q:** Hands-on: an async Server Component.
+
+**A:**
+
+```tsx
+export default async function PostPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const post = await getPublishedPost(slug);     // server-only data layer
+  if (!post) notFound();
+  return <article><h1>{post.title}</h1><Markdown source={post.body} /><LikeButton id={post.id} /></article>;
+}
+```
+
+**Common mistakes in answers:**
+- "Server Components are just SSR." SSR renders Client Components to HTML too; RSC are components that never run in the browser and send no code.
+- Putting `'use client'` at the root layout "to make Hooks work", which turns the whole app back into a client bundle.
+- Skipping authorization in a Server Action because the button is only shown to admins.
 
 ### TL;DR
 Render content with Server Components, keep client islands small, mutate with validated and authorized Server Actions, revalidate by tag and use `useOptimistic` for instant feedback.
@@ -3042,17 +4430,73 @@ CRDTs guarantee convergence but documents grow with history; compact snapshots. 
 - [Ch 10 — Performance](../chapters/10-performance/README.md): avoiding renders on hot paths
 
 ### In the interview
+**30-second answer:** I built a multiplayer whiteboard with an infinite canvas, shapes, freehand drawing, live cursors, per-user undo and offline editing that merges on reconnect. The key decision was storing shared state in a Yjs CRDT, with each shape as its own nested map, so concurrent edits to different properties both survive and all copies converge without a central transform server. The other key decision was keeping React off the hot path: React renders toolbars and panels, while a Canvas 2D renderer subscribes to the Y.Doc and camera directly and redraws on `requestAnimationFrame`, so 5,000 shapes pan at 60 fps. Presence travels over a separate ephemeral awareness channel, and remote edits appear within 150 ms.
+
+**Key terms to know:**
+- **CRDT** — a data type whose replicas can be edited independently and always merge to the same state.
+- **Yjs / Y.Doc / Y.Map** — a CRDT library; the document holds shared types like maps and arrays.
+- **Operational transformation (OT)** — the alternative where a server transforms concurrent operations against each other.
+- **Awareness / presence** — ephemeral per-user state (cursor, selection, name) that is broadcast but not persisted.
+- **Transaction origin** — a tag on each change identifying who made it; used for per-user undo.
+- **`UndoManager`** — Yjs utility that undoes only transactions from tracked origins.
+- **Screen vs world coordinates** — `world = (screen - offset) / zoom`; the camera maps between them.
+- **Spatial index** — a grid or R-tree for fast hit testing and viewport queries.
+- **Dirty-region rendering** — redrawing only what changed or what is visible.
+- **Snapshot compaction** — periodically storing merged state so history does not grow forever.
+
 **Q:** CRDT or operational transformation?
 
-**A:** CRDTs merge without a central transform server and support offline well; OT needs a server to order operations. For shape boards, CRDTs or Figma-style last-writer-wins per property are simpler.
+**A:** CRDTs merge without a central server that orders operations, so offline editing and peer-to-peer sync work naturally. OT needs a server to transform and sequence operations, which is proven for text (Google Docs) but harder to get right. For shape boards, CRDTs or Figma-style last-writer-wins per property are simpler.
 
 **Q:** How do you keep drawing at 60 fps in React?
 
-**A:** Draw on a canvas outside React's render, subscribe the renderer to the data store directly, and keep React for low-frequency UI.
+**A:** Draw on a canvas outside React's render cycle. The renderer subscribes to the data store and the camera directly and redraws the visible viewport once per animation frame. React only renders low-frequency UI like toolbars, so a pointer move never triggers a React render of 5,000 shape components.
 
 **Q:** How does per-user undo work?
 
-**A:** Track the origin of each transaction and undo only the current user's transactions.
+**A:** Every local transaction is tagged with this client's origin, and Yjs's `UndoManager` tracks only that origin. Undo then reverts my changes without touching yours. A whole drag is grouped into one transaction, so one undo restores the shape's position instead of stepping through 200 pointer moves.
+
+**Q:** Why store each shape as its own nested `Y.Map`?
+
+**A:** If a shape is one plain object value, two users editing it at once means one whole object overwrites the other: one user's move loses the other's colour change. With a nested map per shape, `x` and `fill` are separate keys, so concurrent edits to different properties both survive. Concurrent edits to the same property are resolved deterministically.
+
+**Q:** Why is presence separate from the document?
+
+**A:** Cursors change dozens of times per second and are meaningless after the user leaves. Putting them in the CRDT would bloat its history forever. The awareness protocol broadcasts them, expires users who go quiet, and never persists them.
+
+**Q:** How do you zoom around the pointer?
+
+**A:** Convert the pointer to world coordinates before the zoom, apply the new zoom, then adjust the camera offset so that the same world point maps back to the same screen pixel. Otherwise zoom happens around the canvas origin and content slides away.
+
+**Q:** What happens when a user edits offline for an hour?
+
+**A:** Edits apply to their local Y.Doc and are persisted locally (for example with IndexedDB). On reconnect, the client and server exchange state vectors and send only the missing updates; the CRDT merges them deterministically, so both sides end up identical. A shape deleted remotely while edited locally stays deleted, which I document as the rule.
+
+**Q:** What breaks first at 50 users on one board or 100,000 shapes?
+
+**A:** With many users, the relay server's fan-out and awareness traffic grow quadratically, so I throttle cursor updates and shard boards across servers. With huge boards, render and hit testing break first, which the spatial index and viewport culling address, and document size grows, which snapshot compaction addresses.
+
+**Q:** How do you test convergence?
+
+**A:** Unit tests create two Y.Docs, make conflicting edits, exchange updates in different orders, and assert both docs are identical. Geometry and coordinate maths have their own unit tests. Playwright opens two browser contexts to verify presence and conflict behaviour, and a performance test fails if a scripted pan exceeds a frame-time budget.
+
+**Q:** Hands-on: subscribe the canvas outside React.
+
+**A:**
+
+```ts
+useEffect(() => {
+  let raf = 0;
+  const onChange = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); };
+  shapes.observeDeep(onChange);
+  return () => { shapes.unobserveDeep(onChange); cancelAnimationFrame(raf); };
+}, [shapes]);
+```
+
+**Common mistakes in answers:**
+- Mapping every shape to a React component with state and re-rendering on pointer move. That cannot hold 60 fps at scale.
+- Saying CRDTs "resolve conflicts the way the user wanted". They guarantee convergence, not intent; you still choose which semantics to accept.
+- Storing cursor positions in the persisted document.
 
 ### TL;DR
 Put shared state in a CRDT, draw on a canvas outside React's hot path, carry presence separately, and give each user their own undo stack.
@@ -3151,17 +4595,70 @@ Virtualization breaks Ctrl+F; provide your own search. Canvas-based grids scale 
 - [Ch 14 — Patterns and architecture](../chapters/14-patterns-and-architecture/README.md): accessibility, portals
 
 ### In the interview
+**30-second answer:** I built a reusable spreadsheet-style grid that scrolls smoothly through 1,000,000 rows by 50 columns with pinned columns, a sticky header, variable row heights, keyboard range selection, copy and paste, and inline editing. The key decision was virtualization in both directions: from the scroll offset and cached row measurements I render only visible cells plus a small overscan, at most about 1,500 cells in the DOM. Selection lives in its own reducer, independent of what is rendered, so the active cell survives being scrolled out and unmounted. The hard parts were correcting scroll position when measured heights differ from estimates, browser element-height limits, and restoring accessibility with `aria-rowindex` and `aria-colindex`.
+
+**Key terms to know:**
+- **Virtualization (windowing)** — rendering only the items visible in the viewport plus overscan.
+- **Overscan** — a few extra rows rendered beyond the viewport to avoid blank flashes during fast scrolls.
+- **Spacer / total size** — an element with the full content height so the scrollbar is correct.
+- **Measured vs estimated sizes** — unknown rows use an estimate; rendered rows are measured with `ResizeObserver` and cached.
+- **Scroll anchoring correction** — adjusting scroll offset when items above the viewport change size.
+- **Data source abstraction** — fetches row blocks on demand and caches them.
+- **Selection model** — active cell and ranges stored by index, not by DOM node.
+- **`aria-rowcount` / `aria-rowindex` / `aria-colindex`** — tell screen readers the total size and the position of rendered cells.
+- **Maximum element height** — browsers cap element heights in the tens of millions of pixels.
+- **TSV** — tab-separated values, the clipboard format spreadsheets use for ranges.
+
 **Q:** How does virtualization work?
 
-**A:** Compute which items intersect the viewport from the scroll offset and item sizes, render only those (plus overscan), and position them inside a spacer with the full height.
+**A:** From the scroll offset and item sizes, compute the first and last indices that intersect the viewport, render only those plus some overscan, and position them absolutely (or with a translate) inside a spacer element that has the full content height. As the user scrolls, the window of rendered items moves, and DOM size stays constant.
 
 **Q:** How do you handle variable row heights?
 
-**A:** Estimate, measure rendered rows, cache measurements and adjust scroll offset when heights above the viewport change.
+**A:** Use an estimate for unmeasured rows, measure rows once rendered with `ResizeObserver`, and cache the measurements by index. When a row above the viewport turns out taller or shorter than estimated, adjust the scroll offset by the difference so visible content does not jump.
 
 **Q:** What accessibility problems does virtualization cause?
 
-**A:** Off-screen rows don't exist in the DOM, so you must expose total counts and indices with ARIA and manage focus explicitly.
+**A:** Off-screen rows do not exist in the DOM, so screen readers cannot count or reach them and Ctrl+F cannot find them. I set `role="grid"`, `aria-rowcount` and `aria-colcount` for the totals and `aria-rowindex`/`aria-colindex` on rendered cells, manage focus explicitly, and provide my own search.
+
+**Q:** The focused cell scrolls out of view and unmounts. What happens?
+
+**A:** The DOM node with focus is removed, so focus falls to `<body>` and keyboard navigation breaks. I either keep DOM focus on the grid container and use `aria-activedescendant` for the active cell, or scroll the target cell into view first and focus it after it renders. The selection reducer keeps the logical position regardless.
+
+**Q:** Why can't a million rows just be a million rows tall?
+
+**A:** At 30 px each that is 30,000,000 px, near or above the maximum element height some browsers allow, beyond which scrolling breaks or is clamped. I scale the scroll space (map a smaller scroll height to the full index range) or page the data.
+
+**Q:** DOM virtualization or a canvas grid?
+
+**A:** DOM keeps native text selection, accessibility and CSS styling, and scales to millions of rows with virtualization. Canvas grids scale further and render faster, but you must rebuild text selection, accessibility and input editing yourself. I chose DOM; a canvas grid fits trading screens with extreme update rates.
+
+**Q:** What happens when the user drags the scrollbar from top to bottom with a server data source?
+
+**A:** Scrolling fast requests many blocks that are immediately not needed. I debounce block fetching during fast scrolls, cancel requests for blocks that left the viewport, render placeholder rows meanwhile, and keep an LRU cache of recent blocks.
+
+**Q:** How do you keep cells from re-rendering on every scroll?
+
+**A:** Cells are memoized by row index, column and the row's data identity, so a scroll only mounts newly visible cells and unmounts old ones. Callback props must be stable (or the React Compiler handles that), otherwise memoized cells see new props every render. I verify with the Profiler.
+
+**Q:** How do you test it?
+
+**A:** Unit tests cover range maths and the selection reducer. RTL renders with a mocked viewport size and asserts the number of rendered rows. Playwright scrolls to the end, navigates with Page Down and Ctrl+End, tests clipboard with granted permissions, and records a trace asserting frame times while scrolling.
+
+**Q:** Hands-on: the core index calculation for fixed heights.
+
+**A:**
+
+```ts
+const start = Math.max(0, Math.floor(scrollTop / rowH) - overscan);
+const end = Math.min(rowCount, Math.ceil((scrollTop + viewportH) / rowH) + overscan);
+// render rows [start, end) at top = index * rowH inside a spacer of height rowCount * rowH
+```
+
+**Common mistakes in answers:**
+- Saying virtualization makes rendering faster per row. It makes fewer rows render; each row costs the same.
+- Using the row index as the key for rows whose data can reorder (sorting, filtering). Key by the row's id.
+- Forgetting overscan, which shows blank strips during fast scrolling.
 
 ### TL;DR
 Render only visible cells, measure and cache variable heights, keep selection independent of rendering, manage focus explicitly and expose positions with ARIA.
@@ -3258,17 +4755,71 @@ Building on headless primitives (Radix, React Aria) saves months of accessibilit
 - [Ch 14 — Patterns and architecture](../chapters/14-patterns-and-architecture/README.md): compound components, design systems, accessibility
 
 ### In the interview
+**30-second answer:** I built a published design system: tokens compiled to CSS variables, a dozen accessible primitives such as Button, Dialog, Tooltip, Tabs and Menu, documentation in Storybook, and an npm package with types, tree-shakeable ESM and a changelog. The key design decision was composable APIs that mirror native elements: components spread remaining props, merge `className`, take `ref` as a plain prop in React 19, and use compound components instead of piles of booleans. Storybook doubles as the test harness: every story gets an axe check, interaction tests through `play` functions and screenshot diffs in both themes on each pull request. Button is under 3 KB gzipped and bundle analysis proves tree-shaking.
+
+**Key terms to know:**
+- **Design system** — tokens, components, guidelines and processes that teams share.
+- **Story** — a rendered example of a component in one state; the unit of documentation and testing in Storybook.
+- **Compound component** — a parent and children that share implicit state through context, like `<Tabs><Tabs.List>`.
+- **Polymorphism / `asChild`** — letting a component render as a different element (a link styled as a button).
+- **Props spreading** — passing unknown props through to the root element so consumers can add `aria-*`, `data-*` and handlers.
+- **`ref` as a prop (React 19)** — function components receive `ref` directly; `forwardRef` is no longer needed.
+- **Tree-shaking** — the bundler removing unused exports; needs ESM and no side effects at import.
+- **Visual regression testing** — comparing screenshots against approved baselines.
+- **Semantic versioning** — MAJOR.MINOR.PATCH; breaking changes require a major version.
+- **Headless primitives** — unstyled accessible behaviour (Radix, React Aria) a system can build on.
+
 **Q:** How do you decide a component's API?
 
-**A:** Mirror native elements where possible, compose with children and compound components, spread remaining props, and avoid many booleans.
+**A:** Mirror native elements where possible (a Button accepts every `button` prop), compose with children and compound components instead of configuration props, spread remaining props to the root and merge `className`. Avoid boolean explosions like `showHeader`, `headerIcon`, `headerAlign`; give consumers a `Card.Header` they compose.
 
 **Q:** How do you prevent visual regressions?
 
-**A:** Screenshot every story in CI and review diffs on pull requests.
+**A:** Screenshot every story in CI, in light and dark themes, and compare against approved baselines. A pull request that changes pixels shows a visual diff that a reviewer must accept. That catches CSS side effects that unit tests cannot.
 
 **Q:** Do you still need `forwardRef` in React 19?
 
-**A:** No. `ref` is passed as a regular prop to function components.
+**A:** No. Function components receive `ref` as a regular prop, so I type props with `ComponentPropsWithRef<'button'>` and pass `ref` to the element. `forwardRef` still works but is expected to be deprecated, and new components should not use it.
+
+**Q:** Build on Radix or React Aria, or build from scratch?
+
+**A:** Headless primitives encode years of accessibility and browser-quirk fixes for dialogs, menus and comboboxes, which saves months. The cost is a dependency whose API and update cadence you inherit. I would build simple components (Button, Card) myself and wrap headless primitives for complex overlays.
+
+**Q:** How do you make sure importing Button does not import the whole library?
+
+**A:** Ship ESM with one module per component (or preserved modules), mark the package `"sideEffects"` correctly (listing CSS files), and avoid a barrel file with side effects. A consumer test builds a sample app and bundle analysis checks Button's cost stays under budget.
+
+**Q:** How do you handle a breaking prop rename?
+
+**A:** Keep the old prop working in a minor version with a development-only warning, document the migration, provide a codemod for large codebases, then remove it in the next major version. Breaking changes without that path stall adoption because teams freeze on old versions.
+
+**Q:** What happens when a consumer passes their own `onClick` or `className`?
+
+**A:** Spread props must not silently override internal behaviour. I compose handlers (call the consumer's handler, then mine unless they called `preventDefault`) and merge class names instead of replacing them, so consumers extend rather than break components.
+
+**Q:** What changes when 30 teams depend on it?
+
+**A:** Release management breaks first: every change can break someone. I would add automated changesets, a deprecation policy, contract tests run against key consumer apps, and support (docs, office hours, migration guides). Without adoption support, teams fork the components and the system fails regardless of code quality.
+
+**Q:** How do you test a Dialog?
+
+**A:** An interaction test in its story opens it, asserts focus moved inside, tabs around to prove focus is trapped, presses Escape and asserts focus returned to the trigger. axe runs on the open state, and screenshots cover both themes. RTL unit tests cover props like `onOpenChange`.
+
+**Q:** Hands-on: a React 19 Button with `ref` as a prop.
+
+**A:**
+
+```tsx
+type ButtonProps = React.ComponentPropsWithRef<'button'> & { variant?: 'primary' | 'ghost' };
+export function Button({ variant = 'primary', className, ref, ...rest }: ButtonProps) {
+  return <button ref={ref} className={cx('btn', `btn-${variant}`, className)} {...rest} />;
+}
+```
+
+**Common mistakes in answers:**
+- Measuring design-system success by component count instead of adoption and consistency.
+- Shipping CommonJS or one big bundle and claiming it is tree-shakeable.
+- Treating Tooltip as the only place important information lives; tooltips are not reachable on touch and must also open on focus.
 
 ### TL;DR
 Build on tokens, design composable typed APIs, document and test every state in Storybook (visual, a11y, interaction), and version releases carefully.
@@ -3363,17 +4914,73 @@ The payoff of micro-frontends is team independence, not faster code; with only a
 - [Ch 14 — Patterns and architecture](../chapters/14-patterns-and-architecture/README.md): error boundaries, folder structure, design systems
 
 ### In the interview
+**30-second answer:** I built a company portal where a shell app owns layout, navigation and auth, and loads Billing, Support and Analytics as independently deployed remotes at runtime with Module Federation. The key decisions were sharing React and React DOM as singletons so there is exactly one React at runtime, and loading remotes from a manifest that maps each to a URL and version, so ops can roll a remote forward or back without redeploying the shell. Remotes communicate only through small versioned contracts: props from the shell and typed events on a bus, never imports of each other's code. Each remote is wrapped in Suspense and an error boundary, so a broken deploy shows a fallback with retry while the rest of the portal keeps working.
+
+**Key terms to know:**
+- **Micro-frontend** — splitting a front-end into independently built and deployed apps owned by different teams.
+- **Shell (host)** — the app that owns layout, routing and auth and loads remotes.
+- **Remote** — a separately deployed app that exposes modules for the shell to load.
+- **Module Federation** — a bundler feature that loads modules from another build at runtime and negotiates shared dependencies.
+- **Shared singleton** — a dependency (React) that must have exactly one instance at runtime.
+- **Version skew** — the shell and remotes built against different versions of shared code or contracts.
+- **Manifest** — a runtime map from remote names to URLs and versions.
+- **Contract** — the typed, versioned props and events between shell and remote.
+- **Event bus** — a publish/subscribe channel for cross-app events without direct imports.
+- **Error boundary at the seam** — catching a failed remote load or crash at the shell/remote boundary.
+
 **Q:** When are micro-frontends worth it?
 
-**A:** When many independent teams need to deploy separately and the organizational cost of a shared release outweighs the runtime and complexity costs.
+**A:** When many independent teams need to deploy separately and the organizational cost of a shared release train outweighs the runtime and complexity costs. The payoff is team autonomy, not faster code. With a few teams, a well-structured monorepo with build-time packages is cheaper and simpler.
 
 **Q:** What breaks if two React copies load?
 
-**A:** Hooks and context fail across the boundary ("invalid hook call"); share React as a singleton.
+**A:** Hooks rely on module-level state in React; a component rendered by one React copy but calling Hooks from another throws "Invalid hook call", and context providers from one copy are invisible to consumers in the other. Marking React and React DOM as shared singletons with compatible version ranges prevents it.
 
 **Q:** How should micro-frontends communicate?
 
-**A:** Through small, versioned contracts — props from the shell and typed events — not by importing each other.
+**A:** Through small, versioned contracts: the shell passes props like user, base path and a navigate function, and remotes publish typed events (such as `invoice.paid` v1) on a bus. Importing each other's internals recouples deploys, which defeats the point.
+
+**Q:** What happens if a remote's server is down or its new deploy crashes?
+
+**A:** The dynamic `import()` of the remote rejects, the lazy component throws, and the error boundary around that route shows "Billing is unavailable — Retry" while navigation and other remotes keep working. The manifest lets ops roll the remote back to the previous version instantly.
+
+**Q:** How do you avoid version skew in shared dependencies?
+
+**A:** Declare shared libraries with semver ranges and `singleton: true` for React, and keep the design system backwards compatible within a major version. If a remote truly needs an incompatible major version, it must not share that library, and React itself must never be duplicated. Contract tests in each pipeline catch mismatches before deploy.
+
+**Q:** Why is the remote URL in a runtime manifest instead of hard-coded in the shell build?
+
+**A:** If the URL and version are baked into the shell build, deploying a remote means rebuilding the shell, which reintroduces coordination. A manifest fetched at runtime lets each environment pin versions and lets rollbacks happen without any build.
+
+**Q:** What are the performance costs?
+
+**A:** First navigation into a remote costs an extra network round-trip to fetch its entry and chunks, and duplicated non-shared libraries increase total bytes. I keep the shell under 150 KB, preload a remote's entry on hover over its nav link, and audit shared dependencies.
+
+**Q:** What changes with 20 teams instead of 3?
+
+**A:** Consistency and contracts break first: styles drift, events multiply and nobody knows who consumes what. I would require the shared design system and tokens, put event schemas in a versioned registry with owners, and add consumer-driven contract tests. Server-side composition becomes attractive if SEO or first-load performance matters.
+
+**Q:** How do you test it?
+
+**A:** Each remote runs standalone with a mock shell for its own tests. Contract tests check the shell's props and event payloads against shared types in both directions. Playwright composes the real deployed versions to test navigation and the failure fallback, and a check in the browser confirms only one React copy is loaded.
+
+**Q:** Hands-on: load a remote safely.
+
+**A:**
+
+```tsx
+const Billing = lazy(() => loadRemote('billing/App'));   // from the manifest
+<ErrorBoundary fallback={<RemoteDown name="Billing" />}>
+  <Suspense fallback={<PageSkeleton />}>
+    <Billing user={user} basePath="/billing" navigate={navigate} />
+  </Suspense>
+</ErrorBoundary>
+```
+
+**Common mistakes in answers:**
+- Selling micro-frontends as a performance optimization. They usually cost performance; the gain is organizational.
+- Sharing global state (one Redux store) between remotes, which couples their releases again.
+- Forgetting that a failed remote `import()` throws; without an error boundary the whole shell goes blank.
 
 ### TL;DR
 A shell loads independently deployed remotes via Module Federation with React shared as a singleton, isolates failures with boundaries and talks through versioned contracts.
@@ -3502,17 +5109,76 @@ Last-writer-wins is simple but silently drops edits; versioned conflict handling
 - [Ch 9 — Routing and data fetching](../chapters/09-routing-and-data-fetching/README.md): loading and error UX
 
 ### In the interview
+**30-second answer:** I built an installable offline-first PWA for field inspectors who create reports with checklists, photos and GPS in places with no signal, and it syncs automatically when the connection returns. The key decision was making IndexedDB the source of truth: every write updates the record and appends an outbox entry in the same transaction, and a sync engine pushes the outbox in order with idempotent mutation ids, then pulls server changes since its last cursor. Conflicts are detected by sending the `base_version` each edit was based on; the server rejects stale edits and the app shows both versions. The service worker precaches the shell so the app opens offline in under a second, with zero data loss across app kills and reloads.
+
+**Key terms to know:**
+- **PWA** — a website with a web app manifest and a service worker, so it can be installed and work offline.
+- **Service worker** — a script that sits between the page and the network; it precaches the app shell and serves it offline.
+- **IndexedDB** — the browser's transactional, asynchronous database for structured data and blobs.
+- **Offline-first** — local data is the primary source; the network is used to sync, not to function.
+- **Outbox pattern** — pending changes stored in a queue written atomically with the data change.
+- **Idempotency key (mutation id)** — a client-generated id so the server ignores a duplicate of an already applied change.
+- **Optimistic concurrency / `base_version`** — the server accepts an edit only if the record is still at the version the edit started from.
+- **Sync cursor** — a marker of the last server change pulled, so the next pull asks only for newer changes.
+- **Persistent storage** — `navigator.storage.persist()` asks the browser not to evict the site's data under pressure.
+- **`skipWaiting`** — activates a waiting service worker immediately instead of after all tabs close.
+
 **Q:** What does offline-first mean?
 
-**A:** The app reads and writes a local database as its primary source and syncs with the server in the background, rather than treating the network as required.
+**A:** The app reads and writes a local database as its primary source and syncs with the server in the background, rather than treating the network as required. The UI never waits on the network to show or save data. Online is an optimization, not a precondition.
 
 **Q:** How do you avoid losing or duplicating offline edits?
 
-**A:** Write the record and an outbox entry in one transaction, push in order with idempotent mutation ids, and retry until acknowledged.
+**A:** Write the record and its outbox entry in one IndexedDB transaction, so either both exist or neither does. Push outbox entries in order, each with a client-generated mutation id the server stores, so a retry after a lost response is recognized and ignored. Remove an entry only after the server acknowledges it.
 
 **Q:** How do you detect conflicts?
 
-**A:** Send the base version with each edit; the server rejects it if the record changed meanwhile, and the client resolves.
+**A:** Each edit carries the server version it was based on. The server rejects it if the record has a newer version, and returns the current copy. The client then merges simple fields automatically (field-level last-writer-wins) and asks the user to choose for free-text notes.
+
+**Q:** Why IndexedDB instead of `localStorage`?
+
+**A:** `localStorage` is synchronous, string-only and small (about 5 MB), and has no transactions. IndexedDB is asynchronous so it does not block rendering, stores structured objects and photo blobs, supports transactions for the record-plus-outbox write, and has much larger quotas.
+
+**Q:** How do React components stay in sync with IndexedDB?
+
+**A:** A `useLiveQuery` Hook (Dexie provides one) subscribes a component to the tables its query reads and re-renders it when they change, including changes written by the sync engine. Components never call `fetch` for data; they read local data.
+
+**Q:** Why not rely on Background Sync?
+
+**A:** The Background Sync API is not available in every browser. So the engine also runs when the app starts, when the `online` event fires, periodically while open, and on "Sync now". Background Sync is a bonus where supported.
+
+**Q:** What happens if the app is killed in the middle of a sync?
+
+**A:** Nothing is lost: the outbox entry is still there because it is only deleted after acknowledgement. On next start the engine resends it, and if the server already applied it, the mutation id makes the retry a no-op. The pull resumes from the stored cursor.
+
+**Q:** How do you ship a new version without breaking open tabs?
+
+**A:** The new service worker installs and waits. The app detects the waiting worker and shows "Update available — reload". When the user agrees I call `skipWaiting` and reload, so a page never runs old JavaScript against new cached assets.
+
+**Q:** What breaks first at scale, such as 10,000 reports per device or thousands of devices?
+
+**A:** On the device, storage quota and photo size break first, so I compress photos to under 500 KB, request persistent storage and offer to remove synced photos. On the server, pull queries must be indexed by change cursor, and push endpoints must handle bursts when many devices reconnect at once, so I add backoff and jitter to the sync schedule.
+
+**Q:** How do you test sync?
+
+**A:** Unit tests run the sync engine against a fake server that drops responses, duplicates requests and returns conflicts. Playwright sets `context.setOffline(true)`, creates a report, closes the page, reopens online and asserts the server state. Another test clears storage mid-run to verify eviction handling.
+
+**Q:** Hands-on: the atomic write.
+
+**A:** With Dexie, both tables are written in one transaction.
+
+```ts
+await db.transaction('rw', db.reports, db.outbox, async () => {
+  await db.reports.put({ ...report, updatedAt: Date.now() });
+  await db.outbox.add({ mutationId: crypto.randomUUID(), op: 'upsert',
+    reportId: report.id, baseVersion: report.version });
+});
+```
+
+**Common mistakes in answers:**
+- Saying "the service worker makes it offline-first". It makes the app shell load offline; data needs a local database and a sync engine.
+- Using last-writer-wins silently for everything and calling it conflict resolution. It drops edits without telling anyone.
+- Generating record ids on the server. Offline-created records need client-generated ids such as UUIDs.
 
 ### TL;DR
 Make IndexedDB the source of truth, pair every write with an outbox entry, sync idempotently with versions, precache the shell and handle conflicts explicitly.
@@ -3604,17 +5270,72 @@ The Compiler removes most manual memoization but can make debugging slightly les
 - [Ch 7 — Custom Hooks](../chapters/07-custom-hooks-and-hook-rules/README.md): transitions and deferred values
 
 ### In the interview
+**30-second answer:** I built a deliberately slow React dashboard with five planted problems and a benchmark harness that drives identical interactions under 4x CPU throttling and records render counts, commit durations and INP. I fixed it in stages: structural fixes first (moving state down, virtualizing a 5,000-row list, code-splitting a heavy library, stabilizing a context value), then compared manual memoization against the React Compiler. The key finding is that the Compiler removed nearly all unnecessary re-renders without hand-written `useMemo`, but it did not fix the unvirtualized list or the heavy bundle, which needed structural changes. Every claim in my report is a median of at least five production-build runs, and typing INP dropped under 200 ms.
+
+**Key terms to know:**
+- **React Profiler** — DevTools panel and `<Profiler onRender>` component that record what rendered, why, and how long it took.
+- **`actualDuration` / `baseDuration`** — time spent rendering the committed subtree this time vs the estimated cost of rendering it with no memoization.
+- **Commit** — the phase where React applies a render's changes to the DOM.
+- **React Compiler** — a build-time plugin (1.0 in October 2025) that inserts memoization automatically.
+- **Rules of React** — components and Hooks must be pure and must not mutate props or state; the Compiler relies on them.
+- **`memo` / `useMemo` / `useCallback`** — manual memoization of components, values and functions.
+- **State colocation** — keeping state in the lowest component that needs it to limit re-render scope.
+- **INP** — Interaction to Next Paint; "good" is 200 ms or less at the 75th percentile.
+- **CPU throttling** — slowing the CPU in DevTools or the harness to simulate a mid-range phone.
+- **Lab vs field data** — scripted measurements vs metrics from real users collected with web-vitals.
+
 **Q:** Does the React Compiler make `useMemo` obsolete?
 
-**A:** Mostly for performance memoization; it inserts it automatically. You may still use it for semantic reasons, and the Compiler does not replace virtualization or code splitting.
+**A:** Mostly, for performance memoization: it inserts equivalent caching automatically and more precisely than most people write by hand. You may still use `useMemo` as an escape hatch, for example to control an Effect dependency precisely. The Compiler does not replace virtualization, code splitting or better algorithms.
 
 **Q:** How do you find what is slow?
 
-**A:** Profile a production build with a throttled CPU, look at commits and flame graphs, find components rendering too often or too slowly, and fix one cause at a time.
+**A:** Profile a production build with a throttled CPU, record the interaction, and look at the commits and flame graph for components that render too often or take too long. "Why did this render?" in DevTools shows which prop or state changed. Then form a hypothesis, change one thing and measure again.
 
 **Q:** What's the difference between `actualDuration` and `baseDuration`?
 
-**A:** Actual is the time rendering this commit; base is the estimated time to render the whole subtree without memoization.
+**A:** `actualDuration` is the time spent rendering the committed subtree in this commit, so it drops when memoization skips work. `baseDuration` estimates the time to render the whole subtree without any memoization. A large gap between them means memoization is saving work.
+
+**Q:** What does the Compiler actually do?
+
+**A:** At build time it analyses each component and Hook and caches JSX, computed values and callbacks so they are recomputed only when their inputs change, like writing `memo`, `useMemo` and `useCallback` precisely everywhere. It skips code it cannot prove follows the Rules of React, which is why running the ESLint plugin first matters.
+
+**Q:** Why measure production builds only?
+
+**A:** Development builds include extra checks, warnings and StrictMode double rendering, so they are several times slower and distort which parts look expensive. I warm up, repeat at least five times, and report the median and spread, because single runs vary a lot.
+
+**Q:** Which of the five planted problems can `memo` not fix?
+
+**A:** The 5,000-row list (all rows still mount on first render, so it needs virtualization), the heavy library loaded up front (needs code splitting with `lazy`), and the expensive calculation if its inputs really change (needs a better algorithm or deferral). `memo` only skips re-renders whose props did not change.
+
+**Q:** A component re-renders even though it is wrapped in `memo`. Why?
+
+**A:** Usually a prop is a new object, array or function each render, such as `style={{...}}` or `onClick={() => ...}`, so the shallow comparison fails. Or it reads a context whose value changed. Fix the unstable prop (or let the Compiler stabilize it), or split the context.
+
+**Q:** What happens if the Compiler hits code that breaks the rules?
+
+**A:** It skips optimizing that component or Hook rather than producing wrong output, so the app still works, just without the automatic memoization there. If a component behaves differently after enabling it, the `"use no memo"` directive opts that one component out while you fix the underlying rule violation.
+
+**Q:** How do you know lab results match real users?
+
+**A:** Lab results are controlled but not representative. I add field data: web-vitals reports INP, LCP and CLS from real sessions to an endpoint, segmented by device class, and compare the 75th percentile before and after a release.
+
+**Q:** Hands-on: record renders with `<Profiler>`.
+
+**A:**
+
+```tsx
+<Profiler id="ProductList" onRender={(id, phase, actual, base) => {
+  samples.push({ id, phase, actual, base });
+}}>
+  <ProductList />
+</Profiler>
+```
+
+**Common mistakes in answers:**
+- "Wrap everything in `useMemo` and `useCallback`." Memoization has a cost and is useless when inputs change every render; measure first.
+- Profiling in development mode and reporting those numbers.
+- Assuming the Compiler fixes slow pages. It removes unnecessary re-renders; necessary work, large DOMs and big bundles remain.
 
 ### TL;DR
 Measure production builds repeatably, fix structure first, let the React Compiler handle memoization, and prove every change with numbers.
@@ -3712,17 +5433,72 @@ SVG rendering via React is simplest and accessible but slows with many nodes; ca
 - [Ch 14 — Patterns and architecture](../chapters/14-patterns-and-architecture/README.md): architecture patterns
 
 ### In the interview
+**30-second answer:** I built a single-user vector editor with frames, shapes, Bézier paths, text, a layers panel, a properties panel, snapping, grouping, undo/redo and SVG/PNG export. The key architecture decision is that a command bus is the only way to change the document: every command records forward and inverse patches, so undo applies the inverse and a whole drag is coalesced into one history entry, with 500 steps of history in bounded memory. Each tool is a typed state machine (idle, pointing, dragging, resizing, rotating, marquee), which makes Escape and modifier keys predictable. The canvas is rendered imperatively for 60 fps with 2,000 nodes, while React renders only the panels, each field subscribed to its own node property.
+
+**Key terms to know:**
+- **Scene graph** — a tree of nodes with transforms and children, like a DOM for drawings.
+- **Transform matrix** — a 2D affine matrix for position, rotation and scale; world = parent world × local.
+- **Inverse matrix** — converts world or screen coordinates back into a node's local space.
+- **Command pattern** — every change is an object that can be applied and undone.
+- **Patches** — minimal descriptions of changes (forward and inverse), cheaper than full document copies.
+- **Coalescing** — merging many small commands (a drag) into one history entry.
+- **Tool state machine** — explicit states and transitions for each tool's interaction.
+- **Hit testing** — finding which node is under the pointer, accounting for transforms.
+- **Selective subscription** — a panel field subscribes to one node property, so only it re-renders.
+- **Mixed value** — a property that differs across a multi-selection, shown as "Mixed".
+
 **Q:** How do you implement undo/redo in an editor?
 
-**A:** Route every change through commands that record forward and inverse patches; undo applies the inverse, redo the forward, and drags are coalesced into one entry.
+**A:** Route every change through commands that record forward and inverse patches. Undo applies the inverse patch and moves the entry to the redo stack; redo applies the forward patch. A drag applies changes live but records a single entry on pointer-up, so one undo restores the original position.
 
 **Q:** Why not render the canvas with React components per shape?
 
-**A:** It works for small scenes, but reconciling thousands of nodes on every pointer move is too slow; render imperatively and keep React for panels.
+**A:** It works for small scenes and SVG gives accessibility for free, but reconciling thousands of nodes on every pointer move costs more than a frame. I render the scene imperatively and keep React for panels, toolbars and dialogs, which change at human speed.
 
 **Q:** How do you handle tools?
 
-**A:** One state machine per tool that turns input events into commands, so modes, cancellation and modifiers are explicit.
+**A:** One state machine per tool turns pointer and keyboard events into commands. The select tool moves from idle to pointing on pointer-down, to dragging after a small movement threshold, back to idle on pointer-up, and Escape cancels from any state by applying the inverse. Explicit states replace fragile flag combinations like `isDragging && !isResizing`.
+
+**Q:** Patches or full snapshots for history?
+
+**A:** Snapshots of a 2,000-node document for 500 steps would use a lot of memory and copying time. Patches store only what changed, so memory is proportional to edits. The trade-off is that every command must produce a correct inverse, which I prove with an "apply then undo equals original" test for each command.
+
+**Q:** How do you resize a rotated shape from a corner?
+
+**A:** Convert the pointer position into the shape's local space with the inverse of its world matrix, compute the new size there (where the box is axis-aligned), keep the opposite corner fixed, and convert the result back. Doing the maths in screen space distorts rotated shapes.
+
+**Q:** How do you keep the properties panel from re-rendering the app during a drag?
+
+**A:** The document store notifies subscribers by changed node id and property. The X and Y fields subscribe only to the selected node's position, so during a drag those two inputs re-render and nothing else in React does. A global context would re-render every panel on every move.
+
+**Q:** What happens if a command throws halfway or the saved file is from an old version?
+
+**A:** Commands validate before mutating and apply their patch atomically, so a failure leaves the document unchanged and nothing is pushed to history. Saved documents carry a version number, and loading runs migrations step by step before the data reaches the store.
+
+**Q:** What changes at 50,000 nodes or with collaboration?
+
+**A:** Canvas 2D drawing and hit testing break first, so I add a spatial index, viewport culling and cached layer bitmaps, and consider WebGL. For collaboration, the command layer becomes the sync boundary: commands become operations sent through a CRDT or server-ordered log (Project 27), and per-user undo replaces the single stack.
+
+**Q:** How do you test it?
+
+**A:** Unit tests cover matrix maths, hit testing under rotation and every command's inverse. Tool state machines are driven with scripted pointer events and asserted state by state. Playwright performs real interactions, and exported SVGs are compared with snapshots.
+
+**Q:** Hands-on: a command with an inverse.
+
+**A:**
+
+```ts
+const moveCommand = (id: string, from: Point, to: Point): Command => ({
+  apply: doc => doc.update(id, { x: to.x, y: to.y }),
+  undo:  doc => doc.update(id, { x: from.x, y: from.y }),
+  mergeKey: `move:${id}`,          // consecutive moves coalesce
+});
+```
+
+**Common mistakes in answers:**
+- Implementing undo by storing a copy of the whole document after every pointer move.
+- Letting panels mutate the document directly, which bypasses history and breaks undo.
+- Editing text directly on the canvas. Use a positioned HTML `<textarea>` overlay while editing for IME, selection and accessibility.
 
 ### TL;DR
 A scene graph changed only by commands with inverse patches, tools as state machines, imperative rendering for the canvas and precise subscriptions for React panels.
@@ -3855,17 +5631,71 @@ Optimistic UI can lie briefly; show subtle "sending" state. A single WebSocket s
 - [Ch 13 — Server rendering](../chapters/13-server-rendering-and-frameworks/README.md): Server Functions (optional framework variant)
 
 ### In the interview
+**30-second answer:** I built a Slack-like chat with channels, real-time delivery over WebSocket, typing indicators, reactions, edits, read receipts and infinite history. Sending feels instant because the composer's form Action calls `addOptimistic` to show a pending message with a client-generated id, then awaits the server. The hard parts were deduplication, since the server echo over the socket can arrive before or after the POST response, so I merge by `clientId`; ordering, which uses a per-channel server sequence number instead of clocks; and keeping failed messages visible, by storing them in real state as "failed" with a retry. Scrolling up to load history never jumps, and reconnecting catches up from the last sequence seen.
+
+**Key terms to know:**
+- **`useOptimistic(state, updateFn)`** — returns an optimistic state and a setter to call inside an Action or transition; the optimistic value is shown only while that Action is pending.
+- **Action / transition** — the async work during which optimistic state is shown; when it ends React renders the real state.
+- **Client id** — a UUID generated by the sender; the server stores it uniquely, making sends idempotent.
+- **Server sequence number (`seq`)** — a per-channel counter giving a total order independent of device clocks.
+- **Deduplication** — merging the socket echo and the HTTP response for the same message.
+- **Catch-up** — after reconnecting, fetching messages after the last `seq` seen.
+- **Scroll anchoring** — keeping visible content still when older messages are prepended.
+- **Unread count** — `last_seq - last_read_seq` per channel.
+- **Typing indicator** — an ephemeral, throttled event that expires after a few seconds.
+- **Fan-out** — delivering one message to every connected member, via pub/sub at scale.
+
 **Q:** How does `useOptimistic` roll back?
 
-**A:** It doesn't need explicit rollback: the optimistic value is shown only while the Action is pending, and afterwards React renders the real state passed to the Hook.
+**A:** It does not need explicit rollback: the optimistic value is shown only while the Action is pending, and afterwards React renders the real state passed to the Hook. If the Action failed and I did nothing, the pending message would simply disappear, which is why I record failures in real state.
 
 **Q:** How do you avoid duplicate messages?
 
-**A:** Generate a client id for each send; the server stores it uniquely and echoes it, and the client merges by that id.
+**A:** Generate a client id for each send. The server stores it with a unique constraint, so a retried POST does not create a second message, and it echoes the client id in both the response and the socket broadcast. The client indexes messages by client id and server id, so whichever arrives first inserts and the other merges.
 
 **Q:** How do you keep scroll position when loading history?
 
-**A:** Record the distance from the bottom before prepending and restore it after, or rely on scroll anchoring.
+**A:** Before prepending older messages, record the distance from the bottom (`scrollHeight - scrollTop`); after React commits, set `scrollTop = scrollHeight - distance`, in a layout Effect so it happens before paint. CSS `overflow-anchor` or a reversed flex column can do this natively in many cases.
+
+**Q:** Why does a confirmed message sometimes flicker away for a frame?
+
+**A:** When the Action finishes, React stops showing the optimistic list and renders the real state. If the confirmed message is not yet in real state at that moment (because I only add it when the socket echo arrives), it vanishes until the echo arrives. The fix is to put the server response into real state before the Action returns.
+
+**Q:** Why order by server sequence instead of timestamps?
+
+**A:** Device clocks differ and can jump, so two users' timestamps do not give a consistent order. The server assigns a monotonically increasing `seq` per channel, giving everyone the same order. Pending messages, which have no `seq` yet, sort at the end.
+
+**Q:** What happens if the socket drops for a minute?
+
+**A:** The client reconnects with backoff and asks for messages after its last known `seq`, so it fills the gap without a full reload. Sends during the outage stay pending, then retry with the same client id, so they cannot be duplicated. The UI shows a "reconnecting" banner meanwhile.
+
+**Q:** What changes with 100,000 concurrent users or huge channels?
+
+**A:** A single WebSocket server breaks first: connections and fan-out exceed one machine. I would run many socket servers with a pub/sub backbone (such as Redis or a message broker) so each server delivers to its own connections. Huge channels need a virtualized message list, and typing indicators and receipts need throttling and aggregation.
+
+**Q:** How do you test optimistic sends?
+
+**A:** RTL with a mocked Action that succeeds, delays or fails: assert the pending message appears immediately, becomes confirmed on success, and shows "failed — retry" on failure. The merge and dedupe function is unit-tested with every arrival order of response and echo. Playwright uses two browser contexts for real-time delivery plus an offline/online cycle.
+
+**Q:** Hands-on: the composer Action.
+
+**A:**
+
+```tsx
+const [optimistic, addOptimistic] = useOptimistic(messages, (list, m: Msg) => [...list, m]);
+async function send(formData: FormData) {
+  const m: Msg = { clientId: crypto.randomUUID(), text: String(formData.get('text')), status: 'sending' };
+  addOptimistic(m);
+  const saved = await postMessage(m).catch(() => ({ ...m, status: 'failed' as const }));
+  startTransition(() => setMessages(list => upsertByClientId(list, saved)));
+}
+// <form action={send}>
+```
+
+**Common mistakes in answers:**
+- Saying `useOptimistic` keeps the message if the request fails. It discards optimistic state when the Action ends; persist failures yourself.
+- Calling the optimistic setter outside an Action or transition, which React warns about because there is nothing pending to tie it to.
+- Deduplicating by message text or timestamp. Use a client-generated id.
 
 ### TL;DR
 Show sends instantly with `useOptimistic`, persist failures in real state, dedupe by client id, order by server sequence and anchor scroll when loading history.
@@ -3966,17 +5796,74 @@ Streaming improves perceived speed but complicates caching (CDNs cache whole res
 - [Ch 14 — Patterns and architecture](../chapters/14-patterns-and-architecture/README.md): error boundaries
 
 ### In the interview
+**30-second answer:** I built server-side rendering by hand on a plain Node server: `renderToPipeableStream` streams the shell (header, title, price) immediately, while reviews and recommendations stream later into `<Suspense>` boundaries as their data resolves, and the browser hydrates with `hydrateRoot`. The key decisions were starting all data fetches in parallel before rendering and passing promises down to components that read them with `use()`, and serializing the resolved data into the page so the client renders exactly the same output. The hardest lessons were hydration mismatches, from things like `Date.now()` in render, and status codes, since a 404 must be decided before the first byte. "Add to cart" works before the slow sections arrive, with zero mismatch warnings.
+
+**Key terms to know:**
+- **SSR (server-side rendering)** — rendering React to HTML on the server for a fast first paint and crawlable content.
+- **`renderToPipeableStream`** — Node streaming renderer with callbacks `onShellReady`, `onShellError`, `onAllReady` and `onError`.
+- **Shell** — everything outside any Suspense boundary; it must be ready before streaming starts.
+- **Streaming with Suspense** — boundaries send fallbacks first, then their HTML plus a small inline script that swaps it in.
+- **Hydration (`hydrateRoot`)** — React attaching to server HTML, building its tree and attaching event handlers without recreating the DOM.
+- **Selective hydration** — React hydrates boundaries independently and prioritizes the one the user interacts with.
+- **Hydration mismatch** — client's first render differs from the server HTML; React reports an error and may re-render that part on the client.
+- **`use(promise)`** — reads a promise during render, suspending until it resolves.
+- **TTFB** — Time to First Byte.
+- **`onAllReady`** — fires when everything is rendered; used to send complete HTML to crawlers.
+
 **Q:** What does streaming SSR improve?
 
-**A:** The browser gets and paints the shell before slow data resolves; slow sections arrive later and hydrate independently.
+**A:** The browser receives and paints the shell before slow data resolves, instead of waiting for the slowest query. Slow sections arrive later in the same response and hydrate independently. Users see content and can interact with the hydrated parts sooner.
 
 **Q:** What causes hydration mismatches?
 
-**A:** Server and client rendering different output — time, randomness, browser-only checks, locale differences or different data.
+**A:** Server and client rendering different output: time (`Date.now()`), randomness, browser-only checks like `typeof window`, locale or time-zone differences in formatting, or the client using different data. Fix them by passing such values as data from the server, moving browser-only rendering into an Effect after mount, or making both sides use the same serialized data.
 
 **Q:** Why can't you send a 404 after streaming starts?
 
-**A:** Headers, including the status code, are sent with the first chunk; decide the status before or at shell readiness.
+**A:** The status code and headers are sent with the first chunk of the response. Once the shell has been flushed, the status is fixed at whatever was set. So known 404s are decided before rendering (when the route or product is missing), and the status is set in `onShellReady` or `onShellError` at the latest.
+
+**Q:** What is the shell, and what goes wrong if slow data is outside a Suspense boundary?
+
+**A:** The shell is everything not inside a Suspense boundary. If a slow component suspends outside any boundary, the whole shell waits for it and `onShellReady` fires late, so TTFB becomes as slow as that query and streaming gives no benefit.
+
+**Q:** How does the client get the same data for hydration?
+
+**A:** I serialize the resolved data into the HTML, for example in a `<script type="application/json">` tag, escaping `<` so a value containing `</script>` cannot break out and inject markup. The client reads it into the same cache before calling `hydrateRoot`, so components resolve synchronously with identical values.
+
+**Q:** Why give bots `onAllReady` instead of streaming?
+
+**A:** Some crawlers do not run the inline scripts that swap streamed boundaries into place, so they would index fallbacks. Waiting for `onAllReady` sends complete HTML in one go for them, while users get the streamed version.
+
+**Q:** What happens when the recommendations service throws or hangs?
+
+**A:** A thrown error inside that boundary is reported through `onError`, and the server sends the boundary's fallback; on the client, React retries rendering that part, and an error boundary shows a fallback if it fails again. The rest of the page is unaffected. For hangs, I call `abort()` after a deadline so the stream finishes with fallbacks instead of holding the connection open.
+
+**Q:** What breaks first at 10x traffic?
+
+**A:** Server CPU, because every request renders React on the server. I would cache whole responses for anonymous pages, prerender static parts (or use partial prerendering: a static shell with dynamic holes), and set timeouts on data sources so slow dependencies do not tie up connections.
+
+**Q:** How do you test streaming and hydration?
+
+**A:** Server tests read the stream and assert the order of chunks (shell, then reviews, then recommendations). Playwright records when the shell and each section become visible, fails the test on any hydration error in the console, and clicks "Add to cart" before recommendations arrive to prove it is interactive.
+
+**Q:** Hands-on: the server render.
+
+**A:**
+
+```ts
+const { pipe, abort } = renderToPipeableStream(<App data={promises} />, {
+  bootstrapScripts: ['/client.js'],
+  onShellReady() { res.statusCode = status; res.setHeader('Content-Type', 'text/html'); pipe(res); },
+  onShellError() { res.statusCode = 500; res.end('<h1>Something went wrong</h1>'); },
+  onError(err) { log(err, reqId); },
+});
+setTimeout(abort, 10_000);
+```
+
+**Common mistakes in answers:**
+- Saying hydration "re-renders the page from scratch". It reuses the server DOM and attaches handlers; only mismatches cause client re-rendering.
+- Fixing mismatches by sprinkling `suppressHydrationWarning`, which hides the warning but leaves wrong content.
+- Awaiting all data before calling `renderToPipeableStream`, which turns streaming back into "wait for the slowest query".
 
 ### TL;DR
 Render the shell first, put slow data in Suspense boundaries read with `use()`, hand the same data to the client, avoid render-time nondeterminism, and decide status codes early.
@@ -4073,17 +5960,73 @@ React Native shares skills and some code; fully native apps can deliver deeper p
 - [Ch 12 — Testing React](../chapters/12-testing-react/README.md): Testing Library philosophy
 
 ### In the interview
+**30-second answer:** I built a React Native companion app with Expo for one of my web projects, sharing TypeScript types, Zod schemas and the API client with the web app through a monorepo. The key decision was a strict boundary: shared packages are pure TypeScript with zero DOM or React Native imports, while the UI is rebuilt with native components, Expo Router screens and native modules for camera, notifications and secure storage. The parts that do not transfer were the real lessons: lists use virtualized `FlatList` instead of `map` in a `ScrollView`, and session tokens live in the platform Keychain or Keystore because there are no browser HttpOnly cookies. Lists of 1,000 items scroll at 60 fps and cold start is under 2 s in a release build.
+
+**Key terms to know:**
+- **React Native** — React rendering to native iOS and Android views instead of the DOM.
+- **Expo** — a framework and toolchain for building, running and shipping React Native apps, with a library of native modules.
+- **Expo Router** — file-based routing for React Native screens.
+- **Native components** — `View`, `Text`, `Image`, `Pressable` instead of `div`, `span` and `button`.
+- **`FlatList`** — a virtualized list that renders only items near the viewport.
+- **Monorepo shared package** — one package of pure TypeScript (types, schemas, API client) used by web and mobile.
+- **Secure storage** — Keychain on iOS and Keystore on Android, accessed through an Expo library.
+- **Over-the-air (OTA) update** — shipping a new JavaScript bundle without app-store review; cannot change native code.
+- **Release vs development build** — performance must be measured in release builds.
+- **React Native Testing Library** — component testing with the same user-centred queries as RTL.
+
 **Q:** What can you share between React web and React Native?
 
-**A:** Logic, types, validation, data fetching and Hooks; usually not UI components, styling or routing.
+**A:** Logic, types, validation schemas, the API client, data-fetching setup with TanStack Query, and Hooks that do not touch the DOM. Usually not UI components, styling or routing, because the primitives are different (`View` vs `div`, style objects vs CSS). React Native Web can share UI, but the compromises often outweigh the savings.
 
 **Q:** Why `FlatList` instead of mapping in a `ScrollView`?
 
-**A:** `FlatList` virtualizes, rendering only visible rows, which keeps memory and frame times low.
+**A:** A `ScrollView` renders every child up front, so 1,000 rows means 1,000 native views in memory and a slow first render. `FlatList` virtualizes, rendering only rows near the viewport and recycling as you scroll. I give it a stable `keyExtractor`, `getItemLayout` when heights are fixed, and memoized rows.
 
 **Q:** Where do you store auth tokens on mobile?
 
-**A:** In platform secure storage (Keychain or Keystore), not plain async storage.
+**A:** In platform secure storage (Keychain or Keystore) via an Expo library, not in plain AsyncStorage, which is unencrypted. Native apps do not have the browser's HttpOnly cookie protection in the same way, so I use short-lived access tokens with a refresh token kept in secure storage.
+
+**Q:** React Native, a PWA or fully native?
+
+**A:** A PWA (Project 31) is enough for many internal tools and ships instantly. React Native fits when you need app-store presence, push notifications everywhere, native camera and background features, and want to reuse React skills and logic. Fully native gives the deepest platform integration and performance, at the cost of two codebases.
+
+**Q:** What is different about styling and layout?
+
+**A:** There is no CSS cascade or class names; you pass style objects (often via `StyleSheet.create`), and layout is flexbox only, with `flexDirection` defaulting to column. Units are density-independent pixels, and text must be inside `<Text>`. Media queries become `useWindowDimensions`.
+
+**Q:** What happens if a bug ships in a release?
+
+**A:** If the fix is JavaScript only, an OTA update can deliver it within minutes, within store rules. If it touches native code or permissions, it needs a new binary and app-store review, which can take hours to days. So I gate risky features behind flags and keep a kill switch.
+
+**Q:** What happens when the user denies camera or notification permission?
+
+**A:** The permission request resolves as denied, and the screen shows an explanation with a button to open system settings, while the rest of the app still works. I request permissions only when the feature is first used, never at launch, because a denied prompt often cannot be shown again.
+
+**Q:** What changes at 10x users or 10x data on device?
+
+**A:** Offline cache size and list performance on low-end Android break first. I cap and paginate the persisted query cache, keep list rows cheap and memoized, and measure in release builds on a real mid-range device. On the backend nothing changes, since the API is shared with the web app.
+
+**Q:** How do you test it?
+
+**A:** The shared package's unit tests run once for both apps. Components are tested with React Native Testing Library using the same "query by role and text" approach as RTL. One E2E flow runs on an emulator, and performance checks happen on a physical device in a release build.
+
+**Q:** Hands-on: a virtualized list.
+
+**A:**
+
+```tsx
+<FlatList
+  data={expenses}
+  keyExtractor={e => e.id}
+  renderItem={({ item }) => <ExpenseRow expense={item} />}
+  getItemLayout={(_, i) => ({ length: 64, offset: 64 * i, index: i })}
+/>
+```
+
+**Common mistakes in answers:**
+- "React Native compiles React to native code." The JavaScript still runs in a JS engine (Hermes by default); React drives native views.
+- Claiming the same components run on web and mobile unchanged. DOM elements and CSS do not exist in React Native.
+- Measuring performance in a development build, which is much slower than release.
 
 ### TL;DR
 Share pure TypeScript logic in a monorepo, rebuild the UI with native components and virtualized lists, store tokens securely, and respect app-store release realities.
@@ -4176,17 +6119,73 @@ Mesh is simplest and has no media server cost but caps at a few users; SFUs scal
 - [Ch 14 — Patterns and architecture](../chapters/14-patterns-and-architecture/README.md): accessibility, architecture
 
 ### In the interview
+**30-second answer:** I built a small video-meeting app with WebRTC: a pre-join screen with device preview and selection, an adaptive grid for up to eight participants, mute, camera and screen share, active-speaker highlighting and network-quality indicators, with a WebSocket signalling server. The key decision was keeping imperative WebRTC objects, such as peer connections, media streams and device lists, in managers and an external store outside React, with React subscribing and `VideoTile` components attaching streams to `<video>` elements through refs. The hardest problems were cleanup, since every track must be stopped so the camera light turns off within a second of leaving, and negotiation races, solved with the perfect-negotiation pattern. Tiles are keyed by participant id, so layout changes never remount videos.
+
+**Key terms to know:**
+- **WebRTC** — the browser API for real-time audio, video and data between peers.
+- **`RTCPeerConnection`** — one connection to a remote peer that negotiates codecs and network paths and carries media.
+- **`MediaStream` / `MediaStreamTrack`** — a stream of audio and video tracks; each track must be stopped to release the device.
+- **Signalling** — exchanging offers, answers and ICE candidates through your own server so peers can connect.
+- **SDP offer/answer** — the session descriptions peers exchange to agree on media.
+- **ICE, STUN and TURN** — finding a network path; STUN discovers public addresses, TURN relays media when direct paths fail.
+- **Perfect negotiation** — a pattern with polite and impolite peers that resolves simultaneous offers ("glare").
+- **Mesh vs SFU** — every peer sends to every other peer, vs each sends once to a server that forwards.
+- **`srcObject`** — the `<video>` property for a `MediaStream`; it is not a JSX attribute.
+- **`devicechange`** — event fired when cameras or microphones are plugged in or removed.
+
 **Q:** Why does the camera stay on after leaving?
 
-**A:** A track wasn't stopped. Stop every `MediaStreamTrack` and close peer connections in cleanup.
+**A:** A `MediaStreamTrack` was not stopped. Closing the peer connection or unmounting the video element does not release the device; only `track.stop()` on every track from `getUserMedia` (and from screen share) does. I stop all tracks and close all peer connections in cleanup, and StrictMode's double mount quickly exposes any leak.
 
 **Q:** How do you show a `MediaStream` in React?
 
-**A:** Use a ref to the `<video>` element and set `srcObject`; it's not a JSX attribute.
+**A:** Use a ref to the `<video>` element and set `videoEl.srcObject = stream`, because streams cannot be passed as JSX attributes. In React 19 a ref callback can set it and return a cleanup that clears `srcObject`. I also set `autoPlay`, `playsInline`, and `muted` for the local preview.
 
 **Q:** Mesh or SFU?
 
-**A:** Mesh for 2–4 participants with no server cost; SFU beyond that, because each client uploads once.
+**A:** Mesh works for two to four participants with no media server cost, but each client uploads its video once per other participant, so upload bandwidth and CPU collapse beyond about four or five. An SFU (Selective Forwarding Unit) receives each stream once and forwards it, so clients upload once, at the cost of running media infrastructure.
+
+**Q:** Why keep WebRTC objects outside React state?
+
+**A:** Peer connections and streams are long-lived, mutable, imperative objects with their own events, and they must survive re-renders and layout changes. Storing them in managers with an external store lets React subscribe to the parts it displays (participants, mute state, stats) without recreating connections when components re-render.
+
+**Q:** What is "glare", and how does perfect negotiation solve it?
+
+**A:** Glare is when both peers send an offer at the same time and each rejects the other's. In perfect negotiation, one peer is "polite" and the other "impolite": on a collision, the polite peer rolls back its own offer and accepts the incoming one, while the impolite peer ignores the incoming offer. Both converge on one negotiation.
+
+**Q:** Why must tiles be keyed by participant id?
+
+**A:** When the grid layout changes (someone joins or is pinned), React moves existing tiles if their keys are stable. With index keys, React would reuse a tile for a different participant and reattach streams, causing black flashes and a remount of the `<video>`.
+
+**Q:** What happens when a device is unplugged or permission is denied?
+
+**A:** `devicechange` fires, the media manager refreshes the device list, and if the active camera disappeared it switches to another device or shows "camera unavailable". Denied permission (`NotAllowedError`) shows guidance to re-enable it in browser settings, and the user can still join with audio only or as a viewer.
+
+**Q:** What happens on a corporate network that blocks UDP?
+
+**A:** Direct and STUN-assisted paths fail, so without TURN the call never connects. A TURN server reachable over TCP or TLS on port 443 relays the media, which is slower and costs bandwidth but makes calls reliable. I show a network-quality indicator from `getStats()` so users know why quality dropped.
+
+**Q:** How do you test it?
+
+**A:** Unit tests cover signalling message handling and the room-store reducers. Playwright launches Chromium with `--use-fake-device-for-media-stream` and `--use-fake-ui-for-media-stream` and opens two contexts to join the same room. Manual tests on real networks with a TURN server cover what automation cannot.
+
+**Q:** Hands-on: attach a stream with a React 19 ref callback.
+
+**A:**
+
+```tsx
+<video autoPlay playsInline muted={isLocal}
+  ref={el => {
+    if (!el) return;
+    el.srcObject = stream;
+    return () => { el.srcObject = null; };
+  }} />
+```
+
+**Common mistakes in answers:**
+- "WebRTC is peer-to-peer, so no server is needed." You need signalling, and usually STUN and TURN, and at scale an SFU.
+- Stopping the stream by removing the `<video>` element. Tracks keep running until `stop()` is called.
+- Storing `MediaStream` objects in React state and recreating connections on re-render.
 
 ### TL;DR
 Keep WebRTC objects in an external store, attach streams via refs, stop every track on cleanup, key tiles by participant, and switch to an SFU beyond a handful of peers.
@@ -4280,17 +6279,72 @@ Browser bundling avoids servers but is limited (no native modules, slower cold s
 - [Ch 11 — TypeScript with React](../chapters/11-typescript-with-react/README.md): typed message protocols
 
 ### In the interview
+**30-second answer:** I built a CodeSandbox-style playground with a multi-file editor, a live preview that rebuilds within 500 ms of typing stopping, a console panel, error overlays and share links that encode the files in the URL hash. The key decisions were compiling in a Web Worker so typing never waits on the bundler, and running user code in a sandboxed iframe on a separate origin that talks to the host only through `postMessage` with origin and schema checks on both sides. The editor is an imperative library mounted once through a ref and treated as the source of truth, not a controlled component. Infinite loops cannot freeze the editor: a missed heartbeat recreates the preview iframe.
+
+**Key terms to know:**
+- **Sandboxed iframe** — an iframe with the `sandbox` attribute, which removes permissions unless explicitly allowed.
+- **Opaque origin** — `sandbox="allow-scripts"` without `allow-same-origin` gives the frame a unique origin with no access to the host's cookies or storage.
+- **`postMessage`** — the cross-window messaging API; the receiver must check `event.origin` and the message shape.
+- **Web Worker** — a background thread for CPU-heavy work like transforming TypeScript and JSX.
+- **In-browser bundling** — transforming code and resolving imports in the browser, without a server.
+- **Bare import** — `import x from 'pkg'`, rewritten to an ESM CDN URL by the bundler.
+- **Imperative editor integration** — creating an editor instance in an Effect with a ref and syncing through its event API.
+- **Heartbeat** — periodic "alive" messages from the iframe; missing ones mean user code is stuck.
+- **URL-hash state** — compressed files stored in the hash, which is not sent to the server.
+- **Debounced rebuild** — rebuild only after typing pauses.
+
 **Q:** How do you run untrusted code safely in the browser?
 
-**A:** In a sandboxed iframe on a separate origin, communicating only via `postMessage` with origin and schema checks.
+**A:** In a sandboxed iframe on a separate origin (ideally a separate domain), with `sandbox="allow-scripts"` and no `allow-same-origin`, so it cannot read the host's cookies, storage or DOM. The host and iframe communicate only via `postMessage`, and both sides check `event.origin` and validate the message shape before acting.
 
 **Q:** How do you keep the editor responsive while compiling?
 
-**A:** Debounce changes and compile in a Web Worker, so the main thread only handles typing and rendering.
+**A:** Debounce changes and compile in a Web Worker, so the main thread only handles typing and rendering. The worker posts the bundled code (or errors) back, and the host forwards it to the iframe. Even a slow compile cannot block a keystroke.
 
 **Q:** How do you integrate a non-React editor?
 
-**A:** Mount it once into a ref'd element in an Effect, destroy it in cleanup, and sync changes through its event API rather than re-rendering it.
+**A:** Mount it once into a ref'd element in an Effect, destroy it in the Effect's cleanup, and sync changes through its event API rather than re-rendering it. The editor owns the text; React receives changes through a listener and pushes external changes (like switching files) with the editor's own API.
+
+**Q:** Why not make the editor a controlled component with `value` from state?
+
+**A:** Writing the whole document back into the editor on every keystroke resets the cursor, selection, undo history and IME composition, and costs a full update per key. Editors keep rich internal state; treating them as uncontrolled with event-based sync avoids fighting that state.
+
+**Q:** Why is `allow-scripts` plus `allow-same-origin` dangerous?
+
+**A:** If the iframe is same-origin with the host and has both permissions, the code inside can reach into its parent frame or simply remove its own `sandbox` attribute, defeating the sandbox. Serving the preview from a different domain makes it safe even if a permission is misconfigured.
+
+**Q:** What happens when user code has an infinite loop?
+
+**A:** Synchronous JavaScript in a frame cannot be interrupted from outside, and same-process iframes can freeze the host too. The iframe sends heartbeats; when they stop, the host removes and recreates the iframe and shows "Preview stopped responding". Optionally the transform step injects loop guards that throw after a time limit.
+
+**Q:** In-browser bundling or server containers?
+
+**A:** In-browser bundling needs no servers, scales with users for free and works offline once loaded, but cannot run native modules or other back-end stacks, and cold starts can be slow. Server containers run anything but cost money per session and add latency. For React snippets, the browser is enough.
+
+**Q:** What changes at 100x users or with large projects?
+
+**A:** Hosting cost barely changes because compilation runs on users' machines; the CDN for npm packages becomes the dependency, so I cache and pin package versions. Large projects make share URLs too long, so I would store bigger projects server-side and keep hash links for small snippets.
+
+**Q:** How do you test it?
+
+**A:** Unit tests cover the message protocol (rejects wrong origins and malformed messages) and the files-to-URL encoding round-trip. Playwright types in the editor and waits for the preview to change, checks console output and the error overlay, and runs security tests asserting the iframe cannot read host `localStorage` or cookies.
+
+**Q:** Hands-on: receive console messages safely.
+
+**A:**
+
+```ts
+window.addEventListener('message', e => {
+  if (e.origin !== PREVIEW_ORIGIN) return;
+  const msg = ConsoleMsg.safeParse(e.data);       // Zod schema
+  if (msg.success) appendLog(msg.data);
+});
+```
+
+**Common mistakes in answers:**
+- Running user code with `eval` or `new Function` in the host page, which gives it the host's cookies and DOM.
+- Using `postMessage(data, '*')` and never checking `event.origin` on the receiving side.
+- Re-creating the editor on every render because it is created in render instead of once in an Effect.
 
 ### TL;DR
 Wrap an imperative editor with refs, bundle in a Worker, run code in a cross-origin sandboxed iframe, talk only through validated `postMessage`, and encode files in the URL.
@@ -4431,17 +6485,73 @@ Hosted tools (Sentry, LaunchDarkly and similar) give mature grouping, alerting a
 - [Ch 6 — State management](../chapters/06-state-management/README.md): context providers
 
 ### In the interview
+**30-second answer:** I built two linked production tools: an error-monitoring SDK and dashboard, and a feature-flag console with an evaluating SDK. The SDK captures render errors through error boundaries and React 19's root callbacks (`onCaughtError`, `onUncaughtError`), plus global `error` and `unhandledrejection` events, attaches breadcrumbs and active flags, samples, and sends with `sendBeacon` on page hide; the server resolves stacks with privately uploaded source maps and groups by normalized frames. Flags use sticky bucketing, hashing the flag key with the user id into 0–99, evaluated identically on server and client, so there is no flicker. The SDK is under 10 KB gzipped and never throws into the host app, and each flag's page shows error rate per variant, which supports a kill switch.
+
+**Key terms to know:**
+- **Error boundary** — a component that catches errors thrown during rendering of its subtree and shows a fallback.
+- **Root error callbacks (React 19)** — `createRoot` options `onCaughtError`, `onUncaughtError` and `onRecoverableError` that report errors React handles.
+- **Global handlers** — `window` `error` and `unhandledrejection` events for errors outside React rendering.
+- **Breadcrumbs** — a short trail of recent clicks, navigations and requests attached to an error.
+- **Source map** — a file mapping minified code back to original source; uploaded privately for symbolication.
+- **Fingerprint / grouping** — identifying events that represent the same issue, from error type plus normalized top frames.
+- **Sampling** — sending only a fraction of events to control volume and cost.
+- **Feature flag** — a runtime switch that enables code paths for some users.
+- **Sticky bucketing** — deterministic hashing so a user always gets the same variant.
+- **Kill switch** — a flag that turns a feature off instantly without deploying.
+
 **Q:** What do error boundaries not catch?
 
-**A:** Errors in event handlers, asynchronous callbacks, server rendering and in the boundary itself; handle those separately.
+**A:** Errors in event handlers, asynchronous callbacks (timeouts, promises), server-side rendering, and errors thrown in the boundary itself. I capture those with `window` `error` and `unhandledrejection` listeners and in the data-fetching layer, and React 19's root callbacks report what React itself catches.
 
 **Q:** How do you roll out a feature to 10 % of users consistently?
 
-**A:** Hash the flag key with a stable user id into 0–99 and enable when the bucket is below 10, on both server and client.
+**A:** Hash the flag key with a stable user id into a number from 0 to 99, and enable the feature when the bucket is below 10. The same inputs give the same bucket on server and client and across sessions. Including the flag key in the hash means different flags get independent 10 % groups.
 
 **Q:** How do you make minified stack traces readable?
 
-**A:** Upload source maps at build time to the monitoring backend (not to the public site) and resolve frames on ingest.
+**A:** Upload source maps at build time to the monitoring backend, tagged with the release, and not to the public site. On ingest, the server maps each minified frame to the original file, line and function. Then grouping uses real function names.
+
+**Q:** Why group by stack frames rather than by message?
+
+**A:** Messages often contain variable data ("order 123 not found", "order 456 not found"), which would split one bug into thousands of issues. Fingerprinting on the error type plus the normalized top frames of your own code groups them correctly, while different bugs that share a message stay separate.
+
+**Q:** How do you avoid a flash of the wrong variant?
+
+**A:** Evaluate flags on the server during rendering and pass the same rules or results to the client, so the first client render matches. If the SPA has no server render, block the flagged area until rules load (with a timeout and a default), rather than rendering the default and then switching.
+
+**Q:** Build or buy?
+
+**A:** Hosted tools such as Sentry and LaunchDarkly give mature grouping, alerting, compliance and scale, which is usually the right call. Building small versions teaches error boundaries, source maps, sampling and rollout design, and can make sense for special privacy or cost requirements. The trade-off is ongoing maintenance.
+
+**Q:** What happens if the ingest API is down?
+
+**A:** The SDK queues events in memory (capped in size), backs off on failures and drops the oldest events when the cap is hit, so it never grows without bound or slows the app. Every SDK call is wrapped in try/catch, because a monitoring SDK that crashes the host app is worse than no SDK.
+
+**Q:** What breaks first during a 100x error spike after a bad deploy?
+
+**A:** Ingest volume: one broken release can send millions of identical events. Client-side sampling, per-issue rate limits on the server and dropping duplicate events while an issue is "hot" protect the pipeline. The spike itself should trigger an alert, and if it correlates with a flag variant, the kill switch.
+
+**Q:** How do you test the SDK and flags?
+
+**A:** SDK unit tests prove sampling, queue caps and that the SDK never throws. An RTL test renders a component that throws inside a boundary and asserts exactly one event was reported. Grouping is tested with fixture stack traces, and flag evaluation has a property test checking that 100,000 random ids split close to the target percentage.
+
+**Q:** Hands-on: a deterministic bucket.
+
+**A:**
+
+```ts
+function bucket(flagKey: string, userId: string): number {
+  let h = 2166136261;                                  // FNV-1a
+  for (const c of `${flagKey}:${userId}`) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return (h >>> 0) % 100;
+}
+const enabled = bucket('new-checkout', user.id) < rolloutPercent;
+```
+
+**Common mistakes in answers:**
+- Using `Math.random()` to decide rollouts. Users flip between variants on every load.
+- Publishing source maps on the public site to "make debugging easier", which exposes your source code.
+- Assuming an error boundary reports errors from `onClick` handlers.
 
 ### TL;DR
 Capture errors from boundaries, root callbacks and global handlers, group by normalized stack, resolve with private source maps, and roll out features with sticky, server-consistent flags.
@@ -4590,17 +6700,73 @@ Framework mode gives SSR and progressive enhancement but you must operate server
 - [Ch 4 — Forms and Actions](../chapters/04-forms-and-actions/README.md): progressive enhancement
 
 ### In the interview
+**30-second answer:** I built a production-grade storefront on React Router framework mode with server rendering, streaming, edge caching, SEO and Core Web Vitals budgets: category pages with server-side filtering, product pages, a server-side cart that works without JavaScript, checkout through a payment provider, and account pages. The key rule was "cache what's public, stream what's personal": anonymous category and product HTML is cached at the CDN with stale-while-revalidate, critical data like title, price and stock is in the shell, and slow, optional parts such as reviews and recommendations stream into Suspense boundaries with timeouts. Orders are confirmed only by the payment provider's signed webhook, handled idempotently, and key pages meet LCP under 2.5 s, INP under 200 ms and CLS under 0.1 at the 75th percentile.
+
+**Key terms to know:**
+- **React Router framework mode** — React Router as a full-stack framework with route modules, server loaders and actions, and SSR.
+- **Route module** — a file exporting a component plus `loader`, `action`, `meta` and `headers` for that route.
+- **Loader / action** — server functions that read data before render and handle form submissions.
+- **Streaming promises from loaders** — returning a promise for non-critical data and rendering it with `<Await>` or `use()` inside Suspense.
+- **CDN caching / `Cache-Control`** — public pages cached at the edge with `s-maxage` and `stale-while-revalidate`.
+- **Personalized vs anonymous content** — cart counts and greetings must never be in cached HTML.
+- **Progressive enhancement** — forms (add to cart, checkout) work before JavaScript loads.
+- **Signed webhook** — a server-to-server notification from the payment provider, verified with a signature.
+- **Idempotency** — creating an order twice for the same payment reference has no extra effect.
+- **Core Web Vitals** — LCP, INP and CLS measured at the 75th percentile of real page loads.
+
 **Q:** How do you cache an e-commerce page without leaking personal data?
 
-**A:** Cache only anonymous HTML at the CDN and fetch personal parts separately, uncached, or after hydration.
+**A:** Cache only anonymous HTML at the CDN and fetch personal parts separately, uncached, or after hydration. Responses that read the session cookie set `Cache-Control: private, no-store`, and public routes set `public, s-maxage=60, stale-while-revalidate=300`. If cached HTML ever included a cart badge, everyone would see one shopper's cart.
 
 **Q:** What goes in the shell and what gets streamed?
 
-**A:** Content that defines the page and its SEO (title, price, main image) is in the shell; optional, slow content (reviews, recommendations) is streamed behind Suspense.
+**A:** Content that defines the page and its SEO (title, price, stock, main image) is in the shell, because it is the LCP element and what crawlers index. Optional, slow content (reviews, recommendations) is returned from the loader as a promise and streamed behind Suspense with a fallback and a timeout.
 
 **Q:** How do you know an order is paid?
 
-**A:** From the payment provider's signed webhook, handled idempotently — not from the browser redirect.
+**A:** From the payment provider's signed webhook, verified on the server and handled idempotently using the payment reference, not from the browser redirect. Redirects can be faked, closed early or never happen; the webhook is the authoritative signal. The success page shows "processing" until the webhook confirms.
+
+**Q:** Why React Router framework mode instead of a client-only SPA?
+
+**A:** Commerce needs fast first paint, crawlable HTML and forms that work on bad connections, and SSR with loaders and actions gives all three with progressive enhancement. The trade-off is operating servers or edge functions and thinking carefully about caching. A client-only SPA would ship an empty shell to crawlers and slow phones.
+
+**Q:** How does the cart work without JavaScript?
+
+**A:** The cart lives on the server, identified by a cookie. "Add to cart" is a `<Form method="post">` handled by a route action; without JavaScript it is a normal form post and redirect. With JavaScript, a fetcher submits it without navigation and the badge revalidates.
+
+**Q:** What happens during a 10x sale spike if the recommendations service fails?
+
+**A:** Recommendations are optional, so the loader's promise for them has a timeout and their Suspense boundary has an error fallback: the section disappears or shows bestsellers, while the product page and checkout keep working. Cached HTML absorbs most browsing traffic, so the origin mostly handles carts and checkout, which are protected with rate limits and capacity planning.
+
+**Q:** Static generation of the whole catalogue or SSR with caching?
+
+**A:** Static generation is fastest but slow to rebuild for large catalogues and shows stale stock. SSR with short CDN TTLs and stale-while-revalidate keeps pages fresh within a minute while serving most requests from cache. Stock at checkout is always checked live.
+
+**Q:** What usually ruins INP on a store, and how do you fix it?
+
+**A:** Third-party scripts (analytics, chat widgets, A/B testing) and large client components are the usual cause. I load third-party scripts late or after interaction, audit bundle size per route, lazy-load heavy widgets like zoom and the review editor, and let the React Compiler handle memoization in what remains. Field data from web-vitals confirms the effect.
+
+**Q:** How do you test it?
+
+**A:** Loader and action unit tests with a test database. Playwright runs browse, cart and checkout in the payment provider's test mode, with and without JavaScript, and asserts `Cache-Control` headers per route. Lighthouse CI enforces budgets on key pages, and a load test hits category and product routes at sale-level traffic.
+
+**Q:** Hands-on: stream optional data from a loader.
+
+**A:** Await critical data; return slow data as a promise and render it inside Suspense.
+
+```tsx
+export async function loader({ params }: Route.LoaderArgs) {
+  const product = await getProduct(params.id);            // critical: in the shell
+  const reviews = getReviews(params.id);                  // not awaited: streamed
+  return { product, reviews };
+}
+// <Suspense fallback={<ReviewsSkeleton />}><Await resolve={reviews}>{r => <Reviews items={r} />}</Await></Suspense>
+```
+
+**Common mistakes in answers:**
+- Treating the redirect to `/order/success` as proof of payment.
+- Caching a page at the CDN that reads the session cookie, leaking one user's data to others.
+- Awaiting every query in the loader "for simplicity", so the slowest service sets the time to first byte.
 
 ### TL;DR
 Server-render anonymous, cacheable pages with critical data in the shell, stream optional parts, keep personal data uncached, make checkout progressive and idempotent, and hold Core Web Vitals to a budget.
