@@ -6,7 +6,7 @@ A **capstone** is a project big enough to pull several chapters together into on
 
 **The baseline stack.** Every project is **vanilla JavaScript** — no React, Vue or Svelte (the [React Handbook](../../react/chapters/01-why-react-and-setup/README.md) has its own capstones). Browser projects use plain HTML, CSS and ES modules loaded with `<script type="module">`; a dev server is optional (Vite, or `npx serve`). Server and tooling projects use **Node 24** (Active LTS since October 2025, V8 13.6, npm 11). Tests use the built-in **`node:test`** runner with **`node:assert/strict`**, or **Vitest** where a browser-like environment or watch mode helps. A few briefs use one well-known library on purpose (Express, `pg`, `ws`, Yjs) and say why.
 
-**Modern JavaScript you will meet.** The book targets **ES2025**, and Node 24 ships all of it: iterator helpers (`.map`, `.filter`, `.take` on iterators) and `Iterator.from`; the new `Set` methods (`union`, `intersection`, `difference`, …); `Promise.try`; `RegExp.escape`; import attributes and JSON modules (`import data from './x.json' with { type: 'json' }`); `Float16Array`. From ES2026 and later, Node 24 already has `Array.fromAsync`, `Error.isError` and the `using` declaration (explicit resource management); `Temporal` is **not** in Node 24, so feature-detect it. Node 24 also exposes `URLPattern` as a global, a stable browser-compatible `WebSocket` *client*, `fetch`, `node:sqlite` (still pre-stable), the `--permission` flag and stable TypeScript type stripping (`node file.ts`). These facts were checked against the [Node 24.0.0 release notes](https://nodejs.org/en/blog/release/v24.0.0), the [Node globals docs](https://nodejs.org/docs/latest-v24.x/api/globals.html) and the book's own [ES version table](../chapters/18-cheatsheet-and-glossary/README.md).
+**Modern JavaScript you will meet.** The book targets **ES2025**, and Node 24 ships all of it: iterator helpers (`.map`, `.filter`, `.take` on iterators) and `Iterator.from`; the new `Set` methods (`union`, `intersection`, `difference`, …); `Promise.try`; `RegExp.escape`; import attributes and JSON modules (`import data from './x.json' with { type: 'json' }`); `Float16Array`. From ES2026 and later, Node 24 already has `Array.fromAsync`, `Error.isError` and the `using` declaration (explicit resource management); `Temporal` is **not** in Node 24, so feature-detect it. Node 24 also exposes `URLPattern` as a global (new in 24.0 and still marked experimental), a stable browser-compatible `WebSocket` *client*, `fetch`, `node:sqlite` (not yet stable — a release candidate as of 24.15), the `--permission` flag and TypeScript type stripping (`node file.ts`, marked stable in 24.12). These facts were checked against the [Node 24.0.0 release notes](https://nodejs.org/en/blog/release/v24.0.0), the [Node globals docs](https://nodejs.org/docs/latest-v24.x/api/globals.html) and the book's own [ES version table](../chapters/18-cheatsheet-and-glossary/README.md).
 
 **How to pick one.**
 - New to JavaScript: start at Project 1 and do at least four beginner briefs in order. Each adds one or two ideas on top of the last (DOM events, then storage, then `fetch`, then timers).
@@ -95,7 +95,7 @@ A four-function calculator in the browser: a display, digit and operator buttons
 Everyone thinks a calculator is trivial until they press `5 + =` or `0.1 + 0.2`. The project forces you to deal with the two things beginners usually ignore: **state** (what does `=` mean right after `=`?) and **numbers** (JavaScript numbers are IEEE 754 double-precision floats, so `0.1 + 0.2` is `0.30000000000000004`). Getting both right is a lesson in modelling before coding.
 
 ### Real-world examples
-- Microsoft open-sourced the [Windows Calculator](https://github.com/microsoft/calculator); its engine keeps numbers in an arbitrary-precision rational form precisely so users never see float noise.
+- Microsoft open-sourced the [Windows Calculator](https://github.com/microsoft/calculator); its README highlights infinite-precision arithmetic for the four basic operations, so results never lose precision the way doubles do.
 - [0.30000000000000004.com](https://0.30000000000000004.com/) shows the same float result in dozens of languages — it is not a JavaScript bug, it is binary floating point.
 
 ### Requirements
@@ -240,7 +240,7 @@ Stored under one key, `todos:v1`, as a JSON array. The `v1` suffix lets you migr
 | Rendering | `document.createElement` + `textContent` | safe against XSS; no `innerHTML` with user text |
 | Storage | `localStorage` | synchronous, simple, about 5 MB per origin in most browsers |
 | Routing | `location.hash` + `hashchange` | no server config needed |
-| Tests | `node:test` + jsdom | the book's runner already provides jsdom |
+| Tests | `node:test` + jsdom | the book already runs DOM code under jsdom (Ch 13) |
 
 ### Milestones
 1. **In-memory list.** Add and render tasks. *Done when* adding three tasks shows three `<li>`s.
@@ -396,7 +396,7 @@ A dashboard that shows current conditions, a 24-hour strip and a 7-day forecast 
 Real apps chain requests (city name → coordinates → forecast), deal with slow and failing networks, convert units and time zones, and avoid hammering the API. This project makes you handle every one of those in a page small enough to finish.
 
 ### Real-world examples
-- [Open-Meteo's forecast API docs](https://open-meteo.com/en/docs) show requests like `/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m&hourly=temperature_2m`; a key is needed only for commercial use.
+- [Open-Meteo's forecast API docs](https://open-meteo.com/en/docs) show requests like `/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m&hourly=temperature_2m`; a key is needed only for commercial use, and its [terms](https://open-meteo.com/en/terms) cap free non-commercial use at under 10,000 calls a day (5,000 an hour, 600 a minute).
 - MDN's [`AbortController`](https://developer.mozilla.org/en-US/docs/Web/API/AbortController) page documents cancelling an in-flight `fetch`, which you need when the user searches again before the first answer arrives.
 
 ### Requirements
@@ -3167,7 +3167,7 @@ When two people type at the same position at the same moment, naive "send the wh
 
 ### Real-world examples
 - [Yjs](https://github.com/yjs/yjs) is an open-source CRDT framework that implements a modified version of the YATA algorithm; its [documentation](https://docs.yjs.dev/) covers shared types, providers and awareness.
-- Shapiro et al.'s [A comprehensive study of Convergent and Commutative Replicated Data Types](https://inria.hal.science/inria-00609399) is the foundational survey of CRDTs.
+- Shapiro et al.'s [A comprehensive study of Convergent and Commutative Replicated Data Types](https://inria.hal.science/inria-00555588) is the foundational survey of CRDTs.
 - Figma explains why it chose a simpler, server-authoritative design inspired by CRDTs in [How Figma's multiplayer technology works](https://www.figma.com/blog/how-figmas-multiplayer-technology-works/).
 
 ### Requirements
@@ -4382,7 +4382,7 @@ flowchart TD
 ### Deep dive: the hard parts
 **TCP is a stream, not messages.** One `data` event may hold half a header, or two whole requests plus part of a third. Keep a buffer per connection, parse as far as possible, keep the unconsumed tail, and continue on the next event. Scan with `buffer.indexOf('\r\n', offset)`; avoid converting the whole buffer to a string repeatedly.
 
-**Message length rules and smuggling.** The body length is determined by `Transfer-Encoding: chunked` if present, else `Content-Length`, else zero for requests. If a request has both, or two different `Content-Length` values, a front proxy and your server may disagree about where the request ends — an attacker hides a second request in the body (**request smuggling**). RFC 9112 says to treat such messages as errors; reject and close.
+**Message length rules and smuggling.** The body length is determined by `Transfer-Encoding: chunked` if present, else `Content-Length`, else zero for requests. If a request has both, or two different `Content-Length` values, a front proxy and your server may disagree about where the request ends — an attacker hides a second request in the body (**request smuggling**). RFC 9112 makes differing `Content-Length` values an unrecoverable error, and allows a server to reject a message carrying both headers (if it processes one anyway, it must close the connection afterwards). The safe choice for your server is to reject both cases and close.
 
 **Chunked encoding.** Each chunk is `size-in-hex\r\n data \r\n`, ending with a `0\r\n` chunk, optional trailer fields and a final `\r\n`. Parse the size line with a strict hex check and a maximum, then stream exactly that many bytes. When writing responses, you can stream without knowing the total length — ideal for generated content.
 
