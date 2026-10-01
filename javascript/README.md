@@ -56,6 +56,7 @@ flowchart LR
 |---|---|
 | `JavaScript-Handbook.pdf` | The whole book as one PDF, with a cover and a table of contents. |
 | `interview/JavaScript-Interview-Edition.pdf` + `interview/INTERVIEW.md` | **Interview Edition** — a small (~40-page) fast-revision book: every chapter as must-know terms, key tables, tiny code snippets, likely questions and gotchas, plus a Top-25 question list, the event-loop ordering rules with three output puzzles, the from-scratch classics and a last-minute checklist. |
+| `capstones/CAPSTONES.md` + `capstones/JavaScript-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced — vanilla JavaScript and Node 24, from a calculator and a localStorage to-do list to a WebSocket chat, an offline-first PWA, a Promises/A+ library, a bundler, a CRDT editor and an HTTP server on raw TCP — each with requirements, architecture and data-model diagrams, milestones, hard parts, testing, trade-offs and interview questions. |
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
 | `chapters/NN-name/code/` | Runnable examples (`.js`, `.mjs`, `.ts`, test files) and, for browser chapters, small self-contained `.html` pages. |
 | `chapters/NN-name/img/` | Screenshots of those `.html` pages rendered in headless Chrome (Ch 1, 12, 13, 14). |
