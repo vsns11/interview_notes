@@ -73,58 +73,58 @@ const cover = combined ? `
 <nav class="toc"><h2>Contents</h2><ol>${toc.map(m => `<li><a href="#${m.id}">${m.text}</a><ul>${m.subs.map(s => `<li><a href="#${s.id}">${s.text}</a></li>`).join('')}</ul></li>`).join('')}</ol></nav>` : '';
 
 const CSS = `
-:root{color-scheme:dark}
+:root{color-scheme:light}
 *{box-sizing:border-box}
-html{background:#0A0026;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-body{font-family:Monaco,'Courier New',monospace;font-size:10.5px;line-height:1.65;color:#bfc8ee;background:#0A0026;margin:0;padding:0 13mm}
-a{color:#7fb2ff;text-decoration:none}
-h1{font-size:20px;color:#e8e4f7;border-bottom:3px solid #6c8cff;padding-bottom:6px;margin:0 0 14px}
+html{background:#FBF0D9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:Monaco,'Courier New',monospace;font-size:11.5px;line-height:1.65;color:#2E261C;background:#FBF0D9;margin:0;padding:0 13mm}
+a{color:#1F5FAF;text-decoration:none}
+h1{font-size:20px;color:#1C1712;border-bottom:3px solid #3A5BC7;padding-bottom:6px;margin:0 0 14px}
 section.doc + section.doc h1:first-child, .toc + section.doc h1:first-child{page-break-before:always}
-h2{font-size:15.5px;margin:24px 0 8px;padding-top:8px;border-top:1px solid #2a2360;color:#8fb4ff;page-break-after:avoid}
-h3{font-size:12.5px;margin:14px 0 6px;color:#d6d8f5;page-break-after:avoid}
-h4{font-size:11.5px;margin:12px 0 4px;color:#d6d8f5;page-break-after:avoid}
+h2{font-size:15.5px;margin:24px 0 8px;padding-top:8px;border-top:1px solid #D6C29A;color:#2F5DB0;page-break-after:avoid}
+h3{font-size:12.5px;margin:14px 0 6px;color:#2A2218;page-break-after:avoid}
+h4{font-size:11.5px;margin:12px 0 4px;color:#2A2218;page-break-after:avoid}
 p{margin:7px 0}
-hr{border:0;border-top:1px solid #2a2360;margin:16px 0}
-code{font-family:Monaco,'Courier New',monospace;font-size:10px;background:#1a1447;color:#ffd479;padding:1px 5px;border-radius:4px}
-pre{background:#0f0a33;border:1px solid #2c2566;border-left:4px solid #6c8cff;border-radius:6px;padding:11px 13px;margin:10px 0;page-break-inside:avoid;white-space:pre-wrap}
-pre code{background:none;color:#c9d1f4;padding:0;font-size:10px;line-height:1.5;display:block}
-table{border-collapse:collapse;width:100%;margin:10px 0;font-size:9.5px;page-break-inside:avoid}
-th,td{border:1px solid #2e2766;padding:5px 8px;text-align:left;vertical-align:top}
-th{background:#1c1650;color:#dbe1ff}
-tr:nth-child(even) td{background:#0d0830}
-blockquote{margin:10px 0;padding:8px 13px;background:#1a1433;border-left:4px solid #e0a92b;border-radius:5px;color:#e3d7b8}
+hr{border:0;border-top:1px solid #D6C29A;margin:16px 0}
+code{font-family:Monaco,'Courier New',monospace;font-size:10.8px;background:#EAD8B2;color:#8B2F5F;padding:1px 5px;border-radius:4px}
+pre{background:#F3E5C6;border:1px solid #D6C29A;border-left:4px solid #3A5BC7;border-radius:6px;padding:11px 13px;margin:10px 0;page-break-inside:avoid;white-space:pre-wrap}
+pre code{background:none;color:#2E261C;padding:0;font-size:10.8px;line-height:1.5;display:block}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:10.3px;page-break-inside:avoid}
+th,td{border:1px solid #D6C29A;padding:5px 8px;text-align:left;vertical-align:top}
+th{background:#EAD8B2;color:#1C1712}
+tr:nth-child(even) td{background:#F6EAD0}
+blockquote{margin:10px 0;padding:8px 13px;background:#F6EAD0;border-left:4px solid #C08A1E;border-radius:5px;color:#4A3B22}
 ul,ol{margin:6px 0 6px 4px;padding-left:20px}
 li{margin:2px 0}
-strong{color:#e8e4f7}
-em{color:#a9b3e3}
-img.course{display:block;max-width:92%;max-height:115mm;margin:12px auto 2px;border:1px solid #2e2766;border-radius:8px;padding:6px;background:#ffffff;filter:brightness(.9);page-break-inside:avoid}
+strong{color:#1C1712}
+em{color:#5A4A36}
+img.course{display:block;max-width:92%;max-height:115mm;margin:12px auto 2px;border:1px solid #D6C29A;border-radius:8px;padding:6px;background:#ffffff;page-break-inside:avoid}
 p:has(> img.course){page-break-inside:avoid;text-align:center}
-figure.diagram{margin:10px 0 12px;text-align:center;page-break-inside:avoid;background:#0f0a33;border:1px solid #2c2566;border-radius:8px;padding:8px}
+figure.diagram{margin:10px 0 12px;text-align:center;page-break-inside:avoid;background:#F3E5C6;border:1px solid #D6C29A;border-radius:8px;padding:8px}
 figure.diagram svg{max-width:100% !important;max-height:150mm;height:auto}
 pre.mermaid{background:none;border:0;padding:0}
-.merr{color:#ff8a8a;font-size:9px;white-space:pre-wrap;text-align:left;border:1px dashed #ff8a8a;padding:6px}
+.merr{color:#C62828;font-size:9px;white-space:pre-wrap;text-align:left;border:1px dashed #C62828;padding:6px}
 .cover{height:250mm;display:flex;flex-direction:column;justify-content:center;page-break-after:always}
-.cover h1{font-size:30px;border:0;color:#8fb4ff}
-.cover p{font-size:13px;color:#c9cbe8;margin:4px 0}.cover .small{margin-top:30px;font-size:10px;color:#9a9cc4}
+.cover h1{font-size:30px;border:0;color:#2F5DB0}
+.cover p{font-size:13px;color:#3B3024;margin:4px 0}.cover .small{margin-top:30px;font-size:10px;color:#7A6A52}
 .toc{font-size:10px;page-break-after:always}.toc h2{border:0}
 .toc>ol>li{margin-top:6px;font-weight:bold}.toc ul{font-weight:normal;columns:2;margin:2px 0 0}
-.toc a{color:#9ec1ff}
+.toc a{color:#2F5DB0}
 
 /* ---------- colour system ---------- */
-h1{color:#ff9ecb;border-bottom:0;padding-bottom:8px;background:linear-gradient(90deg,#ff9ecb,#6fe3ff,#7ee8a1) bottom/100% 3px no-repeat}
-h2{color:#6fe3ff;border-top:0;border-left:5px solid #6fe3ff;padding:6px 10px;background:linear-gradient(90deg,rgba(111,227,255,.13),rgba(111,227,255,0));border-radius:4px}
-strong{color:#f2cd78}
-code{background:#24144a;color:#ffa8e0}
-.k{--c:#c9cbe8}
+h1{color:#B8326F;border-bottom:0;padding-bottom:8px;background:linear-gradient(90deg,#B8326F,#0B6E8A,#2E7D3A) bottom/100% 3px no-repeat}
+h2{color:#0B6E8A;border-top:0;border-left:5px solid #0B6E8A;padding:6px 10px;background:linear-gradient(90deg,rgba(11,110,138,.10),rgba(11,110,138,0));border-radius:4px}
+strong{color:#6B4400}
+code{background:#EAD8B2;color:#9C2A6E}
+.k{--c:#3B3024}
 h3.k,h4.k{color:var(--c);border-left:3px solid var(--c);padding-left:8px}
 p.lab>strong:first-child{color:var(--c);display:inline-block;background:color-mix(in srgb,var(--c) 16%,transparent);border:1px solid color-mix(in srgb,var(--c) 45%,transparent);border-radius:4px;padding:0 6px;margin-right:3px}
-.box{background:color-mix(in srgb,var(--c) 10%,#0A0026);border:1px solid color-mix(in srgb,var(--c) 40%,transparent);border-left:4px solid var(--c);border-radius:6px;padding:8px 12px;margin:10px 0}
+.box{background:color-mix(in srgb,var(--c) 10%,#FBF0D9);border:1px solid color-mix(in srgb,var(--c) 40%,transparent);border-left:4px solid var(--c);border-radius:6px;padding:8px 12px;margin:10px 0}
 .box>strong:first-child{color:var(--c)}
-blockquote.box{color:#c9d0f2}
-.what{--c:#7ee8a1}.analogy{--c:#7ee8a1}.problem{--c:#ff8a80}.how{--c:#6fc8ff}.walk{--c:#6fc8ff}
-.trade{--c:#ffc56b}.gain{--c:#7ee8a1}.pay{--c:#ff8a80}.whennot{--c:#ffc56b}.real{--c:#c3a6ff}
-.interview{--c:#ff8fd0}.mistake{--c:#ff6b6b}.self{--c:#5ee6d0}.tldr{--c:#ffd84d}.related{--c:#9fb0d8}
-.stage{--c:#ffab5e}.intro{--c:#9ec1ff}
+blockquote.box{color:#3B3024}
+.what{--c:#2E7D3A}.analogy{--c:#2E7D3A}.problem{--c:#C0392B}.how{--c:#1F6FB2}.walk{--c:#1F6FB2}
+.trade{--c:#8A5600}.gain{--c:#2E7D3A}.pay{--c:#C0392B}.whennot{--c:#8A5600}.real{--c:#6B3FB0}
+.interview{--c:#B02E86}.mistake{--c:#C62828}.self{--c:#0B6B5E}.tldr{--c:#6E5700}.related{--c:#4F5F80}
+.stage{--c:#9A4F00}.intro{--c:#2F5DB0}
 ul.box,ol.box{padding:8px 12px 8px 30px}
 p.lab{page-break-after:avoid;break-after:avoid}
 [data-sec] li>strong:first-child{color:var(--c)}
@@ -132,22 +132,22 @@ p.lab{page-break-after:avoid;break-after:avoid}
 .legend{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}.legend span{border:1px solid var(--c);color:var(--c);border-radius:10px;padding:1px 8px;font-size:9px}
 
 /* ---------- colourful code (syntax highlighting) ---------- */
-pre.hl{background:#0d0a2e;border:1px solid #2c2566;border-left:4px solid #c792ea;border-radius:8px}
-pre.hl code.hljs{color:#cdd6f4;background:none}
-.hljs-comment,.hljs-quote{color:#7f86b3;font-style:italic}
-.hljs-keyword,.hljs-selector-tag,.hljs-doctag{color:#f472d0;font-weight:bold}
-.hljs-string,.hljs-regexp,.hljs-addition{color:#c3e88d}
-.hljs-number,.hljs-literal{color:#f78c6c}
-.hljs-title,.hljs-title.function_,.hljs-section{color:#82aaff}
-.hljs-title.class_,.hljs-type,.hljs-class .hljs-title{color:#ffcb6b}
-.hljs-built_in,.hljs-symbol{color:#89ddff}
-.hljs-meta,.hljs-meta .hljs-keyword{color:#ff9ecb}
-.hljs-attr,.hljs-attribute,.hljs-variable,.hljs-template-variable,.hljs-property{color:#f07178}
-.hljs-params{color:#e0c9ff}
-.hljs-operator,.hljs-punctuation{color:#9fb4ff}
-.hljs-deletion{color:#ff6b6b}
+pre.hl{background:#F3E5C6;border:1px solid #D6C29A;border-left:4px solid #8E5BC7;border-radius:8px}
+pre.hl code.hljs{color:#2E261C;background:none}
+.hljs-comment,.hljs-quote{color:#7A7060;font-style:italic}
+.hljs-keyword,.hljs-selector-tag,.hljs-doctag{color:#A0237A;font-weight:bold}
+.hljs-string,.hljs-regexp,.hljs-addition{color:#2F7D32}
+.hljs-number,.hljs-literal{color:#B5541B}
+.hljs-title,.hljs-title.function_,.hljs-section{color:#1F5FAF}
+.hljs-title.class_,.hljs-type,.hljs-class .hljs-title{color:#8A5A00}
+.hljs-built_in,.hljs-symbol{color:#0B7285}
+.hljs-meta,.hljs-meta .hljs-keyword{color:#B8326F}
+.hljs-attr,.hljs-attribute,.hljs-variable,.hljs-template-variable,.hljs-property{color:#B23A48}
+.hljs-params{color:#5B3D8F}
+.hljs-operator,.hljs-punctuation{color:#5A6FA8}
+.hljs-deletion{color:#C62828}
 .hljs-emphasis{font-style:italic}.hljs-strong{font-weight:bold}
-code.lang-plain,code.lang-output,code.lang-text{color:#b8f2c9}
+code.lang-plain,code.lang-output,code.lang-text{color:#2F5E3A}
 `;
 
 const html = `<!doctype html><html><head><meta charset="utf-8"><title>${path.basename(outPdf, '.pdf')}</title><style>${CSS}</style></head><body>
@@ -192,7 +192,7 @@ ${cover}${body}
 </script>
 <script>${mermaidJs}</script>
 <script>
-mermaid.initialize({ startOnLoad:false, theme:'dark', themeVariables:{ background:'#0f0a33', primaryColor:'#1c1650', primaryTextColor:'#d4daf7', primaryBorderColor:'#6c8cff', lineColor:'#9fb4ff', secondaryColor:'#2a1f5e', tertiaryColor:'#141040', noteBkgColor:'#2a2360', noteTextColor:'#d4daf7', actorBkg:'#1c1650', actorTextColor:'#d4daf7', signalColor:'#c9d6ff', signalTextColor:'#bfc8ee' }, securityLevel:'loose', fontFamily:'Monaco, monospace', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
+mermaid.initialize({ startOnLoad:false, theme:'base', themeVariables:{ background:'#F3E5C6', primaryColor:'#EAD8B2', primaryTextColor:'#2E261C', primaryBorderColor:'#3A5BC7', lineColor:'#5A6FA8', secondaryColor:'#EAD8B2', tertiaryColor:'#F6EAD0', noteBkgColor:'#D6C29A', noteTextColor:'#2E261C', actorBkg:'#EAD8B2', actorTextColor:'#2E261C', signalColor:'#3B3024', signalTextColor:'#2E261C' }, securityLevel:'loose', fontFamily:'Monaco, monospace', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
 window.__errors = [];
 (async () => {
   const els = [...document.querySelectorAll('pre.mermaid')];
@@ -207,7 +207,7 @@ window.__errors = [];
   }
 
   // colourful diagrams: give each node/actor its own colour
-  const PAL=[['#1e3a5f','#6fb8ff'],['#3b2360','#c792ea'],['#1f4d3a','#7ee8a1'],['#5a2d3c','#ff8fa3'],['#4a3b12','#ffcb6b'],['#123f4f','#5ee6d0'],['#4a2a14','#ffab5e']];
+  const PAL=[['#DCE8F7','#3E7CC4'],['#EBDDF7','#8E5BC7'],['#DDF0E2','#2E7D3A'],['#F7DDE3','#C24A63'],['#F6E7B8','#8A5A00'],['#D5EEF2','#0B6B5E'],['#F7E0CC','#9A4F00']];
   document.querySelectorAll('figure.diagram svg').forEach(svg=>{
     let i=0;
     svg.querySelectorAll('g.node, g.classGroup').forEach(g=>{
@@ -215,15 +215,15 @@ window.__errors = [];
       g.querySelectorAll(':scope > rect, :scope > polygon, :scope > circle, :scope > ellipse, :scope > path.basic, :scope > path.label-container, :scope > g > rect, :scope > g > path').forEach(sh=>{
         if(sh.closest('.label')) return; sh.style.fill=f; sh.style.stroke=st; sh.style.strokeWidth='1.5px';
       });
-      g.querySelectorAll('.nodeLabel, text, span').forEach(t=>{t.style.color='#f0f2ff'; if(t.tagName==='text') t.style.fill='#f0f2ff';});
+      g.querySelectorAll('.nodeLabel, text, span').forEach(t=>{t.style.color='#1C1712'; if(t.tagName==='text') t.style.fill='#1C1712';});
     });
     const actors={};
     svg.querySelectorAll('rect.actor').forEach(r=>{
       const name=(r.parentNode.textContent||'').trim(); if(!(name in actors)) actors[name]=Object.keys(actors).length;
       const [f,st]=PAL[actors[name]%PAL.length]; r.style.fill=f; r.style.stroke=st; r.style.strokeWidth='1.5px';
     });
-    svg.querySelectorAll('rect.note').forEach(r=>{r.style.fill='#4a3b12'; r.style.stroke='#ffcb6b';});
-    svg.querySelectorAll('.flowchart-link, path.relation, .messageLine0, .messageLine1, .transition').forEach(e=>{e.style.stroke='#9fb4ff';});
+    svg.querySelectorAll('rect.note').forEach(r=>{r.style.fill='#F6E7B8'; r.style.stroke='#8A5A00';});
+    svg.querySelectorAll('.flowchart-link, path.relation, .messageLine0, .messageLine1, .transition').forEach(e=>{e.style.stroke='#5A6FA8';});
   });
   await Promise.all([...document.images].map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; })));
   window.__done = els.length;
@@ -239,9 +239,9 @@ try {
   await page.waitForFunction('window.__done !== undefined', { timeout: 600000 });
   const errors = await page.evaluate(() => window.__errors);
   const imgs = await page.evaluate(() => [...document.images].map(i => [i.naturalWidth > 0, i.alt]));
-  const band = (inner, h) => `<style>html,body{margin:0;padding:0}#header,#footer{padding:0!important}</style><div style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#0A0026;width:100%;height:${h};margin:0;display:flex;align-items:center;justify-content:center;font-family:Monaco,monospace;font-size:7px;color:#8f93c4">${inner}</div>`;
+  const band = (inner, h) => `<style>html,body{margin:0;padding:0}#header,#footer{padding:0!important}</style><div style="-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#FBF0D9;width:100%;height:${h};margin:0;display:flex;align-items:center;justify-content:center;font-family:Monaco,monospace;font-size:7px;color:#7A6A52">${inner}</div>`;
   await page.pdf({
-    path: outPdf, format: 'A4', printBackground: true, displayHeaderFooter: true,
+    path: outPdf, timeout: 0, format: 'A4', printBackground: true, displayHeaderFooter: true,
     headerTemplate: band('', '14mm'),
     footerTemplate: band(`${path.basename(outPdf, '.pdf')} · <span class="pageNumber"></span>/<span class="totalPages"></span>`, '15mm'),
     margin: { top: '14mm', bottom: '15mm', left: '0', right: '0' },
