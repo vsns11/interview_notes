@@ -15,6 +15,8 @@ A **capstone** is a project big enough to pull together several chapters at once
 5. Only then try the **stretch goals**.
 6. Finish by answering *In the interview* out loud, without looking.
 
+**Using these projects in interviews.** Each *In the interview* section is built to be spoken. Lead with the 30-second answer: what you built, the key design decision, the hardest problem and one concrete number. Know every term in *Key terms to know* well enough to explain it in one plain sentence, because interviewers probe whatever word you use. Practise the questions out loud until you need no notes, and quote your own numbers from the build — dataset size, metric with its spread across folds, p95 latency, how many tests you wrote. Be ready for the two follow-ups almost every ML interview brings: "what would you change at 10x?" and "what breaks first?".
+
 **Colour coding.** In the PDF the recurring sections have their own colour so you can skim: the framing sections (*What it is*, *The problem it solves*, *Real-world examples*), the design sections (*Requirements*, *The architecture*), the *Deep dive*, the *Trade-offs*, *In the interview*, *Self-check* and *TL;DR* each stand out. Use the colours to jump straight to the part you need when you revisit a project.
 
 **Levels.**
@@ -174,14 +176,60 @@ flowchart TD
 - [Ch 6 — Evaluation and Tuning](../chapters/06-evaluation-and-tuning/README.md): baselines, RMSE vs MAE, cross-validation.
 
 ### In the interview
+**30-second answer:** I built a house-price model on the Ames data that goes from raw CSV to a test score in under a minute. The key decision was to predict `log1p(price)` inside a single scikit-learn `Pipeline`, so errors are relative and no preprocessing statistic ever sees the test rows. The hardest part was the data itself: many "NA" values mean "no garage" rather than "unknown", so I encoded them as a real "None" category instead of imputing. Ridge and gradient boosting both clearly beat the median baseline under 5-fold CV, and I scored the held-out 20% exactly once.
+
+**Key terms to know:**
+- **Regression** — predicting a number (here the sale price) rather than a class.
+- **Baseline** — the dumbest sensible model ("always predict the median"); every real model must beat it.
+- **RMSE vs MAE** — root mean squared error punishes big misses more; mean absolute error is the typical miss in dollars. I report RMSE on log price and MAE in dollars.
+- **Log transform of the target** — fitting `log1p(price)` turns a right-skewed target into a roughly symmetric one and makes errors proportional.
+- **Ridge / Lasso (L2 / L1 regularisation)** — penalties on coefficient size; Ridge shrinks all, Lasso can set some exactly to zero. Alpha is chosen by inner CV.
+- **Pipeline and ColumnTransformer** — scikit-learn objects that chain imputation, encoding, scaling and the model so all of it is re-fitted inside every CV fold.
+- **Data leakage** — information from the test set or the target sneaking into training, giving scores that do not repeat.
+- **One-hot encoding** — turning a category like `Neighborhood` into 0/1 columns.
+- **k-fold cross-validation** — train on k−1 parts, score on the held-out part, rotate, and average.
+- **Distribution shift** — the model learned Ames 2006–2010; another city or decade is a different distribution.
+
 **Q:** Why model the log of the price?
-**A:** Prices are right-skewed and errors scale with price. On the log scale, residuals are more symmetric, linear models fit better and the metric penalises relative error, so a mansion does not dominate the loss.
+
+**A:** Prices are right-skewed and the size of errors grows with the price. On the log scale residuals are more symmetric, linear models fit better, and the metric measures relative error, so one mansion does not dominate the loss. Remember to invert with `expm1` and note that the back-transformed prediction estimates the median rather than the mean price.
 
 **Q:** Ridge or Lasso?
-**A:** Ridge shrinks all coefficients and handles correlated features gracefully. Lasso can zero out features, which helps when you suspect many are useless. ElasticNet mixes the two. Choose by cross-validation.
+
+**A:** Ridge shrinks all coefficients and handles correlated features (garage cars vs garage area) gracefully by sharing weight between them. Lasso can set coefficients to exactly zero, which helps when you suspect many features are useless, but among correlated features it picks one somewhat arbitrarily. ElasticNet mixes the two. Choose by cross-validation, and scale features first, because the penalty depends on units.
 
 **Q:** Your CV RMSE is great but the test RMSE is much worse. What happened?
-**A:** Usually leakage (preprocessing fitted on all data, or a feature computed using the target), or the test set differs from training. Check that every step lives inside the pipeline and compare feature distributions.
+
+**A:** Usually leakage — preprocessing fitted on all the data, or a feature computed using the target — or the test set differs from training. Check that every step lives inside the pipeline that is passed to `cross_val_score`, and compare feature distributions between train and test. Also remember CV has variance on 2,000 rows, so look at the fold standard deviation before panicking.
+
+**Q:** What is the bias–variance trade-off, and where do you see it here?
+
+**A:** Bias is error from a model too simple to capture the pattern; variance is error from a model so flexible it fits noise. Plain linear regression with hundreds of one-hot columns has high variance, and Ridge adds a little bias to cut variance a lot. Raising alpha moves you toward bias; a deep tree moves you toward variance.
+
+**Q:** Why not just fill every missing value with the column mean?
+
+**A:** In Ames many "NA" values are informative: `PoolQC = NA` means "no pool". Mean or mode imputation invents pools and basements that do not exist. I map those to an explicit "None" category and set the matching area to 0, and only impute true unknowns, inside the pipeline.
+
+**Q:** How do you prove the pipeline does not leak?
+
+**A:** A shuffle test: permute the target and re-run CV. A leak-free pipeline should score about the same as the baseline. I also unit-test the custom transformer on a three-row frame and assert no NaNs come out of preprocessing.
+
+**Q:** Which features drive price, and can you say they cause it?
+
+**A:** Overall quality, living area, basement size and garage size usually dominate the coefficients or permutation importances. They are associations, not causes: correlated features share credit unpredictably, and coefficients are only comparable after scaling. To make causal claims you would need an experiment or a causal design.
+
+**Q:** What changes at 100x the data, or in production?
+
+**A:** With 300,000 sales, CV variance shrinks and a single validation split is usually enough, while gradient boosting gains more room to beat linear models. In production the first thing to break is shift: prices move with interest rates, so you would retrain on a rolling window, validate on the most recent months, and monitor error by neighbourhood.
+
+**Q:** How would you give an uncertainty range instead of one number?
+
+**A:** Train quantile models (gradient boosting with `loss="quantile"` at 0.1 and 0.9) to get an 80% interval, then check on held-out data that about 80% of true prices fall inside it.
+
+**Common mistakes in answers:**
+- Saying "I scaled and imputed the data, then ran cross-validation" — preprocessing outside the CV loop is exactly the leak; it must be inside the pipeline.
+- Reporting RMSE in log units as if it were dollars. Say which scale each metric is on.
+- Reading a Lasso coefficient of zero as "this feature does not matter" — it may just be correlated with a feature Lasso kept.
 
 ### TL;DR
 Predict a skewed number honestly: log the target, wrap every preprocessing step in one pipeline, beat a dumb baseline under cross-validation, and touch the test set exactly once.
@@ -282,14 +330,59 @@ flowchart TD
 - [Ch 7 — Decision Trees and Ensembles](../chapters/07-trees-and-ensembles/README.md): random forests and boosting on small tabular data.
 
 ### In the interview
+**30-second answer:** I built a Titanic survival classifier where the point was an honest score, not a leaderboard rank. All feature engineering (title, family size, age imputed by title) lives in custom scikit-learn transformers, and model selection runs in nested, stratified cross-validation, so tuning never sees the folds that measure it. The hardest lesson was group leakage: families on the same ticket survived together, and splitting with `GroupKFold` on ticket dropped my score by a couple of points. The final outer-CV mean was within about two points of the Kaggle score, and I report mean ± std over folds.
+
+**Key terms to know:**
+- **Binary classification** — two possible answers, survived or not.
+- **Stratified k-fold** — folds that each keep the overall survival rate (about 38%).
+- **Nested cross-validation** — an inner CV loop tunes hyperparameters, an outer loop scores the whole tune-and-train procedure.
+- **Custom transformer** — a class with `fit` and `transform` so statistics like median age by title are learned only from the training fold.
+- **Group leakage** — related rows (a family) landing on both sides of a split; `GroupKFold` keeps groups together.
+- **Accuracy vs ROC AUC** — accuracy depends on the 0.5 threshold; AUC is the probability a random survivor is ranked above a random non-survivor.
+- **Confusion matrix** — counts of true/false positives and negatives.
+- **Learning curve** — score vs training-set size, used to decide if more data or a simpler model would help.
+- **Missing-indicator flag** — a 0/1 column that records "age was missing", because missingness itself can carry signal.
+
 **Q:** What is nested cross-validation and when do you need it?
-**A:** An inner CV chooses hyperparameters and an outer CV scores the whole choose-and-train procedure. You need it when data is small and you want an unbiased estimate after tuning.
+
+**A:** An inner CV chooses hyperparameters and an outer CV scores the whole choose-and-train procedure on folds the search never saw. You need it when data is small and you want an unbiased estimate after tuning. In scikit-learn it is a `GridSearchCV` passed into `cross_validate`.
 
 **Q:** Why stratify?
-**A:** So every fold has the same class balance as the full data. Without it, a fold can by chance have very few positives and its score swings wildly.
+
+**A:** So every fold has the same class balance as the full data. Without it a fold can by chance have very few survivors and its score swings wildly, which inflates the variance of your estimate.
 
 **Q:** How would leakage show up here?
-**A:** Imputing age with the global median before splitting, or letting family members appear on both sides of a split. The symptom is a CV score that the hidden test set does not reproduce.
+
+**A:** Imputing age with the global median before splitting, or letting family members appear on both sides of a split. The symptom is a CV score that the hidden test set does not reproduce. The fix is fitting every transformer inside the folds and trying group-aware splits.
+
+**Q:** Why is the non-nested CV score optimistic?
+
+**A:** If you try 50 hyperparameter settings and report the best CV score, part of that score is luck — you selected the configuration whose noise happened to help. On 891 rows that luck is worth a point or more. Nested CV measures performance on data the selection never touched.
+
+**Q:** Logistic regression scored 0.82 and random forest 0.83. Which is better?
+
+**A:** Probably neither; one outer fold is about 178 people, so one passenger is about 0.6 points. Look at the fold standard deviations, or use repeated stratified CV and compare per-fold paired differences. If the gap is within noise, prefer the simpler, more interpretable logistic regression.
+
+**Q:** Why does the "women survive, men die" baseline matter?
+
+**A:** It scores about 79% accuracy with no learning at all. Any model must clearly beat it, and it tells you that sex (and the title derived from the name) carries most of the signal, so gains from extra features will be small.
+
+**Q:** How do you debug a feature transformer that leaks?
+
+**A:** Fit it on fold A, then on fold B, and assert its learned statistics match fold B alone. Then run a shuffled-label test: accuracy should collapse to the majority-class rate (about 62%). If it stays high, information is flowing from labels into features.
+
+**Q:** Does this protocol scale to a million rows?
+
+**A:** Nested CV multiplies training cost by inner × outer folds, so it gets expensive. With a million rows, estimate variance is small and a single train/validation/test split is usually enough, while group or time-aware splitting still matters.
+
+**Q:** When is accuracy the wrong metric?
+
+**A:** When classes are imbalanced or errors have different costs. Here classes are only mildly imbalanced, so accuracy is acceptable, but I also report ROC AUC and the confusion matrix, which show what kind of mistakes the model makes.
+
+**Common mistakes in answers:**
+- "I used GridSearchCV, so my best_score_ is unbiased" — it is the score of the selected winner, which is optimistically biased.
+- Treating a 0.5-point leaderboard gain as real when fold-to-fold noise is several points.
+- Doing feature engineering in pandas on the full train file before CV and calling the pipeline leak-free.
 
 ### TL;DR
 On small data the protocol matters more than the model: stratified, nested, leak-free cross-validation gives a number you can trust, and a strong simple baseline keeps you honest.
@@ -388,14 +481,60 @@ flowchart TD
 - [Ch 6 — Evaluation and Tuning](../chapters/06-evaluation-and-tuning/README.md): precision, recall, PR curves, thresholds.
 
 ### In the interview
+**30-second answer:** I built an SMS spam filter with bag-of-words features and multinomial Naive Bayes, compared against logistic regression and a linear SVM. The key decision was treating it as an asymmetric-cost problem: I picked the threshold on a validation split so that at most 1% of legitimate messages get flagged, then maximised spam recall under that cap. The tricky part was that 13% spam makes accuracy meaningless, so I compared variants by PR AUC. The model is a 2 × V table of word log-probabilities, classifies in well under 5 ms, and explains each decision with its top spammy words.
+
+**Key terms to know:**
+- **Multinomial Naive Bayes** — applies Bayes' rule assuming each word contributes independently given the class; the model is class priors plus per-word log-likelihoods.
+- **Laplace (additive) smoothing** — add a pseudo-count (alpha) to every word so unseen words never give zero probability.
+- **Bag of words / CountVectorizer** — represent a message by word counts, ignoring order; vocabulary learned from training data only.
+- **TF-IDF** — term frequency times inverse document frequency, down-weights words that appear in most messages.
+- **Character n-grams** — overlapping 3–5 character pieces that survive misspellings like "fr33".
+- **Precision, recall, PR AUC** — of flagged messages how many are spam, of spam how many are caught, and the area under that curve.
+- **False-positive rate** — share of ham wrongly flagged; the business constraint here.
+- **Decision threshold** — the probability cut-off for "spam", chosen on validation from costs.
+- **Generative vs discriminative model** — NB models how text is generated per class; logistic regression models the decision boundary directly.
+- **Calibration** — whether "0.9 spam" really means 90%; NB is typically over-confident.
+
 **Q:** Why does Naive Bayes work despite its false assumption?
-**A:** Classification only needs the correct class to score highest. The independence assumption distorts the probabilities but often preserves the ranking, and with few parameters it needs little data.
+
+**A:** Classification only needs the correct class to score highest. The independence assumption distorts the probabilities (they are pushed toward 0 and 1) but often preserves the ranking, and with few parameters it needs little data and trains in one pass.
 
 **Q:** What is Laplace smoothing for?
-**A:** Without it, a word never seen in spam gets probability zero and wipes out the whole product. Adding a pseudo-count keeps every probability positive.
+
+**A:** Without it, a word never seen in spam gets probability zero and wipes out the whole product for that class. Adding a pseudo-count to every word keeps every probability positive. The `alpha` value is a hyperparameter you can tune by CV.
 
 **Q:** How do you set the threshold?
-**A:** From business cost: decide the maximum tolerable rate of legitimate messages blocked, then choose the threshold on a validation set that meets it with the highest recall.
+
+**A:** From business cost: decide the maximum tolerable rate of legitimate messages blocked, then choose the threshold on a validation set that meets it with the highest recall. Report recall and FPR at that threshold on the untouched test set.
+
+**Q:** Why work in log probabilities?
+
+**A:** Multiplying hundreds of small probabilities underflows to zero in floating point. Summing logs gives the same ranking without underflow, and it turns the model into a linear function of word counts — which is why NB is a linear classifier.
+
+**Q:** Why is accuracy misleading here, and what do you report instead?
+
+**A:** With 13% spam, predicting "ham" for everything is 87% accurate and useless. I report precision, recall and F1 for the spam class, PR AUC to compare models across thresholds, and FPR at the chosen operating point.
+
+**Q:** Naive Bayes or logistic regression?
+
+**A:** NB trains instantly, needs little data and supports incremental updates with `partial_fit`, which suits user-feedback loops. Logistic regression usually wins slightly on accuracy with enough data and gives better-calibrated probabilities. I keep whichever wins on validation PR AUC unless latency or online updates decide it.
+
+**Q:** Spammers start writing "FR€E" and sending links. What breaks and what do you do?
+
+**A:** Word features miss new spellings, so recall drops — this is adversarial drift. Character n-grams, features like "contains a URL" or "long digit run", regular retraining on fresh user reports, and monitoring the flag rate all help.
+
+**Q:** What happens with a word the model has never seen?
+
+**A:** The vectorizer simply has no column for it, so it is ignored rather than raising an error. I have a unit test for exactly that, because a crash on unknown input would take the filter down.
+
+**Q:** What changes at email scale (billions of messages a day)?
+
+**A:** Vocabulary size explodes, so you use the hashing trick (`HashingVectorizer`) to keep memory fixed, add sender reputation and URL features, and update online. Labels come from user "report spam" clicks, which are noisy and delayed, so you also sample messages for human review.
+
+**Common mistakes in answers:**
+- Quoting 97% accuracy as success on a 13%-positive problem.
+- Tuning the threshold on the test set; it must be chosen on validation and confirmed once on test.
+- Saying NB's probabilities are reliable; they are over-confident and need calibration before display.
 
 ### TL;DR
 Bag-of-words plus Naive Bayes is a fast, strong text baseline. The real work is choosing the right metric for an imbalanced, asymmetric-cost problem and setting the threshold deliberately.
@@ -518,14 +657,59 @@ erDiagram
 - [Ch 9 — Unsupervised Learning](../chapters/09-unsupervised-learning/README.md): k-means, elbow, silhouette, Gaussian mixtures, PCA, evaluation without labels.
 
 ### In the interview
+**30-second answer:** I segmented about 4,300 customers of a UK online retailer by recency, frequency and monetary value, then clustered with k-means. The key decision was log-transforming and standardising RFM before clustering, because k-means uses Euclidean distance and unscaled spend would decide everything. The hard part was that there is no ground truth, so I chose k from elbow, silhouette, seed stability (adjusted Rand index above 0.9) and whether marketing could act on each segment. The output is four named segments, such as "loyal big spenders" and "lapsed one-timers", written to PostgreSQL with an assignment timestamp.
+
+**Key terms to know:**
+- **Unsupervised learning** — finding structure without labels.
+- **RFM** — recency (days since last order), frequency (number of orders), monetary (total spend), computed per customer at a fixed snapshot date.
+- **k-means** — places k centroids and assigns each point to the nearest, minimising within-cluster squared distance (inertia).
+- **Feature scaling** — log-transform skewed columns, then standardise, so no feature dominates the distance.
+- **Elbow method** — plot inertia against k and look for where gains flatten.
+- **Silhouette score** — how much closer a point is to its own cluster than to the next one, from −1 to 1.
+- **Gaussian mixture model** — soft, elliptical clusters with membership probabilities; a comparison model here.
+- **Adjusted Rand index** — agreement between two clusterings corrected for chance; my stability test.
+- **PCA** — projects the features to two dimensions for plotting.
+
 **Q:** How do you choose k?
-**A:** Elbow and silhouette for guidance, stability across seeds, then business usefulness. If the business can only run three campaigns, nine segments are not useful.
+
+**A:** Elbow and silhouette for guidance, stability across seeds and bootstrap samples, then business usefulness. If the business can only run three campaigns, nine segments are not useful. I pick the smallest k whose segments are distinct and actionable.
 
 **Q:** Why scale before k-means?
-**A:** Because it uses distances. An unscaled large-range feature dominates, so clusters reflect units, not behaviour.
+
+**A:** Because it uses distances. An unscaled large-range feature such as spend in pounds dominates, so clusters reflect units, not behaviour. I log-transform the skewed columns first, because standardising alone does not fix a long tail.
 
 **Q:** How would you check segments are valuable?
-**A:** Use them: target one segment with an offer in a randomised test and compare response against a control group.
+
+**A:** Use them: target one segment with an offer in a randomised test and compare its response against a held-out control group from the same segment. Clusters are descriptive; only an experiment shows that acting on them pays.
+
+**Q:** What are k-means' assumptions, and when does it fail?
+
+**A:** It assumes roughly spherical, similarly sized clusters and is sensitive to outliers, because the mean is pulled by extremes. A few wholesale buyers can form their own cluster or drag a centroid. Capping outliers, handling them as a rule-based segment, or switching to a Gaussian mixture or DBSCAN helps.
+
+**Q:** Why can two runs give different clusters?
+
+**A:** k-means converges to a local optimum that depends on the starting centroids. scikit-learn uses k-means++ initialisation and `n_init` restarts, keeping the lowest-inertia run. If assignments still change a lot across seeds, the structure is weak.
+
+**Q:** What cleaning mattered most?
+
+**A:** Removing cancellations (invoice numbers starting with "C"), rows with no customer ID and non-positive quantities. Without that, some customers have negative spend and the monetary feature becomes nonsense. I record how many rows each rule removed.
+
+**Q:** What is the time complexity, and what changes at 100 million customers?
+
+**A:** Each k-means iteration is O(n·k·d), linear in rows. At 100 million customers you use `MiniBatchKMeans` or a distributed implementation, fit on a sample and assign everyone else to the nearest centroid, which is cheap.
+
+**Q:** How do you test the RFM step?
+
+**A:** A five-transaction hand-made table with known R, F and M. I also assert recency uses a fixed snapshot date, not "now", so results are reproducible, and that every customer gets exactly one segment.
+
+**Q:** Segments go stale. How do you handle that in production?
+
+**A:** Re-run monthly with the same scaler fitted on the new snapshot, map new clusters to old names by matching centroids, and track how many customers moved. A sudden large movement signals either a real behaviour change or a data problem.
+
+**Common mistakes in answers:**
+- Claiming the elbow plot "gives" the right k; it rarely has a sharp elbow and k is a judgement.
+- Saying "big spenders respond to offers" as a finding; that is a hypothesis for an A/B test.
+- Standardising without log-transforming, so a handful of heavy buyers still shape every cluster.
 
 ### TL;DR
 RFM features, log-scaled, clustered with k-means give marketers named, actionable segments — but scaling, outliers and the choice of k are judgements you must justify.
@@ -624,14 +808,69 @@ flowchart TD
 - [Ch 11 — CNNs and Computer Vision](../chapters/11-cnns-and-computer-vision/README.md): convolution, pooling, a small CNN, augmentation.
 
 ### In the interview
+**30-second answer:** I built a handwritten-digit recogniser in PyTorch, going from logistic regression to an MLP to a small CNN, and served it behind a browser canvas. The CNN reaches over 99% test accuracy with far fewer parameters than the MLP, because convolutions share weights and pooling tolerates small shifts. The hardest problem was train/serve skew: my canvas digits were black-on-white and off-centre, so I reproduced MNIST's preprocessing — invert, crop, resize to 20 × 20, centre by mass in 28 × 28 — before predicting. Inference is a few milliseconds per image on CPU.
+
+**Key terms to know:**
+- **MLP** — layers of fully connected neurons; treats each pixel as an independent input.
+- **CNN (convolution, pooling)** — small learned filters slid over the image share weights across positions; pooling downsamples and adds shift tolerance.
+- **Logits and softmax** — raw scores per class and the function that turns them into probabilities.
+- **Cross-entropy loss** — the negative log probability of the correct class; `nn.CrossEntropyLoss` takes logits, not softmax output.
+- **Backpropagation and Adam** — computing gradients of the loss and the adaptive optimiser that applies them.
+- **Mini-batch / DataLoader** — shuffled batches (for example 128 images) giving cheap, noisy gradient estimates.
+- **Overfitting, dropout, early stopping** — memorising training data, and two ways to fight it.
+- **`model.eval()` / `model.train()`** — switch dropout and batch norm between training and inference behaviour.
+- **Train/serve skew** — inputs at serving time processed differently from training data.
+- **Validation split** — 5,000 training images held out for checkpointing; the test set is used once.
+
 **Q:** Why does a CNN beat an MLP on images?
-**A:** Local connectivity and weight sharing exploit the fact that nearby pixels are related and patterns can appear anywhere. That means far fewer parameters and built-in tolerance to small shifts.
+
+**A:** Local connectivity and weight sharing exploit the fact that nearby pixels are related and the same stroke can appear anywhere. That means far fewer parameters and built-in tolerance to small shifts, so it generalises better from the same data.
 
 **Q:** Your model is 99% accurate on the test set but fails on user drawings. Why?
-**A:** Train/serve skew: the user input is preprocessed differently from training data. Apply exactly the same normalisation, centring and scaling at serving time.
+
+**A:** Train/serve skew: the user input is preprocessed differently from training data. Apply exactly the same inversion, cropping, scaling, centring and normalisation at serving time, and add a test that an MNIST image passes through the serving preprocessing nearly unchanged.
 
 **Q:** How do you know your training loop is correct?
-**A:** Overfit a single small batch to near-zero loss. Then check that train and validation curves behave sensibly.
+
+**A:** Overfit a single small batch to near-zero loss; if it cannot, the loop or the model is broken. Then check that train and validation loss curves behave sensibly and that a shape test passes for each layer.
+
+**Q:** Show the core of a PyTorch training step.
+
+**A:** The order matters: clear old gradients, forward, loss, backward, step.
+```python
+model.train()
+for x, y in loader:
+    opt.zero_grad()
+    loss = F.cross_entropy(model(x), y)
+    loss.backward()
+    opt.step()
+```
+Forgetting `zero_grad()` accumulates gradients across batches, a classic silent bug.
+
+**Q:** Why do you not apply softmax before `CrossEntropyLoss`?
+
+**A:** `nn.CrossEntropyLoss` already combines log-softmax and negative log-likelihood in a numerically stable way. Applying softmax first squashes the logits twice, which weakens gradients and slows learning.
+
+**Q:** How do you detect and fix overfitting here?
+
+**A:** Training loss keeps falling while validation loss rises. Fixes are dropout, data augmentation (small rotations and shifts), weight decay and early stopping on validation loss, keeping the checkpoint with the best validation score.
+
+**Q:** What happens if a user draws a letter "A"?
+
+**A:** Softmax always picks one of the ten digits, often with high confidence. A simple guard is a minimum top-probability or entropy threshold that returns "not a digit"; a better one trains with an explicit "other" class or out-of-distribution examples.
+
+**Q:** How would you serve 1,000 requests a second?
+
+**A:** The model is tiny, so CPU is fine. Run several workers, batch requests that arrive within a few milliseconds, export to ONNX or TorchScript, and wrap inference in `torch.inference_mode()`. The bottleneck is more likely JSON parsing and preprocessing than the CNN.
+
+**Q:** Why is MNIST a weak benchmark?
+
+**A:** Even simple models score above 97%, and past about 99.3% many remaining errors are ambiguous or mislabelled. Fashion-MNIST, same shape but harder, is a better test of whether architecture changes actually help.
+
+**Common mistakes in answers:**
+- Saying CNNs are "rotation invariant" — pooling gives some tolerance to small shifts, not rotation; augmentation is what helps with rotation.
+- Forgetting `model.eval()` at inference, so dropout makes predictions noisy.
+- Using the test set to pick the best epoch; that is the job of the validation split.
 
 ### TL;DR
 MNIST teaches the full deep-learning loop and the first lesson of production ML: a model is only as good as the match between training data and what it sees at serving time.
@@ -729,14 +968,60 @@ flowchart TD
 - [Ch 19 — Responsible ML](../chapters/19-responsible-ml/README.md): protected attributes and explanations for adverse decisions.
 
 ### In the interview
+**30-second answer:** I built a credit-default scorecard on 30,000 Taiwanese card holders: binned features, weight-of-evidence encoding, logistic regression, and a points table a loan officer can add up by hand. The key decision was transparency over a few AUC points — I measured that gradient boosting adds only a small gain over the scorecard on this data. The hardest part was making every bin's risk monotonic, merging noisy bins until more missed payments always cost points. I checked that the probabilities are calibrated with a reliability diagram and Brier score, and the summed points convert back to the model's probability exactly.
+
+**Key terms to know:**
+- **Logistic regression** — a linear model on the log-odds, passed through the sigmoid to give a probability.
+- **Scorecard / points** — coefficients rescaled to integer points, for example 600 points at 50:1 odds and +20 points each time the odds double.
+- **Binning** — grouping a numeric feature into a few ranges, learned on training data only.
+- **Weight of evidence (WoE)** — for each bin, the log of (share of good customers ÷ share of bad customers); puts every feature on the log-odds scale.
+- **Information value (IV)** — a summary of how much a binned feature separates good from bad; near-zero IV features are dropped.
+- **Monotonicity** — risk must move in one direction across a feature's bins where business logic expects it.
+- **Calibration, reliability diagram, Brier score** — whether predicted probabilities match observed rates, a plot of that, and the mean squared error of probabilities.
+- **ROC AUC (discrimination)** — how well the model ranks defaulters above non-defaulters.
+- **Population stability index (PSI)** — how much the score distribution has shifted between two periods.
+- **Reject inference** — the bias from only observing outcomes for applicants you approved.
+
 **Q:** Why would a bank prefer logistic regression to gradient boosting?
-**A:** Transparency, stable behaviour, monotonic and explainable effects, easy regulatory review and "reasons for decline". The accuracy gap is often small on tabular credit data.
+
+**A:** Transparency, stable behaviour, monotonic and explainable effects, easy regulatory review and simple "reasons for decline". The accuracy gap is often small on tabular credit data, and a model the risk committee cannot audit will not be approved.
 
 **Q:** What is weight of evidence?
-**A:** For each bin, the log of the share of good customers divided by the share of bad ones. It puts every feature on the log-odds scale and handles categories and outliers.
+
+**A:** For each bin, the log of the share of good customers in that bin divided by the share of bad ones. It puts every feature on the log-odds scale, handles categories and outliers naturally, and makes logistic-regression coefficients easy to read.
 
 **Q:** How do you check probabilities are trustworthy?
-**A:** A reliability diagram and Brier score on held-out data. Fix miscalibration with Platt scaling or isotonic regression.
+
+**A:** A reliability diagram and Brier score on held-out data, plus the observed default rate per predicted decile. Fix miscalibration with Platt scaling (a logistic fit on the scores) or isotonic regression (a monotone step function), fitted on a separate calibration split.
+
+**Q:** What is the difference between calibration and discrimination?
+
+**A:** Discrimination (AUC) asks whether defaulters get higher scores than payers. Calibration asks whether "20% risk" means one in five actually defaults. A model can rank perfectly yet be badly calibrated, and lending decisions use the probability directly in expected loss = probability × exposure × loss given default.
+
+**Q:** A WoE coefficient comes out with the wrong sign. What does that tell you?
+
+**A:** With WoE inputs every coefficient should share one sign and sit near magnitude 1. A flipped sign usually means collinearity — two features carry the same information and the model is splitting credit oddly. Drop or merge one of them rather than ship a scorecard that rewards risk.
+
+**Q:** Why force bins to be monotonic?
+
+**A:** Raw bins often zig-zag because of noise in small groups. A non-monotonic scorecard would say a customer with three missed payments is safer than one with two, which is indefensible to a regulator. Merging adjacent bins, with a minimum of about 5% of rows each, fixes both noise and logic.
+
+**Q:** What is reject inference and why does it matter?
+
+**A:** Real lenders only see repayment outcomes for applicants they approved, so the training data under-represents risky applicants and the model looks better than it is on the full population. This dataset has no such filter, but in practice you mitigate it with techniques like augmenting with rejected applicants or small randomised approvals.
+
+**Q:** How would you monitor the scorecard after launch?
+
+**A:** Track PSI of the score and of each feature monthly (above about 0.25 is usually treated as a significant shift), the approval rate, and the actual default rate by score band once outcomes mature. An economic downturn shifts default rates, so recalibrating the intercept is often the first fix.
+
+**Q:** Can you use sex, age and marital status?
+
+**A:** Often not for credit decisions, depending on jurisdiction, and dropping them does not remove proxies. I train with and without them and compare approval and default rates by group, which previews the fairness audit in Project 33.
+
+**Common mistakes in answers:**
+- Treating a high AUC as proof the probabilities are right; calibration is a separate check.
+- Fitting bins or WoE on all data before splitting — that leaks the target into features.
+- Saying "logistic regression is always less accurate"; on well-engineered credit data the gap is often small.
 
 ### TL;DR
 A credit scorecard is logistic regression made readable: monotonic WoE bins, points that add up to a calibrated probability, and reasons a customer can be told.
@@ -834,14 +1119,60 @@ flowchart TD
 - [Ch 9 — Unsupervised Learning](../chapters/09-unsupervised-learning/README.md): PCA for visualisation.
 
 ### In the interview
+**30-second answer:** I built a breast-tumour classifier on the 569-sample Wisconsin dataset, comparing k-NN with linear and RBF SVMs, each in a pipeline with `StandardScaler`. The key decision was choosing the operating point from costs: I picked the threshold giving at least 98% recall on malignant cases on validation, then reported precision at that point. The hardest part was honesty with tiny data — about 40 malignant test cases means one miss moves recall by 2.5 points — so I reported bootstrap 95% confidence intervals. Scaling alone gave k-NN a large accuracy jump, which I can show.
+
+**Key terms to know:**
+- **k-nearest neighbours** — classify by majority vote of the k closest training points; no real training, slow prediction.
+- **Support vector machine** — finds the boundary with the widest margin; only support vectors define it.
+- **Kernel (RBF)** — computes similarity as if features were mapped to a higher-dimensional space, giving curved boundaries.
+- **C** — penalty for margin violations; large C fits training data tightly.
+- **Gamma** — how far one point's influence reaches in an RBF kernel; large gamma makes influence very local.
+- **Feature scaling** — standardise so no feature's units dominate distances.
+- **Recall (sensitivity), specificity, precision** — share of malignant caught, share of benign correctly cleared, share of alarms that are real.
+- **Operating point / threshold** — the score cut-off chosen for the required recall.
+- **Bootstrap confidence interval** — resample the test set with replacement many times to see metric uncertainty.
+- **Correlated features** — radius, perimeter and area nearly duplicate each other.
+
 **Q:** Why must you scale features for k-NN and SVM?
-**A:** Both rely on distances. Without scaling, the feature with the largest numeric range dominates the distance and the others are ignored.
+
+**A:** Both rely on distances: k-NN directly, RBF SVM through the kernel. Without scaling, the feature with the largest numeric range (area, in the hundreds) dominates the distance and the others (smoothness, below 1) are ignored.
 
 **Q:** What do C and gamma do in an RBF SVM?
-**A:** C trades margin width for training errors. Gamma sets how local each support vector's influence is. High values of either lead to overfitting.
+
+**A:** C trades margin width for training errors. Gamma sets how local each support vector's influence is. High values of either lead to overfitting, low values to underfitting, so I tune them together on a log-scale grid and plot the CV heat map.
 
 **Q:** Accuracy is 97%. Is the model good enough?
-**A:** Not by itself. For diagnosis, recall on the malignant class at a chosen operating point matters, along with its uncertainty and external validation.
+
+**A:** Not by itself. For diagnosis, recall on the malignant class at a chosen operating point matters, along with its uncertainty and external validation on another hospital's data.
+
+**Q:** How do you threshold an SVM, which outputs no probability?
+
+**A:** Use the signed distance from `decision_function` as a score and pick the cut-off on validation that reaches 98% recall. `probability=True` fits Platt scaling with an internal CV, which is slower and only needed if you must show probabilities.
+
+**Q:** Why does k-NN struggle as data grows?
+
+**A:** Prediction compares the query with every stored point, so it is O(n·d) per query and memory holds the whole training set. In high dimensions distances also become less informative. KD-trees help in low dimensions; approximate nearest-neighbour indexes help at scale.
+
+**Q:** How do you pick k?
+
+**A:** Grid-search k inside stratified CV. Small k gives a jagged, high-variance boundary; large k smooths toward the majority class. Odd values avoid ties in binary problems.
+
+**Q:** Why bootstrap confidence intervals here?
+
+**A:** The test set has about 114 samples, so metrics are noisy. Resampling it a few thousand times and taking the 2.5th and 97.5th percentiles shows, for example, that recall could plausibly be anywhere from about 0.9 to 1.0. That stops you from over-claiming.
+
+**Q:** How do you test that scaling does not leak?
+
+**A:** Fit the pipeline on training folds and check that the scaler's `mean_` matches a manual mean of the training fold only. A constant "always benign" model must score 0 recall, which checks that the metric is wired to the right class.
+
+**Q:** Linear or RBF SVM?
+
+**A:** On this data the linear SVM is nearly as good and much easier to explain. If the gap is within the CV noise I prefer it; the RBF kernel only earns its place if it is clearly better.
+
+**Common mistakes in answers:**
+- Saying SVM outputs probabilities; it outputs distances, and probabilities need a calibration step.
+- Choosing the 98%-recall threshold on the test set, then reporting the test recall as if it were unbiased.
+- Claiming the model is ready for clinics; it needs external validation and regulatory review.
 
 ### TL;DR
 Scale, tune C and gamma or k inside CV, and choose the threshold from the cost of a missed malignancy — then admit how uncertain a 114-sample test is.
@@ -939,14 +1270,60 @@ flowchart TD
 - [Ch 6 — Evaluation and Tuning](../chapters/06-evaluation-and-tuning/README.md): time-based validation, bias–variance.
 
 ### In the interview
+**30-second answer:** I built an hourly bike-demand model on two years of Capital Bikeshare data, comparing a seasonal-naive baseline, a single tree, a random forest and gradient boosting. The key decision was forward-in-time validation with `TimeSeriesSplit`, because random splits let the model see the future. The trap I had to avoid was a leak in plain sight: `casual + registered = cnt`, so both columns are banned from the features and a test enforces it. Boosting with Poisson loss beat the baseline and never predicts negative counts.
+
+**Key terms to know:**
+- **Decision tree** — a learned flowchart of yes/no splits; deep trees overfit.
+- **Random forest (bagging)** — many deep trees on bootstrap samples with random feature subsets, averaged to cut variance.
+- **Gradient boosting** — shallow trees added one at a time, each fitting the previous ensemble's errors, to cut bias; needs learning rate and early stopping.
+- **Bias–variance trade-off** — shown by tree depth: shallow trees underfit, deep ones overfit.
+- **TimeSeriesSplit (expanding window)** — train on months 1..k, validate on month k+1.
+- **Seasonal-naive baseline** — predict the same hour last week.
+- **Target leakage** — a feature that would not be known at prediction time, here `casual` and `registered`.
+- **Poisson loss** — suits non-negative counts whose variance grows with the mean.
+- **Partial dependence plot** — average prediction as one feature varies.
+- **Extrapolation** — trees cannot predict beyond the range of targets seen in training.
+
 **Q:** Random forest vs gradient boosting?
-**A:** Forests average many deep, decorrelated trees to cut variance — robust with little tuning. Boosting fits shallow trees sequentially to residuals to cut bias — usually more accurate but needs learning rate, depth and early stopping.
+
+**A:** Forests average many deep, decorrelated trees to cut variance — robust with little tuning. Boosting fits shallow trees sequentially to residuals to cut bias — usually more accurate but needs learning rate, depth and early stopping tuned.
 
 **Q:** Why not a random train/test split here?
-**A:** The data is ordered in time. Random splits let the model see the future and overstate accuracy. Use forward-chaining splits.
+
+**A:** The data is ordered in time and neighbouring hours are highly correlated. Random splits let the model see the future and interpolate, which overstates accuracy. Use forward-chaining splits and expect a higher, more honest error.
 
 **Q:** What is a partial dependence plot?
-**A:** The model's average prediction as one feature varies, averaging over the others. It shows the shape of an effect but can mislead when features are strongly correlated.
+
+**A:** The model's average prediction as one feature varies, averaging over the others. It shows the shape of an effect, like demand rising with temperature then falling in heat, but can mislead when features are strongly correlated (temperature and season), because it averages over impossible combinations.
+
+**Q:** How did you find the leak, and how do you stop it coming back?
+
+**A:** For every feature I asked "would I know this at prediction time?" — the hour's casual and registered counts are not known until the hour is over. A unit test asserts no column containing those names reaches the model, so a future refactor cannot reintroduce them.
+
+**Q:** Why can trees not extrapolate, and why does it matter here?
+
+**A:** A tree predicts the average of training targets in a leaf, so its output is bounded by what it saw. Demand grew from 2011 to 2012, so a model trained on 2011 under-predicts 2012. A trend feature, a linear component or frequent retraining helps.
+
+**Q:** Why use Poisson loss?
+
+**A:** Counts are non-negative and noisier when larger. Poisson loss models the log of the expected count, so predictions are always positive and errors on busy hours are weighted appropriately. Squared error can produce negative predictions at night.
+
+**Q:** What changes when you deploy this for next-day planning?
+
+**A:** In training, weather features are observed values; in production you only have forecasts, which are noisier. Evaluate with forecast-quality inputs, or the offline score will be too optimistic. Lag features must also respect the forecast horizon — tomorrow's model cannot use the last hour's demand.
+
+**Q:** How would you scale this to 1,000 stations instead of one city total?
+
+**A:** Train one global model with station ID and station features rather than 1,000 small models, so quiet stations borrow strength from busy ones. LightGBM handles millions of rows quickly. The new problem is that per-station counts are sparse and zero-heavy, which Poisson or Tweedie loss handles.
+
+**Q:** How do you guard against regressions in later code changes?
+
+**A:** A test asserts each validation timestamp is later than every training timestamp, a test checks predictions are non-negative, and a regression test fails if validation RMSE worsens by more than 5% against the saved model.
+
+**Common mistakes in answers:**
+- "Random forests can't overfit" — individual deep trees do; forests are just much more resistant.
+- Comparing to no baseline; the same hour last week is surprisingly strong and must be beaten.
+- Using lag features (demand one hour ago) for a next-day forecast where they would not be available.
 
 ### TL;DR
 Tree ensembles capture hour × weather interactions for free. Validate forward in time, drop the target's own components, and use a count-aware loss.
@@ -1067,14 +1444,70 @@ erDiagram
 - [Ch 16 — ML in Production](../chapters/16-ml-in-production/README.md): serving, model registry, logging, train/serve skew.
 
 ### In the interview
+**30-second answer:** I built a small but complete ML service: a wine-quality model trained with MLflow tracking, registered as a versioned model with a `champion` alias, and served by FastAPI with Pydantic validation. Every request logs features, prediction, model version and latency to PostgreSQL. The key design decision was saving the whole preprocessing + model pipeline as one artefact, so the API cannot drift from training, and a parity test proves offline and online predictions match. The service starts with one `docker compose up` and serves single predictions with p95 latency under 50 ms on a laptop.
+
+**Key terms to know:**
+- **Experiment tracking (MLflow)** — records parameters, metrics and artefacts for every training run.
+- **Model registry and alias** — versioned models with a movable pointer such as `champion`; rollback is a metadata change.
+- **FastAPI + Pydantic schema** — typed request models; invalid input returns HTTP 422 automatically.
+- **Train/serve skew** — preprocessing that differs between training and serving.
+- **Parity test** — the API's prediction must equal the training pipeline's for the same row.
+- **p95 latency** — the response time 95% of requests beat.
+- **Prediction log** — one row per request with request ID, timestamp, model version, inputs, output and latency.
+- **Health / readiness endpoint** — `/health` lets an orchestrator know the service is up and the model loaded.
+- **Ordinal target** — quality is an integer 0–10, mostly 5–7.
+- **Shadow mode** — run a candidate model on live traffic without serving its answers.
+
 **Q:** What does a model registry give you over saving files?
-**A:** Versioning with lineage back to the training run, stage or alias management, and a single source of truth for which model is live, which makes rollback a metadata change.
+
+**A:** Versioning with lineage back to the training run, alias management, and a single source of truth for which model is live, which makes rollback a metadata change. A file path tells you none of that.
 
 **Q:** How do you avoid train/serve skew in a simple service?
-**A:** Serialise the full preprocessing + model pipeline as one artefact, validate inputs against a schema, and run a parity test between offline and online predictions.
+
+**A:** Serialise the full preprocessing + model pipeline as one artefact, validate inputs against a schema, and run a parity test between offline and online predictions in CI.
 
 **Q:** What would you log for each prediction?
+
 **A:** Timestamp, model version, input features (or a reference), output, latency and a request ID to join later labels. That enables debugging, monitoring and retraining.
+
+**Q:** Regression or classification for wine quality?
+
+**A:** Quality is an ordered integer, so regression is simple and respects order, while classification ignores that 6 is between 5 and 7. I used regression, rounded for display, and reported MAE; ordinal classification is a reasonable alternative if you justify it.
+
+**Q:** Show a minimal validated endpoint.
+
+**A:** Pydantic does validation; the model is loaded once at startup.
+```python
+class Wine(BaseModel):
+    ph: float = Field(gt=0, lt=14)
+    alcohol: float = Field(ge=0)
+@app.post("/predict")
+def predict(w: Wine):
+    return {"quality": float(model.predict(pd.DataFrame([w.model_dump()]))[0]),
+            "version": MODEL_VERSION}
+```
+A negative pH now returns 422 before the model is touched.
+
+**Q:** How do you roll out a new model safely?
+
+**A:** Register it, run it in shadow mode or on a small share of traffic, compare predictions and latency, then move the `champion` alias and reload. If metrics degrade, move the alias back. Never overwrite a model file in place.
+
+**Q:** What happens if PostgreSQL is down?
+
+**A:** The prediction should still be returned; logging runs in a background task and failures are counted and alerted on, not raised to the client. If the registry is down at startup, the service should fail fast rather than come up without a model.
+
+**Q:** What breaks first at 100x traffic?
+
+**A:** Synchronous database writes and a single process. Add workers behind a load balancer, batch log inserts through a queue, and consider a `/predict/batch` endpoint. The model itself is tiny and is rarely the bottleneck.
+
+**Q:** How do you test the service?
+
+**A:** Schema unit tests for valid and invalid payloads, `TestClient` tests for `/health` and `/predict`, the parity test, and a small load test asserting p95 under 50 ms.
+
+**Common mistakes in answers:**
+- Loading the model inside the request handler, which adds hundreds of milliseconds per call.
+- Re-implementing scaling by hand in the API instead of shipping the fitted pipeline.
+- Returning predictions without the model version, making later debugging impossible.
 
 ### TL;DR
 Wrap even a simple model in tracking, a registry, a validated API and a prediction log — that skeleton is what turns a notebook into a service.
@@ -1174,14 +1607,59 @@ flowchart TD
 - [Ch 12 — Sequences, RNNs and Attention](../chapters/12-sequences-rnns-and-attention/README.md): tokenisation and word/sentence embeddings.
 
 ### In the interview
+**30-second answer:** I built a content-based "more like this" finder over about 16,500 Wikipedia book summaries. Each summary becomes an L2-normalised TF-IDF vector, so cosine similarity is one sparse dot product, and every result shows the shared terms that made it match. The surprise was that rare character names dominate TF-IDF, so sequels match each other and nothing else; I handled it by reducing proper-noun weight and limiting results per author. On a hand-labelled set of 30 books I report precision at 10 for TF-IDF versus sentence embeddings, and queries take well under 50 ms by brute force.
+
+**Key terms to know:**
+- **Content-based recommendation** — recommend items similar in content to ones the user liked; needs no interaction data.
+- **Cold start** — new items or users with no history; content similarity works from day one.
+- **TF-IDF** — word weight that is high when frequent in this document and rare across all documents.
+- **Cosine similarity** — the cosine of the angle between vectors, ignoring their length; with unit vectors it is a dot product.
+- **Sentence embeddings** — dense vectors from a pre-trained model where nearby vectors mean similar meaning.
+- **Top-k search** — score all items, then `argpartition` to find the k best without a full sort.
+- **Precision at k** — share of the top k results judged relevant.
+- **Diversity re-ranking** — limiting near-duplicates, for example two books per author.
+- **Approximate nearest neighbour (ANN)** — an index that trades a little recall for much faster search at scale.
+
 **Q:** When would you choose content-based over collaborative filtering?
-**A:** For new items or users with no interactions, for niche catalogues with little traffic, and when explanations matter. Collaborative filtering wins when interaction data is rich.
+
+**A:** For new items or users with no interactions, for niche catalogues with little traffic, and when explanations matter. Collaborative filtering wins when interaction data is rich, because it captures taste that text does not describe.
 
 **Q:** Why cosine similarity rather than Euclidean distance?
-**A:** Cosine ignores vector length, so a long summary and a short one about the same topic still match. With normalised vectors the two are equivalent rankings.
+
+**A:** Cosine ignores vector length, so a long summary and a short one about the same topic still match. With L2-normalised vectors the two give identical rankings, because squared distance equals 2 − 2 × cosine.
 
 **Q:** How would you evaluate without user data?
-**A:** A small human-labelled relevance set, proxy labels such as genre overlap, and later an online test measuring click-through on recommendations.
+
+**A:** A small human-labelled relevance set, proxy labels such as genre overlap, and later an online test measuring click-through on recommendations. Say clearly which numbers are proxies.
+
+**Q:** TF-IDF vs embeddings — which and why?
+
+**A:** TF-IDF matches shared words and is explainable; embeddings match meaning ("murder" ≈ "killing") but can latch onto style or length and are harder to explain. I compared both on the same labelled set and inspected results, and a weighted blend often beats either.
+
+**Q:** What is the complexity of a query, and what changes at 10 million items?
+
+**A:** Brute force is O(N × d) per query, fine for 16,000 items. At 10 million, use an ANN index such as HNSW or IVF (in FAISS or pgvector), precompute vectors offline, and accept recall slightly below 100% for millisecond latency.
+
+**Q:** Why do filters need a larger k?
+
+**A:** If you take the top 10 and then filter by genre, you may be left with two results. Retrieve, say, the top 100, filter, then cut to 10. At scale, use an index that supports filtering during the search.
+
+**Q:** What tests prove the search works?
+
+**A:** Self-similarity must be 1.0 and the item is excluded from its own results; similarity must be symmetric; filtered results must all match the filter; and a known sequel must appear in its first book's top 10.
+
+**Q:** What happens with a two-line summary or a missing one?
+
+**A:** A very short summary gives a sparse vector that matches almost nothing, or matches randomly on one rare word. I drop empty summaries at parse time and can fall back to genre and author metadata for short ones.
+
+**Q:** What is the main weakness of content-based recommenders?
+
+**A:** Over-specialisation: users get more of the same and no serendipity. Mixing in collaborative signals or popular items, and diversity re-ranking, counters it.
+
+**Common mistakes in answers:**
+- Saying cosine and Euclidean always disagree; on normalised vectors they rank identically.
+- Fitting the TF-IDF vocabulary with stop words left in and blaming the algorithm for "the" matches.
+- Calling genre overlap "accuracy" without saying it is only a proxy for relevance.
 
 ### TL;DR
 Turn text into vectors, rank by cosine similarity, explain with shared terms — the simplest recommender, and the one that works for brand-new items.
@@ -1309,14 +1787,60 @@ erDiagram
 - [Ch 16 — ML in Production](../chapters/16-ml-in-production/README.md): batch inference and point-in-time features.
 
 ### In the interview
+**30-second answer:** I built a churn model that gives a retention team a weekly ranked list of at-risk telecom customers, each with three plain-English reasons. The key decision was optimising lift and precision in the top slice the team can actually call, not overall accuracy, and LightGBM beat the logistic-regression baseline there. The hardest part was the label: I defined churn as "cancels within 90 days of snapshot T" and built every feature only from data before T, with a test that enforces it. SHAP TreeExplainer turns each score into reasons, and I verify additivity — base value plus SHAP values equals the model's log-odds.
+
+**Key terms to know:**
+- **Churn label in time** — features as of snapshot date T, label "cancelled between T and T + 90 days".
+- **Point-in-time correctness** — no feature may use information from after T.
+- **Gradient boosting (LightGBM)** — sequential shallow trees fitting residuals, with early stopping on validation.
+- **SHAP values** — per-feature contributions that add up from the average prediction to this prediction.
+- **TreeExplainer** — exact, fast SHAP computation for tree ensembles.
+- **Lift at top 10%** — churn rate in the top decile divided by the overall churn rate.
+- **PR AUC and cumulative gains curve** — ranking metrics that focus on the positive class and on budgets.
+- **Calibration** — needed if offers depend on the probability, not just the rank.
+- **Hyperparameter search (Optuna)** — tries promising settings first and prunes bad trials early.
+- **Intervention contamination** — offers change who churns, so future labels are biased unless a random holdout gets no offers.
+
 **Q:** How do you define churn for training?
-**A:** Pick a snapshot date T, build features only from data before T, and label whether the customer cancels in a fixed window after T. Use several snapshots for more training rows, and validate on a later snapshot.
+
+**A:** Pick a snapshot date T, build features only from data before T, and label whether the customer cancels in a fixed window after T. Use several snapshots for more training rows, and validate on a later snapshot so the test mimics next week.
 
 **Q:** What do SHAP values tell you?
-**A:** How much each feature pushed this prediction above or below the average prediction, adding up exactly to the output. They explain the model's reasoning, not the causal effect of changing the feature.
+
+**A:** How much each feature pushed this prediction above or below the average prediction, adding up exactly to the output (log-odds for a classifier). They explain the model's reasoning, not the causal effect of changing the feature.
 
 **Q:** The team can call 500 customers a week. Which metric do you optimise?
-**A:** Precision or expected saved revenue in the top 500 — a ranking metric at a fixed budget — plus calibration if offers depend on the probability.
+
+**A:** Precision or expected saved revenue in the top 500 — a ranking metric at a fixed budget — plus calibration if offers depend on the probability. Overall AUC can improve while the top 500 gets worse.
+
+**Q:** Why gradient boosting over logistic regression here?
+
+**A:** Boosting captures interactions such as "month-to-month contract and fibre and no tech support" without hand-made crosses, and usually ranks better on tabular data. Logistic regression is easier to defend, so I keep it as the baseline and report the gap in lift.
+
+**Q:** SHAP says month-to-month contract drives churn. Should we move everyone to yearly contracts?
+
+**A:** No. SHAP shows what the model relies on, not what happens if you intervene. Customers who choose month-to-month differ in many ways. To decide who to treat, you need an uplift model (Project 23) or an A/B test of the offer.
+
+**Q:** How could leakage sneak in?
+
+**A:** A feature like "support calls this month" where the month includes the cancellation call, or "total charges" computed after T. The test asserts every feature timestamp is before its row's snapshot date.
+
+**Q:** Correlated features share SHAP credit. How do you present reasons?
+
+**A:** Tenure and total charges move together, so SHAP may split credit between them arbitrarily. I group related features into one reason ("new customer") and translate feature names into phrases the team understands.
+
+**Q:** What changes at 10 million customers?
+
+**A:** Scoring is still fast with LightGBM, but SHAP on everyone is slow, so I explain only the top N the team will act on. Feature building moves to a warehouse or Spark job with snapshot tables, and I monitor the weekly score distribution for drift.
+
+**Q:** How do you keep future training data clean once the model drives offers?
+
+**A:** Keep a small random holdout of at-risk customers who receive no offer. Their outcomes measure true churn risk and the offer's effect, and give unbiased training labels later.
+
+**Common mistakes in answers:**
+- Reading SHAP as causal ("this feature causes churn").
+- Using the Kaggle snapshot as if it had a time dimension, without explaining the T and T + 90 days design a real system needs.
+- Optimising ROC AUC when the business consumes only the top of the list.
 
 ### TL;DR
 Churn modelling is mostly about a leak-free, point-in-time label and a ranking metric that matches the retention budget; SHAP turns scores into reasons, not causes.
@@ -1417,14 +1941,67 @@ flowchart TD
 - [Ch 6 — Evaluation and Tuning](../chapters/06-evaluation-and-tuning/README.md): calibration, confusion matrices.
 
 ### In the interview
+**30-second answer:** I built a 37-breed cat-and-dog classifier by transfer learning from an ImageNet-pretrained ResNet-50, served behind FastAPI with an "unsure" answer. The key decision was training the new head first and then fine-tuning with lower, discriminative learning rates, which avoids wrecking pretrained features. The hardest part was making the "unsure" threshold mean something: deep nets are over-confident, so I fitted temperature scaling on validation and chose the threshold from calibrated probabilities. Top-1 accuracy is above the 85% target, and CPU inference fits under 150 ms per image after export.
+
+**Key terms to know:**
+- **Transfer learning** — reuse a network trained on a large dataset as the starting point for a new task.
+- **Feature extraction vs fine-tuning** — freeze the backbone and train only the head, or continue training some or all layers.
+- **Pretrained backbone and new head** — ResNet with its 1,000-class layer replaced by a 37-way linear layer.
+- **Discriminative learning rates / gradual unfreezing** — smaller rates for early layers, larger for later ones; unfreeze from the top down.
+- **Catastrophic forgetting** — a high learning rate destroys useful pretrained features.
+- **Data augmentation** — random crops, flips, colour jitter to make the model robust.
+- **ImageNet normalisation** — the mean and std the backbone was trained with; must match at serving.
+- **Temperature scaling / ECE** — divide logits by one fitted number to calibrate; expected calibration error measures the gap.
+- **Top-1 / top-5 accuracy** — correct class is the first guess, or among the first five.
+- **Out-of-distribution input** — something unlike training data, such as a rabbit.
+
 **Q:** Feature extraction or fine-tuning?
-**A:** With very little data or a target domain close to ImageNet, freeze most layers. With more data or a different domain, fine-tune more layers at lower learning rates.
+
+**A:** With very little data or a target domain close to ImageNet, freeze most layers. With more data or a different domain, fine-tune more layers at lower learning rates. Pets are close to ImageNet, so both work, and fine-tuning gains a few points.
 
 **Q:** Why calibrate a classifier you will threshold?
-**A:** Deep nets tend to be over-confident. If 0.9 does not mean 90% correct, the threshold for "unsure" is arbitrary. Temperature scaling fixes this cheaply without changing rankings.
+
+**A:** Deep nets tend to be over-confident. If 0.9 does not mean 90% correct, the threshold for "unsure" is arbitrary. Temperature scaling fixes this cheaply without changing rankings, so accuracy is unchanged.
 
 **Q:** How do you handle a class the model has never seen?
+
 **A:** Detect out-of-distribution inputs with confidence or energy scores, add an explicit "other" class with diverse negatives, and route low-confidence cases to a human.
+
+**Q:** Show how to replace the head in torchvision.
+
+**A:** Load weights, freeze, swap the final layer.
+```python
+m = torchvision.models.resnet50(weights="IMAGENET1K_V2")
+for p in m.parameters():
+    p.requires_grad = False
+m.fc = nn.Linear(m.fc.in_features, 37)  # new layer is trainable
+```
+Then pass only `m.fc.parameters()` to the optimiser for the first stage.
+
+**Q:** Why does a high learning rate hurt fine-tuning?
+
+**A:** The new head starts random, so its large early gradients flow back and overwrite pretrained filters in a few steps. Training the head first, then unfreezing with a rate around ten times smaller (plus warm-up), keeps the useful features.
+
+**Q:** What goes wrong with batch norm during fine-tuning?
+
+**A:** Batch-norm layers keep running statistics. With small batches those estimates get noisy and can drift from ImageNet's. Freezing batch-norm statistics (keeping those layers in eval mode) is a common fix.
+
+**Q:** Accuracy is fine on the test set but poor on user photos. Why?
+
+**A:** Dataset bias: the training photos are well lit and centred, users' are blurry and off-centre. Also check preprocessing parity — wrong normalisation or RGB/BGR order is a classic serving bug. A transform test compares training and serving tensors for the same image.
+
+**Q:** How would you make it run on a phone?
+
+**A:** Use a smaller backbone such as MobileNet or EfficientNet-B0, quantise to int8, and export to a mobile runtime. Measure the accuracy you lose against the latency you gain on the target device.
+
+**Q:** How do you debug which breeds fail?
+
+**A:** A confusion matrix of the most-confused pairs, then look at the images. Many errors are genuinely similar breeds or label noise; higher resolution helps the former, and inspecting top-loss images finds the latter.
+
+**Common mistakes in answers:**
+- Saying temperature scaling improves accuracy; it changes confidence, not the predicted class.
+- Forgetting ImageNet normalisation at inference.
+- Using the softmax maximum as a reliable "unknown" detector; it is weak and over-confident without extra work.
 
 ### TL;DR
 Start from a pre-trained backbone, train the new head, then fine-tune gently with augmentation; calibrate before you threshold.
@@ -1525,14 +2102,60 @@ flowchart TD
 - [Ch 10 — Neural Networks and Deep Learning](../chapters/10-neural-networks-and-deep-learning/README.md): learning-rate schedules, fine-tuning habits.
 
 ### In the interview
+**30-second answer:** I built IMDB sentiment classifiers in three generations — TF-IDF + logistic regression, an LSTM, and fine-tuned DistilBERT — on the same split and the same hand-written hard-case set. The key decision was choosing by accuracy per unit of cost: the transformer won by a few points, but the baseline is far cheaper per 1,000 predictions, and I can state both numbers. The hardest problem was long reviews: the verdict is often at the end, so I compared truncating to the head against a head-plus-tail window. Behavioural tests (negation, swapped names, added "terrible") showed what each model actually understands.
+
+**Key terms to know:**
+- **TF-IDF + logistic regression** — sparse word weights with a linear classifier; the fast baseline.
+- **N-grams** — word pairs like "not_good" that let a bag of words see short negations.
+- **LSTM** — a recurrent network that reads tokens in order and keeps a gated memory.
+- **Transformer and self-attention** — every token attends to every other token at once; BERT-style models are pre-trained on large text.
+- **Fine-tuning** — continuing training of a pre-trained model on labelled task data, with a small learning rate and warm-up.
+- **Subword tokenisation (WordPiece)** — splits rare words into known pieces, so there are no unknown words.
+- **Context limit (512 tokens)** — the maximum input length; longer reviews must be truncated or chunked.
+- **Attention mask / padding** — marks which positions are real tokens.
+- **Behavioural testing** — invariance, directional and minimum-functionality tests beyond accuracy.
+- **Distillation** — training a small model to mimic a large one.
+
 **Q:** Why start with TF-IDF and logistic regression?
+
 **A:** It is fast, strong and interpretable, and it sets the bar. If a transformer adds only a point, its cost may not be justified.
 
 **Q:** How do you handle documents longer than the model's context?
+
 **A:** Truncate smartly (head + tail), split into chunks and aggregate predictions, or use a long-context model. Measure which works on your data.
 
 **Q:** How would you test a sentiment model beyond accuracy?
+
 **A:** Behavioural tests: invariance (names, typos), directional changes (adding negative words) and minimum functionality (simple negation), plus slices by length and domain.
+
+**Q:** Why does the transformer handle "not bad at all" better?
+
+**A:** Bag-of-words sees "not" and "bad" separately, so "bad" pulls negative. Self-attention lets the representation of "bad" depend on "not" and "at all", so the model learns the phrase is positive.
+
+**Q:** Why does the LSTM often fail to beat TF-IDF here?
+
+**A:** IMDB reviews are long and the label depends on a few strong words, which TF-IDF captures well. An LSTM trained from scratch on 25,000 reviews has little data to learn language, struggles with very long sequences and is sensitive to padding mistakes. Pre-training is what gives transformers the edge.
+
+**Q:** Your fine-tuning run predicts one class for everything. What happened?
+
+**A:** Usually too high a learning rate or no warm-up, which destabilises the pre-trained weights; around 2e-5 with warm-up is a safe start. Also check labels are not all one class after a shuffling bug, and run several seeds, because fine-tuning variance is real.
+
+**Q:** How do you serve the transformer cheaply at high volume?
+
+**A:** Batch requests, cap sequence length, use a distilled or quantised model and run on GPU if volume justifies it. Or route: the cheap baseline handles confident cases and only uncertain reviews go to the transformer.
+
+**Q:** What happens on product reviews instead of movie reviews?
+
+**A:** Domain shift: "unpredictable" praises a plot but criticises brakes. Accuracy drops, and you would label a few hundred in-domain examples to measure and fine-tune.
+
+**Q:** Which metric do you report?
+
+**A:** The test set is balanced 50/50, so accuracy is fine, with F1 as a check. For a real stream with skewed sentiment I would report per-class precision and recall instead.
+
+**Common mistakes in answers:**
+- Claiming attention weights are a faithful explanation of the decision; they are a weak signal at best.
+- Truncating long reviews at the start without checking whether the verdict was cut off.
+- Comparing models on different splits or tokenisation, then reporting the "winner".
 
 ### TL;DR
 Climb from TF-IDF to LSTM to a fine-tuned transformer on one shared evaluation, then choose by accuracy per unit of cost, not accuracy alone.
@@ -1663,14 +2286,69 @@ erDiagram
 - [Ch 2 — Math for ML](../chapters/02-math-for-ml/README.md): dot products, low-rank approximation, SVD.
 
 ### In the interview
+**30-second answer:** I built a MovieLens recommender with matrix factorisation in PyTorch, trained both on explicit ratings and on implicit "watched" data with BPR loss. The key decision was evaluating as ranking — Recall@20 and NDCG@20 over all unseen movies on a time-based leave-last-out split — because low RMSE does not mean good recommendations. The hardest part was beating popularity, which is embarrassingly strong offline; BPR with popularity-aware negative sampling beat it and I also report catalogue coverage. Serving is one matrix-vector product per user under 50 ms, with a popularity fallback for unknown users.
+
+**Key terms to know:**
+- **Collaborative filtering** — recommends from patterns of who interacted with what, not content.
+- **Matrix factorisation** — each user and item becomes a short vector; their dot product plus biases predicts preference.
+- **Embedding** — a learned dense vector (for example 64 numbers) for a user or item.
+- **Explicit vs implicit feedback** — ratings vs clicks/watches.
+- **Negative sampling** — treating sampled unwatched items as negatives for implicit data.
+- **BPR loss** — pairwise loss that pushes a watched item's score above an unwatched one's.
+- **Recall@k and NDCG@k** — share of held-out items found in the top k, and a version that rewards higher ranks.
+- **Catalogue coverage / popularity bias** — how much of the catalogue gets recommended at all.
+- **Cold start** — new users or items with no interactions.
+- **Leave-last-N-out split** — each user's latest interactions form the test set.
+
 **Q:** Explicit vs implicit feedback?
+
 **A:** Explicit feedback is ratings — clear but rare and biased toward what people chose to rate. Implicit feedback is clicks or watches — abundant but only positive and noisy. Most production systems train on implicit data with sampled negatives.
 
 **Q:** Why can popularity be a hard baseline to beat?
+
 **A:** Because interactions are concentrated on popular items, and offline metrics reward predicting them. Personalisation must beat it on recall and also add coverage and diversity.
 
 **Q:** How do you handle a brand-new movie?
+
 **A:** Use content features (genres, text, cast) to produce an initial embedding or similarity, give it some exploration traffic, and switch to collaborative signals once interactions arrive.
+
+**Q:** Why can low RMSE give bad recommendations?
+
+**A:** RMSE is computed only on movies users chose to rate, which are mostly ones they expected to like. Users experience the top of a ranked list over all movies, including ones they never rated. A model can predict ratings well and still rank unseen items poorly.
+
+**Q:** Why a time-based split rather than random?
+
+**A:** A random split lets the model learn from a user's future watches to predict the past, which inflates scores. Holding out each user's last interactions mimics recommending what they watch next.
+
+**Q:** Show the core of an MF model in PyTorch.
+
+**A:** Two embedding tables and two bias tables.
+```python
+class MF(nn.Module):
+    def __init__(s, nu, ni, d=64):
+        super().__init__(); s.U, s.V = nn.Embedding(nu, d), nn.Embedding(ni, d)
+        s.bu, s.bi = nn.Embedding(nu, 1), nn.Embedding(ni, 1)
+    def forward(s, u, i):
+        return (s.U(u) * s.V(i)).sum(-1) + s.bu(u).squeeze(-1) + s.bi(i).squeeze(-1)
+```
+Weight decay on the embeddings controls overfitting.
+
+**Q:** What changes with millions of items?
+
+**A:** Scoring every item per request becomes too slow, so you precompute item vectors into an approximate nearest-neighbour index and retrieve the top few hundred, then re-rank. That is the two-tower pattern in Project 26.
+
+**Q:** What breaks when you retrain?
+
+**A:** Embedding spaces are not aligned between training runs, so a user vector from version 3 is meaningless with item vectors from version 4. Publish user and item embeddings together under one model version and swap them atomically.
+
+**Q:** How do you test the evaluation code?
+
+**A:** Hand-computed Recall@k and NDCG@k on tiny rankings, a test that no test interaction appears in training, and a test that recommendations exclude movies the user already rated.
+
+**Common mistakes in answers:**
+- Reporting RMSE as the main metric for a top-N recommender.
+- Forgetting to filter already-seen items, which inflates offline metrics and annoys users.
+- Saying offline gains prove the model is better; only an online test measures what recommendations change.
 
 ### TL;DR
 Matrix factorisation learns user and item embeddings from interactions; evaluate it as a ranking problem against a strong popularity baseline, and plan for cold start.
@@ -1804,14 +2482,60 @@ erDiagram
 - [Ch 6 — Evaluation and Tuning](../chapters/06-evaluation-and-tuning/README.md): time-aware validation, scaled metrics.
 
 ### In the interview
+**30-second answer:** I built a 28-day daily sales forecaster for M5 Walmart data — about 30,000 item-store series — comparing seasonal-naive and exponential smoothing with one global LightGBM model using Tweedie loss. The key decision was a single global model with direct-horizon lags (28 days and longer), so training and forecasting use exactly the same features and slow sellers borrow strength from similar items. The hardest part was backtesting honestly: every feature is computed as of each forecast origin, and a test deletes post-origin data to prove it. Quantile models give 90% intervals that covered close to 90% of actuals in the backtest.
+
+**Key terms to know:**
+- **Forecast origin and horizon** — the last date you know, and how many days ahead you predict (28).
+- **Rolling-origin backtesting** — train to a date, forecast, score, move the origin forward, repeat.
+- **Lag and rolling features** — past sales such as 28 days ago or a 7-day mean ending at the origin.
+- **Direct vs recursive multi-step** — use only lags at least as long as the horizon, or feed predictions back in.
+- **Global model** — one model across all series, with item and store as features.
+- **Tweedie / Poisson loss** — suits non-negative, zero-heavy, spiky counts.
+- **Intermittent demand** — products that sell zero on most days.
+- **Seasonal-naive baseline** — repeat the same weekday last week.
+- **RMSSE** — error scaled by a naive forecast's error, so series of different sizes are comparable.
+- **Prediction interval and coverage** — the 5th–95th percentile range, and how often actuals fall inside it.
+
 **Q:** How do you validate a forecasting model?
+
 **A:** Rolling-origin backtesting: repeatedly train up to a date, forecast the horizon, score, move the origin forward. All features must be computed as of each origin.
 
 **Q:** Why one global model rather than one per product?
+
 **A:** It shares patterns across series, handles short or sparse histories, and is one artefact to maintain. Per-series models can still win for a few long, stable, high-volume series.
 
 **Q:** What loss for sparse count demand?
+
 **A:** Poisson or Tweedie, which fit non-negative skewed data with many zeros, plus quantile losses when you need intervals for safety stock.
+
+**Q:** Lag-7 is a great feature. Why can you not use it for day 20 of the forecast?
+
+**A:** On day 20 the sales from 7 days earlier are in the future and unknown. Either restrict to lags of 28 days or more (direct), train one model per horizon, or feed your own predictions back in (recursive), which compounds errors. Training must mirror whichever you choose.
+
+**Q:** Why are scaled metrics like RMSSE needed?
+
+**A:** Plain RMSE is dominated by high-volume items, and a slow seller with an error of 2 units may be a terrible forecast or a fine one. Dividing by the error of a naive forecast on the same series makes errors comparable and tells you whether you beat the naive method.
+
+**Q:** How do you get prediction intervals, and how do you check them?
+
+**A:** Train LightGBM with quantile loss at 0.05 and 0.95. In the backtest, about 90% of actuals should fall inside; I accept 85–95%. Also assert quantiles do not cross (p05 ≤ p50 ≤ p95).
+
+**Q:** A product shows zero sales for a week. Is demand zero?
+
+**A:** Not necessarily: it may have been out of stock. Training on stock-out zeros teaches the model to under-forecast. Flag those days, exclude or impute them, which is why stock data matters.
+
+**Q:** Store forecasts do not equal the sum of item forecasts. Does it matter?
+
+**A:** Yes, planners at different levels must agree. Bottom-up summing makes them coherent; reconciliation methods adjust all levels together and are often more accurate at the top.
+
+**Q:** What breaks first in production?
+
+**A:** Structural breaks — a new competitor, a pandemic, a price change — make history misleading. Monitor weekly error against the naive baseline and retrain on a schedule. Data volume is the other limit: lag features over millions of series need polars or a warehouse, not pandas.
+
+**Common mistakes in answers:**
+- Computing rolling means across the forecast origin, which leaks the future into the backtest.
+- Using squared error on intermittent demand and celebrating tiny fractional predictions.
+- Reporting one train/test split instead of several origins.
 
 ### TL;DR
 Demand forecasting is backtesting discipline: features as of each origin, a seasonal-naive bar to beat, count-aware losses, and intervals that actually cover.
@@ -1943,14 +2667,60 @@ erDiagram
 - [Ch 16 — ML in Production](../chapters/16-ml-in-production/README.md): monitoring, alerting, feedback loops.
 
 ### In the interview
+**30-second answer:** I built a streaming anomaly detector that replays the Numenta benchmark point by point and runs four detectors per metric: rolling z-score, STL seasonal residual, isolation forest on windowed features, and a forecast-interval check. The key design decision was scoring residuals against what is normal for this metric at this time of day, which cut false alarms on seasonal series. The hardest problem was alert fatigue, so point scores go through deduplication and a cooldown to become one alert per incident, and thresholds are set per metric from an alert budget and operator labels. It handles 10,000 metrics at one point a minute on one machine with per-point decisions well under 100 ms.
+
+**Key terms to know:**
+- **Point, contextual and collective anomalies** — a single spike, a normal value at the wrong time, and a run of slightly odd values.
+- **Rolling z-score** — how many standard deviations a value is from a recent mean.
+- **STL decomposition** — splits a series into trend, seasonal and residual parts; anomalies are scored on the residual.
+- **Robust statistics (median, MAD)** — location and spread that an incident in the window does not drag around.
+- **Isolation forest** — random trees isolate rare points in few splits; short average path length means anomalous.
+- **Forecast-interval detector** — alert when the actual value falls outside the predicted interval.
+- **Alert deduplication and cooldown** — one alert per incident, then suppression for a while.
+- **Alert budget** — a target number of alerts per metric per period, used to set thresholds without labels.
+- **Detection delay** — time between the start of an anomaly and the alert; NAB scoring rewards early detection.
+- **Concept drift / level shift** — a lasting change that is anomalous at first and normal later.
+
 **Q:** How do you detect anomalies in a seasonal metric?
-**A:** Remove the expected seasonal pattern (decomposition or a forecast) and score the residual, so a value is compared with what is normal for that time.
+
+**A:** Remove the expected seasonal pattern (decomposition or a forecast) and score the residual, so a value is compared with what is normal for that time. Low traffic at 3 am is then fine, while the same value at noon fires.
 
 **Q:** How do you choose a threshold without labels?
+
 **A:** From an alert budget per metric, robust statistics on the residual distribution, and operator feedback over time.
 
 **Q:** How does isolation forest work?
+
 **A:** It builds random trees with random splits. Anomalies are few and different, so they get isolated near the root; the average path length becomes the anomaly score.
+
+**Q:** Why median and MAD rather than mean and standard deviation?
+
+**A:** If the history window contains an incident, a huge spike inflates the mean and standard deviation, so the next incident looks normal. The median and median absolute deviation barely move, so the baseline stays honest. I also exclude flagged periods from refits.
+
+**Q:** A deployment permanently doubles latency. What should the detector do?
+
+**A:** Alert at first, because it is an anomaly. If nobody rolls it back, the detector should adapt after a configurable period and treat the new level as normal, recording an annotation so the change is not forgotten.
+
+**Q:** How do you evaluate without many labels?
+
+**A:** Use NAB's labelled windows for development: precision, recall and detection delay per incident, not per point. In production, operators label alerts as real or noise, which gives precision directly; recall needs incident reports from other sources.
+
+**Q:** How do you test the detectors?
+
+**A:** Inject synthetic spikes, level shifts and variance changes into clean seasonal series and assert each detector catches its target type. A cold-start test checks no alerts before enough history, and a replay test checks the same input gives identical alerts.
+
+**Q:** What breaks first at 1 million metrics?
+
+**A:** Memory for per-metric state and CPU for isolation forests. Shard metrics across workers by ID (Kafka partitions), keep cheap detectors on everything and expensive ones on important metrics, and group correlated alerts by service so one incident does not page fifty times.
+
+**Q:** Why combine several detectors instead of picking the best?
+
+**A:** Each catches a different anomaly type: z-score catches spikes, STL catches contextual ones, isolation forest catches odd combinations of window features. A simple max of normalised scores is a robust start; labelled alerts later let you learn weights.
+
+**Common mistakes in answers:**
+- Measuring per-point accuracy; operators care about incidents caught, delay and false alarms.
+- Using a static threshold on a seasonal metric.
+- Training the baseline on a window that contains the incident, then wondering why it is missed.
 
 ### TL;DR
 Score residuals against what is normal for this metric at this time, combine simple detectors, and judge success by alert precision and detection delay.
@@ -2081,14 +2851,60 @@ erDiagram
 - [Ch 15 — ML System Design Framework](../chapters/15-ml-system-design-framework/README.md): offline vs online metrics.
 
 ### In the interview
+**30-second answer:** I built an A/B test analysis toolkit that turns an assignment table and a metrics table into a one-page ship / do-not-ship / inconclusive report. The key design decision was "health before effects": a chi-square sample-ratio-mismatch check runs first, and a failure blocks the analysis. The hardest part was trusting the statistics, so I built a simulator: A/A tests give about 5% false positives over 2,000 runs, CUPED stays unbiased while shrinking variance, and delta-method intervals for ratio metrics have the right coverage. It analyses 10 million users across 20 metrics in under 2 minutes.
+
+**Key terms to know:**
+- **A/B test (randomised controlled experiment)** — users randomly split between control and variant, so differences are caused by the change.
+- **Unit of randomisation / analysis** — users here; per-session analysis would treat correlated sessions as independent.
+- **Confidence interval and p-value** — the range of plausible effects, and how surprising the data would be with no effect.
+- **Statistical power and minimum detectable effect** — the chance of detecting a true effect of a given size; drives sample size.
+- **Sample ratio mismatch (SRM)** — observed split differs from planned beyond chance; signals a bug.
+- **CUPED** — subtract θ × (pre-period metric − its mean) to remove predictable variance.
+- **Delta method** — correct variance for ratio metrics like clicks per session.
+- **Peeking** — repeated significance checks that inflate false positives.
+- **Multiple-testing correction** — adjust p-values when testing many metrics (Bonferroni, Benjamini–Hochberg).
+- **Guardrail metric** — must not get worse, such as latency or unsubscribes.
+
 **Q:** What is sample ratio mismatch and why does it matter?
+
 **A:** The observed split between arms differs from the designed split beyond chance. It signals a bug in assignment or logging, which can bias every metric, so the test should not be trusted until fixed.
 
 **Q:** How does CUPED reduce variance?
-**A:** It regresses the metric on a pre-experiment covariate and removes the part explained by it. Randomisation keeps the covariate balanced, so the effect estimate is unbiased, but the leftover noise is smaller.
+
+**A:** It regresses the metric on a pre-experiment covariate and removes the part explained by it. Randomisation keeps the covariate balanced, so the effect estimate is unbiased, but the leftover noise is smaller. Variance falls by a factor of about 1 − ρ², where ρ is the correlation with the pre-period metric.
 
 **Q:** Why not stop the test as soon as it's significant?
-**A:** Repeated looks inflate the false-positive rate. Pre-commit to a sample size or use sequential methods.
+
+**A:** Repeated looks inflate the false-positive rate. Pre-commit to a sample size or use sequential methods designed for continuous monitoring. My simulator shows daily peeking pushing false positives well above 5%.
+
+**Q:** How do you compute the sample size?
+
+**A:** Pick significance (5%), power (usually 80%), the metric's variance and the minimum effect worth detecting. Required users per arm grow with variance and with 1 / effect², so halving the detectable effect needs about four times as many users. `statsmodels` has power functions that do this.
+
+**Q:** Why the delta method for click-through rate per session?
+
+**A:** Both numerator and denominator are random, and sessions from one user are correlated. Treating sessions as independent rows understates variance and gives too many "significant" results. The delta method computes the variance of a ratio of per-user sums correctly.
+
+**Q:** You tested 20 metrics and one moved with p = 0.03. Ship?
+
+**A:** Not on that alone. With 20 metrics at 5% you expect about one false positive by chance. Name one primary metric up front, correct secondary metrics for multiple testing, and treat a lone secondary win as a hypothesis for the next test.
+
+**Q:** The effect is significant but tiny. What do you report?
+
+**A:** The effect size and its confidence interval against the minimum worthwhile effect. Statistically significant is not practically significant; a 0.01% lift may not pay for the extra complexity.
+
+**Q:** How do you prove the toolkit is correct?
+
+**A:** Simulation: thousands of A/A tests must give about 5% false positives, planted effects must be detected at the power the calculator predicts, and CUPED's average estimate must equal the planted effect. Plus unit tests against textbook examples.
+
+**Q:** What goes wrong in social products?
+
+**A:** Network effects: treated users influence control users, so the difference is biased toward zero. Randomising by clusters of connected users, or by region, reduces interference at the cost of fewer units.
+
+**Common mistakes in answers:**
+- Saying CUPED changes the effect estimate; it keeps the expected effect the same and reduces variance.
+- Analysing per session when users were randomised.
+- Ignoring an SRM failure because the p-value "looks good".
 
 ### TL;DR
 Check health before effects, analyse at the randomisation unit, use CUPED and the delta method, never peek naively — and prove all of it with simulations.
@@ -2220,14 +3036,66 @@ erDiagram
 - [Ch 17 — ML Case Studies I](../chapters/17-ml-case-studies-1/README.md): hybrid lexical and semantic retrieval in search design.
 
 ### In the interview
+**30-second answer:** I built a hybrid semantic search engine over a BEIR dataset: documents are chunked, embedded with a sentence-transformer and indexed with pgvector HNSW, alongside PostgreSQL full-text search, and the two result lists are merged with reciprocal rank fusion. The key decision was hybrid rather than dense-only, because embeddings miss exact identifiers and can fall below BM25 out of domain, and RRF needs no score calibration. The hardest part was chunking and ANN tuning: I compared chunk sizes on nDCG@10 and tuned `ef_search` until the index kept at least 95% of exact-search recall. p95 latency is under 100 ms at a million chunks.
+
+**Key terms to know:**
+- **Dense retrieval** — embed query and documents, return nearest vectors by cosine similarity.
+- **Sparse / lexical retrieval (BM25)** — ranks by term frequency and rarity; exact word matching.
+- **Hybrid search and reciprocal rank fusion** — merge lists by summing 1/(k + rank), no score scaling needed.
+- **Chunking** — splitting documents into passages (200–300 words with overlap) so each vector is one idea.
+- **Approximate nearest neighbour (ANN), HNSW, IVFFlat** — indexes that search a fraction of vectors; HNSW is a layered graph, IVFFlat clusters vectors into lists.
+- **`ef_search`** — HNSW's candidate-list size; higher means better recall and slower queries.
+- **Bi-encoder vs cross-encoder** — embed query and document separately (fast) vs read them together (accurate, slow, for reranking).
+- **nDCG@10, Recall@10, MRR** — graded ranking quality, share of relevant items found, and reciprocal rank of the first hit.
+- **Position bias** — users click top results regardless of relevance, so clicks are biased labels.
+- **Embedding model versioning** — query and document vectors must come from the same model.
+
 **Q:** Dense vs sparse retrieval?
+
 **A:** Sparse (BM25) matches exact terms — great for names and codes, robust out of domain. Dense matches meaning — great for paraphrase. Hybrid fusion usually beats both.
 
 **Q:** How does HNSW trade recall for speed?
+
 **A:** It searches a layered proximity graph greedily; the size of the candidate list during search (`ef_search`) controls how much of the graph is explored. Bigger is slower but more accurate.
 
 **Q:** How would you evaluate search quality?
+
 **A:** Offline with labelled query–document relevance (nDCG, Recall@k), online with click-through, reformulation rate and success rate, correcting for position bias.
+
+**Q:** Why RRF rather than adding the two scores?
+
+**A:** BM25 scores and cosine similarities live on different, query-dependent scales, so a weighted sum needs calibration that breaks across queries. RRF uses only ranks, so it is robust and has one parameter (k, often 60).
+
+**Q:** Show a pgvector nearest-neighbour query.
+
+**A:** `<=>` is cosine distance, so ascending order means most similar.
+```sql
+CREATE INDEX ON chunk_vector USING hnsw (embedding vector_cosine_ops);
+SET hnsw.ef_search = 100;
+SELECT chunk_id FROM chunk_vector
+ORDER BY embedding <=> $1 LIMIT 10;
+```
+
+**Q:** What happens if you change the embedding model?
+
+**A:** Old document vectors and new query vectors live in different spaces, so results become garbage without any error. Store the model name with each vector, re-embed the whole corpus into a new index, and switch queries over atomically.
+
+**Q:** How do filters interact with ANN?
+
+**A:** If you search the top 10 and then filter by document type, you may get two results. Over-fetch then filter, or use an index that applies filters during the graph search; pgvector's iterative scans help with this.
+
+**Q:** What changes at 100 million chunks?
+
+**A:** HNSW memory becomes the limit — it wants the graph in RAM. Options are a dedicated vector database or FAISS with compression (product quantisation), sharding by collection, and accepting slower builds. Embedding the corpus becomes a batch GPU job.
+
+**Q:** A query returns confident results that are irrelevant. Why?
+
+**A:** Dense search always returns nearest neighbours, even when nothing is relevant (out-of-domain queries). Show scores, apply a "no good match" threshold, and lean on BM25 for identifiers.
+
+**Common mistakes in answers:**
+- Claiming dense retrieval always beats BM25; on many BEIR domains BM25 is competitive or better.
+- Forgetting that ANN loses recall and never measuring it against exact search.
+- Adding raw BM25 and cosine scores together without calibration.
 
 ### TL;DR
 Embed chunks, index them with an ANN index, fuse with keyword search, and measure with nDCG on labelled queries — chunking and hybrid fusion matter more than the model.
@@ -2329,14 +3197,68 @@ flowchart TD
 - [Ch 18 — ML Case Studies II](../chapters/18-ml-case-studies-2/README.md): privacy blurring of street imagery.
 
 ### In the interview
+**30-second answer:** I fine-tuned a COCO-pretrained Faster R-CNN to detect pedestrians on the 170-image Penn-Fudan set, replacing only the box predictor for two classes and reusing the backbone and region proposal network. The key decision was fine-tuning rather than training from scratch, because 170 images could never train a detector, and I measured the gain over the zero-shot COCO "person" class. The hardest bug class was augmentation: every flip must move the boxes too, so I visually checked boxes and unit-tested that flipping twice is identity. I report mAP@0.5 and COCO mAP@[0.5:0.95], with score threshold and NMS IoU tuned on validation.
+
+**Key terms to know:**
+- **Object detection** — find a variable number of objects and a box and score for each.
+- **Two-stage detector (Faster R-CNN)** — a region proposal network suggests boxes, then a head classifies and refines them.
+- **One-stage detector (RetinaNet, YOLO)** — predicts boxes densely in one pass; faster.
+- **IoU** — intersection over union of two boxes; decides whether a prediction matches a true box.
+- **Non-maximum suppression (NMS)** — keep the best box, drop overlapping ones above an IoU threshold.
+- **Average precision / mAP** — area under the precision–recall curve per class, averaged; COCO also averages IoU 0.5–0.95.
+- **Box predictor** — the final classification and box-regression layer replaced for the new classes.
+- **Box-aware augmentation** — geometric transforms applied identically to image and boxes.
+- **Focal loss** — down-weights easy background examples; key to one-stage accuracy.
+- **Anchor boxes** — reference boxes of set sizes and shapes that proposals are regressed from.
+
 **Q:** What is mAP?
+
 **A:** Average precision per class (area under the precision–recall curve where a detection counts as correct above an IoU threshold), averaged over classes and, in COCO style, over IoU thresholds 0.5 to 0.95.
 
 **Q:** What does non-maximum suppression do?
+
 **A:** It keeps the highest-scoring box and removes others overlapping it above an IoU threshold, so each object gets one box.
 
 **Q:** One-stage vs two-stage detectors?
+
 **A:** Two-stage detectors propose regions then classify them — more accurate, slower. One-stage detectors predict boxes densely in one pass — faster, and with focal loss they close much of the accuracy gap.
+
+**Q:** How do you compute IoU?
+
+**A:** Area of the overlap divided by area of the union.
+```python
+def iou(a, b):  # boxes as x1, y1, x2, y2
+    w = max(0, min(a[2], b[2]) - max(a[0], b[0]))
+    h = max(0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = w * h
+    area = lambda r: (r[2] - r[0]) * (r[3] - r[1])
+    return inter / (area(a) + area(b) - inter)
+```
+
+**Q:** Why is mAP@[0.5:0.95] lower than mAP@0.5?
+
+**A:** At IoU 0.5 a loosely placed box counts as correct; at 0.95 it must be almost pixel-perfect. Averaging over thresholds rewards tight localisation, so the number is always lower and more sensitive to box quality.
+
+**Q:** Crowded scenes: what goes wrong with NMS?
+
+**A:** Two overlapping people can have boxes with IoU above the NMS threshold, so one is suppressed and recall drops. Too lenient a threshold leaves duplicate boxes. Tune it on validation crowd images; Soft-NMS, which lowers scores instead of deleting boxes, is an alternative.
+
+**Q:** How do you avoid overfitting with 170 images?
+
+**A:** Keep most of the backbone frozen early, use a low learning rate, strong but box-correct augmentation, and early stopping on validation mAP. Starting from COCO weights is the biggest factor.
+
+**Q:** How would you get to real-time video at 30 frames per second?
+
+**A:** Switch to a one-stage detector, reduce input resolution, run on GPU with half precision or TensorRT, and track objects between frames so the detector does not have to run on every frame.
+
+**Q:** How do you test it?
+
+**A:** Perfect predictions must give mAP 1.0 and no predictions 0; flipping twice returns the original boxes; an image with no people returns an empty list; and a fixed set of images must keep its expected box counts.
+
+**Common mistakes in answers:**
+- Augmenting images without transforming boxes, then blaming the model.
+- Confusing NMS IoU threshold with the evaluation IoU threshold; they are separate settings.
+- Reporting accuracy for a detector; detection is judged by precision–recall and mAP.
 
 ### TL;DR
 Fine-tune a pre-trained detector, transform boxes with every augmentation, and judge it by mAP with tuned thresholds and NMS.
@@ -2468,14 +3390,66 @@ erDiagram
 - [Ch 2 — Math for ML](../chapters/02-math-for-ml/README.md): Beta distributions, Bayesian updating.
 
 ### In the interview
+**30-second answer:** I built a headline-testing bandit service that picks one of several headlines per visitor and learns from clicks while traffic flows. I compared epsilon-greedy, UCB1 and Thompson sampling in a simulator, then added LinUCB to personalise by visitor features. The key design decision was logging the propensity of every choice, which lets me evaluate new policies offline with inverse propensity scoring. The hardest parts were delayed clicks and non-stationarity, handled with a reward timeout, decision-ID joins and discounted counts. Thompson and UCB clearly beat the uniform A/B split on cumulative regret, and `choose` returns in under 5 ms.
+
+**Key terms to know:**
+- **Multi-armed bandit** — repeatedly pick one of several options (arms) to maximise total reward.
+- **Exploration vs exploitation** — try uncertain arms vs show the current best.
+- **Regret** — reward lost compared with always choosing the best arm.
+- **Epsilon-greedy** — explore at random with probability ε, otherwise exploit.
+- **UCB** — pick the arm with the highest mean plus an uncertainty bonus that shrinks with data.
+- **Thompson sampling (Beta-Bernoulli)** — sample a click rate from each arm's posterior and show the highest.
+- **Contextual bandit (LinUCB)** — rewards depend on visitor features through a per-arm linear model.
+- **Propensity** — the probability the policy chose the arm it chose.
+- **Inverse propensity scoring (IPS)** — reweight logged rewards by 1 / propensity to estimate another policy's value.
+- **Non-stationarity** — click rates change over time; use discounting or sliding windows.
+
 **Q:** When would you use a bandit instead of an A/B test?
+
 **A:** When options are short-lived or numerous and you care about reward during the test more than a precise effect estimate — headlines, thumbnails, promotions.
 
 **Q:** How does Thompson sampling work?
+
 **A:** Keep a posterior over each arm's reward rate, sample one value per arm, show the arm with the highest sample, update with the outcome. Uncertain arms sometimes sample high, so they get explored.
 
 **Q:** Why log propensities?
+
 **A:** So you can evaluate new policies offline with inverse propensity scoring, correcting for the old policy's choices.
+
+**Q:** Show a Thompson sampling choice.
+
+**A:** Beta(clicks + 1, non-clicks + 1) is the posterior with a uniform prior.
+```python
+def choose(clicks, pulls, rng):
+    draws = rng.beta(clicks + 1, pulls - clicks + 1)  # numpy arrays per arm
+    return int(draws.argmax())
+```
+The propensity is not returned by this sketch; estimate it by Monte Carlo or log the sampling probabilities another way.
+
+**Q:** UCB vs epsilon-greedy?
+
+**A:** Epsilon-greedy explores at a fixed rate, wasting traffic on clearly bad arms forever. UCB explores where it is uncertain, and its bonus shrinks as an arm gets data, so exploration fades naturally and regret grows only logarithmically.
+
+**Q:** Clicks arrive up to 10 minutes late. What happens?
+
+**A:** The policy makes decisions with stale statistics, so it over-explores early. The service never blocks: rewards are joined to decisions by ID, and clicks after a timeout count as no click. I measured the regret cost of delay in the simulator.
+
+**Q:** Why can a bandit pick a clickbait headline?
+
+**A:** It optimises exactly the reward you give it. If the reward is a click, misleading headlines win. Use dwell time or "did not bounce" as the reward, or add guardrail metrics.
+
+**Q:** What changes with ten servers?
+
+**A:** Each has partial arm statistics. Share them through a fast store such as Redis, or merge counts every few seconds; Thompson tolerates slightly stale counts well. Decision and reward logs still go to a durable store for offline evaluation.
+
+**Q:** Why can IPS estimates be very noisy?
+
+**A:** If the logging policy rarely chose an action, its propensity is tiny and 1 / propensity explodes, so a few rows dominate. Keeping an exploration floor, clipping weights, or using a doubly robust estimator reduces the variance.
+
+**Common mistakes in answers:**
+- Saying bandits replace A/B tests; they minimise regret but do not give clean long-term effect estimates.
+- Running a deterministic greedy policy and then trying to evaluate alternatives from its logs (propensities of 0 make IPS impossible).
+- Ignoring non-stationarity when headline click rates decay within hours.
 
 ### TL;DR
 A bandit trades a clean experiment for less regret; log propensities so your traffic remains useful evidence, and watch for non-stationarity and clickbait.
@@ -2578,14 +3552,60 @@ flowchart TD
 - [Ch 6 — Evaluation and Tuning](../chapters/06-evaluation-and-tuning/README.md): grouped CV, asymmetric costs, quantiles.
 
 ### In the interview
+**30-second answer:** I built a remaining-useful-life predictor on NASA's C-MAPSS jet-engine data, comparing LightGBM on rolling window features with an LSTM over the last 30 cycles. The key decisions were capping RUL labels at about 125 cycles, because healthy engines all look alike, and normalising sensors per operating regime, which was the biggest single gain on the multi-condition sets. The hardest part was evaluation honesty: consecutive cycles are near-duplicates, so every split is by engine, never by row. Predictions feed a scheduler that services an engine when its 10th-percentile RUL drops below the maintenance lead time, and I report failures avoided against cycles of life wasted.
+
+**Key terms to know:**
+- **Remaining useful life (RUL)** — cycles left before failure, computed as last cycle minus current cycle for training engines.
+- **Run-to-failure data / truncated test trajectories** — training engines run until failure; test engines stop earlier and you predict at the last observed cycle.
+- **Piecewise-linear RUL cap** — clip labels at a ceiling so early, healthy life is one constant value.
+- **Operating regime normalisation** — cluster flight settings and standardise sensors within each cluster.
+- **Window features** — rolling means, slopes and standard deviations over recent cycles.
+- **Grouped cross-validation** — all rows of one engine stay in one fold (`GroupKFold`).
+- **Asymmetric scoring** — late predictions (more life than remains) are penalised more than early ones.
+- **Quantile prediction** — a lower percentile of RUL for conservative decisions.
+- **Censoring / survival analysis** — machines serviced before failure give "at least this long" labels; survival models use them properly.
+- **LSTM / 1-D CNN** — sequence models that learn temporal features from raw windows.
+
 **Q:** Why cap RUL labels?
+
 **A:** Healthy engines look alike regardless of how much life remains, so large RUL values are unlearnable noise. Capping focuses the model on the degradation phase where predictions matter.
 
 **Q:** How do you split the data?
+
 **A:** By machine. Rows from the same machine are highly correlated, so a row split leaks identity and inflates scores.
 
 **Q:** How do you turn RUL into decisions?
+
 **A:** Use a conservative quantile against the maintenance lead time, and tune the policy by simulating the cost of failures vs early maintenance.
+
+**Q:** Why do late predictions get penalised more?
+
+**A:** Predicting 20 cycles left when 10 remain risks an in-service failure, which is dangerous and expensive. Predicting 10 when 20 remain only wastes a little part life. The C-MAPSS score grows exponentially, faster for late errors, so I train with quantile loss or bias predictions early.
+
+**Q:** Gradient boosting or LSTM?
+
+**A:** Boosting on hand-made window features is fast, interpretable and strong on C-MAPSS. The LSTM learns features directly from sequences but needs more tuning and data. I compared them under the same engine-grouped CV and asymmetric score, and the gap was small enough that the boosted model's simplicity mattered.
+
+**Q:** Why is per-regime normalisation so important?
+
+**A:** In FD002 and FD004 engines fly in six operating conditions, and raw sensor values jump with altitude and throttle far more than with wear. Standardising within each regime removes that and exposes the slow degradation trend.
+
+**Q:** A test engine has only 30 cycles of history. How confident are you?
+
+**A:** Not very: short histories carry little degradation signal. The prediction should come with a wider interval, from quantile models or an ensemble's spread, and the scheduler should use the lower quantile.
+
+**Q:** What changes with real fleet data?
+
+**A:** Sensors drift, fail and get recalibrated, data has gaps, and most machines are serviced before they fail, so labels are censored. You add missing-data handling, sensor-health checks and survival models (for example Weibull time-to-event) that treat serviced units as censored.
+
+**Q:** How do you test the pipeline?
+
+**A:** Labels must fall by one per cycle; no engine may appear in both train and validation; no window may use cycles after the prediction point; and lower quantile ≤ median ≤ upper quantile for every prediction.
+
+**Common mistakes in answers:**
+- Random row splits that report near-perfect RMSE.
+- Optimising RMSE only and ignoring that late predictions are the dangerous ones.
+- Treating serviced-before-failure machines as if they failed at service time.
 
 ### TL;DR
 Group by engine, cap labels, normalise per regime, and use a conservative quantile — RUL prediction is about safe decisions, not just low RMSE.
@@ -2717,14 +3737,60 @@ erDiagram
 - [Ch 15 — ML System Design Framework](../chapters/15-ml-system-design-framework/README.md): the deployment and monitoring steps.
 
 ### In the interview
+**30-second answer:** I built an automated retraining pipeline: extract a snapshot from PostgreSQL, validate it, build features, train a challenger, compare it with the current champion on the same newest holdout, register it in MLflow if it wins, and batch-score all active rows. The key design decision was putting data validation first, because broken upstream data is the most common production failure, and a halved row count or a null key column stops the run with an alert. The hardest part was a fair, safe promotion gate: the challenger must beat the champion by a margin with no slice regressions, and rollback is one alias change. Each run records the data hash, code commit and parameters, and batch writes are idempotent upserts.
+
+**Key terms to know:**
+- **Training pipeline** — scheduled, scripted steps from raw data to a registered model and predictions.
+- **Data validation** — schema, nulls, ranges, category sets, row counts and label distribution checked against the previous run.
+- **Champion / challenger** — the live model and the candidate, scored on the same holdout.
+- **Promotion gate** — rules a challenger must pass: margin on the primary metric, no guardrail or slice regression.
+- **Model registry and alias** — versioned models with a `champion` pointer; rollback moves the pointer.
+- **Batch scoring** — scoring many rows on a schedule and writing results to a table.
+- **Idempotency** — re-running a step with the same inputs gives the same result and no duplicates.
+- **Lineage / reproducibility** — data hash, code version, environment and parameters stored with each model.
+- **Orchestrator** — Airflow, Prefect or Dagster: dependencies, retries, alerts and a UI.
+- **Feedback loop** — model-driven actions change future labels.
+
 **Q:** How do you decide whether to promote a retrained model?
+
 **A:** Score champion and challenger on the same recent holdout, require a meaningful improvement on the primary metric with no guardrail or slice regressions, then roll out gradually with monitoring.
 
 **Q:** What should a training pipeline validate?
+
 **A:** Schema, nulls, ranges, category sets, row counts and label distribution versus the previous run, and freshness of the source tables.
 
 **Q:** How do you make a model reproducible?
+
 **A:** Version the data snapshot, code, environment and parameters, and fix random seeds — all recorded with the registered model.
+
+**Q:** Why not compare the new model's score with the score the old model got at training time?
+
+**A:** They were measured on different data from different periods. A new holdout may be easier or harder, so the comparison is meaningless. Re-score the champion on exactly the same new holdout.
+
+**Q:** The batch job crashed halfway and was retried. What protects you?
+
+**A:** Writes upsert on `(entity_id, run_id)`, so retried rows overwrite rather than duplicate. Steps check whether their output already exists, and downstream readers only read runs marked complete.
+
+**Q:** Scheduled or triggered retraining?
+
+**A:** Scheduled is simple and predictable. Triggered retraining (on drift or enough new labels) saves compute and reacts faster but depends on reliable monitoring (Project 31). I started with a schedule and added drift triggers later.
+
+**Q:** Should promotion be fully automatic?
+
+**A:** Not at first. Automatic promotion is fast but a subtle bug can ship silently, so many teams keep human approval for the final step until the gates have earned trust, and use canary scoring on a small share first.
+
+**Q:** What breaks at 100x data?
+
+**A:** Single-machine pandas extraction and training. Move feature building to the warehouse or Spark, train on sampled or distributed data (Ray, Spark), and make validation statistics incremental. The pipeline structure stays the same.
+
+**Q:** How do you test the pipeline itself?
+
+**A:** Unit tests for each validation check with good and bad fixtures, an end-to-end run on a 1,000-row fixture database in CI, a promotion-gate test with synthetic metrics, and a rollback drill.
+
+**Common mistakes in answers:**
+- Treating "retrain on a schedule" as the whole of MLOps, with no validation or gate.
+- Comparing models on different holdouts.
+- Ignoring that the model's own actions bias the next training set; keep a random holdout population.
 
 ### TL;DR
 Automate extract, validate, train, compare against the champion, register and batch-score — with data checks first and reproducibility everywhere.
@@ -2828,14 +3894,60 @@ flowchart TD
 - [Ch 16 — ML in Production](../chapters/16-ml-in-production/README.md): experiments and their use for modelling.
 
 ### In the interview
+**30-second answer:** I built an uplift model on the Criteo incrementality data to decide whom a marketing campaign should target. Instead of predicting who will convert, it estimates P(convert | treated) − P(convert | not treated) per user, using T-learner, S-learner and class-transformation approaches on randomised data. The hardest part is that no individual's uplift is ever observed, so I evaluate on groups with Qini curves and bootstrap intervals, and conversion is so rare that differences are noisy. The output is a profit curve that picks the share of users to treat given offer cost and conversion value, and it beats a plain response model at finding persuadable users.
+
+**Key terms to know:**
+- **Uplift (individual treatment effect)** — the change in outcome caused by treating this customer.
+- **Persuadables, sure things, lost causes, sleeping dogs** — the four customer types; only persuadables are worth treating, sleeping dogs react badly.
+- **Randomised treatment** — required so treated and control groups differ only by chance.
+- **Average treatment effect (ATE)** — the mean uplift across everyone.
+- **T-learner** — two outcome models, treated and control; uplift is their difference.
+- **S-learner** — one model with treatment as a feature; uplift is f(x, 1) − f(x, 0).
+- **Class transformation** — a relabelling that turns uplift into one classification problem when treatment is 50/50 (reweight otherwise).
+- **Qini curve / coefficient** — cumulative incremental conversions when targeting in order of predicted uplift.
+- **Uplift@k** — treated-minus-control conversion rate in the top k% by predicted uplift.
+- **Confounding** — in non-randomised data, factors that drive both treatment and outcome.
+
 **Q:** Why not just target customers most likely to buy?
+
 **A:** Many would buy anyway, so the offer is wasted on them, and some react negatively. Uplift targets people whose behaviour the offer changes.
 
 **Q:** How do you evaluate an uplift model?
+
 **A:** On randomised holdout data, rank by predicted uplift and compute the observed treated-minus-control difference cumulatively — the Qini or uplift curve — since individual effects are never observed.
 
 **Q:** What is a T-learner?
-**A:** Two outcome models, one trained on treated and one on control users; their difference is the uplift estimate.
+
+**A:** Two outcome models, one trained on treated and one on control users; their difference is the uplift estimate. It is simple but the two models' errors do not cancel, so the difference can be noisy.
+
+**Q:** T-learner vs S-learner?
+
+**A:** The S-learner uses all data in one model, but a tree model may barely split on the treatment flag, shrinking uplift toward zero. The T-learner models each arm separately and captures different patterns, but it suffers when one arm is small — in Criteo most users are treated, so the control model has few positives.
+
+**Q:** Why does a randomised test matter so much?
+
+**A:** Without randomisation, treated customers differ systematically (for example, marketing targeted loyal users), so the treated-minus-control difference mixes the offer's effect with who was chosen. I check balance with standardised differences of features between arms before modelling.
+
+**Q:** How do you pick how many customers to treat?
+
+**A:** A profit curve: for each share of top-uplift customers, expected incremental conversions × value minus treated count × offer cost. Choose the peak, and exclude negative-uplift customers entirely.
+
+**Q:** Conversion is about 0.3%. What problems does that cause?
+
+**A:** The difference between two tiny rates is very noisy, so uplift estimates and Qini curves jump around. Use large buckets, bootstrap intervals, and the more frequent "visit" outcome as an auxiliary signal.
+
+**Q:** How do you prove the methods work?
+
+**A:** Synthetic data with planted heterogeneous effects: each method must recover the true uplift ranking (I report Spearman correlation). A random model's Qini curve must sit near the diagonal and an oracle's above everything.
+
+**Q:** What changes in production?
+
+**A:** Uplift drifts with seasons and offer types, and once you target by the model you lose clean data. Keep a randomised holdout in every campaign to refresh training labels and measure true incremental impact.
+
+**Common mistakes in answers:**
+- Evaluating an uplift model with accuracy or AUC on the conversion label.
+- Training on observational campaign data and calling the result causal.
+- Saying uplift can be measured per customer; it can only be estimated on groups.
 
 ### TL;DR
 Uplift models estimate the effect of acting, not the chance of an outcome; they need randomised data and are judged by Qini curves and profit, never by accuracy.
@@ -2938,14 +4050,60 @@ flowchart TD
 - [Ch 16 — ML in Production](../chapters/16-ml-in-production/README.md): model compression and edge deployment.
 
 ### In the interview
+**30-second answer:** I built a keyword spotter on Google Speech Commands: one-second clips become 40 × 98 log-mel spectrograms, and a compact depthwise-separable CNN classifies 10 keywords plus "unknown" and "silence". The key design decision was optimising for the device — under 500,000 parameters and under 2 MB after int8 quantisation — while keeping test accuracy above 90%. The hardest problem was false triggers in real audio, so I trained strong unknown and silence classes, used noise mixing and SpecAugment, and smoothed predictions over sliding windows in the streaming demo. I measure false accepts per hour of background audio, not just clip accuracy.
+
+**Key terms to know:**
+- **Keyword spotting / wake word** — always-on recognition of a small vocabulary on device.
+- **Log-mel spectrogram** — energy per mel frequency band over time, log-compressed; an image-like input.
+- **Speaker-disjoint split** — no voice in both train and test; the dataset's lists hash by speaker.
+- **Unknown and silence classes** — other words and background noise, essential to avoid triggering on everything.
+- **SpecAugment** — masking random time and frequency bands as augmentation.
+- **Depthwise-separable convolution** — a per-channel convolution plus a 1 × 1 mixing convolution; far fewer parameters.
+- **Int8 quantisation** — 8-bit weights and activations; about 4× smaller and faster, needs calibration data.
+- **Quantisation-aware training** — simulating quantisation during training to recover lost accuracy.
+- **False rejection rate / false accepts per hour** — missed keywords and spurious triggers, the real operating metrics.
+- **Posterior smoothing** — averaging probabilities over several windows before triggering.
+
 **Q:** Why log-mel spectrograms?
+
 **A:** They capture how energy is distributed across frequencies over time, on a perceptual scale and with compressed dynamic range, turning audio into an image-like input that CNNs handle well.
 
 **Q:** How do you measure a wake-word detector?
+
 **A:** False rejection rate on keywords and false acceptances per hour on background audio, at the operating threshold — not just clip accuracy.
 
 **Q:** How do you shrink a model for a device?
+
 **A:** Efficient architectures (depthwise-separable convolutions), pruning, quantisation, and distillation from a bigger teacher.
+
+**Q:** How much does a depthwise-separable convolution save?
+
+**A:** A standard 3 × 3 convolution from C_in to C_out channels has 9·C_in·C_out weights. The separable version has 9·C_in (depthwise) plus C_in·C_out (pointwise). With 64 channels in and out that is about 37,000 vs 4,700 — roughly 8× fewer.
+
+**Q:** Why would a random split overstate accuracy?
+
+**A:** The same speaker's voice in train and test lets the model recognise voices rather than words. The official validation and testing lists hash speaker IDs so each person is in exactly one split.
+
+**Q:** Streaming accuracy is worse than clip accuracy. Why?
+
+**A:** Training clips are centred, but in a stream a word can straddle window boundaries. Time-shift augmentation, overlapping windows every 100 ms, and averaging recent probabilities before thresholding fix most of it.
+
+**Q:** Post-training int8 quantisation cost 3 accuracy points. What now?
+
+**A:** Check calibration data is representative, keep sensitive layers (first and last) in higher precision, or use quantisation-aware training, which usually recovers most of the loss for small models.
+
+**Q:** How would you scale to millions of devices with a custom wake word?
+
+**A:** Use a two-stage design: a tiny always-on detector with a high-recall threshold and a bigger on-device verifier. Personalise with few-shot fine-tuning on the user's own recordings. Monitor false triggers through opt-in, privacy-preserving telemetry.
+
+**Q:** How do you test robustness?
+
+**A:** Mix test clips with noise at several signal-to-noise ratios and plot accuracy against SNR; check feature parity between training and streaming spectrograms; and check the exported model matches PyTorch outputs.
+
+**Common mistakes in answers:**
+- Reporting 95% clip accuracy as the headline when the product metric is false triggers per hour.
+- Skipping the unknown class, so every word triggers a keyword.
+- Assuming quantisation is free for very small models.
 
 ### TL;DR
 Spectrogram plus compact CNN, speaker-disjoint splits, strong unknown/silence classes and quantisation — measured in false triggers per hour, not just accuracy.
@@ -3048,14 +4206,60 @@ flowchart TD
 - [Ch 18 — ML Case Studies II](../chapters/18-ml-case-studies-2/README.md): harmful-content moderation design.
 
 ### In the interview
+**30-second answer:** I built a multi-label toxicity classifier — TF-IDF one-vs-rest baseline and a fine-tuned transformer with six sigmoid outputs — and then audited it for unintended identity bias. The key decision was judging the model by its worst subgroup, using subgroup AUC, BPSN and BNSP AUC plus a template set like "I am a [identity] person", not just mean column-wise AUC. The hardest problem was that identity terms co-occur with abuse in training data, so the model learned "identity word means toxic"; adding non-toxic identity examples improved the worst-subgroup BPSN without a large drop in overall AUC. Thresholds are set per use: high precision for auto-hide, a lower bar for human review.
+
+**Key terms to know:**
+- **Multi-label classification** — each comment can have several labels; one sigmoid per label with binary cross-entropy.
+- **Mean column-wise ROC AUC** — AUC per label, averaged.
+- **Unintended bias** — higher scores for innocent comments that mention identity groups.
+- **Subgroup AUC** — AUC within comments mentioning one identity.
+- **BPSN AUC** — background positive, subgroup negative: toxic comments without the identity vs non-toxic ones with it.
+- **BNSP AUC** — background negative, subgroup positive: the reverse mix.
+- **Template test set** — synthetic non-toxic sentences varying only the identity term.
+- **Mitigation by data** — add or up-weight non-toxic identity examples, then re-audit.
+- **Label subjectivity / soft labels** — annotators disagree; labels can be fractions.
+- **Precision-based thresholds** — separate cut-offs for auto-removal and human review.
+
 **Q:** What is BPSN AUC?
+
 **A:** AUC on a mix of toxic comments that do not mention the identity and non-toxic comments that do. Low values mean the model confuses mentions of the identity with toxicity.
 
 **Q:** How would you reduce identity bias?
+
 **A:** Add or up-weight non-toxic examples mentioning identities, balance training data, and re-audit with subgroup metrics; avoid simply masking identity words.
 
 **Q:** Why is overall AUC not enough?
+
 **A:** Errors concentrated on small groups barely move the average but cause real harm. Report per-subgroup and worst-group metrics.
+
+**Q:** Why six sigmoids rather than one softmax?
+
+**A:** Labels overlap — an insult can also be obscene and toxic. Softmax forces probabilities to sum to one and pick a single class. Independent sigmoids give each label its own probability.
+
+**Q:** Why not just remove identity words from the input?
+
+**A:** It hides the symptom but blinds the model to real identity attacks, which are exactly what the "identity hate" label must catch. Fix the training data instead.
+
+**Q:** Threat and severe-toxic are very rare. How do you handle them?
+
+**A:** Report PR AUC per label rather than ROC AUC, which looks good on rare classes even when precision is poor. Use class weights or per-label thresholds, and accept that evaluation will be noisy with few positives.
+
+**Q:** How do you test the model beyond metrics?
+
+**A:** Template tests (every identity's average score stays low), invariance tests (swapping one identity term for another barely changes the score), directional tests (adding an explicit insult raises the insult score), and a regression suite of past false positives.
+
+**Q:** What changes when you run this on a platform with 100 million comments a day?
+
+**A:** Transformer cost dominates, so a cheap model filters obvious cases and the transformer scores the uncertain middle. Users adapt with obfuscated spelling, so character-level features and regular retraining matter. Human review capacity sets the review threshold.
+
+**Q:** Users write "f*ck" and "i d i o t". What breaks?
+
+**A:** Word-level features miss them, so recall drops. Character n-grams and subword tokenisers handle much of it, and I include obfuscated variants in the test set to measure robustness.
+
+**Common mistakes in answers:**
+- Claiming the model is fair because overall AUC is high.
+- Using softmax for overlapping labels.
+- Auto-removing comments at a single threshold without human review for borderline scores.
 
 ### TL;DR
 A toxicity model is only as good as its worst subgroup: measure subgroup, BPSN and BNSP AUC, mitigate with better data, and keep humans in the loop for borderline cases.
@@ -3205,17 +4409,60 @@ erDiagram
 - [Ch 16 — ML in Production](../chapters/16-ml-in-production/README.md): feature consistency, shadow testing, fallbacks.
 
 ### In the interview
+**30-second answer:** I built a three-stage recommender on MovieLens 32M: a two-tower model retrieves 500 candidates from an HNSW index, a LightGBM ranker with user–item cross features orders them, and a rule-based re-ranker removes seen items and enforces diversity and freshness. The key design decision was the funnel itself — item embeddings are precomputed so retrieval is a millisecond ANN lookup, and the heavy model only sees 500 items. The hardest part was in-batch negatives over-penalising popular items; the logQ correction fixed it and I measured the Recall@500 gain. End to end it holds p95 under 150 ms at 200 requests per second, with stage-by-stage debug info in every response.
+
+**Key terms to know:**
+- **Recommendation funnel** — cheap broad retrieval, then precise ranking, then business-rule re-ranking.
+- **Two-tower model** — a user tower and an item tower produce embeddings; relevance is their dot product.
+- **In-batch negatives / sampled softmax** — other positives in the batch serve as negatives for each user.
+- **logQ (sampling-bias) correction** — subtract the log of each item's sampling probability so popular items are not over-penalised.
+- **ANN index (HNSW, FAISS)** — fast approximate top-k search over item vectors.
+- **Ranker with cross features** — a heavier model using user–item interaction features the towers cannot combine.
+- **Recall@K vs NDCG@K** — did good items survive retrieval, and are they well ordered at the top.
+- **Training–serving consistency** — same feature definitions and history windows offline and online.
+- **Position bias and feedback loops** — users click what you show and what is on top, reinforcing the current model.
+- **Shadow testing and fallbacks** — score live traffic without serving; serve popularity if a stage fails.
+
 **Q:** Why separate retrieval and ranking?
+
 **A:** Compute budget: retrieval must scan millions of items, so it uses a model whose item side can be pre-computed and searched with ANN. Ranking sees only hundreds of items, so it can afford rich cross features and heavy models.
 
 **Q:** How do you train a two-tower model without explicit negatives?
+
 **A:** Use in-batch negatives (other users' positives in the batch) with a softmax loss, plus a sampling-bias correction so popular items are not unfairly penalised; optionally add hard negatives.
 
 **Q:** How do you handle new items?
+
 **A:** The item tower uses content features, so a new item gets an embedding immediately and can be added to the index; reserve some exploration traffic so it collects interactions.
 
 **Q:** What offline metrics would you use per stage?
+
 **A:** Recall@K for retrieval (did the good items survive?), NDCG@K or MAP for ranking, plus coverage and diversity for the final list.
+
+**Q:** Why can a two-tower model not replace the ranker?
+
+**A:** The towers never see user and item together until the final dot product, so they cannot model specific interactions like "this user has watched four films by this director". That separation is what makes precomputing item vectors possible, and it is exactly what the ranker adds back.
+
+**Q:** How do you size the system?
+
+**A:** 10 million items × 64 floats × 4 bytes is about 2.6 GB of vectors, which fits in RAM on one machine before index overhead. Ranking 500 candidates with LightGBM takes tens of milliseconds, and feature fetches usually dominate, so they are batched and cached.
+
+**Q:** The ANN service goes down. What does the user see?
+
+**A:** Never an empty page. The API falls back to cached recommendations for that user or to popular items, logs the fallback, and the impression log records which path served the request so metrics are not polluted.
+
+**Q:** Retrieval improves offline but the online metric does not. Why might that be?
+
+**A:** The ranker may not like the new candidates (stage misalignment), or the gain may be on items the ranker already found. Evaluate the ranker on the candidates retrieval actually returns, and remember offline replay rewards predicting what users found anyway.
+
+**Q:** How do you test it before launch?
+
+**A:** A fixed offline harness for every change, contract tests that embedding dimension, normalisation and model version match between towers and index, unit tests for re-rank rules, load tests with heavy and new users, and a shadow test on live traffic.
+
+**Common mistakes in answers:**
+- Describing one big model scoring every item per request; it cannot meet the latency budget.
+- Mixing user and item embeddings from different model versions.
+- Training on impression logs without addressing position bias, so the model learns to copy itself.
 
 ### TL;DR
 Retrieval (two towers + ANN) for recall, a feature-rich ranker for precision, rules for policy — each stage evaluated on its own job and served within one latency budget.
@@ -3352,14 +4599,60 @@ erDiagram
 - [Ch 6 — Evaluation and Tuning](../chapters/06-evaluation-and-tuning/README.md): calibration.
 
 ### In the interview
+**30-second answer:** I built a social feed ranker on a simulated network where I know the true engagement probabilities. One multi-task network with a shared body and five heads predicts like, comment, share, long dwell and hide, and a product-owned value formula combines them — negative weight on hide — so the definition of a good feed can change at runtime without retraining. The hardest parts were calibration and position bias: the value formula adds probabilities, so each head is calibrated on held-out data, and position is a training-only feature fixed at serving. In a simulated A/B test the multi-task feed raised comments and cut hides compared with chronological and like-only feeds, ranking 1,000 candidates in under 50 ms.
+
+**Key terms to know:**
+- **Candidate inventory** — recent unseen posts from connections, cut to hundreds by a light first pass.
+- **Multi-task learning** — one shared network with a head per task; rare tasks borrow representations from common ones.
+- **Task loss weights** — weights on each head's loss so common tasks do not dominate shared layers.
+- **Negative transfer** — one task hurting another's accuracy in a shared model.
+- **Value formula** — Σ wᵢ × P(actionᵢ), with negative weights for hides or reports.
+- **Per-head calibration** — each predicted probability must match observed rates before summing.
+- **Position bias** — top slots get engagement regardless of quality.
+- **Feature hydration and fresh counters** — fetching per-post and per-viewer features; early engagement counts from a streaming aggregator.
+- **Integrity and diversity re-rank** — down-rank flagged posts, cap consecutive posts per author.
+- **Simulator ground truth** — known probabilities let you check whether the model learned the truth.
+
 **Q:** Why multi-task instead of separate models?
+
 **A:** One model and one feature fetch for all predictions, and rare tasks benefit from representations learned on common ones. The cost is tuning loss weights and watching for negative transfer.
 
 **Q:** How do you combine the predictions?
+
 **A:** A weighted sum of calibrated probabilities, including negative weights for hides or reports. Weights encode product values and are tuned with online experiments.
 
 **Q:** How do you avoid optimising for clickbait?
+
 **A:** Include negative-feedback predictions and integrity signals, weight meaningful interactions higher, and use long-term metrics (retention, surveys) as guardrails.
+
+**Q:** Why must each head be calibrated?
+
+**A:** If the share head says 0.3 when the truth is 0.03, its term in the weighted sum is ten times too large and silently dominates the ranking. Calibration (for example isotonic regression per head on held-out data) makes the weights mean what product owners think they mean.
+
+**Q:** How do you correct for position bias?
+
+**A:** Log the position of every impression, include it as a feature during training so the model attributes some engagement to slot, and set it to one constant at serving so all posts compete fairly. A small slice of randomised ordering lets you estimate position propensities directly.
+
+**Q:** Early-engagement counts are a top feature. What can go wrong?
+
+**A:** If training uses the final count while serving sees the live count after five minutes, the model learns a relationship that does not exist at serving time. Log features exactly as served and train on the logged values.
+
+**Q:** Where does the latency go?
+
+**A:** A small MLP over 500 candidates is a few milliseconds on CPU. Feature hydration — network calls for counters, affinity and post data — dominates, so fetch in batches and cache hot authors.
+
+**Q:** How do you evaluate offline and online?
+
+**A:** Offline: AUC and calibration per head, NDCG on the combined value, and correlation with the simulator's true probabilities. Online: an A/B test on comments, hides and session length, with long-term retention as a guardrail.
+
+**Q:** What changes at a billion users?
+
+**A:** The inventory per user grows, so the first pass needs to be learned rather than heuristic; counters move to a distributed streaming system; and models retrain continuously. Experiment design must handle network effects, since one user's feed changes what their friends see.
+
+**Common mistakes in answers:**
+- Summing uncalibrated probabilities in the value formula.
+- Optimising a single engagement metric and calling it "feed quality".
+- Training on final engagement counts while serving uses live counts.
 
 ### TL;DR
 Predict many engagement types with one calibrated multi-task model, combine them with a product-owned value formula, and correct for position bias and stale counters.
@@ -3506,14 +4799,60 @@ erDiagram
 - [Ch 6 — Evaluation and Tuning](../chapters/06-evaluation-and-tuning/README.md): PR AUC, thresholds at a fixed FPR.
 
 ### In the interview
+**30-second answer:** I built a real-time card-fraud scorer that decides approve, challenge or block while the customer waits. A stream processor updates sliding-window velocity counters (per card, device, email and address) in Redis, and the scoring API combines them with a LightGBM model and a rules layer within a 50 ms p99 budget at 1,000 transactions per second. The hardest problem was training/serving skew, so training data is built point-in-time and a parity test checks online and offline feature values match on 10,000 replayed transactions. I also handled chargebacks arriving weeks later by training only on matured data, and report recall at a 0.1% false-positive rate.
+
+**Key terms to know:**
+- **Velocity features** — counts and sums in sliding windows (1 min, 1 h, 24 h) per card, device, email or IP.
+- **Stream processing** — consuming events from Kafka and updating windowed aggregates continuously.
+- **Online feature store** — low-latency reads of the latest feature values (Redis).
+- **Point-in-time correctness** — offline features computed exactly as they were at each transaction, excluding later events.
+- **Training/serving skew** — features computed differently offline and online.
+- **Delayed labels** — chargebacks arrive 30–60 days later; train only on matured windows.
+- **Selection bias from blocking** — blocked transactions never get a true label.
+- **Extreme class imbalance** — fraud may be one in a thousand; use PR AUC and recall at a fixed FPR.
+- **Decision thresholds** — approve / challenge (3-D Secure) / block cut-offs from cost and friction.
+- **Fail-open vs fail-closed** — approve or block by default when a dependency fails.
+
 **Q:** How do you guarantee features are the same online and offline?
+
 **A:** Define each feature once, compute it with the same logic in both paths (or log online values and train on them), use point-in-time joins offline, and run parity tests on replayed data.
 
 **Q:** How do you handle labels arriving 60 days late?
+
 **A:** Train only on matured data, use faster proxy labels (analyst verdicts, customer disputes) for monitoring, and account for the gap when measuring drift.
 
 **Q:** How do you learn from transactions you blocked?
+
 **A:** You can't directly — they have no outcome. Route a small random fraction to challenge instead of block, and use those outcomes (with inverse propensity weighting) for training and evaluation.
+
+**Q:** Why not compute velocity features in a nightly batch?
+
+**A:** A stolen card is used many times within minutes. A count from last night says nothing about the last ten minutes, so the most predictive signal would be missing exactly when fraud happens.
+
+**Q:** Which metric do you report and why?
+
+**A:** With fraud around 0.1% of transactions, accuracy is meaningless and ROC AUC looks great even when precision is poor. I report PR AUC and recall at a fixed false-positive rate, because the FPR maps directly to legitimate customers who get blocked or challenged.
+
+**Q:** Redis goes down during peak. What happens?
+
+**A:** The API must never time out a checkout. It falls back to a model trained without velocity features, or to rules only, and a per-merchant policy decides whether to fail open or closed. A chaos test proves it.
+
+**Q:** Do the counters fit in memory?
+
+**A:** 100 million cards × 10 counters × 8 bytes is about 8 GB before overhead, so a single Redis node is tight and a Redis cluster sharded by key is the plan. Hot keys — one card attempting hundreds of payments — need testing too.
+
+**Q:** Fraudsters change tactics after you block a pattern. How do you keep up?
+
+**A:** Retrain frequently on fresh matured labels, monitor feature drift and the share of fraud caught by rules vs model, feed analyst verdicts back quickly as early labels, and add graph features (cards per device) that are harder to evade.
+
+**Q:** Why LightGBM rather than a deep model?
+
+**A:** It is strong on tabular data, fast to score and easy to explain to analysts. Deep models, as Stripe moved to, use more raw features and scale better with data but need more infrastructure; I would switch when data volume justified it.
+
+**Common mistakes in answers:**
+- Computing "transactions in the last hour" offline with a window that includes the current transaction.
+- Evaluating with a random split instead of a time-based one, which leaks future fraud patterns.
+- Treating blocked transactions as confirmed fraud in training data.
 
 ### TL;DR
 Real-time fraud is a feature-freshness problem: streaming velocity counters, point-in-time training data, sub-50 ms scoring, and a plan for delayed and missing labels.
@@ -3650,14 +4989,67 @@ erDiagram
 - [Ch 13 — Recommender Systems and Embeddings](../chapters/13-recommenders-and-embeddings/README.md): retrieval funnels.
 
 ### In the interview
+**30-second answer:** I built a two-stage search system: PostgreSQL full-text retrieval returns 200 candidates and a LambdaMART ranker in LightGBM re-ranks them to the top 20 in under 30 ms. On MSLR-WEB30K I compared pointwise, pairwise and LambdaMART across all five folds, and LambdaMART won on NDCG@10. The key design decision was optimising a list metric directly, because only the top of the list matters to users. The hardest part was learning from clicks: in a simulator with position bias, naive click training copied the old ranking, while inverse-propensity-weighted training recovered the true relevance order.
+
+**Key terms to know:**
+- **Learning to rank (LTR)** — learning to order documents for each query.
+- **Pointwise / pairwise / listwise** — predict each item's relevance, which of two is better, or optimise the whole list.
+- **LambdaMART** — gradient-boosted trees fitted to "lambda" gradients scaled by how much a swap would change NDCG.
+- **NDCG@k** — graded relevance with a log discount by position, normalised by the ideal ranking.
+- **Query groups** — training rows grouped by query; splits and the `group` array must respect them.
+- **L1 retrieval / L2 ranking** — cheap recall-oriented candidate generation, then an expensive precise ranker.
+- **BM25** — the classic keyword score from term frequency and rarity.
+- **Position bias and examination propensity** — the probability a user even looks at each position.
+- **Inverse propensity weighting (IPW)** — weight each click by 1 / propensity of its position.
+- **Interleaving** — mix two rankers' results in one list and see which gets more clicks.
+
 **Q:** Pointwise, pairwise or listwise?
+
 **A:** Pointwise predicts relevance per item — simple but ignores order. Pairwise learns which of two items is better. Listwise (LambdaMART, softmax losses) optimises a list metric directly and usually wins on NDCG.
 
 **Q:** Why can't you just train on clicks?
+
 **A:** Clicks depend on position and on what was shown, so they reflect the old ranker as much as relevance. Correct with propensity weighting, randomisation or click models.
 
 **Q:** How would you evaluate a new ranker before a full A/B test?
+
 **A:** Offline NDCG on human judgements and IPW-corrected click data, then interleaving on a small slice of traffic, then an A/B test on success metrics.
+
+**Q:** How does LambdaMART optimise NDCG when NDCG is not differentiable?
+
+**A:** NDCG depends on sorting, so it has no useful gradient. LambdaRank defines a gradient for each document pair proportional to how much swapping them would change NDCG, so mistakes near the top get large pushes. MART — gradient-boosted trees — fits those gradients.
+
+**Q:** Show how to train it in LightGBM.
+
+**A:** Rows must be sorted by query, with group sizes in that order.
+```python
+rk = lgb.LGBMRanker(objective="lambdarank", n_estimators=500)
+rk.fit(X_tr, y_tr, group=sizes_tr,
+       eval_set=[(X_va, y_va)], eval_group=[sizes_va],
+       eval_at=[10])
+```
+If `sum(sizes_tr) != len(X_tr)` or rows are not grouped, it trains on nonsense without complaint.
+
+**Q:** Why split by query?
+
+**A:** Documents for the same query share features and relevance context. Splitting rows of one query across train and test leaks information and inflates NDCG.
+
+**Q:** The ranker is great but users still miss the right document. What do you check?
+
+**A:** L1 recall. If retrieval never returns the document, no ranker can show it. Measure L1 recall@200 separately and add a dense retrieval channel if lexical retrieval misses paraphrases.
+
+**Q:** What changes at 10,000 queries per second?
+
+**A:** Feature computation for 200 candidates per query dominates, so precompute document features, cache popular queries, and cap candidates. LambdaMART scoring is cheap; a cross-encoder on the top 20 would need GPUs and a strict budget.
+
+**Q:** Why normalise features for a neural ranker but not for trees?
+
+**A:** Trees split on thresholds and do not care about scale. MSLR features range over many orders of magnitude, which destabilises gradient descent, so neural rankers need log-transform and standardisation.
+
+**Common mistakes in answers:**
+- Treating clicks as unbiased relevance labels.
+- Reporting a single fold's NDCG instead of mean ± std over five folds.
+- Forgetting that the ranker's ceiling is set by retrieval recall.
 
 ### TL;DR
 Two-stage search with a LambdaMART re-ranker, query-grouped evaluation by NDCG, and click labels corrected for position bias.
@@ -3765,14 +5157,60 @@ flowchart TD
 - [Ch 16 — ML in Production](../chapters/16-ml-in-production/README.md): freshness and continual training.
 
 ### In the interview
+**30-second answer:** I built a CTR model on Criteo display-ad data, going from hashed logistic regression to GBDT to DCN V2 in PyTorch, trained on 50 million+ rows with a streaming loader and a day-based split. The key design decision was treating calibration as a first-class metric — log loss and normalised entropy, plus predicted vs observed CTR by bucket — because pCTR sets the price in the auction. The hardest part was negative down-sampling: it inflates predictions, so I apply the correction q = p / (p + (1 − p)/w) and then isotonic calibration on a recent slice, bringing overall predicted CTR within 1–2% of observed. Scoring 100 candidate ads takes under 10 ms.
+
+**Key terms to know:**
+- **CTR (click-through rate)** — probability an impression leads to a click.
+- **Hashing trick** — map category strings into a fixed number of buckets with a stable hash.
+- **High-cardinality sparse features** — fields with millions of distinct IDs; most appear rarely.
+- **Embeddings for IDs** — learned dense vectors per hashed value (`nn.EmbeddingBag`).
+- **Feature interactions (FM, DeepFM, DCN V2)** — models that learn crosses like user × site.
+- **Log loss** — penalises confident wrong probabilities; rewards ranking and calibration.
+- **Normalised entropy** — log loss divided by the log loss of always predicting the average CTR.
+- **Negative down-sampling and recalibration** — keep a fraction w of negatives, then correct predictions.
+- **Calibration (isotonic, Platt)** — making predicted probabilities match observed rates.
+- **Freshness / incremental training** — daily updates because ads and interests change fast.
+
 **Q:** Why does calibration matter so much for ads?
+
 **A:** The auction ranks and prices by bid × pCTR. Miscalibrated probabilities misprice every ad, hurting advertisers or the platform even if the ranking is good.
 
 **Q:** How do you handle millions of categorical values?
+
 **A:** Hashing into fixed buckets, frequency thresholds for rare values, learned embeddings with regularisation, and models that learn interactions (FM, DCN).
 
 **Q:** You down-sampled negatives by 10×. What changes?
+
 **A:** Predicted probabilities are inflated; apply the correction q = p / (p + (1 − p)/w) with w = 0.1, then verify calibration on un-sampled data.
+
+**Q:** Why log loss rather than AUC?
+
+**A:** AUC only measures ranking and is unchanged if every prediction is doubled. Log loss punishes wrong probabilities, so it captures calibration too. Normalised entropy makes log loss comparable across days with different average CTR.
+
+**Q:** Why split by day instead of randomly?
+
+**A:** In production you always predict tomorrow from the past, and CTR patterns shift daily. A random split mixes days, hides staleness and overstates accuracy.
+
+**Q:** What is the risk of hashing?
+
+**A:** Collisions: two unrelated values share one bucket and one embedding. More buckets reduce collisions but cost memory — 26 fields × 1 million buckets × 16 dimensions × 4 bytes is about 1.7 GB. And the hash must be stable: Python's built-in `hash()` for strings is randomised per process, so use a fixed hash such as MurmurHash.
+
+**Q:** How fast does the model go stale, and what do you do?
+
+**A:** Train on day 1 and test on days 2, 3 and 4 to measure decay. Ad CTR models typically lose measurable accuracy within days, so train incrementally every day (warm-starting from yesterday's weights) and recalibrate on the latest slice.
+
+**Q:** New ads never get shown because the model under-rates them. How do you fix it?
+
+**A:** That is a feedback loop. Reserve exploration traffic for new ads, use content and advertiser features so new IDs inherit sensible priors, and give new ads a temporary boost or bandit-style exploration.
+
+**Q:** What would break first at 10x traffic?
+
+**A:** Serving latency from embedding lookups and feature fetches, and daily training time. Export to ONNX, batch candidates, shard embedding tables, and move to streaming or online updates (FTRL-style logistic regression is a classic option).
+
+**Common mistakes in answers:**
+- Forgetting to correct for negative down-sampling, so every ad is overpriced.
+- Calling a higher-AUC model better when its calibration is worse.
+- Using Python's `hash()` for feature hashing and getting different buckets at serving.
 
 ### TL;DR
 CTR prediction is sparse features, embeddings and crosses — but calibrated probabilities and fresh models are what make it profitable.
@@ -3935,14 +5373,69 @@ erDiagram
 - [Ch 6 — Evaluation and Tuning](../chapters/06-evaluation-and-tuning/README.md): performance tracking over time.
 
 ### In the interview
+**30-second answer:** I built a mini ML platform with three parts: a feature store with one definition per feature feeding an offline history store and an online Redis store, a model gateway with versioned models, canary and shadow routing, and a monitoring service that tracks drift, latency and delayed-label performance. The key design decision was point-in-time training-set generation — an as-of join that takes each feature's latest value at or before the event time — so training matches serving exactly. The hardest part was making drift alerts useful rather than noisy: I prioritise drift on important features and alert only on sustained, large shifts. Two earlier projects (churn and fraud) run through it with no custom plumbing, and online feature fetch is under 10 ms p99.
+
+**Key terms to know:**
+- **Feature store** — one place to define features, compute them, and serve them offline for training and online for inference.
+- **Offline vs online store** — full timestamped history for training vs latest value per entity for low-latency reads.
+- **Point-in-time (as-of) join** — for each training row, the latest feature value with timestamp ≤ the row's event time.
+- **Materialisation** — scheduled job copying the newest feature values to the online store.
+- **Freshness SLA / TTL** — how stale a feature may be at serving time.
+- **Model gateway** — resolves model version, fetches features, routes traffic, logs every request.
+- **Canary vs shadow deployment** — a small share of real traffic served by the new model, or the new model scoring without its answers being used.
+- **Data drift (PSI, KS)** — change in input distributions; PSI compares binned shares, KS is the largest gap between two cumulative distributions.
+- **Prediction drift and delayed-label performance** — change in output distribution now, and real accuracy once labels arrive.
+- **Graceful degradation** — defaults or fallbacks when the online store is down.
+
 **Q:** What problem does a feature store solve?
+
 **A:** Consistent feature definitions for training and serving, point-in-time correct training data, low-latency online access, and reuse of features across teams.
 
 **Q:** How do you detect model degradation before labels arrive?
+
 **A:** Monitor input drift (PSI, KS), prediction distribution drift, missing values and upstream freshness; confirm with performance once labels arrive.
 
 **Q:** Canary or shadow deployment?
+
 **A:** Shadow first to validate correctness and latency on real traffic with no user impact, then canary to measure business metrics on a small slice before full rollout.
+
+**Q:** Show a point-in-time join in PostgreSQL.
+
+**A:** A lateral subquery picks the latest value at or before each label's time.
+```sql
+SELECT l.*, f.values
+FROM labels l
+LEFT JOIN LATERAL (
+  SELECT values FROM feature_value v
+  WHERE v.entity_id = l.entity_id AND v.event_ts <= l.event_ts
+  ORDER BY v.event_ts DESC LIMIT 1) f ON true;
+```
+A plain join on entity ID would attach today's value and leak the future.
+
+**Q:** How is PSI computed and what threshold do you use?
+
+**A:** Bin the reference distribution (for example into deciles), compute each bin's share in reference and current data, and sum (current − reference) × ln(current / reference). Common rules of thumb: below 0.1 little change, 0.1–0.25 moderate, above 0.25 significant. Thresholds should be tuned per feature, because seasonal features drift harmlessly.
+
+**Q:** Does drift always mean the model is broken?
+
+**A:** No. PSI flags any change, including harmless seasonal ones, and a model can stay accurate under input drift. Weight drift by feature importance, watch prediction drift, and confirm with labelled performance before retraining.
+
+**Q:** The online store goes down. What happens?
+
+**A:** The gateway follows each model's policy: use default feature values, fall back to a model that needs fewer features, or fail clearly. The platform is now a dependency for every model, so a chaos test proves the fallbacks work.
+
+**Q:** What breaks first at 100 models and 10,000 requests per second?
+
+**A:** Prediction logging volume and online-store load. Sample logs for high-volume models (keeping full logs where retraining needs served features), shard Redis, batch feature reads, and run drift jobs incrementally on a stream rather than daily full scans.
+
+**Q:** How do you prove the feature store is correct?
+
+**A:** A synthetic entity whose values change at known times must give the right value for training rows at various timestamps, and online and offline values for 1,000 random entities must match. Gateway routing proportions must be within tolerance over 10,000 requests, and shadow responses must never be returned.
+
+**Common mistakes in answers:**
+- Joining labels to the latest feature values instead of as-of values.
+- Retraining every time PSI moves, without checking whether performance dropped.
+- Calling shadow mode a way to measure business impact; it cannot, because users never see the outputs.
 
 ### TL;DR
 A platform makes features consistent (one definition, point-in-time joins), deployments safe (registry, shadow, canary, rollback) and degradation visible (drift and delayed-label monitoring).
@@ -4050,14 +5543,68 @@ flowchart TD
 - [Ch 6 — Evaluation and Tuning](../chapters/06-evaluation-and-tuning/README.md): reporting variance across runs.
 
 ### In the interview
+**30-second answer:** I implemented tabular Q-learning, DQN and PPO from scratch and compared them on a grid world, CartPole and LunarLander, always reporting mean and confidence bands over at least five seeds. DQN solved CartPole within 100,000 steps, and ablations without the replay buffer or target network showed exactly why they exist. The hardest part was PPO's small details — advantage normalisation, entropy bonus, learning-rate annealing — which I added one at a time and measured. My curves landed in the same range as Stable-Baselines3 with matched hyperparameters, which was my correctness check.
+
+**Key terms to know:**
+- **Markov decision process (MDP)** — states, actions, rewards, transitions and a discount factor γ.
+- **Q-value and Bellman update** — expected return of an action in a state; target r + γ · max Q(s′, a′).
+- **Q-learning vs SARSA** — off-policy (uses the best next action) vs on-policy (uses the action actually taken).
+- **DQN, replay buffer, target network** — a neural Q-function trained on random past transitions against a lagged copy.
+- **Epsilon-greedy schedule** — exploration rate decayed over training.
+- **Policy gradient / actor-critic** — directly optimise a policy (actor), with a value function (critic) to reduce variance.
+- **GAE** — generalised advantage estimation; blends short- and long-horizon advantage estimates with λ.
+- **PPO clipped objective** — limits the probability ratio between new and old policy per update.
+- **Deadly triad** — function approximation + bootstrapping + off-policy learning can diverge.
+- **Sample efficiency and seed variance** — environment steps needed, and how much results vary between seeds.
+
 **Q:** Why does DQN need a replay buffer and a target network?
+
 **A:** The replay buffer breaks correlations between consecutive samples and reuses data; the target network keeps training targets stable instead of chasing a moving estimate.
 
 **Q:** On-policy vs off-policy?
+
 **A:** On-policy methods (PPO, SARSA) learn from data generated by the current policy; off-policy methods (Q-learning, DQN) can learn from data from any policy, enabling replay and logged data.
 
 **Q:** What does PPO's clipping do?
+
 **A:** It limits the change in action probabilities per update, preventing destructive large policy steps while allowing several epochs of updates on each batch.
+
+**Q:** Write the DQN target computation.
+
+**A:** Use the target network and stop bootstrapping at terminal states.
+```python
+with torch.no_grad():
+    next_q = target_net(s2).max(dim=1).values
+    y = r + gamma * next_q * (1 - done)
+q = q_net(s).gather(1, a.unsqueeze(1)).squeeze(1)
+loss = F.smooth_l1_loss(q, y)  # Huber loss
+```
+Forgetting `(1 - done)` makes the agent value states after the episode has ended.
+
+**Q:** Why does DQN over-estimate values, and how is it fixed?
+
+**A:** Taking a max over noisy estimates picks the ones that happen to be too high, so targets are biased upward. Double DQN chooses the next action with the online network but evaluates it with the target network, which reduces the bias.
+
+**Q:** DQN or PPO for a new problem?
+
+**A:** DQN reuses data, so it is sample-efficient, but only handles discrete actions. PPO is more stable, handles continuous actions and parallelises well, but needs more environment steps. With a cheap simulator I default to PPO; with expensive samples and discrete actions, DQN.
+
+**Q:** Your agent's return collapsed after improving for a while. How do you debug it?
+
+**A:** Look beyond return: exploding Q-value magnitudes signal divergence in DQN; for PPO, a spike in KL divergence or a collapse in policy entropy signals too-large updates. Then check the learning rate, target update frequency and reward scale, and run several seeds before concluding.
+
+**Q:** How do you test RL code?
+
+**A:** Unit-test the Bellman target and GAE against hand-computed values, use a one-step environment with a known optimal action, check that the same seed reproduces the first 1,000 steps, and evaluate in a separate environment instance with exploration off.
+
+**Q:** Why do companies rarely run RL like this in production?
+
+**A:** Real-world trial and error is expensive and risky, and rewards are hard to specify — agents exploit badly shaped rewards. Production systems more often use bandits, offline RL from logged data, or RL inside a simulator, then validate carefully before acting for real.
+
+**Common mistakes in answers:**
+- Reporting one seed's best curve as the result.
+- Calling PPO off-policy because it reuses a batch for several epochs; it is on-policy and discards the batch afterwards.
+- Treating return alone as the debugging signal and ignoring Q-values, entropy and KL.
 
 ### TL;DR
 Implement Q-learning, DQN and PPO yourself, report results across seeds, and learn why replay, target networks and clipping exist.
@@ -4163,14 +5710,67 @@ flowchart TD
 - [Ch 7 — Decision Trees and Ensembles](../chapters/07-trees-and-ensembles/README.md): the boosted baseline.
 
 ### In the interview
+**30-second answer:** I audited a gradient-boosting income model built on Folktables ACSIncome census data, measuring selection rate, true-positive rate, false-positive rate and calibration per race, sex, age band and their intersections, all with bootstrap confidence intervals. The key point I make is that fairness definitions conflict: when base rates differ, you cannot equalise selection rates, error rates and calibration at once, so choosing one is a documented value judgement. I compared reweighting, exponentiated-gradient constraints and group thresholds on an accuracy-versus-disparity plot, and re-checked everything on another state and year because fairness can erode under shift. The deliverable is a model card a non-technical reviewer can read in ten minutes.
+
+**Key terms to know:**
+- **Sensitive attribute and group** — race, sex, age band; audited whether or not they are model inputs.
+- **Selection rate** — share of a group predicted positive.
+- **Demographic parity** — equal selection rates across groups.
+- **Equalised odds / equal opportunity** — equal TPR and FPR across groups, or equal TPR only.
+- **Calibration within groups** — a given score means the same probability in every group.
+- **Proxy features** — inputs such as place of birth or occupation that correlate with a sensitive attribute.
+- **Intersectional slices** — combined groups like race × sex; often small and noisy.
+- **Pre-, in- and post-processing mitigation** — reweighting data, constrained training (exponentiated gradient), group-specific thresholds.
+- **Accuracy–disparity frontier** — the trade-off curve across mitigations.
+- **Model card** — intended use, out-of-scope uses, metrics by group, limitations.
+
 **Q:** Name two fairness criteria and why they conflict.
+
 **A:** Demographic parity (equal positive rates) and equalised odds (equal error rates). When base rates differ between groups, a model that equalises error rates will have different positive rates, and vice versa.
 
 **Q:** Is dropping the sensitive attribute enough?
+
 **A:** No. Other features act as proxies. You need the attribute (at least for auditing) to measure outcomes by group.
 
 **Q:** How do you mitigate a disparity you found?
+
 **A:** Diagnose first (data, labels, proxies, sample size), then choose among reweighting, constrained training or threshold adjustment, comparing accuracy–disparity trade-offs and documenting the choice.
+
+**Q:** Show how you compute group metrics.
+
+**A:** Fairlearn's `MetricFrame` evaluates any metric per group.
+```python
+from fairlearn.metrics import MetricFrame, selection_rate
+from sklearn.metrics import recall_score
+mf = MetricFrame(metrics={"sel": selection_rate, "tpr": recall_score},
+                 y_true=y, y_pred=pred, sensitive_features=df["SEX"])
+print(mf.by_group, mf.difference())
+```
+
+**Q:** Which criterion would you choose for a lending decision?
+
+**A:** It depends on context and law, and it is not the modeller's call alone. Equal opportunity (equal TPR — qualified applicants approved at equal rates) is often argued for when the label is trustworthy; demographic parity when the label itself reflects historical bias. I present the trade-offs and record who decided.
+
+**Q:** An intersectional group of 40 people has a much higher FPR. Is that a finding?
+
+**A:** Not yet. With 40 people the confidence interval is wide, so I report it with its interval, flag it as below the minimum size rule, and seek more data before claiming a disparity.
+
+**Q:** Why can group-specific thresholds be a problem?
+
+**A:** They equalise error rates effectively but require using the sensitive attribute at decision time, which some regulations prohibit. That is a legal question for counsel, and it belongs in the model card.
+
+**Q:** How do you prove the audit code works?
+
+**A:** Plant a known disparity in synthetic data and check the audit detects it; plant none and check it reports none within confidence intervals. Also compare `MetricFrame` output with manual per-group calculations.
+
+**Q:** The model was fair in California in 2018. Is it fair in Texas in 2022?
+
+**A:** Not necessarily: base rates, feature distributions and proxies shift. I re-measured all group metrics on another state and year, and a production version would recompute them monthly as part of monitoring.
+
+**Common mistakes in answers:**
+- Claiming a model is fair because it does not use race as an input.
+- Presenting one fairness metric as "the" definition.
+- Declaring disparities from tiny slices without confidence intervals.
 
 ### TL;DR
 A fairness audit measures error and selection rates per group with uncertainty, explains the gaps, compares mitigations on an explicit trade-off, and documents the choice in a model card.
@@ -4305,14 +5905,60 @@ erDiagram
 - [Ch 18 — ML Case Studies II](../chapters/18-ml-case-studies-2/README.md): the visual search case study.
 
 ### In the interview
+**30-second answer:** I built a "shop the look" visual search: a user uploads or crops a photo, an image encoder fine-tuned with metric learning embeds it, and an ANN index returns visually similar products, optionally refined with CLIP text like "same but in red". The key decision was training and evaluating on unseen products — splitting Stanford Online Products by product class — so Recall@k measures the real task. Hard-negative mining gave the biggest gain over off-the-shelf ImageNet features, and cropping the main item with a detector closed much of the gap between clean catalogue images and cluttered user photos. Queries return in under 200 ms p95, with product quantisation keeping a million-item index under 4 GB.
+
+**Key terms to know:**
+- **Image embedding** — a vector from a CNN or ViT where similar images are close.
+- **Metric learning** — training so same-product images are close and different products far apart.
+- **Triplet / contrastive / proxy losses** — anchor-positive-negative margins, pairwise similarity, or learned class proxies.
+- **Hard-negative mining** — choosing negatives the model currently confuses.
+- **Split by product class** — test products are never seen in training.
+- **Recall@k** — does a same-product image appear in the top k results?
+- **ANN index and product quantisation** — fast approximate search, with vectors compressed to short codes.
+- **CLIP** — joint image–text embedding space enabling text refinement.
+- **Domain gap (street-to-shop)** — catalogue photos vs user photos.
+- **Embedding versioning** — catalogue and queries must use the same model and preprocessing.
+
 **Q:** How do you train image embeddings for retrieval?
+
 **A:** Start from a pre-trained backbone and fine-tune with a metric-learning loss (triplet, contrastive or proxy-based), mining hard negatives, evaluated with Recall@k on unseen products.
 
 **Q:** How do you scale to a billion images?
+
 **A:** ANN indexes with compression (product quantisation), sharding by category or hash, distributed index builds and incremental updates for new items.
 
 **Q:** User photos look very different from catalogue photos. What do you do?
+
 **A:** Crop with a detector, augment training images toward user-photo conditions, and fine-tune on street-to-shop pairs or click data.
+
+**Q:** Why not use the classifier's softmax features directly?
+
+**A:** A classifier learns to separate its training classes, not to measure similarity between unseen products. Pre-trained penultimate-layer features are a fine baseline, but metric learning directly optimises distances and generalises better to new products.
+
+**Q:** What is the triplet loss, and why mine hard negatives?
+
+**A:** For an anchor a, positive p and negative n, the loss is max(0, d(a, p) − d(a, n) + margin). With random negatives most triplets already satisfy the margin, the loss is zero and learning stalls. Mining confusing negatives keeps gradients useful; avoid the very hardest early, since they are often label noise.
+
+**Q:** Why split by product rather than by image?
+
+**A:** If images of the same product are in both train and test, the model just memorises products, and Recall@1 is inflated. Real users search for products the model has never seen.
+
+**Q:** How much memory does the index need?
+
+**A:** 1 million × 512 floats × 4 bytes is about 2 GB raw, plus index overhead. Product quantisation stores each vector as a short code, cutting memory several-fold at some recall cost, which I measured against exact search.
+
+**Q:** What happens when you upgrade the encoder?
+
+**A:** Old catalogue vectors and new query vectors are incompatible, so search silently breaks. Version embeddings, re-embed the catalogue in the background into a new index, and switch atomically.
+
+**Q:** How do you handle a busy street photo with several items?
+
+**A:** Run a detector to find candidate items, let the user pick or search each crop separately, and re-rank results with filters for category, stock and duplicates.
+
+**Common mistakes in answers:**
+- Evaluating on the same products used for training.
+- Forgetting that catalogue and query preprocessing must be identical.
+- Treating ANN results as exact without measuring recall loss from compression.
 
 ### TL;DR
 Fine-tune an image encoder with metric learning, split by product, index with ANN, and close the gap between catalogue and user photos with crops and augmentation.
@@ -4452,14 +6098,60 @@ erDiagram
 - [Ch 19 — Responsible ML](../chapters/19-responsible-ml/README.md): privacy risks of recommendations.
 
 ### In the interview
+**30-second answer:** I built a People You May Know system on a time-evolving collaboration graph: candidates come from friends-of-friends (capped for hub users) plus nearest neighbours in node2vec embedding space, and a LightGBM ranker scores each pair with mutual-friend count, Adamic–Adar, Jaccard, degrees and embedding similarity. The key decision was a strict time split — features and embeddings come only from the past graph, and positives are edges that formed later. The hardest problems were leakage through the graph and hub explosion, which I handled with leakage tests and capped, precomputed 2-hop expansion. The ranker beat every single heuristic on Hits@50, and suggestions come with an "N mutual friends" explanation in under 50 ms.
+
+**Key terms to know:**
+- **Link prediction** — predicting which unconnected pairs will connect.
+- **2-hop candidates (friends of friends)** — people connected to your connections.
+- **Mutual-friend count, Jaccard** — shared neighbours, raw and normalised by union size.
+- **Adamic–Adar** — sum over mutual friends of 1 / log(degree), so selective mutual friends count more.
+- **node2vec / GraphSAGE** — node embeddings from biased random walks, or a graph neural network aggregating neighbour features.
+- **CSR adjacency** — compressed sparse row storage of neighbour lists.
+- **Time-based edge split** — build from past edges, evaluate on future ones.
+- **Hard negatives** — candidates that share friends but did not connect.
+- **Hits@50** — share of true future edges scored above all but at most 49 of a fixed set of negatives.
+- **Hub explosion** — huge 2-hop neighbourhoods for popular users.
+
 **Q:** What's the simplest strong baseline for friend recommendations?
+
 **A:** Friends of friends ranked by mutual count or Adamic–Adar. Mutual connections are the strongest single signal.
 
 **Q:** How do you avoid leakage in link prediction?
+
 **A:** Split edges by time, build the graph and all features from the past only, and evaluate on edges that formed later.
 
 **Q:** How do you scale candidate generation for hub users?
+
 **A:** Cap and sample 2-hop expansion, precompute in batch, and add embedding-based ANN candidates instead of exhaustive traversal.
+
+**Q:** Why does Adamic–Adar beat a plain mutual count?
+
+**A:** A mutual friend with 5,000 connections is weak evidence that two people know each other; one with 20 is strong. Adamic–Adar weights each mutual friend by 1 / log(degree), so selective connections count more.
+
+**Q:** How do you compute mutual-friend counts efficiently?
+
+**A:** With a sparse adjacency matrix A in CSR format, row u of A·A gives, for every other node, the number of common neighbours with u. Computing it per user on demand (or in batch for all users with caps) is far faster than Python loops over neighbour sets.
+
+**Q:** Why sample negatives from the candidate set rather than random pairs?
+
+**A:** Random pairs almost never share friends, so the ranker learns the trivial rule "mutual friends > 0" and nothing else. Negatives from the 2-hop candidate set share friends but did not connect, which teaches the distinctions that matter for ranking.
+
+**Q:** What can go wrong ethically?
+
+**A:** Suggesting an ex-partner, an abuser, or a therapist's patients can cause real harm and reveal private relationships. Offer opt-outs from being suggested, filter sensitive contexts, never suggest blocked users, and make blocking quick.
+
+**Q:** Suggestions are computed nightly. What breaks for active users?
+
+**A:** After someone accepts three suggestions, their candidates change, but the batch results are stale until tomorrow. Add a light online refresh triggered by new connections, recomputing 2-hop candidates for that user only.
+
+**Q:** How do you test for graph leakage?
+
+**A:** Assert no target edge exists in the training graph, and that a pair's features do not change whether or not its future edge is present in the database. Also unit-test heuristics on a tiny hand-drawn graph with known Adamic–Adar values.
+
+**Common mistakes in answers:**
+- Computing features or embeddings on the full graph that already contains the edges being predicted.
+- Evaluating against random negatives and reporting inflated scores.
+- Ignoring hub users until one request takes seconds.
 
 ### TL;DR
 Generate candidates from 2-hop neighbours and embeddings, rank pairs with graph features, split by time, and guard against both leakage and harmful suggestions.
@@ -4598,14 +6290,60 @@ erDiagram
 - [Ch 6 — Evaluation and Tuning](../chapters/06-evaluation-and-tuning/README.md): MAE vs RMSE, percentiles, slices.
 
 ### In the interview
+**30-second answer:** I built a trip ETA service on NYC taxi data where a simple routing estimate gives the first guess and a LightGBM model predicts the residual — how much the real trip will differ. The key decision was predicting the correction rather than the full duration: it is an easier target, keeps predictions physically sensible, and gives a natural fallback if the model fails. The hardest part was a leak-free live traffic feature: zone speeds must use only trips completed before the request time. The model beats the baseline on MAE and p90 error under a time-based split, returns a p10–p90 interval, and answers in under 10 ms p99.
+
+**Key terms to know:**
+- **ETA** — estimated time of arrival or trip duration.
+- **Baseline ETA and residual model** — a deterministic estimate (distance / typical speed) plus an ML correction.
+- **Live (streaming) features** — rolling average zone speeds from recently completed trips.
+- **Point-in-time correctness** — only trips completed before the request may feed its features.
+- **MAE, MAPE, Huber loss** — robust error metrics and a loss that is squared for small errors and linear for large ones.
+- **Asymmetric loss** — penalising late predictions more than early ones.
+- **Quantile prediction and coverage** — p10 and p90 models; about 80% of trips should fall between them.
+- **Heavy tails** — rare very long trips (accidents, detours) that dominate squared error.
+- **Slice metrics** — errors by distance, borough and hour.
+- **Fallback** — return the baseline with a flag when the model or feature store fails.
+
 **Q:** Why predict a residual on top of a routing ETA?
+
 **A:** The routing engine captures physics (distance, road speeds); ML learns systematic corrections. It is an easier target, more robust, and has a natural fallback.
 
 **Q:** Which loss would you use?
+
 **A:** MAE or Huber for robustness to heavy tails, asymmetric if lateness costs more, and quantile losses for intervals.
 
 **Q:** How do you keep latency under 10 ms?
+
 **A:** Pre-compute and cache features, use a compact model (trees or a small MLP exported to an optimised runtime), avoid network calls in the request path except one feature lookup, and batch where possible.
+
+**Q:** How can the live-speed feature leak?
+
+**A:** If "average zone speed in the last 15 minutes" includes trips that started before the request but finished after it, offline training sees information unavailable at request time. Filter on drop-off time before the request, and test it on hand-made trip timelines.
+
+**Q:** Why is a random split wrong here?
+
+**A:** Traffic patterns are correlated in time — a storm affects every trip that evening. A random split lets the model learn that evening from its neighbours and overstates accuracy. Train on earlier weeks and test on later ones.
+
+**Q:** How do you check the intervals are honest?
+
+**A:** On the latest week, count how often the actual duration falls between p10 and p90; it should be close to 80%, and also check by slice, since coverage is often worse at rush hour and for airport trips. Conformal prediction can adjust intervals to hit the target coverage.
+
+**Q:** A marathon closes half of Manhattan. What happens?
+
+**A:** The model has little training data for such conditions and will under-predict. Live zone speeds partly capture it, and in extreme cases leaning more on the baseline plus live speeds, or a manual event flag, is safer than trusting the learned corrections.
+
+**Q:** What would you change with Uber-scale data?
+
+**A:** Move from zones to fine-grained discretised coordinates with embeddings, use a real routing engine over road segments as the baseline, and consider a neural model like DeepETA's self-attention over feature embeddings. Serving would need many replicas, and feature freshness would come from a proper streaming pipeline.
+
+**Q:** How do you monitor it?
+
+**A:** Join predictions to actual trip durations daily and track MAE, p90 error, bias (mean signed error) and interval coverage by slice. A rising bias in one borough is an early sign of a data or traffic-pattern change.
+
+**Common mistakes in answers:**
+- Optimising RMSE and letting a handful of extreme trips drive the model.
+- Using trips that ended after the request time in live features.
+- Giving a single precise number with no interval when lateness is costly.
 
 ### TL;DR
 Predict the correction to a routing ETA with fresh, leak-free traffic features, a robust or asymmetric loss and honest intervals, served within milliseconds with a baseline fallback.
@@ -4712,14 +6450,66 @@ flowchart TD
 - [Ch 6 — Evaluation and Tuning](../chapters/06-evaluation-and-tuning/README.md): Recall@k, MRR, honest evaluation protocols.
 
 ### In the interview
+**30-second answer:** I built a session-based next-item recommender on RetailRocket e-commerce events: clicks are split into sessions by a 30-minute gap, and I compared popularity, co-occurrence and first-order Markov baselines with a GRU model and SASRec, a causally masked self-attention model. The key decision was evaluating honestly — every prefix of every test session, against the full catalogue rather than 100 sampled negatives, with a time-based split. The hardest bug class is the causal mask: without it training loss looks superb and test results collapse, so a test changes a future item and checks earlier outputs do not move. SASRec beat the baselines on Recall@20 and MRR@20, and the API updates recommendations after every click in under 30 ms.
+
+**Key terms to know:**
+- **Session-based recommendation** — predicting the next item from the current session alone, for anonymous users.
+- **Sessionisation** — splitting a visitor's events where the gap exceeds 30 minutes.
+- **Co-occurrence and first-order Markov baselines** — "viewed together" counts and next-item transition counts.
+- **GRU4Rec** — a recurrent model over the item sequence.
+- **SASRec** — item plus position embeddings through causal self-attention blocks; scores against all item embeddings.
+- **Causal mask** — position t may attend only to positions ≤ t.
+- **Sampled softmax / in-batch negatives** — scoring a subset of items in training to handle huge vocabularies.
+- **Recall@20 and MRR@20** — is the true next item in the top 20, and 1 / its rank (0 if outside).
+- **Full-catalogue vs sampled-negative evaluation** — ranking against all items vs 100 random ones.
+- **Repeat consumption** — users re-viewing items already in the session.
+
 **Q:** Why a sequence model instead of matrix factorisation?
+
 **A:** Most sessions are anonymous and short, and order matters: what you clicked last is highly predictive of what comes next. Sequence models use that order; MF needs user history.
 
 **Q:** What does the causal mask do in SASRec?
+
 **A:** It prevents each position from attending to later positions, so the model learns to predict the next item only from the past, matching how it will be used.
 
 **Q:** Why can sampled-negative evaluation be misleading?
+
 **A:** Ranking against 100 random items is much easier than against the full catalogue and can reorder which model looks best. Use full-catalogue metrics when possible.
+
+**Q:** Show how to build a causal mask in PyTorch.
+
+**A:** `True` marks positions that may not be attended to.
+```python
+L = seq.size(1)
+mask = torch.triu(torch.ones(L, L, dtype=torch.bool), diagonal=1)
+out = encoder(x, mask=mask, src_key_padding_mask=(seq == PAD))
+```
+The padding mask stops the model attending to padded positions as well.
+
+**Q:** Self-attention or GRU?
+
+**A:** Self-attention looks at all previous items directly, so it can weigh an item from ten clicks ago against the last one, and it trains in parallel across positions. A GRU compresses history into one state step by step and trains sequentially. SASRec usually wins on accuracy; the GRU is smaller and simpler.
+
+**Q:** Why are co-occurrence baselines hard to beat?
+
+**A:** They capture the strongest signal — items viewed together — and can be updated hourly, so they know about new items. Neural models only learn items present at training time and need retraining to catch up.
+
+**Q:** A new product launches today. What happens?
+
+**A:** It has no embedding until the next retrain, so the neural model cannot recommend it. Blend in co-occurrence updated hourly, or give new items embeddings from content features.
+
+**Q:** How do you serve with 500,000 items?
+
+**A:** Run the encoder once on the session (cheap for 50 items), then score against all item embeddings — a single matrix–vector product — or use an ANN index if that is too slow. Keep the API stateless: the client or a session cache sends the recent items.
+
+**Q:** How do you test it?
+
+**A:** The causality test, sessionisation tests on hand-made event streams with known gaps, an oracle that must reach Recall@20 = 1, and a check that no test session precedes the training cut-off.
+
+**Common mistakes in answers:**
+- Reporting sampled-negative metrics as if they reflected real ranking quality.
+- Forgetting the causal mask, or the padding mask, and celebrating a suspiciously low training loss.
+- Using a random session split that lets the model see future popular items.
 
 ### TL;DR
 Turn clicks into sessions, beat strong co-occurrence baselines with a causally masked self-attention model, and evaluate against the full catalogue.
@@ -4870,14 +6660,60 @@ erDiagram
 - [Ch 19 — Responsible ML](../chapters/19-responsible-ml/README.md): reliability, privacy and safety risks.
 
 ### In the interview
+**30-second answer:** I built a retrieval-augmented question-answering system over a documentation set: hybrid pgvector and full-text retrieval, cross-encoder re-ranking to five passages, and a language model that answers with numbered citations or says "I don't know". The key decision was building the evaluation set first — 150+ questions with gold passages and reference answers, including unanswerable and prompt-injection cases — so every change is judged by numbers. The hardest part was measuring faithfulness: I split answers into claims and checked each against the retrieved passages with a judge model, which I validated against my own labels on 50 answers. The biggest single gain came from fixing retrieval, not from prompt tweaks.
+
+**Key terms to know:**
+- **RAG** — retrieve relevant passages, then generate an answer grounded in them.
+- **Chunking and hybrid retrieval** — splitting documents into passages; combining dense vectors with keyword search.
+- **Cross-encoder re-ranking** — a model reads question and passage together to pick the best few.
+- **Retrieval Recall@k and MRR** — did the gold passage come back, and how high.
+- **Faithfulness (groundedness)** — share of answer claims supported by the retrieved passages.
+- **Answer correctness** — match against reference answers (exact match, F1 or a rubric judge).
+- **LLM-as-judge and judge validation** — using a model to grade answers, checked against human labels.
+- **Refusal behaviour** — saying "I don't know" for unanswerable questions without refusing answerable ones.
+- **Hallucination** — fluent but unsupported content.
+- **Prompt injection** — instructions hidden in retrieved text that the model might follow.
+
 **Q:** How do you evaluate a RAG system?
+
 **A:** Separately: retrieval (Recall@k, MRR against gold passages), generation faithfulness (claims supported by sources), correctness (against references), refusal behaviour, latency and cost — on a fixed eval set for every change.
 
 **Q:** Answers are wrong. Where do you look first?
+
 **A:** Retrieval. Check whether the gold passage was retrieved; if not, fix chunking, hybrid search or re-ranking before touching prompts or models.
 
 **Q:** What is prompt injection in RAG and how do you mitigate it?
+
 **A:** Retrieved text containing instructions the model might follow. Mitigate by clearly delimiting retrieved content, instructing the model to treat it as data, limiting tool access, and testing with planted injections.
+
+**Q:** Why not just retrieve 20 passages and let the model sort it out?
+
+**A:** More passages add evidence but also distraction, cost and latency, and models can miss relevant text buried in a long context. Re-ranking to a small, high-quality k usually improves faithfulness and lowers cost.
+
+**Q:** Can you trust an LLM judge?
+
+**A:** Only after checking it. Judges have biases — favouring longer answers or their own style — so I compared the judge with my own labels on 50 answers, reported agreement, and kept the judge model and prompt fixed across experiments so comparisons stay fair.
+
+**Q:** Why is the refusal rate measured in two directions?
+
+**A:** A system that never refuses invents answers to unanswerable questions; one that refuses too often is useless. I report refusals on the unanswerable subset and false refusals on answerable ones, and tune the prompt or a retrieval-score threshold to balance them.
+
+**Q:** What changes when documents have access controls?
+
+**A:** Retrieval must filter chunks by the user's permissions before ranking, otherwise the model can quote documents the user may not see. Filtering after generation is too late, because the content has already been used.
+
+**Q:** How do you stop quality regressing over time?
+
+**A:** A CI job runs a 30-question smoke subset on every change and fails on metric drops; documents are re-ingested on a schedule with dates shown in citations; and embedding-model changes trigger a full re-index under a new version.
+
+**Q:** What breaks first at 1,000 questions per second?
+
+**A:** Generation cost and latency, not retrieval. Cache answers to frequent questions, use a smaller model for easy queries, stream responses, and keep retrieval and re-ranking within a tight budget.
+
+**Common mistakes in answers:**
+- Tuning prompts when the real problem is that the right passage was never retrieved.
+- Using an unvalidated LLM judge as ground truth.
+- Treating retrieved text as trusted instructions.
 
 ### TL;DR
 Build the evaluation set first, measure retrieval and faithfulness separately, fix retrieval before prompts, and test refusals and prompt injection explicitly.
@@ -4987,14 +6823,68 @@ sequenceDiagram
 - [Ch 16 — ML in Production](../chapters/16-ml-in-production/README.md): on-device models and compression.
 
 ### In the interview
+**30-second answer:** I trained a next-word prediction model for a phone keyboard with federated learning on simulated clients with naturally non-IID data, so raw text never leaves a client. FedAvg samples clients each round, they train locally and send clipped weight updates, and the aggregator averages them with Gaussian noise for differential privacy, reporting the privacy budget (ε, δ) from an accountant. The hardest part was the trade-off triangle: non-IID data causes client drift, clipping and noise cost accuracy, and dropouts waste rounds. I report federated accuracy as a fraction of a centralised upper bound and an accuracy-versus-ε curve, so the price of privacy is explicit.
+
+**Key terms to know:**
+- **Federated learning** — devices train locally and share only model updates.
+- **FedAvg** — server averages client updates, weighted by client data size.
+- **Client sampling, local epochs, rounds** — the main FedAvg knobs.
+- **Non-IID data and client drift** — each user's data differs, pulling local models in different directions.
+- **Secure aggregation** — cryptography that lets the server see only the sum of updates.
+- **Differential privacy (DP)** — a guarantee that the output changes little whether or not any one participant is included.
+- **Clipping and Gaussian noise (DP-FedAvg)** — bound each update's norm, add noise to the sum.
+- **Privacy budget (ε, δ) and accountant** — smaller ε is stronger privacy; an accountant tracks it across rounds.
+- **Stragglers and dropouts** — slow or missing clients.
+- **Communication compression** — quantising or sparsifying updates to save bandwidth.
+
 **Q:** How does federated averaging work?
+
 **A:** The server sends the model to a sample of clients; each trains locally and returns its weight update; the server averages updates weighted by client data size and applies the result. Raw data never leaves devices.
 
 **Q:** Does federated learning guarantee privacy?
+
 **A:** No. Updates can leak information. Secure aggregation hides individual updates from the server, and differential privacy (clipping + noise) limits what the final model reveals about any participant.
 
 **Q:** What makes federated learning harder than centralised?
+
 **A:** Non-IID data, unreliable and slow clients, limited communication, privacy noise, and evaluation without central data.
+
+**Q:** Show the core of DP-FedAvg aggregation.
+
+**A:** Clip each update, sum, add noise scaled to the clip norm, then average.
+```python
+def aggregate(deltas, clip, sigma):
+    clipped = [d * min(1.0, clip / (d.norm() + 1e-12)) for d in deltas]
+    total = torch.stack(clipped).sum(0)
+    total += torch.randn_like(total) * sigma * clip
+    return total / len(deltas)
+```
+Here each delta is a flattened weight-difference vector.
+
+**Q:** Why clip before adding noise?
+
+**A:** Differential privacy needs a bound on how much one client can change the sum. Clipping caps each update's norm at C, so noise proportional to C hides any single client. Without clipping, one outlier could dominate and no finite noise would protect it.
+
+**Q:** How do you choose the clip norm and noise?
+
+**A:** Too tight a clip destroys signal; too loose requires large noise. Tune them together, and sample more clients per round, because noise is added once to the sum, so its relative effect shrinks as the number of clients grows.
+
+**Q:** Why do local epochs help and hurt?
+
+**A:** More local training means fewer communication rounds, which matters on phones. But with non-IID data, longer local training drifts each model toward its own user, and averaging those drifted models slows convergence. A few local epochs, server momentum, or methods like FedProx balance this.
+
+**Q:** How do you test the simulation is correct?
+
+**A:** With IID data and one local step, FedAvg must equal centralised mini-batch SGD within tolerance. Assert every clipped update's norm is at most C, check the noise standard deviation matches the configuration, and test that rounds with dropped clients still average correctly.
+
+**Q:** Who is under-represented in a real deployment?
+
+**A:** Devices train only when idle, charging and on Wi-Fi, so users with older phones or limited connectivity participate less, and the model learns their language less well. DP also hurts rare words most, which are often dialect or minority-language words.
+
+**Common mistakes in answers:**
+- Saying federated learning alone makes training private.
+- Reporting ε without δ, the number of rounds and the sampling rate.
+- Assuming federated accuracy will match centralised; report the gap.
 
 ### TL;DR
 Train on-device with FedAvg, protect updates with clipping, noise and secure aggregation, and report the accuracy cost against the privacy budget honestly.
@@ -5156,14 +7046,60 @@ erDiagram
 - [Ch 15 — ML System Design Framework](../chapters/15-ml-system-design-framework/README.md): end-to-end design presentation.
 
 ### In the interview
+**30-second answer:** I built listing embeddings for a simulated marketplace from click sessions with a skip-gram model, treating sessions as sentences and listings as words, and used them twice: a "similar listings" carousel via ANN search, and real-time search personalisation where a LightGBM ranker gets features like similarity to listings the user clicked or skipped in the last 30 minutes. The key decisions, following Airbnb's published approach, were adding the booked listing as global context and sampling extra negatives from the same city so the model learns style and price, not just geography. The hardest part was keeping real-time features leak-free in training, solved by replaying events in time order. The personalised ranker improved the booked listing's rank over the base ranker, and I am explicit that simulated gains need an online test.
+
+**Key terms to know:**
+- **Skip-gram with negative sampling** — predict nearby items in a sequence from the current one, against sampled negatives.
+- **Listing embedding** — a learned vector where substitutable listings are close.
+- **Booked listing as global context** — added as a positive for every listing in a booking session.
+- **Same-market negatives** — negatives from the same city to force finer distinctions.
+- **Cold-start embedding** — average of nearby listings with matching type and price band.
+- **Similar listings via ANN** — nearest neighbours filtered by city, availability and capacity.
+- **Real-time personalisation features** — max/average cosine between a candidate and recently clicked, skipped or saved listings.
+- **Session event store** — recent user events readable in milliseconds (Redis).
+- **Point-in-time training data** — session features built only from events before each search.
+- **Two-sided marketplace metrics** — guest bookings plus host exposure fairness.
+
 **Q:** How would you learn listing embeddings without content features?
+
 **A:** Treat click sessions as sentences and listings as words, train skip-gram with negative sampling, add booked listings as global context and same-market negatives.
 
 **Q:** How do embeddings help search ranking in real time?
+
 **A:** For each candidate, compute similarity to listings the user clicked, skipped or saved in the current session, and feed those as features to the ranker, so results adapt within the session.
 
 **Q:** How do you handle a brand-new listing?
+
 **A:** Initialise its embedding from similar nearby listings by attributes, then let real interactions update it at the next retrain.
+
+**Q:** Why same-city negatives?
+
+**A:** Random negatives mostly come from other cities, so the easiest way to separate them is location, and the model learns geography and little else. Negatives from the same city force it to learn price, style and amenities — the distinctions users actually make.
+
+**Q:** How do you know the embeddings are any good before an A/B test?
+
+**A:** Sanity checks: nearest neighbours should share neighbourhood, room type and price band far more often than random pairs; clusters should line up with known areas. Then offline ranking metrics — the booked listing's rank with and without embedding features — on a time-based split.
+
+**Q:** Why not compare embeddings from yesterday's and today's models?
+
+**A:** Each training run produces a different, unaligned vector space, so a similarity between versions is meaningless. Store a model version with every vector and refresh the index, cold-start vectors and real-time features together.
+
+**Q:** What is the memory and latency picture?
+
+**A:** 7 million listings × 32 floats × 4 bytes is under 1 GB, so the index fits in memory on one server. The latency risk is fetching session events and computing up to 200 × N cosines per search, which is cheap if recent events are cached and vectors are pre-normalised.
+
+**Q:** What could personalisation harm?
+
+**A:** It can concentrate bookings on a few popular hosts and starve new ones, which hurts a two-sided marketplace. Track exposure across hosts as a guardrail, and give new listings exploration traffic.
+
+**Q:** How would you run the A/B test?
+
+**A:** Randomise by user, with bookings per searcher as the primary metric and guardrails on host exposure, cancellations and search latency. Run for full weeks to cover weekday patterns, and check sample ratio mismatch first (Project 17).
+
+**Common mistakes in answers:**
+- Presenting simulated gains as proof the system works in production.
+- Using random negatives and then wondering why the embeddings only encode location.
+- Building session features for training from events that happened after the search.
 
 ### TL;DR
 Learn listing embeddings from sessions with marketplace-aware negatives, use them for similar listings and as real-time search features, and keep every session feature point-in-time correct.
