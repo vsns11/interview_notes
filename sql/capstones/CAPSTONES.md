@@ -22,6 +22,8 @@ A **capstone** is a project big enough to pull many chapters together. Reading a
 4. Only then pick one or two **stretch goals**.
 5. Finish by answering the **In the interview** questions out loud without looking. If you can explain your own design choices in two minutes each, the project has done its job.
 
+**Using these projects in interviews.** Each "In the interview" section is built to be rehearsed. Open with the 30-second answer: what you built, the one design decision that mattered, the hardest problem and how you solved it. Make sure you can explain every entry in Key terms in your own words, because interviewers probe the vocabulary first. Practise the Q&As out loud until the answers come without notes. Quote your own numbers from the build (row counts, query times before and after an index, test counts) rather than the brief's targets. Finally, prepare for the two follow-ups that almost always come: "what would you change at 10x the data or traffic?" and "what breaks first?"
+
 **Colour code.** In the PDF, section headings are coloured by their role, the same as in the rest of the handbook: **What it is** is green, **The problem it solves** and **Requirements** are coral, **Real-world examples** are violet, **The architecture** and **Deep dive** are blue, **Trade-offs** are amber, **In the interview** is pink, **Self-check** is teal and **TL;DR** is a yellow box.
 
 **Levels.**
@@ -206,17 +208,59 @@ Keep a `tests.sql` that inserts a tiny known dataset inside a transaction, runs 
 - Filtering and sorting: [Ch 2 — SELECT Basics](../chapters/02-select-basics/README.md)
 
 ### In the interview
+**30-second answer:** I built a normalized PostgreSQL catalogue of my books, authors, genres, loans and reading history, with a small psycopg CLI on top. The key decision was pushing business rules into the database: a surrogate `book_id`, junction tables for many-to-many, and `CHECK` constraints for ratings and dates. The hardest rule was "one open loan per book", which I solved with a partial unique index on `loan (book_id) WHERE returned_on IS NULL`. A second open loan now fails with SQLSTATE `23505`, and every report runs in a few milliseconds on 5,000 books.
+
+**Key terms to know:**
+- **Normalization** — storing each fact once so updates cannot disagree. Authors live in their own table, not in a text column.
+- **First normal form (1NF)** — one atomic value per column, no repeating groups. A comma-separated author list breaks it.
+- **Junction table** — a table that links two others in a many-to-many relationship. `book_author` and `book_genre`.
+- **Surrogate key** — a meaningless generated id used as the primary key. `book_id` from an identity column.
+- **Foreign key** — a column that must match a key in another table. `loan.book_id` references `book`.
+- **CHECK constraint** — a per-row rule checked on every write. Rating between 1 and 5, `due_on >= lent_on`.
+- **Partial unique index** — a unique index over only the rows matching a `WHERE` clause. Enforces one open loan.
+- **Anti-join** — rows with no match in another table. "Unread books", written with `NOT EXISTS`.
+
 **Q:** How do you allow many loans per book in history but only one active loan?
 
-**A:** A partial unique index on `book_id` with `WHERE returned_on IS NULL`. Only open loans are indexed, so the uniqueness rule applies only to them.
+**A:** A partial unique index on `book_id` with `WHERE returned_on IS NULL`. Only open loans are in the index, so uniqueness applies only to them, while returned loans can repeat without limit.
 
 **Q:** Why not store authors as a comma-separated column?
 
-**A:** It breaks first normal form. You cannot index, join or rename an author cleanly, and counting "books per author" needs string parsing. A junction table makes each fact one row.
+**A:** It breaks first normal form. You cannot index, join or rename an author cleanly, and "books per author" needs string parsing. A junction table makes each book-author fact one row.
 
 **Q:** Is ISBN a good primary key?
 
-**A:** No. It can be missing or reused, and keys should never change. Use a surrogate key and keep ISBN as a nullable unique column.
+**A:** No. Old books have none and some reprints reuse them, and a primary key should never change. Use a surrogate key and keep ISBN as a nullable `UNIQUE` column; PostgreSQL allows many NULLs in a unique column.
+
+**Q:** Why enforce the loan rule in the database rather than the CLI?
+
+**A:** The CLI can check "is it already lent?" and still lose a race with a second session, or be bypassed by someone typing SQL in `psql`. The index is checked atomically on every insert by every client.
+
+**Q:** Write the "unread books" query. Why `NOT EXISTS` and not `NOT IN`?
+
+**A:** If the subquery returns even one NULL, `x NOT IN (...)` evaluates to unknown for every row and returns nothing. `NOT EXISTS` has no such trap.
+```sql
+SELECT b.title FROM book b
+WHERE NOT EXISTS (SELECT 1 FROM reading r
+                  WHERE r.book_id = b.book_id AND r.finished_on IS NOT NULL);
+```
+
+**Q:** A report joining books, authors and genres counts too many books. Why?
+
+**A:** Fan-out: a book with 2 authors and 3 genres appears 6 times after both joins. Use `count(DISTINCT book_id)` or aggregate each side in a subquery before joining.
+
+**Q:** What changes if this became a library with millions of copies?
+
+**A:** Split the work (the title) from the copy (the physical item), and point loans at copies. Add indexes on foreign keys used in joins, such as `loan (friend_id)`; PostgreSQL does not create them automatically. The partial unique index pattern scales unchanged.
+
+**Q:** How do you test the constraints?
+
+**A:** Negative tests: inside a transaction, try one bad row per constraint in a `DO` block that catches the expected error and raises if the insert succeeded, then roll back.
+
+**Common mistakes in answers:**
+- Proposing `UNIQUE (book_id)` on `loan`. That forbids loan history; the rule needs a partial index.
+- Saying "the app checks first". A check-then-insert in the app is a race; only a constraint is safe.
+- Using ISBN as the primary key because it "looks unique".
 
 ### TL;DR
 A personal library teaches the basic schema-design moves: junction tables for many-to-many, constraints that encode business rules, and a partial unique index for "only one active at a time".
@@ -344,17 +388,54 @@ Hand-check three films: pick them in the CSV with `grep`, count their ratings by
 - Join fan-out: [Ch 5 — Joins](../chapters/05-joins/README.md)
 
 ### In the interview
+**30-second answer:** I loaded the MovieLens 32M dataset into PostgreSQL through all-text staging tables, then into typed tables with a `movie_genre` junction built from the pipe-separated genre string. The main design point was fair ranking: a naive `ORDER BY avg(rating)` crowns films with one 5-star vote, so I used a Bayesian average with the global mean computed once in a CTE. The trickiest bug was fan-out when joining ratings to genres. The full load takes a few minutes, and each analytic question runs in under 2 seconds.
+
+**Key terms to know:**
+- **Staging table** — an all-`text` copy of the CSV so loading never fails on a type error. `stg_ratings`.
+- **Bayesian average** — `(v*R + m*C)/(v+m)`, pulling low-vote films toward the global mean `C`. The fair "top films" list.
+- **CTE** — a named subquery in `WITH`, used here to compute the global mean once.
+- **Fan-out** — a join multiplying rows because one side has many matches. Each rating repeats once per genre.
+- **`HAVING`** — a filter on groups after aggregation. `HAVING count(*) >= 50`.
+- **`regexp_split_to_table`** — turns one delimited string into many rows. Splits `genres`.
+- **Materialized view** — a stored query result refreshed on demand. Per-film statistics.
+- **`work_mem`** — memory per sort or hash operation before it spills to disk. Matters for large `GROUP BY`s.
+
 **Q:** How do you rank items by average rating fairly?
 
-**A:** Require a minimum number of votes, or use a Bayesian average that pulls films with few votes toward the global mean.
+**A:** Require a minimum number of votes, or use a Bayesian average that pulls films with few votes toward the global mean. The prior weight `m` controls how many votes a film needs before its own mean dominates.
 
 **Q:** Why did my genre totals add up to more than the number of ratings?
 
-**A:** Each film belongs to several genres, so the join repeats each rating once per genre. Count distinct ratings, or accept that genre totals overlap.
+**A:** Each film belongs to several genres, so the join repeats each rating once per genre. That is correct for "average per genre" but wrong for a grand total. Count distinct rating ids, or accept that genre totals overlap.
 
 **Q:** How would you find the most divisive film?
 
-**A:** Group by film, require enough ratings, and order by the standard deviation of the rating, highest first.
+**A:** Group by film, require enough ratings, and order by `stddev_samp(rating)` descending. A high standard deviation means people strongly disagree.
+
+**Q:** Why load through staging tables instead of straight into typed tables?
+
+**A:** A single malformed value would abort the whole `COPY`. Loading text first lets you count, inspect and reject bad rows with SQL, then move clean rows with `INSERT ... SELECT` and casts.
+
+**Q:** Why `numeric` for ratings instead of `real`?
+
+**A:** Ratings are half-stars, and `numeric` stores them exactly. `avg()` over `numeric` returns `numeric`, so `round(avg(rating), 2)` is reliable. Floats are fine for science but give surprising rounding in reports.
+
+**Q:** A whole-table aggregate ignores your index. Is that a bug?
+
+**A:** No. Averaging all 32 million ratings must read every row, and a sequential scan is the cheapest way. Indexes help when a query reads a small fraction of rows, such as one film's ratings.
+
+**Q:** What happens to performance as the data grows 10x?
+
+**A:** Big `GROUP BY`s may spill to disk; `EXPLAIN (ANALYZE, BUFFERS)` shows "Disk:" or "external merge". Raise `work_mem` per session, pre-aggregate into a materialized view, and let parallel workers help.
+
+**Q:** How do you prove the numbers are right?
+
+**A:** Hand-count three films from the CSV with `grep`, compare with the view, and run zero-row sanity queries (ratings out of range, duplicate user-film pairs, unknown films). Re-run the pipeline from scratch and check results are identical.
+
+**Common mistakes in answers:**
+- Ranking by raw average with no vote threshold.
+- Treating `(no genres listed)` as a real genre.
+- Assuming every slow aggregate needs an index; full scans are correct for whole-table work.
 
 ### TL;DR
 Load a real ratings dataset, clean it into a normalized schema, and learn that good analytic SQL means guarding against small samples and join fan-out, not just writing `avg()`.
@@ -487,9 +568,21 @@ Build a "golden" fixture: two students, two categories, four assignments, with r
 - `rank()` and `lead()`: [Ch 8 — Window Functions](../chapters/08-window-functions/README.md)
 
 ### In the interview
+**30-second answer:** I built a gradebook where submissions store only raw facts, and views compute per-category percentages, weighted finals and letter grades. The key decision was compute-on-read: at 300 students a view is fast and never stale. The hardest parts were the cross-row rule "weights sum to 100", which I enforced with a deferred constraint trigger, and excused work, which leaves both numerator and denominator. The final-grade view returns a 300-student course in well under 100 ms and matches a hand-calculated golden fixture.
+
+**Key terms to know:**
+- **Conditional aggregation** — aggregates with `FILTER (WHERE ...)`. Separates graded, missing and excused work.
+- **Constraint trigger** — a trigger that can be deferred to commit time. Checks the sum of weights per course.
+- **`DEFERRABLE INITIALLY DEFERRED`** — run the check at `COMMIT`, not after each statement. Lets you insert all categories first.
+- **`LEFT JOIN`** — keeps rows from the left side even with no match. Keeps students with no submissions.
+- **`LATERAL` join** — a subquery that can refer to the current outer row. Picks the matching grade-scale row.
+- **`NULLIF`** — returns NULL when two values are equal. Avoids division by zero.
+- **Window function `rank()`** — ranks rows within a partition without collapsing them. Rank within a course.
+- **Derived data** — values computed from facts. Percentages are never stored in `submission`.
+
 **Q:** How do you enforce a rule that spans many rows, like weights summing to 100?
 
-**A:** `CHECK` only sees one row. Use a deferred constraint trigger that checks the sum at commit, or a serialized write path that validates before commit.
+**A:** `CHECK` only sees one row. Use a deferred constraint trigger that checks the sum at commit. Under `READ COMMITTED`, two concurrent transactions could each pass the check, so also lock the parent course row (`SELECT ... FOR UPDATE`) or run them `SERIALIZABLE`.
 
 **Q:** Why should a student with no submissions still appear?
 
@@ -497,7 +590,37 @@ Build a "golden" fixture: two students, two categories, four assignments, with r
 
 **Q:** How do you map a percentage to a letter from a table of lower bounds?
 
-**A:** For each student, take the scale row with the largest lower bound not above the percentage, using `LATERAL ... ORDER BY min_pct DESC LIMIT 1`.
+**A:** Take the scale row with the largest lower bound not above the percentage.
+```sql
+SELECT f.*, g.letter FROM final_grade f
+CROSS JOIN LATERAL (SELECT letter FROM grade_scale s
+  WHERE s.min_pct <= f.pct ORDER BY s.min_pct DESC LIMIT 1) g;
+```
+
+**Q:** How do missing and excused work differ in the maths?
+
+**A:** Missing counts as 0 points out of `max_points`. Excused is dropped from both sums: `sum(points) FILTER (WHERE status = 'graded')` over `sum(max_points) FILTER (WHERE status <> 'excused')`.
+
+**Q:** What if every assignment in a category is excused?
+
+**A:** The denominator is 0. `NULLIF(den, 0)` makes the percentage NULL, and the final view re-weights over the remaining categories instead of crashing.
+
+**Q:** Why compute grades in a view instead of storing them?
+
+**A:** Stored grades must be refreshed after every edit and can go stale. At this size a view is fast enough. At 100x (a whole district), a materialized view refreshed on publish becomes worth it.
+
+**Q:** What breaks if a teacher changes a weight mid-term?
+
+**A:** Every grade shifts silently. Lock categories with a `published_at` column checked by a trigger, or audit changes (Project 15).
+
+**Q:** How do you test it?
+
+**A:** A golden fixture of two students and four assignments, calculated by hand, compared with the view using `EXCEPT` both ways. Plus edge cases: all excused, perfect scores, no submissions.
+
+**Common mistakes in answers:**
+- Claiming a `CHECK` constraint can validate a sum across rows.
+- Treating excused as zero, which unfairly lowers grades.
+- Forgetting that a trigger-based check can race under concurrency without a lock.
 
 ### TL;DR
 A gradebook is weighted conditional aggregation plus a range lookup. The interesting part is enforcing cross-row rules and treating missing and excused work correctly.
@@ -630,9 +753,21 @@ The best test is reconciliation: for each account, the sum of transactions up to
 - Running totals: [Ch 8 — Window Functions](../chapters/08-window-functions/README.md)
 
 ### In the interview
+**30-second answer:** I built a personal finance database that imports bank CSVs through per-bank staging tables, categorises transactions with rules stored as data, and reports spending against monthly budgets. The key decision was idempotent imports: each row gets a fingerprint with a unique constraint, and `ON CONFLICT DO NOTHING` makes re-importing a file add zero rows. The hard part was that two identical coffees on one day are genuine duplicates, so the fingerprint includes `row_number()` among identical rows in the file. Reconciliation against three real statement balances matches to the cent.
+
+**Key terms to know:**
+- **`numeric`** — exact decimal type. Money is `numeric(12,2)`, never `float`.
+- **Idempotent import** — running it twice has the same effect as once. Achieved with a unique fingerprint.
+- **`ON CONFLICT DO NOTHING`** — an upsert variant that skips rows violating a unique constraint.
+- **`row_number()`** — a window function numbering rows in a partition. Separates identical transactions.
+- **`DISTINCT ON`** — PostgreSQL extension keeping the first row per group by `ORDER BY`. Picks the highest-priority rule.
+- **Window frame** — which rows a window aggregate sees. Matters for the running balance.
+- **Reconciliation** — checking computed balances against an outside source. Statement closing balances.
+- **`coalesce`** — first non-NULL argument. Shows 0 for budgets with no spending.
+
 **Q:** Why not use `float` for money?
 
-**A:** Binary floating point cannot represent most decimal fractions exactly, so sums drift by fractions of a cent. `numeric` is exact.
+**A:** Binary floating point cannot represent most decimal fractions exactly, so sums drift by fractions of a cent. `numeric` is exact decimal arithmetic.
 
 **Q:** How do you make an import idempotent?
 
@@ -640,7 +775,36 @@ The best test is reconciliation: for each account, the sum of transactions up to
 
 **Q:** How do you compute a running balance?
 
-**A:** A window sum ordered by date with a unique tie-breaker such as the id, partitioned by account. Without the tie-breaker, rows on the same date get the same total under the default `RANGE` frame.
+**A:** A window sum partitioned by account, ordered by date with a unique tie-breaker. Without the tie-breaker, same-date rows share one total under the default `RANGE` frame.
+```sql
+SELECT *, sum(amount) OVER (PARTITION BY account_id
+  ORDER BY posted_on, txn_id) AS balance FROM txn;
+```
+
+**Q:** Several rules match one transaction. How do you pick one?
+
+**A:** Give rules a priority and keep the best match per transaction with `DISTINCT ON (txn_id) ... ORDER BY txn_id, priority`, or a `LATERAL ... LIMIT 1` subquery.
+
+**Q:** How do you show categories with a budget but no spending?
+
+**A:** Start from `budget`, `LEFT JOIN` the monthly sums, and `coalesce(actual, 0)`. Starting from transactions would drop them.
+
+**Q:** What happens if the bank changes its date format?
+
+**A:** `to_date` may silently swap day and month. Validate that every parsed date falls inside the statement period and reject the whole batch otherwise, inside one transaction.
+
+**Q:** Why are card payments not spending?
+
+**A:** Moving money from current account to credit card is a transfer. Pair rows with the same amount, opposite sign, different accounts within 3 days, and exclude them from category totals.
+
+**Q:** How do you prove the data is right?
+
+**A:** Reconcile: the sum of each account's transactions up to a statement date must equal that statement's closing balance. Three statements matching to the cent is strong evidence.
+
+**Common mistakes in answers:**
+- Building the fingerprint from date, amount and description only, which deletes genuine duplicate purchases.
+- Running totals without a tie-breaker in `ORDER BY`.
+- Hard-coding categorisation in application code instead of a rules table.
 
 ### TL;DR
 An expense tracker teaches exact money types, idempotent imports with a deterministic key, rules stored as data, and reconciliation against a known balance as the ultimate test.
@@ -753,17 +917,60 @@ Write invariants as queries that must return zero rows: trips ending before they
 - Normalizing a flat file: [Ch 10 — Data Modeling and ER Diagrams](../chapters/10-data-modeling-and-er-diagrams/README.md)
 
 ### In the interview
+**30-second answer:** I loaded a month of Citi Bike trips, about 3 million rows, normalized them into `station` and `trip`, and answered demand questions with SQL. The headline report is net bikes gained or lost per station per hour, which needs departures and arrivals aggregated separately and then `FULL JOIN`ed. The hard part was showing zeros for empty hours, which I solved by cross-joining stations with `generate_series` hours. Load and normalize take under 2 minutes, and every question runs in under 3 seconds after indexing.
+
+**Key terms to know:**
+- **Normalization** — station names and coordinates stored once in `station`, not on every trip.
+- **`FULL JOIN`** — keeps unmatched rows from both sides. Stations with departures but no arrivals, and vice versa.
+- **`generate_series`** — produces a set of values or timestamps. Builds the hour grid.
+- **Percentile / median** — `percentile_cont(0.5) WITHIN GROUP (ORDER BY ...)`. Robust to outlier trips.
+- **Anti-join** — rows with no match. Stations never used as a destination, with `NOT EXISTS`.
+- **`timestamptz`** — timestamp stored as an absolute instant. Avoids daylight-saving and UTC errors.
+- **Surrogate key** — internal id independent of Citi Bike's changing station ids.
+- **BRIN index** — a tiny index storing min/max per block range. Useful for years of time-ordered trips.
+
 **Q:** How do you report a zero for hours with no trips?
 
-**A:** Generate the full grid of stations and hours, then `LEFT JOIN` the aggregated counts and `coalesce` NULL to 0.
+**A:** Generate the full grid of stations and hours, then `LEFT JOIN` the aggregated counts and `coalesce` NULL to 0. `GROUP BY` alone only returns groups that exist.
 
 **Q:** Why median rather than average for trip duration?
 
-**A:** The distribution has a long tail of very long trips, which pulls the mean up. The median describes a typical trip.
+**A:** The distribution has a long tail of bikes not docked for days, which pulls the mean up. The median describes a typical trip.
 
-**Q:** How do you compute departures minus arrivals per station?
+**Q:** How do you compute net bikes gained (arrivals minus departures) per station and hour?
 
-**A:** Aggregate departures and arrivals separately, then full-join them on station and hour. Joining raw trips to each other first multiplies rows.
+**A:** Aggregate each in its own CTE, then full-join on station and hour.
+```sql
+WITH d AS (SELECT start_station_id s, date_trunc('hour', started_at) h, count(*) n FROM trip GROUP BY 1,2),
+     a AS (SELECT end_station_id s, date_trunc('hour', ended_at) h, count(*) n FROM trip GROUP BY 1,2)
+SELECT coalesce(d.s,a.s), coalesce(d.h,a.h), coalesce(a.n,0) - coalesce(d.n,0) AS net
+FROM d FULL JOIN a ON a.s = d.s AND a.h = d.h;
+```
+
+**Q:** Why `NOT EXISTS` for "never a destination"?
+
+**A:** `end_station_id` contains NULLs, and one NULL makes `NOT IN` return no rows. `NOT EXISTS` is NULL-safe.
+
+**Q:** Which index helps "trips from station X in a time range"?
+
+**A:** A composite B-tree on `trip (start_station_id, started_at)`: equality column first, range column second, so the scan reads one contiguous slice.
+
+**Q:** What changes at several years of data?
+
+**A:** Hundreds of millions of rows. Partition `trip` by month so old months can be dropped and queries prune partitions, and use BRIN on `started_at` because rows arrive in time order.
+
+**Q:** What breaks first if times are wrong?
+
+**A:** Treating local time as UTC shifts every hourly chart by four or five hours, and the daylight-saving night gets a missing or doubled hour. Store `timestamptz` and convert with `AT TIME ZONE 'America/New_York'` for display.
+
+**Q:** How do you check the flow report?
+
+**A:** Invariant queries that must return zero rows (trips ending before they start, missing stations), and a hand count for one station-hour from the raw CSV with `grep`.
+
+**Common mistakes in answers:**
+- Self-joining trips to compute flow, which multiplies rows.
+- Averaging durations without handling multi-day outliers.
+- Forgetting empty hours exist and charting only non-zero ones.
 
 ### TL;DR
 Bike-share data teaches normalizing a flat file, time bucketing with real time zones, filling empty buckets with `generate_series`, and combining two aggregations without fan-out.
@@ -885,17 +1092,60 @@ Craft a pantry where you know the answer: one recipe exactly covered, one short 
 - More division problems: [Ch 19 — SQL Interview Problems II](../chapters/19-sql-interview-problems-2/README.md)
 
 ### In the interview
+**30-second answer:** I built a recipe and pantry database that answers "what can I cook now?", "what am I one ingredient short of?" and "what should I buy?". The core is relational division, which I wrote three ways (double `NOT EXISTS`, counting with `FILTER`, and `EXCEPT`) and proved they agree on 100 random pantries. The hard part was fan-out: two pantry rows for flour inflated counts until I summed the pantry per ingredient first. Every query runs in under 50 ms on 2,000 recipes.
+
+**Key terms to know:**
+- **Relational division** — entities related to *every* member of a set. Recipes whose every required ingredient is in stock.
+- **Double `NOT EXISTS`** — "no required ingredient that is not in the pantry". The most reliable division form.
+- **Conditional count** — `count(*) FILTER (WHERE ...)`. The counting form of division.
+- **Fan-out** — a join multiplying rows. Duplicate pantry rows per ingredient.
+- **Empty divisor** — a set with no members. A recipe with only optional ingredients.
+- **`greatest()`** — largest of its arguments. Floors the shopping list at zero.
+- **Expression index** — an index on a computed value. `UNIQUE (lower(name))` stops "Tomato"/"tomato" duplicates.
+
 **Q:** What is relational division?
 
-**A:** Finding entities related to every member of a set, such as recipes whose every required ingredient is in stock. You write it with double `NOT EXISTS` or by comparing counts per group.
+**A:** Finding entities related to every member of a set, such as recipes whose every required ingredient is in stock. Write it with double `NOT EXISTS` or by comparing counts per group.
+
+**Q:** Write the "cookable now" query.
+
+**A:**
+```sql
+SELECT r.name FROM recipe r WHERE NOT EXISTS (
+  SELECT 1 FROM recipe_ingredient ri WHERE ri.recipe_id = r.recipe_id
+    AND NOT ri.optional AND NOT EXISTS (
+      SELECT 1 FROM pantry_total p WHERE p.ingredient_id = ri.ingredient_id
+        AND p.qty >= ri.quantity));
+```
 
 **Q:** Why can the counting method give wrong answers?
 
-**A:** If the joined table has duplicates per key (two pantry rows for flour), counts inflate. Aggregate that side first, or count distinct keys.
+**A:** If the joined table has several rows per key (two pantry rows for flour), counts inflate. Aggregate that side first, or count distinct keys.
 
 **Q:** How would you find recipes missing exactly one ingredient?
 
-**A:** Group by recipe and keep groups where required ingredients minus available ingredients equals one. Use `string_agg` with a `FILTER` to name the missing one.
+**A:** Group by recipe and keep groups where required minus available equals one. `string_agg(name, ', ') FILTER (WHERE have IS NULL OR have < quantity)` names the missing one.
+
+**Q:** Is a recipe with only optional ingredients cookable?
+
+**A:** Double `NOT EXISTS` says yes (nothing is missing), while a count-based form may say yes or drop it depending on the `HAVING`. Decide the rule and make all forms agree; that is the empty-divisor case.
+
+**Q:** Which indexes matter here?
+
+**A:** The primary key `(recipe_id, ingredient_id)` serves lookups by recipe. A second index on `recipe_ingredient (ingredient_id)` serves "recipes that use this expiring ingredient".
+
+**Q:** What changes with many users, each with a pantry?
+
+**A:** Add `user_id` to `pantry` and to every query, index `pantry (user_id, ingredient_id)`, and the recipe catalogue stays shared. Division per user stays cheap because each pantry is small.
+
+**Q:** How do you test division?
+
+**A:** A hand-built pantry with known answers (exact cover, short by quantity, missing only an optional item), plus a property test: the three forms return identical sets on random pantries.
+
+**Common mistakes in answers:**
+- Using a plain inner join and `count(*)`, which treats "has some ingredients" as "has all".
+- Forgetting quantities: having 50 g of flour is not having 500 g.
+- Ignoring the empty-divisor case.
 
 ### TL;DR
 "What can I cook?" is relational division. Write it with double `NOT EXISTS` and with counting, prove they agree, and guard against fan-out from duplicate rows.
@@ -1041,9 +1291,24 @@ A fixture day per edge case: a fully booked day, a day with a cancellation, a da
 - `generate_series`: [Ch 7 — CTEs, Views and Recursion](../chapters/07-ctes-views-and-recursion/README.md)
 
 ### In the interview
+**30-second answer:** I built a vet clinic scheduler with owners, pets, vets, appointments, visits and vaccination reminders. Double-booking is prevented by a partial unique index on `(vet_id, starts_at)` covering only active statuses, so cancelled appointments stay as history without blocking the slot. The hardest part was time: slots are generated in clinic local time and converted with `AT TIME ZONE`, so 9:00 stays 9:00 across daylight-saving changes. A fixture suite checks the free-slot list exactly on a full day, a cancellation day and a clock-change day.
+
+**Key terms to know:**
+- **Partial unique index** — uniqueness only for rows matching a `WHERE`. Active appointments only.
+- **`timestamptz`** — an absolute instant, displayed in the session's zone. Every appointment time.
+- **`AT TIME ZONE`** — converts between local wall-clock time and instants. Slot generation.
+- **`generate_series`** — produces the slot grid from opening hours.
+- **Anti-join** — removes booked slots from the grid, with `NOT EXISTS`.
+- **`make_interval`** — builds an interval from parts. `given_on + make_interval(months => n)` for reminders.
+- **Exclusion constraint** — generalises uniqueness to overlapping ranges. Needed if appointments had variable length (Project 13).
+
 **Q:** How do you prevent double-booking but keep cancelled appointments?
 
 **A:** A partial unique index on vet and start time that only covers active statuses.
+```sql
+CREATE UNIQUE INDEX one_live_appt ON appointment (vet_id, starts_at)
+  WHERE status IN ('booked', 'arrived');
+```
 
 **Q:** Why `timestamptz` and not `timestamp`?
 
@@ -1051,7 +1316,32 @@ A fixture day per edge case: a fully booked day, a day with a cancellation, a da
 
 **Q:** How do you find free slots?
 
-**A:** Generate every slot from opening hours with `generate_series`, then anti-join against booked appointments.
+**A:** Generate every slot from opening hours with `generate_series`, then anti-join against active appointments for that vet and date.
+
+**Q:** Why can't a `CHECK` constraint enforce opening hours?
+
+**A:** `CHECK` sees only the row being written, and opening hours live in another table. Enforce it in a booking function or a trigger, accepting that direct inserts could bypass a function.
+
+**Q:** What happens with a two-hour surgery?
+
+**A:** A unique index on start time cannot see overlaps. Store a `tstzrange` and use an exclusion constraint with `&&`, or book several consecutive fixed slots.
+
+**Q:** Why does "add 30 days per month" break reminders?
+
+**A:** Months have 28 to 31 days, so it drifts. Interval arithmetic with months handles month lengths properly.
+
+**Q:** What breaks if a client laptop has the wrong time zone?
+
+**A:** Displayed and entered times shift by an hour. Set the zone per session from clinic configuration (`SET TIME ZONE 'Europe/London'`), not from the client.
+
+**Q:** How do you test the scheduler?
+
+**A:** One fixture day per edge case, including a daylight-saving day and a Sunday, asserting the free-slot list exactly. Negative tests for every constraint.
+
+**Common mistakes in answers:**
+- A plain `UNIQUE (vet_id, starts_at)`, which lets a cancelled appointment block the slot forever.
+- Generating slots in UTC, which moves opening time on clock-change days.
+- Claiming a unique index prevents overlapping variable-length bookings.
 
 ### TL;DR
 A clinic booking system is mostly constraints and dates: partial unique indexes for "only one active", `timestamptz` with local-time slot generation, and interval arithmetic that respects months.
@@ -1193,17 +1483,53 @@ Unit-test the booking function with fixtures: under capacity, at capacity, membe
 - Row locks: [Ch 13 — Transactions and Concurrency](../chapters/13-transactions-and-concurrency/README.md)
 
 ### In the interview
+**30-second answer:** I built a gym booking system: a weekly timetable, sessions generated eight weeks ahead, capacity-limited bookings with a waitlist, and attendance reports. The key decision was a booking function that locks the session row with `SELECT ... FOR UPDATE` before counting confirmed bookings, so two people grabbing the last place cannot both succeed. Cancelling promotes the earliest waitlisted booking in the same transaction. A Python script that fires two concurrent bookings 100 times never exceeded capacity.
+
+**Key terms to know:**
+- **Race condition** — the result depends on timing. "Count then insert" lets two bookings both see 19 of 20.
+- **Row lock (`FOR UPDATE`)** — locks selected rows until commit. Serializes bookings for one session.
+- **Check-then-act** — reading a value and acting on it later. The pattern that causes the race.
+- **Idempotent generator** — `INSERT ... ON CONFLICT DO NOTHING`. Session generation can run repeatedly.
+- **Waitlist ordering** — `ORDER BY booked_at, booking_id`. The id breaks timestamp ties.
+- **`pg_cron`** — an extension that runs SQL on a schedule. Runs the generator.
+- **Lock contention** — transactions queueing for the same lock. Fine for one class, a problem for a flash sale.
+
 **Q:** How do you model a weekly class and its occurrences?
 
 **A:** Store the rule (weekday, time) in one table and generate dated sessions into another. Exceptions such as cancellations edit only the session.
 
-**Q:** Two members book the last place at once. What happens in your design?
+**Q:** Two members book the last place at once. What happens?
 
-**A:** Both transactions lock the session row with `FOR UPDATE`. The second waits, then sees the first booking and is waitlisted.
+**A:** Both lock the session row with `FOR UPDATE`. The second waits, then counts 20 confirmed and is waitlisted. Without the lock both would count 19 and both confirm.
+
+**Q:** Why not just use `SERIALIZABLE` instead of the lock?
+
+**A:** It also works: one transaction fails with a serialization error (SQLSTATE `40001`) and must be retried. The explicit lock avoids retries and is easier to reason about for a single hot row.
 
 **Q:** How do you make the session generator safe to run repeatedly?
 
-**A:** A unique key on slot and start time, and `INSERT ... ON CONFLICT DO NOTHING`.
+**A:** A unique key on timetable slot and start time, and `INSERT ... ON CONFLICT DO NOTHING`.
+
+**Q:** How is a ten-class pass "active"?
+
+**A:** By a count of attended bookings below 10, not a date range. Model eligibility per plan type rather than faking an end date.
+
+**Q:** What breaks first at 100x members?
+
+**A:** Not the database; each class still has a few dozen bookings. A flash sale for one popular class with thousands of buyers would queue everyone on one row lock, which is where Project 20's designs come in.
+
+**Q:** What if the generator stops running?
+
+**A:** Next week has no sessions to book. Schedule it and alert when the furthest future session is under seven days away.
+
+**Q:** How do you prove capacity is never exceeded?
+
+**A:** A concurrency test with two connections booking simultaneously, repeated 100 times, asserting `count(*) FILTER (WHERE status = 'confirmed') <= capacity` every time.
+
+**Common mistakes in answers:**
+- Saying a transaction alone prevents overbooking. Under `READ COMMITTED` it does not.
+- Locking the whole bookings table instead of one session row.
+- Ordering a waitlist by timestamp with no tie-breaker.
 
 ### TL;DR
 Separate rules from instances, expand rules with `generate_series`, and protect a capacity limit by locking the parent row before counting.
@@ -1318,9 +1644,26 @@ Fixtures with known answers: a single day, two separate streaks, a streak that e
 - Time zones: [Ch 3 — Functions and Expressions](../chapters/03-functions-and-expressions/README.md)
 
 ### In the interview
+**30-second answer:** I built a habit tracker that computes current and longest streaks, weekly targets and a 90-day calendar entirely in SQL. The key technique is gaps-and-islands: `local_date - row_number()` is constant across consecutive dates, so grouping by it yields each streak. The subtle problem was time zones, so I store the user's local date at write time and compute "today" as `(now() AT TIME ZONE tz)::date`. The streak query runs in a few milliseconds for 10 habits over 5 years.
+
+**Key terms to know:**
+- **Gaps and islands** — finding runs of consecutive values. Streaks are islands of dates.
+- **`row_number()`** — sequential number per partition. Subtracted from the date to make the island key.
+- **`lag()`** — the previous row's value in window order. Detects gaps in the alternative method.
+- **Running sum** — `sum(flag) OVER (ORDER BY d)`. Turns "new island" flags into island numbers.
+- **ISO week** — Monday-start week numbering. Weekly habits group by `date_trunc('week', d)`.
+- **Local date** — the calendar date in the user's zone. Stored on each check-in.
+- **Compute on read** — streaks derived from history, not counters. Survives back-filled days.
+
 **Q:** How do you find the longest run of consecutive days?
 
-**A:** Subtract `row_number()` (ordered by date) from the date. Consecutive dates share the same result, so group by it and take the largest count.
+**A:** Subtract `row_number()` from the date; consecutive dates share the result.
+```sql
+SELECT min(d), max(d), count(*) FROM (
+  SELECT local_date d, local_date - row_number() OVER (ORDER BY local_date)::int AS grp
+  FROM checkin WHERE habit_id = $1) s
+GROUP BY grp ORDER BY count(*) DESC LIMIT 1;
+```
 
 **Q:** How would you allow a one-day gap inside a streak?
 
@@ -1329,6 +1672,31 @@ Fixtures with known answers: a single day, two separate streaks, a streak that e
 **Q:** Why store a local date rather than only a timestamp?
 
 **A:** The habit day is the day in the user's zone. Deriving it from a UTC timestamp later depends on knowing the zone they were in at the time.
+
+**Q:** Why not use `current_date` for "is the streak current?"
+
+**A:** `current_date` uses the session's zone, not the user's. A user in Tokyo and one in New York have different "todays" at the same instant.
+
+**Q:** Why not keep a `current_streak` counter column?
+
+**A:** It breaks when a user back-fills a forgotten day or deletes one. Computing from history is always correct and fast with the `(habit_id, local_date)` primary key.
+
+**Q:** What happens at 1 million users?
+
+**A:** Each streak query still reads one habit's rows through the index, so it scales. For a leaderboard of streaks across all users, precompute nightly into a table.
+
+**Q:** How do you test streaks?
+
+**A:** Fixtures for single days, two streaks, a streak ending yesterday (current) versus two days ago (not), New Year and leap day. Property: the sum of island lengths equals the number of check-ins.
+
+**Q:** What prevents double check-ins?
+
+**A:** A unique constraint on `(habit_id, local_date)`, with `ON CONFLICT DO NOTHING` so a double tap is harmless.
+
+**Common mistakes in answers:**
+- Truncating `timestamptz` to UTC days, which moves evening check-ins to the next day for users west of UTC.
+- Using a self-join or loop instead of window functions.
+- Forgetting the date-ordered `row_number()` must be partitioned per habit.
 
 ### TL;DR
 Streaks are gaps and islands: `date - row_number()` groups consecutive days, `lag()` plus a running sum handles looser rules, and "today" must be computed in the user's time zone.
@@ -1474,17 +1842,58 @@ Make a 20-line CSV with one example of every problem (bad date, lowercase boroug
 - Dynamic SQL and injection safety: [Ch 14 — Advanced SQL and Using SQL from Code](../chapters/14-advanced-sql-and-using-sql-from-code/README.md)
 
 ### In the interview
+**30-second answer:** I built a repeatable pipeline for NYC 311 data: load into an all-text staging table with batch id and line number, run validation rules stored as data, move clean rows into a normalized schema and quarantine the rest with reasons. The key decision was never editing raw data, so any batch can be re-run idempotently in one transaction. The hard part was profiling 40 columns, which I generated from `information_schema` with `format()` and `\gexec`. A month loads and cleans in under 3 minutes, and every rejected row traces back to its source line.
+
+**Key terms to know:**
+- **Staging table** — all-`text` exact copy of the file. `raw_311`.
+- **Data-quality rule** — a stored SQL predicate that flags bad rows. The `dq_rule` table.
+- **Quarantine** — where rejected rows and their reasons are kept.
+- **Functional dependency** — one column determines another. `agency` → `agency_name`.
+- **Dynamic SQL** — SQL built and run at runtime with `EXECUTE`. Runs stored rules.
+- **`format()` with `%I` / `%L`** — safely quotes identifiers and literals. Prevents SQL injection.
+- **Idempotent batch** — delete-and-reinsert one batch in one transaction.
+- **`\gexec`** — psql command running each result row as a statement. Generated profiling queries.
+
 **Q:** Why load into an all-text staging table first?
 
 **A:** A single bad value would make a typed `COPY` fail the whole load. Text staging accepts everything, so you can validate with SQL and keep bad rows for inspection.
 
 **Q:** How do you make a load re-runnable?
 
-**A:** Tag rows with a batch id, and in one transaction delete that batch's output and re-insert it. Upserts handle shared dimension rows.
+**A:** Tag rows with a batch id, and in one transaction delete that batch's output and re-insert it. Readers see the old or the new batch, never half. Upserts handle shared dimension rows.
 
 **Q:** How can you check a functional dependency in real data?
 
 **A:** Group by the determinant and look for groups with more than one distinct dependent value.
+```sql
+SELECT agency FROM raw_311 GROUP BY agency
+HAVING count(DISTINCT agency_name) > 1;
+```
+
+**Q:** Why not use PostgreSQL 17's `COPY ... ON_ERROR ignore`?
+
+**A:** It is fast, but it silently drops bad rows (it can only log a notice). Staging keeps every rejected row and its line number for an analyst.
+
+**Q:** How do you run stored predicates safely?
+
+**A:** Build the statement with `format()`, using `%I` for identifiers and `%L` for literals, then `EXECUTE` it. Only trusted owners may write rules.
+
+**Q:** Reject or repair a lowercase borough?
+
+**A:** Repair keeps data but every repair is a guess. Repair obvious cases and log each as a low-severity issue, so analysts can see what changed.
+
+**Q:** What changes at ten years of data?
+
+**A:** Tens of millions of rows. Load per month, create indexes after loading (faster than maintaining them row by row), and partition the final table by month.
+
+**Q:** How do you test the rules?
+
+**A:** A 20-line CSV with one example of every defect, asserting exactly which rules fire on which lines, kept as a regression test.
+
+**Common mistakes in answers:**
+- Cleaning data in place in the raw table, which makes re-runs impossible.
+- Concatenating column names into dynamic SQL without `%I`.
+- Treating a violated dependency as a schema bug rather than a data-quality finding.
 
 ### TL;DR
 Load raw as text, profile, turn problems into rules stored as data, quarantine with reasons, normalize the clean rows, and make every batch idempotent.
@@ -1621,9 +2030,24 @@ Concurrency tests are the core: a `pgbench` script per scenario (last unit, mult
 - The e-commerce case study: [Ch 17 — Schema Design Case Studies](../chapters/17-schema-design-case-studies/README.md)
 
 ### In the interview
+**30-second answer:** I built an order and inventory schema whose checkout function creates the order, snapshots prices, decrements stock and records a payment attempt in one transaction. The key decision was a single conditional `UPDATE ... WHERE on_hand >= qty`: PostgreSQL re-checks the condition after waiting on a locked row, so the last unit can never be sold twice, with no explicit lock or retry loop. I also prevented deadlocks by updating stock rows in `sku_id` order and made checkout idempotent with a client key. Under 50 concurrent buyers for 10 units, `pgbench` runs always end with exactly 10 sold and stock at zero.
+
+**Key terms to know:**
+- **ACID transaction** — all steps commit together or none do. Checkout.
+- **`READ COMMITTED`** — PostgreSQL's default isolation: each statement sees data committed before it started.
+- **EvalPlanQual re-check** — after waiting on a locked row, an `UPDATE` re-evaluates its `WHERE` on the newest version. Why the conditional decrement is safe.
+- **Deadlock** — two transactions each waiting for a lock the other holds. Avoided by a fixed lock order.
+- **Idempotency key** — a client-supplied unique key so retries return the same order.
+- **Hot row** — one row every transaction must update. A best-selling SKU.
+- **State machine** — allowed status transitions enforced by one function.
+
 **Q:** How do you stop overselling without heavy locking?
 
-**A:** One conditional `UPDATE` that decrements only if enough stock remains, and checks the affected row count. A `CHECK (on_hand >= 0)` is the safety net.
+**A:** One conditional `UPDATE` that decrements only if enough stock remains, then check the affected row count. A `CHECK (on_hand >= 0)` is the safety net.
+```sql
+UPDATE stock SET on_hand = on_hand - $3
+WHERE sku_id = $1 AND warehouse_id = $2 AND on_hand >= $3;  -- 0 rows = out of stock
+```
 
 **Q:** Why copy the price into the order line?
 
@@ -1631,11 +2055,32 @@ Concurrency tests are the core: a `pgbench` script per scenario (last unit, mult
 
 **Q:** How do you make checkout safe to retry?
 
-**A:** The client sends an idempotency key, stored with a unique constraint in the same transaction as the order. A retry finds the key and returns the original order.
+**A:** Insert the idempotency key row first in the transaction, under a unique constraint. A concurrent retry waits on that uncommitted entry, then gets `23505`, and the handler returns the original order.
+
+**Q:** Two carts both contain SKUs A and B. What can go wrong?
+
+**A:** If one locks A then B and the other B then A, they deadlock and PostgreSQL aborts one. Updating stock rows in a fixed order (`ORDER BY sku_id`) removes the cycle.
 
 **Q:** Where does the payment call go?
 
-**A:** Outside the database transaction. Commit a pending order, call the provider, then update the status, with a reconciliation job for crashes in between.
+**A:** Outside the database transaction. Commit a `pending_payment` order, call the provider, then transition, with a reconciliation job for crashes in between. Holding locks during a network call stalls every other buyer.
+
+**Q:** What breaks first at 10x traffic?
+
+**A:** The hot SKU row, because every buyer queues on one lock. Split its stock into several bucket rows and decrement any bucket with stock, or accept a small oversell handled in fulfilment.
+
+**Q:** How do you prove stock is never negative?
+
+**A:** `pgbench` scenarios (last unit, random-order multi-line carts, duplicate keys) followed by invariant queries: sold + remaining = initial, no negative stock, one order per key.
+
+**Q:** What is a lost update, and how does your design avoid it?
+
+**A:** Two transactions read the same stock value, each computes a new value, and the second write silently overwrites the first. Here the arithmetic happens inside the `UPDATE` (`on_hand = on_hand - $3`), so each transaction applies its change to the latest committed row version.
+
+**Common mistakes in answers:**
+- "Read stock in the app, then update", which is a classic lost update.
+- Claiming `SERIALIZABLE` is required; the conditional update is enough here.
+- Calling the payment provider inside the transaction.
 
 ### TL;DR
 Checkout is one atomic transaction: conditional stock decrements in a fixed order, an idempotency key with a unique constraint, prices copied into lines, and payment calls kept outside the locks.
@@ -1765,17 +2210,58 @@ For each tile keep a slow reference version (correlated subquery or self-join) a
 - Interview-style analytics: [Ch 18 — SQL Interview Problems I](../chapters/18-sql-interview-problems-1/README.md)
 
 ### In the interview
+**30-second answer:** I generated 2 million orders over 3 years and built twelve dashboard tiles in SQL: moving averages, year-over-year, top-N per category, share of total. The key design was a calendar table plus a nightly `daily_sales` rollup, so gaps show as zeros and most tiles read a few thousand rows instead of millions. The subtle bugs were window frames: `ROWS` counts rows not days, and the default `RANGE` frame treats tied timestamps as one group. Every tile runs under 500 ms for 90 days, and four match a slow reference query exactly.
+
+**Key terms to know:**
+- **Window function** — computes over related rows without collapsing them. Every tile uses one.
+- **Frame (`ROWS` / `RANGE`)** — which rows a window aggregate sees. Moving averages.
+- **Peers** — rows with equal `ORDER BY` values; `RANGE` treats them together.
+- **Calendar table** — one row per date, used to fill gaps and compare periods.
+- **Rollup** — a pre-aggregated table or materialized view. `daily_sales`.
+- **`REFRESH MATERIALIZED VIEW CONCURRENTLY`** — refresh without blocking readers; needs a unique index.
+- **Top-N per group** — rank in a subquery, filter outside.
+
 **Q:** How do you compute a 7-day moving average?
 
-**A:** `avg(x) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)` on a gap-free daily series, or a `RANGE` frame with an interval offset if days can be missing.
+**A:** `avg(x) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)` on a gap-free daily series, or `RANGE BETWEEN interval '6 days' PRECEDING AND CURRENT ROW` if days can be missing.
 
 **Q:** How do you get the top 3 products per category?
 
-**A:** Rank products within each category with `row_number()` or `rank()` in a subquery or CTE, then filter on the rank in the outer query.
+**A:** Rank within each category in a subquery, then filter; window functions cannot appear in `WHERE`.
+```sql
+SELECT * FROM (SELECT category, product, revenue,
+  row_number() OVER (PARTITION BY category ORDER BY revenue DESC) rn
+  FROM product_sales) t WHERE rn <= 3;
+```
 
 **Q:** What is the difference between `ROWS` and `RANGE`?
 
 **A:** `ROWS` counts physical rows. `RANGE` groups rows with equal sort values as peers and can use value offsets, such as an interval.
+
+**Q:** How do you compare with last year fairly?
+
+**A:** Compare with the date 364 days earlier, which falls on the same weekday, using `lag(revenue, 364)` over a gap-free calendar.
+
+**Q:** Why a rollup instead of querying raw orders?
+
+**A:** A 90-day tile then reads about 90 × categories rows instead of hundreds of thousands. The cost is a refresh delay and one more object to keep correct.
+
+**Q:** What changes at 100x data?
+
+**A:** Raw scans become seconds or minutes. Partition orders by month, keep tiles on rollups, refresh incrementally (only recent days), and consider a columnar warehouse for ad-hoc slicing (Project 34).
+
+**Q:** "Daily revenue" differs between two reports. Why?
+
+**A:** One buckets days in UTC and the other in local time. Pick one and bucket with `(placed_at AT TIME ZONE 'Europe/Berlin')::date` everywhere.
+
+**Q:** How do you test a tile?
+
+**A:** Keep a slow reference version (correlated subquery) and compare with `EXCEPT` both ways on a small range, including the first day of data, month ends and a leap day.
+
+**Common mistakes in answers:**
+- Using `ROWS 6 PRECEDING` over a series with missing days and calling it "7 days".
+- Filtering on a window function in `WHERE`.
+- Forgetting the unique index needed for a concurrent refresh.
 
 ### TL;DR
 Dashboard metrics are window functions over a gap-free calendar: choose the frame on purpose, keep reference queries to prove correctness, and pre-aggregate daily rollups for speed.
@@ -1913,17 +2399,58 @@ Constraint tests: overlap rejected, touching ranges accepted, cancelled stays ig
 - The hotel case study: [Ch 17 — Schema Design Case Studies](../chapters/17-schema-design-case-studies/README.md)
 
 ### In the interview
+**30-second answer:** I built a hotel booking system where each stay is a half-open `daterange`, and an exclusion constraint `EXCLUDE USING gist (room_id WITH =, nights WITH &&)` makes overlapping bookings impossible. The key decision was putting maintenance blocks in the same table so one constraint covers both. The hardest part was assigning a specific room under contention, which I do by trying candidate rooms and catching SQLSTATE `23P01`. A `pgbench` run with 100 concurrent bookings produced zero overlapping pairs, and search runs under 100 ms over 1 million stays.
+
+**Key terms to know:**
+- **Range type** — a value with lower and upper bounds. `daterange` for nights.
+- **Half-open range `[a,b)`** — includes start, excludes end. Check-out day is free for the next guest.
+- **Overlap operator `&&`** — true if two ranges share any point.
+- **Exclusion constraint** — no two rows may satisfy all listed operators together. Generalises `UNIQUE`.
+- **GiST index** — a generalised search tree that supports ranges and overlaps.
+- **`btree_gist`** — extension letting GiST handle `=` on plain columns like `room_id`.
+- **Subtransaction** — created by a PL/pgSQL `EXCEPTION` block. Used in the retry loop.
+
 **Q:** How do you prevent overlapping bookings in PostgreSQL?
 
-**A:** Store the stay as a range and add `EXCLUDE USING gist (room_id WITH =, nights WITH &&)`. The database rejects any overlapping row atomically, even under concurrency.
+**A:** Store the stay as a range and add an exclusion constraint. The database rejects any overlapping row atomically, even under concurrency.
+```sql
+CREATE EXTENSION btree_gist;
+ALTER TABLE stay ADD EXCLUDE USING gist
+  (room_id WITH =, nights WITH &&) WHERE (kind <> 'cancelled');
+```
 
 **Q:** Why a half-open range?
 
-**A:** So one guest's check-out day can be the next guest's check-in day without the ranges overlapping.
+**A:** So one guest's check-out day can be the next guest's check-in day without the ranges overlapping. `[1,4)` and `[4,6)` do not overlap.
 
 **Q:** Why is an application-level overlap check not enough?
 
 **A:** Two transactions can both run the check before either inserts, so both see the room free. Only a constraint, a lock or serializable isolation closes that gap.
+
+**Q:** How does the constraint behave with two concurrent inserts?
+
+**A:** Like a unique index: the second waits for the first to commit or roll back, then re-checks and fails with `23P01` if they overlap.
+
+**Q:** Why not book a room type and assign rooms at check-in?
+
+**A:** It improves occupancy but needs a count per type per night instead of an exclusion constraint, and the rule "count ≤ rooms" is harder to enforce concurrently.
+
+**Q:** What changes at airline scale?
+
+**A:** GiST inserts are slower than B-tree inserts and the table grows fast. Partition by date and keep the constraint per partition, or move to count-based inventory per seat class.
+
+**Q:** How do you test it?
+
+**A:** Constraint tests (overlap rejected, touching accepted, cancelled ignored), then a concurrent `pgbench` run followed by a self-join looking for overlapping pairs, which must return zero rows.
+
+**Q:** Which query finds free rooms for a date range?
+
+**A:** Rooms with no overlapping live stay: `WHERE NOT EXISTS (SELECT 1 FROM stay s WHERE s.room_id = r.room_id AND s.nights && daterange($in, $out) AND s.kind <> 'cancelled')`. The same GiST index that backs the constraint serves the overlap test.
+
+**Common mistakes in answers:**
+- Using closed ranges, which blocks same-day turnover.
+- Forgetting the `WHERE` on the constraint, so cancelled bookings block rooms forever.
+- Writing overlap as `start BETWEEN ...` checks, missing the case where one stay contains another.
 
 ### TL;DR
 Model stays as half-open `daterange` values and let an exclusion constraint with `btree_gist` reject overlaps. It is a uniqueness rule for intervals and it is race-free.
@@ -2048,13 +2575,29 @@ An exactly-once test: each handler inserts its job id into a `processed` table w
 - `LISTEN`/`NOTIFY` and psycopg: [Ch 14 — Advanced SQL and Using SQL from Code](../chapters/14-advanced-sql-and-using-sql-from-code/README.md)
 
 ### In the interview
+**30-second answer:** I built a PostgreSQL job queue where workers claim batches with `FOR UPDATE SKIP LOCKED`, commit immediately, and protect the job with a lease timestamp that a heartbeat extends. The key decision was short transactions plus leases instead of holding a lock for the whole job, because long transactions block vacuum and bloat a high-churn table. Delivery is at-least-once, so handlers are idempotent, and a reaper requeues jobs whose lease expired after a `kill -9`. Eight workers process over 1,000 jobs per second on a laptop.
+
+**Key terms to know:**
+- **`FOR UPDATE SKIP LOCKED`** — lock rows but skip any already locked. Lets workers claim different jobs.
+- **Lease** — a time-limited claim (`lease_until`). Expired leases make jobs available again.
+- **At-least-once delivery** — every job runs, possibly twice. Requires idempotent handlers.
+- **Exponential backoff with jitter** — retry delays that grow and are randomised to avoid stampedes.
+- **MVCC bloat** — dead row versions from updates. Every state change creates one.
+- **Autovacuum tuning** — per-table settings like `autovacuum_vacuum_scale_factor`. Keeps the queue lean.
+- **`LISTEN` / `NOTIFY`** — lightweight pub/sub that wakes idle workers.
+
 **Q:** What does `SKIP LOCKED` do and why is it good for queues?
 
 **A:** It makes a locking `SELECT` skip rows other transactions have locked instead of waiting. Concurrent workers each grab different jobs with no blocking.
+```sql
+UPDATE job SET state = 'running', lease_until = now() + interval '5 min'
+WHERE id IN (SELECT id FROM job WHERE state = 'available' AND run_after <= now()
+  ORDER BY priority, id LIMIT 10 FOR UPDATE SKIP LOCKED) RETURNING *;
+```
 
 **Q:** Why not hold the row lock for the whole job?
 
-**A:** It keeps a transaction open for minutes, which blocks VACUUM cleanup and ties up a connection. Claim quickly, commit, and protect the job with a lease timestamp.
+**A:** It keeps a transaction open for minutes, which stops VACUUM removing dead rows and ties up a connection. Claim quickly, commit, and protect the job with a lease.
 
 **Q:** What delivery guarantee does your queue give?
 
@@ -2062,7 +2605,28 @@ An exactly-once test: each handler inserts its job id into a `processed` table w
 
 **Q:** When would you move off a PostgreSQL queue?
 
-**A:** When throughput or fan-out needs exceed what one primary can handle comfortably, or when many consumers need to replay the same event stream.
+**A:** When throughput or fan-out needs exceed what one primary can handle comfortably, or when many consumers need to replay the same event stream. That is where a log-based broker such as Kafka fits.
+
+**Q:** Which index makes the claim fast?
+
+**A:** A partial index on `job (priority, id) WHERE state = 'available'`. It stays small because finished jobs leave it.
+
+**Q:** The queue gets slower over hours. What do you check first?
+
+**A:** Dead tuples in `pg_stat_user_tables` and long-open transactions in `pg_stat_activity`. One idle-in-transaction session can block cleanup; `idle_in_transaction_session_timeout` prevents it.
+
+**Q:** How do you test for double processing?
+
+**A:** Each handler inserts its job id into a table with a unique constraint, so a duplicate run fails loudly. Repeat with `kill -9` on a worker mid-job.
+
+**Q:** How do low-priority jobs avoid starving?
+
+**A:** Add aging (effective priority improves with wait time) or give low-priority work its own worker pool.
+
+**Common mistakes in answers:**
+- Claiming exactly-once delivery.
+- Using `NOWAIT` and treating its errors as normal flow.
+- Keeping finished jobs forever in the hot table.
 
 ### TL;DR
 A PostgreSQL job queue gives transactional enqueueing for free. Claim with `FOR UPDATE SKIP LOCKED` in a short transaction, protect running jobs with leases, make handlers idempotent, and keep the table small to fight bloat.
@@ -2176,17 +2740,57 @@ For each operation, assert the exact log row. A pooled-connection test: two tran
 - Partitioning old data: [Ch 15 — Scaling Databases](../chapters/15-scaling-databases/README.md)
 
 ### In the interview
+**30-second answer:** I built a generic audit system: one PL/pgSQL trigger function, attached with `audit.enable('table')`, writes old values, new values and changed columns as `jsonb` to an append-only, monthly partitioned log. The key problem was identity: every web request uses the same database role, so the app sets a transaction-local `app.user_id` with `set_config(..., true)` and the trigger reads it, which is safe with connection pools. For bulk changes I used statement-level triggers with transition tables. Overhead measured under 30% on a bulk update benchmark.
+
+**Key terms to know:**
+- **Row-level trigger** — runs once per affected row with `OLD` and `NEW`.
+- **Statement-level trigger with transition tables** — runs once per statement with `OLD TABLE` / `NEW TABLE`. Cheaper for bulk writes.
+- **`set_config(name, value, true)`** — sets a custom setting for the current transaction only.
+- **`IS DISTINCT FROM`** — NULL-safe inequality. Computes the changed columns.
+- **`jsonb_each`** — expands a `jsonb` object into key-value rows for diffing.
+- **Append-only table** — inserts allowed, updates and deletes revoked from app roles.
+- **`SECURITY DEFINER`** — function runs with its owner's rights, so the app role need not have insert on the log.
+
 **Q:** Why audit with triggers rather than in the application?
 
 **A:** Triggers catch every change from every client, including scripts and manual fixes, and run in the same transaction, so the audit row commits or rolls back with the change.
 
 **Q:** How does the trigger know which end user made a change?
 
-**A:** The application sets a transaction-local setting such as `app.user_id` with `set_config(..., true)`, and the trigger reads it with `current_setting('app.user_id', true)`.
+**A:** The application sets a transaction-local setting and the trigger reads it; the `true` second argument returns NULL instead of erroring when unset.
+```sql
+SELECT set_config('app.user_id', '42', true);  -- app, per transaction
+-- in trigger: current_setting('app.user_id', true)
+```
+
+**Q:** Why transaction-local and not session-level?
+
+**A:** With a connection pool, a session setting survives on the connection and leaks to the next request that reuses it, attributing changes to the wrong person.
 
 **Q:** What does auditing cost?
 
 **A:** An extra insert per changed row, more WAL and storage. Statement-level triggers with transition tables reduce the per-row overhead for bulk changes.
+
+**Q:** How do you reconstruct a row as of time T?
+
+**A:** Take the latest audit event for that row at or before T. With full images that row is the answer. With diffs you fold forward from the insert, which is slower.
+
+**Q:** What escapes row triggers?
+
+**A:** `TRUNCATE`. Add a `BEFORE TRUNCATE` statement trigger that logs or forbids it.
+
+**Q:** Triggers or logical decoding?
+
+**A:** Triggers are simple and transactional but cost write time. Logical decoding of WAL has no trigger overhead but does not see the session's `app.user_id` unless you write it somewhere the decoder can read.
+
+**Q:** How do you test it?
+
+**A:** Assert exact log rows per operation, a pooled-connection test proving the second transaction does not inherit the first's user, and a security test expecting permission errors when the app role edits the log.
+
+**Common mistakes in answers:**
+- Using `current_user` as the "who", which is just the shared app role.
+- Session-level settings with a pooler.
+- Saying auditing is free; it roughly doubles writes for audited tables.
 
 ### TL;DR
 A generic `AFTER` row trigger writing `jsonb` diffs to a protected, partitioned log gives a complete, transactional change history. Pass the human user through a transaction-local setting.
@@ -2326,9 +2930,27 @@ The leak suite is the most important test: for every table, view and function, r
 - Sharding by tenant later: [Ch 15 — Scaling Databases](../chapters/15-scaling-databases/README.md)
 
 ### In the interview
+**30-second answer:** I built a shared-schema multi-tenant SaaS database where row-level security policies on every tenant table filter by `current_setting('app.tenant_id', true)`. The key decision was the role setup: the app connects as an ordinary role that neither owns the tables nor has `BYPASSRLS`, and sets the tenant per transaction so it is safe with PgBouncer transaction pooling. The hardest part was finding leaks, so a catalog-driven test runs every table and view as tenant A and asserts no other tenant's rows appear. RLS added under 10% overhead at 10 million tasks.
+
+**Key terms to know:**
+- **Row-level security (RLS)** — per-row filtering by policy, added to every query on the table.
+- **Policy `USING` / `WITH CHECK`** — `USING` filters rows you can see; `WITH CHECK` validates rows you write.
+- **`BYPASSRLS` / `FORCE ROW LEVEL SECURITY`** — who skips policies; owners skip unless forced.
+- **Transaction-local setting** — `set_config(..., true)`; vanishes at commit, safe with pooling.
+- **Fail closed** — no tenant set means no rows, never all rows.
+- **Composite foreign key** — `(tenant_id, project_id)` references, preventing cross-tenant links.
+- **`security_invoker` view** — PostgreSQL 15+ view that runs with the caller's rights, so RLS applies.
+- **Noisy neighbour** — one big tenant hurting others' performance.
+
 **Q:** How does RLS enforce tenant isolation?
 
-**A:** You enable RLS on each table and add a policy such as `tenant_id = current_setting('app.tenant_id')::uuid`. PostgreSQL adds that predicate to every query and checks it on writes with `WITH CHECK`.
+**A:** Enable RLS on each table and add a policy; PostgreSQL adds the predicate to every query and checks writes with `WITH CHECK`.
+```sql
+ALTER TABLE task ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_iso ON task
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
+  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+```
 
 **Q:** Which roles are not filtered by RLS?
 
@@ -2340,7 +2962,28 @@ The leak suite is the most important test: for every table, view and function, r
 
 **Q:** How do you stop a row referencing another tenant's parent?
 
-**A:** Composite foreign keys that include `tenant_id`.
+**A:** Composite foreign keys that include `tenant_id`, for example `FOREIGN KEY (tenant_id, project_id) REFERENCES project (tenant_id, project_id)`, backed by a unique key on the parent.
+
+**Q:** How can a view leak data?
+
+**A:** A normal view runs with its owner's privileges; if the owner bypasses RLS, the view returns every tenant. Use `security_invoker = true` (PostgreSQL 15+) or put the filter in the view.
+
+**Q:** Shared tables, schema per tenant or database per tenant?
+
+**A:** Shared tables are cheapest for many small tenants. Separate schemas or databases give stronger isolation and per-tenant restore, but thousands of them strain the catalog and migrations. Many teams pool small tenants and isolate the largest.
+
+**Q:** What breaks first at 10x tenants?
+
+**A:** A few huge tenants dominate I/O and every index includes their rows. Per-tenant statement timeouts help; the real fix is sharding by `tenant_id` (Project 28).
+
+**Q:** How do you prove there are no leaks?
+
+**A:** Generate a test from the catalog: for every table and view, query as tenant A and assert all `tenant_id`s equal A. Fail the build if any tenant table has `relrowsecurity = false`.
+
+**Common mistakes in answers:**
+- Connecting the app as the table owner, which silently disables every policy.
+- Reading the tenant from a request parameter instead of the verified token.
+- Forgetting `WITH CHECK`, so a user can insert rows into another tenant.
 
 ### TL;DR
 Put `tenant_id` on every table and every index, use composite foreign keys, enforce isolation with RLS policies on a non-owner role, pass the tenant per transaction, and test for leaks automatically.
@@ -2474,21 +3117,58 @@ A relevance test set: 30 queries with the article that should appear in the top 
 - When to add a search engine: [Ch 16 — Beyond Relational](../chapters/16-beyond-relational/README.md)
 
 ### In the interview
+**30-second answer:** I built knowledge-base search in PostgreSQL with a stored generated `tsvector` (title weighted A, tags B, body C), a GIN index, `websearch_to_tsquery` for familiar query syntax, and `pg_trgm` for "did you mean". The key decision was keeping search in the database, so edits are searchable in the same transaction. The hard part was latency: ranking and `ts_headline` are per-row costs, so I rank a limited candidate set and build snippets only for the final 20 rows. p95 is under 50 ms on 500,000 articles, measured against a 30-query relevance set.
+
+**Key terms to know:**
+- **`tsvector`** — a document's normalized words (lexemes) with positions.
+- **`tsquery`** — a search expression with AND, OR, NOT and phrase operators; `@@` matches.
+- **Stemming** — reducing words to a root ("running" → "run") by a language configuration.
+- **GIN index** — an inverted index from lexeme to rows containing it.
+- **`setweight` / `ts_rank_cd`** — label parts of the text and rank with those weights and proximity.
+- **`ts_headline`** — highlighted snippet; re-parses the original text, so it is expensive.
+- **Trigram (`pg_trgm`)** — three-letter chunks used for fuzzy similarity and `ILIKE` indexing.
+
 **Q:** Why not just use `ILIKE '%term%'`?
 
-**A:** It cannot use a normal B-tree index, scans everything, ignores word forms, and cannot rank. Full-text search with a GIN index fixes all four.
+**A:** It cannot use a normal B-tree index, scans everything, ignores word forms and cannot rank. Full-text search with a GIN index fixes all four.
 
 **Q:** What are `tsvector` and `tsquery`?
 
-**A:** A `tsvector` is a document's sorted list of normalized words with positions. A `tsquery` is a search expression of normalized words with AND, OR, NOT and phrase operators. `@@` tests whether they match.
+**A:** A `tsvector` is a document's sorted list of normalized words with positions. A `tsquery` is a search expression of normalized words with operators. `@@` tests whether they match.
+
+**Q:** Write a ranked search with snippets.
+
+**A:** Rank and limit first, then build headlines only for the page.
+```sql
+SELECT id, ts_headline('english', body, q) FROM (
+  SELECT id, body, q FROM article, websearch_to_tsquery('english', $1) q
+  WHERE search_vec @@ q ORDER BY ts_rank_cd(search_vec, q) DESC LIMIT 20) t;
+```
 
 **Q:** How do you rank title matches higher?
 
 **A:** Build the vector with `setweight` (A for title, C for body). The ranking functions weight A matches more.
 
+**Q:** Why must the generated column use `to_tsvector('english', ...)` with two arguments?
+
+**A:** Generated columns need immutable expressions. The one-argument form depends on `default_text_search_config`, so it is not immutable. Querying must use the same configuration or stems will not match.
+
+**Q:** A common term makes search slow. Why?
+
+**A:** The index finds 200,000 matches quickly, but ranking needs each row's vector. Narrow candidates with filters first, or cap the candidate set before ranking.
+
 **Q:** When would you move to Elasticsearch?
 
-**A:** When you need advanced relevance tuning, large-scale faceting, or search load you want to scale separately from the primary database.
+**A:** When you need BM25-style relevance tuning, large-scale faceting, or search load you want to scale separately from the primary database.
+
+**Q:** How do you test relevance?
+
+**A:** A fixed set of 30 queries with the article that must appear in the top 3, re-run after every weight or configuration change, plus edge inputs such as an empty string or only stop words.
+
+**Common mistakes in answers:**
+- Calling `ts_headline` on every match instead of the final page.
+- Changing the text-search configuration without rebuilding stored vectors.
+- Claiming PostgreSQL FTS uses BM25; its ranking is different and simpler.
 
 ### TL;DR
 A stored, weighted `tsvector` with a GIN index, `websearch_to_tsquery` for user input, ranking on a small candidate set and `ts_headline` only on the final page gives fast, good-enough search inside PostgreSQL.
@@ -2608,17 +3288,61 @@ A fixture of 10 users with hand-written activity weeks and the expected triangle
 - Retention interview problems: [Ch 19 — SQL Interview Problems II](../chapters/19-sql-interview-problems-2/README.md)
 
 ### In the interview
+**30-second answer:** I built weekly cohort retention over 100 million generated events: cohort tables (classic and unbounded), segments by country and channel, and DAU/WAU/MAU. The key design was a `user_week_activity` rollup with one row per user per active week, which shrinks 100 million events to a few million rows and takes the cohort query from seconds to under 200 ms. The subtle parts were showing future cells as NULL rather than 0%, and computing rolling MAU without `count(DISTINCT)` windows, which PostgreSQL does not support.
+
+**Key terms to know:**
+- **Cohort** — users grouped by signup week.
+- **Retention** — share of a cohort active N weeks later.
+- **Classic vs unbounded retention** — active in exactly week N, vs in week N or later.
+- **Rollup** — pre-aggregated table. `user_week_activity`.
+- **Pivot with `FILTER`** — one column per week offset via `count(*) FILTER (WHERE week_n = k)`.
+- **DAU / MAU** — distinct daily and 30-day active users; their ratio measures stickiness.
+- **HyperLogLog** — approximate distinct counting with small memory. The `hll` extension.
+
 **Q:** How do you build a weekly retention table?
 
-**A:** Find each user's cohort week, find the weeks they were active, compute the week offset, count distinct users per cohort and offset, and divide by cohort size. Pivot offsets into columns with `FILTER`.
+**A:** Find each user's cohort week and active weeks, compute the offset, count users per cohort and offset, and divide by cohort size.
+```sql
+WITH s AS (SELECT DISTINCT u.user_id, u.cohort_week, (a.week - u.cohort_week) / 7 AS wk
+           FROM users u JOIN user_week_activity a USING (user_id))
+SELECT cohort_week, count(*) FILTER (WHERE wk = 0) AS size,
+  round(100.0 * count(*) FILTER (WHERE wk = 1)
+        / count(*) FILTER (WHERE wk = 0), 1) AS w1_pct
+FROM s GROUP BY cohort_week;
+```
 
 **Q:** Why can't the newest cohorts show week-8 retention?
 
-**A:** That week has not happened yet for them. Those cells must be empty, not zero.
+**A:** That week has not happened yet for them. Those cells must be NULL, not zero, or new cohorts look terrible.
 
 **Q:** What is the difference between classic and unbounded retention?
 
-**A:** Classic counts users active in exactly week N. Unbounded counts users active in week N or any later week, so it never rises over time.
+**A:** Classic counts users active in exactly week N. Unbounded counts users active in week N or later, so it never increases with N. Compute each user's maximum offset once and count `max_week >= n`.
+
+**Q:** Why can't you write `count(DISTINCT user_id) OVER (...)`?
+
+**A:** PostgreSQL does not allow `DISTINCT` in window aggregates. Join each day to the activity of the previous 30 days, or use each user's last-seen date.
+
+**Q:** What changes at 10 billion events?
+
+**A:** Exact distinct counts get expensive. Keep rollups incremental, partition events by day, and use HyperLogLog sketches, which can be unioned across days with about 1–2% error.
+
+**Q:** What inflates early weeks?
+
+**A:** Bots and test accounts. Exclude them in the cohort CTE and log how many were excluded.
+
+**Q:** How do you test it?
+
+**A:** A 10-user fixture with the expected triangle written by hand, plus properties: week 0 is 100%, unbounded is non-increasing, segment sizes sum to the total.
+
+**Q:** Why build `user_week_activity` before anything else?
+
+**A:** Retention only needs to know whether a user was active in a week, not every event. Collapsing 100 million events into a few million user-weeks makes every later query cheaper, and the rollup can be extended one week at a time.
+
+**Common mistakes in answers:**
+- Counting events instead of distinct users.
+- Showing 0% for weeks that have not happened.
+- Mixing UTC weeks in the rollup with local weeks in cohorts.
 
 ### TL;DR
 Cohort retention is date bucketing, a join to each user's first week, distinct counts per offset and a pivot. Pre-aggregate to user-weeks, and never show future cells as zero.
@@ -2749,17 +3473,58 @@ Validation tests per data type and rule. Query-correctness tests that compare `j
 - Document stores compared: [Ch 16 — Beyond Relational](../chapters/16-beyond-relational/README.md)
 
 ### In the interview
+**30-second answer:** I built a product catalogue with typed columns for common fields and a `jsonb` `attrs` column for category-specific attributes, validated on write against per-category definitions by a trigger. Filtering uses a GIN index for containment (`attrs @> '{"brand":"Lenovo"}'`) and B-tree expression indexes for numeric ranges on hot keys. The hard problem was bad plans: the planner has no per-key statistics inside `jsonb`, so I added expression statistics on the hot keys. Two-attribute filters plus price run under 100 ms at 1 million products.
+
+**Key terms to know:**
+- **`jsonb`** — binary JSON, parsed once, indexable. `attrs`.
+- **Containment `@>`** — left document contains the right. The GIN-indexable filter.
+- **GIN `jsonb_ops` vs `jsonb_path_ops`** — the default supports key-exists operators; `path_ops` is smaller and faster but supports only containment (and jsonpath match operators).
+- **Expression index** — index on `((attrs->>'ram_gb')::int)` for range filters.
+- **Extended statistics** — `CREATE STATISTICS` on expressions (PostgreSQL 14+) to give the planner real selectivity.
+- **EAV** — entity-attribute-value table; the main alternative to `jsonb`.
+- **Facet counts** — grouped counts per attribute value for the filtered set.
+
 **Q:** When is `jsonb` a good choice?
 
 **A:** For sparse, varied attributes that differ by type of record and are not central to joins or constraints. Common, frequently filtered fields belong in real columns.
 
 **Q:** How do you index `jsonb` for filters?
 
-**A:** A GIN index (often `jsonb_path_ops`) for containment queries, plus B-tree expression indexes on cast values for range filters on hot keys.
+**A:** A GIN index for containment, plus B-tree expression indexes for ranges; the query must repeat the exact indexed expression.
+```sql
+CREATE INDEX ON product USING gin (attrs jsonb_path_ops);
+CREATE INDEX ON product (((attrs->>'ram_gb')::int));
+SELECT * FROM product WHERE attrs @> '{"brand":"Lenovo"}' AND (attrs->>'ram_gb')::int >= 16;
+```
+
+**Q:** Why doesn't `attrs->>'brand' = 'Lenovo'` use the GIN index?
+
+**A:** GIN on `jsonb` supports operators like `@>` and `?`, not equality on an extracted text value. Rewrite as containment, or add an expression index on `(attrs->>'brand')`.
 
 **Q:** Why can `jsonb` queries get bad plans?
 
-**A:** PostgreSQL keeps no per-key statistics on values inside `jsonb`, so it guesses selectivity. Expression indexes or expression statistics give it real numbers.
+**A:** PostgreSQL keeps no per-key statistics on values inside `jsonb`, so it guesses selectivity. Expression indexes or expression statistics give `ANALYZE` real numbers.
+
+**Q:** `jsonb` vs EAV vs columns?
+
+**A:** Columns are fastest and fully constrained but rigid. EAV is flexible but multi-attribute filters need a join per attribute. `jsonb` is flexible and reasonably fast, with weaker typing and statistics.
+
+**Q:** What goes wrong with frequently updated `jsonb`?
+
+**A:** Changing one key rewrites the whole value and row version, causing bloat and WAL. Keep fast-changing fields such as stock and price in real columns.
+
+**Q:** Why validate with a trigger and not a `CHECK` calling a function?
+
+**A:** A `CHECK` that reads another table is not re-checked when definitions change, and a restore may load products before definitions. A trigger is honest about the dependency.
+
+**Q:** How do you compute facet counts?
+
+**A:** Filter the category's products once in a CTE, then expand the filterable keys with `jsonb_each_text(attrs)` and `GROUP BY key, value` to count every facet value in one pass over the filtered set.
+
+**Common mistakes in answers:**
+- Putting everything into `jsonb`, including keys used in joins and foreign keys.
+- Expecting a GIN index to serve range comparisons.
+- Ignoring key-spelling drift (`ramGB` vs `ram_gb`).
 
 ### TL;DR
 Use real columns for common fields and `jsonb` for the long tail, validate against definitions, write filters as containment for GIN, add expression indexes for ranges and statistics, and know when to promote a key to a column.
@@ -2908,6 +3673,17 @@ Concurrency tests with invariant checks after each run: no seat sold twice (uniq
 - The ticketing case study: [Ch 17 — Schema Design Case Studies](../chapters/17-schema-design-case-studies/README.md)
 
 ### In the interview
+**30-second answer:** I built ticketing for a 20,000-seat event where buyers hold seats for 10 minutes and then buy. The key decision was lazy expiry: a seat is available if it is free or its hold has expired, so correctness never depends on a cleanup job. Holds are all-or-nothing conditional updates, "best available" uses `FOR UPDATE SKIP LOCKED`, and a transaction-level advisory lock serializes each buyer's requests to enforce the 6-seat limit. An on-sale test with 500 concurrent buyers had zero double sales and p99 holds under 100 ms.
+
+**Key terms to know:**
+- **Hold** — a temporary, expiring claim on a seat.
+- **Lazy expiry** — treat expired holds as free at read time instead of deleting them.
+- **All-or-nothing update** — update N seats, compare `RETURNING` count with N, raise if short.
+- **`SKIP LOCKED`** — skip rows other buyers are locking. Best-available allocation.
+- **Advisory lock** — an application-defined lock on a number. `pg_advisory_xact_lock(buyer_id)`.
+- **`now()` vs `clock_timestamp()`** — transaction start time vs actual current time.
+- **Virtual waiting room** — admitting buyers in batches to protect a hot event.
+
 **Q:** How do you expire holds without a cron job?
 
 **A:** Store an expiry time and treat expired holds as free in the availability predicate. Correctness never depends on cleanup, which becomes housekeeping only.
@@ -2918,7 +3694,36 @@ Concurrency tests with invariant checks after each run: no seat sold twice (uniq
 
 **Q:** How do you enforce "at most 6 seats per buyer" with parallel requests?
 
-**A:** Serialize that buyer's requests with a transaction-level advisory lock on the buyer id, then count and hold.
+**A:** Serialize that buyer's requests with a transaction-level advisory lock, then count and hold.
+```sql
+SELECT pg_advisory_xact_lock($1);  -- $1 = buyer_id (bigint)
+-- now count this buyer's held + sold seats and hold more if under 6
+```
+
+**Q:** How does a specific-seat hold stay all-or-nothing?
+
+**A:** One `UPDATE ... WHERE seat_id = ANY($ids) AND <available> RETURNING seat_id`. If fewer rows return than requested, raise an exception, which rolls back the statement and keeps nothing.
+
+**Q:** What if payment is slow and the hold expires?
+
+**A:** Extend the hold when payment starts, and make purchase check ownership and validity and convert to `sold` in one atomic statement.
+
+**Q:** What changes for general admission with no seat numbers?
+
+**A:** A counter per section, which becomes one hot row. Split it into bucket rows or add a waiting room so only N buyers enter at once.
+
+**Q:** Why use the database clock?
+
+**A:** App servers and the database can disagree by seconds, so holds expire early or late. Use `now()` consistently, or `clock_timestamp()` inside long transactions.
+
+**Q:** How do you test for double sales?
+
+**A:** Concurrent on-sale runs followed by invariant queries: no seat sold twice, no buyer over 6, sold + held + free = capacity. Simulate expiry by setting `hold_expires_at` in the past.
+
+**Common mistakes in answers:**
+- Relying on a cleanup job for correctness.
+- "Count then insert" for the per-buyer limit without serializing.
+- Using a partial index on `status = 'free'` and forgetting it misses expired holds.
 
 ### TL;DR
 Hold seats with atomic conditional updates, treat expired holds as free (lazy expiry), use `SKIP LOCKED` for "best available", and serialize per-buyer limits with advisory locks.
@@ -3043,9 +3848,24 @@ Equality tests between each optimized path and a brute-force `rank()` over the f
 - Upserts: [Ch 9 — DDL, DML and Constraints](../chapters/09-ddl-dml-and-constraints/README.md)
 
 ### In the interview
+**30-second answer:** I built leaderboards for 5 million players and 200 million scores. Every score is kept, a `best_score` table holds one row per player and mode via `ON CONFLICT DO UPDATE SET best = greatest(...)`, and top-N boards are materialized views refreshed concurrently each minute. The key insight was that "my rank" needs no full sort: it is one plus a count of higher scores from a B-tree index, which is always live. Deep ranks cost linear counting, so low-ranked players get a percentile badge. Top-100 serves in under 20 ms.
+
+**Key terms to know:**
+- **`rank` / `dense_rank` / `row_number`** — ties give 1,1,3 / 1,1,2 / 1,2,3.
+- **Upsert** — `INSERT ... ON CONFLICT DO UPDATE`. Maintains `best_score`.
+- **Materialized view** — stored query result. Ranked boards.
+- **Concurrent refresh** — rebuild without blocking readers; needs a unique index.
+- **Index-only scan** — answers from the index alone when the visibility map says pages are all-visible. Rank counting.
+- **Row comparison** — `(best, achieved_at) > (x, t)`. Tie-breaking neighbours.
+- **Staleness budget** — how old a board may be (60 s here).
+
 **Q:** How do you get one player's rank without ranking everyone?
 
-**A:** Count players with a higher score using an index on the score column. Rank is that count plus one.
+**A:** Count players with a higher score using an index on the score column; rank is that count plus one.
+```sql
+SELECT 1 + count(*) FROM best_score
+WHERE mode_id = $1 AND best > (SELECT best FROM best_score WHERE mode_id = $1 AND player_id = $2);
+```
 
 **Q:** Why keep a best-score table instead of ranking raw scores?
 
@@ -3054,6 +3874,31 @@ Equality tests between each optimized path and a brute-force `rank()` over the f
 **Q:** What does `REFRESH MATERIALIZED VIEW CONCURRENTLY` need and cost?
 
 **A:** A unique index on the view. It diffs old and new results, so it is slower than a plain refresh, but readers are not blocked.
+
+**Q:** Which ranking function would you use?
+
+**A:** `rank()` for public boards, so equal scores share a place and the next place skips. `row_number()` only with an explicit tie-breaker such as earlier `achieved_at`.
+
+**Q:** What breaks first as players grow?
+
+**A:** Exact rank deep in the list, because counting 4 million index entries is linear. Switch to a score histogram refreshed each minute for approximate rank, and keep exact rank for the top.
+
+**Q:** Why not just use Redis sorted sets?
+
+**A:** They give live rank in logarithmic time and are ideal for this one job, but add a second, memory-bound system that must be rebuilt from PostgreSQL after loss. PostgreSQL alone is often enough.
+
+**Q:** How do you handle a cheater?
+
+**A:** Keep raw scores, validate against match data, delete bad scores and rebuild that player's `best_score` row from the remaining history.
+
+**Q:** How do you test the fast paths?
+
+**A:** Compare the count-based rank with a brute-force `rank()` over the full table for sampled players, and check the view's freshness stays within 60 seconds under write load.
+
+**Common mistakes in answers:**
+- Running `rank() OVER (...)` over 5 million rows on every "my rank" request.
+- Forgetting ties when fetching neighbours.
+- Refreshing without `CONCURRENTLY`, which blocks readers.
 
 ### TL;DR
 Keep one best score per player, precompute top boards in concurrently refreshed materialized views, and answer "my rank" live with an index count, switching to percentiles deep in the list.
@@ -3176,17 +4021,58 @@ Uniqueness and non-sequential code tests. Latency tests on the resolve path unde
 - Hot rows and MVCC: [Ch 13 — Transactions and Concurrency](../chapters/13-transactions-and-concurrency/README.md)
 
 ### In the interview
+**30-second answer:** I built a URL shortener whose redirect path is a single indexed lookup, with clicks written to a buffer, moved in batches to a day-partitioned log with BRIN indexes, and rolled up into daily counters by upsert. The key decision was keeping analytics off the redirect path and avoiding a per-click `UPDATE` on the link row, which would make viral links a lock hot spot. Codes are random base62 with retry on unique violation. Resolves stay around a couple of milliseconds at 5,000 per second while ingest runs.
+
+**Key terms to know:**
+- **Base62** — digits plus upper and lower letters. 7 characters ≈ 3.5 trillion codes.
+- **Hot row** — one row updated by every request. A per-link click counter.
+- **Batch rollup** — aggregate many clicks into one upsert per link per batch.
+- **BRIN index** — min/max per block range; tiny and effective on time-ordered data.
+- **Partitioning by day** — old days dropped as whole partitions.
+- **`UNLOGGED` table** — skips WAL; fast but emptied after a crash.
+- **Hash index** — equality-only index; cannot enforce `UNIQUE`.
+
 **Q:** How do you generate short codes?
 
-**A:** Either random base62 strings with a unique constraint and retry on collision, or a scrambled sequence value encoded in base62. Both give short, non-sequential codes.
+**A:** Either random base62 strings with a unique constraint and retry on collision, or a sequence value scrambled by a reversible permutation, then base62-encoded. Both give short, non-sequential codes.
 
 **Q:** Why not increment a counter on the link row for each click?
 
 **A:** Every click would lock the same row and create a dead tuple. Popular links become a bottleneck. Log clicks and roll them up in batches.
+```sql
+INSERT INTO click_daily (link_id, day, country, clicks)
+SELECT link_id, ts::date, country, count(*) FROM click_batch GROUP BY 1, 2, 3
+ON CONFLICT (link_id, day, country) DO UPDATE SET clicks = click_daily.clicks + EXCLUDED.clicks;
+```
 
 **Q:** Why is BRIN a good index for a click log?
 
 **A:** Rows arrive in time order, so each block range covers a narrow time span. BRIN stores only min and max per range, which makes it tiny and still lets time-range queries skip most blocks.
+
+**Q:** What do you lose with an `UNLOGGED` buffer?
+
+**A:** After a crash, an unlogged table is truncated, so up to one batch of clicks is lost. Redirects are unaffected. Use a logged table if every click must count.
+
+**Q:** How do you count unique visitors cheaply?
+
+**A:** Approximate distinct counts with HyperLogLog sketches per link per day, which merge across days. Exact `count(DISTINCT)` over 50 million rows is expensive.
+
+**Q:** What changes at 100x traffic?
+
+**A:** Put a CDN or in-memory cache in front of resolves with a short time-to-live, so disabling a link takes effect quickly. Ingest moves to a stream or queue, and read replicas serve dashboards.
+
+**Q:** How do you handle abuse?
+
+**A:** A `disabled` flag checked on every resolve and a blocklist checked at creation. With caching, keep the TTL short so disabling propagates.
+
+**Q:** How do you verify analytics?
+
+**A:** Reconcile rollups against the raw log for sampled links and days, and crash-test with `pg_ctl stop -m immediate` to measure buffer loss.
+
+**Common mistakes in answers:**
+- Using sequential ids as codes, which makes every link guessable.
+- Writing analytics synchronously in the redirect path.
+- Claiming a hash index can enforce uniqueness of codes.
 
 ### TL;DR
 Keep the redirect path to one indexed lookup, absorb clicks in a buffer, move them in batches to a day-partitioned, BRIN-indexed log, and serve dashboards from upserted rollups.
@@ -3317,17 +4203,58 @@ Brute-force comparisons for nearest-N and radius on random points. Known-distanc
 - Time zones: [Ch 3 — Functions and Expressions](../chapters/03-functions-and-expressions/README.md)
 
 ### In the interview
+**30-second answer:** I built a store locator with PostGIS: store locations as `geography(Point, 4326)` with a GiST index, KNN queries using `ORDER BY location <-> point LIMIT 10`, radius search with `ST_DWithin`, and delivery zones as polygons checked with `ST_Covers`. The key decision was `geography`, so distances are in metres across the globe without choosing projections. The hardest part was "open now": local time per store, hours crossing midnight and special closures. Nearest-10 runs under 10 ms over 10,000 stores.
+
+**Key terms to know:**
+- **SRID 4326** — the WGS 84 longitude/latitude system GPS uses.
+- **`geography` vs `geometry`** — round-earth metres vs flat projected coordinates.
+- **GiST spatial index** — indexes bounding boxes for overlap and distance search.
+- **KNN operator `<->`** — distance used in `ORDER BY` so the index returns nearest first.
+- **`ST_DWithin`** — index-assisted "within distance".
+- **`ST_Covers`** — point-in-polygon including the boundary.
+- **Bounding box** — the rectangle around a shape; the index's first filter.
+
 **Q:** How do you find the nearest 10 stores efficiently?
 
-**A:** A GiST index on the location and `ORDER BY location <-> point LIMIT 10`. The index returns rows in distance order, so only a few are visited.
+**A:** A GiST index on the location and a KNN sort; the index returns rows in distance order, so only a few are visited.
+```sql
+SELECT store_id, ST_Distance(location, p) AS m
+FROM store, ST_MakePoint($lon, $lat)::geography p
+ORDER BY location <-> p LIMIT 10;
+```
 
 **Q:** Why does `ST_Distance(a, b) < 5000` in `WHERE` perform badly?
 
-**A:** It computes the distance for every row. `ST_DWithin` uses the spatial index to find candidates first.
+**A:** It computes the distance for every row. `ST_DWithin` uses the spatial index to find candidates first, then checks exact distance.
 
 **Q:** geography or geometry?
 
 **A:** geography for global latitude and longitude with distances in metres. geometry with a local projection for speed and richer functions in a limited area.
+
+**Q:** KNN plus "open now and has stock" is slow. Why?
+
+**A:** The index returns stores in distance order and the filter discards them afterwards; if most nearby stores fail the filter, the scan walks far. For rare filters, filter first, then sort the small set by distance.
+
+**Q:** Why might `<->` order differ slightly from `ST_Distance`?
+
+**A:** On geography, `<->` uses a sphere while `ST_Distance` uses the spheroid by default. Re-sort the final 10 by `ST_Distance` if exact order matters.
+
+**Q:** How do you handle hours like 20:00–02:00?
+
+**A:** Convert `now()` to the store's zone, then treat `closes < opens` as crossing midnight: open if local time ≥ opens or < closes. Closures override weekly hours.
+
+**Q:** What is a classic data bug here?
+
+**A:** Swapped coordinates. `ST_MakePoint` takes longitude first. A `CHECK` that latitude is within your region's range catches it.
+
+**Q:** How do you test correctness?
+
+**A:** Compare nearest-N and radius results with a brute-force `ST_Distance` sort on random points, and check known landmark distances.
+
+**Common mistakes in answers:**
+- Filtering with `ST_Distance < r` instead of `ST_DWithin`.
+- Passing latitude first to `ST_MakePoint`.
+- Ignoring store time zones in "open now".
 
 ### TL;DR
 Store locations as PostGIS geography with GiST indexes, use `<->` with `LIMIT` for nearest-N and `ST_DWithin` for radius, and handle local opening hours carefully.
@@ -3477,6 +4404,17 @@ A table-driven date test: anchors on the 28th to the 31st across two years. Pror
 - Interval arithmetic: [Ch 3 — Functions and Expressions](../chapters/03-functions-and-expressions/README.md)
 
 ### In the interview
+**30-second answer:** I built subscription billing with periods anchored on the start date, prorated plan changes, dunning retries and MRR reports. The key guarantee is exactly one invoice per subscription per period, enforced by a unique key on `(subscription_id, period_start)` and `INSERT ... ON CONFLICT DO NOTHING`, with parallel workers claiming subscriptions via `SKIP LOCKED`. The subtle bug was month arithmetic: Jan 31 + 1 month + 1 month gives March 28, so every period is computed from the original anchor. A 100,000-subscription run finishes in under 2 minutes with one invoice per period, even with 4 workers.
+
+**Key terms to know:**
+- **Billing anchor** — the date all periods are computed from.
+- **Proration** — charging or crediting the unused fraction of a period after a plan change.
+- **Idempotent billing run** — re-running creates nothing new, thanks to a unique key.
+- **`ON CONFLICT DO NOTHING ... RETURNING`** — insert if absent; no row returned means it already existed.
+- **Dunning** — retrying failed payments on a schedule, then cancelling.
+- **MRR** — monthly recurring revenue; annual plans count as price / 12.
+- **Credit note** — a correcting document; invoices are immutable.
+
 **Q:** How do you guarantee one invoice per subscription per period?
 
 **A:** A unique constraint on `(subscription_id, period_start)` and `INSERT ... ON CONFLICT DO NOTHING`. The database settles races, not application checks.
@@ -3484,10 +4422,39 @@ A table-driven date test: anchors on the 28th to the 31st across two years. Pror
 **Q:** Why compute every period from the original anchor date?
 
 **A:** Adding a month to a clamped date (28 February) loses the original day. Anchor-plus-n-months always lands on the right day or the month's end.
+```sql
+SELECT anchor + make_interval(months => n) AS period_start
+FROM subscription, generate_series(0, 12) n;   -- Jan 31 → Feb 28, Mar 31, ...
+```
 
 **Q:** How do you fix a wrong invoice?
 
 **A:** Never edit it. Issue a credit note or adjustment on a new document, so the history stays auditable.
+
+**Q:** How do you prorate an upgrade?
+
+**A:** Credit `old_price × remaining / period` and charge `new_price × remaining / period`, using `extract(epoch FROM ...)` for durations. Keep full precision until rounding each line, with a documented rounding rule.
+
+**Q:** What if the process crashes between creating the invoice and advancing the period?
+
+**A:** Do both in one transaction, so either both happen or neither. Otherwise a period is skipped or billed twice.
+
+**Q:** The provider charged the card but you timed out. What now?
+
+**A:** Send a provider idempotency key per attempt so a retry does not charge twice, and reconcile with the provider's records daily.
+
+**Q:** How do you test billing over a year?
+
+**A:** Pass `as_of` into functions instead of calling `now()`, then step a fake clock through 13 months, including anchors on the 28th to 31st and a leap year.
+
+**Q:** What changes at 10 million subscriptions?
+
+**A:** Spread anchors so not everyone bills on the 1st, run more `SKIP LOCKED` workers, and partition invoices by month.
+
+**Common mistakes in answers:**
+- Computing the next period from the previous period end.
+- "Check whether an invoice exists, then insert", which races.
+- Using `float` or rounding intermediate proration values.
 
 ### TL;DR
 Make invoices idempotent with a unique key per period, compute periods from the anchor date, prorate with full precision and round once per line, and treat finalized invoices as immutable.
@@ -3621,9 +4588,20 @@ Feed correctness: for random users, the fan-out-on-write feed (plus merged celeb
 - The Instagram case study: [Ch 17 — Schema Design Case Studies](../chapters/17-schema-design-case-studies/README.md)
 
 ### In the interview
+**30-second answer:** I built a social feed for 1 million users with power-law follower counts. Most posts are fanned out on write into a `timeline (user_id, post_id)` table by a job queue, while celebrity accounts are skipped and merged at read time, a hybrid that avoids million-row writes. Pagination is keyset (`WHERE post_id < $cursor`), so every page is an index range scan and new posts never cause duplicates. Typical timeline pages run under 30 ms, and walking all pages returns every post exactly once even during inserts.
+
+**Key terms to know:**
+- **Fan-out on write** — copy each post into followers' timelines when posted.
+- **Fan-out on read** — assemble the timeline from followees' posts when read.
+- **Hybrid fan-out** — write for normal authors, read for celebrities.
+- **Keyset (seek) pagination** — continue from the last seen key instead of `OFFSET`.
+- **Row-value comparison** — `(created_at, id) < ($t, $id)` for non-unique sort keys.
+- **Power-law distribution** — a few accounts have most of the followers.
+- **Time-ordered id** — an id that sorts by creation time; a natural cursor.
+
 **Q:** Fan-out on read or on write?
 
-**A:** On write for most users, because reads are far more frequent than posts. On read for accounts with huge follower counts, merged at read time. The hybrid gives fast reads without million-row writes.
+**A:** On write for most users, because reads far outnumber posts. On read for accounts with huge follower counts, merged at read time. The hybrid gives fast reads without million-row writes.
 
 **Q:** Why is `OFFSET` pagination bad for feeds?
 
@@ -3631,7 +4609,37 @@ Feed correctness: for random users, the fan-out-on-write feed (plus merged celeb
 
 **Q:** How do you paginate by a non-unique timestamp?
 
-**A:** Add a unique tie-breaker and compare row values: `(created_at, id) < ($t, $id)`, backed by an index on both columns.
+**A:** Add a unique tie-breaker and compare row values, backed by an index on both columns in the same order.
+```sql
+SELECT * FROM post WHERE author_id = $1 AND (created_at, post_id) < ($2, $3)
+ORDER BY created_at DESC, post_id DESC LIMIT 20;
+-- index: (author_id, created_at DESC, post_id DESC)
+```
+
+**Q:** How do you write "friends of friends you don't follow"?
+
+**A:** Join `follows` to itself (my followees' followees), exclude myself and anyone I already follow with `NOT EXISTS`, then group and rank by how many mutual connections suggest them.
+
+**Q:** What happens on unfollow or post delete?
+
+**A:** Cleaning every timeline copy is expensive, so filter at read time (join to current follows and non-deleted posts) and let trimming remove stale rows later.
+
+**Q:** What breaks first at 10x users?
+
+**A:** Timeline storage and write volume. Trim each timeline to the newest 1,000 entries, then shard posts by author and timelines by reader.
+
+**Q:** How do you keep like counts fast?
+
+**A:** Store a `like_count`, but batch increments for viral posts to avoid a hot row, accepting slightly stale counts.
+
+**Q:** How do you test the feed?
+
+**A:** For random users, the fan-out-on-write feed plus merged celebrity posts must equal a pure fan-out-on-read feed, and paging must return each post once while inserts run.
+
+**Common mistakes in answers:**
+- Pure fan-out on write, ignoring celebrities.
+- Keyset paging on a non-unique column without a tie-breaker.
+- An index whose column order does not match the `ORDER BY`.
 
 ### TL;DR
 Use time-ordered ids, fan out on write for normal authors and merge celebrities on read, and paginate with keyset seeks instead of `OFFSET`.
@@ -3763,21 +4771,54 @@ Invariant checks after every concurrent run: per-currency sum of all entries is 
 - The banking case study: [Ch 17 — Schema Design Case Studies](../chapters/17-schema-design-case-studies/README.md)
 
 ### In the interview
+**30-second answer:** I built a double-entry ledger where every transaction is a set of immutable entries summing to zero per currency, checked by a deferred constraint trigger at commit. The key decision was running transfers at `SERIALIZABLE`, so PostgreSQL's SSI catches write skew such as two concurrent overdrafts and aborts one with `40001`; the client retries the whole transaction, and an idempotency key prevents double posting after a lost reply. With 200 concurrent overlapping transfers no wallet went negative, the trial balance stayed at zero, and I measured about 1,000 transfers per second with retry counts reported.
+
+**Key terms to know:**
+- **Double-entry** — every movement debits one account and credits another; the ledger sums to zero.
+- **Write skew** — two transactions each read, then write different rows, jointly breaking a rule.
+- **SSI (Serializable Snapshot Isolation)** — PostgreSQL's `SERIALIZABLE`; detects dangerous read/write dependencies and aborts one transaction.
+- **SQLSTATE `40001`** — serialization failure; retry the whole transaction.
+- **Predicate lock** — SSI's record of what a transaction read (rows, index pages or whole relations); not a blocking lock.
+- **Idempotency key** — unique per request, so a retry returns the original result.
+- **Reversal** — the only way to correct; entries are never updated.
+- **`READ ONLY DEFERRABLE`** — a serializable read-only transaction that waits for a safe snapshot and never aborts.
+
 **Q:** Why double-entry instead of a balance column?
 
 **A:** Every movement has a source and a destination and is kept forever, so any balance can be explained and rebuilt, and the whole ledger can be checked by confirming it sums to zero.
 
 **Q:** What is write skew and how does SERIALIZABLE stop it?
 
-**A:** Two transactions read overlapping data, each makes a change that is valid alone, and together they break a rule. SSI detects the read/write dependency cycle and aborts one with `40001`.
+**A:** Two transactions read overlapping data, each makes a change that is valid alone, and together they break a rule. SSI detects the read/write dependency cycle and aborts one with `40001`. `REPEATABLE READ` in PostgreSQL does not prevent it.
 
 **Q:** What must the application do under SERIALIZABLE?
 
-**A:** Retry the whole transaction on serialization failures, with backoff, and make the operation idempotent so a retry after a lost reply does not post twice.
+**A:** Retry the whole transaction on serialization failures, with jittered backoff and a cap, re-reading everything. Make the operation idempotent so a retry after a lost reply does not post twice.
 
 **Q:** How do you correct a wrong entry?
 
 **A:** Post a reversing transaction, then a correct one. Entries are never updated or deleted.
+
+**Q:** Why does a missing index raise the abort rate?
+
+**A:** Without an index on `entry (account_id)`, the balance check scans the table and SSI records a relation-level predicate lock, so every transfer conflicts with every other. An index narrows conflicts to transfers touching the same account.
+
+**Q:** SERIALIZABLE or `SELECT ... FOR UPDATE`?
+
+**A:** Locking both wallets in id order also works and needs no retries, but each new rule needs fresh lock reasoning. SSI is safer to evolve, at the cost of retries and some false-positive aborts.
+
+**Q:** What breaks first at scale?
+
+**A:** Hot accounts such as the platform fee account, which every transfer touches. Split them into sub-accounts or update their cached balance asynchronously. Beyond one primary, shard by account and move money across shards through clearing accounts.
+
+**Q:** How do you test it?
+
+**A:** After every concurrent run: per-currency sum is zero, no wallet negative, cached balance equals summed entries, one transaction per key. Add a chaos test that kills connections mid-transfer and retries with the same key.
+
+**Common mistakes in answers:**
+- Saying `REPEATABLE READ` prevents write skew in PostgreSQL. It does not.
+- Retrying only the failed statement instead of the whole transaction.
+- Updating entries to fix mistakes.
 
 ### TL;DR
 Model money as immutable, balanced entries, derive balances from them with a cache, run postings under `SERIALIZABLE` with idempotent retries, and prove correctness with invariants that must always sum to zero.
@@ -3914,17 +4955,59 @@ Correctness: rollups equal raw aggregates. Pruning: assert that `EXPLAIN (FORMAT
 - Time-series databases: [Ch 16 — Beyond Relational](../chapters/16-beyond-relational/README.md)
 
 ### In the interview
+**30-second answer:** I built a metrics store with a series table mapping label sets to small ids, samples range-partitioned by day with BRIN on time, and 1-minute and hourly rollups computed by idempotent upserts over a sliding window. The key decision was partitioning by time, so retention is detaching and dropping a partition in under a second instead of a giant `DELETE`. The subtle problems were late data and percentiles, which do not roll up, so rollups store sums, counts and fixed histograms. Batched ingest reached 100,000 samples per second, and 30-day dashboards read rollups in under 500 ms.
+
+**Key terms to know:**
+- **Declarative partitioning** — `PARTITION BY RANGE (ts)`; one child table per day.
+- **Partition pruning** — skipping partitions that cannot match; needs the key in the `WHERE`.
+- **BRIN index** — min/max per block range; tiny on time-ordered data.
+- **Rollup / downsampling** — pre-aggregated buckets at coarser resolution.
+- **Mergeable aggregate** — sum, count, min, max, histogram; can be combined across buckets. Average and p95 cannot.
+- **`DETACH PARTITION ... CONCURRENTLY`** — PostgreSQL 14+; removes a partition without blocking queries.
+- **`lock_timeout`** — give up waiting for a lock instead of queueing.
+
 **Q:** Why partition time-series data by time?
 
 **A:** Old data is removed by dropping partitions instead of deleting rows, each partition's indexes stay small, and queries on recent ranges skip old partitions.
 
 **Q:** Why store sum and count rather than average in rollups?
 
-**A:** Sums and counts combine across buckets. Averaging averages with different counts gives the wrong answer.
+**A:** Sums and counts combine across buckets. Averaging averages with different counts gives the wrong answer. The same goes for percentiles, so store histograms.
 
 **Q:** How do you handle late-arriving samples?
 
-**A:** Recompute a recent window of buckets on each run and upsert the results, so the rollup is idempotent and catches late data.
+**A:** Recompute a recent window of buckets on each run and upsert, so the rollup is idempotent and catches late data.
+```sql
+INSERT INTO rollup_1m SELECT series_id, date_trunc('minute', ts), min(v), max(v), sum(v), count(*)
+FROM sample WHERE ts >= now() - interval '5 min' GROUP BY 1, 2
+ON CONFLICT (series_id, bucket) DO UPDATE SET mn = EXCLUDED.mn, mx = EXCLUDED.mx,
+  sm = EXCLUDED.sm, cnt = EXCLUDED.cnt;
+```
+
+**Q:** Why might a query scan every partition?
+
+**A:** The partition key is wrapped in a function, such as `date_trunc('hour', ts) = ...`, so the planner cannot prune. Compare `ts` directly with a range; `EXPLAIN` shows which partitions are touched.
+
+**Q:** Why can retention block ingest, and how do you avoid it?
+
+**A:** Dropping a partition needs a brief `ACCESS EXCLUSIVE` lock on the parent, which queues behind long queries and blocks everyone after it. Detach concurrently, then drop, and set `lock_timeout`.
+
+**Q:** What happens if the maintenance job stops?
+
+**A:** Tomorrow's partition does not exist and inserts fail at midnight. Create partitions days ahead and alert when fewer than 3 future partitions exist.
+
+**Q:** What changes at 100x series?
+
+**A:** Planning slows if partitions number in thousands, and storage dominates. Keep partition count in the hundreds, compress old data (TimescaleDB does this), and shard by series id.
+
+**Q:** How do you test it?
+
+**A:** Assert rollups equal raw aggregates, assert `EXPLAIN (FORMAT JSON)` touches only the expected partitions, and run a time-compressed 24-hour endurance test.
+
+**Common mistakes in answers:**
+- Deleting old rows with `DELETE` instead of dropping partitions.
+- Averaging averages or percentiles across buckets.
+- Creating hourly partitions for years of data, producing thousands of tables.
 
 ### TL;DR
 Partition by time, ingest in batches, roll up into combinable aggregates with idempotent recomputation, drop or detach old partitions, and let the query pick the right resolution.
@@ -4056,9 +5139,21 @@ Run the Project 16 leak tests and application test suite against Citus. Plan tes
 - NewSQL and distributed SQL: [Ch 16 — Beyond Relational](../chapters/16-beyond-relational/README.md)
 
 ### In the interview
+**30-second answer:** I took the Project 16 multi-tenant schema onto a Citus cluster with one coordinator and three workers, distributing every tenant table by `tenant_id` with co-location and making small lookup tables reference tables. The key decision was the shard key: `tenant_id` appears in almost every query, so they route to one worker and joins stay local. The hard parts were schema changes (every unique key must include `tenant_id`) and skew, which I solved by isolating the largest tenant onto its own shard. I added a fourth worker and rebalanced online with zero failed requests under load.
+
+**Key terms to know:**
+- **Sharding** — splitting a table's rows across nodes by a key.
+- **Distribution column** — the shard key, here `tenant_id`, hashed to pick a shard.
+- **Co-location** — same-key rows of different tables on the same node; local joins.
+- **Reference table** — a small table copied to every node.
+- **Router query** — a query with the shard key sent to one worker.
+- **Multi-shard query** — fans out to all shards, then merges on the coordinator.
+- **Two-phase commit (2PC)** — prepare then commit across nodes for multi-node transactions.
+- **Tenant isolation** — giving a hot tenant its own shard or node.
+
 **Q:** How do you choose a shard key?
 
-**A:** The column that appears in almost every query, groups data that is used together, is part of every unique key, and spreads load evenly. For B2B SaaS that is usually the tenant id.
+**A:** The column that appears in almost every query, groups data used together, is part of every unique key, and spreads load evenly. For B2B SaaS that is usually the tenant id.
 
 **Q:** What is co-location and why does it matter?
 
@@ -4071,6 +5166,32 @@ Run the Project 16 leak tests and application test suite against Citus. Plan tes
 **Q:** Why did Notion build its own sharding instead of using Citus?
 
 **A:** They wanted explicit control over where data lives and how it moves. Their post says the clustering logic of packaged solutions was too opaque for them.
+
+**Q:** Show how tables are distributed.
+
+**A:**
+```sql
+SELECT create_distributed_table('project', 'tenant_id');
+SELECT create_distributed_table('task', 'tenant_id', colocate_with => 'project');
+SELECT create_reference_table('country');
+```
+
+**Q:** What happens when a worker goes down?
+
+**A:** Only tenants whose shards live on that worker fail; others continue. In production each worker needs its own standby with failover, because Citus does not replicate shards for you by default.
+
+**Q:** What breaks first as you grow?
+
+**A:** Hot tenants and the coordinator. Isolate large tenants, measure coordinator CPU, and route queries from any node where the Citus version allows it.
+
+**Q:** How do you catch sharding-incompatible migrations?
+
+**A:** Run every migration in CI against a small Citus cluster; a unique index without `tenant_id` fails there instead of in production.
+
+**Common mistakes in answers:**
+- Choosing a shard key that hot paths rarely filter on, so everything fans out.
+- Assuming hashing balances load; it balances tenants, not their size.
+- Relying on cross-shard transactions for normal requests.
 
 ### TL;DR
 Shard by the key every query already filters on, co-locate related tables, replicate small lookups as reference tables, include the key in every unique constraint, and plan for skewed tenants.
@@ -4205,6 +5326,17 @@ Fault injection is the test plan: kill the consumer between publish and confirm,
 - Streaming systems: [Ch 16 — Beyond Relational](../chapters/16-beyond-relational/README.md)
 
 ### In the interview
+**30-second answer:** I built event publishing for an order service with a transactional outbox: every state change inserts an event row in the same transaction, and a relay reads committed rows from a logical replication slot (hand-written with `pgoutput`, then Debezium) and publishes to Kafka keyed by order id. The key decision was outbox over dual writes, so an event exists if and only if its change committed. The hard parts were slot safety and duplicates: I monitor slot lag, cap it with `max_slot_wal_keep_size`, and consumers dedupe by event id. Fault injection showed zero lost events and p95 under 1 second at 2,000 events per second.
+
+**Key terms to know:**
+- **Dual-write problem** — two separate writes (DB and broker) that a crash can split.
+- **Transactional outbox** — events written to a table in the business transaction.
+- **CDC (change data capture)** — streaming committed changes from the WAL.
+- **Logical replication slot** — tracks a consumer's confirmed position and retains WAL until then.
+- **LSN** — log sequence number, a position in the WAL.
+- **Exported snapshot** — lets an initial copy match the slot's start point exactly.
+- **At-least-once + idempotent consumer** — duplicates possible, effect applied once.
+
 **Q:** What is the dual-write problem?
 
 **A:** Writing to the database and to a message broker as two separate steps. A crash between them leaves the two out of sync, either losing or inventing events.
@@ -4216,10 +5348,35 @@ Fault injection is the test plan: kill the consumer between publish and confirm,
 **Q:** What is the risk of a replication slot?
 
 **A:** It retains WAL until its consumer confirms. A dead consumer makes WAL grow until the disk fills. Monitor slot lag and cap it with `max_slot_wal_keep_size`.
+```sql
+SELECT slot_name, pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn))
+FROM pg_replication_slots WHERE slot_type = 'logical';
+```
 
 **Q:** Is delivery exactly once?
 
 **A:** Delivery is at least once. Consumers make the effect exactly once by deduplicating on event id.
+
+**Q:** How do you keep per-order ordering?
+
+**A:** Logical decoding emits transactions in commit order, and Kafka preserves order within a partition, so key messages by order id.
+
+**Q:** Why not poll the outbox table instead?
+
+**A:** Polling is simpler and needs no slot, but sequence ids can commit out of order, so a naive "id > last seen" poller can skip rows. It also adds query load.
+
+**Q:** What happens on primary failover?
+
+**A:** Before PostgreSQL 17 logical slots did not follow a failover, forcing a re-snapshot. PostgreSQL 17+ can sync failover-enabled slots to standbys.
+
+**Q:** How do you prove no events are lost?
+
+**A:** Inject faults (kill the consumer between publish and confirm, restart PostgreSQL, pause for an hour), then compare committed outbox ids with processed ids: none missing, duplicates only where allowed.
+
+**Common mistakes in answers:**
+- Claiming Kafka or Debezium gives end-to-end exactly-once by itself.
+- Forgetting that an abandoned slot can fill the primary's disk.
+- Publishing raw table rows as the public event contract.
 
 ### TL;DR
 Write events to an outbox in the same transaction, stream them from the WAL through a replication slot, publish keyed by aggregate, dedupe in consumers, and watch slot lag like a hawk.
@@ -4358,13 +5515,29 @@ Each case is a script that sets up, runs the slow query, applies the fix and run
 - N+1 and pooling from code: [Ch 14 — Advanced SQL and Using SQL from Code](../chapters/14-advanced-sql-and-using-sql-from-code/README.md)
 
 ### In the interview
+**30-second answer:** I built a tuning lab with a 50-million-row skewed dataset and 25 slow queries, each with a different root cause, from wrong composite index order to correlated columns and generic-plan misestimates. My method was always the same: find the query in `pg_stat_statements`, read `EXPLAIN (ANALYZE, BUFFERS)` comparing estimated and actual rows, fix the cause rather than the symptom, and record the cost of the fix. Every case is a script asserting identical results before and after, and most fixes gave 10x or more, with written explanations where they did not.
+
+**Key terms to know:**
+- **`EXPLAIN (ANALYZE, BUFFERS)`** — runs the query and shows the real plan, row counts, timing and pages read.
+- **Cardinality estimate** — the planner's guess of rows per node; misestimates cause bad plans.
+- **`pg_stat_statements`** — cumulative statistics per normalized query.
+- **`auto_explain`** — logs plans of slow statements automatically.
+- **Extended statistics** — `CREATE STATISTICS` for correlated columns.
+- **Composite index order** — equality columns first, then range or sort.
+- **HOT update** — an update that avoids index writes when no indexed column changes.
+- **Generic vs custom plan** — prepared statements may switch to one plan for all parameter values.
+
 **Q:** A query got slow overnight. What do you check first?
 
 **A:** `pg_stat_statements` to confirm which query and how much, then `EXPLAIN (ANALYZE, BUFFERS)` comparing estimated and actual rows. A mismatch points to statistics, so check when the table was last analyzed and whether the data shape changed.
 
 **Q:** How do you choose composite index column order?
 
-**A:** Columns compared with equality first, then the range or sort column, so one index range scan satisfies both the filter and the order.
+**A:** Columns compared with equality first, then the range or sort column, so one index range scan satisfies both filter and order.
+```sql
+CREATE INDEX ON orders (customer_id, placed_at);
+SELECT * FROM orders WHERE customer_id = $1 AND placed_at > $2 ORDER BY placed_at;
+```
 
 **Q:** Why can a query not use an index on `email` when it filters on `lower(email)`?
 
@@ -4373,6 +5546,27 @@ Each case is a script that sets up, runs the slow query, applies the fix and run
 **Q:** What does "rows=1, actual rows=200000" tell you?
 
 **A:** A severe misestimate. The planner probably chose a nested loop that now runs 200,000 times. Fix the estimate with fresh or extended statistics, or rewrite the predicate.
+
+**Q:** Why are `country = 'FR' AND city = 'Paris'` estimates too low?
+
+**A:** The planner assumes columns are independent and multiplies selectivities. `CREATE STATISTICS ... (dependencies) ON country, city` teaches it the correlation.
+
+**Q:** Why not just add an index for every slow query?
+
+**A:** Each index slows inserts and updates, costs disk and cache, and can prevent HOT updates. Check `pg_stat_user_indexes.idx_scan` for unused ones and drop them.
+
+**Q:** Why is `SET enable_nestloop = off` a bad fix?
+
+**A:** It hides the real cause, usually a misestimate, and harms other queries that need nested loops. Fix statistics, indexes or the query instead.
+
+**Q:** Does a lab result prove the fix works in production?
+
+**A:** No. Cache state, concurrency and data differ. Confirm with `pg_stat_statements` after deployment, and remember `auto_explain` with `log_analyze` adds overhead to every query, so sample in production.
+
+**Common mistakes in answers:**
+- Reading `EXPLAIN` without `ANALYZE` and trusting estimates as facts.
+- Forgetting to multiply actual rows by `loops`.
+- Blaming the planner instead of the statistics it was given.
 
 ### TL;DR
 Find slow queries by total time, read plans by comparing estimated and actual rows, name the root cause, fix indexes and statistics rather than planner switches, and record what every fix costs.
@@ -4510,21 +5704,57 @@ Every playbook runs against the load generator, recording errors and latency per
 - Triggers: [Ch 14 — Advanced SQL and Using SQL from Code](../chapters/14-advanced-sql-and-using-sql-from-code/README.md)
 
 ### In the interview
+**30-second answer:** I built a migration runner and linter and ran seven risky schema changes, including `int` to `bigint` on a primary key, under a 500-query-per-second load. The key decision was safety by default: every migration runs with a short `lock_timeout` and retries, so an `ALTER` never sits in the lock queue blocking all traffic. Big changes follow expand, dual write, backfill, switch, contract, each a separate deploy, with batched, resumable backfills. Every playbook finished with zero client errors and p99 under 3x baseline.
+
+**Key terms to know:**
+- **`ACCESS EXCLUSIVE` lock** — blocks everything, including reads. Taken by most `ALTER TABLE` forms.
+- **Lock queue** — a waiting `ALTER` blocks later queries that conflict with it.
+- **`lock_timeout`** — abort if a lock is not granted in time; retry later.
+- **`CREATE INDEX CONCURRENTLY`** — builds without blocking writes; can leave an `INVALID` index on failure.
+- **`NOT VALID` constraint** — added without checking existing rows; validated later with a weaker lock.
+- **Expand / contract** — add new structure, migrate, then remove old.
+- **Batched backfill** — small committed batches by key range, resumable.
+
 **Q:** Why can a fast `ALTER TABLE` take a site down?
 
 **A:** It waits in the lock queue behind a long query, and every new query queues behind it. Set `lock_timeout` and retry.
+```sql
+SET lock_timeout = '2s';
+ALTER TABLE orders ADD COLUMN note text;   -- on timeout: wait, retry
+```
 
 **Q:** How do you add an index to a big table safely?
 
-**A:** `CREATE INDEX CONCURRENTLY`, outside a transaction, and check for an invalid index if it fails.
+**A:** `CREATE INDEX CONCURRENTLY`, outside a transaction, and check for an invalid index if it fails; drop it and retry, because an invalid index still slows writes.
 
 **Q:** How do you change a column's type without downtime?
 
-**A:** Expand and contract: add a new column, keep it in sync with a trigger, backfill in batches, switch reads and writes, then drop the old column.
+**A:** Expand and contract: add a new column, keep it in sync with a trigger, backfill in batches, build a unique index concurrently, swap in one short transaction, then drop the old column.
 
 **Q:** How do you add NOT NULL to a large table?
 
 **A:** Add `CHECK (col IS NOT NULL) NOT VALID`, validate it (weaker lock), then `SET NOT NULL`, which PostgreSQL 12+ completes without a scan thanks to the validated check.
+
+**Q:** How do you add a foreign key safely?
+
+**A:** `ADD CONSTRAINT ... FOREIGN KEY ... NOT VALID`, then `VALIDATE CONSTRAINT` separately, which scans without blocking writes.
+
+**Q:** Why not backfill with one big `UPDATE`?
+
+**A:** It holds one huge transaction, creates a dead version of every row, blocks vacuum and makes replicas lag. Batches of a few thousand rows, committed and throttled on replica lag, avoid all of that.
+
+**Q:** How do you rename a column used by running code?
+
+**A:** Never in one step. Add the new column (or a view), write both, move reads, then drop the old one after every deployed version stops using it.
+
+**Q:** What fails if you test only in staging?
+
+**A:** Small tables and no load hide lock waits. Test against production-sized data under load, and keep the linter and lock timeouts always on.
+
+**Common mistakes in answers:**
+- Thinking a metadata-only `ALTER` is safe because it is fast; the lock wait is the danger.
+- Running `CREATE INDEX CONCURRENTLY` inside a transaction block (it errors).
+- Dropping the old column in the same deploy that stops writing it.
 
 ### TL;DR
 Use lock timeouts with retries, concurrent index builds, `NOT VALID` then `VALIDATE`, batched backfills, and expand and contract across several deploys. Test every migration under load.
@@ -4653,17 +5883,57 @@ A fixture story told day by day: create, future change, retroactive correction, 
 - GiST indexes: [Ch 12 — Indexes, Storage and Query Performance](../chapters/12-indexes-storage-and-query-performance/README.md)
 
 ### In the interview
+**30-second answer:** I built bitemporal insurance policies where every version has a `valid_period` (when it was true) and a `recorded_period` (when the database believed it), so I can answer "what did we think on March 1 about coverage on February 15?". All changes go through one function that closes recorded periods and inserts split replacement versions; rows are never deleted. The hard parts were splitting periods with range operators and enforcing no-overlap only among current records, via a partial exclusion constraint. As-of queries run under 20 ms over 20 million versions.
+
+**Key terms to know:**
+- **Valid time** — when a fact was true in the real world.
+- **Transaction (recorded) time** — when the database knew it.
+- **Bitemporal** — tracking both, so past beliefs can be reproduced.
+- **`tstzrange`** — a range of timestamps; `@>` contains, `&&` overlaps, `*` intersects.
+- **Partial exclusion constraint** — no overlap only where `upper_inf(recorded_period)`.
+- **Multirange / `range_agg`** — a set of ranges (PostgreSQL 14+); used for temporal foreign keys.
+- **`WITHOUT OVERLAPS` / `PERIOD`** — PostgreSQL 18+ native temporal keys.
+
 **Q:** What is the difference between valid time and transaction time?
 
 **A:** Valid time is when a fact was true in the real world. Transaction time is when the database knew it. Bitemporal tables keep both, so you can reproduce what you believed at any past moment.
 
 **Q:** How do you stop overlapping versions of the same entity?
 
-**A:** An exclusion constraint on the entity id with `=` and the valid period with `&&`, limited to rows that are still current in transaction time. PostgreSQL 18+ also offers `WITHOUT OVERLAPS`.
+**A:** An exclusion constraint limited to rows still current in transaction time.
+```sql
+ALTER TABLE policy_version ADD EXCLUDE USING gist
+  (policy_id WITH =, valid_period WITH &&) WHERE (upper_inf(recorded_period));
+```
 
 **Q:** How do you correct a past mistake in a bitemporal table?
 
 **A:** Close the recorded period of the wrong version and insert the corrected version with the same valid period. Nothing is overwritten.
+
+**Q:** Write the "as of V, as known at T" query.
+
+**A:** `WHERE policy_id = $1 AND valid_period @> $V AND recorded_period @> $T`. A GiST index on the two ranges (with `btree_gist` for the id) makes it fast.
+
+**Q:** What happens to a version when a change applies only to June?
+
+**A:** The covering version's recorded period is closed and three versions are inserted: before June with old values, June with new values, after June with old values.
+
+**Q:** How do you enforce a temporal foreign key on PostgreSQL 14?
+
+**A:** A constraint trigger checks that `range_agg(valid_period)` of the policy's current versions contains the coverage period. PostgreSQL 18+ supports `FOREIGN KEY (..., PERIOD ...)` natively.
+
+**Q:** Why must transaction time come from the database clock?
+
+**A:** App servers' clocks drift, which would reorder history. `now()` in the database keeps recording order close to commit order.
+
+**Q:** What grows, and how do you manage it?
+
+**A:** Every change adds rows, and nothing is removed. Partition by recorded time and keep a `policy_current` view or table for everyday reads.
+
+**Common mistakes in answers:**
+- Confusing an audit log (transaction time only) with bitemporal data.
+- A non-partial exclusion constraint, which rejects legitimate history.
+- Letting the app `UPDATE` versions directly; revoke it and expose only the functions.
 
 ### TL;DR
 Give each version a valid period and a recorded period, change data only through functions that split periods, enforce non-overlap among current rows with exclusion constraints, and never update or delete history.
@@ -4791,17 +6061,61 @@ Small hand-drawn graphs (a diamond, a cycle, a disconnected component) with expe
 - Hierarchy interview problems: [Ch 19 — SQL Interview Problems II](../chapters/19-sql-interview-problems-2/README.md)
 
 ### In the interview
+**30-second answer:** I modelled two graphs in plain tables, OpenFlights routes and a package dependency graph, and answered reachability, shortest-by-hops, cheapest-within-3-legs, reverse dependencies and cycle detection with recursive CTEs. The key insight was that recursive CTEs expand paths, not nodes, so depth limits and visited-path checks are essential to stop exponential growth and infinite loops on cycles. I used the PostgreSQL 14 `CYCLE` clause and compared everything with Apache AGE's Cypher. Two-stop reachability from a hub runs under 200 ms.
+
+**Key terms to know:**
+- **Recursive CTE** — `WITH RECURSIVE`: an anchor query plus a recursive term repeated until no new rows.
+- **`UNION` vs `UNION ALL`** — `UNION` removes duplicate rows each iteration; `UNION ALL` keeps all.
+- **Frontier** — rows produced by the previous iteration.
+- **Path array** — `ARRAY[...] || next`; tracks visited nodes on the current path.
+- **`CYCLE` / `SEARCH` clauses** — PostgreSQL 14+ cycle marking and breadth/depth-first ordering.
+- **Closure table** — all ancestor-descendant pairs precomputed.
+- **Dijkstra** — weighted shortest path; needs a priority queue SQL lacks.
+
 **Q:** How does a recursive CTE work?
 
 **A:** It has a base query and a recursive query joined with `UNION` or `UNION ALL`. The recursive part runs repeatedly on the rows produced by the previous iteration until no new rows appear.
 
 **Q:** How do you stop infinite recursion on cycles?
 
-**A:** Track the visited path in an array and skip nodes already on it, or use the `CYCLE` clause (PostgreSQL 14+). Add a depth limit as a safety net.
+**A:** Track the visited path and skip nodes already on it, or use the `CYCLE` clause. Add a depth limit as a safety net.
+```sql
+WITH RECURSIVE r(id, depth, path) AS (
+  SELECT $1, 0, ARRAY[$1]
+  UNION ALL
+  SELECT e.to_id, r.depth + 1, r.path || e.to_id FROM r JOIN edge e ON e.from_id = r.id
+  WHERE r.depth < 2 AND NOT e.to_id = ANY(r.path))
+SELECT DISTINCT id FROM r;
+```
 
 **Q:** When would you choose a graph database instead?
 
 **A:** For deep or unbounded traversals, weighted shortest paths and graph algorithms at scale, where a recursive CTE's path explosion becomes the bottleneck.
+
+**Q:** Why does reachability get exponentially slower with depth?
+
+**A:** Each iteration keeps every path, and the recursive term cannot see the whole result so far to drop nodes already reached. Limit depth, or use PL/pgSQL with a visited table.
+
+**Q:** How do you find the cheapest route with at most 3 legs?
+
+**A:** Enumerate all paths up to 3 legs with a running price sum and take the minimum. Bounded hops make enumeration feasible; unbounded needs Dijkstra in pgRouting or code.
+
+**Q:** Which indexes matter?
+
+**A:** `edge (from_id)` for forward traversal and `edge (to_id)` for reverse ("who depends on me?"). `EXPLAIN` should show an index scan per frontier row.
+
+**Q:** How do you protect production from a runaway query?
+
+**A:** Always a depth limit and a `statement_timeout`; otherwise a query can run until it fills temp space.
+
+**Q:** `UNION` or `UNION ALL` in a recursive CTE?
+
+**A:** `UNION` discards rows identical to ones already produced, which stops loops only when rows carry just the node id. `UNION ALL` keeps everything and is cheaper. Once rows include a path array or depth they are all distinct, so `UNION` no longer protects you.
+
+**Common mistakes in answers:**
+- Saying `UNION` makes reachability efficient; it removes only duplicate rows, and the path column makes rows distinct.
+- No cycle protection on real dependency data.
+- Assuming SQL can do weighted shortest paths efficiently without bounds.
 
 ### TL;DR
 Recursive CTEs handle bounded graph traversals in SQL. Index both edge directions, protect against cycles and path explosion, and move to a graph engine for deep weighted algorithms.
@@ -4947,6 +6261,18 @@ dbt-style tests as SQL queries that must return zero rows: duplicate surrogate k
 - OLAP, columnar and batch processing: [Ch 16 — Beyond Relational](../chapters/16-beyond-relational/README.md)
 
 ### In the interview
+**30-second answer:** I built an ELT pipeline from the OLTP schema into a PostgreSQL star schema: raw, staging and mart layers, a fact table at order-line grain, a generated date dimension, and type 2 history on customer address and product category. The key decision was declaring the grain first, which fixed every other choice. The hard parts were point-in-time lookups (each fact joins the dimension version valid at order time) and idempotent incremental loads with a watermark plus overlap window and upserts. A year-by-month-by-category query runs under 2 seconds on 50 million facts.
+
+**Key terms to know:**
+- **Star schema** — a fact table surrounded by denormalized dimensions.
+- **Grain** — what one fact row means. "One order line".
+- **Fact / dimension** — measurable events vs descriptive context.
+- **Type 1 / type 2 SCD** — overwrite vs keep history with validity dates.
+- **Surrogate key** — warehouse-generated key per dimension version.
+- **ELT** — load raw, then transform with SQL in the warehouse.
+- **Watermark** — the high-water `updated_at` already loaded.
+- **Columnar storage** — stores each column separately; fast scans and compression for analytics.
+
 **Q:** What is a star schema?
 
 **A:** A central fact table of measurable events at a declared grain, with foreign keys to denormalized dimension tables that describe who, what, when and where.
@@ -4958,6 +6284,36 @@ dbt-style tests as SQL queries that must return zero rows: duplicate surrogate k
 **Q:** ETL or ELT?
 
 **A:** ELT loads raw data first and transforms it with SQL inside the warehouse, so transformations are versioned, re-runnable and use the warehouse's compute. ETL transforms before loading, in a separate engine.
+
+**Q:** How does a fact find the right dimension version?
+
+**A:** A range join on validity.
+```sql
+SELECT o.*, d.customer_sk FROM stg_order_line o
+JOIN dim_customer d ON d.customer_id = o.customer_id
+ AND o.order_date >= d.valid_from AND o.order_date < d.valid_to;
+```
+
+**Q:** Why denormalize dimensions when OLTP normalizes?
+
+**A:** Analysts join few tables and filter by descriptive attributes. Update anomalies matter less because the warehouse is loaded in controlled batches, not edited.
+
+**Q:** How do you make incremental loads idempotent?
+
+**A:** Load rows with `updated_at` above the watermark minus an overlap window, and upsert facts on their natural key `(order_id, line_no)`. Source deletes need CDC or a periodic full comparison.
+
+**Q:** When does PostgreSQL stop being enough?
+
+**A:** At billions of fact rows. A row store reads whole rows; columnar engines read only needed columns and compress far better.
+
+**Q:** How do you test the warehouse?
+
+**A:** Zero-row SQL tests: duplicate surrogate keys, orphan facts, more than one current row per customer, overlapping validity. Reconcile daily revenue with the source.
+
+**Common mistakes in answers:**
+- Mixing grains in one fact table.
+- Joining facts to the *current* dimension row, rewriting history.
+- Using the source's natural key as the dimension primary key under type 2.
 
 ### TL;DR
 Declare the grain, build type 2 dimensions with surrogate keys, join facts to the dimension version valid at event time, load incrementally and idempotently, and test the data on every run.
@@ -5086,9 +6442,24 @@ A consistency test harness: simulated users write a value and immediately read i
 - Replication, lag and consistency models: [Ch 15 — Scaling Databases](../chapters/15-scaling-databases/README.md)
 
 ### In the interview
+**30-second answer:** I built a read-routing library over a primary and two streaming replicas with three consistency levels: strong, session (read-your-writes) and eventual. The key decision was LSN tracking instead of "stick to the primary for 5 seconds": after a write I store the primary's WAL position in the session, and a replica serves the user only once its replay position has passed it. Health checks remove lagging replicas, and reads fall back to the primary if none qualifies. A 1,000-user test showed zero stale reads with over 70% of reads on replicas.
+
+**Key terms to know:**
+- **Streaming replication** — replicas replay the primary's WAL continuously.
+- **Replication lag** — how far a replica is behind, in bytes or seconds.
+- **Read-your-writes** — a user always sees their own committed changes.
+- **LSN** — WAL position; `pg_current_wal_lsn()` on primary, `pg_last_wal_replay_lsn()` on replica.
+- **Hot standby** — a replica that accepts read-only queries.
+- **Recovery conflict** — replay would remove data a replica query needs; query cancelled.
+- **`hot_standby_feedback`** — replica tells primary what it still needs; avoids cancels, causes bloat.
+
 **Q:** How do you guarantee read-your-writes with replicas?
 
 **A:** After a write, record the primary's WAL LSN. Serve the user's next reads only from replicas whose replayed LSN is at least that value, otherwise from the primary.
+```sql
+-- on replica: has it replayed the user's write?
+SELECT pg_last_wal_replay_lsn() >= $1::pg_lsn;
+```
 
 **Q:** Why do long queries get cancelled on replicas?
 
@@ -5097,6 +6468,31 @@ A consistency test harness: simulated users write a value and immediately read i
 **Q:** Which reads should never go to a replica?
 
 **A:** Reads that decide a write (read-modify-write), reads inside write transactions, and anything where stale data would cause a wrong decision, such as balances.
+
+**Q:** Why is time-based stickiness a guess?
+
+**A:** "Primary for 5 seconds after a write" fails when lag exceeds 5 seconds and wastes primary capacity when lag is 10 ms. LSN comparison is exact.
+
+**Q:** Why can time lag look huge when nothing is wrong?
+
+**A:** `now() - pg_last_xact_replay_timestamp()` keeps growing when the primary is idle, because there is nothing new to replay. Check byte lag as well.
+
+**Q:** What happens during a big backfill?
+
+**A:** Replicas fall behind, all session reads fall back to the primary, and it overloads. Throttle backfills on replica lag.
+
+**Q:** Proxy routing or app routing?
+
+**A:** A proxy needs no code changes but cannot know which reads need read-your-writes. App routing knows the session but must be built into every service.
+
+**Q:** How do you test it?
+
+**A:** Simulated users write and immediately read under heavy background writes, counting stale reads (must be zero), with fault injection: stop, pause and lag replicas.
+
+**Common mistakes in answers:**
+- Claiming replicas scale writes; they only scale reads.
+- Measuring lag only in seconds.
+- Making "any replica" the default instead of the safe choice.
 
 ### TL;DR
 Route reads to replicas only when they have replayed the user's last write LSN, watch lag in bytes and seconds, separate report replicas from user replicas, and fall back to the primary safely.
@@ -5226,9 +6622,26 @@ The drill itself is the test, run nightly. Add chaos variants: a missing WAL seg
 - Recovery, replication and high availability: [Ch 15 — Scaling Databases](../chapters/15-scaling-databases/README.md)
 
 ### In the interview
+**30-second answer:** I built a backup system with continuous WAL archiving, scheduled `pg_basebackup` base backups, `pg_dump` for single-table restores, and a nightly drill that restores the latest backup to a scratch server, replays WAL and runs consistency checks. The key decision was treating the drill as the real backup test, because a backup that has never been restored is a hope, not a backup. The hardest part was point-in-time recovery to just before a bad `DELETE`, which I located with `pg_waldump` and restored with `recovery_target_xid`. RPO is under a minute thanks to `archive_timeout`, and a measured 50 GB restore took under 30 minutes.
+
+**Key terms to know:**
+- **WAL archiving** — copying each completed WAL segment to separate storage.
+- **Base backup** — a physical copy of the data directory taken while running.
+- **PITR** — restore a base backup, then replay WAL up to a chosen target.
+- **RPO / RTO** — maximum acceptable data loss / maximum acceptable recovery time.
+- **`archive_timeout`** — forces a segment switch on quiet servers, bounding RPO.
+- **Recovery target** — `recovery_target_time`, `_xid`, `_name` or `_lsn`.
+- **Timeline** — a new branch of WAL history started after PITR or promotion.
+- **Logical vs physical backup** — SQL dump of objects vs copy of data files.
+
 **Q:** How do you restore a database to just before a bad `DELETE`?
 
-**A:** Restore the last base backup to a new server, set `restore_command` and a recovery target time or transaction id just before the delete, and let it replay archived WAL. Then copy the lost rows back.
+**A:** Restore the last base backup to a new server, set `restore_command` and a recovery target just before the delete, create `recovery.signal` and let it replay archived WAL. Then copy the lost rows back to production.
+```
+restore_command = 'cp /archive/%f %p'
+recovery_target_xid = '48213'
+recovery_target_inclusive = false
+```
 
 **Q:** What are RPO and RTO?
 
@@ -5236,11 +6649,32 @@ The drill itself is the test, run nightly. Add chaos variants: a missing WAL seg
 
 **Q:** Is a replica a backup?
 
-**A:** No. It replicates mistakes immediately. You need independent, tested, off-site backups.
+**A:** No. It replicates mistakes immediately. You need independent, tested, off-site backups. A delayed replica (`recovery_min_apply_delay`) gives a short undo window but still is not one.
 
 **Q:** How do you know your backups work?
 
-**A:** Restore them automatically and regularly, run consistency checks, and alert when a drill fails or does not run.
+**A:** Restore them automatically and regularly, run consistency checks, and alert when a drill fails or does not run at all.
+
+**Q:** Why not rely on `pg_dump` alone?
+
+**A:** A dump is one moment in time, so everything after it is lost, and restoring rebuilds every index, which is slow. Keep dumps for single-table recovery and major-version upgrades.
+
+**Q:** What happens if a WAL segment is missing from the archive?
+
+**A:** Replay cannot pass the gap, so recovery ends early at the last continuous point. The drill must check it reached the target and fail loudly if not.
+
+**Q:** How do frequent backups affect RTO at 10x data?
+
+**A:** Fewer base backups mean more WAL to replay, which raises RTO. Incremental backups (PostgreSQL 17+ or pgBackRest) make frequent backups cheap.
+
+**Q:** What did GitLab's 2017 incident teach?
+
+**A:** Their backups had been failing silently for a long time. Every step must report success positively, and a missing success signal must alert.
+
+**Common mistakes in answers:**
+- Storing archives on the same disk or cloud account as the database.
+- Restoring PITR over production instead of to a scratch server.
+- Mixing WAL from two timelines after a restore.
 
 ### TL;DR
 Archive WAL continuously, take regular base backups, practise PITR to an exact moment, store backups separately, and prove it all with automated restore drills that measure RPO and RTO.
@@ -5359,6 +6793,18 @@ The failure matrix is the test plan: each scenario (kill -9, clean shutdown, hos
 - Connection handling from code: [Ch 14 — Advanced SQL and Using SQL from Code](../chapters/14-advanced-sql-and-using-sql-from-code/README.md)
 
 ### In the interview
+**30-second answer:** I built a three-node Patroni cluster with etcd for consensus and HAProxy routing writes to whichever node Patroni reports as leader, then ran a failure matrix: process kill, power-off, network partition, disk full, in async and sync modes. The key mechanism is a leader key with a TTL in etcd: only a majority can grant it, and a primary that cannot renew it demotes itself, preventing two writable primaries. The main trade-off I measured was durability: async lost the last few acknowledged commits on failover, while synchronous mode lost none at higher commit latency. Failover completed in under 30 seconds, and I can account for each second.
+
+**Key terms to know:**
+- **Failover / switchover** — unplanned vs planned change of primary.
+- **Split brain** — two nodes both accepting writes.
+- **Consensus store (etcd, Raft)** — a majority-agreed key-value store holding the leader key.
+- **TTL / `loop_wait`** — how long the leader key lives and how often Patroni checks.
+- **Fencing** — making sure the old primary stops accepting writes.
+- **Synchronous replication** — commit waits for a standby to confirm.
+- **`pg_rewind`** — rewinds a diverged old primary so it can follow the new one.
+- **Failure domain** — things that fail together, such as one host.
+
 **Q:** How does Patroni avoid split brain?
 
 **A:** The leader must keep renewing a key with a time-to-live in a consensus store. Only a majority can grant it, and a node that cannot renew it demotes itself.
@@ -5369,11 +6815,32 @@ The failure matrix is the test plan: each scenario (kill -9, clean shutdown, hos
 
 **Q:** What limits how fast failover happens?
 
-**A:** The time to detect failure (TTL and check intervals), election, promotion and client rerouting. Shorter timeouts mean faster failover but more false failovers.
+**A:** Detection (TTL and check intervals), election, promotion and client rerouting by HAProxy health checks. Shorter timeouts fail over faster but trigger false failovers on brief network blips.
 
 **Q:** How does a failed primary rejoin?
 
 **A:** `pg_rewind` rewinds its data directory to the point where timelines diverged, then it follows the new primary as a replica.
+
+**Q:** What is the cost of synchronous replication?
+
+**A:** Every commit waits for a standby round trip, and if no synchronous standby is available, commits block. Patroni's synchronous mode can pick another standby automatically.
+
+**Q:** What do the `synchronous_commit` levels mean?
+
+**A:** `on` waits until the standby has flushed the WAL to disk; `remote_apply` waits until the change is visible to queries there; `remote_write` waits only for the standby's OS to receive it.
+
+**Q:** What goes wrong if etcd runs on the same three hosts?
+
+**A:** Losing two hosts loses both the database majority and the consensus majority, so nothing can be promoted. Know your failure domains.
+
+**Q:** How do you count lost writes?
+
+**A:** A client load generator records every acknowledged commit id; after failover, compare that list with what the new primary contains.
+
+**Common mistakes in answers:**
+- Claiming automatic failover never loses data.
+- Ignoring the window between partition and demotion of the old primary.
+- Treating "fast failover" as purely good.
 
 ### TL;DR
 Use a consensus store to elect one leader with a TTL, route clients by health checks, choose async or sync replication by how much loss you can accept, and prove behaviour with a failure matrix that counts lost writes.
@@ -5508,17 +6975,62 @@ Recall and relevance are measured, not asserted: keep the evaluation set and a r
 - Specialised databases: [Ch 16 — Beyond Relational](../chapters/16-beyond-relational/README.md)
 
 ### In the interview
+**30-second answer:** I built hybrid search over 1 million chunks: an HNSW pgvector index for semantic similarity, the full-text search of Project 17 for keywords, and reciprocal rank fusion to combine them. The key decision was RRF, because cosine distances and `ts_rank` scores are on different scales and only ranks combine meaningfully. The hard problem was filtering: the index returns approximate candidates and filters run afterwards, so rare filters returned too few rows until I used iterative scans and partial indexes. On a 50-query evaluation set I reached recall@10 above 0.95 against exact search with p95 under 50 ms.
+
+**Key terms to know:**
+- **Embedding** — a vector representing meaning; similar texts are close.
+- **Cosine distance `<=>`** — pgvector's operator for angle-based distance.
+- **Exact vs approximate nearest neighbour** — full scan vs index search that may miss some.
+- **HNSW** — a layered neighbour graph; `ef_search` trades recall for speed.
+- **Recall@k** — fraction of true top-k results the index returned.
+- **Reciprocal rank fusion (RRF)** — score = Σ 1/(k + rank) across result lists.
+- **Post-filtering** — applying `WHERE` after the index returns candidates.
+
 **Q:** What does an HNSW index trade off?
 
-**A:** Accuracy for speed. It searches a neighbour graph approximately. `ef_search` raises recall at the cost of latency, and you must measure recall against exact search.
+**A:** Accuracy for speed. It searches a neighbour graph approximately. `hnsw.ef_search` raises recall at the cost of latency, and you must measure recall against exact search.
 
 **Q:** Why can a filtered vector query return fewer rows than `LIMIT`?
 
-**A:** The index returns a fixed number of approximate candidates, and the filter runs afterwards, discarding many. Raise the candidate count, use iterative scans, or partition or partially index by the filter.
+**A:** The index returns a fixed number of approximate candidates and the filter runs afterwards, discarding many. Raise the candidate count, use iterative scans, or partition or partially index by the filter.
 
 **Q:** How do you combine keyword and vector results?
 
-**A:** Reciprocal rank fusion: sum `1 / (k + rank)` from each list, because raw scores are on different scales.
+**A:** Reciprocal rank fusion, because raw scores are on different scales.
+```sql
+WITH v AS (SELECT id, row_number() OVER (ORDER BY d) r FROM
+       (SELECT id, emb <=> $1 AS d FROM chunk ORDER BY d LIMIT 50) s),
+     k AS (SELECT id, row_number() OVER (ORDER BY s DESC) r FROM
+       (SELECT id, ts_rank_cd(tsv, q) AS s FROM chunk, websearch_to_tsquery($2) q
+        WHERE tsv @@ q ORDER BY s DESC LIMIT 50) t)
+SELECT id, coalesce(1.0/(60+v.r), 0) + coalesce(1.0/(60+k.r), 0) AS score
+FROM v FULL JOIN k USING (id) ORDER BY score DESC LIMIT 10;
+```
+
+**Q:** What happens when you change embedding model?
+
+**A:** Old and new vectors are not comparable. Store `model_id`, build a partial index per model, re-embed in the background, and switch queries once the new model is complete.
+
+**Q:** pgvector or a dedicated vector database?
+
+**A:** pgvector gives transactions, joins, RLS and one system. Dedicated engines scale to billions of vectors more easily. Up to tens of millions, pgvector usually suffices.
+
+**Q:** What breaks first at 10x vectors?
+
+**A:** Memory. HNSW performs best when the index fits in RAM; compute its size and use half-precision or lower-dimension embeddings to shrink it.
+
+**Q:** How do you test search quality?
+
+**A:** A fixed evaluation set with known relevant chunks, recording recall@10 and latency per configuration, failing any change that drops recall below target.
+
+**Q:** Why HNSW rather than IVFFlat?
+
+**A:** HNSW usually gives better recall for the same speed and can be built on an empty table, but builds more slowly and uses more memory. IVFFlat builds quickly but needs representative data present to train its lists, and recall depends on `ivfflat.probes`.
+
+**Common mistakes in answers:**
+- Adding cosine and `ts_rank` scores directly.
+- Assuming the index is exact.
+- Forgetting to re-embed chunks whose text changed.
 
 ### TL;DR
 Store embeddings next to the data with pgvector, tune HNSW by measured recall, handle filters deliberately, fuse vector and keyword results by rank, and version embeddings by model.
@@ -5650,17 +7162,58 @@ Given-when-then tests per aggregate: given these past events, when this command 
 - Logs, streams and derived data: [Ch 16 — Beyond Relational](../chapters/16-beyond-relational/README.md)
 
 ### In the interview
+**30-second answer:** I built event-sourced inventory: each SKU-and-warehouse stream is an append-only list of events with a unique `(stream_id, version)`, and projections such as stock per bin are built by projectors tracking their last global position. The key mechanism is optimistic concurrency: an append states the expected version, and the unique constraint rejects a concurrent writer, which reloads and retries. The hardest problem was the global ordering trap, since sequence numbers are assigned at insert but become visible at commit, so the projector never reads past the oldest in-flight transaction. 200 concurrent writers sustained 2,000 appends per second with projection lag under 1 second.
+
+**Key terms to know:**
+- **Event sourcing** — storing changes as immutable events; current state is derived.
+- **Stream / aggregate** — the event sequence for one entity.
+- **Optimistic concurrency** — no locks during logic; conflicts detected at write via expected version.
+- **Projection (read model)** — a table built by folding events.
+- **Checkpoint** — the last global position a projector processed.
+- **Snapshot** — saved folded state to avoid full replays.
+- **Upcasting** — converting old event versions to the new shape on read.
+- **CQRS** — separate write model (events) from read models (projections).
+
 **Q:** How do you prevent two writers corrupting one event stream?
 
 **A:** Optimistic concurrency: each append states the expected version, and a unique constraint on `(stream_id, version)` rejects the loser, which reloads and retries.
+```sql
+INSERT INTO event (stream_id, version, type, payload)
+VALUES ($1, $2 + 1, 'Picked', $3);   -- $2 = version read; 23505 = conflict, retry
+```
 
 **Q:** Why can a projector miss events when reading by a sequence column?
 
-**A:** Sequence values are assigned at insert, but transactions commit in a different order. A lower number can become visible after a higher one, so the projector must not advance past in-flight transactions.
+**A:** Sequence values are assigned at insert, but transactions commit in a different order. A lower number can become visible after a higher one, so the projector must not advance past in-flight transactions, using `pg_snapshot_xmin(pg_current_snapshot())` and stored transaction ids.
 
 **Q:** How do you change an event's format?
 
 **A:** Never rewrite stored events. Add a schema version and upcast old versions to the new shape when reading.
+
+**Q:** How do projections get exactly-once effect?
+
+**A:** Update the read model and the checkpoint in the same transaction. A crash rolls back both, and the projector resumes from the old checkpoint.
+
+**Q:** Why can't a command check stock using a projection?
+
+**A:** Projections lag behind writes. Commands load the stream (plus snapshot) to see current state, then rely on the version check.
+
+**Q:** Event sourcing or state plus audit log?
+
+**A:** An audit log records history beside state; event sourcing makes history the state, enabling replays and new projections at the cost of eventual consistency and more design work.
+
+**Q:** A projection was wrong for weeks. How do you fix it?
+
+**A:** Fix the code and rebuild the projection from position 0 into a new table while the old one serves reads, then swap.
+
+**Q:** How do you test it?
+
+**A:** Given-when-then tests per aggregate, replay tests comparing projections with expected rows, and a concurrency test that reproduces the ordering trap.
+
+**Common mistakes in answers:**
+- Assuming `bigserial` order equals commit order.
+- Holding a lock while running business logic instead of using the version check.
+- Editing old events in place to "migrate" them.
 
 ### TL;DR
 Append immutable events with per-stream optimistic concurrency, project them in true commit order with checkpoints in the same transaction, snapshot long streams, and evolve events by upcasting.
@@ -5803,9 +7356,24 @@ The incident lab is the test suite: each script creates one problem, and the har
 - `lag()` for rates: [Ch 8 — Window Functions](../chapters/08-window-functions/README.md)
 
 ### In the interview
+**30-second answer:** I built a monitoring system that snapshots PostgreSQL's statistics views every minute into partitioned history tables, turns counters into rates with `lag()`, and raises alerts with runbook links. The key idea was alerting on causes rather than symptoms: instead of "bloat is growing", the alert names the oldest `backend_xmin` and which session, slot or replica is holding cleanup back. An incident lab reproduces each problem, including transaction ID wraparound pressure, idle-in-transaction sessions and stuck replication slots, and every alert fired before users saw errors, with collector overhead under 1% CPU.
+
+**Key terms to know:**
+- **MVCC** — updates write new row versions; old versions stay until vacuum removes them.
+- **Dead tuple / bloat** — obsolete row versions, and the wasted space they cause.
+- **Autovacuum** — background vacuum triggered by `threshold + scale_factor × reltuples` dead tuples.
+- **xmin horizon** — the oldest transaction any session, slot or replica still needs; vacuum cannot clean past it.
+- **Transaction ID wraparound** — 32-bit xids compared in a circle; old rows must be frozen.
+- **Freezing** — marking old row versions as visible to all, so their xid no longer matters.
+- **Counter vs gauge** — ever-growing totals vs current values; rates need deltas.
+- **Cache hit ratio** — share of block reads served from shared buffers.
+
 **Q:** What is transaction ID wraparound and how do you prevent it?
 
 **A:** Transaction IDs are 32-bit and compared in a circle, so old ones must be frozen by vacuum before about 2 billion newer transactions pass. Keep autovacuum healthy, watch `age(datfrozenxid)`, and alert long before PostgreSQL's own limits.
+```sql
+SELECT datname, age(datfrozenxid) FROM pg_database ORDER BY 2 DESC;
+```
 
 **Q:** Autovacuum runs but bloat keeps growing. Why?
 
@@ -5813,7 +7381,32 @@ The incident lab is the test suite: each script creates one problem, and the har
 
 **Q:** Why tune autovacuum per table?
 
-**A:** The default scale factor is proportional to table size, so huge tables wait for millions of dead tuples. Hot large tables need a small scale factor and higher cost limits.
+**A:** The default scale factor (0.2) is proportional to table size, so huge tables wait for millions of dead tuples. Hot large tables need a small scale factor and higher cost limits.
+
+**Q:** Why does `VACUUM` not shrink the file?
+
+**A:** Plain `VACUUM` marks space reusable inside the table but rarely returns it to the OS. `VACUUM FULL` rewrites the table under an `ACCESS EXCLUSIVE` lock; tools like `pg_repack` do it online.
+
+**Q:** How do you compute queries per second from `pg_stat_statements`?
+
+**A:** Its columns are counters, so take differences between samples with `lag()` and divide by elapsed time, treating a decrease as a reset.
+
+**Q:** Where should the monitoring data live?
+
+**A:** Not on the monitored server, or the monitor goes blind exactly when that server is in trouble.
+
+**Q:** What changes at 100x databases?
+
+**A:** Store history centrally, sample cheap views often and expensive ones (bloat estimates) hourly, or adopt an exporter such as postgres_exporter with Prometheus.
+
+**Q:** How do you test alerts?
+
+**A:** The incident lab: each script causes one problem and the harness asserts the right alert fires in time and clears after the fix. A stopped collector must also alert.
+
+**Common mistakes in answers:**
+- Disabling autovacuum on busy tables to "save I/O".
+- Treating counters as rates.
+- Saying `VACUUM FULL` is a routine fix.
 
 ### TL;DR
 Sample PostgreSQL's statistics views into a separate history, turn counters into rates, alert on the leading signals (XID age, held-back cleanup, dead tuples, slot WAL, lock chains), and prove every alert with a reproducible incident.
