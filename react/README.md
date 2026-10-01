@@ -60,6 +60,7 @@ flowchart LR
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter (Markdown source and its PDF). |
 | `chapters/NN-name/code/` | Runnable examples (`.jsx`, `.tsx`, `.mjs`, `*.test.jsx`), the component modules they import, and for UI chapters a small `.html` page with its esbuild browser bundle. |
 | `chapters/NN-name/img/` | Screenshots of those pages rendered in headless Chrome (Ch 1–10, 13–15). |
+| `capstones/CAPSTONES.md` + `capstones/React-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced (profile cards and a tip calculator → kanban, infinite feed, auth, Zustand → Next.js Server Components, collaborative whiteboard, virtualized grid, streaming SSR), each with requirements, architecture and data-model diagrams, milestones, hard parts, testing, trade-offs and interview Q&A. |
 | `tools/` | `regen_pdfs.sh` (rebuild all PDFs) and `md2pdf.mjs` (Markdown → PDF). See [tools/README.md](tools/README.md). |
 
 ## Chapters
