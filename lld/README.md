@@ -20,6 +20,7 @@ Every chapter is written for a first-time learner, every Java example is **Java 
 | `chapters/NN-name/README.md` + `ChapterNN-Notes.pdf` | One chapter, Full Edition. |
 | `chapters/NN-name/code/` | Runnable Java for that chapter (package per topic/case, each with a `Main`). |
 | `assets/` | Course diagrams. |
+| `capstones/CAPSTONES.md` + `capstones/LLD-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced (parking lot to order-matching engine, KV store, DI container), each with class/state diagrams, milestones, deep dives and interview Q&A, in Java 25. |
 | `tools/` | `regen_pdfs.sh` (all PDFs), `compile_all.sh` (compile + run every Main), `md2pdf.mjs`. |
 
 ## Chapters

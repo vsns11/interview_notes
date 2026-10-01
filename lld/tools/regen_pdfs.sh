@@ -19,3 +19,4 @@ done
 COVER_TITLE="Low-Level Design Handbook — Study Edition" COVER_SUB="OOP · UML · SOLID · Clean Code · Refactoring · Patterns · Concurrency · 45 case studies in Java — every topic, readable length" node tools/md2pdf.mjs LLD-Handbook-Study.pdf chapters/*/STUDY.md
 # Interview Edition (fast revision, single file)
 COVER_TITLE="Low-Level Design Handbook — Interview Edition" COVER_SUB="Fast revision: every topic, key facts, top questions, gotchas" node tools/md2pdf.mjs interview/LLD-Interview-Edition.pdf interview/INTERVIEW.md
+COVER_TITLE="Low-Level Design (Java) — Capstone Projects" node tools/md2pdf.mjs capstones/LLD-Capstone-Projects.pdf capstones/CAPSTONES.md
