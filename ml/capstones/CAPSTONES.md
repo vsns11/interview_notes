@@ -25,9 +25,9 @@ A **capstone** is a project big enough to pull together several chapters at once
 | Intermediate | A stronger model (boosting, transfer learning, embeddings), real evaluation pitfalls, and usually an API, a pipeline or a dashboard. | 2–3 weeks |
 | Advanced | A multi-stage system: offline training plus online serving, feature freshness, monitoring, experiments. Mirrors Ch 15–19. | 3–8 weeks |
 
-**The stack.** Unless a brief says otherwise, use Python 3.14, pandas or polars for data, scikit-learn for classic models, PyTorch for deep learning, MLflow for experiment tracking and the model registry, FastAPI for serving and PostgreSQL for anything persistent. Python 3.14 is recent, so a few libraries with compiled extensions (for example some versions of SHAP, numba-based tools, TensorFlow-only packages or niche RL and federated-learning libraries) may not ship 3.14 wheels yet. When that happens, keep a separate 3.12 or 3.13 virtual environment for that one library rather than fighting the build.
+**The stack.** Unless a brief says otherwise, use Python 3.14, pandas or polars for data, scikit-learn for classic models, PyTorch for deep learning, MLflow for experiment tracking and the model registry, FastAPI for serving and PostgreSQL for anything persistent. Python 3.14 is still fairly new for the ML ecosystem, so a few libraries with compiled extensions (for example some versions of SHAP, numba-based tools, TensorFlow-only packages or niche RL and federated-learning libraries) may not ship 3.14 wheels yet. When that happens, keep a separate 3.12 or 3.13 virtual environment for that one library rather than fighting the build.
 
-**Datasets are real.** Every brief names a public dataset (UCI, Kaggle, MovieLens, academic benchmarks) and points to engineering blogs or papers that describe how real companies solved the same problem. Respect each dataset's licence and terms; several Kaggle datasets require you to accept competition rules before downloading.
+**Datasets are real.** Every brief names a public dataset (UCI, Kaggle, MovieLens, academic benchmarks) and points to engineering blogs or papers that describe how real companies solved the same problem. Respect each dataset's licence and terms: several Kaggle datasets require you to accept competition rules before downloading, and some popular sets are non-commercial only (MovieLens is for research use, and the Criteo uplift and RetailRocket datasets are CC BY-NC-SA 4.0), which is fine for study but matters if you reuse them at work.
 
 > The briefs describe the problem, the design and the traps. The code, the experiments and the mistakes are yours. That is the point.
 
@@ -598,7 +598,7 @@ flowchart TD
 5. **Interactive demo.** *Done when* digits you draw are recognised — and you have fixed the preprocessing so they look like MNIST.
 
 ### Deep dive: the hard parts
-- **Train/serve skew.** MNIST digits are centred by centre of mass in a 20 × 20 box inside the 28 × 28 frame, white on black. Your canvas digit is probably off-centre, thick, and black on white. The model will fail until you apply the same preprocessing: invert, crop to the bounding box, resize, centre. This is the beginner version of a problem that ruins production systems.
+- **Train/serve skew.** MNIST digits were scaled to fit a 20 × 20 box (keeping their aspect ratio), then placed in the 28 × 28 frame so their centre of mass sits in the middle, white on black. Your canvas digit is probably off-centre, thick, and black on white. The model will fail until you apply the same preprocessing: invert, crop to the bounding box, resize, centre. This is the beginner version of a problem that ruins production systems.
 - **Why convolutions win.** An MLP treats each pixel independently, so a digit shifted by two pixels looks new. Convolutions share weights across positions and pooling adds tolerance to small shifts, so the CNN needs fewer parameters and generalises better.
 - **Overfitting signals.** Training loss keeps falling while validation loss rises. Use dropout (randomly zeroing activations during training), data augmentation (small rotations and shifts) and early stopping.
 - **`model.eval()`.** Dropout and batch norm behave differently at inference. Forgetting to switch modes gives noisy predictions.
@@ -648,7 +648,7 @@ Lenders must price risk, set credit limits and explain decisions to customers an
 
 ### Real-world examples
 - The UCI [Default of Credit Card Clients](https://archive.ics.uci.edu/dataset/350/default+of+credit+card+clients) dataset has 30,000 Taiwanese card holders from 2005 with demographics, credit limits, six months of repayment status, bill and payment amounts, and a default flag.
-- The scikit-learn [cross-validation guide](https://scikit-learn.org/stable/modules/cross_validation.html) and its calibration tools (`CalibratedClassifierCV`, `calibration_curve`) are what you will use to validate the probabilities.
+- The scikit-learn [probability calibration guide](https://scikit-learn.org/stable/modules/calibration.html) explains reliability diagrams and the tools (`CalibratedClassifierCV`, `calibration_curve`) you will use to validate the probabilities.
 
 ### Requirements
 **Functional**
@@ -674,7 +674,7 @@ flowchart TD
     G --> H["Score function and report"]
 ```
 - **Binning and WoE**: learned from training rows only. WoE turns any feature, including categories, into a single number on the log-odds scale, which is exactly the scale logistic regression works in.
-- **Logistic regression**: with WoE inputs, coefficients should all be positive and near 1. A negative one warns of collinearity.
+- **Logistic regression**: with WoE inputs, coefficients should all share the same sign and sit near 1 in size (with WoE defined as log of good over bad and the target "default", they come out near −1). A coefficient with the opposite sign warns of collinearity.
 - **Points table**: a standard rescaling, for example 600 points at odds of 50:1 and 20 more points every time the odds double.
 
 ### Data model
@@ -682,7 +682,7 @@ flowchart TD
 |---|---|---|
 | `default_next_month` | 0/1 target | About 22% positives |
 | `LIMIT_BAL` | numeric | Credit limit |
-| `PAY_0` … `PAY_6` | int | Repayment status by month (−2 to 8) |
+| `PAY_0`, `PAY_2` … `PAY_6` | int | Repayment status by month, −2 to 8 (there is no `PAY_1`) |
 | `BILL_AMT1..6`, `PAY_AMT1..6` | numeric | Monthly bills and payments |
 | Bin table | feature, range, WoE, points | The deliverable scorecard |
 
@@ -2851,7 +2851,7 @@ A small neural network that listens to one-second audio clips and recognises a f
 Voice assistants listen for a wake word on-device, constantly, without sending audio to the cloud — for privacy, battery life and latency. That requires a tiny, always-on model that rarely triggers falsely. Keyword spotting is the standard teaching problem for this kind of **edge ML**.
 
 ### Real-world examples
-- Warden's [Speech Commands](https://arxiv.org/abs/1804.03209) dataset (Google) provides tens of thousands of one-second utterances of short words from many speakers, designed specifically for keyword spotting.
+- Warden's [Speech Commands](https://arxiv.org/abs/1804.03209) dataset (Google) provides one-second utterances of short words, designed specifically for keyword spotting; version 2 has 105,829 clips of 35 words from 2,618 speakers.
 - [torchaudio](https://docs.pytorch.org/audio/stable/) provides loaders and spectrogram transforms used in this project.
 
 ### Requirements
@@ -2962,7 +2962,7 @@ Platforms need help moderating huge comment volumes. But a toxicity model traine
 
 ### Real-world examples
 - Kaggle's [Toxic Comment Classification Challenge](https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge) (Jigsaw) provides Wikipedia talk-page comments with six labels: toxic, severe toxic, obscene, threat, insult, identity hate.
-- The follow-up [Jigsaw Unintended Bias in Toxicity Classification](https://www.kaggle.com/c/jigsaw-unintended-bias-in-toxicity-classification) competition added identity annotations and a bias-aware metric built from subgroup AUCs.
+- The follow-up [Jigsaw Unintended Bias in Toxicity Classification](https://www.kaggle.com/c/jigsaw-unintended-bias-in-toxicity-classification) competition added identity annotations and a bias-aware metric that blends overall AUC with subgroup, BPSN and BNSP AUCs.
 
 ### Requirements
 **Functional**
@@ -3175,7 +3175,7 @@ erDiagram
 6. **Load test and freshness.** *Done when* 200 RPS holds p95 under 150 ms and a newly added item appears in the index within an hour.
 
 ### Deep dive: the hard parts
-- **In-batch negatives and popularity.** Popular items appear often in batches and so are used as negatives often, pushing their scores down. The logQ correction compensates; without it, retrieval under-recommends popular items in a way that hurts online metrics.
+- **In-batch negatives and popularity.** A frequently watched item turns up in many training batches, so it is drafted as a negative for other users again and again, and its scores get pushed down. The logQ correction compensates; without it, retrieval under-recommends popular items in a way that hurts online metrics.
 - **Stage alignment.** Retrieval is trained on "watched", the ranker on "rated highly"; if objectives diverge too much, retrieval hands the ranker candidates it does not like. Measure the ranker's NDCG restricted to retrieved candidates, not on a random sample.
 - **Training–serving consistency.** The user tower must see the same history window and feature definitions online as offline. Compute both from one feature function and log served features to train on.
 - **Feedback loops and position bias.** Users click what you show and what is on top. Training on your own impressions reinforces the current model. Add exploration slots and position as a training-only feature (set to a constant at serving).
@@ -3369,7 +3369,7 @@ Predict many engagement types with one calibrated multi-task model, combine them
 **Level:** Advanced · **Time:** 4–6 weeks · **Prerequisites:** Ch 16, 18
 
 ### What it is
-A system that scores every card payment for fraud risk in real time — while the customer waits at checkout — and decides to approve, challenge (for example, ask for 3-D Secure verification) or block. Its power comes from **streaming features** (velocity counters such as "number of transactions on this card in the last 10 minutes" or "distinct cards used from this device today") computed continuously from an event stream, combined with a gradient-boosted model and a rules layer.
+A system that scores every card payment for fraud risk in real time — while the customer waits at checkout — and decides to approve, challenge (for example, ask for 3-D Secure verification, an extra check by the card issuer such as a code sent to the cardholder's phone) or block. Its power comes from **streaming features** (velocity counters such as "number of transactions on this card in the last 10 minutes" or "distinct cards used from this device today") computed continuously from an event stream, combined with a gradient-boosted model and a rules layer.
 
 ### The problem it solves
 Fraudsters move fast: a stolen card is used many times in minutes. Features computed in a nightly batch are useless by then. The system must compute fresh aggregates, score in tens of milliseconds, cope with extreme class imbalance and with labels (chargebacks) that arrive weeks later.
@@ -3523,7 +3523,7 @@ Real-time fraud is a feature-freshness problem: streaming velocity counters, poi
 **Level:** Advanced · **Time:** 4–5 weeks · **Prerequisites:** Ch 6, 7, 17
 
 ### What it is
-A **learning-to-rank** (LTR) system: for each query, it orders candidate documents so the most relevant appear first. You train pointwise (predict each document's relevance), pairwise (predict which of two documents is better) and listwise models — in particular **LambdaMART**, gradient-boosted trees optimised for NDCG — on a public benchmark, then build a two-stage search service (BM25 retrieval + LTR re-ranking) with click logging and click-bias correction.
+A **learning-to-rank** (LTR) system: for each query, it orders candidate documents so the most relevant appear first. You train pointwise (predict each document's relevance), pairwise (predict which of two documents is better) and listwise models — in particular **LambdaMART**, gradient-boosted trees optimised for NDCG — on a public benchmark, then build a two-stage search service (BM25 retrieval — a classic keyword-match score based on term frequency and rarity — followed by LTR re-ranking) with click logging and click-bias correction.
 
 ### The problem it solves
 Search quality decides whether users find what they need. Hand-tuned scoring formulas break down once there are dozens of signals (text match, freshness, popularity, personalisation). LTR learns how to weigh them from labelled judgements or clicks, and optimises the metric that matters — quality at the top of the list.
@@ -3798,7 +3798,7 @@ Every team that ships models rebuilds the same plumbing, and each rebuild introd
 - **Offline store**: historical feature values with timestamps (PostgreSQL or Parquet); `get_training_data(entity_df)` performs point-in-time joins.
 - **Online store**: latest values per entity (Redis or PostgreSQL), filled by a materialisation job and optionally a stream processor.
 - **Serving**: `POST /v1/models/{name}/predict` fetches online features by entity ID, calls the model, logs inputs and outputs. Supports canary (x% traffic to a new version) and shadow (new version scores but is not returned).
-- **Monitoring**: daily and hourly drift metrics per feature (PSI — population stability index — and KS statistic), prediction distribution drift, missing-value rates, latency percentiles; delayed-label performance; alerts by threshold.
+- **Monitoring**: daily and hourly drift metrics per feature (PSI — population stability index — and the KS statistic, the largest gap between two cumulative distributions), prediction distribution drift, missing-value rates, latency percentiles; delayed-label performance; alerts by threshold.
 - Plug in at least two earlier projects (for example churn from Project 11 and fraud from Project 28).
 
 **Non-functional**
@@ -4339,7 +4339,7 @@ Social networks grow when people find others they know. Searching manually is sl
 - Features per pair: mutual-friend count, Jaccard, Adamic–Adar, degrees, embedding cosine, shared attributes.
 - Ranker: LightGBM (binary) on sampled candidate pairs; compare with heuristic-only ranking.
 - Stretch model: a graph neural network (GraphSAGE) for embeddings.
-- Metrics: Hits@50 (OGB style), Recall@k per user, and coverage.
+- Metrics: Hits@50 (OGB style: the share of true future edges that score higher than all but at most 49 of a fixed set of negative pairs), Recall@k per user, and coverage.
 - API: `GET /pymk/{user_id}` returning 20 suggestions with "N mutual friends" explanation.
 
 **Non-functional**
@@ -4475,7 +4475,7 @@ A service that predicts how long a taxi or delivery trip will take — the **ETA
 ETAs drive pricing, dispatch (which driver to send), customer expectations and courier batching. A few minutes of systematic error causes missed pickups, cold food and lost trust. Routing engines know the roads but not the messy reality (pickup delays, building entrances, local traffic patterns); ML learns those corrections from millions of completed trips.
 
 ### Real-world examples
-- Uber's [DeepETA: How Uber Predicts Arrival Times Using Deep Learning](https://www.uber.com/us/en/blog/deepeta-how-uber-predicts-arrival-times/) describes predicting the residual on top of the routing engine's ETA, replacing an XGBoost model with a low-latency transformer-style network with embedded features.
+- Uber's [DeepETA: How Uber Predicts Arrival Times Using Deep Learning](https://www.uber.com/us/en/blog/deepeta-how-uber-predicts-arrival-times/) describes predicting the residual on top of the routing engine's ETA, replacing gradient-boosted tree ensembles with a low-latency self-attention (linear transformer) network over discretised, embedded features.
 - The [NYC Taxi and Limousine Commission trip record data](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page) publishes pickup and drop-off times and zones for millions of trips per month; Kaggle's [NYC Taxi Trip Duration](https://www.kaggle.com/competitions/nyc-taxi-trip-duration) offers a smaller version with coordinates.
 
 ### Requirements
@@ -4485,7 +4485,7 @@ ETAs drive pricing, dispatch (which driver to send), customer expectations and c
 - Features: origin and destination zones, hour, weekday, holiday, weather, recent average speeds in the origin zone (streaming-style feature), baseline ETA.
 - Models: LightGBM on residual; neural model with zone and time embeddings and an MLP (or small self-attention over feature embeddings).
 - Loss: try MAE, Huber, and an **asymmetric** loss (being late is worse than early).
-- Metrics: MAE, MAPE, error percentiles (p50, p90), and calibration of quantile predictions; slices by distance, borough, hour.
+- Metrics: MAE, MAPE (mean absolute percentage error), error percentiles (p50, p90), and calibration of quantile predictions; slices by distance, borough, hour.
 - API: `POST /eta` returns point ETA and p10–p90 interval.
 
 **Non-functional**
@@ -4587,7 +4587,7 @@ erDiagram
 - ETAs influence behaviour (customers choose based on ETA), creating feedback in the data — keep an eye on systematic bias by product.
 
 ### Stretch goals
-- Feature embeddings over discretised coordinates (geohash) and a self-attention layer over feature embeddings, as in DeepETA.
+- Feature embeddings over discretised coordinates (hashed grid cells at several resolutions) and a self-attention layer over feature embeddings, in the spirit of DeepETA.
 - Multi-task: predict pickup ETA and trip duration jointly.
 - Conformal prediction for intervals with coverage guarantees.
 
@@ -4623,7 +4623,7 @@ On many e-commerce and media sites, most sessions are from logged-out or new use
 ### Real-world examples
 - Kang and McAuley's [Self-Attentive Sequential Recommendation](https://arxiv.org/abs/1808.09781) (SASRec, ICDM 2018) applied causal self-attention to item sequences and outperformed recurrent and Markov-chain baselines on several datasets.
 - The [RetailRocket e-commerce dataset](https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset) contains view, add-to-cart and transaction events from a real online shop over about four and a half months.
-- Moreira's [News Session-Based Recommendations using Deep Neural Networks](https://arxiv.org/abs/1808.00076) applies session-based recommendation to news, where items expire quickly.
+- Moreira et al.'s [News Session-Based Recommendations using Deep Neural Networks](https://arxiv.org/abs/1808.00076) applies session-based recommendation to news, where items expire quickly.
 
 ### Requirements
 **Functional**
@@ -4631,7 +4631,7 @@ On many e-commerce and media sites, most sessions are from logged-out or new use
 - Time-based split: train on earlier sessions, test on the last weeks.
 - Baselines: most popular, item-to-item co-occurrence ("viewed together"), first-order Markov (next-item transition counts).
 - Models: GRU-based and SASRec in PyTorch, trained to predict the next item at every position.
-- Metrics: Recall@20 and MRR@20 for the next item, evaluated at every step of test sessions.
+- Metrics: Recall@20 and MRR@20 (mean reciprocal rank: 1 divided by the true next item's position, counted as 0 if it is outside the top 20) for the next item, evaluated at every step of test sessions.
 - Serving: `POST /next` with the current session's item list returns top 20 items.
 
 **Non-functional**
