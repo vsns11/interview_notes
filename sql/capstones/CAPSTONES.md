@@ -2199,7 +2199,7 @@ A generic `AFTER` row trigger writing `jsonb` diffs to a protected, partitioned 
 The database for a business-to-business SaaS product, say a project tracker, where many customer companies (**tenants**) share one database and one set of tables. Every row carries a `tenant_id`, and PostgreSQL **row-level security** (RLS, rules that filter which rows a role may see or change) makes sure a query can only ever touch the current tenant's rows, even if the application forgets a `WHERE tenant_id = ...`.
 
 ### The problem it solves
-In a shared-schema SaaS, one missing tenant filter in one query leaks one customer's data to another, which is the worst bug a SaaS company can ship. Code review and tests catch most of these, but not all. RLS moves the rule into the database: it adds the tenant predicate to every query on the table automatically, so isolation no longer depends on every developer remembering it.
+When every customer's rows sit in the same tables, forgetting the tenant condition in a single query is enough to show company A the projects of company B. Few bugs damage a SaaS business more. Code review and tests catch most of these, but not all. RLS moves the rule into the database: it adds the tenant predicate to every query on the table automatically, so isolation no longer depends on every developer remembering it.
 
 ### Real-world examples
 - AWS's post [Multi-tenant data isolation with PostgreSQL Row Level Security](https://aws.amazon.com/blogs/database/multi-tenant-data-isolation-with-postgresql-row-level-security/) compares silo, bridge and pool models and shows the pool model with a policy that reads `current_setting('app.current_tenant')`.
@@ -2725,7 +2725,7 @@ Brand and price are real columns because every product has them and they are fil
 
 ### Deep dive: the hard parts
 - **Which operators use which index.** GIN on `jsonb` supports `@>` (contains), and with `jsonb_ops` also `?` (key exists). It does *not* support `attrs->>'brand' = 'Lenovo'`. Write filters as containment: `attrs @> '{"brand":"Lenovo"}'`. Range filters (`ram_gb >= 16`) need a B-tree expression index, and the query must use the identical expression.
-- **The statistics blind spot.** For `attrs @> '{"color":"red"}'` the planner uses a fixed default selectivity, whether red matches 1 row or 900,000. That can choose a nested loop over 900,000 rows. An expression index on `(attrs->>'color')` makes `ANALYZE` collect statistics on that expression, and PostgreSQL 14+ can also do it with `CREATE STATISTICS` on expressions without an index. Then filter with the same expression.
+- **The statistics blind spot.** For `attrs @> '{"color":"red"}'` the planner has no per-key statistics, so it falls back to a generic estimate whether red matches 1 row or 900,000. That can choose a nested loop over 900,000 rows. An expression index on `(attrs->>'color')` makes `ANALYZE` collect statistics on that expression, and PostgreSQL 14+ can also do it with `CREATE STATISTICS` on expressions without an index. Then filter with the same expression.
 - **Validation design.** A trigger that looks up the category's definitions and checks each key with `jsonb_typeof` and the allowed values is honest about reading another table. A `CHECK` that calls a function reading another table "works" but is not re-validated when definitions change, and `pg_dump` may restore rows before definitions.
 - **When to promote a key to a column.** If a key is present in most rows, filtered often, or needs a foreign key, it should be a real column. Write down your rule and apply it to your 20 categories.
 
@@ -2759,7 +2759,7 @@ Validation tests per data type and rule. Query-correctness tests that compare `j
 
 **Q:** Why can `jsonb` queries get bad plans?
 
-**A:** PostgreSQL keeps no statistics on values inside `jsonb`, so it guesses selectivity. Expression indexes or expression statistics give it real numbers.
+**A:** PostgreSQL keeps no per-key statistics on values inside `jsonb`, so it guesses selectivity. Expression indexes or expression statistics give it real numbers.
 
 ### TL;DR
 Use real columns for common fields and `jsonb` for the long tail, validate against definitions, write filters as containment for GIN, add expression indexes for ranges and statistics, and know when to promote a key to a column.
@@ -3793,7 +3793,7 @@ A metrics store for infrastructure monitoring: thousands of hosts report CPU, me
 Time-series data grows without end and is mostly appended, queried by recent time ranges and deleted by age. In one big table, `DELETE` of old rows creates huge amounts of dead tuples and WAL, indexes outgrow memory, and every query scans more than it needs. Partitioning by time turns retention into dropping a whole partition (instant), keeps each partition's indexes small, and lets the planner skip partitions outside the queried range (**partition pruning**).
 
 ### Real-world examples
-- GitLab's [database partitioning guide](https://docs.gitlab.com/development/database/partitioning/) documents the strategies GitLab uses on its PostgreSQL database (date range, integer range, hash, list and sliding list) and warns that converting an existing large table is a multi-step process across several releases.
+- GitLab's [database partitioning guide](https://docs.gitlab.com/development/database/partitioning/) documents the strategies GitLab uses on its PostgreSQL database (date range, integer range, hash and list) and warns that converting an existing large table is a multi-step process across several releases.
 - [pg_partman](https://github.com/pgpartman/pg_partman) is an extension that creates future partitions and drops expired ones on a schedule, which is the job you will first do by hand.
 - [TimescaleDB hypertables](https://docs.timescale.com/use-timescale/latest/hypertables/) automate time partitioning (chunks) inside PostgreSQL and add compression and continuous aggregates. Compare it with your hand-built version as a stretch goal.
 
@@ -5109,7 +5109,7 @@ Route reads to replicas only when they have replayed the user's last write LSN, 
 A complete, tested backup system for a PostgreSQL database: nightly base backups, continuous WAL archiving, **point-in-time recovery** (PITR, restoring the database to any moment, such as one second before someone ran `DELETE` without a `WHERE`), backup verification, and a scripted disaster-recovery drill that restores to a fresh server and measures how long it took and how much data was lost. You do it with the built-in tools first, then with pgBackRest.
 
 ### The problem it solves
-Backups that are never restored are hopes, not backups. The two numbers that matter are **RPO** (recovery point objective, how much data you can lose) and **RTO** (recovery time objective, how long you can be down). `pg_dump` alone gives an RPO of a day and a slow restore. Continuous archiving gives an RPO of seconds and lets you pick the exact moment before a mistake. A regular drill proves both numbers.
+Until you have restored a backup, you do not know that it works. The two numbers that matter are **RPO** (recovery point objective, how much data you can lose) and **RTO** (recovery time objective, how long you can be down). `pg_dump` alone gives an RPO of a day and a slow restore. Continuous archiving gives an RPO of seconds and lets you pick the exact moment before a mistake. A regular drill proves both numbers.
 
 ### Real-world examples
 - GitLab's [postmortem of the 31 January 2017 database outage](https://about.gitlab.com/blog/2017/02/10/postmortem-of-database-outage-of-january-31/) describes about 300 GB deleted from the primary by mistake, `pg_dump` backups that had silently failed because of a 9.2 client against a 9.6 server, failure emails that were never delivered, and recovery from a 6-hour-old snapshot. It is the best argument for automated restore testing.
