@@ -9,8 +9,8 @@
   <version>0.0.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <modules>
-    <module>modules/greeting-spring-boot</module>          <!-- auto-configuration code -->
-    <module>modules/greeting-spring-boot-starter</module>  <!-- empty jar: just dependencies -->
-    <module>modules/greeting-demo-app</module>             <!-- an app that uses the starter -->
+    <module>modules/autoconfig</module>  <!-- auto-configuration code -->
+    <module>modules/starter</module>     <!-- empty jar: just dependencies -->
+    <module>modules/demo</module>        <!-- an app that uses the starter -->
   </modules>
 </project>

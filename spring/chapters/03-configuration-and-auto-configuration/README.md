@@ -15,7 +15,7 @@ A real application runs in many places — your laptop, CI, staging, production 
 9. Writing a custom starter and testing it with `ApplicationContextRunner` (§3.13).
 10. Boot 4's modularization and what it means for you (§3.14).
 
-Runnable code: [`code/config-demo/`](code/config-demo/) (a non-web Boot app started in tests with different arguments, fake environment variables and profiles) and [`code/greeting-starter/`](code/greeting-starter/) (a three-module build: auto-configuration module, starter, and an app using it). Built with `mvn -q -B -ntp verify` on Spring Boot 4.1.1 / JDK 25; all outputs are real.
+Runnable code: [`code/config-demo/`](code/config-demo/) (a non-web Boot app started in tests with different arguments, fake environment variables and profiles) and [`code/greeter/`](code/greeter/) (a three-module build: auto-configuration module, starter, and an app using it). Built with `mvn -q -B -ntp verify` on Spring Boot 4.1.1 / JDK 25; all outputs are real.
 
 Background you may want first: the container, `@Conditional` and profiles in [Chapter 2](../02-ioc-and-dependency-injection/README.md) (§2.11). The architecture idea behind this chapter — keep config out of the artifact — is the *externalized configuration* pattern in the [microservices notes](../../../microservices-patterns/chapters/13-config-externalization/README.md).
 
@@ -715,16 +715,16 @@ The Boot 4.1 reference recommends two modules (merge them into one `acme-spring-
 Our example wires a tiny `GreetingService` library:
 
 ```
-greeting-starter/
-├── pom.xml                                   ← aggregator: builds the modules together
+greeter/
+├── pom.xml                         ← aggregator: builds the modules together
 └── modules/
-    ├── greeting-spring-boot/                 ← auto-configure module
+    ├── autoconfig/                 ← auto-configure module (artifactId greeting-spring-boot)
     │   ├── src/main/java/com/example/greeting/core/GreetingService.java
     │   ├── src/main/java/com/example/greeting/autoconfigure/GreetingProperties.java
     │   ├── src/main/java/com/example/greeting/autoconfigure/GreetingAutoConfiguration.java
     │   └── src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
-    ├── greeting-spring-boot-starter/pom.xml  ← dependencies only
-    └── greeting-demo-app/                    ← an application that uses the starter
+    ├── starter/pom.xml             ← dependencies only (artifactId greeting-spring-boot-starter)
+    └── demo/                       ← an application that uses the starter
 ```
 (In real life `GreetingService` would be a separate library jar; it's in the same module here to keep the demo small.)
 
@@ -833,7 +833,7 @@ All five behaviours are proved: default bean, property binding, the on/off switc
 The demo app has one dependency on `greeting-spring-boot-starter`, one property, and **no** `@Bean` or `@Import` for `GreetingService`:
 
 ```properties
-# greeting-demo-app/src/main/resources/application.properties
+# modules/demo/src/main/resources/application.properties
 greeting.template=Good morning, %s!
 ```
 ```java
