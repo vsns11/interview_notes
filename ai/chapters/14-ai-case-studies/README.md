@@ -7,11 +7,11 @@
 1. How to **pace** a 45-minute case: the clock, exit sentences, interviewer moves and a self-grading rubric.
 2. **Legal research assistant** — retrieval-augmented generation (RAG) where a wrong citation is catastrophic.
 3. **AI meeting assistant** — three latency regimes in one product, with privacy as architecture.
-4. **Text-to-image at scale** — GPU-fleet economics: queues, utilisation, tiers, envelope math done live.
-5. **Autonomous coding agent** — a bounded loop made safe by tests, a sandbox and pull-request review.
+4. **Text-to-image at scale** — GPU-fleet (GPU = graphics processor that runs the models) economics: queues, **utilisation** (the share of time the GPUs are actually busy), tiers, envelope math done live.
+5. **Autonomous coding agent** — a bounded loop made safe by tests, a **sandbox** (an isolated environment where code can't harm anything) and **pull-request** review (a proposed code change that a person reviews before it is merged).
 6. **Critiquing a design** — findings in severity order, each with a consequence and a fix, delivered as a plan.
 7. A **comparison table** across all five cases.
-8. **Part II — model-centric cases**, where the model choice is the design: **email sentence completion** (a tiny LM under a keystroke budget), **machine translation** (one multilingual model for 100+ languages), **image captioning** (grounded alt text), **face generation with GANs**, **high-resolution image synthesis** (latents and cascades), **personalised headshots** (per-user LoRA fine-tuning with consent) and **text-to-video** (spacetime latents and multi-GPU jobs), with a second comparison table.
+8. **Part II — model-centric cases**, where the model choice is the design: **email sentence completion** (a tiny LM — language model — under a keystroke budget), **machine translation** (one multilingual model for 100+ languages), **image captioning** (grounded **alt text** — the image description a screen reader reads aloud), **face generation with GANs**, **high-resolution image synthesis** (latents — compressed internal representations — and cascades), **personalised headshots** (per-user LoRA fine-tuning — cheaply training small add-on weight matrices — with consent) and **text-to-video** (spacetime latents and multi-GPU jobs), with a second comparison table.
 
 Every case uses the same template: *requirements → approach (data and model) → architecture → evaluation → scaling and cost → safety → failure modes → follow-ups (Q→A)*, then *what separates levels and variations*, a **runnable toy** and a TL;DR. The classic-ML cases from the same interview family — music discovery, harmful content at platform scale, visual search — are in the ML Handbook, [Chapter 17](../../../ml/chapters/17-ml-case-studies-1/README.md) and [Chapter 18](../../../ml/chapters/18-ml-case-studies-2/README.md).
 
@@ -43,7 +43,7 @@ Each phase ends with an **exit sentence** said aloud, even if more could be said
 | Minutes | Framework steps | Phase | Say this, then move on |
 |---|---|---|---|
 | 0–8 | 1–2 | Frame and define success | "This is [known system]; target [metric = value], latency [X], scale [Y], cost [Z]; [W] out of scope. OK?" |
-| 8–13 | 3 | Data and labels | "Ground truth is [source], lagging by [delay]; freshness [tier]." |
+| 8–13 | 3 | Data and labels | "Ground truth (the real correct answer) is [source], lagging by [delay]; freshness [tier]." |
 | 13–18 | 4 | Model | "Start with [simple thing]; move to [next] only if [evidence]." |
 | 18–30 | 5 | Architecture | Done when every arrow carries three labels: how long, how much, what happens if it breaks |
 | 30–38 | 6 | Loop and evaluation | "Nothing ships unless [offline metric] holds; [online metric] picks the winner." |
@@ -64,7 +64,7 @@ Each phase ends with an **exit sentence** said aloud, even if more could be said
 |---|---|---|
 | **Redirect** | "Skip ahead to the architecture." | Comply at once, but carry your numbers: "Then I'll assume quality bar X and budget Y." |
 | **Stress test** | "10× the traffic", "the provider is down" | Failure/cost questions arriving early: give the **fallback sequence** (ordered backup behaviours), then the alarm that detects it |
-| **Depth probe** | "Explain the reranker in detail." | Go two levels deep — mechanism, then trade-off ("a **cross-encoder** reads query and passage together: accurate, but too slow beyond a shortlist") — then *offer* a third |
+| **Depth probe** | "Explain the reranker (a second, more careful ranking pass) in detail." | Go two levels deep — mechanism, then trade-off ("a **cross-encoder** reads query and passage together: accurate, but too slow beyond a shortlist") — then *offer* a third |
 | **Disagreement** | "I'd have fine-tuned there." | Name the deciding variable: "Changing private facts → retrieval; a stable format or behaviour gap → prompting, then fine-tuning" |
 | **Silence** | — | Probably note-taking: continue with the plan, or ask whether more detail would help |
 
@@ -80,7 +80,7 @@ A practice rubric — real rubrics vary by company and role.
 | Dimension | Pass | Strong hire |
 |---|---|---|
 | Problem navigation | Scopes; needs occasional nudges | Owns the timing, closes each phase aloud, parks tangents |
-| Data and metrics | Names plausible metrics when asked | Volunteers targets, label delays, freshness; says where a proxy misleads |
+| Data and metrics | Names plausible metrics when asked | Volunteers targets, label delays, freshness; says where a proxy (a measurable stand-in for the real goal) misleads |
 | Architecture and trade-offs | Sound diagram of the right shape | Every connection has a budget and failure plan; rejected options named with what would flip them |
 | Production maturity | Mentions monitoring once prompted | Volunteers the loop, release gates, fallbacks, failure and cost lists |
 | Communication | Clear structure | Plan up front, timeboxes aloud, ends on loop, risks and price |
@@ -98,17 +98,17 @@ A dimension stuck at "pass" for two practice runs is your study list; record you
 
 ## 14.2 Case: legal research assistant
 
-> **The question (paraphrased).** A legal-software vendor wants an AI research tool for law firms: answers drawn from court decisions, statutes and the firm's private files, with trustworthy citations — one made-up citation in a court filing can cost the vendor the client and the lawyer their reputation. About 50,000 lawyers will use it.
+> **The question (paraphrased).** A legal-software vendor wants an AI research tool for law firms: answers drawn from court decisions, **statutes** (written laws passed by a legislature) and the firm's private files, with trustworthy citations — one made-up citation in a court filing can cost the vendor the client and the lawyer their reputation. About 50,000 lawyers will use it.
 
 ### Requirements (minutes 0–8)
 **Recognition.** "This is enterprise RAG ([Chapter 7](../07-embeddings-vector-databases-and-rag/README.md)) with the strictest confidentiality and verification needs I can imagine. Claims get grounding checks *before* release; when evidence is thin, the product returns research pointers or declines. None of this replaces the attorney's own review."
 
 **Success metrics — stakes first.**
 - *Primary (positive):* **attorney-verified usefulness** — share of answers reliable enough to build on.
-- *Binding (negative) metrics — these decide the launch:* **fabricated-citation rate** (bar: *none found* in the eval sample — report the sample size and an upper confidence bound, since none found ≠ none possible); **unsupported-claim rate**, per claim against retrieved text; **refusal correctness in both directions** (refusing answerable questions is also a failure).
+- *Binding (negative) metrics — these decide the launch:* **fabricated-citation rate** (bar: *none found* in the eval sample — report the sample size and an upper confidence bound, since none found ≠ none possible — the **upper confidence bound** is the highest true rate still consistent with what you saw); **unsupported-claim rate**, per claim against retrieved text; **refusal correctness in both directions** (refusing answerable questions is also a failure).
 - *Latency is the relaxable constraint* — allow up to ~30 s for a verified synthesis (validate with users) and spend it on verification deliberately. *Cost* is argued per query against billable lawyer time saved.
 
-**Scope.** Research assistance only — no drafting filings, no "legal advice" framing; English, US law for v1. Firm documents are strictly confidential: **tenant isolation at law-firm grade**, including **ethical walls** (barriers inside one firm that stop a team seeing another matter's files, to avoid conflicts of interest).
+**Scope.** Research assistance only — no drafting filings, no "legal advice" framing; English, US law for v1. Firm documents are strictly confidential: **tenant isolation at law-firm grade** (each customer firm's data kept fully separate), including **ethical walls** (barriers inside one firm that stop a team seeing another matter's files, to avoid conflicts of interest).
 
 ![The primary metric is positive; the binding metrics are negative (course diagram)](img/legal-metrics.svg)
 *Figure — The primary metric is positive; the binding metrics are negative (course diagram)*
@@ -116,15 +116,15 @@ A dimension stuck at "pass" for two practice runs is your study list; record you
 ### Approach: data and model (minutes 8–18)
 **Legal text is highly structured, and plain RAG throws that structure away** — exploiting it is where this case gets deep.
 - Case law is a **citation graph**: each decision is a node, each citation an edge to an earlier authority; later cases can affirm, distinguish or overrule earlier ones.
-- Law has a **validity dimension**: each chunk carries jurisdiction, court, decision date and **treatment status** (good law, amended, superseded, overruled — how later rulings handled it). Treatment can apply to part of a case, and other jurisdictions can still be persuasive, so metadata *flags*; it doesn't decide.
+- Law has a **validity dimension**: each **chunk** (a retrieval-sized piece of a document) carries **jurisdiction** (the region whose law applies), court, decision date and **treatment status** (good law, amended, superseded, overruled — how later rulings handled it). Treatment can apply to part of a case, and other jurisdictions can still be persuasive, so **metadata** (descriptive tags stored with each chunk) *flags*; it doesn't decide.
 - **Chunk along the law's own structure**: judgments by section, statutes by clause, each tagged with its citation.
 
 ![Citation relationships and treatment metadata support legal review (course diagram)](img/legal-citation-graph.svg)
 *Figure — Citation relationships and treatment metadata support legal review (course diagram)*
 
-**Retrieval.** Questions mix exact identifiers (statute numbers, party names → **BM25** keyword ranking) with fuzzy concepts (→ embeddings), so run **hybrid retrieval**, fuse, then **rerank hard** with a cross-encoder — the latency budget pays for top precision ([§7.7](../07-embeddings-vector-databases-and-rag/README.md)). Extract jurisdictions from the question (ask when ambiguous) and filter by them, keeping relevant cross-jurisdiction authority visible.
+**Retrieval.** Questions mix exact identifiers (statute numbers, party names → **BM25** keyword ranking) with fuzzy concepts (→ **embeddings**, vectors that capture meaning), so run **hybrid retrieval** (keyword and meaning-based search together), fuse, then **rerank hard** with a cross-encoder — the latency budget pays for top precision ([§7.7](../07-embeddings-vector-databases-and-rag/README.md)). Extract jurisdictions from the question (ask when ambiguous) and filter by them, keeping relevant cross-jurisdiction authority visible.
 
-**Model posture.** Choose the generator on domain evals; low temperature reduces variation but doesn't make answers true. Sources do the knowing, the model does the synthesis. Fine-tuning may help format but **cannot replace retrieval of current authority** — weights can't be checked for whether a case is still good law (the check lawyers call "Shepardizing").
+**Model posture.** Choose the generator on domain evals; low **temperature** (the setting that controls how random the output is) reduces variation but doesn't make answers true. Sources do the knowing, the model does the synthesis. Fine-tuning may help format but **cannot replace retrieval of current authority** — **weights** (the model's learned numbers) can't be checked for whether a case is still good law (the check lawyers call "Shepardizing").
 
 ### Architecture (minutes 18–30)
 
@@ -157,14 +157,14 @@ flowchart LR
 - Lawyer feedback is slow and partial — also pay for independent expert audits, and keep firm-confidential content out of shared datasets.
 - **Every citation a user flags becomes a permanent regression test.**
 - **Component evals**: the reranker is scored on attorney-labelled relevance with **NDCG** (a ranking metric that rewards the best passages at the very top) and gated like any model change.
-- New decisions and treatment changes arrive under **freshness SLOs in hours** — citing a ruling overturned days ago is exactly what a judge notices.
+- New decisions and treatment changes arrive under **freshness SLOs in hours** (SLO = service level objective, a promised target) — citing a ruling overturned days ago is exactly what a judge notices.
 
 ### Scaling and cost
-- 50,000 attorneys × (say) 10 queries/day = 500,000 queries/day ≈ 6/s average — modest QPS; the cost is per-query depth (retrieval + rerank + generation + verification).
-- Treat ~$3/query as an illustrative budget and itemise it. Licence fees for case law and treatment data may be the biggest line — and the moat competitors can't easily copy.
+- 50,000 attorneys × (say) 10 queries/day = 500,000 queries/day ≈ 6/s average — modest **QPS** (queries per second); the cost is per-query depth (retrieval + rerank + generation + verification).
+- Treat ~$3/query as an illustrative budget and itemise it. Licence fees for case law and treatment data may be the biggest line — and the **moat** (an advantage competitors can't easily copy).
 
 ### Safety and privacy
-- Isolation at **three layers**: retrieval (per-tenant filters and ethical walls), training (firm documents never train a model other firms use), caches (per tenant); plus contractual **zero-retention inference** (verify terms per endpoint).
+- Isolation at **three layers**: retrieval (per-tenant filters and ethical walls), training (firm documents never train a model other firms use), caches (per tenant); plus contractual **zero-retention inference** (the provider keeps no copy of prompts or outputs; verify terms per endpoint).
 - Retrieved text is untrusted for instructions ([§12.4](../12-safety-ethics-governance/README.md)).
 
 ### Failure modes
@@ -179,7 +179,7 @@ flowchart LR
 - **Q: "A lawyer still finds an invented citation."** A: Ask first: *was the citation in the retrieved context?* — that separates "the generator invented it" from "the verifier missed it". The existence check is **deterministic**, so a miss means a bypass, bad source mapping, stale metadata or a verifier bug. Fix it, add the case to the regression suite, notify affected users.
 - **Q: "Why not fine-tune on all the case law instead?"** A: Knowledge vs behaviour — and law changes; a retrieval layer can carry treatment status, frozen weights can't be checked ([§8.1](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)).
 - **Q: "A partner wants 5 seconds, not 30."** A: Change the *artefact*, not the checks: a fast mode returns checked research pointers and quotes; the verified synthesis follows asynchronously. Sell speed as a tier; never buy it by weakening verification.
-- **Q: "A firm demands on-prem."** A: Licensed feeds (redistribution rights), the shared eval loop (per-tenant evals) and operations (versioned index and model artefacts) break; the architecture survives, the learning loop fragments.
+- **Q: "A firm demands on-prem."** (On-prem = installed in the customer's own data centre.) A: Licensed feeds (redistribution rights), the shared eval loop (per-tenant evals) and operations (versioned index and model artefacts) break; the architecture survives, the learning loop fragments.
 - **Q: "California law, Delaware company."** A: Extract both jurisdictions, retrieve per jurisdiction, answer comparatively with per-claim citations, surface conflicts.
 
 ### What separates levels, and variations
@@ -243,7 +243,7 @@ Enterprise RAG with maximum stakes: negative metrics bind the launch, latency is
 > **The question (paraphrased).** Build a meeting assistant for businesses: it sits in video calls, produces a transcript, writes a recap with to-dos, and afterwards answers questions over the whole history of a team's meetings. Scale: 100,000 customer companies and about 5 million meetings per week.
 
 ### Requirements (minutes 0–8)
-**Recognition.** "Three subsystems with three latency regimes and one shared data path: a **real-time lane** (speech-to-text while people talk), an **async generation pipeline** (recaps and to-dos after the call — the job-queue pattern), and **RAG over the meeting archive**." That hands the interviewer a map with three regions to choose from.
+**Recognition.** "Three subsystems with three latency regimes and one shared data path: a **real-time lane** (speech-to-text while people talk), an **async generation pipeline** (recaps and to-dos after the call — the job-queue pattern, where work waits in a queue for background workers; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), and **RAG over the meeting archive**." That hands the interviewer a map with three regions to choose from.
 
 ![Three latency regimes, one shared data path (course diagram)](img/meeting-three-regimes.svg)
 *Figure — Three latency regimes, one shared data path (course diagram)*
@@ -253,7 +253,7 @@ Enterprise RAG with maximum stakes: negative metrics bind the launch, latency is
 |---|---|
 | Live transcription | **Word error rate (WER)** = (substitutions + deletions + insertions) ÷ words in the reference transcript — can exceed 100%; plus **speaker-attribution accuracy** |
 | Summaries and action items | Model-assisted and human review; **edit rate** (useful but noisy). Wrong-owner action items are the most visible failure |
-| Archive Q&A | Retrieval recall and **faithfulness** (answers supported by transcripts) |
+| Archive Q&A | Retrieval **recall** (share of relevant items found) and **faithfulness** (answers supported by transcripts) |
 
 **Privacy is a first-class requirement** — it shapes the design, not an appendix. **Scope:** post-call output and archive search; live translation and coaching are named and parked. **Consent** (recording notices, per-jurisdiction recording laws) is a hard product gate.
 
@@ -306,14 +306,14 @@ Price speech-to-text, storage, generation and retrieval separately; **speech-to-
 
 ### Safety and privacy
 - ACLs bound search, delivery *and* synthesis — and the answer says so: "committed in meetings **you have access to**".
-- **Deletion = tombstone and propagate**: mark the meeting dead everywhere reads check, then purge every downstream copy — transcripts, indexes, caches, summaries, action items (derived data is the classic miss). A **legal hold** means preserve, not delete.
+- **Deletion = tombstone and propagate**: a **tombstone** is a "deleted" marker that every reader checks — mark the meeting dead everywhere reads check, then purge every downstream copy — transcripts, indexes, caches, summaries, action items (derived data is the classic miss). A **legal hold** (an order to keep data that may be evidence) means preserve, not delete.
 - Re-check recipients at delivery time; prefer access-controlled links — an emailed copy can't be revoked.
 
 ### Failure modes
 | Failure | Response |
 |---|---|
-| ASR struggles with accents or crosstalk | Confidence-scored transcripts; low-confidence spans marked in summaries, not guessed |
-| Pipeline backlog | Status and a revised ETA; queue-depth alarms |
+| ASR struggles with accents or crosstalk (people talking over each other) | Confidence-scored transcripts; low-confidence spans marked in summaries, not guessed |
+| Pipeline backlog | Status and a revised ETA (estimated time of arrival); queue-depth alarms |
 | Deletion request / 90-day retention | Tombstone-and-propagate as a monitored pipeline with its own SLO; holds pinned per meeting |
 | Permission change after delivery | Access-controlled links; delivery-time checks |
 
@@ -394,14 +394,14 @@ One data path, three speeds: streaming speech-to-text, a queued recap *workflow*
 2. **Wait time by tier** — the promise the queue makes.
 3. **Safety incident rate** — a generated image can be shared instantly.
 
-**Latency, in one careful sentence.** Of the several clocks (acceptance, queue wait, generation, completion) you commit to a *wait-time distribution per tier* — paid users within seconds at p90, free users about a minute — and display it. **Scope:** new images and variations; editing, inpainting and video are out (their costs behave differently).
+**Latency, in one careful sentence.** Of the several clocks (acceptance, queue wait, generation, completion) you commit to a *wait-time distribution per tier* — paid users within seconds at **p90** (the time 90% of jobs beat), free users about a minute — and display it. **Scope:** new images and variations; editing, **inpainting** (repainting part of an existing image) and video are out (their costs behave differently).
 
 ### Approach: data and model (minutes 8–18)
 - **Input is one line of text** — too little for a good image. An optional **prompt enhancer** adds detail while preserving intent; moderate the enhanced text too.
 - **Output is a rich job record**: prompt, enhanced prompt, model version, **seed** (sets the random starting noise), settings, software versions, both safety-gate scores. (A seed alone doesn't guarantee identical reproduction.)
 - **The four-image grid is a preference signal** — which image is picked, upscaled or regenerated. Noisy (position matters), but with permission it drives the loop.
 - **Model, at name level.** A text encoder guides a **diffusion model** that starts from noise and cleans it over N **denoising steps**, so cost ≈ steps × resolution ([§10.5](../10-generative-models-beyond-text/README.md)).
-- **A portfolio, not a model**: a flagship model (paid quality), a fast low-step model (previews, free tier), an **upscaler** (only on picked images) and the enhancer. Model and settings are chosen **when the job is queued**, by plan — steps and resolution belong to the job, which is the basis of pricing.
+- **A portfolio, not a model**: a flagship model (paid quality), a fast low-step model (previews, free tier), an **upscaler** (a model that enlarges an image while adding detail; only on picked images) and the enhancer. Model and settings are chosen **when the job is queued**, by plan — steps and resolution belong to the job, which is the basis of pricing.
 
 ### Architecture (minutes 18–30)
 **Do the math before defending any box** (all rates illustrative):
@@ -434,19 +434,19 @@ flowchart LR
     C <-. "progress via WebSocket or polling" .-> API
 ```
 
-- **The queues are the business model.** Paid users jump ahead onto reserved GPUs; free users absorb backlog by waiting; a **batch** option sells night-time idle capacity at a discount. The same queues define **what each plan buys**, tell the **autoscaler** when to grow and drive the **wait estimate** users see.
+- **The queues are the business model.** Paid users jump ahead onto reserved GPUs; free users absorb backlog by waiting; a **batch** option sells night-time idle capacity at a discount. The same queues define **what each plan buys**, tell the **autoscaler** (the service that adds or removes machines with load) when to grow and drive the **wait estimate** users see.
 
 ![One queue doing three jobs at once (course diagram)](img/t2i-queue-three-jobs.svg)
 *Figure — One queue doing three jobs at once (course diagram)*
 
-- **The scheduler is where utilisation happens.** Loading a model takes tens of seconds, so long-lived workers keep weights on the GPU and the scheduler batches jobs with the same model and resolution. Scale on **queue-depth trends** plus measured start-up time, with a **warm pool** — cold GPUs arrive minutes late.
+- **The scheduler is where utilisation happens.** Loading a model takes tens of seconds, so long-lived workers keep weights on the GPU and the scheduler batches jobs with the same model and resolution. Scale on **queue-depth trends** plus measured start-up time, with a **warm pool** (machines kept running and ready) — cold GPUs arrive minutes late.
 - **Utilisation is the business metric**: an idle GPU-second costs exactly what a busy one does.
-- **Two safety gates, in order**: the prompt gate *before* generation (no GPU spent on blocked jobs); the image gate on the finished image *before* any user or CDN access. Both **fail closed**.
-- **Progress events keep the wait honest** (queued → generating → done over WebSocket or polling).
-- **Dead-letter queue (DLQ)**: a job that crashes a worker retries on a fresh one under the same **idempotency key** (so it is published and billed once); a second crash parks it and pages an engineer. One bad prompt never consumes the fleet.
+- **Two safety gates, in order**: the prompt gate *before* generation (no GPU spent on blocked jobs); the image gate on the finished image *before* any user or **CDN** (content delivery network: servers worldwide that cache files near users) access. Both **fail closed**.
+- **Progress events keep the wait honest** (queued → generating → done over **WebSocket** — an always-open two-way connection — or **polling**, the client asking repeatedly).
+- **Dead-letter queue (DLQ)**: a job that crashes a worker retries on a fresh one under the same **idempotency key** (a unique request ID that makes repeats harmless — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), so it is published and billed once; a second crash parks it and **pages** (alerts) an on-duty engineer. One bad prompt never consumes the fleet.
 
 ### Evaluation and the loop (minutes 30–38)
-- Per model version, track how often images are **chosen, upscaled or re-rolled** (tunes the enhancer, settles A/B tests); **human raters** calibrate what "looks good" means ([§10.9](../10-generative-models-beyond-text/README.md)).
+- Per model version, track how often images are **chosen, upscaled or re-rolled** (tunes the enhancer, settles **A/B tests** — comparing two versions on randomly split users); **human raters** calibrate what "looks good" means ([§10.9](../10-generative-models-beyond-text/README.md)).
 - Every gate miss and **red-team** find (people attacking your own system on purpose) joins both gates' eval sets; thresholds are scored on missed violations *and* wrongful blocks.
 - The business dashboard: queue depth per tier, utilisation, **promised vs actual wait**.
 
@@ -467,7 +467,7 @@ Cost controls have different effects — choose by the user promise:
 Other lines: storage, networking, moderation, operations.
 
 ### Safety
-Prompt gate (classifiers, adversarial-phrasing detection), image gate (NSFW, violence, real-person likeness, minors), **provenance** (watermarks and C2PA content credentials — establish origin, not safety, and can be stripped). Copyright and likeness rules vary by jurisdiction: legal review ([§12.10](../12-safety-ethics-governance/README.md)).
+Prompt gate (classifiers, adversarial-phrasing detection), image gate (NSFW — "not safe for work": sexual or graphic content — violence, real-person likeness, minors), **provenance** (watermarks and C2PA content credentials — establish origin, not safety, and can be stripped). Copyright and likeness rules vary by jurisdiction: legal review ([§12.10](../12-safety-ethics-governance/README.md)).
 
 ### Failure modes
 | Failure | Response |
@@ -480,16 +480,16 @@ Prompt gate (classifiers, adversarial-phrasing detection), image gate (NSFW, vio
 ### Follow-ups (Q→A)
 - **Q: "Free users make 80% of images and pay nothing. Cut the cost."** A: Math first: 1.6M free images/day × 10 GPU-s ≈ 185 busy GPUs. Halving free-tier steps (if GPU time really halves) saves ~93 GPUs ≈ **$8,900/day** at $4/h — validate the quality hit. Then shift free work to quiet night hours, then add a daily free quota — each priced.
 - **Q: "A new model is twice as good but needs 3× the GPU time."** A: Not fleet-wide: 231 → **694** busy GPUs ≈ **$66,700/day** before headroom. Launch it as a paid tier, and test "twice as good" with pick/upscale rates on matched prompts plus human panels.
-- **Q: "Celebrity likenesses appear though prompts name no one."** A: A text filter can't block a name nobody typed — this is the image gate's job: better likeness detection, red-team patterns, hashes of known outputs, and an explicit policy decision.
+- **Q: "Celebrity likenesses appear though prompts name no one."** A: A text filter can't block a name nobody typed — this is the image gate's job: better likeness detection, red-team patterns, **hashes** (compact fingerprints) of known outputs, and an explicit policy decision.
 - **Q: "How do you set the free-tier wait promise?"** A: Take peak demand, serve paid first, compute the p90 wait the leftover capacity can honour, promise it with margin. A kept 90 s beats a broken 30 s.
-- **Q: "Storage is creeping toward the GPU bill."** A: 2M images/day = 500,000 requests × 4, and most grid images are never picked: keep chosen images hot, move them cold after ~30 days, delete unpicked ones after a retention window.
+- **Q: "Storage is creeping toward the GPU bill."** A: 2M images/day = 500,000 requests × 4, and most grid images are never picked: keep chosen images **hot** (fast, pricier storage), move them **cold** (cheap, slower storage) after ~30 days, delete unpicked ones after a retention window.
 
 
 ### What separates levels, and variations
 Mid-level draws the correct pipeline and gives cost as one total at the end; senior states and checks 23.1/s and 231 busy GPUs, sizes peaks separately and states wait promises per tier; staff treats the fleet bill as the product's margin — tiers, quality settings, batch capacity and caps are one system for selling a fleet three ways — and sequences reserved-capacity contracts until demand is steady. **Variations:** *AI music generation* (same jobs and gates; singer-voice imitation becomes the likeness risk) and *erase-and-refill photo editing* (interactive, so a few-second promise, small masked jobs, and the uploaded photo is scanned too).
 
 ### Toy: capacity math and a fleet simulation (`code/t2i_fleet_sim.py`)
-Three simulated hours in 1-second steps: Poisson arrivals averaging 23 images/s with a 30-minute ×2.2 spike, 20% paid jobs served first, 10 GPU-s per image, an autoscaler that sees only the *previous* minute and whose GPUs take 3 minutes to boot, plus a poison job.
+Three simulated hours in 1-second steps: **Poisson** arrivals (random arrivals at a steady average rate) averaging 23 images/s with a 30-minute ×2.2 spike, 20% paid jobs served first, 10 GPU-s per image, an autoscaler that sees only the *previous* minute and whose GPUs take 3 minutes to boot, plus a poison job.
 
 ```python
 while free_gpus > 0 and (paid_q or free_q):
@@ -540,14 +540,14 @@ Async jobs because generation is slow; do the envelope math first (23.1/s → 23
 - *Primary:* **PR merge rate** — merged without major rework, per task class (acceptance rate at task size); plus **time to merge** vs humans on similar tickets.
 - **Reviewer burden** — review minutes per agent PR; plausible-but-wrong code costs senior engineers' time.
 - **All-in cost per merged PR** — failed runs, compute and review included (measure it; don't assume "a few dollars").
-- *Guardrails:* CI-break rate and the **share reverted after merging** — a delayed label, like chargebacks in fraud.
+- *Guardrails:* **CI** (continuous integration: the automatic build-and-test run on every change) break rate and the **share reverted after merging** — a delayed label, like **chargebacks** (card payments reversed weeks later) in fraud.
 
-**Scope.** Clearly written tickets only — bugs, small features, tests, refactors; no architecture changes. **The agent proposes; humans merge** — a deliberately low rung of the autonomy ladder ([§9.10](../09-ai-agents/README.md)). Auto-merge is a distant, evidence-gated step (perhaps dependency bumps with passing tests).
+**Scope.** Clearly written tickets only — bugs, small features, tests, **refactors** (restructuring code without changing its behaviour); no architecture changes. **The agent proposes; humans merge** — a deliberately low rung of the autonomy ladder ([§9.10](../09-ai-agents/README.md)). Auto-merge is a distant, evidence-gated step (perhaps **dependency bumps** — upgrading a library version — with passing tests).
 
 ### Approach: the environment is the architecture (minutes 8–18)
-- **One isolated, disposable environment per task** (repo checkout, dependencies, test runner). Harden containers or use stronger isolation (Firecracker micro-VMs, gVisor) according to the threat model.
-- **No production credentials, no deploy access, allowlisted network egress** (**egress** = outbound traffic), ideally via internal package mirrors — even an approved package source can deliver malware. **Least privilege as infrastructure**, not as instructions to the model.
-- **A few job-shaped tools**: search and read code, edit files, run tests and linters, a sandbox-confined shell, request a PR. Deliberately absent: database tools, cloud consoles.
+- **One isolated, disposable environment per task** (repo checkout, **dependencies** — the libraries the code needs — test runner). Harden **containers** (lightweight isolated environments) or use stronger isolation (Firecracker **micro-VMs**, tiny virtual machines; gVisor) according to the **threat model** (who might attack, how, and what they want).
+- **No production credentials, no deploy access, allowlisted network egress** (**egress** = outbound traffic), ideally via internal **package mirrors** (internal copies of public library repositories) — even an approved package source can deliver malware. **Least privilege as infrastructure**, not as instructions to the model.
+- **A few job-shaped tools**: search and read code, edit files, run tests and **linters** (tools that flag style problems and likely bugs), a sandbox-confined **shell** (command line), request a PR. Deliberately absent: database tools, cloud consoles.
 - **PR creation lives in a separate service** with narrowly scoped credentials; the sandbox never holds merge, deploy or broad repo tokens.
 
 ![What is inside the sandbox, and what is deliberately not (course diagram)](img/agent-sandbox.svg)
@@ -591,12 +591,12 @@ flowchart TD
 
 ### Scaling and cost
 - Sandboxes are independent, so scaling out is counting containers — the same queue/priority/utilisation shape as the text-to-image fleet.
-- Real limits are per repo: merge conflicts between concurrent agent branches and, above all, **reviewer throughput** — the honest bottleneck.
+- Real limits are per repo: **merge conflicts** (two branches changed the same lines) between concurrent agent branches and, above all, **reviewer throughput** — the honest bottleneck.
 - Estimate per task (model calls + sandbox time + tests + review) and divide total spend by *merged* PRs.
 
 ### Safety
 - **Prompt injection lives in the repo**: a README or comment can carry instructions, and a dependency's install script can run code. The egress allowlist and missing credentials bound the damage — *a fooled model inside a bounded system* ([§12.4](../12-safety-ethics-governance/README.md)).
-- Supply-chain screening on added dependencies, secret scanning on every diff, an audit trace per task.
+- **Supply-chain** screening (checking third-party libraries for tampering or malware) on added dependencies, secret scanning on every diff, an audit trace per task.
 
 ### Failure modes
 | Failure | Response |
@@ -604,19 +604,19 @@ flowchart TD
 | Agent weakens tests to pass | Flag any test modification for elevated review; final acceptance uses tests the agent can't change |
 | Budget exhausted | Draft PR / findings comment with the plan and last results |
 | Pod evicted mid-task | Resume from durable task state |
-| Malicious dependency | Registry allowlist, lockfile-only updates, supply-chain scan as a CI gate; egress limits and no credentials bound a compromised install script |
+| Malicious dependency | Registry allowlist, **lockfile**-only updates (a lockfile pins exact library versions), supply-chain scan as a CI gate; egress limits and no credentials bound a compromised install script |
 
 ### Follow-ups (Q→A)
 - **Q: "PRs pass CI but solve the wrong problem."** A: Compare ticket, plan, diff and review comments first — vague criteria, misreading or weak tests. Remedies: the agent **asks questions first** on vague tickets (cheap, often the biggest win) and humans **review the plan** before code exists.
 - **Q: "Why would teams trust it?"** A: Trust is **instrumented**: start draft-PR-only, trace every action, publish merge rate, revert rate and reviewer burden per ticket class, and widen autonomy per class as the numbers earn it.
-- **Q: "Monorepo with 30-minute CI."** A: Tiered verification: fast tests chosen by **test-impact analysis** (which tests exercise the changed code) inside the loop; the full suite at PR time.
+- **Q: "Monorepo with 30-minute CI."** (A monorepo is one huge repository holding many projects.) A: Tiered verification: fast tests chosen by **test-impact analysis** (which tests exercise the changed code) inside the loop; the full suite at PR time.
 - **Q: "Cost per merged PR is $40."** A: Attribute first (trajectories reveal oversized context and thrashing), then routing and prefix caching, then **restrict by ticket type** — a failed run is spend with no return.
 
 ### What separates levels, and variations
 Mid-level stops at "it opens a PR" with controls bolted on; senior frames safety as three overlapping controls, caps the loop and raises the untrusted-repo threat unprompted; staff treats trust as a measured ladder per ticket category and names reviewer capacity as the limit before being asked. **Variations:** a *data-analysis agent* (weaker verifiers — nothing "compiles" an insight — so a lower autonomy ceiling) and *upgrading 3,000 repos to a new framework* (design once, replay everywhere, canary repos first; CI capacity is the bottleneck).
 
 ### Toy: a bounded loop with guards (`code/coding_agent_loop.py`)
-A scripted "LLM" works a real bug in a temporary directory (a stand-in for a sandbox — no real network isolation), running the real `unittest` suite in a subprocess with a stripped environment.
+A scripted "LLM" works a real bug in a temporary directory (a stand-in for a sandbox — no real network isolation), running the real `unittest` suite in a **subprocess** (a separate program started by the script) with a stripped environment.
 
 ```python
 def edit_file(self, rel, new_text):
@@ -690,7 +690,7 @@ A bounded loop in the friendliest agent domain: tests inside, CI outside, humans
 The order is a default — a bad enough quality problem can become a blocker. For every finding state the **consequence, evidence, uncertainty and fix**; the most interesting flaw is not necessarily the most urgent.
 
 ### The exercise
-> **The setup (paraphrased).** An internal helpdesk bot embeds an employee's question, fetches the 10 nearest wiki chunks (the whole wiki is re-indexed nightly), and a top-tier model writes the reply. For personal HR questions the model can call a tool that runs read-only SQL on the HR database. The demo went well; the plan is to switch it on for all 30,000 staff. What do you think?
+> **The setup (paraphrased).** An internal helpdesk bot embeds an employee's question, fetches the 10 nearest wiki chunks (the whole wiki is re-indexed nightly), and a top-tier model writes the reply. For personal HR questions the model can call a tool that runs read-only **SQL** (the query language of relational databases) on the HR database. The demo went well; the plan is to switch it on for all 30,000 staff. What do you think?
 
 Set a 10-minute timer and write your critique in severity order before reading on.
 
@@ -710,7 +710,7 @@ flowchart LR
 
 ### Tier 1 — broken invariants (open with these, in a level tone)
 1. **No permission filtering on retrieval.** A similar-sounding question from anyone can pull restricted chunks into an answer. Enforce current permissions *before* content reaches context, output, caches or logs: per-chunk ACL metadata filtered in the index query ([§7.9](../07-embeddings-vector-databases-and-rag/README.md)). It blocks launch — but first confirm it isn't enforced somewhere the diagram doesn't show.
-2. **The SQL tool is far too broad.** If the model writes the `WHERE` clause, a manipulated prompt can insert someone else's employee ID: the model is deciding access. Replace it with a narrow `get_my_record(fields)` whose employee ID comes from the authenticated session; if SQL must stay, enforce read-only scope, row-level security and limits *outside* the model. This is the worst problem in the design.
+2. **The SQL tool is far too broad.** If the model writes the `WHERE` clause (the filter part of a SQL query), a manipulated prompt can insert someone else's employee ID: the model is deciding access. Replace it with a narrow `get_my_record(fields)` whose employee ID comes from the authenticated session; if SQL must stay, enforce read-only scope, **row-level security** (the database itself shows each user only the rows they may see) and limits *outside* the model. This is the worst problem in the design.
 3. **No injection posture.** Wiki pages flow as untrusted input into a model holding a database tool — the **indirect prompt injection** path — with no input gate, no data tagging and no action gate.
 
 ![The three tier-one findings, said first and said calmly (course diagram)](img/critique-tier-one.svg)
@@ -721,7 +721,7 @@ flowchart LR
 5. **No feedback** — no ratings, no human hand-off, no traces — so problems go unnoticed.
 
 ### Tier 3 — reliability gaps
-6. **Nightly full re-index** → up to 24 h staleness and a fragile all-at-once job. Prefer incremental, **idempotent** (safe to re-run), delete-propagating sync with a freshness SLO; build a new index and swap atomically.
+6. **Nightly full re-index** → up to 24 h staleness and a fragile all-at-once job. Prefer incremental, **idempotent** (safe to re-run), delete-propagating sync with a freshness SLO; build a new index and **swap atomically** (switch over in one step, so readers never see a half-built index).
 7. **No fallbacks** — vector DB, model API or tool timeout each surface as raw errors.
 
 ### Tiers 4–5 — economics and quality (one sentence each)
@@ -739,9 +739,9 @@ The author may be in the room. Three moves:
 **Practice drill:** take any capstone in this book, delete three subsystems at random and critique the damaged design cold — naming what's *absent* is a different skill from building.
 
 ### Two more to practise (10 minutes each)
-**Exercise A — churn model (paraphrased).** Monthly, someone exports a CSV and retrains a churn model; nightly, all customers are scored into the CRM; marketing discounts the riskiest 10%. After a year, everyone believes it works. Findings, most severe first: no **point-in-time joins** (check for leakage — features using information from after the prediction time); **no holdback group**, so nobody knows whether discounts cause retention or just give away margin; a **self-inflicted feedback loop** (discounts change what the next training set learns); stale hand-run refreshes; no model registry or rollback.
+**Exercise A — churn model (paraphrased).** Monthly, someone exports a **CSV** (plain-text spreadsheet file) and retrains a **churn** model (predicting which customers will leave); nightly, all customers are scored into the CRM; marketing discounts the riskiest 10%. After a year, everyone believes it works. Findings, most severe first: no **point-in-time joins** (check for leakage — features using information from after the prediction time); **no holdback group** (customers deliberately left untreated for comparison), so nobody knows whether discounts cause retention or just give away margin; a **self-inflicted feedback loop** (discounts change what the next training set learns); stale hand-run refreshes; no **model registry** (a versioned catalogue of trained models) or rollback.
 
-**Exercise B — "hallucinations fixed" (paraphrased).** A support RAG bot made things up; the team set temperature to 0, told the model not to invent facts, and retrieved 20 chunks instead of 5. Complaints fell. Findings: none of those changes *checks* an answer — groundedness checks are still missing ([§7.8](../07-embeddings-vector-databases-and-rag/README.md)); temperature 0 reduces variation, not falsehood; top-k 20 adds cost and **lost-in-the-middle** risk (models under-use information buried mid-context); complaint counts stand in for a faithfulness eval never built; and the bot still can't decline.
+**Exercise B — "hallucinations fixed" (paraphrased).** A support RAG bot made things up; the team set temperature to 0, told the model not to invent facts, and retrieved 20 chunks instead of 5. Complaints fell. Findings: none of those changes *checks* an answer — groundedness checks are still missing ([§7.8](../07-embeddings-vector-databases-and-rag/README.md)); temperature 0 reduces variation, not falsehood; **top-k** 20 (keeping the 20 best-scoring chunks) adds cost and **lost-in-the-middle** risk (models under-use information buried mid-context); complaint counts stand in for a faithfulness eval never built; and the bot still can't decline.
 
 ### What separates levels
 Mid-level spots real issues but opens with product opinions ("I'd swap the vector DB") stated as taste; senior opens with tier-1 issues, each with impact and remedy, and keeps severity order; staff also reads the room — affirms the shape, sequences blockers / week one / later, and ends with a to-do list, not a verdict.
@@ -814,11 +814,11 @@ Cases 14.2–14.5 were **product-centric**: the model was a component you could 
 
 | Script | Case | What it demonstrates |
 |---|---|---|
-| `code/smart_compose.py` | Email completion | Beam search, confidence threshold vs trigger/acceptance, personal blend, pronoun filter |
+| `code/smart_compose.py` | Email completion | Beam search (keeping the few best partial outputs at each step), confidence threshold vs trigger/acceptance, personal blend, pronoun filter |
 | `code/translation_toy.py` | Translation | Character-trigram language ID, BLEU from scratch and its blind spots, segment-cache hit rates |
 | `code/caption_toy.py` | Captioning | Grounding rerank, CHAIR hallucination rate, CIDEr-style consensus, alt-text policy |
 | `code/gan_faces_toy.py` | GAN faces | GAN training on 8 modes, mode dropping, why FD alone misleads, the truncation trick |
-| `code/latent_compression.py` | High-res synthesis | Token and attention arithmetic, a k-means VQ codebook: compression vs PSNR |
+| `code/latent_compression.py` | High-res synthesis | Token and attention arithmetic, a k-means VQ codebook: compression vs PSNR (peak signal-to-noise ratio, a pixel-accuracy score in decibels) |
 | `code/headshot_lora.py` | Personalised headshots | Low-rank update vs full fine-tune, prior-preservation trade-off, per-user cost |
 | `code/video_budget.py` | Text-to-video | Spacetime token counts, factorised attention, flicker, fleet cost |
 
@@ -841,9 +841,9 @@ Cases 14.2–14.5 were **product-centric**: the model was a component you could 
 **Scope.** Sentence completion in the body of new emails and replies, one language first, no whole-email drafting (that is a different, slower product with an LLM).
 
 ### Approach: data and model (minutes 8–18)
-- **Training data is users' own sent email** — the most sensitive corpus in the company. It is used only under the product's privacy terms, with identifiers removed, and with a defence against **memorisation**: language models can reproduce rare strings seen in training, such as a phone number that appeared a few times (Carlini et al., *The Secret Sharer*, 2019). Mitigations: drop rare n-grams and personal data before training, cap the contribution of any one user, and consider differentially private training (training that mathematically bounds how much any one example can influence the model).
-- **Context beyond the prefix.** The words typed so far are the main input, but the subject line and, for replies, the previous message help a lot; Google's published Smart Compose system conditions on both (Chen et al., *Gmail Smart Compose: Real-Time Assisted Writing*, KDD 2019). Cheap signals such as locale and time of day help greetings ("Have a great weekend" on Friday).
-- **Model, at name level.** A small decoder-only language model — tens of millions of parameters, not billions — because it must answer in tens of milliseconds at a very high request rate. A large model can serve as a **teacher** whose outputs train the small one (**distillation**, [§11.8](../11-llm-serving-and-inference/README.md)); quantise the student for serving ([§11.7](../11-llm-serving-and-inference/README.md)).
+- **Training data is users' own sent email** — the most sensitive corpus in the company. It is used only under the product's privacy terms, with identifiers removed, and with a defence against **memorisation**: language models can reproduce rare strings seen in training, such as a phone number that appeared a few times (Carlini et al., *The Secret Sharer*, 2019). Mitigations: drop rare **n-grams** (runs of n consecutive words) and personal data before training, cap the contribution of any one user, and consider differentially private training (training that mathematically bounds how much any one example can influence the model).
+- **Context beyond the prefix.** The words typed so far are the main input, but the subject line and, for replies, the previous message help a lot; Google's published Smart Compose system conditions on both (Chen et al., *Gmail Smart Compose: Real-Time Assisted Writing*, KDD 2019). Cheap signals such as **locale** (language and region settings) and time of day help greetings ("Have a great weekend" on Friday).
+- **Model, at name level.** A small **decoder-only** (GPT-style, generating left to right) language model — tens of millions of **parameters** (learned weights), not billions — because it must answer in tens of milliseconds at a very high request rate. A large model can serve as a **teacher** whose outputs train the small one (**distillation**, [§11.8](../11-llm-serving-and-inference/README.md)); **quantise** the student (store its numbers with fewer bits) for serving ([§11.7](../11-llm-serving-and-inference/README.md)).
 - **Decoding.** **Beam search** ([§4.7](../04-large-language-models/README.md)) keeps the few most probable partial completions and extends them word by word; stop at the end of the sentence or when confidence falls. Show the best completion **only if its probability clears a threshold** — the single most important product knob.
 - **Personalisation.** People have habits ("Cheers, Sam"). Keep a tiny per-user model — even an n-gram count table — and **interpolate** its probabilities with the global model: p = (1 − λ)·p_global + λ·p_user. It is cheap, stays in the user's own data store, and is deleted with the account.
 
@@ -887,7 +887,7 @@ Cost ≈ requests actually sent × tokens processed per request × cost per toke
 |---|---|
 | Inference slow or down | Client time-out drops the suggestion; typing is never blocked |
 | Offensive suggestion reported | Hot-update the blocklist within minutes; add the prefix to the red-team set |
-| New model lowers acceptance | Canary on a small slice, automatic rollback on the online metrics |
+| New model lowers acceptance | **Canary** (release first to a small slice of users) on a small slice, automatic rollback on the online metrics |
 | Personal table suggests another user's text | Treat as a privacy incident: tables are per-account by construction, so look for a keying bug |
 
 ### Follow-ups (Q→A)
@@ -900,7 +900,7 @@ Cost ≈ requests actually sent × tokens processed per request × cost per toke
 Mid-level draws "LLM behind an API"; senior budgets the 200 ms inter-keystroke gap, avoids requests on the client and treats the threshold as a product curve; staff adds memorisation defences, attribute-guessing policy and on-device options as first-class design constraints. **Variations:** *code completion* (longer suggestions, the repository as context, the same trigger/acceptance trade-off — [§13.10](../13-ai-system-design-and-genai-products/README.md)) and *mobile keyboard next-word prediction* (on-device models trained with **federated learning**, where phones compute updates locally and only aggregated updates leave the device — Hard et al., 2018).
 
 ### Toy: threshold, personal blend and filter (`code/smart_compose.py`)
-A trigram model with backoff stands in for the small LM; beam search proposes completions; replaying 800 held-out synthetic emails measures the three success numbers.
+A **trigram model with backoff** (predicts the next word from the previous two, falling back to shorter context when the pair is unseen) stands in for the small LM; beam search proposes completions; replaying 800 held-out synthetic emails measures the three success numbers.
 
 ```python
 def suggest(prefix, g, u, beam=3, max_words=6, lam=0.6, block=True):
@@ -954,20 +954,20 @@ A small distilled LM under a ~100 ms budget; avoid requests on the client (trim,
 
 **Success.**
 - *Primary:* **human-judged quality per language pair**, measured with a professional protocol such as **MQM** (Multidimensional Quality Metrics: translators mark each error by type and severity; Freitag et al., 2021).
-- *Automatic proxies:* **BLEU** (n-gram overlap with a reference translation; Papineni et al., 2002), **chrF** (character n-gram overlap, better for rich morphology) and **COMET** (a neural model trained to predict human quality judgements; Rei et al., 2020).
+- *Automatic proxies:* **BLEU** (n-gram overlap with a reference translation; Papineni et al., 2002), **chrF** (character n-gram overlap, better for rich **morphology** — languages whose words change form a lot) and **COMET** (a neural model trained to predict human quality judgements; Rei et al., 2020).
 - *Guardrails:* critical errors — negation flipped, numbers or names changed, offensive output, gender stereotyping when the source is neutral.
 
-**Latency.** Three regimes: interactive typing (~300 ms p90), web-page translation (hundreds of short segments, throughput-bound), documents (asynchronous minutes). **Scope:** text only; speech and image translation reuse the same core behind ASR or OCR.
+**Latency.** Three regimes: interactive typing (~300 ms p90), web-page translation (hundreds of short segments, throughput-bound), documents (asynchronous minutes). **Scope:** text only; speech and image translation reuse the same core behind ASR (speech recognition) or **OCR** (optical character recognition: reading text from images).
 
 ### Approach: data and model (minutes 8–18)
-- **Model: an encoder-decoder Transformer** (Vaswani et al., 2017 — the architecture was introduced for translation). The encoder builds a representation of the whole source; the decoder attends to it with cross-attention while generating.
-- **One multilingual model, not one per pair.** 100 languages form 100 × 99 = **9,900 directed pairs** — far too many models to train and serve. A single model with a **target-language tag** at the start of the input ("<2es> …") translates between many languages and can even manage pairs it never saw together (*zero-shot*; Johnson et al., 2017). NLLB extended this to ~200 languages (NLLB Team, 2022). The cost is **capacity dilution** — high-resource pairs lose a little quality as languages are added (Conneau et al., 2020, call it the *curse of multilinguality*) — so the top pairs by traffic often get a dedicated or distilled model.
-- **Tokenisation:** a shared **subword vocabulary** (BPE or SentencePiece; Sennrich et al., 2016; Kudo and Richardson, 2018) across all languages, so rare words split into known pieces. Check how many tokens each script needs — languages that fragment badly pay more latency and money for the same sentence ([§3.1](../03-transformers-and-embeddings/README.md)).
-- **Data:** **parallel text** (the same content in two languages) from public-domain and licensed sources and **mined** pairs (find sentences with near-identical multilingual embeddings in web text). For low-resource languages, **back-translation** creates synthetic pairs: translate monolingual target-language text *back* into the source with a reverse model, then train on (synthetic source → real target) (Sennrich, Haddow and Birch, 2016). The target side stays human-written, which is what matters most for fluency.
-- **Cleaning:** language-ID every sentence, drop misaligned pairs, remove boilerplate and machine-translated web text where detectable — training on your own model's output amplifies its errors.
+- **Model: an encoder-decoder Transformer** (Vaswani et al., 2017 — the architecture was introduced for translation). The encoder builds a representation of the whole source; the decoder attends to it with **cross-attention** (each output step looks back at the encoder's representation) while generating.
+- **One multilingual model, not one per pair.** 100 languages form 100 × 99 = **9,900 directed pairs** — far too many models to train and serve. A single model with a **target-language tag** at the start of the input ("<2es> …") translates between many languages and can even manage pairs it never saw together (*zero-shot*; Johnson et al., 2017). NLLB extended this to ~200 languages (NLLB Team, 2022). The cost is **capacity dilution** — **high-resource** pairs (those with lots of training text) lose a little quality as languages are added (Conneau et al., 2020, call it the *curse of multilinguality*) — so the top pairs by traffic often get a dedicated or distilled model.
+- **Tokenisation:** a shared **subword vocabulary** (**BPE** — byte-pair encoding, which builds tokens by merging frequent character pairs — or SentencePiece; Sennrich et al., 2016; Kudo and Richardson, 2018) across all languages, so rare words split into known pieces. Check how many tokens each script needs — languages that fragment badly pay more latency and money for the same sentence ([§3.1](../03-transformers-and-embeddings/README.md)).
+- **Data:** **parallel text** (the same content in two languages) from public-domain and licensed sources and **mined** pairs (find sentences with near-identical multilingual embeddings in web text). For low-resource languages, **back-translation** creates synthetic pairs: translate **monolingual** (single-language) target-language text *back* into the source with a reverse model, then train on (synthetic source → real target) (Sennrich, Haddow and Birch, 2016). The target side stays human-written, which is what matters most for fluency.
+- **Cleaning:** language-ID every sentence, drop misaligned pairs, remove **boilerplate** (repeated stock text such as cookie notices) and machine-translated web text where detectable — training on your own model's output amplifies its errors.
 
 ### Architecture (minutes 18–30)
-**Envelope:** 500M requests/day ≈ **5,800/s** average. Take ~40 tokens in and ~40 out per request and an encoder-decoder of ~600M parameters split evenly. A forward pass costs ~2 FLOPs per parameter per token, and each token only passes through its own half: the encoder reads 40 source tokens once, the decoder writes 40 target tokens for each of 4 beams — 2 × 0.3 × 10⁹ × (40 + 4 × 40) ≈ 1.2 × 10¹¹ FLOPs per request; 5,800/s × 1.2 × 10¹¹ ≈ 7 × 10¹⁴ FLOP/s — a few accelerators at full use, tens in practice once latency headroom, peaks and per-pair models are included.
+**Envelope:** 500M requests/day ≈ **5,800/s** average. Take ~40 tokens in and ~40 out per request and an encoder-decoder of ~600M parameters split evenly. A **forward pass** (one run through the network) costs ~2 **FLOPs** (floating-point operations, i.e. arithmetic steps) per parameter per token, and each token only passes through its own half: the encoder reads 40 source tokens once, the decoder writes 40 target tokens for each of 4 beams — 2 × 0.3 × 10⁹ × (40 + 4 × 40) ≈ 1.2 × 10¹¹ FLOPs per request; 5,800/s × 1.2 × 10¹¹ ≈ 7 × 10¹⁴ FLOP/s — a few accelerators at full use, tens in practice once latency headroom, peaks and per-pair models are included.
 
 ```mermaid
 flowchart LR
@@ -996,7 +996,7 @@ flowchart LR
 - **Signals from users:** edits in the "suggest an improvement" box and copy-without-edit rates; treat them as noisy labels, never as automatic training data without review (they can be adversarial).
 
 ### Scaling and cost
-Levers in order: segment cache (the toy shows hit rates of 61–81% under an assumed Zipf distribution — measure yours), batching by language pair, **distilled** pair-specific students for the top 20 pairs by traffic, quantisation, and routing only low-QE segments to the large model ([§11.14](../11-llm-serving-and-inference/README.md)). Long documents go to a cheaper asynchronous queue.
+Levers in order: segment cache (the toy shows hit rates of 61–81% under an assumed **Zipf** distribution — a few items extremely popular, a long tail of rare ones — measure yours), batching by language pair, **distilled** pair-specific students for the top 20 pairs by traffic, quantisation, and routing only low-QE segments to the large model ([§11.14](../11-llm-serving-and-inference/README.md)). Long documents go to a cheaper asynchronous queue.
 
 ### Safety
 Translation can **introduce** harm: a mistranslated medical or legal instruction, an insult produced from a neutral sentence, or a political term rendered with a loaded synonym. Add output toxicity checks when the source was not toxic, protect numbers and negation with automatic source-target consistency checks, and label machine translation as such. Content sent for translation is often confidential — no training on API customers' text by default ([§12.5](../12-safety-ethics-governance/README.md)).
@@ -1013,7 +1013,7 @@ Translation can **introduce** harm: a mistranslated medical or legal instruction
 - **Q: "BLEU went up but users complain."** A: BLEU rewards word overlap with one reference. The toy scores a correct paraphrase 0.31 and a wrong-meaning sentence 0.29 — nearly the same. Check COMET and a human MQM sample; BLEU is a regression alarm, not a launch criterion.
 - **Q: "Add a language with almost no parallel data."** A: Mine what exists, back-translate monolingual text, rely on transfer from related languages in the multilingual model, and evaluate with native speakers before launch.
 - **Q: "Why not pivot through English?"** A: Two hops double the latency and compound errors (and lose information English does not mark, such as formality); direct multilingual models avoid both, but pivoting is a reasonable fallback for rare pairs.
-- **Q: "Could an LLM replace the NMT model?"** A: For top languages, LLMs translate well and follow instructions (tone, glossary); they cost more per token and are weaker on low-resource languages. A router can send high-value document translation to an LLM and bulk traffic to NMT — evaluate both on the same per-pair suites.
+- **Q: "Could an LLM replace the NMT model?"** (NMT = neural machine translation, the dedicated encoder-decoder.) A: For top languages, LLMs translate well and follow instructions (tone, glossary); they cost more per token and are weaker on low-resource languages. A router can send high-value document translation to an LLM and bulk traffic to NMT — evaluate both on the same per-pair suites.
 
 ### What separates levels, and variations
 Mid-level describes an encoder-decoder with beam search; senior settles the one-model-vs-9,900 question, names back-translation and per-pair evaluation and sizes the cache; staff treats quality as per-pair contracts with gates, QE-based routing and glossary/formatting as product features. **Variations:** *speech-to-speech interpretation* (streaming ASR → translation that waits for enough context → TTS; latency vs accuracy is the whole design) and *app-string localisation* (short strings without context — add screenshots or developer notes as context and a human review queue).
@@ -1080,10 +1080,10 @@ One multilingual encoder-decoder with language tags (plus distilled students for
 **Latency.** Captioning can run **asynchronously at upload** — the post is usually viewed seconds or minutes later. For posts viewed before the caption is ready, show "image" plus any text the uploader wrote, never block the post. **Scope:** one-sentence descriptions; faces of private people are *not* identified by name; text inside images is read by OCR (optical character recognition) as a separate signal.
 
 ### Approach: data and model (minutes 8–18)
-- **Architecture history in one breath:** CNN encoder + LSTM decoder (*Show and Tell*, Vinyals et al., 2015) → decoder that **attends** to image regions at each word (*Show, Attend and Tell*, Xu et al., 2015) → Transformer encoders (**ViT**, which cuts the image into patches treated as tokens; Dosovitskiy et al., 2021) → today's pattern: a **frozen pretrained image encoder** (e.g. CLIP's, Radford et al., 2021) connected by a small trainable bridge to a **pretrained language model** (BLIP-2, Li et al., 2023). The bridge is cheap to train; both big parts are reused.
-- **Data:** human-written captions (COCO Captions: ~120k images with five captions each; Chen et al., 2015) are clean but small and narrow. Web **alt-text pairs** (Conceptual Captions, Sharma et al., 2018; billions more in later datasets) are huge but noisy — many alt texts are file names or SEO keywords. Filter with an image-text similarity model, and **bootstrap**: caption the web images with your model, then let an image-text matching filter drop every pair — original alt text or synthetic caption — that it judges a mismatch (BLIP's *CapFilt*, Li et al., 2022).
+- **Architecture history in one breath:** **CNN** (convolutional neural network, the classic image model) encoder + **LSTM** (an older recurrent network for sequences) decoder (*Show and Tell*, Vinyals et al., 2015) → decoder that **attends** to image regions at each word (*Show, Attend and Tell*, Xu et al., 2015) → Transformer encoders (**ViT**, which cuts the image into patches treated as tokens; Dosovitskiy et al., 2021) → today's pattern: a **frozen pretrained image encoder** (e.g. CLIP's, Radford et al., 2021) connected by a small trainable bridge to a **pretrained language model** (BLIP-2, Li et al., 2023). The bridge is cheap to train; both big parts are reused.
+- **Data:** human-written captions (COCO Captions: ~120k images with five captions each; Chen et al., 2015) are clean but small and narrow. Web **alt-text pairs** (Conceptual Captions, Sharma et al., 2018; billions more in later datasets) are huge but noisy — many alt texts are file names or **SEO** (search-engine-optimisation) keywords. Filter with an image-text similarity model, and **bootstrap**: caption the web images with your model, then let an image-text matching filter drop every pair — original alt text or synthetic caption — that it judges a mismatch (BLIP's *CapFilt*, Li et al., 2022).
 - **Alt-text style is a fine-tuning target.** Accessibility guidelines prefer concise, concrete descriptions ("A golden retriever catching a frisbee on a lawn") over "an image of…". Fine-tune on captions written to that style guide ([§8.2](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)).
-- **Decoding:** beam search produces safe, generic captions; the fix for *hallucinated* content is not a decoding trick but **grounding**: rerank beam candidates by how well each mentioned object is supported by an object detector or an image-text score, as in the toy.
+- **Decoding:** beam search produces safe, generic captions; the fix for *hallucinated* content is not a decoding trick but **grounding**: rerank beam candidates by how well each mentioned object is supported by an **object detector** (a model that finds and labels objects in an image) or an image-text score, as in the toy.
 
 ### Architecture (minutes 18–30)
 **Envelope:** 100M images/day ≈ **1,160/s** average. Per image: an image encoder pass (a ViT-L-sized encoder, ~300M parameters over ~200 patch tokens: 2 × 3 × 10⁸ × 200 ≈ 1.2 × 10¹¹ FLOPs) plus ~30 generated tokens from a ~1B-parameter decoder (2 × 10⁹ × 30 ≈ 6 × 10¹⁰ FLOPs) ≈ 2 × 10¹¹ FLOPs; × 1,160/s ≈ 2 × 10¹⁴ FLOP/s — a small GPU pool, because the work is asynchronous and batches perfectly.
@@ -1109,13 +1109,13 @@ flowchart LR
 - **Uploader edits win.** The screen reader uses a human-written caption when one exists; edits become evaluation data.
 
 ### Evaluation and the loop (minutes 30–38)
-- **Reference-based metrics:** BLEU, METEOR, **CIDEr** (n-gram agreement with several human references, weighted by TF-IDF so rare, informative words count more; Vedantam et al., 2015) and **SPICE** (compares the objects, attributes and relations in a scene graph; Anderson et al., 2016).
+- **Reference-based metrics:** BLEU, METEOR, **CIDEr** (n-gram agreement with several human references, weighted by TF-IDF so rare, informative words count more; Vedantam et al., 2015) and **SPICE** (compares the objects, attributes and relations in a **scene graph** — a structured list of objects and how they relate; Anderson et al., 2016).
 - **Reference-free:** **CLIPScore** (image-caption similarity from CLIP; Hessel et al., 2021) — useful at scale on your own traffic where no references exist.
 - **Hallucination:** CHAIR on a labelled set.
 - **Humans decide:** sessions with screen-reader users rate usefulness; these results tune the style guide and the policy.
 
 ### Scaling and cost
-Asynchronous batching keeps GPUs full. Cheaper models caption low-traffic images; high-traffic posts can be re-captioned by a larger model. Skip near-duplicates (a perceptual hash lookup) and reuse their captions.
+Asynchronous batching keeps GPUs full. Cheaper models caption low-traffic images; high-traffic posts can be re-captioned by a larger model. Skip near-duplicates (a **perceptual hash** lookup — a fingerprint that stays similar for visually similar images) and reuse their captions.
 
 ### Safety
 Captioning systems have a documented history of offensive labels on photos of people. Defences: the attribute policy above, a red-team set of people images across demographics, a safety classifier on captions, fast takedown, and a rule that "person" is always acceptable. If captions feed an LLM later (e.g. image Q&A), text *inside* images read by OCR is untrusted input — it can carry prompt injection ([§12.4](../12-safety-ethics-governance/README.md)).
@@ -1171,7 +1171,7 @@ Frozen image encoder + bridge + language model, trained on clean human captions 
 > **The question (paraphrased).** A stock-media company wants photorealistic portraits of **people who do not exist** — for ads, game avatars and as privacy-safe test data. Customers browse and filter thousands of faces, and new ones are generated on demand. Design the generator and the service.
 
 ### Requirements (minutes 0–8)
-**Recognition.** "This is **unconditional image generation** in one narrow domain — faces — where a **GAN** (generative adversarial network, [§10.3](../10-generative-models-beyond-text/README.md)) is still a strong choice: one forward pass per image, very sharp output and a smooth latent space you can steer. The two promises that matter are *realistic* and *not a real person*."
+**Recognition.** "This is **unconditional image generation** in one narrow domain — faces — where a **GAN** (generative adversarial network, [§10.3](../10-generative-models-beyond-text/README.md)) is still a strong choice: one forward pass per image, very sharp output and a smooth **latent space** (the space of input codes the generator turns into images) you can steer. The two promises that matter are *realistic* and *not a real person*."
 
 **Success.**
 - *Primary:* **realism judged by people** — in a blind test, raters cannot reliably tell generated faces from real photos at the delivered resolution — tracked day to day with **FID** (Fréchet Inception Distance: the distance between feature statistics of real and generated images; lower is better; Heusel et al., 2017; [§10.9](../10-generative-models-beyond-text/README.md)).
@@ -1187,7 +1187,7 @@ Frozen image encoder + bridge + language model, trained on clean human captions 
   - The generator starts from a learned constant and injects *w* as a **style** at every resolution: coarse layers control pose and face shape, middle layers features such as hairstyle and eyes, fine layers mainly the colour scheme and micro-detail.
   - Per-pixel **noise inputs** add random fine detail (freckles, hair placement) without changing identity.
   - Training grew resolution step by step in the earlier **Progressive GAN** (Karras et al., 2018); StyleGAN2 replaced that with other architectural fixes.
-- **Training loop:** the discriminator learns to tell real from fake; the generator learns to fool it (Goodfellow et al., 2014). Stabilisers that matter: the non-saturating loss, **R1 regularisation** (penalise the discriminator's gradient on real images), an **exponential moving average** of generator weights used for sampling, and **adaptive discriminator augmentation** when data is limited (StyleGAN2-ADA, Karras et al., 2020).
+- **Training loop:** the discriminator learns to tell real from fake; the generator learns to fool it (Goodfellow et al., 2014). Stabilisers that matter: the **non-saturating loss** (a generator loss that still gives useful gradients when the discriminator is winning easily), **R1 regularisation** (penalise the discriminator's gradient on real images), an **exponential moving average** (a smoothed running average that weights recent values most) of generator weights used for sampling, and **adaptive discriminator augmentation** when data is limited (StyleGAN2-ADA, Karras et al., 2020).
 - **Known failure: mode collapse** — the generator finds a few outputs that fool the discriminator and stops producing the rest (whole age groups can vanish). Watch coverage metrics during training, not the losses: GAN losses do not go down steadily the way a classifier's do.
 - **The truncation trick** (Brock et al., 2019; used by StyleGAN): sample *w* closer to its average. Quality rises and diversity falls — a **product knob**, not a training choice.
 
@@ -1207,13 +1207,13 @@ flowchart LR
     POOL --> REQ
 ```
 
-- **Attribute control** comes from directions in *w* space: fit a simple classifier (e.g. "smiling vs not") on generated samples, and its normal vector becomes an edit direction. Customers get sliders without retraining.
+- **Attribute control** comes from directions in *w* space: fit a simple classifier (e.g. "smiling vs not") on generated samples, and its **normal vector** (the direction perpendicular to its decision boundary) becomes an edit direction. Customers get sliders without retraining.
 - **Memorisation check:** embed each output with a face-recognition model (e.g. **ArcFace**, Deng et al., 2019) and search the nearest training identity; above a similarity threshold, discard. This makes "does not exist" a measured claim.
 - **Artefact check:** GANs have typical failures — mismatched earrings, melted glasses, background blobs. A small classifier trained on rejected samples filters them.
 - **Provenance:** an invisible watermark plus C2PA content credentials on every image ([§10.10](../10-generative-models-beyond-text/README.md)), so buyers and platforms can check that the face is synthetic.
 
 ### Evaluation and the loop (minutes 30–38)
-- **FID on 50,000 samples** at fixed preprocessing, per checkpoint; pick checkpoints by FID *and* precision/recall, since FID alone mixes the two.
+- **FID on 50,000 samples** at fixed preprocessing, per **checkpoint** (a saved snapshot of the model's weights during training); pick checkpoints by FID *and* precision/recall, since FID alone mixes the two.
 - **Attribute distribution** of generated faces vs the target distribution; a skew is a bias finding, not just a quality one.
 - **Human realism tests** before each release; customer rejections and reports feed the artefact classifier.
 
@@ -1221,7 +1221,7 @@ flowchart LR
 Serving is cheap; a pre-generated pool of a few million screened faces answers most browsing. Retraining cost dominates — reuse checkpoints and fine-tune for new styles (e.g. studio lighting) instead of training from scratch.
 
 ### Safety
-Synthetic faces are the standard ingredient of **fake social-media profiles**. Mitigations: provenance on every image, rate limits and know-your-customer checks for bulk buyers, terms banning impersonation and fraud, and sharing detection signatures with platforms. Deliberately **not** offered: editing uploaded photos of real people (that is a deepfake product with different risks — [§12.7](../12-safety-ethics-governance/README.md)).
+Synthetic faces are the standard ingredient of **fake social-media profiles**. Mitigations: provenance on every image, rate limits and **know-your-customer** checks (verifying buyers' identities) for bulk buyers, terms banning impersonation and fraud, and sharing detection signatures with platforms. Deliberately **not** offered: editing uploaded photos of real people (that is a deepfake product with different risks — [§12.7](../12-safety-ethics-governance/README.md)).
 
 ### Failure modes
 | Failure | Response |
@@ -1235,7 +1235,7 @@ Synthetic faces are the standard ingredient of **fake social-media profiles**. M
 - **Q: "Why a GAN, not diffusion?"** A: For one narrow domain, a GAN gives one-pass generation (instead of tens of denoising steps — an order of magnitude or more cheaper per image) and a steerable latent space. Diffusion wins on diversity and text conditioning; if customers want "a nurse in her 60s, laughing, outdoors" as free text, switch to a diffusion model with face-specific fine-tuning.
 - **Q: "Discriminator loss is flat — is training broken?"** A: Not necessarily — the loss measures a moving game, not quality. Track FID, precision/recall and sample grids over time.
 - **Q: "How do you prove a face is not a real person?"** A: You can't prove it about everyone alive; you can show it is not close to anyone *in your training set* (the people it could have memorised), and label it synthetic.
-- **Q: "A customer wants more variety."** A: Raise ψ (less truncation), sample latents stratified by attribute, and check recall — at the cost of more artefacts to filter.
+- **Q: "A customer wants more variety."** A: Raise ψ (psi, the truncation strength; 1 means no truncation) for less truncation, sample latents stratified by attribute, and check recall — at the cost of more artefacts to filter.
 
 ### What separates levels, and variations
 Mid-level explains generator vs discriminator; senior names StyleGAN's mapping network, mode collapse, FID with precision/recall and truncation as a product knob; staff turns "not a real person" and "consented data" into measured pipeline steps and prices the pre-generated pool. **Variations:** *synthetic training data for face-recognition testing* (diversity and label control matter more than beauty) and *game avatar generation* (stylised domain, fine-tune from the photoreal model).
@@ -1288,7 +1288,7 @@ StyleGAN-style generator (mapping network, per-layer styles, noise) trained on c
 **Latency.** Seconds to tens of seconds; a low-resolution preview can come first. **Scope:** text-to-image at up to 2048² and arbitrary aspect ratios; editing is out.
 
 ### Approach: data and model (minutes 8–18)
-**The arithmetic that forces the design** (from the toy): a 1024² RGB image is 3.1M numbers. As a sequence of pixels it would be 1M tokens — about 10¹² attention pairs. A latent autoencoder with downsampling factor **f = 8** turns it into a 128 × 128 × 4 latent (65,536 numbers, **48× fewer**), and 2 × 2 patches make that 4,096 tokens. Doubling the side to 2048² multiplies tokens by 4 and attention pairs by **16**.
+**The arithmetic that forces the design** (from the toy): a 1024² **RGB** (red, green, blue channels) image is 3.1M numbers. As a sequence of pixels it would be 1M tokens — about 10¹² **attention pairs** (attention compares every token with every other token). A latent autoencoder with downsampling factor **f = 8** turns it into a 128 × 128 × 4 latent (65,536 numbers, **48× fewer**), and 2 × 2 patches make that 4,096 tokens. Doubling the side to 2048² multiplies tokens by 4 and attention pairs by **16**.
 
 Three families, each from a primary paper:
 
@@ -1303,7 +1303,7 @@ Three families, each from a primary paper:
 **Data for high resolution:**
 - Filter the training set to images at or above the target resolution; upsampled low-resolution images teach blur.
 - **Aspect-ratio bucketing** (group training images by shape instead of cropping everything square) and **conditioning on the original size and crop coordinates**, both used in SDXL (Podell et al., 2023), stop the model from learning that heads get cut off at the edge.
-- Train the autoencoder carefully — a perceptual and adversarial loss keeps textures sharp — because every generated image passes through its decoder.
+- Train the autoencoder carefully — a **perceptual** loss (compares images the way a vision network sees them) and an **adversarial** loss (a discriminator penalises unrealistic output) keep textures sharp — because every generated image passes through its decoder.
 
 ### Architecture (minutes 18–30)
 ```mermaid
@@ -1320,7 +1320,7 @@ flowchart LR
 - **Generate at the resolution the model was trained on**, then upscale. Asking a 1024² model directly for 2048² tends to produce **repetition** (two heads, duplicated towers), because each region looks locally like a whole image to the network.
 - **Upscale only what users keep.** Previews at 1024² cost a quarter of the tokens; the expensive stage runs on the one image the user selects (the same "upscale on selection" economics as §14.4).
 - **Tiled decoding** splits the final decode into overlapping tiles so GPU memory stays bounded; the overlaps are blended to hide seams.
-- **Memory:** attention over 16,384 tokens (2048² at f = 8, 2 × 2 patches) needs memory-efficient attention kernels; batch sizes shrink, so throughput per GPU falls.
+- **Memory:** attention over 16,384 tokens (2048² at f = 8, 2 × 2 patches) needs memory-efficient attention **kernels** (low-level GPU routines); batch sizes shrink, so throughput per GPU falls.
 
 ### Evaluation and the loop (minutes 30–38)
 - **Crop-level human evaluation** (faces, text, hands, fabrics) against the previous model and a strong upscaler baseline.
@@ -1387,7 +1387,7 @@ Never generate megapixels directly: compress (f = 8 latent → 48× fewer number
 > **The question (paraphrased).** Users upload 10–20 selfies, pay once, and within an hour receive ~40 professional headshots in chosen styles (studio, outdoor, business casual) that clearly look like them. Expect 20,000 new users a day. Design it.
 
 ### Requirements (minutes 0–8)
-**Recognition.** "This is **subject-driven generation**: teach a pretrained text-to-image diffusion model one new identity from a handful of photos, then render that identity in new scenes. The design question is *per-user fine-tuning* versus a *zero-shot identity encoder*, and the product is really a **per-user GPU job pipeline** with biometric data in it ([§8.2](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md), [§10.5](../10-generative-models-beyond-text/README.md))."
+**Recognition.** "This is **subject-driven generation**: teach a pretrained text-to-image diffusion model one new identity from a handful of photos, then render that identity in new scenes. The design question is *per-user fine-tuning* versus a *zero-shot identity encoder*, and the product is really a **per-user GPU job pipeline** with **biometric** data (body measurements such as face geometry that can identify a person) in it ([§8.2](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md), [§10.5](../10-generative-models-beyond-text/README.md))."
 
 **Success.**
 - *Primary:* **"looks like me" rate** — share of delivered photos the user keeps or downloads; a proxy is **identity similarity**, the cosine similarity between face-recognition embeddings (e.g. ArcFace) of outputs and of the uploads.
@@ -1410,9 +1410,9 @@ Never generate megapixels directly: compress (f = 8 latent → 48× fewer number
 - **Rare-token binding.** Use an identifier the model has no strong meaning for, such as "[v]", so training attaches the new face to it rather than overwriting a common word. (Textual Inversion, Gal et al., 2022, learns only a new token embedding — cheapest, but weaker identity.)
 - **LoRA:** freeze the base model's weights *W* and learn a low-rank update *B·A* (rank *r* of 4–64) in the attention layers. The adapter is megabytes, not gigabytes, and many users' adapters share one base model in GPU memory ([§8.2](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)).
 - **Prior preservation.** Fine-tuning on one face makes *every* "person" look like the user (the model forgets the class — DreamBooth calls this *language drift*). The fix: also train on images the *frozen* model generates for "a photo of a person", with a loss that keeps those outputs unchanged. The toy shows the trade-off in numbers.
-- **Overfitting.** Too many steps and the model copies the uploads' backgrounds, clothes and pose. Use few steps (hundreds to about a thousand), augmentation (crops, flips), and early stopping on identity-vs-diversity metrics.
+- **Overfitting.** Too many steps and the model copies the uploads' backgrounds, clothes and pose. Use few steps (hundreds to about a thousand), **augmentation** (training on altered copies: crops, flips), and **early stopping** (halting when a held-out metric stops improving) on identity-vs-diversity metrics.
 
-**Input quality decides output quality.** Before any GPU time: detect exactly one face per photo, reject blur, heavy filters, sunglasses and near-duplicates, require variety of angle and lighting, and **check that all photos show the same person** by clustering face embeddings. That last check is also the consent control.
+**Input quality decides output quality.** Before any GPU time: detect exactly one face per photo, reject blur, heavy filters, sunglasses and near-duplicates, require variety of angle and lighting, and **check that all photos show the same person** by **clustering** (grouping similar) face embeddings. That last check is also the consent control.
 
 ### Architecture (minutes 18–30)
 **Envelope** (illustrative, from the toy): training ~12 GPU-minutes per user × 20,000 users/day = 4,000 GPU-hours/day ≈ **167 GPUs busy around the clock**, ≈ $0.60 per user at $3/GPU-hour; inference 40 portraits × ~6 GPU-seconds ≈ $0.20 per user ($0.40 if you over-generate 2× and select, below); one rank-16 adapter ≈ 8 MB. Price the product against ~$1 of GPU cost per user.
@@ -1432,7 +1432,7 @@ flowchart LR
     DEL -.-> TTL["Deletion job - photos, adapter, outputs after N days"]
 ```
 
-- **Training is a batch job with an SLA.** Jobs run on a queue with idempotent retries (a crashed job restarts from its last checkpoint); paid-priority users jump the queue. Workers keep the base model loaded; each job loads only the user's photos.
+- **Training is a batch job with an SLA** (service level agreement: a promised deadline). Jobs run on a queue with idempotent retries (a crashed job restarts from its last checkpoint); paid-priority users jump the queue. Workers keep the base model loaded; each job loads only the user's photos.
 - **Serving many adapters on one base model.** Batch requests from different users on one GPU and apply each request's LoRA update on the fly (the idea behind multi-LoRA serving systems such as S-LoRA; Sheng et al., 2023). No per-user copy of the model ever exists.
 - **Over-generate and select.** Generate ~2× the delivered count, score identity similarity, style match and artefacts, deliver the best 40. Selection is cheaper than a failed order.
 - **Deletion is part of the pipeline**, not a support ticket: photos, adapter and outputs carry a time-to-live and a deletion job verifies they are gone from storage, caches and backups.
@@ -1447,7 +1447,7 @@ flowchart LR
 The GPU bill is mostly training (60–75% in the illustrative numbers, depending on how much you over-generate). Levers: fewer steps with better initialisation, lower rank, smaller training resolution, pre-computing text encodings, and the zero-shot encoder for users who only want a few images. Spread training across off-peak capacity — most users accept "within an hour".
 
 ### Safety and privacy
-- **Biometric data.** Face templates used to identify or match a person — exactly what the same-person and identity checks compute — are *special category* biometric data under GDPR (Art. 9), and face geometry is regulated by laws such as Illinois BIPA: explicit consent, a stated purpose and retention period, no use for training shared models without separate opt-in, and deletion on request.
+- **Biometric data.** Face **templates** (the numeric summaries of a face) used to identify or match a person — exactly what the same-person and identity checks compute — are *special category* biometric data under **GDPR** (the EU's data-protection law) (Art. 9), and face geometry is regulated by laws such as Illinois BIPA: explicit consent, a stated purpose and retention period, no use for training shared models without separate opt-in, and deletion on request.
 - **Only your own face.** The same-person check across uploads plus a live selfie matched to the uploads (a liveness check) stops users making headshots of someone else.
 - **Fixed styles, filtered outputs.** No free-text prompts, a nudity/violence filter on every output, adults only (age estimation with human review for borderline cases).
 
@@ -1548,7 +1548,7 @@ flowchart LR
 
 - **Preview first.** A keyframe (one image from the prompt) or a small, short clip costs a few percent of a full render; users who reject the preview never pay for the full clip. In the toy, previews at 5% cost that cut full renders by 30% save **$12,500/day**.
 - **Multi-GPU jobs need a real scheduler.** A job that needs 4 GPUs for 2 minutes must wait for 4 free GPUs on one host; the scheduler packs jobs to avoid fragmentation and keeps model weights warm (loading tens of GB takes longer than a short job).
-- **Checkpoint long jobs** so a preempted or crashed worker resumes rather than restarts; retries use the idempotency key so one clip is billed once.
+- **Checkpoint long jobs** so a **preempted** (stopped to free the machine for other work) or crashed worker resumes rather than restarts; retries use the idempotency key so one clip is billed once.
 - **Extension** ("make it longer") conditions a new segment on the last frames of the previous one; drift accumulates, so limit extensions or re-anchor on the first frame.
 - **The video gate** samples frames (plus motion-aware checks) for nudity, violence and realistic likenesses of public figures; it runs before the clip is visible.
 
@@ -1569,7 +1569,7 @@ Video is the most convincing medium for deepfakes. Prompt gate and video gate bo
 |---|---|
 | Flicker or morphing objects | Temporal layers and joint denoising; consistency probes in the regression suite |
 | Job preempted mid-render | Resume from checkpoint; idempotent billing |
-| GPU fragmentation leaves jobs waiting | Gang scheduling by job size; separate pools for 1-GPU previews and multi-GPU renders |
+| GPU fragmentation leaves jobs waiting | **Gang scheduling** (starting all GPUs a job needs at once, or none) by job size; separate pools for 1-GPU previews and multi-GPU renders |
 | Safety gate outage | That lane stops; no ungated clip is ever published |
 
 ### Follow-ups (Q→A)

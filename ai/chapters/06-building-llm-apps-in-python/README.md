@@ -2,9 +2,9 @@
 
 *Last reviewed: September 2026. LLM APIs change every few months: model names, prices and some parameters in this chapter will drift. The concepts (messages, tokens, tool loops, caching, retries, MCP roles) have been stable for years. Always check the provider's current docs before shipping.*
 
-Chapters 3–5 explained what a large language model (LLM) is and how to prompt it. This chapter turns that into software. You will see the AI tools people already use, then learn to call a model from Python the way production apps do: with a system prompt, a message history, token limits, streaming, JSON output, tools the model can call, retries, caching and memory. The chapter ends with the **Model Context Protocol (MCP)**, the open standard that lets one AI app plug into many tools and data sources.
+Chapters 3–5 explained what a large language model (LLM) is and how to prompt it. This chapter turns that into software. You will see the AI tools people already use, then learn to call a model from Python the way production apps do: with a system prompt (standing instructions for the whole conversation), a message history, token limits, streaming (showing the answer as it is generated), JSON output (JSON is a standard text format for structured data), tools the model can call, retries, caching (reusing earlier results instead of recomputing them) and memory. The chapter ends with the **Model Context Protocol (MCP)**, the open standard that lets one AI app plug into many tools and data sources.
 
-Every API snippet is real SDK code but is **not run here** (it needs an API key and network). Every script in [`code/`](code/) runs offline with small local stand-ins, so you can study the logic without paying for tokens.
+Every API snippet is real SDK code (the provider's official library; more in 6.2) but is **not run here** (it needs an API key, a secret string that identifies your account, and network access). Every script in [`code/`](code/) runs offline with small local stand-ins, so you can study the logic without paying for tokens.
 
 **What you'll learn**
 
@@ -33,7 +33,7 @@ Most tools fall into six families:
 | Family | What it does | Example products (as of Sept 2026) | Typical uses |
 |---|---|---|---|
 | **Chat assistants** (language and communication) | Answer, explain, summarise, draft, translate | ChatGPT (OpenAI), Claude (Anthropic), Gemini (Google), Microsoft Copilot, Meta AI | Research summaries, drafting emails and reports, brainstorming |
-| **Coding assistants** | Complete, explain, write and fix code; run multi-step coding tasks | GitHub Copilot, Claude Code, Cursor, OpenAI Codex, Gemini Code Assist | Writing functions from a description, refactoring, tests, onboarding to a codebase |
+| **Coding assistants** | Complete, explain, write and fix code; run multi-step coding tasks | GitHub Copilot, Claude Code, Cursor, OpenAI Codex, Gemini Code Assist | Writing functions from a description, refactoring (restructuring code without changing its behaviour), tests, onboarding to a codebase |
 | **Image and video generators** | Create or edit visuals from a text description | Midjourney, OpenAI image generation (the DALL·E line, now built into ChatGPT), Adobe Firefly, Google Imagen and Veo, OpenAI Sora | Slide visuals, social posts, concept art, marketing mock-ups |
 | **Voice and audio** | Text-to-speech, voice cloning, transcription, music | ElevenLabs, OpenAI Whisper (speech-to-text), Google and Microsoft speech services | Narrated lessons, podcasts, dubbing into other languages, meeting transcripts |
 | **Writing assistants** | Grammar, style, paraphrase, long-form drafting | Grammarly, QuillBot, Wordtune, Jasper, Sudowrite, NovelAI; Hemingway Editor (classic version: rule-based readability checks; its paid Plus tier adds AI rewrites) | Polishing emails, simplifying text, blog and story drafts |
@@ -54,15 +54,15 @@ These tools save time on repetitive work, raise output (a first draft in seconds
 5. **Verify.** All of them can be confidently wrong or biased. Treat output as a draft; check facts, numbers, citations and code.
 6. **Mind privacy.** Read the data-use settings before pasting company or personal data.
 
-Access styles differ. Most run in a web or mobile app after you create an account; many third-party apps embed a model with a small free allowance and then charge a subscription; assistants connected to web search (Microsoft Copilot, for example) can pull in current pages and link their sources; Midjourney started as a Discord bot (you type `/imagine` plus a prompt and get several variations) and now also has a web app; writing tools often plug into your editor or browser.
+Access styles differ. Most run in a web or mobile app after you create an account; many third-party apps embed a model with a small free allowance and then charge a subscription; assistants connected to web search (Microsoft Copilot, for example) can pull in current pages and link their sources; Midjourney started as a Discord bot (an automated account in the Discord chat app; you type `/imagine` plus a prompt and get several variations) and now also has a web app; writing tools often plug into your editor or browser.
 
 ### Hands-on reflection
 
-Pick one repetitive task from your week (summarising long reading, making slides, writing boilerplate code, recording narration, sorting files, scheduling). Ask: which family above fits it? How would your workflow change, how much time might you save, and what would you have to double-check? Keep the answer; Section 6.5 shows how to build such a helper yourself.
+Pick one repetitive task from your week (summarising long reading, making slides, writing boilerplate code (repetitive, standard code), recording narration, sorting files, scheduling). Ask: which family above fits it? How would your workflow change, how much time might you save, and what would you have to double-check? Keep the answer; Section 6.5 shows how to build such a helper yourself.
 
 ### Common mistakes
 
-- Treating output as final: hallucinated facts, fake citations and subtly wrong code are normal failure modes.
+- Treating output as final: hallucinated (invented but confident-sounding) facts, fake citations and subtly wrong code are normal failure modes.
 - Paying for many overlapping subscriptions before learning what one general assistant can do.
 - Pasting secrets or customer data into a consumer app whose settings allow training on your inputs.
 
@@ -82,7 +82,7 @@ AI tools are model engines wrapped in product features. Learn the families, try 
 
 ### What it is
 
-An **LLM API** is a web endpoint: you send JSON (which model, instructions, conversation, limits) and receive JSON (generated content, why it stopped, and how many tokens it used). **SDKs** (software development kits) such as the `anthropic` and `openai` Python packages wrap the HTTP details, authentication, retries and types.
+An **LLM API** is a web endpoint (a URL your program sends requests to): you send JSON (which model, instructions, conversation, limits) and receive JSON (generated content, why it stopped, and how many tokens it used). **SDKs** (software development kits) such as the `anthropic` and `openai` Python packages wrap the HTTP (the request/response protocol of the web; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) details, authentication (proving who you are), retries and types.
 
 The key idea: **the API is stateless**. The model remembers nothing between calls. Each request must carry everything the model should consider: the system prompt, the conversation so far, tool definitions and any retrieved documents.
 
@@ -150,11 +150,11 @@ chat = client.chat.completions.create(
 print(chat.choices[0].message.content, chat.choices[0].finish_reason)
 ```
 
-What each part does: the client reads your key from an environment variable (never hard-code keys); the system prompt sets rules for the whole conversation; `messages`/`input` holds the turns; the response gives content, a stop reason and token usage. To continue a conversation you append the assistant reply and the next user turn and send **everything** again (Section 6.9). Many other providers (and local servers such as vLLM or Ollama) expose a Chat-Completions-compatible endpoint, so this shape is the de facto lingua franca.
+What each part does: the client reads your key from an environment variable (a named setting the operating system passes to programs; never hard-code keys, i.e. write them into the source); the system prompt sets rules for the whole conversation; `messages`/`input` holds the turns; the response gives content, a stop reason and token usage. To continue a conversation you append the assistant reply and the next user turn and send **everything** again (Section 6.9). Many other providers (and local servers such as vLLM or Ollama, which run open models on your own machine) expose a Chat-Completions-compatible endpoint, so this shape is the de facto lingua franca (the common language everyone uses).
 
 ### Temperature: controlling randomness
 
-The model produces a score (**logit**) for every possible next token; **softmax** turns scores into probabilities. **Temperature** T divides the logits first: p_i = e^(z_i/T) / Σ_j e^(z_j/T).
+The model produces a score (**logit**) for every possible next token; **softmax** turns scores into probabilities that add up to 1. **Temperature** T divides the logits first: p_i = e^(z_i/T) / Σ_j e^(z_j/T).
 
 Worked example with three candidate tokens whose logits are [2.0, 1.0, 0.1]:
 
@@ -164,9 +164,9 @@ Worked example with three candidate tokens whose logits are [2.0, 1.0, 0.1]:
 | 1.0 | 0.659, 0.242, 0.099 | The model's own distribution |
 | 2.0 | 0.502, 0.304, 0.194 | Flatter: more variety, more mistakes |
 
-Use low temperature (0–0.3) for extraction, classification and code; higher (0.7–1.0) for brainstorming and creative writing. **Temperature 0 is not a determinism guarantee**: batching and floating-point effects on the server can still change outputs. **Top-p** (nucleus sampling) is an alternative knob: sample only from the smallest set of tokens whose probabilities add up to p. Change one of the two, not both.
+Use low temperature (0–0.3) for extraction, classification and code; higher (0.7–1.0) for brainstorming and creative writing. **Temperature 0 is not a determinism guarantee**: batching (the server running many requests together) and floating-point effects (tiny rounding differences in computer decimals) on the server can still change outputs. **Top-p** (nucleus sampling) is an alternative knob: sample only from the smallest set of tokens whose probabilities add up to p. Change one of the two, not both.
 
-Newer **reasoning models** manage sampling internally, and several reject sampling parameters: recent Claude models (Opus 4.7 and later, Sonnet 5 and later) return an error if you send `temperature`, and OpenAI's reasoning models do not accept it either. On those models you steer with the prompt and an **effort** setting (Anthropic `output_config={"effort": "low"|"medium"|"high"|...}`, OpenAI `reasoning={"effort": ...}`): lower effort means less thinking, fewer tokens and faster answers.
+Newer **reasoning models** (models that think internally before answering) manage sampling internally, and several reject sampling parameters: recent Claude models (Opus 4.7 and later, Sonnet 5 and later) return an error if you send `temperature`, and OpenAI's reasoning models do not accept it either. On those models you steer with the prompt and an **effort** setting (Anthropic `output_config={"effort": "low"|"medium"|"high"|...}`, OpenAI `reasoning={"effort": ...}`): lower effort means less thinking, fewer tokens and faster answers.
 
 ### Trade-offs: which OpenAI API?
 
@@ -174,21 +174,21 @@ Newer **reasoning models** manage sampling internally, and several reject sampli
 |---|---|---|
 | Shape | List of messages in, one message out | Items in, a list of output items out (text, tool calls, reasoning) |
 | State | You resend history | You may resend history, or chain with `previous_response_id` / conversation objects |
-| Built-in tools | Function calling | Function calling plus hosted tools (web search, file search, code interpreter, remote MCP) |
+| Built-in tools | Function calling | Function calling plus hosted tools (web search, file search, code interpreter = a sandbox where the model runs code, remote MCP) |
 | Status | Supported, industry-standard shape | OpenAI's recommended API for new projects |
 
 ### Common mistakes
 
 - **Forgetting that `max_tokens` truncates.** Always check the stop reason; `max_tokens`/`length` means the answer is incomplete.
 - **Reading `content` as a string.** In the Messages API it is a list of blocks (text, tool_use, thinking); loop and check `type`.
-- **Putting the key in code** or in a front-end app. Call LLM APIs from your server.
-- **Pinning to a model id forever.** Models are retired; keep the id in configuration and re-run your evaluations when you change it ([Chapter 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)).
+- **Putting the key in code** or in a front-end app (code that runs in the user's browser or phone, where anyone can read it). Call LLM APIs from your server.
+- **Pinning to a model id forever.** Models are retired; keep the id in configuration (settings kept outside the code) and re-run your evaluations when you change it ([Chapter 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)).
 
 ### In the interview
 
 **30-second answer:** "An LLM API is stateless: each call sends the model id, a system prompt, the message history and an output-token cap, and returns content blocks, a stop reason and token usage. I keep keys server-side, check the stop reason for truncation or tool calls, log usage for cost, and keep model ids in config so I can swap and re-evaluate."
 
-- *Why is `max_tokens` required on Anthropic?* It forces you to bound cost and latency per call; generation stops at the cap with `stop_reason="max_tokens"`.
+- *Why is `max_tokens` required on Anthropic?* It forces you to bound cost and latency (how long a call takes) per call; generation stops at the cap with `stop_reason="max_tokens"`.
 - *How do you make outputs more consistent?* Lower temperature (where supported), clearer instructions and examples, structured outputs, and validation — but never assume bit-for-bit determinism.
 - *Why do many vendors mimic Chat Completions?* It became the common interface, so SDKs and tools work across providers with a changed base URL.
 
@@ -213,13 +213,13 @@ Request = model + system + messages + limits (+ tools). Response = content block
 
 ### Why it matters
 
-Generation is sequential: a 600-token answer at ~60 tokens/second takes ~10 seconds. With streaming, the user sees the first words after the **time to first token (TTFT)**, often well under a second or two, and reads while the rest arrives. Perceived latency drops even though total time is the same. Streaming also avoids HTTP timeouts on very long outputs; the Anthropic SDK asks you to stream when `max_tokens` is very large.
+Generation is sequential: a 600-token answer at ~60 tokens/second takes ~10 seconds. With streaming, the user sees the first words after the **time to first token (TTFT)**, often well under a second or two, and reads while the rest arrives. Perceived latency drops even though total time is the same. Streaming also avoids HTTP timeouts (the connection being dropped because no reply arrived within a time limit) on very long outputs; the Anthropic SDK asks you to stream when `max_tokens` is very large.
 
 ### How it works
 
 1. You set a stream flag (or use a streaming helper).
 2. The server sends events: message start → content-block start → many **deltas** (text fragments) → block stop → message stop (with final usage).
-3. Your code forwards each text delta to the UI (via SSE or WebSocket to the browser) and accumulates the full text for logging and checks.
+3. Your code forwards each text delta to the UI (user interface; via SSE or WebSocket, a connection that stays open so either side can send messages, to the browser) and accumulates the full text for logging and checks.
 
 ### Code (needs an API key — not run)
 
@@ -246,19 +246,19 @@ The offline stand-in `FakeLLM.stream()` in [`code/fake_llm_tool_loop.py`](code/f
 
 | Streaming | Buffering (wait for full answer) |
 |---|---|
-| Fast perceived latency, good chat UX | Simpler code |
-| Harder to validate or moderate before the user sees it | You can run safety, JSON and citation checks **before** release |
+| Fast perceived latency, good chat UX (user experience) | Simpler code |
+| Harder to validate or moderate (screen for harmful content) before the user sees it | You can run safety, JSON and citation checks **before** release |
 | Partial output if the connection drops | All-or-nothing |
 
 ### When not to use it
 
-When a check must pass before anything is shown (a regulated answer, JSON that a program will parse, an answer whose citations must be verified). A mid-stream check can stop further text but cannot take back words already on screen. Batch jobs also gain nothing from streaming.
+When a check must pass before anything is shown (a regulated answer, JSON that a program will parse, an answer whose citations must be verified). A mid-stream check can stop further text but cannot take back words already on screen. Batch jobs (large offline workloads with no user waiting) also gain nothing from streaming.
 
 ### Common mistakes
 
 - Forgetting to accumulate the full text, then having nothing to log or evaluate.
 - Not handling a stream that errors half-way (show what arrived plus a retry option).
-- Streaming JSON straight into a parser that expects a complete document.
+- Streaming JSON straight into a parser (code that reads text and turns it into data) that expects a complete document.
 
 ### Self-check
 
@@ -280,7 +280,7 @@ Programs need data, not prose. **Structured output** means getting the model to 
 
 ### The problem it solves
 
-"Return JSON" in a prompt usually works, but "usually" breaks pipelines: the model adds a friendly sentence before the JSON, wraps it in a code fence, uses `"12"` instead of `12`, or omits a field.
+"Return JSON" in a prompt usually works, but "usually" breaks pipelines (chains of automated processing steps): the model adds a friendly sentence before the JSON, wraps it in a code fence, uses `"12"` instead of `12`, or omits a field.
 
 ### How it works: four levels of strictness
 
@@ -291,7 +291,7 @@ Programs need data, not prose. **Structured output** means getting the model to 
 | 3. **Structured outputs** | Supply a JSON Schema; decoding is constrained to it (Anthropic `output_config={"format": {"type": "json_schema", ...}}`; OpenAI `text={"format": {"type": "json_schema", "strict": True, ...}}`) | Output parses and matches the schema (within documented schema limits) |
 | 4. **Strict tool use** | Define a tool whose input schema is your data shape, with `strict: true` | The tool-call arguments match the schema |
 
-Constrained decoding works by masking tokens: at each step the server only allows tokens that keep the output a valid prefix of something your schema accepts. Even with a guarantee on *shape*, the *values* can still be wrong (a misread date), so validate business rules in code.
+Constrained decoding works by masking tokens: at each step the server only allows tokens that keep the output a valid prefix of something your schema accepts. Even with a guarantee on *shape*, the *values* can still be wrong (a misread date), so validate business rules (your application's own logic) in code.
 
 ### Code (needs an API key — not run)
 
@@ -319,7 +319,7 @@ resp = client.responses.create(
 data = json.loads(resp.output_text)
 ```
 
-Both SDKs also offer Pydantic helpers (`client.messages.parse(...)`, `client.responses.parse(...)`) that return a validated Python object.
+Both SDKs also offer Pydantic (a Python data-validation library) helpers (`client.messages.parse(...)`, `client.responses.parse(...)`) that return a validated Python object.
 
 ### Code: validate-and-retry fallback (runs offline)
 
@@ -365,7 +365,7 @@ The fake model first returned chatty text with `"seats": "12"`; the error messag
 
 - Using JSON mode and assuming the schema is enforced.
 - Asking for JSON but also for "a friendly explanation" in the same output.
-- Skipping semantic validation (e.g. `seats` must be ≥ 1, email must contain `@`).
+- Skipping semantic validation (checking that values make sense, e.g. `seats` must be ≥ 1, email must contain `@`).
 - Deeply nested, optional-everything schemas; flat, required fields are more reliable.
 
 ### In the interview
@@ -397,7 +397,7 @@ Analogy: the model is a manager on the phone. It cannot touch the filing cabinet
 
 ### Why it matters
 
-Tools give a model three things it lacks: **fresh or private data** (databases, search, internal APIs), **exact computation** (a calculator, SQL, code execution) and **actions** (create a ticket, send an email). Every agent in [Chapter 9](../09-ai-agents/README.md) is this loop repeated.
+Tools give a model three things it lacks: **fresh or private data** (databases, search, internal APIs), **exact computation** (a calculator, SQL (database query language), code execution) and **actions** (create a ticket, send an email). Every agent in [Chapter 9](../09-ai-agents/README.md) is this loop repeated.
 
 ### How it works
 
@@ -457,7 +457,7 @@ for _ in range(8):                                      # step limit
 print(next(b.text for b in resp.content if b.type == "text"))
 ```
 
-The OpenAI Responses API has the same loop with different names: tools are `{"type": "function", "name", "description", "parameters"}`; the model returns output items with `type == "function_call"`, a `call_id` and JSON-string `arguments`; you append `resp.output` to your input list and add `{"type": "function_call_output", "call_id": ..., "output": ...}` items. The Anthropic SDK also has a beta **tool runner** that drives this loop for you; writing it once by hand is the best way to understand it.
+The OpenAI Responses API has the same loop with different names: tools are `{"type": "function", "name", "description", "parameters"}`; the model returns output items with `type == "function_call"`, a `call_id` and JSON-string `arguments`; you append `resp.output` to your input list and add `{"type": "function_call_output", "call_id": ..., "output": ...}` items. The Anthropic SDK also has a beta (pre-release) **tool runner** that drives this loop for you; writing it once by hand is the best way to understand it.
 
 ### Code: the loop with a local FakeLLM (runs offline)
 
@@ -521,17 +521,17 @@ What it shows: (1) one model turn can request two tools in parallel, and both re
 |---|---|---|
 | Tool count | Few, well-described tools: higher accuracy | Many tools: more capability, more confusion and prompt tokens (use tool search or routing) |
 | Loop control | Model decides (`tool_choice: auto`) | Force a specific tool when you know it is needed (not supported on every model) |
-| Side effects | Read-only tools run automatically | Write actions (payments, emails, deletes) need human confirmation |
+| Side effects (changes to the outside world) | Read-only tools run automatically | Write actions (payments, emails, deletes) need human confirmation |
 
 ### When not to use it
 
-If the data can simply be put in the prompt (a short document), or the sequence of steps is fixed and known (call the API yourself, then ask the model to summarise). Deterministic code is cheaper and more reliable than a model deciding to call it.
+If the data can simply be put in the prompt (a short document), or the sequence of steps is fixed and known (call the API yourself, then ask the model to summarise). Deterministic code (ordinary code that always behaves the same way) is cheaper and more reliable than a model deciding to call it.
 
 ### Common mistakes
 
 - **Dropping the assistant's tool_use message** before sending results; the API rejects a `tool_result` without its matching call.
 - **Splitting parallel results** across several user messages.
-- **Trusting arguments blindly.** Validate types and ranges; never pass model-written strings straight into SQL or a shell.
+- **Trusting arguments blindly.** Validate types and ranges; never pass model-written strings straight into SQL or a shell (the command-line interpreter that runs system commands).
 - **No step limit** and no timeout per tool.
 - **Treating tool output as trusted.** A web page or email returned by a tool can contain instructions ("ignore previous rules…"): this is **prompt injection**. Keep tool permissions minimal and require approval for risky actions ([Chapter 12](../12-safety-ethics-governance/README.md)).
 
@@ -541,7 +541,7 @@ ChatGPT and Claude use tools for web search, code execution and file analysis; c
 
 ### In the interview
 
-**30-second answer:** "I describe tools with JSON Schemas. The model returns tool-call blocks; my code validates the arguments, runs the functions with least privilege, and returns results linked by id, errors included. I loop until the model finishes, with a step cap, per-tool timeouts, and human approval for side-effecting actions. The model never executes code itself."
+**30-second answer:** "I describe tools with JSON Schemas. The model returns tool-call blocks; my code validates the arguments, runs the functions with least privilege (only the permissions each strictly needs), and returns results linked by id, errors included. I loop until the model finishes, with a step cap, per-tool timeouts, and human approval for side-effecting actions. The model never executes code itself."
 
 - *How do you stop a runaway loop?* Max steps, max tokens/cost per task, timeouts, and detection of repeated identical calls.
 - *How do you make the model pick the right tool?* Clear names and descriptions that say when to use it, few overlapping tools, examples, and evaluation on real queries.
@@ -570,7 +570,7 @@ Providers bill per token, separately for **input** (everything you send, includi
 
 **Cost per request = input_tokens × input_price + output_tokens × output_price** (prices are quoted per million tokens, "MTok").
 
-1. **Count tokens.** Each model family has its own tokenizer, so counts differ between vendors. Use the provider's tool: Anthropic's `client.messages.count_tokens(model=..., messages=...)` endpoint; for OpenAI models, the `tiktoken` library (for example `tiktoken.encoding_for_model(...)`). Offline, ~4 characters per English token is a workable first estimate; code and non-English text use more tokens.
+1. **Count tokens.** Each model family has its own tokenizer (the program that splits text into tokens), so counts differ between vendors. Use the provider's tool: Anthropic's `client.messages.count_tokens(model=..., messages=...)` endpoint; for OpenAI models, the `tiktoken` library (for example `tiktoken.encoding_for_model(...)`). Offline, ~4 characters per English token is a workable first estimate; code and non-English text use more tokens.
 2. **Log real usage.** Every response reports `usage`; store it per request, per feature and per user.
 3. **Estimate the monthly bill** = requests/day × cost/request × 30, then look for the biggest term.
 
@@ -640,7 +640,7 @@ Cost = tokens in × price in + tokens out × price out. Count with the provider'
 
 ### What it is
 
-Remote APIs fail. **Rate limits** cap how much you may send: requests per minute (RPM) and tokens per minute (input and output TPM), per model and per organisation tier. Exceed them and you get **HTTP 429**, often with a `retry-after` header. Servers also return **5xx** errors when overloaded (Anthropic uses 529 for "overloaded"), and networks time out.
+Remote APIs fail. **Rate limits** cap how much you may send: requests per minute (RPM) and tokens per minute (input and output TPM), per model and per organisation tier. Exceed them and you get **HTTP 429** (the status code for "too many requests"; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) for rate limiting), often with a `retry-after` header (a metadata line on the response saying how long to wait). Servers also return **5xx** errors (the family of server-side failure codes) when overloaded (Anthropic uses 529 for "overloaded"), and networks time out.
 
 ### How it works
 
@@ -649,7 +649,7 @@ Remote APIs fail. **Rate limits** cap how much you may send: requests per minute
 | 400 bad request, 401/403 auth, 404 model not found | **No** | Fix the request or credentials |
 | 408 timeout, 409 conflict, 429 rate limit | Yes | Wait (use `retry-after` if present) |
 | 500, 502, 503, 529 | Yes | Exponential backoff with jitter |
-| Connection error / client timeout | Yes | Backoff; consider a fallback model or provider |
+| Connection error / client timeout | Yes | Backoff; consider a fallback (backup) model or provider |
 
 **Exponential backoff with jitter:** wait a random time between 0 and min(cap, base × 2^attempt). Doubling spreads retries out; **jitter** (randomness) stops thousands of clients retrying in lock-step and knocking the server over again (the "thundering herd").
 
@@ -703,17 +703,17 @@ Token bucket: 2 requests/second, burst of 3, 8 requests arrive at once
   send times (s): [0.0, 0.0, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5]
 ```
 
-The **token bucket** is a client-side limiter: the bucket refills at `rate` tokens per second up to `capacity`; each request spends one. It lets short bursts through and then smooths traffic so you stay under your quota instead of hammering it and collecting 429s. Note the timeout: the 10-second wait is spent even before the retry, so worst-case latency ≈ timeout × (retries + 1) plus backoff. Set timeouts from your latency budget, not the SDK default.
+The **token bucket** is a client-side limiter: the bucket refills at `rate` tokens per second up to `capacity`; each request spends one. It lets short bursts through and then smooths traffic so you stay under your quota (allowed usage) instead of hammering it and collecting 429s. Note the timeout: the 10-second wait is spent even before the retry, so worst-case latency ≈ timeout × (retries + 1) plus backoff. Set timeouts from your latency budget (the total delay you can afford), not the SDK default.
 
 ### Trade-offs
 
-More retries raise success rate but also tail latency and cost. For user-facing chat, prefer few retries plus a **fallback** (a smaller model, another region or provider, or a cached answer); for batch jobs, retry patiently.
+More retries raise success rate but also tail latency (the delay of the slowest few percent of requests) and cost. For user-facing chat, prefer few retries plus a **fallback** (a smaller model, another region or provider, or a cached answer); for batch jobs, retry patiently.
 
 ### Common mistakes
 
 - Retrying 400s (the request will fail forever).
-- Retrying without jitter, or in several layers at once (SDK retries × your retries × a queue's retries = a retry storm).
-- Retrying non-**idempotent** tool actions (an operation is idempotent if doing it twice has the same effect as once): a retried "send email" sends two emails. Use idempotency keys.
+- Retrying without jitter, or in several layers at once (SDK retries × your retries × a queue's retries = a retry storm; a queue is a waiting line that holds jobs between components).
+- Retrying non-**idempotent** tool actions (an operation is idempotent if doing it twice has the same effect as once): a retried "send email" sends two emails. Use idempotency keys (a unique ID sent with each request so the receiver can ignore duplicates; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
 - No timeout on streams that stall.
 
 ### In the interview
@@ -741,15 +741,15 @@ Fail fast on client errors; back off with jitter on 429/5xx/timeouts; honour ret
 
 Two different caches are both called "caching":
 
-1. **Prompt caching (provider-side prefix caching).** The provider stores the processed internal state (the attention key–value cache) for a **prefix** of your prompt. If the next request starts with the identical prefix, that part is not recomputed, so it is cheaper and faster.
+1. **Prompt caching (provider-side prefix caching).** The provider stores the processed internal state (the attention key–value cache from Chapter 4) for a **prefix** (the opening part) of your prompt. If the next request starts with the identical prefix, that part is not recomputed, so it is cheaper and faster.
 2. **Response caching (your side).** You store final answers and return them for repeated (exact) or similar (semantic) questions without calling the model.
 
 ### How prompt caching works
 
-1. Put **stable content first**: tool definitions, system prompt, long reference documents, few-shot examples. Put **changing content last**: the user question, timestamps, IDs.
+1. Put **stable content first**: tool definitions, system prompt, long reference documents, few-shot examples (sample input/output pairs). Put **changing content last**: the user question, timestamps, IDs.
 2. On Anthropic, mark where the reusable prefix ends with `cache_control`, or set top-level automatic caching. The cache is an exact **prefix match**: one changed byte (a timestamp in the system prompt) invalidates everything after it.
 3. Pricing (Anthropic, Sept 2026): a cache **write** costs 1.25× the normal input price for a 5-minute lifetime (2× for 1 hour); a cache **read** costs 0.1× on most models (0.05× on Opus 5.5, 0.025× on Fable 5.1). Each hit refreshes the lifetime. Two requests within the window already beat no caching (1.25 + 0.1 = 1.35 vs 2.0).
-4. OpenAI applies prompt caching **automatically** (on current models, for prompts of at least 1,024 tokens; cached input costs 0.1× on the newest models), with an optional explicit mode for placing breakpoints; you mainly keep the prefix stable.
+4. OpenAI applies prompt caching **automatically** (on current models, for prompts of at least 1,024 tokens; cached input costs 0.1× on the newest models), with an optional explicit mode for placing breakpoints (markers where the cacheable part ends); you mainly keep the prefix stable.
 5. Verify with usage fields: Anthropic reports `cache_creation_input_tokens` and `cache_read_input_tokens`; OpenAI reports them in `usage.input_tokens_details.cached_tokens`.
 
 ```python
@@ -769,10 +769,10 @@ In the cost script above, caching a 3,000-token prefix cut the bill by 47% even 
 
 | Kind | Key | Good for | Danger |
 |---|---|---|---|
-| Exact cache | Hash of (model, prompt, parameters) | Repeated identical requests, evaluations, dev loops | Stale answers after data changes |
-| Semantic cache | Embedding similarity of the question | FAQ-style traffic | "Similar" is not "same": *cancel my order* vs *cancel my subscription*; can leak one user's answer to another |
+| Exact cache | Hash (short fingerprint) of (model, prompt, parameters) | Repeated identical requests, evaluations, dev loops | Stale answers after data changes |
+| Semantic cache | Embedding similarity (closeness of meaning vectors, Chapter 7) of the question | FAQ-style traffic | "Similar" is not "same": *cancel my order* vs *cancel my subscription*; can leak one user's answer to another |
 
-Include model version, prompt version and **permission scope** in cache keys, and invalidate when source documents change or are deleted ([Chapter 7](../07-embeddings-vector-databases-and-rag/README.md)).
+Include model version, prompt version and **permission scope** in cache keys, and invalidate (discard cached entries) when source documents change or are deleted ([Chapter 7](../07-embeddings-vector-databases-and-rag/README.md)).
 
 ### Common mistakes
 
@@ -842,13 +842,13 @@ sent to model: 4 messages, ~52 tokens, 4 turns summarized
   user      Great, what will the new total be?
 ```
 
-Notice what the summary lost: "12-person design studio" disappeared, yet the next question ("new total") needs the seat count. That is the classic failure of lossy memory; the fix is to extract key facts (seats = 12) into a small structured memory that is always sent.
+Notice what the summary lost: "12-person design studio" disappeared, yet the next question ("new total") needs the seat count. That is the classic failure of lossy (detail-losing) memory; the fix is to extract key facts (seats = 12) into a small structured memory that is always sent.
 
 ### Common mistakes
 
 - Dropping the system prompt when trimming (always keep it).
 - Cutting between a tool call and its tool result (the pair must stay together).
-- Storing personal data in long-term memory without consent, retention limits and a way to delete it.
+- Storing personal data in long-term memory without consent, retention limits (how long data may be kept) and a way to delete it.
 
 ### Self-check
 
@@ -866,16 +866,16 @@ You own memory. Keep the system prompt, recent turns verbatim, a summary of olde
 
 ### What it is
 
-The **Model Context Protocol (MCP)** is an open protocol, introduced by Anthropic in November 2024, that standardises how an AI application connects to external **tools** and **data sources**. The popular analogy is **USB-C for AI**: before USB-C every device had its own charger; with one standard port, any charger fits any device. Before MCP, every AI app needed custom glue code for every service; with MCP, a service written once as an **MCP server** works in any AI app that includes an **MCP client**.
+The **Model Context Protocol (MCP)** is an open protocol (an agreed set of rules for how two programs talk), introduced by Anthropic in November 2024, that standardises how an AI application connects to external **tools** and **data sources**. The popular analogy is **USB-C for AI**: before USB-C every device had its own charger; with one standard port, any charger fits any device. Before MCP, every AI app needed custom glue code for every service; with MCP, a service written once as an **MCP server** works in any AI app that includes an **MCP client**.
 
-MCP is now widely supported: Claude's apps and Claude Code, ChatGPT and the OpenAI APIs (remote MCP servers), Microsoft's Copilot tools and VS Code, Cursor and many others. In December 2025 Anthropic donated MCP to the Agentic AI Foundation, a Linux Foundation project, so it is governed as a vendor-neutral standard.
+MCP is now widely supported: Claude's apps and Claude Code, ChatGPT and the OpenAI APIs (remote MCP servers), Microsoft's Copilot tools and VS Code (a popular code editor), Cursor and many others. In December 2025 Anthropic donated MCP to the Agentic AI Foundation, a Linux Foundation (a non-profit that hosts open-source projects) project, so it is governed as a vendor-neutral standard.
 
 ### The problem it solves
 
 With M AI apps and N tools, custom integrations need M × N connectors. With a shared protocol you need M clients + N servers. Concretely:
 
-- **Integration:** a GitHub, Postgres or Google Drive server works in every MCP host without changes.
-- **Efficiency:** less custom code; new tools are plug-and-play, discovered at run time.
+- **Integration:** a GitHub, Postgres (a popular open-source database) or Google Drive server works in every MCP host without changes.
+- **Efficiency:** less custom code; new tools are plug-and-play, discovered at run time (while the program is running).
 - **Future-proofing:** switch model or app vendor and keep your servers.
 
 MCP is about connecting **an AI application to capabilities and context**. It is not mainly a protocol for AI models to talk to each other; agent-to-agent messaging is a separate area with its own emerging standards (such as the Agent2Agent protocol).
@@ -896,31 +896,31 @@ flowchart LR
     S2 --> API[("Remote service")]
 ```
 
-- **Host** — the application the user runs (Claude Desktop, an IDE, your own agent). It owns the LLM, the UI and the user's consent.
+- **Host** — the application the user runs (Claude Desktop, an IDE (integrated development environment: a code editor with built-in tools), your own agent). It owns the LLM, the UI and the user's consent.
 - **Client** — a connector inside the host; one client per server connection.
-- **Server** — a program that exposes capabilities (a wrapper around Git, a database, a SaaS API).
+- **Server** — a program that exposes capabilities (a wrapper around Git (the version-control tool), a database, a SaaS (software as a service: apps rented over the internet) API).
 
-**Messages.** All communication is **JSON-RPC 2.0**: requests (`{"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}`), responses with a `result` or an `error`, and one-way notifications.
+**Messages.** All communication is **JSON-RPC 2.0** (a simple standard for sending function calls and their results as JSON messages): requests (`{"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}`), responses with a `result` or an `error`, and one-way notifications.
 
-**Transports.** **stdio** (the host launches the server as a local subprocess and talks over standard input/output; credentials come from the environment) and **Streamable HTTP** (a remote server over HTTP, optionally streaming with SSE; the spec defines an OAuth-based authorization framework for this case).
+**Transports.** **stdio** (the host launches the server as a local subprocess, a program started by another program, and talks over standard input/output, the text streams every program reads from and writes to; credentials come from the environment) and **Streamable HTTP** (a remote server over HTTP, optionally streaming with SSE; the spec defines an OAuth-based authorization framework for this case; OAuth is the standard way to let an app act for you without handing over your password).
 
 **What servers offer — three primitives, distinguished by who is in control:**
 
 | Primitive | Controlled by | What it is | Methods | Example |
 |---|---|---|---|---|
 | **Tools** | The model | Functions the LLM may call (with the host asking the user's permission) | `tools/list`, `tools/call` | `create_issue`, `run_sql`, `search_notes` |
-| **Resources** | The application | Read-only data identified by a URI that the host may put into context | `resources/list`, `resources/read` | `file:///README.md`, `notes://meeting/2026-09-21` |
+| **Resources** | The application | Read-only data identified by a URI (an address-like identifier) that the host may put into context | `resources/list`, `resources/read` | `file:///README.md`, `notes://meeting/2026-09-21` |
 | **Prompts** | The user | Reusable templates, often shown as slash commands | `prompts/list`, `prompts/get` | `/summarize_meeting` |
 
 **What clients may offer back to servers:** **elicitation** (the server asks the user for extra input, through the host), plus two older features that the 2026-07-28 revision **deprecates** but still supports during a 12-month window: **sampling** (the server asks the host's model to generate text; new servers should call a model API directly) and **roots** (which folders or URIs the server may work in; pass them as tool arguments or configuration instead).
 
-**Versions.** The spec is versioned by date. Revisions up to 2025-11-25 open a stateful session with an `initialize` handshake that negotiates version and capabilities. The **2026-07-28** revision made the protocol stateless: every request carries its protocol version and client capabilities in a `_meta` field, there is no handshake or session ID, servers must implement a `server/discover` method, and every result carries a `resultType` field. When a server needs more input mid-request (an elicitation), it returns an "input required" result and the client retries the request with the answers (**multi round-trip requests**). Servers may support both eras. SDKs hide these details.
+**Versions.** The spec is versioned by date. Revisions up to 2025-11-25 open a stateful session with an `initialize` handshake (an opening exchange where both sides agree on settings) that negotiates version and capabilities. The **2026-07-28** revision made the protocol stateless: every request carries its protocol version and client capabilities in a `_meta` field, there is no handshake or session ID, servers must implement a `server/discover` method, and every result carries a `resultType` field. When a server needs more input mid-request (an elicitation), it returns an "input required" result and the client retries the request with the answers (**multi round-trip requests**). Servers may support both eras. SDKs hide these details.
 
 **A worked flow: scheduling a meeting.** A host has three servers connected: a calendar server, a contacts server and an email server. The user says "Set up 30 minutes with Priya and Omar next week". The model calls `contacts.lookup` for both emails, then `calendar.find_free_slots`, picks a time, and calls `calendar.create_event`, which sends invitations. Each hop is a `tools/call` through a different MCP client; the host shows a confirmation before the event is created. A weekly newsletter works the same way: a news-search server (fetch articles), the model itself (summarise and organise), and a docs or email server (fill the template and send), run on a schedule.
 
 ### Code: a minimal MCP server (official Python SDK — not run here)
 
-The SDK derives each tool's JSON Schema from type hints and docstrings:
+The SDK derives each tool's JSON Schema from type hints (annotations such as `query: str`) and docstrings (the description string at the top of a function):
 
 ```python
 # server.py  (pip install mcp)  - Python SDK v2; in v1 the class is FastMCP:
@@ -992,7 +992,7 @@ Put together with 6.5: MCP handles *discovering and executing* tools; the LLM AP
 | MCP server | Direct tool code inside your app |
 |---|---|
 | Reusable across hosts and teams; ecosystem of ready servers | Simplest for one app and one or two tools |
-| Process or network boundary: isolation, but more latency and ops | In-process, fastest |
+| Process or network boundary: isolation, but more latency and ops (operational work: deploying, monitoring) | In-process, fastest |
 | Standard auth and discovery | Your own conventions |
 
 ### When not to use it
@@ -1002,14 +1002,14 @@ A single app with two internal functions does not need a protocol. Use MCP when 
 ### Common mistakes and security
 
 - **Installing untrusted servers.** A server is code with your permissions; a malicious tool description can hide instructions for the model (**tool poisoning**), and a server can change its tools after you approved it.
-- **Over-broad scopes.** Give each server the minimum access (read-only where possible, limited folders, scoped OAuth tokens).
+- **Over-broad scopes.** Give each server the minimum access (read-only where possible, limited folders, scoped OAuth tokens, i.e. tokens that grant only named permissions).
 - **Skipping consent.** The spec requires hosts to get user consent before invoking tools and before exposing user data to servers; keep a human in the loop for writes.
 - **Prompt injection through data.** Resources and tool results (emails, web pages, tickets) can carry instructions; treat them as data.
 - **Too many servers at once.** Dozens of tools bloat the prompt and confuse tool choice; enable per task.
 
 ### Real-world examples
 
-Official and community servers exist for GitHub, Slack, Google Drive, Postgres, filesystems, browsers (Playwright) and many SaaS products. Claude Code and IDEs such as VS Code and Cursor connect to them for coding workflows; ChatGPT and the OpenAI Responses API can call remote MCP servers; the Anthropic Messages API has an MCP connector for remote servers.
+Official and community servers exist for GitHub, Slack, Google Drive, Postgres, filesystems, browsers (Playwright, a browser-automation tool) and many SaaS products. Claude Code and IDEs such as VS Code and Cursor connect to them for coding workflows; ChatGPT and the OpenAI Responses API can call remote MCP servers; the Anthropic Messages API has an MCP connector for remote servers.
 
 ### In the interview
 

@@ -38,7 +38,7 @@ Most modern AI work uses the bottom-right cell. AIMA calls it the **standard mod
 
 ### Key terms
 
-- **Agent** — anything that *perceives* its environment through **sensors** and *acts* on it through **actuators**. A thermostat, a chess program, a self-driving car and a chatbot calling tools are all agents.
+- **Agent** — anything that *perceives* its environment through **sensors** (anything that takes in information: cameras, microphones, a text input box) and *acts* on it through **actuators** (anything that changes the world: wheels, a speaker, a message it sends). A thermostat, a chess program, a self-driving car and a chatbot calling tools are all agents.
 - **Percept** — what the agent senses at one moment. The **percept sequence** is everything it has sensed so far.
 - **Agent function** — the mapping from percept sequences to actions. The **agent program** is the code that implements it.
 - **Performance measure** — how we score the agent's behaviour *in the environment* (not how the agent feels about itself).
@@ -50,9 +50,9 @@ Before building any agent, fill in **PEAS**: Performance measure, Environment, A
 
 | Agent | Performance | Environment | Actuators | Sensors |
 |---|---|---|---|---|
-| Robot vacuum | Clean floor, battery used, no collisions | Rooms, furniture, pets | Wheels, brushes, suction | Bump sensors, cliff sensors, camera or lidar |
+| Robot vacuum | Clean floor, battery used, no collisions | Rooms, furniture, pets | Wheels, brushes, suction | Bump sensors, cliff sensors, camera or lidar (laser distance sensor) |
 | Taxi route planner | Arrival time, fuel, safety | Road network, traffic | Route shown to driver | GPS, live traffic feed |
-| Customer-support LLM agent | Issues solved, customer rating, cost | Help desk, order database | Replies, refund API calls | Customer messages, tool results |
+| Customer-support LLM agent | Issues solved, customer rating, cost | Help desk, order database | Replies, refund API (program-to-program interface) calls | Customer messages, tool results |
 
 Then classify the **environment**, because each property changes which algorithms work:
 
@@ -60,7 +60,7 @@ Then classify the **environment**, because each property changes which algorithm
 |---|---|---|---|
 | Observable? | Fully observable (sees the whole state) | Partially observable | Poker (hidden cards) |
 | Agents? | Single agent | Multi-agent | Driving among other cars |
-| Outcomes? | Deterministic (same action, same result) | Nondeterministic / stochastic | Dice games, robot wheels slipping |
+| Outcomes? | Deterministic (same action, same result) | Nondeterministic / stochastic (involves randomness) | Dice games, robot wheels slipping |
 | Episodes? | Episodic (each decision independent) | Sequential (decisions affect the future) | Chess |
 | Changes while thinking? | Static | Dynamic | Traffic |
 | Values? | Discrete | Continuous | Steering angle |
@@ -168,11 +168,11 @@ AI = making machines act intelligently. The working definition is the **rational
 | **What it stores** | Memories, intuitions, concepts it can apply in new contexts | Numbers (model **parameters**) that encode patterns |
 | **Missing information** | Fills gaps with common sense and context | Often fails or guesses confidently when inputs differ from training data |
 | **Strengths** | Creativity, abstraction, empathy, reasoning from little data, knowing what matters | Speed, consistency, tireless scale, instant copying of a trained model to thousands of servers |
-| **Weaknesses** | Slow, tires, inconsistent, limited memory | Brittle outside its training distribution, no lived experience, can be confidently wrong |
+| **Weaknesses** | Slow, tires, inconsistent, limited memory | Brittle outside its training distribution (the kind of data it learned from), no lived experience, can be confidently wrong |
 
 Two examples make the difference concrete:
 
-- **Recognising a face.** You spot a friend in a crowd almost instantly and still recognise them with a new haircut. A phone's face-unlock system converts the face into measurements (a numeric "embedding" built from features such as eye spacing and jaw shape) and compares it with the stored one. It is very fast and accurate for its narrow job, but it is arithmetic, not recognition in the human sense.
+- **Recognising a face.** You spot a friend in a crowd almost instantly and still recognise them with a new haircut. A phone's face-unlock system converts the face into measurements (a numeric "embedding", i.e. a list of numbers that summarises the face, built from features such as eye spacing and jaw shape) and compares it with the stored one. It is very fast and accurate for its narrow job, but it is arithmetic, not recognition in the human sense.
 - **Understanding language.** Children learn words through years of interaction, context and correction, and they get sarcasm and jokes. A large language model (LLM) learns from vast amounts of text to predict the next piece of text. It can translate thousands of words in seconds and often sounds fluent, yet whether it "understands" in the human sense is exactly what people argue about (see below).
 
 The practical conclusion: humans and machines have *complementary* strengths. The best systems combine machine speed and scale with human judgement, context and responsibility.
@@ -192,7 +192,7 @@ AIMA adds the **total Turing test**, which also requires perception (vision) and
 
 ### Code: why passing a chat test proves little
 
-In 1966 Joseph Weizenbaum's ELIZA imitated a therapist with nothing more than pattern matching and pronoun swapping. Some users still confided in it as if it understood them. Here is the same trick in about 20 lines:
+In 1966 Joseph Weizenbaum's ELIZA imitated a therapist with nothing more than pattern matching (spotting fixed text shapes, here written as *regular expressions* or **regex**, a mini-language for describing text patterns) and pronoun swapping. Some users still confided in it as if it understood them. Here is the same trick in about 20 lines:
 
 ```python
 # code/eliza_toy.py (core)
@@ -234,7 +234,7 @@ The first match wins; `reflect` swaps "my" to "your" so the echo sounds natural.
 
 - **Chinese Room (John Searle, 1980).** A person who speaks no Chinese follows a rulebook to answer Chinese notes perfectly. To outsiders the room "understands" Chinese; inside, nobody does. Searle's point: manipulating symbols correctly is not the same as understanding them.
 - **Weak vs strong AI** (Searle's terms). *Weak AI*: machines can act *as if* intelligent. *Strong AI*: a suitably programmed machine would really have a mind. Most engineers only need the weak claim: what matters is whether the system does the job reliably.
-- **LLMs and the test.** Modern chatbots can hold long, fluent conversations. A 2025 preprint by researchers at UC San Diego reported that, in a three-party Turing-style test, GPT-4.5 prompted to adopt a human persona was picked as the human 73% of the time, more often than the real human participants were (Jones and Bergen; a preprint, so not yet peer-reviewed when published). That says a lot about fluent imitation and little about understanding, feelings or reliability, which is why researchers today rely on task **benchmarks** (maths, coding, reasoning tests) and real-world evaluations instead of the Turing test.
+- **LLMs and the test.** Modern chatbots can hold long, fluent conversations. A 2025 preprint by researchers at UC San Diego reported that, in a three-party Turing-style test, GPT-4.5 prompted to adopt a human persona was picked as the human 73% of the time, more often than the real human participants were (Jones and Bergen; a preprint, so not yet peer-reviewed when published). That says a lot about fluent imitation and little about understanding, feelings or reliability, which is why researchers today rely on task **benchmarks** (maths, coding, reasoning tests) and real-world evaluations instead of the Turing test. (A **benchmark** is a fixed, public set of test questions with known answers, so different models can be scored the same way; a **preprint** is a paper shared publicly before other experts have formally reviewed it.)
 
 ### Trade-offs: ways to judge "is it intelligent?"
 
@@ -285,17 +285,17 @@ AI's history is a cycle of bold predictions, funding booms, disappointment ("**A
 |---|---|---|
 | **1943–1955: foundations** | McCulloch and Pitts model a neuron mathematically (1943). Turing's 1950 paper proposes the imitation game. | Brains as computation; a test for machine intelligence. |
 | **1956: Dartmouth workshop** | John McCarthy, Marvin Minsky, Claude Shannon and Nathaniel Rochester's 1955 proposal coins "artificial intelligence"; the summer 1956 workshop at Dartmouth College is taken as the field's birth. | AI becomes a named research field, and very optimistic predictions begin. |
-| **1956–early 1970s: symbolic AI** | Programs manipulate symbols and logic: Newell and Simon's Logic Theorist and General Problem Solver, McCarthy's Lisp (1958), Rosenblatt's perceptron (1958), ELIZA (1966), Shakey the robot. | "Good old-fashioned AI" (GOFAI): intelligence as rules and search over symbols. |
-| **~1974–1980: first AI winter** | Programs that worked on toy problems failed to scale (combinatorial explosion). The UK Lighthill report (1973) was highly critical; funding fell in the UK and US. Minsky and Papert's *Perceptrons* (1969) had shown limits of single-layer networks, cooling neural-network research. | Lesson: toy demos do not imply real-world scale. |
+| **1956–early 1970s: symbolic AI** | Programs manipulate symbols and logic: Newell and Simon's Logic Theorist and General Problem Solver, McCarthy's Lisp (1958; an early programming language built for AI), Rosenblatt's perceptron (1958; the first trainable artificial neuron), ELIZA (1966), Shakey the robot. | "Good old-fashioned AI" (GOFAI): intelligence as rules and search over symbols. |
+| **~1974–1980: first AI winter** | Programs that worked on toy problems failed to scale (combinatorial explosion: the number of possibilities grows far too fast to check them all). The UK Lighthill report (1973) was highly critical; funding fell in the UK and US. Minsky and Papert's *Perceptrons* (1969) had shown limits of single-layer networks, cooling neural-network research. | Lesson: toy demos do not imply real-world scale. |
 | **1980–1987: expert systems boom** | Rule-based **expert systems** capture specialist knowledge as thousands of if-then rules; DEC's XCON/R1 configured computer orders. Japan's Fifth Generation project spurs investment. | First commercial AI wave. |
 | **~1987–1993: second AI winter** | Expert systems proved brittle and costly to maintain; the specialised Lisp-machine market collapsed in 1987. | Lesson: hand-written knowledge does not scale or adapt. |
-| **1986–2000s: statistical and ML era** | Backpropagation popularised for multi-layer networks (Rumelhart, Hinton and Williams, 1986). Probability and learning take over: Bayesian networks, support vector machines, decision trees. IBM's Deep Blue beats world chess champion Garry Kasparov (1997) using search, not learning. In the 2000s cheap computing and web-scale data power recommendations and search at Amazon and Google. | Shift from writing rules to learning them from data. |
-| **2012: deep learning breakthrough** | AlexNet, a deep convolutional network trained on GPUs, wins the ImageNet image-recognition challenge with a top-5 error of about 15% versus about 26% for the runner-up. | Deep learning takes over vision, then speech and translation. Three ingredients: big data (ImageNet), GPUs, better training tricks. |
-| **2014–2016** | Generative adversarial networks (2014). DeepMind's AlphaGo beats Go champion Lee Sedol 4–1 (March 2016), combining deep networks with tree search. | Learning plus search beats humans at a game once thought decades away. |
+| **1986–2000s: statistical and ML era** | Backpropagation (the method that works out how much each weight in a network should change to reduce its error) popularised for multi-layer networks (Rumelhart, Hinton and Williams, 1986). Probability and learning take over: Bayesian networks (probability models of cause and effect), support vector machines (classifiers that find the widest dividing boundary), decision trees (chains of yes/no questions). IBM's Deep Blue beats world chess champion Garry Kasparov (1997) using search, not learning. In the 2000s cheap computing and web-scale data power recommendations and search at Amazon and Google. | Shift from writing rules to learning them from data. |
+| **2012: deep learning breakthrough** | AlexNet, a deep convolutional network (a neural network design suited to images) trained on GPUs (graphics chips that do thousands of calculations in parallel), wins the ImageNet (a dataset of over a million labelled photos) image-recognition challenge with a top-5 error (right answer missing from its five best guesses) of about 15% versus about 26% for the runner-up. | Deep learning takes over vision, then speech and translation. Three ingredients: big data (ImageNet), GPUs, better training tricks. |
+| **2014–2016** | Generative adversarial networks, GANs (2014: one network makes fakes, another learns to spot them, and both improve). DeepMind's AlphaGo beats Go champion Lee Sedol 4–1 (March 2016), combining deep networks with tree search. | Learning plus search beats humans at a game once thought decades away. |
 | **2017: the transformer** | Google researchers publish "Attention Is All You Need", introducing the **transformer** architecture. | Foundation of nearly every modern language model (Chapter 3). |
-| **2018–2021: pre-trained language models** | BERT and GPT-1 (2018), GPT-2 (2019), GPT-3 (2020, 175 billion parameters). DeepMind's AlphaFold 2 largely solves protein-structure prediction at CASP14 (2020). | "Pre-train on huge data, then adapt" becomes the recipe (**foundation models**). |
+| **2018–2021: pre-trained language models** | BERT and GPT-1 (2018), GPT-2 (2019), GPT-3 (2020, 175 billion parameters). DeepMind's AlphaFold 2 largely solves protein-structure prediction at CASP14 (2020; a biennial protein-prediction competition). | "Pre-train on huge data, then adapt" becomes the recipe (**foundation models**: very large models pre-trained once on broad data, then adapted to many tasks). |
 | **2022: generative AI goes mainstream** | Text-to-image models (DALL·E 2, Midjourney, Stable Diffusion) and, on 30 November 2022, OpenAI's ChatGPT, which reportedly reached around 100 million users within about two months. | AI becomes a consumer product; "AI engineering" (building on top of foundation models) becomes a job. |
-| **2023–today: multimodal models, reasoning and agents** | GPT-4, Claude, Gemini and open-weight families such as Llama; models that handle text, images and audio; "reasoning" models that spend more computation thinking before answering (from 2024); tool-using **agents** that browse, write code and operate software, and open protocols for connecting models to tools. The 2024 Nobel Prizes in Physics (Hopfield, Hinton) and Chemistry (Hassabis, Jumper, with Baker) recognised AI research. | Focus shifts from "can it generate?" to "can it act reliably, safely and cheaply?" |
+| **2023–today: multimodal models, reasoning and agents** | GPT-4, Claude, Gemini and open-weight families (models whose trained numbers are published for anyone to download and run) such as Llama; **multimodal** models that handle text, images and audio; "reasoning" models that spend more computation thinking before answering (from 2024); tool-using **agents** that browse, write code and operate software, and open protocols for connecting models to tools. The 2024 Nobel Prizes in Physics (Hopfield, Hinton) and Chemistry (Hassabis, Jumper, with Baker) recognised AI research. | Focus shifts from "can it generate?" to "can it act reliably, safely and cheaply?" |
 
 ![AI evolution over the past two decades](img/ai-evolution.jpg)
 *Figure — The recent arc: data-driven ML in the 2000s, the deep learning revolution from 2012, generative and agentic AI in the 2020s (course diagram).*
@@ -419,7 +419,7 @@ ML itself has two main styles you will meet everywhere:
 
 (Reinforcement learning, learning by trial and error from rewards, is the third; the [ML Handbook](../../../ml/chapters/01-what-is-ml/README.md) covers all of them.)
 
-Generative AI raises its own questions: it blurs the line between human-made and machine-made content, which creates issues of originality, copyright, authenticity and misuse (covered in Chapter 12). Agentic AI is the youngest branch: agents can already handle multi-step digital tasks, but they remain error-prone and need guardrails (Chapter 9).
+Generative AI raises its own questions: it blurs the line between human-made and machine-made content, which creates issues of originality, copyright, authenticity and misuse (covered in Chapter 12). Agentic AI is the youngest branch: agents can already handle multi-step digital tasks, but they remain error-prone and need guardrails (automatic checks and limits on what they may do; Chapter 9).
 
 ### Symbolic vs statistical AI
 
@@ -430,7 +430,7 @@ The deepest split in the field's history is *how knowledge gets into the machine
 | Knowledge | Written by people as rules, logic, search spaces | Learned from data as numeric parameters |
 | Strengths | Transparent, exact, needs no data, provable | Handles messy real-world inputs (images, speech, language), improves with data |
 | Weaknesses | Brittle, cannot cover every case, costly to maintain | Needs lots of data and compute, hard to explain, can be confidently wrong |
-| Examples | Tax rules engine, A* route planning, SQL query planner, expert systems | Image classifiers, recommenders, LLMs |
+| Examples | Tax rules engine, A* route planning (a shortest-path search), SQL query planner (database part that picks how to run a query), expert systems | Image classifiers, recommenders, LLMs |
 
 Modern systems mix both (sometimes called **neuro-symbolic** or simply "hybrid"): an LLM (statistical) calls a calculator, a database or a planner (symbolic).
 
@@ -462,7 +462,7 @@ good but slow      pos      neg      0.41
 love it            pos      pos      0.68
 ```
 
-What it shows: the rules say nothing about "superb" or "laggy" because nobody wrote those words down; the learned model (a Naive Bayes classifier, explained in the ML Handbook) picked them up from examples. But look at "good but slow": the rules say positive, the model says negative. Neither is obviously right; the model is only as good as its eight examples. With more data the learned approach wins on coverage; the rules win on transparency.
+What it shows: the rules say nothing about "superb" or "laggy" because nobody wrote those words down; the learned model (a Naive Bayes classifier, explained in the ML Handbook) picked them up from examples. The `P(pos)` column is the model's estimated probability that the review is positive (0 to 1). But look at "good but slow": the rules say positive, the model says negative. Neither is obviously right; the model is only as good as its eight examples. With more data the learned approach wins on coverage; the rules win on transparency.
 
 ### When not to use ML
 
@@ -470,7 +470,7 @@ When the rules are known, stable and must be exact (tax brackets, access control
 
 ### Common mistakes
 
-- Saying "AI" when you mean a specific technique. Say "a gradient-boosted classifier" or "an LLM".
+- Saying "AI" when you mean a specific technique. Say "a gradient-boosted classifier" (many small decision trees, each correcting the previous ones' mistakes) or "an LLM".
 - Assuming GenAI is the right tool for prediction on tables. Classic ML is usually cheaper and more accurate there.
 - Forgetting that every DL model is ML and every ML model is AI, but not the reverse.
 
@@ -502,11 +502,11 @@ AI is mostly invisible: it runs inside products you already use. The table group
 | Area | Examples | Main technique |
 |---|---|---|
 | Phones and assistants | Face unlock, predictive keyboard, photo enhancement, live translation, voice assistants (Siri, Alexa, Google Assistant) | Deep learning, on-device models |
-| Generative tools | Chat assistants, writing and coding helpers, text-to-image and video generators, meeting summaries | LLMs, diffusion models |
+| Generative tools | Chat assistants, writing and coding helpers, text-to-image and video generators, meeting summaries | LLMs, diffusion models (generate images by step-by-step removing noise) |
 | Recommendations and feeds | Netflix, Spotify, YouTube, Amazon, TikTok, news feeds | Classic ML plus deep recommender models |
 | Communication | Spam and phishing filters, content moderation, smart replies | Classifiers, LLMs |
 | Customer service | Chatbots and virtual agents answering common questions around the clock, routing tickets | LLMs, intent classifiers |
-| Finance | Card-fraud detection, credit scoring, document processing | Gradient-boosted trees, anomaly detection |
+| Finance | Card-fraud detection, credit scoring, document processing | Gradient-boosted trees, anomaly detection (flagging unusual cases) |
 | Transport and logistics | Navigation and ETA prediction, ride matching, warehouse robots, driver assistance, robotaxis in some cities | Search (A*), ML, deep learning |
 | Healthcare and science | Medical image screening, protein-structure prediction (AlphaFold), drug-discovery support | Deep learning |
 | Software engineering | Code completion, coding agents, test generation | LLMs, agents |
@@ -571,22 +571,22 @@ Most AI projects fail or stall not because the algorithm is wrong but because of
 | Constraint | What goes wrong | Practical response |
 |---|---|---|
 | **Data** | Too little, poor quality, unrepresentative or biased; privacy rules limit use | Audit data first; start where good data exists; collect feedback in production |
-| **Budget and infrastructure** | GPUs and cloud compute are expensive; per-request API costs multiply with traffic | Pilot projects on limited scope; pay-as-you-go cloud to avoid big up-front spend; pick the smallest model that meets quality |
-| **Maintenance** | Models degrade as the world changes (**data drift**); pipelines, dependencies and model versions need upkeep | Budget AI as an ongoing cost, not a one-off; monitor quality continuously |
-| **Latency** | Users abandon slow features; long generated answers take seconds | Stream output, shorten outputs, cache, use smaller or faster models |
-| **Reliability** | Models are probabilistic; errors compound across multi-step agent workflows | Evaluate before launch, add checks and fallbacks, keep humans in the loop for high stakes |
-| **Integration with legacy systems** | Older mission-critical software was not designed for AI; connecting needs custom APIs or middleware | Plan integration work explicitly; wrap models behind stable service interfaces |
-| **Skills and staffing** | ML engineers, data scientists and MLOps specialists are scarce; weak teams build weak systems | Upskill existing staff through workshops and real projects with mentoring; hire selectively |
+| **Budget and infrastructure** | GPUs and cloud compute are expensive; per-request API costs multiply with traffic | Pilot projects on limited scope; pay-as-you-go cloud (renting computers from a provider by the hour) to avoid big up-front spend; pick the smallest model that meets quality |
+| **Maintenance** | Models degrade as the world changes (**data drift**: live data slowly stops looking like the training data); pipelines, dependencies (other software packages the system relies on) and model versions need upkeep | Budget AI as an ongoing cost, not a one-off; monitor quality continuously |
+| **Latency** | Users abandon slow features; long generated answers take seconds | Stream output (show words as they are generated), shorten outputs, cache (store and reuse earlier answers), use smaller or faster models |
+| **Reliability** | Models are probabilistic (outputs involve chance); errors compound across multi-step agent workflows | Evaluate before launch, add checks and fallbacks, keep humans in the loop for high stakes |
+| **Integration with legacy systems** | Older mission-critical software was not designed for AI; connecting needs custom APIs or middleware (glue software between systems) | Plan integration work explicitly; wrap models behind stable service interfaces |
+| **Skills and staffing** | ML engineers, data scientists and MLOps (running ML models reliably in production) specialists are scarce; weak teams build weak systems | Upskill existing staff through workshops and real projects with mentoring; hire selectively |
 | **Culture and change** | Staff fear for jobs or resist new workflows; departments want different things | Communicate early, involve users, align stakeholders on a few clear goals |
-| **Return on investment (ROI)** | No clear success metric, so no case for continued funding; benefits may take time | Define concrete metrics (churn, handling time, conversion) up front; mix quick-win pilots with longer-term bets |
-| **Security, safety and regulation** | Prompt injection, data leaks, harmful outputs; laws such as the EU AI Act (in force since August 2024, obligations phased in over several years) | Threat-model the system, restrict tool permissions, keep audit logs, check legal obligations (Chapter 12) |
+| **Return on investment (ROI)** | No clear success metric, so no case for continued funding; benefits may take time | Define concrete metrics (churn = customers leaving, handling time, conversion = share who buy) up front; mix quick-win pilots with longer-term bets |
+| **Security, safety and regulation** | Prompt injection (hidden text that tricks a model into ignoring its instructions), data leaks, harmful outputs; laws such as the EU AI Act (in force since August 2024, obligations phased in over several years) | Threat-model the system, restrict tool permissions, keep audit logs, check legal obligations (Chapter 12) |
 
 ### How it works: back-of-envelope maths
 
 Three quick calculations every AI plan should include:
 
 1. **Cost** = (input tokens × input price + output tokens × output price) × requests. A **token** is the unit models read and write, roughly three-quarters of an English word on average.
-2. **Latency** ≈ time to first token + output tokens ÷ generation speed.
+2. **Latency** (how long the user waits for the full answer; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) ≈ time to first token + output tokens ÷ generation speed.
 3. **Compound reliability**: if each step of a workflow succeeds with probability p, and steps are independent, the whole n-step task succeeds with probability pⁿ. For p = 0.95 and n = 10: 0.95¹⁰ ≈ 0.60.
 
 ```python
@@ -645,7 +645,7 @@ When a simple rule or existing software does the job, when errors are unacceptab
 
 **30-second answer:** "Beyond model quality, AI projects are limited by data, cost, latency, reliability, integration, skills, change management and measurable ROI, plus security and regulation. I estimate cost and latency up front, define a success metric, pilot small, evaluate on real data, monitor in production and design for failure with fallbacks and human review."
 
-- *How do you cut LLM cost?* Shorter prompts, caching, smaller models for easy requests (routing), batching, limiting output length.
+- *How do you cut LLM cost?* Shorter prompts, caching, smaller models for easy requests (routing: sending each request to the cheapest model that can handle it), batching (grouping many requests into one job), limiting output length.
 - *Why do agents fail more than single calls?* Errors compound across steps; each tool call and decision is another chance to go wrong.
 
 ### Self-check
@@ -670,8 +670,8 @@ AI moves weekly, and much of the coverage is marketing. **Critical reading** mea
 
 1. **Check the date.** A 2023 "limitation" may be fixed; a 2023 "breakthrough" may be obsolete.
 2. **Spot hype words.** "Revolutionary", "game-changing", "human-level", "disruptive" usually signal marketing. Look for numbers instead.
-3. **Find the primary source.** Is there a paper, technical report, model card or reproducible demo? Peer-reviewed work (NeurIPS, ICML, ICLR, ACL, CVPR) and preprints on arXiv are primary sources; preprints are not yet peer-reviewed.
-4. **Ask what was measured.** Which benchmark or dataset, which baseline, which metric (accuracy, F1 score, pass rate)? Does the test data overlap the training data (**contamination**)? Were limitations reported?
+3. **Find the primary source.** Is there a paper, technical report, model card (a document describing how a model was trained, what it is for and its known limits) or reproducible demo? Peer-reviewed work (checked by independent experts before publication, e.g. at the top AI conferences NeurIPS, ICML, ICLR, ACL, CVPR) and preprints on arXiv (a free online archive of research papers) are primary sources; preprints are not yet peer-reviewed.
+4. **Ask what was measured.** Which benchmark or dataset, which baseline (a simple reference system to compare against), which metric (accuracy, F1 score, a single number balancing missed cases against false alarms, pass rate)? Does the test data overlap the training data (**contamination**)? Were limitations reported?
 5. **Ask for evidence of real use.** Working product, public demo, user trials? A company that cannot show working code or real test results may have more pitch than product.
 6. **Triangulate.** Read two or three independent sources, including named experts and institutions; treat anonymous "insiders say" claims with extra caution.
 7. **Consider harms.** Who could be hurt by errors, bias or misuse? Is the provider transparent about data use, privacy and bias mitigation?
@@ -685,7 +685,7 @@ AI moves weekly, and much of the coverage is marketing. **Critical reading** mea
 | Annual overviews | Stanford HAI *AI Index Report*; Epoch AI data on compute and model trends |
 | Independent evaluation | Public leaderboards such as LMArena (use as one signal: rankings reflect crowd preferences on chat prompts) |
 | Books | Russell & Norvig, *Artificial Intelligence: A Modern Approach* (4th ed.); Chip Huyen, *AI Engineering* (2025) |
-| Regulation and policy | EU AI Act texts, NIST AI Risk Management Framework |
+| Regulation and policy | EU AI Act texts, NIST (US standards agency) AI Risk Management Framework |
 
 ### Engaging responsibly
 
@@ -733,7 +733,7 @@ flowchart LR
 
 | Part | Chapters | You will be able to… |
 |---|---|---|
-| Foundations | 1 World of AI · 2 Classical AI and search | Explain the field; implement BFS, A*, minimax and a pathfinding agent |
+| Foundations | 1 World of AI · 2 Classical AI and search | Explain the field; implement BFS (breadth-first search), A*, minimax (game-playing search) and a pathfinding agent |
 | How modern models work | 3 Transformers and embeddings · 4 LLMs · 10 Generative models beyond text | Explain attention, embeddings, tokens, pre-training, diffusion |
 | Building with LLMs | 5 Prompt engineering · 6 LLM apps in Python and MCP · 7 RAG · 8 Fine-tuning vs RAG and evaluation · 9 Agents | Build, ground, evaluate and extend LLM applications |
 | Production and responsibility | 11 Serving and inference · 12 Safety, ethics, governance | Run models efficiently; manage risk, bias, privacy and regulation |

@@ -4,12 +4,12 @@
 
 A few years ago, a small business launching a product needed a designer or a stock-photo budget for every social-media image, and an independent filmmaker needed paid voice actors for every narration. Today both can type a description and get usable images or a natural-sounding voice in minutes. Large language models (Chapter 4) generate text; this chapter is about machines that generate **images, audio, speech, music and video**, and models that **understand several kinds of data at once**.
 
-You will build four kinds of generator from scratch on toy data — an autoencoder-based **VAE**, a **GAN**, a **diffusion model** with classifier-free guidance, and a miniature **CLIP** — then see how the same ideas scale up into Stable Diffusion, DALL·E, Midjourney, Whisper, text-to-speech systems, video generators and multimodal assistants. The chapter ends with how these models are **evaluated** and the **risks** they bring: deepfakes, fraud, watermarking and copyright.
+You will build four kinds of generator from scratch on toy data — an autoencoder-based **VAE**, a **GAN**, a **diffusion model** with classifier-free guidance, and a miniature **CLIP** (a model that learns to match images with their captions) — then see how the same ideas scale up into Stable Diffusion, DALL·E, Midjourney, Whisper, text-to-speech systems, video generators and multimodal assistants. The chapter ends with how these models are **evaluated** and the **risks** they bring: **deepfakes** (realistic fake video, images or audio of real people), fraud, watermarking and copyright.
 
 **What you'll learn**
 
 - The four families of generative model and their trade-offs (quality, diversity, speed)
-- **Autoencoders and VAEs**: latent spaces, the reparameterisation trick, the ELBO loss
+- **Autoencoders and VAEs**: latent spaces (compressed internal representations of the data), the reparameterisation trick, the ELBO loss
 - **GANs**: generator vs discriminator, the minimax game, **mode collapse**
 - **Diffusion**: forward noising, reverse denoising, noise schedules, the U-Net, fast samplers
 - **Text-to-image**: conditioning, **CLIP**, **classifier-free guidance**, **latent diffusion (Stable Diffusion)**, DALL·E, Imagen, Midjourney, diffusion transformers
@@ -19,7 +19,7 @@ You will build four kinds of generator from scratch on toy data — an autoencod
 - **Evaluation**: FID, CLIP score, precision/recall, human evaluation, WER and MOS
 - **Risks**: deepfakes, misinformation, consent, **watermarking and provenance**, copyright, regulation
 
-Code lives in [`code/`](code/); every script runs on a laptop CPU in under 30 seconds and saves its figures to `img/`.
+Code lives in [`code/`](code/); every script runs on a laptop **CPU** (the computer's general-purpose processor — no graphics card needed) in under 30 seconds and saves its figures to `img/`.
 
 ---
 
@@ -27,7 +27,7 @@ Code lives in [`code/`](code/); every script runs on a laptop CPU in under 30 se
 
 ### What it is
 
-A **generative model** learns the probability distribution of its training data — which images, sounds or videos are "likely" — so that it can **sample** new examples that look as if they came from the same source. A **conditional** generative model samples given some input: a text prompt, a class label, a reference voice, a sketch.
+A **generative model** learns the **probability distribution** (the full picture of how likely each possible outcome is) of its training data — which images, sounds or videos are "likely" — so that it can **sample** new examples that look as if they came from the same source. A **conditional** generative model samples given some input: a text prompt, a class label, a reference voice, a sketch.
 
 Image generators learn from very large collections of **images paired with text descriptions**. Over millions of pairs they absorb how words, objects, styles and moods relate to visual patterns, which lets them produce new images from a description. Ask for "a watercolour of a lighthouse at dawn, gulls overhead, soft pastel light" and the model composes a scene it has never seen from patterns it has learned.
 
@@ -38,10 +38,10 @@ Image generators learn from very large collections of **images paired with text 
 
 | Tool | Maker | Notes |
 |---|---|---|
-| **Stable Diffusion** (2022 →) | Stability AI, with CompVis (LMU Munich) and Runway | Open weights: you can run it on your own GPU, fine-tune it and control it (ControlNet, LoRA). Latent diffusion (Section 10.5) |
+| **Stable Diffusion** (2022 →) | Stability AI, with CompVis (LMU Munich) and Runway | Open weights (the trained model file is published): you can run it on your own GPU (graphics chip that runs models fast), fine-tune it (train further on your data) and control it (ControlNet, LoRA). Latent diffusion (Section 10.5) |
 | **DALL·E** (2021, 2, 3) | OpenAI | Known for imaginative combinations of concepts; DALL·E 3 (2023) was built into ChatGPT, and in 2025 ChatGPT moved to native image generation in its GPT-4o model |
 | **Midjourney** (2022 →) | Midjourney, Inc. | Strong artistic, stylised look; architecture not published |
-| **Imagen** / Gemini image models | Google | Imagen used a large frozen text encoder (T5) with cascaded diffusion |
+| **Imagen** / Gemini image models | Google | Imagen used a large frozen (not further trained) text encoder (T5) with cascaded diffusion (small image first, then upscaled) |
 | **FLUX** (2024) | Black Forest Labs | Open-weight family from former Stable Diffusion researchers |
 
 ### Why it matters
@@ -60,8 +60,8 @@ The same power creates problems: copyright disputes, forged artworks, and realis
 |---|---|---|---|---|---|
 | **VAE** (variational autoencoder) | Compress to a smooth latent space, decode samples from it | Fast (one pass) | Blurry on its own | Good | Image tokenisers/compressors inside Stable Diffusion |
 | **GAN** (generative adversarial network) | Generator vs discriminator game | Fast (one pass) | Very sharp | Prone to **mode collapse** | StyleGAN faces |
-| **Autoregressive** | Predict the next token (pixel patch, audio token) | Slow (one step per token) | High | Good | Original DALL·E, VALL-E speech, GPT-4o images |
-| **Diffusion / flow** | Learn to remove noise step by step | Slow (tens of steps; distillation cuts this) | Very high | Good | Stable Diffusion, Imagen, Sora-style video |
+| **Autoregressive** | Predict the next token (a small unit: word piece, pixel patch, audio chunk) | Slow (one step per token) | High | Good | Original DALL·E, VALL-E speech, GPT-4o images |
+| **Diffusion / flow** | Learn to remove noise step by step | Slow (tens of steps; distillation — training a fast student to copy it — cuts this) | Very high | Good | Stable Diffusion, Imagen, Sora-style video |
 
 This is sometimes called the **generative trilemma**: fast sampling, high quality and full diversity are hard to get all at once. GANs are fast and sharp but may drop modes; VAEs are fast and diverse but blurry; diffusion is high quality and diverse but slow.
 
@@ -81,22 +81,22 @@ Generative models learn "what data looks like" and sample new data, usually cond
 
 ### What it is
 
-An **autoencoder** is a neural network trained to copy its input to its output through a narrow middle layer. The **encoder** squeezes an image into a short vector, the **latent code** z; the **decoder** rebuilds the image from z. Because the bottleneck is small, the network must learn the essentials — like describing a face in a few words and having a sketch artist redraw it.
+An **autoencoder** is a **neural network** (layers of simple maths operations whose numbers, the weights, are learned from data) trained to copy its input to its output through a narrow middle layer. The **encoder** squeezes an image into a short **vector** (a list of numbers), the **latent code** z; the **decoder** rebuilds the image from z. Because the bottleneck is small, the network must learn the essentials — like describing a face in a few words and having a sketch artist redraw it.
 
-A plain autoencoder is a good compressor but a poor generator: its latent space has gaps, so decoding a random z often gives garbage. A **variational autoencoder** (VAE; Kingma and Welling, 2013) fixes this by making the latent space smooth and well-organised, so that *any* z drawn from a standard normal distribution N(0, I) decodes into something sensible.
+A plain autoencoder is a good compressor but a poor generator: its latent space has gaps, so decoding a random z often gives garbage. A **variational autoencoder** (VAE; Kingma and Welling, 2013) fixes this by making the latent space smooth and well-organised, so that *any* z drawn from a **standard normal distribution** N(0, I) (the bell curve with mean 0 and spread 1 in every dimension) decodes into something sensible.
 
 ### How it works
 
-1. **Encode to a distribution, not a point.** For input x, the encoder outputs a mean μ(x) and a variance σ²(x) (in practice log σ²). This defines q(z | x) = N(μ, σ²).
-2. **Sample with the reparameterisation trick.** z = μ + σ ⊙ ε, with ε ~ N(0, I). Randomness moves into ε, so gradients can flow through μ and σ during back-propagation.
+1. **Encode to a distribution, not a point.** For input x, the encoder outputs a mean μ(x) and a **variance** σ²(x) (how spread out values are; its square root σ is the **standard deviation**) (in practice log σ²). This defines q(z | x) = N(μ, σ²).
+2. **Sample with the reparameterisation trick.** z = μ + σ ⊙ ε, with ε ~ N(0, I). Randomness moves into ε, so **gradients** (numbers telling each weight which way to move to lower the loss) can flow through μ and σ during **back-propagation** (the algorithm that computes those gradients layer by layer, from output back to input). (⊙ means multiply element by element.)
 3. **Decode** z into a reconstruction x̂.
-4. **Loss = reconstruction + KL.** We would like to maximise log p(x), the probability the model gives the data, but it cannot be computed directly. The **ELBO** (evidence lower bound) is a quantity that is always ≤ log p(x) and can be computed, so we maximise it instead — equivalently, minimise the negative ELBO:
+4. **Loss = reconstruction + KL.** The **loss** is the single number training tries to make small. We would like to maximise log p(x), the probability the model gives the data, but it cannot be computed directly. The **ELBO** (evidence lower bound) is a quantity that is always ≤ log p(x) and can be computed, so we maximise it instead — equivalently, minimise the negative ELBO:
 
    Loss = reconstruction error(x, x̂) + KL( N(μ, σ²) ‖ N(0, I) )
 
-   **KL divergence** measures how far one distribution is from another (0 when they are identical). For Gaussians it has a closed form, summed over latent dimensions: KL = −½ Σ (1 + log σ² − μ² − σ²).
+   **KL divergence** measures how far one distribution is from another (0 when they are identical). For **Gaussians** (normal, bell-shaped distributions) it has a **closed form** (an exact formula, no simulation needed), summed over latent dimensions: KL = −½ Σ (1 + log σ² − μ² − σ²).
 
-   Worked number: one latent dimension with μ = 1, σ = 1 → KL = −½(1 + 0 − 1 − 1) = 0.5. With μ = 0, σ = 1 it is 0 — the prior itself.
+   Worked number: one latent dimension with μ = 1, σ = 1 → KL = −½(1 + 0 − 1 − 1) = 0.5. With μ = 0, σ = 1 it is 0 — the **prior** itself (the distribution we want codes to follow, here N(0, I)).
 
 5. **Generate** by sampling z ~ N(0, I) and decoding.
 
@@ -104,7 +104,7 @@ The two terms pull against each other: reconstruction wants each input to have i
 
 ### Code: a VAE on handwritten digits
 
-`code/vae_digits.py` trains a VAE with a **2-dimensional** latent space on scikit-learn's 1,797 digit images (8 × 8 pixels), so the whole latent space can be drawn.
+`code/vae_digits.py` trains a VAE with a **2-dimensional** latent space on **scikit-learn**'s (a popular Python machine-learning library) 1,797 digit images (8 × 8 pixels), so the whole latent space can be drawn.
 
 ```python
 class VAE(nn.Module):
@@ -151,13 +151,13 @@ What to notice:
 
 - **Unsupervised structure**: digits form clusters without ever seeing a label.
 - **Smoothness**: moving across the grid changes the digit gradually; that is what makes sampling work.
-- **Posterior collapse, briefly**: at epoch 10 the KL term fell to 0.01 — the encoder was nearly ignoring the input and the decoder was producing an "average digit". It recovered as training went on. Collapse is a real failure mode of VAEs with powerful decoders; KL warm-up (starting with a small KL weight) is a common fix.
+- **Posterior collapse, briefly**: at **epoch** 10 (an epoch is one full pass over the training data) the KL term fell to 0.01 — the encoder was nearly ignoring the input and the decoder was producing an "average digit". It recovered as training went on. Collapse is a real failure mode of VAEs with powerful decoders; KL warm-up (starting with a small KL weight) is a common fix.
 - The latent means have roughly mean 0 and standard deviation 1, as the KL term demands.
 - The samples are recognisable but soft-edged: the typical VAE blur.
 
 ### Where VAEs are used today
 
-Rarely as stand-alone image generators, but everywhere as **compressors**: Stable Diffusion's VAE turns a 512 × 512 × 3 image into a 64 × 64 × 4 latent (8× smaller per side) so diffusion can run cheaply in latent space (Section 10.5). **VQ-VAE** (van den Oord et al., 2017) uses a discrete codebook, turning images or audio into **tokens** that transformers can model — the basis of the first DALL·E and of neural audio codecs.
+Rarely as stand-alone image generators, but everywhere as **compressors**: Stable Diffusion's VAE turns a 512 × 512 × 3 image into a 64 × 64 × 4 latent (8× smaller per side) so diffusion can run cheaply in latent space (Section 10.5). **VQ-VAE** (van den Oord et al., 2017) uses a **discrete codebook** (a fixed list of learned vectors; each piece of input is replaced by the number of its nearest entry), turning images or audio into **tokens** that **transformers** (the neural-network architecture behind LLMs) can model — the basis of the first DALL·E and of **neural audio codecs** (networks that compress sound into tokens and back).
 
 ### Common mistakes
 
@@ -197,8 +197,8 @@ The classic analogy is a forger and a detective. The forger improves until the d
 
 ### How it works
 
-1. Sample a batch of real data and a batch of fakes G(z).
-2. **Update D** to output 1 on real and 0 on fake (binary cross-entropy).
+1. Sample a **batch** (a small group of examples processed together) of real data and a batch of fakes G(z).
+2. **Update D** to output 1 on real and 0 on fake (**binary cross-entropy**, the standard loss for yes/no predictions).
 3. **Update G** so that D outputs 1 on its fakes. In practice G minimises −log D(G(z)) (the **non-saturating** loss), because the original min log(1 − D(G(z))) gives almost no gradient early on, when D easily rejects every fake.
 4. Repeat, keeping the two roughly balanced.
 
@@ -206,7 +206,7 @@ Formally it is a **minimax game**: min over G, max over D of E_x[log D(x)] + E_z
 
 ### The problem: mode collapse and instability
 
-A **mode** is one distinct "type" of data (one digit, one face style, one cluster). **Mode collapse** happens when G discovers that a few outputs fool D and keeps producing only those — sharp samples, little variety. D then learns to reject that mode, G hops to another, and training can cycle instead of converging. Remedies include better losses (Wasserstein GAN with gradient penalty), architectural tricks (DCGAN, spectral normalisation), minibatch statistics that let D notice low variety, and careful balancing of the two learning rates.
+A **mode** is one distinct "type" of data (one digit, one face style, one cluster). **Mode collapse** happens when G discovers that a few outputs fool D and keeps producing only those — sharp samples, little variety. D then learns to reject that mode, G hops to another, and training can cycle instead of converging. Remedies include better losses (Wasserstein GAN with gradient penalty — a loss measuring how much probability mass must be moved to turn one distribution into the other), architectural tricks (DCGAN, spectral normalisation), minibatch statistics that let D notice low variety, and careful balancing of the two **learning rates** (how big each training update step is).
 
 ### Code: a GAN on 8 Gaussian blobs
 
@@ -243,7 +243,7 @@ What to notice: the balanced run covers all 8 modes and puts 77% of samples on t
 
 ### Trade-offs and where GANs stand today
 
-GANs sample in **one forward pass** (fast) and produce very sharp images; **StyleGAN** (NVIDIA, 2018–2019) made photorealistic faces famous ("this person does not exist"). But training is unstable and diversity is hard to guarantee, and diffusion models overtook them for text-to-image around 2021–2022. GAN ideas live on as **adversarial losses** inside other systems — for example, the discriminator losses used to train the VAE of Stable Diffusion and neural audio vocoders, and adversarial distillation that makes diffusion models sample in one to four steps.
+GANs sample in **one forward pass** (one run of the network from input to output) (fast) and produce very sharp images; **StyleGAN** (NVIDIA, 2018–2019) made photorealistic faces famous ("this person does not exist"). But training is unstable and diversity is hard to guarantee, and diffusion models overtook them for text-to-image around 2021–2022. GAN ideas live on as **adversarial losses** inside other systems — for example, the discriminator losses used to train the VAE of Stable Diffusion and neural audio **vocoders** (networks that turn a spectrogram into a sound wave), and adversarial distillation that makes diffusion models sample in one to four steps.
 
 ### In the interview
 
@@ -317,11 +317,11 @@ saved img/forward_noising.png and img/noise_schedules.png
 ![Linear vs cosine schedule](img/noise_schedules.png)
 *Figure — the cosine schedule (Nichol and Dhariwal, 2021) destroys signal more gradually, wasting fewer steps on near-pure noise.*
 
-Two checks: stepping 300 times and jumping once give the same statistics (mean ≈ 0, std ≈ 1, since the data were standardised), confirming the closed form; and the linear schedule has lost half its signal variance by step 260, while the cosine schedule keeps it until step 497.
+Two checks: stepping 300 times and jumping once give the same statistics (mean ≈ 0, std ≈ 1, since the data were **standardised** — shifted and scaled to mean 0, standard deviation 1), confirming the closed form; and the linear schedule has lost half its signal variance by step 260, while the cosine schedule keeps it until step 497.
 
 ### How it works: the reverse (denoising) process and training
 
-We cannot reverse the noise exactly, but a neural network ε_θ(x_t, t) can learn to **predict the noise** that was added. Training is simple supervised regression:
+We cannot reverse the noise exactly, but a neural network ε_θ(x_t, t) can learn to **predict the noise** that was added. Training is simple **supervised regression** (learning to predict numbers from examples whose right answers are known):
 
 1. Pick a real example x₀, a random step t and random noise ε.
 2. Make x_t with the closed form.
@@ -333,13 +333,13 @@ x_{t−1} = (1/√α_t) · ( x_t − (β_t / √(1 − ᾱ_t)) · ε_θ(x_t, t) 
 
 Each step removes the predicted noise and adds back a smaller amount of fresh noise, so samples stay varied. Predicting noise at every noise level is equivalent to learning the **score** (the direction towards higher data probability), which links DDPM to score-based models (Song et al.).
 
-**The network.** For images, ε_θ is usually a **U-Net**: a convolutional encoder that downsamples, a decoder that upsamples, and skip connections between matching resolutions so fine detail is not lost; the timestep enters as a sinusoidal embedding, and text enters through cross-attention layers (Section 10.5). Newer systems replace the U-Net with a **diffusion transformer (DiT)** that processes the latent as a sequence of patches (Peebles and Xie, 2023) — the backbone of Stable Diffusion 3, FLUX and Sora-style video models.
+**The network.** For images, ε_θ is usually a **U-Net**: a **convolutional** encoder (built from small filters that slide across the image) that **downsamples** (shrinks the resolution), a decoder that upsamples, and skip connections between matching resolutions so fine detail is not lost; the timestep enters as a **sinusoidal embedding** (the step number encoded as a vector of sine and cosine waves), and text enters through **cross-attention** layers (where each image position "looks up" the most relevant prompt words; Section 10.5). Newer systems replace the U-Net with a **diffusion transformer (DiT)** that processes the latent as a sequence of **patches** (small square tiles) (Peebles and Xie, 2023) — the backbone of Stable Diffusion 3, FLUX and Sora-style video models.
 
-**Faster sampling.** 1,000 network calls per image is slow. **DDIM** (Song, Meng and Ermon, 2020) samples deterministically in 20–50 steps with the same trained network; better ODE solvers need even fewer; **distillation** (consistency models, adversarial distillation such as SDXL Turbo) gets to 1–4 steps. **Flow matching / rectified flow** — used in Stable Diffusion 3 and FLUX — learns straighter paths from noise to data, which also allows fewer steps.
+**Faster sampling.** 1,000 network calls per image is slow. **DDIM** (Song, Meng and Ermon, 2020) samples deterministically in 20–50 steps with the same trained network; better **ODE solvers** (numerical methods that follow a continuous path in a few large, accurate steps) need even fewer; **distillation** (consistency models, adversarial distillation such as SDXL Turbo) gets to 1–4 steps. **Flow matching / rectified flow** — used in Stable Diffusion 3 and FLUX — learns straighter paths from noise to data, which also allows fewer steps.
 
 ### Code: a tiny diffusion model you can train in 20 seconds
 
-`code/toy_diffusion_2d.py` trains an MLP noise predictor on two-moons data with T = 100 steps (a shorter schedule, β from 0.001 to 0.1, suits a toy problem) and samples with the DDPM update above. It is also **class-conditional** and supports guidance, which Section 10.5 uses.
+`code/toy_diffusion_2d.py` trains an **MLP** (multi-layer perceptron: a plain stack of fully connected layers) noise predictor on two-moons data with T = 100 steps (a shorter schedule, β from 0.001 to 0.1, suits a toy problem) and samples with the DDPM update above. It is also **class-conditional** (it can be told which class to generate) and supports guidance, which Section 10.5 uses.
 
 ```python
 def train(model, x0, y0, steps=6000, batch=512, p_uncond=0.2):
@@ -437,12 +437,12 @@ A text-to-image model is a **conditional diffusion model**: the denoiser receive
 
 ### CLIP: a shared space for images and text
 
-**CLIP** (Contrastive Language–Image Pre-training; Radford et al., OpenAI, 2021) trains an image encoder and a text encoder together on about 400 million image–caption pairs from the web. In each batch of N pairs it computes all N × N cosine similarities and uses a **contrastive loss**: each image should be most similar to *its own* caption (the diagonal) and dissimilar to the other N − 1 captions, and vice versa. The result is a shared embedding space where "a photo of a dog" lands near photos of dogs.
+**CLIP** (Contrastive Language–Image Pre-training; Radford et al., OpenAI, 2021) trains an image encoder and a text encoder together on about 400 million image–caption pairs from the web. In each batch of N pairs it computes all N × N **cosine similarities** (how closely two vectors point the same way: 1 = same direction, 0 = unrelated) and uses a **contrastive loss**: each image should be most similar to *its own* caption (the diagonal) and dissimilar to the other N − 1 captions, and vice versa. The result is a shared **embedding space** (a space of vectors where similar meanings sit close together) where "a photo of a dog" lands near photos of dogs.
 
 CLIP gives you:
 
 - **Zero-shot classification** — embed an image and the captions "a photo of a {class}" and pick the most similar caption, with no task-specific training.
-- **A text encoder for generators** — Stable Diffusion 1.x conditions on CLIP's text encoder (ViT-L/14); DALL·E 2 generated a CLIP image embedding from the text and decoded it into an image.
+- **A text encoder for generators** — Stable Diffusion 1.x conditions on CLIP's text encoder (ViT-L/14 — a large vision-transformer design that cuts images into 14-pixel patches); DALL·E 2 generated a CLIP image embedding from the text and decoded it into an image.
 - **An evaluation metric** — **CLIP score**, how well an image matches its prompt (Section 10.9).
 
 `code/clip_contrastive_toy.py` reproduces the idea at toy scale: 12 concepts ("red square", "blue circle", …), each seen as a noisy 48-number "image" and a different noisy 32-number "caption", with two small encoders trained on CLIP's symmetric loss.
@@ -466,7 +466,7 @@ CLIP-score style: mean cos(image, its caption) = 0.81, with a wrong caption = 0.
 example: image of 'blue circle' -> predicted 'blue circle'
 ```
 
-The loss stops falling around 1.9 rather than 0 because a batch of 64 drawn from only 12 concepts contains several pairs of the same concept, which the loss still treats as "negatives" — real CLIP has the same issue with near-duplicate captions, at a much smaller scale. Zero-shot accuracy is 96.5% against 8.3% chance, and matching pairs have far higher cosine similarity than mismatched ones: the two modalities now share one space. The learnable **temperature** (initialised to 1/0.07, as in CLIP) sharpens the softmax over similarities.
+The loss stops falling around 1.9 rather than 0 because a batch of 64 drawn from only 12 concepts contains several pairs of the same concept, which the loss still treats as "negatives" — real CLIP has the same issue with near-duplicate captions, at a much smaller scale. Zero-shot accuracy is 96.5% against 8.3% chance, and matching pairs have far higher cosine similarity than mismatched ones: the two **modalities** (kinds of data — here images and text) now share one space. The learnable **temperature** (initialised to 1/0.07, as in CLIP) sharpens the **softmax** (the function that turns scores into probabilities summing to 1) over similarities.
 
 ### Classifier-free guidance (CFG)
 
@@ -477,11 +477,11 @@ A conditional model that is only *mildly* influenced by the prompt produces imag
 
    ε̂ = ε(x_t, ∅) + s · ( ε(x_t, c) − ε(x_t, ∅) )
 
-   s = 0 ignores the prompt; s = 1 is the plain conditional model; s > 1 pushes harder towards the prompt. (This is the convention used by the diffusers library, whose Stable Diffusion default is 7.5; the original paper writes the same thing as (1 + w)ε_c − wε_∅.)
+   s = 0 ignores the prompt; s = 1 is the plain conditional model; s > 1 pushes harder towards the prompt. (This is the convention used by the **diffusers** library (Hugging Face's open-source diffusion toolkit), whose Stable Diffusion default is 7.5; the original paper writes the same thing as (1 + w)ε_c − wε_∅.)
 
 3. Cost: two network evaluations per step (often batched together).
 
-The trade-off: higher guidance gives better **prompt adherence** and fidelity but **less diversity**, and very high values give over-saturated, harsh images.
+The trade-off: higher guidance gives better **prompt adherence** and fidelity but **less diversity**, and very high values give **over-saturated** (unnaturally intense colours), harsh images.
 
 The toy model shows exactly this. Asked for class 0 (the upper moon):
 
@@ -494,7 +494,7 @@ From the output above: on-class rate goes 51.5% → 100% → 100%, off-manifold 
 
 ### Latent diffusion and Stable Diffusion
 
-Running diffusion on 512 × 512 × 3 pixels (786,432 numbers) at every step is expensive. **Latent diffusion** (Rombach et al., 2022) runs it in the latent space of a pretrained autoencoder instead. Stable Diffusion 1.x, released in August 2022, has three parts:
+Running diffusion on 512 × 512 × 3 pixels (786,432 numbers) at every step is expensive. **Latent diffusion** (Rombach et al., 2022) runs it in the latent space of a **pretrained** (already trained beforehand) autoencoder instead. Stable Diffusion 1.x, released in August 2022, has three parts:
 
 ```mermaid
 flowchart LR
@@ -508,22 +508,22 @@ flowchart LR
 
 1. **VAE** — encoder compresses 512 × 512 × 3 images to 64 × 64 × 4 latents (48× fewer numbers); decoder maps latents back to pixels.
 2. **Text encoder** — CLIP ViT-L/14 turns the prompt into a sequence of token embeddings.
-3. **U-Net denoiser** — about 860 million parameters, with **cross-attention** layers where the image latent's positions (queries) attend to the prompt's token embeddings (keys and values), so each region of the image can "look up" the relevant words.
+3. **U-Net denoiser** — about 860 million **parameters** (learned weights), with **cross-attention** layers where the image latent's positions (**queries** — what each position is looking for) attend to the prompt's token embeddings (**keys** — what each word offers to match on — and **values**, the information passed back), so each region of the image can "look up" the relevant words.
 
 Generation: random latent → 20–50 guided denoising steps → VAE decoder → image. Because the weights are open, a large ecosystem grew around it:
 
-- **Image-to-image / inpainting** — start from a noised version of an existing image, or denoise only a masked region.
-- **ControlNet** (Zhang et al., 2023) — adds a trainable copy of the encoder that conditions on edges, depth maps or human poses.
-- **LoRA** fine-tuning and **DreamBooth** — teach a new style or subject from a handful of images by training small low-rank adapters (LoRA is explained in [Chapter 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)).
-- Newer open models (SDXL in 2023; Stable Diffusion 3 and FLUX in 2024) use larger text encoders (including T5), transformer backbones and flow matching; SD3's MMDiT lets image and text tokens attend to each other in the same transformer.
+- **Image-to-image / inpainting** (filling in or replacing part of an image) — start from a noised version of an existing image, or denoise only a masked region.
+- **ControlNet** (Zhang et al., 2023) — adds a trainable copy of the encoder that conditions on edges, **depth maps** (images where brightness encodes distance from the camera) or human poses.
+- **LoRA** fine-tuning and **DreamBooth** — teach a new style or subject from a handful of images by training small **low-rank adapters** (small extra weight matrices trained beside the frozen model) (LoRA is explained in [Chapter 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)).
+- Newer open models (SDXL in 2023; Stable Diffusion 3 and FLUX in 2024) use larger text encoders (including T5), transformer **backbones** (the main network that does most of the work) and flow matching; SD3's MMDiT lets image and text tokens attend to each other in the same transformer.
 
-Other designs: **Imagen** (Google, 2022) showed that a large frozen *language-model* text encoder (T5-XXL) improves prompt understanding, with cascaded pixel-space diffusion (a small image, then super-resolution stages); **DALL·E 3** (2023) improved prompt following by training on detailed, machine-rewritten captions; **autoregressive** image generation (native image output in GPT-4o, 2025) generates image tokens with the same transformer that writes text.
+Other designs: **Imagen** (Google, 2022) showed that a large frozen *language-model* text encoder (T5-XXL) improves prompt understanding, with cascaded pixel-space diffusion (a small image, then **super-resolution** stages that upscale it to a larger, sharper image); **DALL·E 3** (2023) improved prompt following by training on detailed, machine-rewritten captions; **autoregressive** image generation (native image output in GPT-4o, 2025) generates image tokens with the same transformer that writes text.
 
 ### Common mistakes
 
 - Cranking the guidance scale too high to "make it follow the prompt" — images become harsh and repetitive.
 - Assuming the model "understands" counts, spatial relations or text rendering; these improved a lot with larger text encoders but still fail on complex prompts.
-- Ignoring the negative prompt / null condition: in many UIs the "negative prompt" simply replaces ∅ in the CFG formula, pushing *away* from those words.
+- Ignoring the negative prompt / null condition: in many **UIs** (user interfaces) the "negative prompt" simply replaces ∅ in the CFG formula, pushing *away* from those words.
 
 ### In the interview
 
@@ -550,7 +550,7 @@ Text-to-image = conditional diffusion. CLIP aligns text and images; cross-attent
 
 - **ASR (automatic speech recognition)** turns speech into text.
 - **TTS (text-to-speech)** turns text into speech.
-- **Voice cloning** is TTS that imitates a specific speaker's voice — its pitch, timbre, rhythm and accent — from a sample of their speech.
+- **Voice cloning** is TTS that imitates a specific speaker's voice — its pitch, **timbre** (the tone "colour" that makes a voice recognisable), rhythm and accent — from a sample of their speech.
 - **Music and sound generation** create audio from text descriptions or melodies.
 
 ### How audio is represented
@@ -558,7 +558,7 @@ Text-to-image = conditional diffusion. CLIP aligns text and images; cross-attent
 A **waveform** is a list of air-pressure samples (16,000 per second at 16 kHz). Models rarely work on raw samples directly; the usual input is a **log-Mel spectrogram**:
 
 1. Cut the waveform into short overlapping windows (e.g. 25 ms, every 10 ms).
-2. Take the Fourier transform of each window → energy per frequency (a **spectrogram**).
+2. Take the **Fourier transform** (a maths tool that splits a signal into the frequencies it contains) of each window → energy per frequency (a **spectrogram**).
 3. Pool frequencies into **Mel bands**: triangular filters spaced evenly on the Mel scale, mel = 2595 · log₁₀(1 + f / 700), which is dense at low frequencies and sparse at high ones, like human hearing.
 4. Take the logarithm (loudness is perceived roughly logarithmically).
 
@@ -589,7 +589,7 @@ saved img/log_mel_spectrogram.png
 
 ### ASR: Whisper
 
-**Whisper** (OpenAI, September 2022) is an encoder–decoder transformer trained on about 680,000 hours of multilingual audio paired with (weakly supervised) transcripts from the web. The encoder reads 30-second chunks as log-Mel spectrograms (80 bands at 16 kHz with 25 ms windows and a 10 ms hop — exactly the 80 × 3000 input above; large-v3 uses 128 bands); the decoder writes text tokens, with special tokens selecting the task (transcribe or translate to English), language and timestamps. Its size and diversity of training data make it robust to accents and background noise. Known weaknesses: it can **hallucinate** text during silences or noise, and long audio must be chunked.
+**Whisper** (OpenAI, September 2022) is an **encoder–decoder transformer** (one part reads the input, the other writes the output token by token) trained on about 680,000 hours of multilingual audio paired with (**weakly supervised** — the labels are noisy and not hand-checked) transcripts from the web. The encoder reads 30-second chunks as log-Mel spectrograms (80 bands at 16 kHz with 25 ms windows and a 10 ms **hop** (the step between window starts) — exactly the 80 × 3000 input above; large-v3 uses 128 bands); the decoder writes text tokens, with special tokens selecting the task (transcribe or translate to English), language and timestamps. Its size and diversity of training data make it robust to accents and background noise. Known weaknesses: it can **hallucinate** (confidently output content that is not in the input) text during silences or noise, and long audio must be chunked.
 
 ASR is measured by **word error rate**: WER = (substitutions + deletions + insertions) / number of reference words. Example: reference "turn the lights off" (4 words), hypothesis "turn lights of" → one deletion ("the") + one substitution ("off"→"of") = 2 / 4 = 50%.
 
@@ -597,7 +597,7 @@ ASR is measured by **word error rate**: WER = (substitutions + deletions + inser
 
 Neural TTS has evolved in three waves:
 
-1. **Two-stage pipelines**: an acoustic model maps text (or phonemes) to a Mel spectrogram (Tacotron 2, 2017; FastSpeech), and a **vocoder** turns the spectrogram into a waveform (WaveNet, 2016; later fast GAN vocoders such as HiFi-GAN).
+1. **Two-stage pipelines**: an **acoustic model** maps text (or **phonemes**, the distinct sounds of a language) to a Mel spectrogram (Tacotron 2, 2017; FastSpeech), and a **vocoder** turns the spectrogram into a waveform (WaveNet, 2016; later fast GAN vocoders such as HiFi-GAN).
 2. **Neural audio codecs + language models**: codecs such as SoundStream (2021) and EnCodec (2022) compress audio into sequences of discrete tokens; a transformer then predicts audio tokens like text tokens. Microsoft's **VALL-E** (2023) showed that a 3-second recording was enough to imitate a new speaker.
 3. **Diffusion / flow-matching TTS** and speech-native assistants that listen and speak directly (e.g. real-time voice modes in ChatGPT and Gemini).
 
@@ -665,17 +665,17 @@ A **multimodal** model combines several kinds of data — text, images, audio, v
 
 ### How it works
 
-1. **Separate encoders plus fusion** — each modality has its own encoder (a vision transformer for images, an audio encoder for sound) whose outputs are projected into the language model's embedding space and treated as extra "tokens". LLaVA (2023) showed that even a simple projection from a CLIP image encoder into an LLM, fine-tuned on image-instruction data, yields a capable visual assistant. Flamingo (DeepMind, 2022) instead used cross-attention from the language model to image features.
-2. **Natively multimodal** — one model trained from the start on interleaved text, image and audio tokens; GPT-4o (2024) and the Gemini family (from December 2023) are described this way, and they can also *output* audio and images.
+1. **Separate encoders plus fusion** — each modality has its own encoder (a vision transformer for images, an audio encoder for sound) whose outputs are **projected** (converted by a small learned layer) into the language model's embedding space and treated as extra "tokens". LLaVA (2023) showed that even a simple projection from a CLIP image encoder into an LLM, fine-tuned on image-instruction data (images paired with requests and good answers), yields a capable visual assistant. Flamingo (DeepMind, 2022) instead used cross-attention from the language model to image features.
+2. **Natively multimodal** — one model trained from the start on **interleaved** (mixed together in one sequence) text, image and audio tokens; GPT-4o (2024) and the Gemini family (from December 2023) are described this way, and they can also *output* audio and images.
 3. **Any-to-any generation** — the same model decodes text, image tokens or speech, so an assistant can listen, look and reply in voice or with a picture.
 
-**Applications**: assistants that see and hear (reading a document through the camera while you give spoken instructions), captioning and visual question answering, accessibility (describing scenes for blind users), document and chart understanding, and content creation (turning a text prompt into slides, infographics or short videos). Today's frontier assistants (Claude, ChatGPT, Gemini) accept images and documents as input as a matter of course.
+**Applications**: assistants that see and hear (reading a document through the camera while you give spoken instructions), captioning and **visual question answering** (answering questions about an image), accessibility (describing scenes for blind users), document and chart understanding, and content creation (turning a text prompt into slides, infographics or short videos). Today's **frontier** (most capable, newest) assistants (Claude, ChatGPT, Gemini) accept images and documents as input as a matter of course.
 
 ### Common mistakes
 
 - Assuming image understanding is as reliable as text understanding — small text, counting and precise spatial reasoning still cause errors.
-- Forgetting that images cost tokens: a high-resolution image may use hundreds to thousands of tokens in the context window.
-- Forgetting that images and audio can carry **prompt injection** too (instructions written inside a picture).
+- Forgetting that images cost tokens: a high-resolution image may use hundreds to thousands of tokens in the **context window** (the limited amount of input the model can see at once).
+- Forgetting that images and audio can carry **prompt injection** (hidden instructions meant to hijack the model) too (instructions written inside a picture).
 
 ### In the interview
 
@@ -702,11 +702,11 @@ Generated content has no single "correct" answer, so evaluation checks two thing
 
 | Metric | What it measures | How | Better |
 |---|---|---|---|
-| **FID** (Fréchet Inception Distance; Heusel et al., 2017) | Distance between real and generated image distributions | Embed both sets with Inception-v3 (2048-d features); fit a Gaussian to each; FID = ‖μ_r − μ_g‖² + Tr(Σ_r + Σ_g − 2(Σ_r Σ_g)^½), with μ the mean feature vector, Σ the covariance matrix and Tr the trace (sum of the diagonal) | Lower |
+| **FID** (Fréchet Inception Distance; Heusel et al., 2017) | Distance between real and generated image distributions | Embed both sets with Inception-v3 (an older image classifier used as a feature extractor; 2048-d features); fit a Gaussian to each; FID = ‖μ_r − μ_g‖² + Tr(Σ_r + Σ_g − 2(Σ_r Σ_g)^½), with μ the mean feature vector, Σ the covariance matrix (how the features vary together) and Tr the trace (sum of the diagonal) | Lower |
 | **Inception Score** (IS, 2016) | Confident *and* varied class predictions | From Inception-v3 class probabilities | Higher (dated; ignores real data) |
-| **Precision / recall** for generative models | Precision = fraction of samples that look real (fidelity); recall = fraction of real data the model covers (diversity) | Nearest-neighbour manifolds in feature space | Higher |
+| **Precision / recall** for generative models | Precision = fraction of samples that look real (fidelity); recall = fraction of real data the model covers (diversity) | Nearest-neighbour (closest-point) manifolds in feature space | Higher |
 | **CLIP score** | Image–prompt agreement | Cosine similarity of CLIP embeddings (often scaled, e.g. × 100) | Higher |
-| **Human evaluation** | Overall preference, prompt adherence, aesthetics, artefacts | Side-by-side comparisons, rating scales, Elo-style arenas | — |
+| **Human evaluation** | Overall preference, prompt adherence, aesthetics, artefacts | Side-by-side comparisons, rating scales, Elo-style arenas (rankings from head-to-head votes, as in chess) | — |
 | **WER / MOS** (speech) | ASR accuracy; TTS naturalness | See Section 10.6 | Lower WER; higher MOS |
 
 ### Code: what the Fréchet distance can and cannot see
@@ -739,11 +739,11 @@ Lessons:
 
 - Mode collapse is punished heavily, and shifts are caught.
 - The **blurry** fake scores almost as well as a perfect model. FID only compares means and covariances (it assumes both feature clouds are Gaussian), and on raw 2-D points blur barely changes those. Real FID works in rich Inception features, where blur *does* move the distribution — which is exactly why the choice of feature extractor matters, and why FID can disagree with human judgement.
-- With few samples the estimate is biased upward (0.040 instead of ≈0.003), so FID values are only comparable at the same sample size (commonly 10,000–50,000 images) and the same preprocessing. KID (kernel inception distance) is an unbiased alternative for small sets.
+- With few samples the estimate is biased upward (0.040 instead of ≈0.003; **biased** = systematically off in one direction), so FID values are only comparable at the same **sample size** (number of images used) (commonly 10,000–50,000 images) and the same preprocessing. KID (kernel inception distance) is an unbiased alternative for small sets.
 
 ### Human evaluation
 
-Automatic scores do not capture everything people care about: aesthetics, subtle artefacts (hands, text), cultural appropriateness, and whether the image matches the *intent* of the prompt. Standard practice is side-by-side preference tests on a fixed prompt set, with several raters per item, and public "arenas" that turn many pairwise votes into Elo-style leaderboards. Report inter-rater agreement and use prompt sets that cover hard cases (counting, spatial relations, text rendering, diverse people).
+Automatic scores do not capture everything people care about: aesthetics, subtle artefacts (hands, text), cultural appropriateness, and whether the image matches the *intent* of the prompt. Standard practice is side-by-side preference tests on a fixed prompt set, with several raters per item, and public "arenas" that turn many pairwise votes into Elo-style leaderboards. Report **inter-rater agreement** (how often different raters give the same verdict) and use prompt sets that cover hard cases (counting, spatial relations, text rendering, diverse people).
 
 ### Common mistakes
 
@@ -753,7 +753,7 @@ Automatic scores do not capture everything people care about: aesthetics, subtle
 
 ### In the interview
 
-**30-second answer — "How would you evaluate an image generator?"** "Automatic metrics first: FID against a real reference set for overall realism and coverage, precision and recall to separate fidelity from diversity, and CLIP score for prompt alignment — all at fixed sample sizes and preprocessing. Then human side-by-side evaluations on a curated prompt suite covering hard cases, with multiple raters and agreement statistics, plus safety and bias checks. Humans decide launches; metrics catch regressions."
+**30-second answer — "How would you evaluate an image generator?"** "Automatic metrics first: FID against a real reference set for overall realism and coverage, precision and recall to separate fidelity from diversity, and CLIP score for prompt alignment — all at fixed sample sizes and preprocessing. Then human side-by-side evaluations on a curated prompt suite covering hard cases, with multiple raters and agreement statistics, plus safety and bias checks. Humans decide launches; metrics catch **regressions** (things that used to work getting worse)."
 
 ### Self-check
 
@@ -771,7 +771,7 @@ Measure fidelity and diversity. FID (lower is better) compares feature distribut
 
 ### The problems
 
-- **Misinformation and impersonation** — realistic fake videos, photos and voices of politicians, executives or family members. In a widely reported case from early 2024, an employee of the engineering firm Arup in Hong Kong transferred about US$25 million after a video call in which the "colleagues", including the CFO, were deepfakes.
+- **Misinformation and impersonation** — realistic fake videos, photos and voices of politicians, executives or family members. In a widely reported case from early 2024, an employee of the engineering firm Arup in Hong Kong transferred about US$25 million after a video call in which the "colleagues", including the CFO (chief financial officer), were deepfakes.
 - **Fraud and identity theft** — cloned voices in "emergency" calls; synthetic faces passing weak identity checks.
 - **Non-consensual imagery** — sexualised deepfakes of real people, overwhelmingly targeting women.
 - **Consent and likeness** — actors, voice artists and artists whose voice, face or style is reproduced without agreement.
@@ -780,29 +780,29 @@ Measure fidelity and diversity. FID (lower is better) compares feature distribut
 
 ### Detection
 
-Human cues exist, though they fade as models improve: malformed hands or extra limbs, garbled lettering on signs, inconsistent shadows or reflections, skin that looks too smooth, mismatched earrings or eyes ([Chapter 12, §12.7](../12-safety-ethics-governance/README.md) covers spotting generated media). Automated detectors are an arms race and generalise poorly to new generators, so they should inform — not decide — high-stakes judgements. **Context checks** (reverse image search, source verification, calling back on a known number) remain the strongest defence against scams.
+Human cues exist, though they fade as models improve: malformed hands or extra limbs, garbled lettering on signs, inconsistent shadows or reflections, skin that looks too smooth, mismatched earrings or eyes ([Chapter 12, §12.7](../12-safety-ethics-governance/README.md) covers spotting generated media). Automated detectors are an **arms race** (each better detector prompts better fakes) and generalise poorly to new generators, so they should inform — not decide — high-stakes judgements. **Context checks** (**reverse image search** — finding where else an image has appeared online — source verification, calling back on a known number) remain the strongest defence against scams.
 
 ### Watermarking and provenance
 
 - **Invisible watermarks** — **SynthID** (Google DeepMind, 2023) embeds a signal in generated images, audio, video and text that survives common edits such as compression and cropping, and can be detected by a matching tool. Watermarks can be weakened by heavy editing and only exist if the generator added them.
-- **Provenance metadata** — the **C2PA** "Content Credentials" standard (backed by Adobe, Microsoft, Google, OpenAI and others) attaches a cryptographically signed record of how content was created and edited. Because metadata can be stripped, a file without credentials is not thereby shown to be fake or real.
+- **Provenance metadata** (information about a file's origin, stored with the file) — the **C2PA** "Content Credentials" standard (backed by Adobe, Microsoft, Google, OpenAI and others) attaches a **cryptographically signed** (sealed with a digital signature, so tampering is detectable) record of how content was created and edited. Because metadata can be stripped, a file without credentials is not thereby shown to be fake or real.
 - Best practice combines both, plus visible labels in products.
 
 ### Copyright and ownership (as of 2026; this is evolving and varies by country)
 
-- **Training data** — several lawsuits challenge training on copyrighted material without permission. In *Getty Images v. Stability AI*, the English High Court (November 2025) rejected Getty's main copyright claim — Getty had dropped its training claim, and the court held the Stable Diffusion model was not an "infringing copy" — while finding only very limited trade-mark infringement over watermark-like artefacts in early versions; Getty's US case continues in California. The artists' class action *Andersen v. Stability AI* (also against Midjourney and others) went to a jury trial in San Francisco in September 2026. No universal rule has emerged; results differ by country and by claim.
+- **Training data** — several lawsuits challenge training on copyrighted material without permission. In *Getty Images v. Stability AI*, the English High Court (November 2025) rejected Getty's main copyright claim — Getty had dropped its training claim, and the court held the Stable Diffusion model was not an "infringing copy" — while finding only very limited trade-mark infringement over watermark-like artefacts in early versions; Getty's US case continues in California. The artists' **class action** (a lawsuit brought on behalf of a whole group) *Andersen v. Stability AI* (also against Midjourney and others) went to a jury trial in San Francisco in September 2026. No universal rule has emerged; results differ by country and by claim.
 - **Outputs** — the US Copyright Office holds that works need human authorship; purely machine-generated images are not protected, while human selection, arrangement or substantial editing can be. Courts upheld this in *Thaler v. Perlmutter* (district court 2023, appeal 2025), and the US Supreme Court declined to hear the case in March 2026.
 - **Practical rules** — check the generator's licence and terms, avoid prompts that imitate a living artist's protected work or a trademark, get consent for anyone's likeness or voice, and keep records of human contributions.
 
 ### Regulation
 
-- The **EU AI Act** puts generated content in its **limited / transparency risk** tier (Chapter 12): Article 50 requires providers to tell people when they are interacting with an AI system and to **mark synthetic content in machine-readable form** (audio, images, video, text), and requires deployers to **label deepfakes**. These duties apply from 2 August 2026; the EU's "Digital Omnibus on AI" (Regulation (EU) 2026/1744, in force since 27 July 2026) gives generative systems placed on the market before that date until 2 December 2026 for the marking duty. The same amendment postponed high-risk obligations (Annex III systems from 2 December 2027, Annex I products from 2 August 2028) and added bans on generating non-consensual intimate imagery or child sexual abuse material from 2 December 2026. Check current guidance before relying on any date.
+- The **EU AI Act** (the European Union's law that regulates AI systems by risk level) puts generated content in its **limited / transparency risk** tier (Chapter 12): Article 50 requires **providers** (those who build or sell the AI system) to tell people when they are interacting with an AI system and to **mark synthetic content in machine-readable form** (audio, images, video, text), and requires **deployers** (organisations that use it in their own service) to **label deepfakes**. These duties apply from 2 August 2026; the EU's "Digital Omnibus on AI" (Regulation (EU) 2026/1744, in force since 27 July 2026) gives generative systems placed on the market before that date until 2 December 2026 for the marking duty. The same amendment postponed high-risk obligations (Annex III systems from 2 December 2027, Annex I products from 2 August 2028) and added bans on generating non-consensual intimate imagery or child sexual abuse material from 2 December 2026. Check current guidance before relying on any date.
 - In the US, the **TAKE IT DOWN Act** (signed May 2025) makes it a crime to publish non-consensual intimate images, including AI-generated "digital forgeries", and required covered platforms to run a notice-and-removal process (removal within 48 hours of a valid request) by May 2026; several states regulate election deepfakes.
 - China's **labelling measures for AI-generated content** (in force since 1 September 2025) require visible labels on generated text, images, audio and video plus hidden labels in file metadata.
 
 ### In the interview
 
-**30-second answer — "What safeguards would you ship with an image generator?"** "Input and output safety classifiers for disallowed content, especially sexual content and real-person likeness; refusal policies for impersonation; invisible watermarking plus C2PA provenance on every output; visible labels in the product; licensed or opt-out-respecting training data; red-teaming for bias and misuse before launch; and monitoring with a takedown and appeals process after launch — with the understanding that detection alone is not enough."
+**30-second answer — "What safeguards would you ship with an image generator?"** "Input and output **safety classifiers** (models that screen requests and results) for disallowed content, especially sexual content and real-person likeness; refusal policies for impersonation; invisible watermarking plus C2PA provenance on every output; visible labels in the product; licensed or opt-out-respecting training data; **red-teaming** (deliberately attacking your own system to find failures) for bias and misuse before launch; and monitoring with a takedown and appeals process after launch — with the understanding that detection alone is not enough."
 
 ### Self-check
 

@@ -1,19 +1,19 @@
 # Chapter 11 — LLM Serving and Inference
 
-So far an LLM has mostly been a black box you send text to. This chapter opens the box from the **operations** side: what happens on the GPU when a request arrives, why an answer takes the time it takes, what runs out first when traffic grows, and how teams make generation faster and cheaper without making it worse.
+So far an LLM has mostly been a black box you send text to. This chapter opens the box from the **operations** side: what happens on the **GPU** (graphics processing unit — the chip that does the model's maths) when a request arrives, why an answer takes the time it takes, what runs out first when traffic grows, and how teams make generation faster and cheaper without making it worse.
 
-A classic ML service (a fraud score) returns one number in about 10 ms. A **generative** service writes hundreds of tokens, one after another, on expensive accelerators, so the same feature can cost a fraction of a cent or several cents per request. **Inference** (running a trained model to get an output) therefore moves to the centre of the design — and good engineers put numbers on it early.
+A classic ML service (a fraud score) returns one number in about 10 ms. A **generative** service writes hundreds of **tokens** (word pieces; defined in §11.1), one after another, on expensive **accelerators** (specialised chips such as GPUs), so the same feature can cost a fraction of a cent or several cents per request. **Inference** (running a trained model to get an output) therefore moves to the centre of the design — and good engineers put numbers on it early.
 
 **What you'll learn**
 
-1. **Prefill** vs **decode**, and latency metrics (**TTFT**, **TPOT**, goodput).
+1. **Prefill** vs **decode**, and **latency** metrics (latency = how long a request takes; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) (**TTFT**, **TPOT**, goodput).
 2. The **KV cache**, **batching** (static, dynamic, continuous) and **PagedAttention / vLLM**.
 3. **Quantization**, **distillation** and **speculative decoding**.
 4. **GPU memory sizing** and **model parallelism**.
 5. **Streaming**, **caching** (exact, semantic, prefix), **routing and cascades**.
-6. **Cost estimation**, **rate limiting**, API vs self-hosting, **observability** — and a capstone pricing a 5-million-user product.
+6. **Cost estimation**, **rate limiting** (capping how much each caller may send per minute), API (a provider's hosted model you call over the internet) vs self-hosting (running the model on your own GPUs), **observability** — and a capstone pricing a 5-million-user product.
 
-Prices and throughput figures are **illustrative assumptions** chosen to make the arithmetic easy; learn the relationships and check current prices before relying on them. All code is in `code/`, runs on a laptop CPU with NumPy, and the outputs shown are real.
+Prices and throughput figures are **illustrative assumptions** chosen to make the arithmetic easy; learn the relationships and check current prices before relying on them. All code is in `code/`, runs on a laptop **CPU** (ordinary processor) with **NumPy** (Python's numerical-array library), and the outputs shown are real.
 
 ```mermaid
 flowchart LR
@@ -41,7 +41,7 @@ The optimizations fall into three groups: skip the expensive call (caching, rout
 ## 11.1 The LLM as a production component
 
 ### What it is
-To a system designer an LLM endpoint is a function: **tokens in → tokens out**, with latency depending on both counts and a price per token. Two terms:
+To a system designer an LLM **endpoint** (the network address your code sends requests to) is a function: **tokens in → tokens out**, with latency depending on both counts and a price per token. Two terms:
 
 - **Token** — the unit a model reads, writes and bills in. Rough English rule: 1 token ≈ 4 characters ≈ 0.75 words (1,000 words ≈ 1,300 tokens). Code and non-English text use more; use the provider's token counter when accuracy matters.
 - **Context window** — the maximum tokens one request may use; input, output and any reasoning tokens usually share it, with a separate cap on output length.
@@ -50,7 +50,7 @@ To a system designer an LLM endpoint is a function: **tokens in → tokens out**
 Everything in this chapter is measured in tokens: latency grows with them, prices are quoted per million of them, the context window caps them. The model does **not** remember earlier conversations — your application must re-send the relevant history each time. Choosing which instructions, history and documents to include (**context assembly**) is one of your biggest cost levers.
 
 ### How it works — a request's life
-1. The server **tokenizes** the client's text.
+1. The server **tokenizes** the client's text (splits it into tokens and maps each to a number).
 2. **Prefill**: the model reads all input tokens and builds internal state (the KV cache, §11.4).
 3. **Decode**: it produces output tokens one at a time, each depending on the previous one.
 4. Tokens are **streamed** back as produced, or returned together at the end.
@@ -76,7 +76,7 @@ Generating a reply happens in two phases with very different hardware behaviour:
 | | Prefill | Decode |
 |---|---|---|
 | What it does | Processes the whole prompt | Produces one new token per step |
-| Parallelism | All prompt positions at once (one big matrix multiply) | Sequential — token *t+1* needs token *t* |
+| Parallelism | All prompt positions at once (one big matrix multiply — the GPU's core operation on grids of numbers) | Sequential — token *t+1* needs token *t* |
 | Bottleneck | **Compute** (FLOPs — floating-point operations) | **Memory bandwidth** (bytes/s read from GPU memory: weights + KV cache) at small batch |
 | Drives | Time to first token | Time per output token |
 | Grows with | Input length | Output length |
@@ -85,27 +85,27 @@ Analogy: prefill is a chef reading the whole order at a glance; decode is platin
 
 ### Why it matters
 It explains three facts you will be asked about:
-- **The first word takes a moment, then text flows steadily** — the wait is prefill (+ queueing); the flow rate is decode.
+- **The first word takes a moment, then text flows steadily** — the wait is prefill (+ **queueing**, time spent waiting for a free slot); the flow rate is decode.
 - **Output tokens cost more than input tokens** — each output token needs its own sequential pass, while input tokens share one parallel pass. (Providers set prices commercially, so the ratio is not physics; list prices typically put output at about 4–8× input.)
 - **"Be concise" saves real money** — shorter answers mean fewer decode steps.
 
 ### How it works — worked numbers
-Take a 7-billion-parameter model in 16-bit precision (2 bytes per parameter → **14 GB of weights**) on a GPU with ~**2 TB/s** memory bandwidth (an NVIDIA A100 80 GB; an H100 SXM has ~3.35 TB/s).
+Take a 7-billion-**parameter** (learned weight) model in **16-bit precision** (each number stored in 16 bits) (2 bytes per parameter → **14 GB of weights**) on a GPU with ~**2 TB/s** memory bandwidth (an NVIDIA A100 80 GB; an H100 SXM has ~3.35 TB/s).
 
 1. **Decode, batch of 1.** Each step reads all 14 GB of weights: 14 GB ÷ 2 TB/s = **7 ms per token at best**, ≈ 140 tokens/s for that user. The arithmetic units sit mostly idle — each 2-byte weight feeds only ~2 FLOPs.
 2. **Decode, batch of 32.** The same 14 GB read now serves 32 sequences; the step still takes ~7 ms plus extra KV-cache reads, so throughput approaches 32 × 140 ≈ 4,500 tokens/s. This is why **batching** (§11.5) is key.
-3. **Prefill of 2,000 tokens.** About 2 × parameters FLOPs per token → 2 × 7×10⁹ × 2,000 = 2.8×10¹³ FLOPs. At an effective ~150 TFLOP/s (half the A100's 312 TFLOP/s BF16 peak) that is ≈ 0.19 s, so long prompts show up directly in TTFT.
+3. **Prefill of 2,000 tokens.** About 2 × parameters FLOPs per token → 2 × 7×10⁹ × 2,000 = 2.8×10¹³ FLOPs. At an effective ~150 **TFLOP/s** (trillion floating-point operations per second) (half the A100's 312 TFLOP/s **BF16** — a 16-bit number format built for ML — peak) that is ≈ 0.19 s, so long prompts show up directly in TTFT.
 
-These are back-of-envelope ceilings, not benchmarks. The toy demo in §11.4 shows the same shape on a CPU: prefill handles ~90,000 prompt tokens/s in one pass, decode only ~5,000 tokens/s one at a time.
+These are back-of-envelope ceilings, not **benchmarks** (measured runs on real hardware). The toy demo in §11.4 shows the same shape on a CPU: prefill handles ~90,000 prompt tokens/s in one pass, decode only ~5,000 tokens/s one at a time.
 
 ### Trade-offs
-RAG and summarization are **prefill-heavy**; chat and code generation with long answers are **decode-heavy** — benchmark both. Engines use **chunked prefill** (split a long prompt into pieces interleaved with other users' decode steps so their output does not stall); some large deployments use **disaggregated serving** (separate GPU pools for prefill and decode).
+RAG (retrieval-augmented generation: retrieved documents are pasted into the prompt) and summarization are **prefill-heavy**; chat and code generation with long answers are **decode-heavy** — benchmark both. Engines use **chunked prefill** (split a long prompt into pieces interleaved with other users' decode steps so their output does not stall); some large deployments use **disaggregated serving** (separate GPU pools for prefill and decode).
 
 ### In the interview
 **30-second answer:** "Prefill reads the whole prompt in parallel, is compute-bound and sets time to first token. Decode emits one token per step and, at small batch, is limited by memory bandwidth because every step re-reads the weights — it sets streaming speed. That's why output tokens cost more and why batching matters."
 
 - *Why is decode memory-bound?* Each step reads every weight but does only ~2 FLOPs per weight per sequence; the GPU computes far faster than it can stream weights, until the batch is large.
-- *How would you cut TTFT for a RAG app?* Fewer/shorter retrieved chunks, prefix caching, chunked prefill, a smaller model or more GPUs per replica.
+- *How would you cut TTFT for a RAG app?* Fewer/shorter retrieved chunks, prefix caching, chunked prefill, a smaller model or more GPUs per **replica** (one running copy of the model server).
 
 ### Self-check
 1. Which phase dominates "summarize this 50-page PDF in one sentence"? → Prefill.
@@ -125,7 +125,7 @@ Prefill = parallel, compute-bound, sets TTFT. Decode = sequential, bandwidth-bou
 | **TPOT** — time per output token (≈ **ITL**, inter-token latency) | Average gap between output tokens | 20–50 ms (20–50 tokens/s, faster than reading) |
 | **End-to-end latency** | Request sent → last token | Depends on answer length |
 | **Tokens/s per user** | 1 / TPOT | — |
-| **Throughput** | Total tokens/s (or requests/s) the server produces | Maximize, subject to the above |
+| **Throughput** (work done per second) | Total tokens/s (or requests/s) the server produces | Maximize, subject to the above |
 | **Goodput** | Requests/s that **meet** their latency targets | What actually matters |
 
 A handy formula: **E2E ≈ TTFT + TPOT × (output_tokens − 1)**. Example: TTFT 0.4 s, TPOT 30 ms, 300 tokens → 0.4 + 0.03 × 299 ≈ **9.4 s**. The user starts reading after 0.4 s — why streaming makes it feel fast.
@@ -148,7 +148,7 @@ Measure TTFT, TPOT and E2E percentiles under realistic load; optimize goodput.
 ## 11.4 The KV cache
 
 ### What it is
-In a transformer ([Chapter 3](../03-transformers-and-embeddings/README.md)), each token's attention step compares its **query** vector against the **key** vectors of all earlier tokens and mixes their **value** vectors. When generating token 101, the keys and values of tokens 1–100 are unchanged — so the engine **stores** them instead of recomputing. That store, per layer, is the **KV cache**.
+In a transformer ([Chapter 3](../03-transformers-and-embeddings/README.md)), each token's **attention** step (how it gathers information from other tokens) compares its **query** vector against the **key** vectors of all earlier tokens and mixes their **value** vectors. When generating token 101, the keys and values of tokens 1–100 are unchanged — so the engine **stores** them instead of recomputing. That store, per layer, is the **KV cache**.
 
 Analogy: meeting minutes. Without notes you replay the whole recording before saying anything new; with notes you read them and add one line.
 
@@ -171,14 +171,14 @@ Worked examples at 16-bit (2 bytes), using published model shapes:
 
 | Model | Layers | KV heads × head dim | Per token | One 4,096-token sequence |
 |---|---|---|---|---|
-| Llama-2-7B (standard multi-head attention) | 32 | 32 × 128 | 2·32·32·128·2 = 524,288 B = **512 KiB** | **2.0 GiB** |
+| Llama-2-7B (standard multi-head attention: many attention units, or heads, in parallel) | 32 | 32 × 128 | 2·32·32·128·2 = 524,288 B = **512 KiB** | **2.0 GiB** |
 | Llama-3-8B (grouped-query attention) | 32 | 8 × 128 | **128 KiB** | **0.5 GiB** |
 | Llama-3-70B (grouped-query attention) | 80 | 8 × 128 | **320 KiB** | **1.25 GiB** |
 
-Two lessons. A single long conversation can need gigabytes. And **grouped-query attention (GQA)** — several query heads sharing one K/V head — cuts Llama-3-8B's cache to a quarter of Llama-2-7B's at the same depth, which is why modern models use GQA (or **multi-query attention**, MQA, with one shared K/V head). Storing the cache in 8 bits (**KV-cache quantization**) halves it again at a small accuracy cost.
+Two lessons. A single long conversation can need gigabytes (KiB = 1,024 bytes; GiB = 1,024³ bytes). And **grouped-query attention (GQA)** — several query heads sharing one K/V head — cuts Llama-3-8B's cache to a quarter of Llama-2-7B's at the same depth, which is why modern models use GQA (or **multi-query attention**, MQA, with one shared K/V head). Storing the cache in 8 bits (**KV-cache quantization**) halves it again at a small accuracy cost.
 
 ### Code — cache vs no cache on a toy transformer
-`code/kv_cache_demo.py` builds a 4-layer decoder with random weights and generates 256 tokens both ways.
+`code/kv_cache_demo.py` builds a 4-layer **decoder** (a generate-left-to-right transformer, like GPT) with random weights and generates 256 tokens both ways.
 
 ```python
 def block(x, w, k_past=None, v_past=None):
@@ -247,13 +247,13 @@ Compute drops from ~*n²*/2 to ~*n* token passes; memory grows with users × con
 - Confusing the **KV cache** (inside the engine) with a **response cache** (in front of the model, §11.13).
 
 ### Real-world examples
-Every production engine (vLLM, TensorRT-LLM, SGLang, llama.cpp) keeps a KV cache; Hugging Face `transformers` calls it `past_key_values` and uses it by default in `generate()`. GQA is used by Llama 2 70B, the Llama 3 family and Mistral 7B.
+Every production engine (vLLM, TensorRT-LLM, SGLang, llama.cpp) keeps a KV cache; **Hugging Face** (the main hub and Python library for open models) `transformers` calls it `past_key_values` and uses it by default in `generate()`. GQA is used by Llama 2 70B, the Llama 3 family and Mistral 7B.
 
 ### In the interview
 **30-second answer:** "The KV cache stores each layer's keys and values for tokens already processed, so each decode step computes them only for the newest token — quadratic recomputation becomes linear work. It costs 2 × layers × KV-heads × head-dim × bytes per token, about 320 KiB per token for Llama-3-70B, so it, not the weights, usually limits concurrent users per GPU."
 
-- *How do you shrink it?* GQA/MQA, 8-bit KV cache, shorter contexts, paged allocation (§11.6), offloading old blocks to CPU memory.
-- *Why does it limit batch size?* Each sequence needs its own cache; when memory runs out the engine queues or pre-empts requests.
+- *How do you shrink it?* GQA/MQA, 8-bit KV cache, shorter contexts, paged allocation (§11.6), **offloading** (moving) old blocks to CPU memory.
+- *Why does it limit batch size?* Each sequence needs its own cache; when memory runs out the engine queues or **pre-empts** requests (pauses one and evicts its cache to make room).
 
 ### Self-check
 1. KV per token for a model with 40 layers, 8 KV heads, head dim 128, fp16? → 2·40·8·128·2 = 163,840 B = 160 KiB.
@@ -268,11 +268,11 @@ Compute K and V once, reuse them every step. 2·L·H_kv·d·bytes per token, tim
 ## 11.5 Batching: static, dynamic and continuous
 
 ### What it is
-**Batching** runs several requests through one forward pass so one read of the weights serves many sequences (§11.2).
+**Batching** runs several requests through one **forward pass** (one run of inputs through all the model's layers) so one read of the weights serves many sequences (§11.2).
 
 - **Static batching** — collect a fixed-size batch, run it until **every** sequence finishes, then take the next batch.
 - **Dynamic batching** — start when the batch is full **or** the oldest request has waited a maximum time (e.g. 200 ms); still runs to completion.
-- **Continuous batching** (**in-flight** or **iteration-level** batching, from the Orca system, OSDI 2022) — the scheduler adds and removes sequences **at every decode step**, so a waiting request takes a freed slot immediately.
+- **Continuous batching** (**in-flight** or **iteration-level** batching, from the Orca system, OSDI 2022) — the **scheduler** (the engine component that decides which sequences run in each step) adds and removes sequences **at every decode step**, so a waiting request takes a freed slot immediately.
 
 Analogy: a tour bus that returns only when the last tourist is back (static) versus a hop-on/hop-off bus (continuous).
 
@@ -333,7 +333,7 @@ How to read it:
 | Weakness | Idle slots, long waits | Wastes slots on finished sequences | Needs per-step scheduling; per-user speed dips as the batch grows |
 
 ### When not to use it
-For **embedding** or **classification** models (one forward pass, no decode loop), dynamic batching is simpler and sufficient. For **offline** jobs, maximize batch size and ignore TTFT; hosted providers also sell asynchronous batch APIs at a discount (Anthropic's and OpenAI's are 50% of the standard price) for work that can wait hours.
+For **embedding** or **classification** models (one forward pass, no decode loop), dynamic batching is simpler and sufficient. For **offline** jobs, maximize batch size and ignore TTFT; hosted providers also sell **asynchronous batch APIs** (submit many jobs now, collect results later) at a discount (Anthropic's and OpenAI's are 50% of the standard price) for work that can wait hours.
 
 ### Common mistakes
 - Comparing engines at batch size 1.
@@ -356,10 +356,10 @@ Batch to share weight reads; continuous batching is the LLM standard.
 ## 11.6 PagedAttention, vLLM and serving engines
 
 ### What it is
-**PagedAttention** (Kwon et al., SOSP 2023 — the paper behind **vLLM**) manages the KV cache the way an operating system manages RAM: in small fixed-size **blocks** (16 tokens by default in vLLM) handed out on demand, with a per-sequence **block table** mapping token positions to physical blocks that need not be contiguous.
+**PagedAttention** (Kwon et al., SOSP 2023 — the paper behind **vLLM**) manages the KV cache the way an **operating system** manages **RAM** (the computer's working memory): in small fixed-size **blocks** (16 tokens by default in vLLM) handed out on demand, with a per-sequence **block table** mapping token positions to physical blocks that need not be **contiguous** (side by side in memory).
 
 ### The problem it solves
-Earlier engines reserved one contiguous slab per request sized for the **maximum** possible output — say 2,048 tokens — even if the answer ended after 50. The vLLM paper measured that such systems used only about 20–38% of KV memory for real token data, i.e. roughly **60–80% was wasted** by over-reservation and fragmentation; paging cut the waste to under 4%, fitting more sequences per GPU and giving **2–4× higher throughput** than FasterTransformer and Orca at the same latency.
+Earlier engines reserved one contiguous slab per request sized for the **maximum** possible output — say 2,048 tokens — even if the answer ended after 50. The vLLM paper measured that such systems used only about 20–38% of KV memory for real token data, i.e. roughly **60–80% was wasted** by over-reservation and **fragmentation** (free memory broken into gaps too small to use); paging cut the waste to under 4%, fitting more sequences per GPU and giving **2–4× higher throughput** than FasterTransformer and Orca at the same latency.
 
 ### How it works
 1. Free GPU memory (after weights) is carved into equal KV blocks.
@@ -373,13 +373,13 @@ Paging also makes **prefix caching** cheap: a common system prompt's blocks stay
 ### Serving engines at a glance
 | Engine | Notes |
 |---|---|
-| **vLLM** (open source) | PagedAttention, continuous batching, prefix caching, many quantization formats, tensor/pipeline parallel, OpenAI-compatible server |
-| **TensorRT-LLM** (NVIDIA) | Compiled, highly optimized kernels for NVIDIA GPUs; "in-flight batching"; often served via Triton |
+| **vLLM** (open source: code anyone may use and change) | PagedAttention, continuous batching, prefix caching, many quantization formats, tensor/pipeline parallel, OpenAI-compatible server (accepts the same request format as OpenAI's API) |
+| **TensorRT-LLM** (NVIDIA) | Compiled, highly optimized **kernels** (small low-level programs that run one operation on the GPU) for NVIDIA GPUs; "in-flight batching"; often served via Triton |
 | **SGLang** (open source) | RadixAttention prefix sharing, fast structured generation |
 | **Hugging Face TGI** | Early continuous-batching server; in maintenance mode since December 2025 — Hugging Face now points users to vLLM and SGLang |
-| **llama.cpp / Ollama** | Runs GGUF-quantized models on laptops, CPUs and consumer GPUs — the usual choice for local experiments |
+| **llama.cpp / Ollama** | Runs GGUF-quantized (llama.cpp's compact model-file format) models on laptops, CPUs and consumer GPUs — the usual choice for local experiments |
 
-Your job is usually to **choose and configure** one of these, not to write kernels. One kernel-level name you will hear: **FlashAttention**, an exact attention algorithm that tiles the computation to cut slow memory traffic.
+Your job is usually to **choose and configure** one of these, not to write kernels. One kernel-level name you will hear: **FlashAttention**, an exact attention algorithm that **tiles** the computation (works on small blocks that fit in fast on-chip memory) to cut slow memory traffic.
 
 ### Trade-offs and common mistakes
 Paging adds bookkeeping but the memory win dominates. Mistake: assuming paging creates memory — it only stops wasting it.
@@ -399,7 +399,7 @@ KV memory in pages, not slabs: less waste, more users, shared prefixes.
 ## 11.7 Quantization
 
 ### What it is
-**Quantization** stores numbers with fewer bits. Weights are normally 16-bit floats (FP16 or BF16); quantized weights are 8- or 4-bit integers plus a **scale** factor mapping them back to real values. Analogy: recording heights to the nearest centimetre instead of micrometre — far less to write, almost always good enough.
+**Quantization** stores numbers with fewer bits. Weights are normally 16-bit **floats** (numbers with a fractional part; FP16 or BF16); quantized weights are 8- or 4-bit **integers** (whole numbers) plus a **scale** factor mapping them back to real values. Analogy: recording heights to the nearest centimetre instead of micrometre — far less to write, almost always good enough.
 
 ### Why it matters
 - **Memory:** raw weights shrink to ½ (int8) or ¼ (int4) of 16-bit: a 70B model goes from ~140 GB to ~70 GB or ~35 GB.
@@ -410,7 +410,7 @@ KV memory in pages, not slabs: less waste, more users, shared prefixes.
 *Figure — A 70B model's raw weights at 16-bit vs 8-bit (course diagram).*
 
 ### How it works — symmetric "absmax" quantization
-1. Pick a group of weights (the whole tensor, one output channel, or a small group such as 128 weights).
+1. Pick a group of weights (the whole **tensor** — a multi-dimensional array of numbers — one output channel, or a small group such as 128 weights).
 2. `scale = max(|w|) / q_max`, where `q_max = 127` for int8 and `7` for int4.
 3. Store `q = round(w / scale)` as a small integer.
 4. At run time use `ŵ = q × scale`.
@@ -464,8 +464,8 @@ Reading the results: int8 with per-channel scales is almost lossless (1% error).
 ### Smarter methods (intuition only)
 | Method | Idea in one line |
 |---|---|
-| **LLM.int8()** (Dettmers et al., 2022) | Keep the few outlier **activation** channels in 16-bit and do the rest in int8. |
-| **GPTQ** (Frantar et al., 2022) | Quantize one column at a time and **adjust the not-yet-quantized weights** to cancel the error, using second-order statistics from a small calibration set. One-shot, no retraining; popular for 4-bit. |
+| **LLM.int8()** (Dettmers et al., 2022) | Keep the few outlier **activation** channels (activations = the intermediate values flowing between layers) in 16-bit and do the rest in int8. |
+| **GPTQ** (Frantar et al., 2022) | Quantize one column at a time and **adjust the not-yet-quantized weights** to cancel the error, using second-order statistics (how sensitive the output is to each weight) from a small **calibration set** (a sample of realistic inputs). One-shot, no retraining; popular for 4-bit. |
 | **AWQ** (Lin et al., 2023) | "Activation-aware": the ~0.1–1% of weight channels that meet large activations matter most, so **scale them up before quantizing** (and the input down to compensate). No backprop. |
 | **SmoothQuant** (Xiao et al., 2022) | Move activation outliers into the weights with a per-channel rescale so both **weights and activations** can be int8 (W8A8). |
 | **FP8** | 8-bit floating point, native on recent GPUs (e.g. H100); little quality loss. |
@@ -488,10 +488,10 @@ When memory and bandwidth are not your bottleneck, or your eval shows a drop on 
 - Forgetting scales and the KV cache in memory maths; calibrating GPTQ/AWQ on data unlike your traffic.
 
 ### Real-world examples
-Hugging Face hosts thousands of GPTQ/AWQ/GGUF checkpoints; vLLM and SGLang load AWQ/GPTQ/FP8 directly; Ollama ships 4-bit GGUF models by default so 7–8B models run on laptops; QLoRA fine-tunes adapters on a 4-bit base model ([Chapter 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)).
+Hugging Face hosts thousands of GPTQ/AWQ/GGUF **checkpoints** (saved model files); vLLM and SGLang load AWQ/GPTQ/FP8 directly; Ollama ships 4-bit GGUF models by default so 7–8B models run on laptops; QLoRA fine-tunes **adapters** (small trainable add-on layers) on a 4-bit base model ([Chapter 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)).
 
 ### In the interview
-**30-second answer:** "Quantization stores weights — optionally activations or the KV cache — in 8 or 4 bits with per-group scales. It halves or quarters weight memory and, since decode is bandwidth-bound, often speeds it up. The risk is outlier-driven quality loss; GPTQ (error-compensating) and AWQ (protecting salient channels) make 4-bit practical. I'd always A/B it on our task eval."
+**30-second answer:** "Quantization stores weights — optionally activations or the KV cache — in 8 or 4 bits with per-group scales. It halves or quarters weight memory and, since decode is bandwidth-bound, often speeds it up. The risk is outlier-driven quality loss; GPTQ (error-compensating) and AWQ (protecting salient channels) make 4-bit practical. I'd always A/B it (compare old and new versions on the same tests) on our task eval."
 
 - *Weight-only vs W8A8?* Weight-only saves memory/bandwidth; W8A8 also uses int8 maths units, useful when compute-bound (large batch, prefill).
 
@@ -508,16 +508,16 @@ Fewer bits → less memory, often faster decode. Per-group scales, GPTQ/AWQ for 
 ## 11.8 Distillation and small specialist models
 
 ### What it is
-**Knowledge distillation** (Hinton, Vinyals & Dean, 2015) trains a small **student** model to imitate a large **teacher**. Classic distillation matches the teacher's full probability distribution ("soft targets", softened by a temperature), which carries more information than one correct label; for LLMs teams often just fine-tune the student on **teacher-generated answers** to real product prompts.
+**Knowledge distillation** (Hinton, Vinyals & Dean, 2015) trains a small **student** model to imitate a large **teacher**. Classic distillation matches the teacher's full probability distribution ("soft targets", softened by a **temperature** — a knob that flattens or sharpens probabilities), which carries more information than one correct label; for LLMs teams often just fine-tune the student on **teacher-generated answers** to real product prompts.
 
 ### Why it matters
-A student sized for a narrow task serves the high-volume path at a fraction of the cost and latency. **DistilBERT** kept about 97% of BERT's language-understanding score with 40% fewer parameters and ~60% faster inference.
+A student sized for a narrow task serves the high-volume path at a fraction of the cost and latency. **DistilBERT** kept about 97% of BERT's (a 2018 Google language-understanding model) language-understanding score with 40% fewer parameters and ~60% faster inference.
 
 ### How it works
 1. Collect representative prompts from traffic (with consent and privacy review).
 2. Have the teacher answer them; filter bad answers.
 3. Fine-tune the student on the pairs (optionally on teacher probabilities).
-4. Evaluate on a held-out golden set; deploy behind a router (§11.14) that escalates hard cases.
+4. Evaluate on a **held-out golden set** (fixed test cases with known answers, never used for training); deploy behind a router (§11.14) that escalates hard cases.
 
 ### Trade-offs and cautions
 Students inherit the teacher's mistakes and are good only **inside** the training distribution; retrain when the teacher or product changes. **Check provider terms** — several forbid using outputs to build competing models.
@@ -538,7 +538,7 @@ A cheap **draft** model guesses the next *k* tokens; the big **target** model ch
 ### How it works — the exact acceptance rule (Leviathan et al. 2023; Chen et al. 2023)
 For each drafted token *x* (draft probability q(x), target probability p(x)):
 1. Accept with probability **min(1, p(x)/q(x))**.
-2. If rejected, sample a replacement from the **residual** distribution ∝ max(0, p − q) and stop.
+2. If rejected, sample a replacement from the **residual** distribution ∝ max(0, p − q) (∝ means "proportional to") and stop.
 3. If all *k* are accepted, sample one bonus token from p.
 
 This rule provably yields **exactly the target's distribution**, so quality is unchanged (though sampled text still varies run to run). With acceptance probability α = Σ min(p, q), expected tokens per target pass = **(1 − α^(k+1)) / (1 − α)** (assuming each guess is accepted independently).
@@ -576,7 +576,7 @@ Emitted frequencies match the target to three decimals and tokens per pass match
 
 ### Trade-offs
 - Speed-up depends on **acceptance rate** on your traffic, draft cost and load: published results are often 2–3× on favourable workloads, and gains shrink at large batch because the GPU is already busy.
-- The draft adds memory and complexity. Variants: **Medusa** (extra prediction heads instead of a separate draft), **EAGLE**, and **prompt-lookup / n-gram** drafting (copy continuations from the prompt — good for edits and RAG answers that quote sources).
+- The draft adds memory and complexity. Variants: **Medusa** (extra prediction heads instead of a separate draft), **EAGLE**, and **prompt-lookup / n-gram** (a run of n consecutive tokens) drafting (copy continuations from the prompt — good for edits and RAG answers that quote sources).
 
 ### In the interview
 **30-second answer:** "A small draft proposes several tokens; the target verifies them in one parallel pass with an accept/reject rule that preserves its exact output distribution. Decode steps become multi-token steps; gains depend on acceptance rate and load, so benchmark it."
@@ -602,7 +602,7 @@ KV cache          ≈ concurrent sequences × tokens per sequence × KV bytes pe
 overhead          ≈ activations, CUDA context, allocator slack — engines typically reserve a fraction
 ```
 
-**Mixture-of-experts (MoE)** models need **all** experts in memory though each token uses a few: Mixtral 8×7B has ~47B parameters but uses ~13B per token — memory follows the 47B, compute the 13B.
+**Mixture-of-experts (MoE)** models (many "expert" sub-networks, with a small router choosing a few per token) need **all** experts in memory though each token uses a few: Mixtral 8×7B has ~47B parameters but uses ~13B per token — memory follows the 47B, compute the 13B.
 
 ### How it works — worked examples
 `code/serving_calculator.py` implements these formulas, assuming the engine may use 90% of GPU memory (vLLM's default `gpu_memory_utilization`) with activations in the other 10% — a simplification.
@@ -665,8 +665,8 @@ When one GPU cannot hold or serve a model fast enough, split the work:
 
 | Kind | What is split | Communication | Typical use |
 |---|---|---|---|
-| **Replicas (data parallelism)** | Nothing — each GPU group has a full copy; requests are load-balanced | None | Scale **throughput** once one replica fits |
-| **Tensor parallelism (TP)** | Each layer's weight matrices are sliced across GPUs (Megatron-LM style); every GPU computes part of every layer | An **all-reduce** (every GPU sums its partial results with all the others) **in every layer** → needs very fast GPU-to-GPU links such as NVIDIA's **NVLink** | Within one node (2–8 GPUs); also lowers per-token latency |
+| **Replicas (data parallelism)** | Nothing — each GPU group has a full copy; requests are load-balanced (spread evenly by a load balancer — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) | None | Scale **throughput** once one replica fits |
+| **Tensor parallelism (TP)** | Each layer's weight matrices are sliced across GPUs (Megatron-LM style); every GPU computes part of every layer | An **all-reduce** (every GPU sums its partial results with all the others) **in every layer** → needs very fast GPU-to-GPU links such as NVIDIA's **NVLink** | Within one node (one server machine, usually up to 8 GPUs); also lowers per-token latency |
 | **Pipeline parallelism (PP)** | Consecutive **layers** go to different GPUs (stage 1 = layers 1–40, stage 2 = 41–80) | Activations passed between stages once per step | Across nodes, when the model is too big for one node |
 | **Expert parallelism (EP)** | Different MoE experts on different GPUs | Tokens routed to the GPU holding their expert | Large MoE models |
 
@@ -674,7 +674,7 @@ Analogy: TP is four cooks chopping one onion together (fast, constant coordinati
 
 ### How it works
 - **TP:** in `Y = X·W` with `W` split by columns across 4 GPUs, each GPU computes a quarter of `Y`; the next matrix is split by rows, so its partial sums are all-reduced. That is two communications per transformer layer (one after attention, one after the MLP) — fine over NVLink, slow over ordinary networking.
-- **PP:** with one request in flight, stage 2 idles while stage 1 works (a **pipeline bubble**); engines keep several micro-batches in flight so all stages stay busy.
+- **PP:** with one request in flight, stage 2 idles while stage 1 works (a **pipeline bubble**); engines keep several **micro-batches** (small slices of the batch) in flight so all stages stay busy.
 
 In vLLM these are single settings: `--tensor-parallel-size 4` (and `--pipeline-parallel-size` for multi-node).
 
@@ -692,7 +692,7 @@ Fit with TP (inside a node) or PP (across nodes); scale throughput with replicas
 ## 11.12 Streaming responses
 
 ### What it is
-**Streaming** sends tokens to the client as they are generated instead of waiting for the full answer. LLM APIs typically use **Server-Sent Events (SSE)** — a long-lived HTTP response carrying a sequence of small events (Anthropic's API emits `message_start`, `content_block_delta` events carrying text, and `message_stop`; OpenAI's Chat Completions emits `chat.completion.chunk` objects).
+**Streaming** sends tokens to the client as they are generated instead of waiting for the full answer. LLM APIs typically use **Server-Sent Events (SSE)** — a long-lived **HTTP** (the web's request–response protocol) response carrying a sequence of small events (Anthropic's API emits `message_start`, `content_block_delta` events carrying text, and `message_stop`; OpenAI's Chat Completions emits `chat.completion.chunk` objects).
 
 ### Why it matters
 Streaming does **not** cut compute or cost, but an answer that starts after 0.5 s feels responsive. It also enables **early cancellation**: if Stop reaches the engine, the remaining decode work (and billed output tokens) is saved; merely hiding output in the UI saves nothing.
@@ -713,12 +713,12 @@ with client.messages.stream(
 print("\nusage:", final.usage.input_tokens, "in /", final.usage.output_tokens, "out")
 ```
 
-A server relaying this to browsers re-emits SSE (or uses WebSockets) and records TTFT when the first chunk is flushed.
+A server relaying this to browsers re-emits SSE (or uses **WebSockets**, an always-open two-way browser connection) and records TTFT when the first chunk is flushed.
 
 ### Trade-offs and common mistakes
 - **Safety vs speed:** output checks cannot see the whole answer before it is shown. Buffer a sentence or a few hundred characters, run a streaming classifier, and keep a **stop control** — which cannot un-show displayed text.
 - **Structured output:** streamed JSON is invalid until complete; parse incrementally or wait.
-- Buffering proxies silently break streaming; long streams need timeouts and heartbeats.
+- Buffering **proxies** (servers in the middle that forward traffic) silently break streaming; long streams need timeouts and **heartbeats** (small periodic "still alive" messages).
 
 ### In the interview
 "Streaming improves perceived latency and lets cancellation stop decode early, but doesn't cut cost by itself. Stream over SSE, buffer enough for output checks, make sure cancel reaches the engine."
@@ -734,14 +734,14 @@ Three caches at three layers — keep them apart:
 
 | Cache | Key | What it saves | Where it lives |
 |---|---|---|---|
-| **Exact response** | Normalized request (+ tenant, model, settings) | The whole call | In front of the model (e.g. Redis) |
+| **Exact response** | Normalized request (+ tenant — the customer organisation — model, settings) | The whole call | In front of the model (e.g. Redis, a fast in-memory key–value store) |
 | **Semantic response** | Embedding similarity ≥ threshold | The whole call, for paraphrases | In front (vector index) |
 | **Prefix / prompt** | Exact token prefix | Prefill of the shared part only | Inside the engine or provider |
 
 ### What it is
-- **Exact cache:** same question, same context → stored answer. Low hit rate for free text, high for requests like "summarize document v17".
+- **Exact cache:** same question, same context → stored answer. Low **hit rate** (share of requests answered from the cache) for free text, high for requests like "summarize document v17".
 - **Semantic cache:** embed the request (an **embedding** is a vector capturing meaning — [Chapter 3](../03-transformers-and-embeddings/README.md)), search earlier requests, and reuse an answer if cosine similarity ≥ a threshold. Catches paraphrases ("reset password" vs "change my pwd").
-- **Prefix (prompt) cache:** the engine keeps the KV cache of a prompt's beginning (system prompt, tools, a shared document) and reuses it when a request starts with **exactly** the same tokens. Hosted APIs sell this as discounted **cached input** — Anthropic bills cache reads at 10% of the base input price on most models, less on some (5% on Claude Opus 5.5), with a 5-minute cache write at 1.25×; OpenAI caches long repeated prefixes automatically. Minimum lengths and lifetimes vary by provider.
+- **Prefix (prompt) cache:** the engine keeps the KV cache of a prompt's beginning (**system prompt** — the standing instructions sent before the conversation — tools, a shared document) and reuses it when a request starts with **exactly** the same tokens. Hosted APIs sell this as discounted **cached input** — Anthropic bills cache reads at 10% of the base input price on most models, less on some (5% on Claude Opus 5.5), with a 5-minute cache write at 1.25×; OpenAI caches long repeated prefixes automatically. Minimum lengths and lifetimes vary by provider.
 
 ### Why it matters
 Support bots see many repeated questions, and a cached answer costs almost nothing. Prefix caching cuts cost and TTFT for long shared prompts.
@@ -775,7 +775,7 @@ print(u.cache_creation_input_tokens, u.cache_read_input_tokens, u.input_tokens)
 If `cache_read_input_tokens` stays at zero across repeated calls, something in the prefix is changing — or the prefix is shorter than the model's minimum cacheable length.
 
 ### Code — exact + semantic cache with a local fake embedder
-`code/semantic_cache.py` uses a deterministic stand-in embedder (synonym normalization + hashed words and character trigrams) so it runs offline.
+`code/semantic_cache.py` uses a deterministic stand-in embedder (synonym normalization + hashed words and character **trigrams**, i.e. three-letter chunks) so it runs offline.
 
 ```python
 def get(self, tenant, text, now):
@@ -840,7 +840,7 @@ A **router** decides up front which model answers; a **cascade** tries a cheap m
 Router signals, from cheapest to most expensive:
 1. **Heuristics** — task type (summaries, classification, drafts → small model), prompt length, keywords.
 2. **A trained classifier** — a small model trained on labelled outcomes ("did the small model's answer pass?").
-3. **A verifier** — the cheap model answers, then a check (schema validation, citation check, grader model) decides whether to escalate. A model's self-reported confidence is often poorly calibrated; test it against real outcomes first.
+3. **A verifier** — the cheap model answers, then a check (schema validation, citation check, grader model) decides whether to escalate. A model's self-reported confidence is often poorly **calibrated** (its stated confidence does not match how often it is right); test it against real outcomes first.
 
 Savings: if 75% of traffic can use a model at 1/10 the price, cost × (0.75 × 0.1 + 0.25 × 1) = **0.325** (67.5% saved), assuming equal token counts. A cascade also pays for the cheap attempt on escalations.
 
@@ -928,9 +928,9 @@ Rough, out-loud arithmetic turning "users and features" into tokens, dollars and
 
 **The chat-history trap:** if every turn re-sends the whole conversation, input grows each turn. With a 500-token system prompt and 200-token user and assistant messages, turn *i* sends 500 + 200 × (2*i* − 1) tokens, so 10 turns send **25,000** input tokens instead of 7,000 (10 × 700) — 3.6× more, and the total grows quadratically with conversation length. Fixes: summarize or window old turns, prefix-cache the stable part.
 
-**Self-host fleet:** peak 100 requests/s × 400 output tokens = 40,000 tokens/s. At a measured 2,500 tokens/s per node → 16 nodes, + headroom → 20. At $3/node-hour → 20 × 3 × 24 × 365 = **$525,600/year** before networking, storage and people (benchmark with your real input lengths).
+**Self-host fleet:** peak 100 requests/s × 400 output tokens = 40,000 tokens/s. At a measured 2,500 tokens/s per node → 16 nodes, + **headroom** (spare capacity for spikes and failures) → 20. At $3/node-hour → 20 × 3 × 24 × 365 = **$525,600/year** before networking, storage and people (benchmark with your real input lengths).
 
-**Vector storage for RAG:** 10M chunks × 768 dims × 4 B = **30.72 GB** of raw vectors (before index overhead, metadata, text and replicas); 1B chunks ≈ **3.07 TB** → a sharded design.
+**Vector storage for RAG:** 10M chunks × 768 dims × 4 B = **30.72 GB** of raw vectors (before index overhead, metadata, text and replicas); 1B chunks ≈ **3.07 TB** → a **sharded** design (data split across many machines; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
 
 ### API vs self-hosting
 | Factor | Favours a hosted API | Favours self-hosting |
@@ -939,9 +939,9 @@ Rough, out-loud arithmetic turning "users and features" into tokens, dollars and
 | Quality needed | Only frontier models are good enough | A small or open model passes your evals |
 | Data governance | Provider terms suffice | Requirements hosted options can't meet |
 | Team | No inference team | Infra team, strategic priority |
-| Control | Rate limits and deprecations acceptable | Need control of versions, capacity, latency |
+| Control | Rate limits and deprecations (the provider retiring a model) acceptable | Need control of versions, capacity, latency |
 
-Compute **break-even** on total cost (people, redundancy, on-call), not GPU price alone. The usual end state is a **mix**: frontier API for hard, low-volume paths, a cheap small model for the easy bulk, a router in between.
+Compute **break-even** (the volume where both options cost the same) on total cost (people, **redundancy** — spare machines in case one fails — and **on-call**, engineers on a rota to fix incidents at any hour), not GPU price alone. The usual end state is a **mix**: frontier API for hard, low-volume paths, a cheap small model for the easy bulk, a router in between.
 
 ### Common mistakes
 - A total with no per-unit number; assumptions stated as facts.
@@ -963,11 +963,11 @@ Per unit → price → volume → decision. Say assumptions aloud; make the conc
 ## 11.16 Rate limiting, backpressure and provider risk
 
 ### What it is
-Hosted APIs limit **requests per minute** and **tokens per minute** (Anthropic counts input and output tokens separately) and return HTTP **429** when you exceed them. Your service should also limit **its** users so one tenant cannot consume the whole budget.
+Hosted APIs limit **requests per minute** and **tokens per minute** (Anthropic counts input and output tokens separately) and return HTTP **429** (the "too many requests" status code) when you exceed them. Your service should also limit **its** users so one tenant cannot consume the whole budget.
 
 ### How it works
 - **Token bucket:** a bucket of capacity *C* tokens refills at *C*/60 per second; a request of *n* tokens proceeds only if *n* are available — bursts allowed, average enforced.
-- **Backpressure:** when empty, queue (bounded), return "busy", or **degrade** (smaller model, shorter context). Retry 429s with exponential backoff plus random jitter, honouring `retry-after`.
+- **Backpressure:** when empty, queue (bounded), return "busy", or **degrade** (smaller model, shorter context). Retry 429s with **exponential backoff** (wait 1 s, 2 s, 4 s …) plus random **jitter** (a little random extra delay so clients don't all retry at once), honouring `retry-after`.
 - **Budgets:** per-org and per-feature spend limits with alerts, and a **kill switch** per feature.
 - **Outages:** a **degradation ladder** — canned answers for common intents → second provider or self-hosted small model → an honest "temporarily unavailable".
 
@@ -1016,11 +1016,11 @@ Budget tokens before the provider does; degrade gracefully.
 | Quality & safety | Sampled grader scores per path, golden-set results per change, refusal and guardrail-block rates, user feedback |
 
 ### How it works
-1. Emit metrics from the engine (vLLM exposes Prometheus metrics such as KV-cache usage and running/waiting requests) and from your gateway.
-2. Trace each request with IDs linking prompt version, model, route, cache result and token counts (OpenTelemetry has GenAI semantic conventions; LLM-specific tools include Langfuse, LangSmith and Arize Phoenix).
-3. Put **cost on the same dashboard as latency** and alert on drift — a prompt edit that doubles input size is a production regression.
+1. Emit metrics from the engine (vLLM exposes **Prometheus** — a popular open-source metrics system — metrics such as KV-cache usage and running/waiting requests) and from your gateway.
+2. Trace each request with IDs linking prompt version, model, route, cache result and token counts (**OpenTelemetry**, an open standard for traces and metrics, has GenAI semantic conventions; LLM-specific tools include Langfuse, LangSmith and Arize Phoenix).
+3. Put **cost on the same dashboard as latency** and alert on **drift** (a slow, unplanned change in a metric) — a prompt edit that doubles input size is a production regression.
 4. Run evaluations continuously on the cheap paths (router, cache, distilled model), not just at launch ([Chapter 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)).
-5. Prompts and outputs may contain personal data — redact, restrict access, set retention ([Chapter 12](../12-safety-ethics-governance/README.md)).
+5. Prompts and outputs may contain personal data — redact, restrict access, set **retention** (how long data is kept) ([Chapter 12](../12-safety-ethics-governance/README.md)).
 
 ### In the interview
 "TTFT/TPOT percentiles, throughput and KV-cache pressure for capacity; tokens and dollars per request by feature, tenant and model; cache-hit and escalation rates; sampled quality scores on every cheap path — with alerts on cost drift as well as latency."
@@ -1032,7 +1032,7 @@ Latency, capacity, cost and quality on one dashboard, with alerts on all four.
 
 ## 11.18 Capstone: pricing the inference layer of a 5M-user product
 
-**The scenario:** a project-management SaaS with 5 million daily active users (DAU) plans an in-app AI assistant that explains project status, drafts updates and condenses long threads. You own the model-serving layer: propose a design and price it.
+**The scenario:** a project-management **SaaS** (software as a service — software rented over the internet) with 5 million daily active users (DAU) plans an in-app AI assistant that explains project status, drafts updates and condenses long threads. You own the model-serving layer: propose a design and price it.
 
 **Assumptions (state them, invite correction):** 20% of DAU use it daily, 4 interactions each; with retrieved context, 2,500 input and 300 output tokens on average; peak = 3× average; prices as in §11.15.
 
@@ -1058,7 +1058,7 @@ Always produce this naive number first — it justifies every optimization that 
 - At a measured 2,500 tokens/s per node: 10.6 → **11 nodes**, provision **14** for failures and bursts.
 - Fleet: 14 × $3 × 24 = **$1,008/day**.
 - Same path on the hosted small model: input 6.375B × $0.30/M × 0.55 (prefix caching) = $1,051.88 + output 765M × $1.20/M = $918 → **$1,969.88/day**.
-- Difference ≈ $962/day ≈ **$351K/year** *before* engineering, on-call and failover — worth it only if a team exists and quality holds; keep API overflow for peaks.
+- Difference ≈ $962/day ≈ **$351K/year** *before* engineering, on-call and **failover** (switching to a backup when something breaks) — worth it only if a team exists and quality holds; keep API overflow for peaks.
 
 Section 8 of `serving_calculator.py` reproduces every capstone number; change an assumption and re-run.
 
@@ -1068,7 +1068,7 @@ Section 8 of `serving_calculator.py` reproduces every capstone number; change an
 - **Budgets and backpressure:** per-org token/spend limits, a tested outage policy, per-feature kill switches.
 
 ### Follow-ups worth rehearsing
-- *"The prefix-cache hit rate halved overnight."* Check recent deploys: someone probably put a per-request field (timestamp, user name) near the top of the prompt. Fix the structure and add a test that asserts cache hits.
+- *"The prefix-cache hit rate halved overnight."* Check recent **deploys** (releases of new code): someone probably put a per-request field (timestamp, user name) near the top of the prompt. Fix the structure and add a test that asserts cache hits.
 - *"Product wants proactive suggestions on every page load."* Re-run the naive math with page-load volume (far higher than explicit requests); that usually forces precomputation, aggressive caching, the smallest viable model — or not shipping it.
 - *"Finance wants a fixed cost ceiling per user."* Only with enforced per-org token budgets and a degradation ladder (smaller model → shorter context → polite refusal).
 - **Scale changes the answer:** at 50K DAU just use an API; at 50M DAU self-hosting and the router become central.

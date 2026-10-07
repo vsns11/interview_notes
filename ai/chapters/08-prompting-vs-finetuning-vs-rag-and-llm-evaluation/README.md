@@ -2,9 +2,9 @@
 
 *Last reviewed: September 2026. Tooling and model names move quickly; the decision logic, the LoRA arithmetic and the evaluation methods in this chapter do not.*
 
-A general-purpose model rarely fits a product perfectly out of the box. It may lack your facts, miss your format or tone, or cost too much at your volume. You have three tools to close the gap — **prompting**, **retrieval (RAG)** and **fine-tuning** — and they fix *different* problems. The second half of the chapter answers the question that decides whether any of them worked: **how do you evaluate a system whose correct answers can be written a thousand ways?**
+A general-purpose model rarely fits a product perfectly out of the box. It may lack your facts, miss your format or tone, or cost too much at your volume. You have three tools to close the gap — **prompting**, **retrieval (RAG)** (retrieval-augmented generation: looking up relevant documents and adding them to the prompt) and **fine-tuning** (continuing to train the model on your own examples) — and they fix *different* problems. The second half of the chapter answers the question that decides whether any of them worked: **how do you evaluate a system whose correct answers can be written a thousand ways?**
 
-Runnable code is in [`code/`](code/): a LoRA parameter and memory calculator with a tiny LoRA layer trained in PyTorch, and an evaluation harness that scores fake models on a golden set.
+Runnable code is in [`code/`](code/): a LoRA parameter and memory calculator with a tiny LoRA layer trained in PyTorch (a popular deep-learning library), and an evaluation harness that scores fake models on a golden set (a fixed collection of test inputs with known good answers; Section 8.5).
 
 **What you'll learn**
 
@@ -17,7 +17,7 @@ Runnable code is in [`code/`](code/): a LoRA parameter and memory calculator wit
 - Online evaluation: feedback, behavioural proxies, task outcomes, A/B tests and canaries
 - Guardrail evaluations and the tooling landscape
 
-**Prerequisites.** Chapters [4](../04-large-language-models/README.md) (how LLMs are trained), [5](../05-prompt-engineering/README.md) (prompting) and [7](../07-embeddings-vector-databases-and-rag/README.md) (RAG). Gradient descent and loss functions from the [ML Handbook](../../../ml/chapters/10-neural-networks-and-deep-learning/README.md).
+**Prerequisites.** Chapters [4](../04-large-language-models/README.md) (how LLMs are trained), [5](../05-prompt-engineering/README.md) (prompting) and [7](../07-embeddings-vector-databases-and-rag/README.md) (RAG). Gradient descent (the step-by-step way training nudges weights to reduce error) and loss functions (formulas that score how wrong a prediction is) from the [ML Handbook](../../../ml/chapters/10-neural-networks-and-deep-learning/README.md).
 
 ---
 
@@ -27,7 +27,7 @@ Runnable code is in [`code/`](code/): a LoRA parameter and memory calculator wit
 
 **Adapting** a model means making a general model behave well for *your* task. Interviewers ask it directly ("would you fine-tune here?") or wait to see whether you raise it. The key insight is that the three tools are not a ladder from basic to advanced; each addresses a different kind of gap.
 
-A handy rule of thumb: **retrieval hands the model facts while it answers; fine-tuning reshapes how it behaves by updating its weights.** It is a guideline, not a wall — both can affect what a model knows and how it answers.
+A handy rule of thumb: **retrieval hands the model facts while it answers; fine-tuning reshapes how it behaves by updating its weights.** (Weights are the model's learned numbers.) It is a guideline, not a wall — both can affect what a model knows and how it answers.
 
 ![Start from the observed failure: missing knowledge, wrong format or tone, or cost](img/adaptation-decision.svg)
 *Figure — Start from the failure you observe, not from the fanciest tool (course diagram).*
@@ -36,7 +36,7 @@ A handy rule of thumb: **retrieval hands the model facts while it answers; fine-
 
 **1. Prompting (with few-shot examples).** Each request carries the task description, a persona, the required output shape and a few worked input→output pairs (**few-shot examples**); the model copies the pattern.
 
-- Weights stay untouched, so a change deploys like a config edit — though it still has to pass your evals and roll out gradually.
+- Weights stay untouched, so a change deploys like a config edit (a settings change) — though it still has to pass your evals (evaluation runs) and roll out gradually.
 - Instructions and examples consume context tokens on every call; long or contradictory prompts get less reliable.
 - A prompt can *supply* facts, but they don't persist in the weights.
 - Start here: write a clear prompt with representative examples, measure what still fails, *then* decide whether retrieval or training is needed.
@@ -44,7 +44,7 @@ A handy rule of thumb: **retrieval hands the model facts while it answers; fine-
 **2. RAG (retrieval-augmented generation).** Fetch relevant facts (documents, database rows, user records) at request time and put them in the context; the model answers **grounded** in them (Chapter 7).
 
 - The tool for **knowledge**: private, large or fast-changing information.
-- Updates appear once documents are ingested, indexed and caches invalidated — easier than retraining, but not magically instant.
+- Updates appear once documents are ingested (loaded and split), indexed (added to the search structure) and caches invalidated (stale stored answers thrown away) — easier than retraining, but not magically instant.
 - Sources can be shown; **access control is enforced per user at retrieval time**.
 - Costs: a retrieval subsystem to build and evaluate, longer prompts, and answer quality capped by retrieval quality.
 
@@ -61,23 +61,23 @@ Start from **the failure you actually observe** in examples, not from the most i
 
 | Observed problem | Likely cause to check first | Start with | Escalate to |
 |---|---|---|---|
-| Wrong or outdated facts; "I don't know our policy" | Missing or stale evidence; poor retrieval | **RAG** (fix sources and retrieval) | Better chunking, hybrid + rerank; tuning for evidence use |
+| Wrong or outdated facts; "I don't know our policy" | Missing or stale evidence; poor retrieval | **RAG** (fix sources and retrieval) | Better chunking (how documents are split into passages), hybrid + rerank (keyword plus meaning search, then precise re-scoring); tuning for evidence use |
 | Answers private/user-specific data | Needs per-user data and permissions | **RAG** with access control | — (never weights) |
 | Wrong format, schema or length | Unclear instructions | **Prompt** + examples, structured outputs, validation | Fine-tune if errors persist |
 | Wrong tone or style | Underspecified voice | **Prompt** with examples | Fine-tune for consistent voice |
 | Can't do the task well at all | Model capability | Better prompt, stronger model | Fine-tune on task data |
-| Quality fine, but too expensive or slow at volume | Model size | Try an existing smaller model | Fine-tune (or distil into) a small specialist |
+| Quality fine, but too expensive or slow at volume | Model size | Try an existing smaller model | Fine-tune (or distil into, i.e. train a small model to copy a big one) a small specialist |
 | Tuned model invents policy details | Evidence path, not training | Check that current policy is available, retrieved and used; add grounding checks | More tuning alone won't keep policies current |
 
 Two refinements:
 
-- **Diagnose before choosing.** "Wrong facts" can mean stale sources, bad retrieval or the model ignoring good evidence — three different fixes. "Bad formatting" may disappear with sharper instructions, a JSON schema, constrained decoding — or, failing those, tuning.
+- **Diagnose before choosing.** "Wrong facts" can mean stale sources, bad retrieval or the model ignoring good evidence — three different fixes. "Bad formatting" may disappear with sharper instructions, a JSON schema (a description of required fields and types), constrained decoding (the API only lets the model produce tokens that keep the output valid) — or, failing those, tuning.
 - **Combine when the benefits justify the complexity.** A common production combination: **retrieval supplies the policy facts while a small tuned model supplies the voice and structure**, with a prompt still wrapped around both. When cost is the driver, weigh an off-the-shelf small model against a tuned one, counting the tuned model's training and upkeep too.
 
 ### What about training your own model?
 
-- **Pretraining from scratch** a general foundation model needs vast data, compute and expertise; it is outside almost every product design question. If you propose it, justify why no existing model works and what it would take.
-- **Continued pretraining** — more unsupervised training of an existing model on a large domain corpus (e.g. Code Llama was Llama 2 continued on code) — can improve domain fluency but needs its own quality, cost and data-governance case. More training is not automatically the answer to missing or changing knowledge.
+- **Pretraining from scratch** a general foundation model (a large model pre-trained on broad data) needs vast data, compute (processing power) and expertise; it is outside almost every product design question. If you propose it, justify why no existing model works and what it would take.
+- **Continued pretraining** — more unsupervised training (learning from raw text, no labels) of an existing model on a large domain corpus (collection of text) (e.g. Code Llama was Llama 2 continued on code) — can improve domain fluency but needs its own quality, cost and data-governance (rules on how data may be collected and used) case. More training is not automatically the answer to missing or changing knowledge.
 
 ### Common mistakes
 
@@ -87,13 +87,13 @@ Two refinements:
 
 ### Real-world examples
 
-Support assistants typically pair RAG over help-centre articles with prompts or small tuned models for tone. Coding assistants fine-tune on code and use retrieval over the user's repository. Many companies fine-tune small open models (for example with LoRA via Hugging Face PEFT) for high-volume classification or extraction to cut cost. Hosted fine-tuning services (for example OpenAI's fine-tuning API and cloud platforms such as Amazon Bedrock and Google Vertex AI) let teams tune selected models without managing GPUs; which models are tunable changes often.
+Support assistants typically pair RAG over help-centre articles with prompts or small tuned models for tone. Coding assistants fine-tune on code and use retrieval over the user's repository. Many companies fine-tune small open models (for example with LoRA via Hugging Face PEFT, a library for the methods in 8.2) for high-volume classification or extraction to cut cost. Hosted fine-tuning services (for example OpenAI's fine-tuning API and cloud platforms such as Amazon Bedrock and Google Vertex AI) let teams tune selected models without managing GPUs (the graphics processors used for AI training); which models are tunable changes often.
 
 ### In the interview
 
 **30-second answer:** "First a solid prompt and an eval set, so I can see what actually fails. If the failures are about facts that are recent or private, I add retrieval with access checks. If format, tone or task errors survive better prompting and output constraints, I consider tuning — and if cost is the issue, I benchmark a tuned small model against an untuned small one. The approaches stack, and none of them replaces authorization, output validation or production monitoring."
 
-- *Where would the training examples come from?* Logs you are allowed to use (scrubbed for personal data and within retention rules), conversations users rated well, answers that reviewers corrected, and synthetic pairs written by a stronger model and screened by people — so today's traffic becomes tomorrow's training set.
+- *Where would the training examples come from?* Logs you are allowed to use (scrubbed for personal data and within retention rules, i.e. limits on how long data may be kept), conversations users rated well, answers that reviewers corrected, and synthetic pairs written by a stronger model and screened by people — so today's traffic becomes tomorrow's training set.
 - *Does RAG eliminate hallucination?* No. It reduces it; the model can still contradict or embellish the retrieved text. Grounding instructions, citations and claim checks complete it (Chapter 7.8).
 - *Full fine-tuning or LoRA?* LoRA keeps base weights frozen and trains small low-rank updates, cutting training memory and storage; compare quality with full fine-tuning for your task. The decision logic above is the same either way.
 
@@ -114,34 +114,36 @@ Prompting is the baseline; RAG adds knowledge (fresh, private, permissioned); fi
 
 ### What it is
 
-**Full fine-tuning** updates every weight of the model on your data. **Parameter-efficient fine-tuning (PEFT)** freezes the original weights and trains a small number of new or selected parameters. The most popular PEFT method is **LoRA** (Low-Rank Adaptation; Hu et al., 2021); **QLoRA** (Dettmers et al., 2023) runs LoRA on top of a 4-bit-quantised frozen model.
+**Full fine-tuning** updates every weight of the model on your data. **Parameter-efficient fine-tuning (PEFT)** freezes the original weights and trains a small number of new or selected parameters. The most popular PEFT method is **LoRA** (Low-Rank Adaptation; Hu et al., 2021); **QLoRA** (Dettmers et al., 2023) runs LoRA on top of a 4-bit-quantised frozen model (weights stored in 4 bits each instead of 16, trading a little precision for much less memory).
 
 ### Why it matters: the memory wall
 
-Training with the Adam optimiser in mixed precision needs, per parameter, roughly: 2 bytes (bf16 weight) + 2 (gradient) + 4 (fp32 master copy) + 4 + 4 (Adam's two moment estimates) = **16 bytes**, before activations. For a 7-billion-parameter model that is ~108 GB — more than one 80 GB GPU. And each fine-tuned variant is another full 13.5 GB checkpoint to store and serve.
+Training with the Adam optimiser in mixed precision needs, per parameter, roughly: 2 bytes (bf16 weight) + 2 (gradient) + 4 (fp32 master copy) + 4 + 4 (Adam's two moment estimates) = **16 bytes**, before activations.
+
+> **Key term — what training memory holds:** An *optimiser* is the algorithm that updates the weights; **Adam** is the standard one and keeps two running averages (*moment estimates*) of each weight's recent gradients. A *gradient* says how much, and in which direction, each weight should change. *Mixed precision* means doing most maths in 16-bit numbers (**bf16**, a 16-bit floating-point format) while keeping a 32-bit (**fp32**) *master copy* of the weights for accurate updates. *Activations* are the intermediate values saved during the forward pass so gradients can be computed; they grow with batch size and sequence length. For a 7-billion-parameter model that is ~108 GB — more than one 80 GB GPU. And each fine-tuned variant is another full 13.5 GB checkpoint (saved copy of the weights) to store and serve.
 
 ### How LoRA works
 
-The hypothesis (supported by the LoRA paper's experiments): the *change* a task needs, ΔW, has **low intrinsic rank** — it can be expressed with far fewer numbers than the full matrix.
+The hypothesis (supported by the LoRA paper's experiments): the *change* a task needs, ΔW, has **low intrinsic rank** (a matrix's *rank* is how many truly independent directions it contains) — it can be expressed with far fewer numbers than the full matrix.
 
-1. Take a frozen weight matrix W₀ of shape d × k (e.g. a 4,096 × 4,096 attention projection).
+1. Take a frozen weight matrix W₀ of shape d × k (e.g. a 4,096 × 4,096 attention projection, one of the weight matrices inside an attention layer; Chapter 3).
 2. Add a trainable update ΔW = B·A, where **A** is r × k and **B** is d × r, with **rank r** small (4–64). The layer computes h = W₀x + (α/r)·B·A·x.
 3. Initialise A with small random values and **B with zeros**, so B·A = 0 and training starts exactly at the original model.
 4. Train only A and B. **α** (lora_alpha) is a scaling constant; dividing by r keeps the update's size comparable when you change r.
-5. After training, either keep the small adapter separate (swap adapters per customer or task on one base model) or **merge**: W' = W₀ + (α/r)·B·A — no extra inference latency.
+5. After training, either keep the small adapter separate (swap adapters per customer or task on one base model) or **merge**: W' = W₀ + (α/r)·B·A — no extra inference latency (delay when the model is used; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
 
 **Parameter arithmetic** for one 4,096 × 4,096 matrix: full = 16,777,216 parameters; LoRA with r = 8 trains 8 × (4,096 + 4,096) = **65,536** — 0.39% of that matrix. The LoRA paper reports that on GPT-3 175B it cut trainable parameters by about 10,000× and GPU memory by about 3× compared with full fine-tuning, with comparable quality on its benchmarks.
 
-**Which matrices?** The original paper adapted the attention query and value projections; practice today often targets all linear layers (attention and MLP), which usually helps quality at modest extra cost.
+**Which matrices?** The original paper adapted the attention query and value projections; practice today often targets all linear layers (attention and MLP, the feed-forward block in each transformer layer), which usually helps quality at modest extra cost.
 
-**Choosing r.** Start around 8–16; raise it if the task is far from the base model's behaviour (and the data supports it). Too small underfits; too large wastes memory and can overfit small datasets.
+**Choosing r.** Start around 8–16; raise it if the task is far from the base model's behaviour (and the data supports it). Too small underfits (cannot capture the task); too large wastes memory and can overfit (memorise the training examples and do worse on new ones) small datasets.
 
 ### How QLoRA works
 
-1. Quantise the frozen base model to 4 bits using the **NF4** (4-bit NormalFloat) data type, designed for normally distributed weights.
+1. Quantise (store with fewer bits) the frozen base model to 4 bits using the **NF4** (4-bit NormalFloat) data type, designed for normally distributed (bell-curve shaped) weights.
 2. **Double quantisation**: also quantise the per-block scaling constants, saving a bit more memory.
-3. **Paged optimisers** move optimiser state between GPU and CPU memory to survive memory spikes.
-4. Train LoRA adapters in 16-bit on top; gradients flow through the dequantised weights.
+3. **Paged optimisers** move optimiser state (Adam's extra per-weight numbers) between GPU and CPU (ordinary processor) memory to survive memory spikes.
+4. Train LoRA adapters in 16-bit on top; gradients flow through the dequantised (temporarily converted back to higher precision) weights.
 
 The QLoRA paper fine-tuned a 65B model on a single 48 GB GPU while matching 16-bit fine-tuning quality on its benchmarks.
 
@@ -220,7 +222,7 @@ model.print_trainable_parameters()      # a fraction of a percent
 model = model.merge_and_unload()        # optional: fold adapters into the weights
 ```
 
-For QLoRA, load the base model in 4-bit (bitsandbytes `BitsAndBytesConfig` with `load_in_4bit=True` and `bnb_4bit_quant_type="nf4"`) before attaching the adapters. Module names (`q_proj`…) depend on the architecture.
+For QLoRA, load the base model in 4-bit (bitsandbytes, a quantisation library: `BitsAndBytesConfig` with `load_in_4bit=True` and `bnb_4bit_quant_type="nf4"`) before attaching the adapters. Module names (`q_proj`…) depend on the architecture.
 
 ### Trade-offs
 
@@ -239,7 +241,7 @@ Other PEFT methods exist — adapter layers (Houlsby et al., 2019), prefix tunin
 - Picking a huge rank "to be safe" on a few hundred examples (overfitting).
 - Forgetting activation memory when sizing GPUs.
 - Evaluating the adapter only on the new task and missing regressions elsewhere.
-- Comparing to an unpinned base model (you can't tell which change helped).
+- Comparing to an unpinned base model (one whose version may change under you, so you can't tell which change helped).
 
 ### In the interview
 
@@ -247,7 +249,7 @@ Other PEFT methods exist — adapter layers (Houlsby et al., 2019), prefix tunin
 
 - *Why initialise B to zero?* So ΔW = 0 at step 0: the model starts exactly as the base model and training moves away from it smoothly.
 - *What does α do?* Scales the update; using α/r keeps its magnitude comparable when you change r, so learning rates transfer.
-- *When prefer full fine-tuning?* Large distribution shift, abundant data and compute, and evidence that adapters plateau below target quality.
+- *When prefer full fine-tuning?* Large distribution shift (your data looks very different from the model's training data), abundant data and compute, and evidence that adapters plateau below target quality.
 
 ### Self-check
 
@@ -276,19 +278,19 @@ The data decides what fine-tuning teaches. Three kinds matter:
 
 ### How it works
 
-**SFT** is ordinary next-token training, with the loss usually computed only on the response tokens. Quality beats quantity: LIMA (Zhou et al., 2023) showed about 1,000 carefully curated examples could produce a strong instruction follower from a good base model. Sources: permitted product logs (with privacy and retention rules), top-rated conversations, human-corrected outputs from review queues, and synthetic examples from a frontier model filtered by people.
+**SFT** is ordinary next-token training, with the loss usually computed only on the response tokens. Quality beats quantity: LIMA (Zhou et al., 2023) showed about 1,000 carefully curated examples could produce a strong instruction follower from a good base model. Sources: permitted product logs (with privacy and retention rules), top-rated conversations, human-corrected outputs from review queues, and synthetic (model-generated) examples from a frontier model (the most capable available model) filtered by people.
 
 **Preference tuning.**
 
-- **RLHF** (reinforcement learning from human feedback; InstructGPT, Ouyang et al., 2022): collect human rankings of responses, train a **reward model** to predict them, then optimise the LLM against it with reinforcement learning (PPO), with a penalty for drifting too far from the SFT model.
+- **RLHF** (reinforcement learning from human feedback; InstructGPT, Ouyang et al., 2022): collect human rankings of responses, train a **reward model** to predict them, then optimise the LLM against it with reinforcement learning (learning by trial and error from a reward signal; here the PPO algorithm), with a penalty for drifting too far from the SFT model.
 - **DPO** (Direct Preference Optimization; Rafailov et al., 2023): skips the separate reward model and RL loop, and trains directly on chosen/rejected pairs with a classification-style loss. Simpler and now common.
 
-**Distillation.** Classic distillation trains the student on the teacher's softened probability distribution ("soft targets"), which carries more information than hard labels. With LLMs, it often means generating a large synthetic dataset with the teacher and running SFT on the student. It is how many small, cheap production models are made. Check the teacher provider's terms of use — some prohibit using outputs to build competing models.
+**Distillation.** Classic distillation trains the student on the teacher's softened probability distribution ("soft targets"), which carries more information than hard labels (just the single correct answer). With LLMs, it often means generating a large synthetic dataset with the teacher and running SFT on the student. It is how many small, cheap production models are made. Check the teacher provider's terms of use — some prohibit using outputs to build competing models.
 
 ### When fine-tuning hurts
 
 - **Catastrophic forgetting**: gains on the new task, losses on general abilities you didn't test.
-- **Safety erosion**: research (Qi et al., 2023) showed that fine-tuning aligned models — even on small or benign datasets — can weaken their safety behaviour. Re-run safety evaluations after every tune.
+- **Safety erosion**: research (Qi et al., 2023) showed that fine-tuning aligned models (models already trained to be helpful and safe) — even on small or benign datasets — can weaken their safety behaviour. Re-run safety evaluations after every tune.
 - **More hallucination from new facts**: teaching facts the base model didn't know can encourage confident guessing (Gekhman et al., 2024 found such examples are learned slowly and increase hallucination tendency).
 - **Stale knowledge baked in**: facts in weights go out of date; retraining is slow.
 - **Overfitting to a narrow format**: great on the training distribution, brittle elsewhere.
@@ -316,7 +318,7 @@ SFT teaches tasks and formats, preference tuning (RLHF, DPO) teaches which answe
 
 ### The problem it solves
 
-Predictive systems (click prediction, delivery-time estimates) eventually observe an outcome to compare against — even if labels are delayed, partial or biased. Generative systems add a new difficulty: **many different outputs can all be acceptable.** "Summarise this meeting" has countless good answers and no single correct label; "was this support reply good?" is a judgement, not an observable fact.
+Predictive systems (click prediction, delivery-time estimates) eventually observe an outcome to compare against — even if labels (the correct answers attached to examples) are delayed, partial or biased. Generative systems add a new difficulty: **many different outputs can all be acceptable.** "Summarise this meeting" has countless good answers and no single correct label; "was this support reply good?" is a judgement, not an observable fact.
 
 Yet you still need what any production model needs: compare versions, catch **regressions** (things that used to work and now don't), and notice decay in production. So the real engineering problem is turning human judgement into something inexpensive and consistent that can be rerun automatically whenever anything changes.
 
@@ -337,7 +339,7 @@ Generative outputs have many right answers, so define task-specific quality crit
 
 ### Layer 1 — Programmatic checks
 
-Anything code can assert with no model or human: output parses as JSON; required fields present; contains a citation; under a length limit; no banned phrases; generated SQL executes; code compiles and passes unit tests.
+Anything code can assert with no model or human: output parses as JSON; required fields present; contains a citation; under a length limit; no banned phrases; generated SQL (database query language) executes; code compiles and passes unit tests (small automated tests of individual functions).
 
 - Cheap, fast, repeatable — the base of the pyramid.
 - Only as strong as what they test: a passing test suite is *evidence*, not proof of correctness; a citation being present doesn't mean it supports the claim.
@@ -367,7 +369,7 @@ A judge score must be **validated before it drives release decisions**: compare 
 2. Chance agreement: both say "good" by chance with probability 0.7 × 0.7 = 0.49, both say "bad" with 0.3 × 0.3 = 0.09, so p_e = 0.58.
 3. κ = (0.86 − 0.58)/(1 − 0.58) = 0.28/0.42 ≈ **0.67** — "substantial" on the common Landis–Koch scale (0.61–0.80). Note how 86% raw agreement shrinks once chance is removed: with a 70/30 label split, two raters guessing at those rates would already agree 58% of the time.
 
-**Judge discipline**: pin the judge model's version like any dependency; keep a **human-scored anchor set** to recalibrate when the judge changes; mark judge migrations on dashboards, or every trend line becomes unreadable.
+**Judge discipline**: pin the judge model's version like any dependency (external component your system relies on); keep a **human-scored anchor set** to recalibrate when the judge changes; mark judge migrations on dashboards (live charts of key metrics), or every trend line becomes unreadable.
 
 ### Layer 3 — Human evaluation
 
@@ -377,7 +379,7 @@ Specialists grading a sample, people choosing between two versions side by side,
 
 The **golden set** (also "eval set" or "test set") turns the pyramid into practice: a versioned collection of inputs with expected outputs or grading criteria.
 
-1. **Contents**: real user requests (sampled and anonymised), difficult cases, past incidents, adversarial inputs, and — for RAG — unanswerable questions and permission probes (Chapter 7.11).
+1. **Contents**: real user requests (sampled and anonymised, i.e. with personal details removed), difficult cases, past incidents, adversarial inputs (inputs crafted to break the system), and — for RAG — unanswerable questions and permission probes (Chapter 7.11).
 2. **Size**: each user intent, tricky case and former incident needs enough items for the per-category numbers to mean something, yet the whole suite must stay cheap enough to rerun constantly. A few hundred cases is a common start; rare harms need targeted suites and larger samples.
 3. **Separation**: keep a stable **held-out** test set apart from the examples you tune prompts on, or you will overfit to your own test.
 4. **Growth by accretion**: every representative production failure becomes a new test case — just as a developer adds a unit test for every bug they fix.
@@ -416,25 +418,27 @@ Programmatic checks at the base, a calibrated LLM judge in the middle, humans at
 
 | Metric | Measures | Good for | Limits |
 |---|---|---|---|
-| **Exact match (EM)** | Normalised string equality | Short factual answers, classification | Penalises correct but differently phrased answers |
-| **Token F1** | Word overlap (precision/recall) | Extractive QA | Rewards overlap, not correctness |
-| **BLEU** (Papineni et al., 2002) | n-gram precision vs references, with a brevity penalty | Machine translation (with several references) | Poor correlation with quality for open-ended generation |
+| **Exact match (EM)** | Normalised (lower-cased, punctuation stripped) string equality | Short factual answers, classification | Penalises correct but differently phrased answers |
+| **Token F1** | Word overlap (precision = share of predicted words that are right; recall = share of reference words found) | Extractive QA (answers copied from a passage) | Rewards overlap, not correctness |
+| **BLEU** (Papineni et al., 2002) | n-gram (run of n consecutive words) precision vs references, with a brevity penalty | Machine translation (with several references) | Poor correlation with quality for open-ended generation |
 | **ROUGE** (Lin, 2004), e.g. ROUGE-L | n-gram / longest-common-subsequence recall/F vs reference | Summarisation benchmarks | Paraphrases score low; fluent wrong text can score high |
 | Embedding similarity (e.g. BERTScore) | Semantic closeness to a reference | Paraphrase-tolerant comparison | Still can't verify facts |
 | **pass@k** | Probability at least one of k samples passes unit tests | Code generation | Needs good tests; ignores code quality |
-| Faithfulness, answer relevance | Supported by context; addresses the question | RAG | Needs judge or NLI model (validate it) |
+| Faithfulness, answer relevance | Supported by context; addresses the question | RAG | Needs judge or NLI (natural language inference: does the text support the claim?) model (validate it) |
 | Refusal correctness / over-refusal | Abstains when it should, answers when it should | Safety and RAG | Needs unanswerable and benign-but-scary items |
 | Latency, cost per task | Time to first token, total time, $ per completed task | Every system | Must be measured per category, under load |
 
-**pass@k** (Chen et al., 2021, the Codex/HumanEval paper) is estimated without bias by drawing n ≥ k samples per problem, counting the c that pass, and computing
+**pass@k** (Chen et al., 2021, the Codex/HumanEval paper) is estimated without bias (correct on average) by drawing n ≥ k samples per problem, counting the c that pass, and computing
 
 pass@k = 1 − C(n − c, k) / C(n, k)
+
+where C(n, k) is the number of ways to choose k items from n.
 
 Worked: n = 10, c = 3, k = 3 → 1 − C(7,3)/C(10,3) = 1 − 35/120 = **0.708**.
 
 ### Code: a tiny eval harness (runs offline)
 
-[`code/eval_harness.py`](code/eval_harness.py) scores two fake model versions on a nine-item golden set with categories (factual, summary, JSON, unanswerable, guardrail), then runs a regression gate, pass@k, a judge-bias test and a bootstrap confidence interval.
+[`code/eval_harness.py`](code/eval_harness.py) scores two fake model versions on a nine-item golden set with categories (factual, summary, JSON, unanswerable, guardrail), then runs a regression gate, pass@k, a judge-bias test and a bootstrap confidence interval (a range likely to contain the true difference, estimated by resampling the test items many times).
 
 ```python
 def rouge_l(pred, ref):
@@ -529,13 +533,13 @@ Offline evals catch problems before release; production shows how the system beh
 
 1. **Explicit feedback** — thumbs up/down, ratings, comments. Only a self-selected minority responds; sample other sessions too.
 2. **Behavioural proxies** — inferred from actions: regenerate, rephrase, copy, abandon mid-conversation, escalate to a human. Ambiguous: a regeneration may be exploration, a copy or a short session doesn't prove success. Validate proxies against task outcomes and reviewed samples.
-3. **Task-level outcomes** — the best evidence when available: ticket resolved, code suggestion accepted and kept (GitHub Copilot popularised acceptance rate), purchase completed. Watch for later reopenings, reverts or other harms rather than treating the first outcome as final truth.
+3. **Task-level outcomes** — the best evidence when available: ticket resolved, code suggestion accepted and kept (GitHub Copilot popularised acceptance rate), purchase completed. Watch for later reopenings, reverts (code changes undone) or other harms rather than treating the first outcome as final truth.
 
 ### How it works
 
 Familiar production-ML practice carries straight over:
 
-- **A/B tests** — randomised comparisons on these metrics — choose the version to promote (randomise users, pre-register the metric, compute confidence intervals).
+- **A/B tests** — randomised comparisons on these metrics — choose the version to promote (randomise users, pre-register the metric, i.e. fix it before seeing results, compute confidence intervals).
 - **Canary releases** send a small slice of traffic to the new version and watch closely before widening.
 - **Dashboards** segment metrics by intent, user tier, topic and language.
 
@@ -563,18 +567,18 @@ Measure outcomes and validated behaviour in production, promote with A/B tests a
 
 ### Guardrail evals
 
-**Guardrails** are the checks that keep a system within safety, security and policy limits (input filters, output moderation, refusal behaviour, tool-permission rules). They need their own suites, run on every change and after every fine-tune:
+**Guardrails** are the checks that keep a system within safety, security and policy limits (input filters, output moderation (screening for harmful content), refusal behaviour, tool-permission rules). They need their own suites, run on every change and after every fine-tune:
 
 | Suite | Tests | Pass condition |
 |---|---|---|
 | Harmful requests | Requests the policy forbids | Refuses (and helpfully redirects where appropriate) |
 | **Over-refusal** | Benign requests that *sound* risky ("how do I kill a Python process?") | Answers — e.g. the XSTest benchmark measures exaggerated safety |
-| Jailbreaks | Role-play, obfuscation, multi-turn manipulation | Still refuses |
+| Jailbreaks (tricks to make a model break its rules) | Role-play, obfuscation (disguising the request), multi-turn manipulation | Still refuses |
 | **Prompt injection** | Instructions hidden in documents, web pages, tool results | Ignores injected instructions; no tool misuse |
-| Data leakage | PII, secrets, system prompt, other users' data, permission probes | Nothing leaks |
+| Data leakage | PII (personally identifiable information), secrets, system prompt, other users' data, permission probes | Nothing leaks |
 | Format and policy | Required disclaimers, banned content, brand rules | Programmatic checks pass |
 
-Guardrail failures are usually **hard gates** (any failure blocks) rather than averages, and adversarial suites need regular refreshing because attacks evolve (red-teaming, [Chapter 12](../12-safety-ethics-governance/README.md)).
+Guardrail failures are usually **hard gates** (any failure blocks) rather than averages, and adversarial suites need regular refreshing because attacks evolve (red-teaming, i.e. deliberately attacking your own system, [Chapter 12](../12-safety-ethics-governance/README.md)).
 
 ### Eval tooling (concepts, as of 2026)
 
@@ -582,9 +586,9 @@ Guardrail failures are usually **hard gates** (any failure blocks) rather than a
 |---|---|
 | Prompt/app test suites in CI | promptfoo, DeepEval, OpenAI Evals |
 | RAG metrics | RAGAS, TruLens |
-| Tracing + eval + datasets platforms | LangSmith, Braintrust, Arize Phoenix, Langfuse, Weights & Biases Weave |
+| Tracing (recording every step of each request) + eval + datasets platforms | LangSmith, Braintrust, Arize Phoenix, Langfuse, Weights & Biases Weave |
 | Model benchmarking harnesses | EleutherAI lm-evaluation-harness, Stanford HELM, Inspect (UK AI Security Institute) |
-| Crowd-sourced pairwise rankings | LMArena (formerly Chatbot Arena), which ranks models from human votes with a Bradley–Terry / Elo-style model |
+| Crowd-sourced pairwise rankings | LMArena (formerly Chatbot Arena), which ranks models from human votes with a Bradley–Terry / Elo-style (like chess ratings) model |
 
 The concepts matter more than the brand: versioned datasets, scorers (programmatic, judge, human), experiment tracking across versions, tracing of production requests, and turning traces into new test cases.
 

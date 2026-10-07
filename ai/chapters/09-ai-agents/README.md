@@ -4,9 +4,9 @@
 
 So far this book has treated a language model as something that **answers**: text in, text out, a person reads it. An **AI agent** goes further: what the model writes can also **do things** — look up an order, run code, send an email, book a room. That change from answering to acting brings new power and new risk. A wrong answer misleads a reader; a wrong action changes the world, sometimes irreversibly.
 
-**What you'll learn:** what an agent is and when to use one; the ReAct loop and its budgets; tool calling and tool design; guardrails and human approval; planning; memory; multi-agent patterns; MCP; evaluating agents; rollout, cost and failure modes; and a full design walk-through.
+**What you'll learn:** what an agent is and when to use one; the ReAct loop and its budgets; tool calling and tool design; guardrails and human approval; planning; memory; multi-agent patterns; MCP (Model Context Protocol, a shared standard for plugging tools and data sources into agents); evaluating agents; rollout, cost and failure modes; and a full design walk-through.
 
-All code is in [`code/`](code/); each script runs offline in about a second with `python code/<file>.py`. The "LLM" in the scripts is a small, deterministic, scripted stand-in so you can see every step; the real-API version is shown as a snippet marked "(needs an API key — not run)". Interview answers for the whole chapter are collected in the "Interview practice" section at the end.
+All code is in [`code/`](code/); each script runs offline in about a second with `python code/<file>.py`. The "LLM" in the scripts is a small, **deterministic** (same input always gives the same output), scripted stand-in so you can see every step; the real-API version is shown as a snippet marked "(needs an API key — not run)". An **API** (application programming interface) is the set of calls one program offers to others; an **API key** is the secret string that identifies you to a paid online service such as a model provider. Interview answers for the whole chapter are collected in the "Interview practice" section at the end.
 
 ---
 
@@ -23,7 +23,7 @@ An **AI agent** is a program that pursues a goal by repeatedly deciding what to 
 |---|---|---|
 | **Model (LLM)** | Reads the situation and proposes the next step | A new employee's judgment |
 | **Tools** | Functions the model may request: search, calculator, database lookup, send email, run code | The phone, computer and forms the employee may use |
-| **Memory** | What it sees now (the context window) plus what it can look up (notes, past cases, preferences) | A notepad and the company wiki |
+| **Memory** | What it sees now (the context window: all text sent in one call) plus what it can look up (notes, past cases, preferences) | A notepad and the company wiki |
 | **Loop** | Code that calls the model, runs the requested tool, feeds back the result, and repeats until done or stopped | Think, act, check, repeat |
 
 **Key terms.** The model never runs a **tool** itself: it emits a structured request ("call `lookup_order` with `order_id="4711"`") and the **runtime** (or **harness** — the loop, tool execution, validation, permissions and logging around the model) decides whether to run it. The result, fed back into context, is an **observation**; the full ordered record of one task is its **trajectory**; the set of things the agent may do is its **action space**.
@@ -45,7 +45,7 @@ The settings run from a **fixed workflow** (code decides everything), through a 
 
 ### Why it matters
 
-Agents let software handle **multi-step tasks that are hard to specify in advance** — diagnosing a support problem, fixing a failing test, researching across sources. The price is more cost, latency and new failure modes (Section 9.10).
+Agents let software handle **multi-step tasks that are hard to specify in advance** — diagnosing a support problem, fixing a failing test, researching across sources. The price is more cost, **latency** (how long a request takes, start to finish — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) and new failure modes (Section 9.10).
 
 ### How it works: "agent or workflow?"
 
@@ -98,7 +98,7 @@ Every agent runs the same cycle: **reason → act → observe → repeat**.
 ![The agent loop: reason, act, observe, repeat](img/the-loop.svg)
 *Figure — the loop, and the three design questions it raises: what enters it, what it may touch, how it ends (course diagram).*
 
-**ReAct** ("Reason + Act", Yao et al., 2022) is the classic way to prompt a model to run this loop. The model writes:
+**ReAct** ("Reason + Act", Yao et al., 2022) is the classic way to **prompt** a model (give it written instructions as input text) to run this loop. The model writes:
 
 ```text
 Thought: what I know and what I should do next
@@ -117,14 +117,14 @@ Nothing guarantees the loop will **end**, **make progress** or **stay cheap**:
 ![End-to-end success falls quickly with the number of steps](img/compounding_errors.png)
 *Figure — generated by `code/agent_eval.py`: 0.95¹⁰ ≈ 0.60, and even 99%-reliable steps give only 0.99³⁰ ≈ 0.74.*
 
-2. **Cost grows faster than the number of steps.** Each call resends the growing history. If history grows by a fixed amount per step, total input tokens over n steps grow like 1 + 2 + … + n = n(n+1)/2, i.e. roughly n². Prompt caching and compaction (Section 9.6) reduce this.
+2. **Cost grows faster than the number of steps.** Each call resends the growing history. If history grows by a fixed amount per step, total input **tokens** (the word pieces a model reads and is billed by; roughly ¾ of a word each) over n steps grow like 1 + 2 + … + n = n(n+1)/2, i.e. roughly n². **Prompt caching** (the provider reuses work for a repeated prompt prefix and charges less for it) and compaction (Section 9.6) reduce this.
 3. **Agents fail quietly** — a stuck agent repeats calls and burns tokens rather than crashing.
 
 So **every loop ships with budgets** (steps, tokens or dollars, wall-clock time, caps on consequential actions) and a defined exhaustion behaviour: **halt, save state, summarise progress, hand to a person**.
 
 ### How it works: a complete ReAct agent in pure Python
 
-`code/react_agent.py` has two real tools — a calculator that walks Python's syntax tree (never `eval()`, which would run any code the model wrote) and a TF-IDF-style search over five fictional handbook pages (rare words count more). `run_tool()` turns unknown tools, bad arguments and exceptions into `ERROR ...` observations. The loop:
+`code/react_agent.py` has two real tools — a calculator that walks Python's **syntax tree** (the parsed, tree-shaped structure of the expression) (never `eval()`, which would run any code the model wrote) and a TF-IDF-style search over five fictional handbook pages (rare words count more). `run_tool()` turns unknown tools, bad arguments and exceptions into `ERROR ...` observations. The loop:
 
 ```python
 def react(question: str, llm, max_steps: int = 6) -> AgentResult:
@@ -180,7 +180,7 @@ Q: What is the CEO's favourite colour?
 
 ### Trade-offs
 
-Text ReAct works with any text model and shows its reasoning, but parsing is fragile; **native tool calling** (Section 9.3) returns schema-checked JSON blocks and is the production default.
+Text ReAct works with any text model and shows its reasoning, but **parsing** (turning the model's free text back into fields) is fragile; **native tool calling** (Section 9.3) returns schema-checked **JSON** (a plain-text format for structured data: `{"key": "value"}`) blocks and is the production default.
 
 ### Common mistakes
 
@@ -229,7 +229,7 @@ This split is every agent's security architecture: the model can only **ask**; t
 
 ### Code: the real API version (needs an API key — not run)
 
-The loop of `react_agent.py` with native tool calling in the Anthropic Python SDK (see Chapter 6 for SDK set-up). Not executed here: there is no key or network in this book's environment.
+The loop of `react_agent.py` with native tool calling in the Anthropic Python **SDK** (software development kit: the provider's official client library) (see Chapter 6 for SDK set-up). Not executed here: there is no key or network in this book's environment.
 
 ```python
 # (needs an API key — not run)
@@ -273,14 +273,14 @@ The only consumer of your tools rereads their docs on every call, pays for them 
 
 1. **Few, coarse, task-shaped tools.** `search_orders`, `get_order_details`, `issue_refund(order_id, amount, reason)` beat twenty overlapping low-level tools. They are also **safer**: `issue_refund` can enforce a cap and eligibility in its own code; a general `run_sql` cannot easily be limited to legitimate refunds.
 2. **Descriptions are prompts.** Say when to use a tool *and when not to* ("not for other customers' orders; use `escalate`"). Measure tool choice on a small **golden set** (fixed cases with known answers) of "scenario → expected call", re-run whenever descriptions change.
-3. **Errors are information.** Return a code (`INVALID_ORDER_ID`), what a valid value looks like, and whether retrying makes sense. Vague errors cause retry loops; stack traces leak internals. Add timeouts and rate limits.
-4. **Writes must be idempotent** (doing it twice = doing it once). Derive an **idempotency key** from the operation (case + order + amount), reuse it on retries, and have the service return the stored result for duplicates.
+3. **Errors are information.** Return a code (`INVALID_ORDER_ID`), what a valid value looks like, and whether retrying makes sense. Vague errors cause retry loops; **stack traces** (the raw error dump listing which functions were running) leak internals. Add **timeouts** (give up after a fixed wait) and **rate limits** (caps on calls per minute).
+4. **Writes must be idempotent** (doing it twice = doing it once; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)). Derive an **idempotency key** from the operation (case + order + amount), reuse it on retries, and have the service return the stored result for duplicates.
 
 **Hallucinated arguments.** Models sometimes invent tools or fields, use the wrong type (`100` instead of `"A-100"`) or fill in values nobody gave. Defences, cheapest first: schema validation that rejects extra fields (strict mode constrains generation to the schema's shape); checks against the world, since schema-valid is not *true* (does this order exist and belong to this user?); precise errors so the model can self-correct; and ids the runtime already knows rather than ids the model types.
 
 ### Common mistakes
 
-- A general-purpose tool (shell, SQL, HTTP) where a narrow one would do; business rules only in the prompt.
+- A general-purpose tool (shell = run any command, SQL = query any database table, HTTP = call any web address) where a narrow one would do; business rules only in the prompt.
 - A fresh random idempotency key per retry — that protects nothing.
 - Returning results for only some parallel calls, or splitting them across messages.
 
@@ -307,8 +307,8 @@ Once outputs trigger actions, a model error can move money or delete data, and t
 
 ### How it works: three permission principles
 
-1. **Least privilege, per task.** Credentials hold only what this task's tools need. A support agent can read *this customer's* orders and issue capped refunds — not query arbitrary tables.
-2. **The agent acts as someone, never beyond them.** Tools run under an authorised identity (the signed-in user, or a narrow service role under approved policy) with short-lived, per-task credentials; authority never comes from model output. If the agent works for Alice, Bob's orders are unreachable whatever text it reads.
+1. **Least privilege, per task** (give only the minimum access the job needs). **Credentials** (the keys, passwords or tokens that prove who is calling) only what this task's tools need. A support agent can read *this customer's* orders and issue capped refunds — not query arbitrary tables.
+2. **The agent acts as someone, never beyond them.** Tools run under an authorised identity (the signed-in user, or a narrow **service role** — a non-human account with fixed permissions — under approved policy) with short-lived, per-task credentials; authority never comes from model output. If the agent works for Alice, Bob's orders are unreachable whatever text it reads.
 3. **Tier tools by consequence** and map each tier to a control.
 
 ![Tools tiered by consequence](img/tool-tiers.svg)
@@ -327,7 +327,7 @@ Once outputs trigger actions, a model error can move money or delete data, and t
 2. **Authorise**: may this principal use this tool on this object now?
 3. **Apply business rules**: caps, eligibility, per-conversation action limits.
 4. **Classify risk**; if approval is needed, show the reviewer the *exact* tool and arguments, bind the approval to them, and re-check just before executing.
-5. **Execute** with idempotency, then **log** decision, reason and approver (sensitive data redacted).
+5. **Execute** with idempotency, then **log** decision, reason and approver (sensitive data **redacted**, i.e. blanked out).
 
 A fooled model can still *propose* a harmful action; the gate refuses it.
 
@@ -374,7 +374,7 @@ The run ends with `Audit summary: {'declined_by_human': 1, 'deduplicated': 1, 'd
 
 ### Other guardrails
 
-Input and output filters; **sandboxes** for code-running tools (isolated containers, network allow-lists); a **kill switch** per tool; **alarms** on action rates (a spike may be an attack, a bug or a genuine surge — investigate first). Measure the approvers too: someone who approves everything unread is not a control. Against indirect injection, treat fetched content as data and, for high-risk agents, separate the part that reads untrusted content from the part that acts, or require approval for actions that follow such reading.
+Input and output filters; **sandboxes** for code-running tools (isolated **containers** — lightweight sealed-off environments for running a program — and network **allow-lists**, lists of the only addresses it may reach); a **kill switch** per tool (one switch that disables it instantly); **alarms** on action rates (a spike may be an attack, a bug or a genuine surge — investigate first). Measure the approvers too: someone who approves everything unread is not a control. Against indirect injection, treat fetched content as data and, for high-risk agents, separate the part that reads untrusted content from the part that acts, or require approval for actions that follow such reading.
 
 ### When not to use human approval
 
@@ -415,14 +415,14 @@ Pure ReAct calls the LLM before every step: flexible, but it wanders and costs m
 | **Plan-and-execute** | Planner writes the plan, executor runs it, re-plan on failure | Fewer calls, readable plan; plan may be wrong from the start |
 | **ReWOO** (Xu et al., 2023) | Plan all tool calls with placeholders, run them, one "solver" call answers | Very few calls; cannot react mid-way |
 | **Reflection** | Critique the result and retry | Catches own errors; may agree with itself |
-| **Reflexion** (Shinn et al., 2023) | Store a short verbal **lesson** per failure, reuse it next attempt | Learns without retraining; needs a reliable success signal |
+| **Reflexion** (Shinn et al., 2023) | Store a short verbal **lesson** per failure, reuse it next attempt | Learns without **retraining** (updating the model's learned internal numbers); needs a reliable success signal |
 | **Tree search** (Tree of Thoughts, Yao et al., 2023) | Explore candidate steps, back up from bad ones | Good for puzzles; costly |
 
 A crucial rule: **verify the world, not the agent's claim**. "I booked the room" is a claim; a booking record with enough capacity is a fact.
 
 ### Code: plan, execute, verify, reflect, re-plan
 
-`code/plan_execute_reflect.py` books a room for 6. The planner (an LLM stand-in) first makes the naive choice; a code **verifier** checks the real bookings; **reflection** turns each failure into a one-line lesson; the planner re-plans with its lessons; a **compensating action** undoes a wrong booking.
+`code/plan_execute_reflect.py` books a room for 6. The planner (an LLM stand-in) first makes the naive choice; a code **verifier** checks the real bookings; **reflection** turns each failure into a one-line lesson; the planner re-plans with its lessons; a **compensating action** (a follow-up step that reverses an earlier step's effect) undoes a wrong booking.
 
 ```python
 def run(goal: Goal, max_attempts: int = 3) -> None:
@@ -464,7 +464,7 @@ Attempt 1 "succeeded" as far as the tool knew (`BOOKED`) but missed the goal; on
 
 ### When not to use it
 
-Heavy planning is wasted on one- or two-call tasks. Reflection needs a real success signal (tests, checks, a validated judge); without one the model may just rephrase its mistake.
+Heavy planning is wasted on one- or two-call tasks. Reflection needs a real success signal (tests, checks, a validated judge — a scoring model or rubric whose grades were checked against people's); without one the model may just rephrase its mistake.
 
 ### Common mistakes
 
@@ -502,22 +502,22 @@ History piles up on long tasks; resending it costs tokens, and **more context is
 | 1. **Window** | Current plan, recent steps and results, verbatim | Drop the 4,000-token log from eleven steps ago |
 | 2. **Compaction** | A summary of older history, made near the budget | Summarise into **structure** — decisions, constraints, failures, open questions — with links to originals |
 | 3. **Scratchpad** | Notes, findings, code written to files via tools | The window keeps a **pointer** ("see findings.md") and reads back only what it needs |
-| 4. **Long-term** | Preferences, past outcomes, learned facts | Embeddings in a vector index (RAG over the agent's own experience, [Chapter 7](../07-embeddings-vector-databases-and-rag/README.md)); injected selectively; **visible, editable, deletable** by the user |
+| 4. **Long-term** | Preferences, past outcomes, learned facts | Embeddings (number lists where similar meanings sit close) in a vector index (a store that finds the nearest ones) — RAG (retrieval-augmented generation: fetch relevant text, add it to the prompt) over the agent's own experience, [Chapter 7](../07-embeddings-vector-databases-and-rag/README.md)); injected selectively; **visible, editable, deletable** by the user |
 | **Durable task state** | Every intended operation, its id, result and status | Written before and after each step so a crashed task **resumes** |
 
 Compaction is **lossy**: drop *why* an approach failed and the agent retries it; drop a constraint and it breaks it — so keep them as explicit lists.
 
 **"What if the server dies mid-task?"** Resume from the last recorded step; for a call that may have completed unrecorded, check the external system or retry with the **same** idempotency key. Restarting from scratch repeats costs, may repeat side effects and — models being non-deterministic — may take a different path. The same record is the **audit trail** and **debugging trace**.
 
-Names you will meet: **episodic** (past events), **semantic** (facts) and **procedural** memory (how-to, often stored as instructions or "skills"). *Generative Agents* (Park et al., 2023) ranked memories by **recency**, **importance** and **relevance**; MemGPT (Packer et al., 2023) treated the window as RAM and external storage as disk.
+Names you will meet: **episodic** (past events), **semantic** (facts) and **procedural** memory (how-to, often stored as instructions or "skills"). *Generative Agents* (Park et al., 2023) ranked memories by **recency**, **importance** and **relevance**; MemGPT (Packer et al., 2023) treated the window as RAM (a computer's small, fast working memory) and external storage as disk (large, slower, permanent).
 
 ### How agents "learn"
 
-Mostly **without changing weights**: store what worked and failed and retrieve it next time (Reflexion-style lessons); **spot patterns** ("this user declines 8 a.m. meetings") and plan around them; occasionally **fine-tune** a smaller model on accumulated traces ([Chapter 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)). Trial and error that *does* update a policy — a game agent that avoids losing moves until it wins — is reinforcement learning ([ML book, Chapter 14](../../../ml/chapters/14-reinforcement-learning/README.md)).
+Mostly **without changing weights** (the billions of learned numbers inside the model): store what worked and failed and retrieve it next time (Reflexion-style lessons); **spot patterns** ("this user declines 8 a.m. meetings") and plan around them; occasionally **fine-tune** (continue training on your own examples) a smaller model on accumulated traces ([Chapter 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)). Trial and error that *does* update a policy — a game agent that avoids losing moves until it wins — is **reinforcement learning** (learning by trial, error and reward) ([ML book, Chapter 14](../../../ml/chapters/14-reinforcement-learning/README.md)).
 
 ### Code: the four tiers in 100 lines
 
-`code/agent_memory.py` implements a token-budgeted window with **structured compaction**, a scratchpad that returns pointers, and long-term memory using cosine similarity over hashed bag-of-words vectors (a deterministic stand-in for a real embedding model).
+`code/agent_memory.py` implements a token-budgeted window with **structured compaction**, a scratchpad that returns pointers, and long-term memory using **cosine similarity** (a score of how closely two number lists point the same way; 1 = identical direction) over hashed **bag-of-words vectors** (word counts, ignoring order, squeezed into a fixed-length list of numbers) (a deterministic stand-in for a real embedding model).
 
 ```python
     def _compact(self, old: Step) -> None:
@@ -589,7 +589,7 @@ A **multi-agent system** splits work between several LLM-driven agents, each wit
 More agents mean more coordination, more handoffs where errors spread, harder debugging and more cost. **Start with one bounded agent**; split only when tests show a gain, for one of three reasons:
 
 1. **Context isolation** — a fresh worker with a small, clean context answers one sub-question.
-2. **Parallelism** — independent subtasks **fan out** and **fan in** (scatter-gather with prompts), cutting wall-clock time, not compute.
+2. **Parallelism** — independent subtasks **fan out** and **fan in** (send all subtasks out at once, then gather the results — scatter-gather with prompts), cutting wall-clock time, not compute.
 3. **Specialisation** — different prompts, tools, permissions or model sizes per subtask (often one model, configured differently).
 
 ### How it works: the main shapes
@@ -597,14 +597,14 @@ More agents mean more coordination, more handoffs where errors spread, harder de
 | Pattern | How control flows | Typical use |
 |---|---|---|
 | **Orchestrator-workers** (supervisor) | A lead agent splits the task, delegates scoped subtasks, integrates structured reports, owns the answer | Research, multi-file code review |
-| **Pipeline with agentic stages** | Fixed sequence of small bounded agents (triage → resolve → QA) | Support, document processing |
+| **Pipeline with agentic stages** | Fixed sequence of small bounded agents (triage → resolve → QA, a quality check) | Support, document processing |
 | **Handoff / router** | A triage agent transfers the whole conversation to one specialist | Billing / tech / sales service desks |
-| **Producer-reviewer** (evaluator-optimizer) | One drafts, another critiques against a rubric, fixed number of rounds | Writing, code, translation |
+| **Producer-reviewer** (evaluator-optimizer) | One drafts, another critiques against a **rubric** (a written scoring checklist), fixed number of rounds | Writing, code, translation |
 
 ![Orchestrator-workers](img/orchestrator-workers.svg)
 *Figure — an orchestrator owns decomposition, integration and the outcome; workers are stateless, bounded and scoped (course diagram).*
 
-Three disciplines make any shape work. **Handoffs are contracts**: task, *only* the needed context, tool scope, budget and report schema (findings, evidence pointers, open questions, tokens used); a worker's stated "confidence" is a claim to check. **State lives outside the agents**, in a store the orchestrator owns, so workers can be retried. **Budgets are hierarchical**: worker slices plus an integration reserve, and a worker that runs out returns a **partial report**, never silence. Avoid free-form agent "debates" and open-ended agent chat — hard to bound, reproduce and evaluate.
+Three disciplines make any shape work. **Handoffs are contracts**: task, *only* the needed context, tool scope, budget and report schema (findings, evidence pointers, open questions, tokens used); a worker's stated "confidence" is a claim to check. **State lives outside the agents**, in a store the orchestrator owns, so workers can be **stateless** (they keep nothing between calls) and retried. **Budgets are hierarchical**: worker slices plus an integration reserve, and a worker that runs out returns a **partial report**, never silence. Avoid free-form agent "debates" and open-ended agent chat — hard to bound, reproduce and evaluate.
 
 ### Code: orchestrator-workers and handoffs
 
@@ -647,12 +647,12 @@ Each worker "takes" 0.2 s, so three in parallel take ~0.2 s instead of 0.6 s —
 
 ### Frameworks you will meet
 
-LangGraph (graphs with persisted state), the OpenAI Agents SDK (handoffs, guardrails; successor to Swarm), Microsoft AutoGen, CrewAI (role-based "crews"), the Claude Agent SDK (the Claude Code harness as a library, with sub-agents). They package loop, state and tracing — not bounds, permissions or evaluation.
+LangGraph (graphs with persisted state), the OpenAI Agents SDK (handoffs, guardrails; successor to Swarm), Microsoft AutoGen, CrewAI (role-based "crews"), the Claude Agent SDK (the Claude Code harness as a library, with sub-agents). They package loop, state and **tracing** (recording every step of a run for later inspection) — not bounds, permissions or evaluation.
 
 ### Common mistakes
 
 - Many agents because it looks like an org chart; free-text reports instead of schemas with evidence pointers.
-- Overlapping worker scopes, so the same evidence is counted twice and looks like confirmation; no shared trace id.
+- Overlapping worker scopes, so the same evidence is counted twice and looks like confirmation; no shared **trace id** (one id stamped on every log line of a task so its pieces can be joined).
 
 ### Self-check
 
@@ -669,15 +669,15 @@ One agent first; split only for isolation, parallelism or specialisation, with c
 
 ### What it is
 
-The **Model Context Protocol (MCP)** is an open standard, introduced by Anthropic in November 2024, for connecting AI applications to tools and data. A service is wrapped once as an **MCP server** and any MCP-capable app can use it (M + N integrations instead of M × N) — the "USB-C port for AI". In December 2025 Anthropic donated MCP to the **Agentic AI Foundation**, a new Linux Foundation fund co-founded with OpenAI and Block, giving it vendor-neutral governance. [Chapter 6 (§6.10)](../06-building-llm-apps-in-python/README.md) explains the protocol in detail and builds a server; here is its place in the agent picture.
+The **Model Context Protocol (MCP)** is an open standard, introduced by Anthropic in November 2024, for connecting AI applications to tools and data. A service is wrapped once as an **MCP server** and any MCP-capable app can use it (M + N integrations instead of M × N) — the "USB-C port for AI". In December 2025 Anthropic donated MCP to the **Agentic AI Foundation**, a new **Linux Foundation** (a non-profit that hosts open-source projects) fund co-founded with OpenAI and Block, giving it **vendor-neutral** governance (no single company controls it). [Chapter 6 (§6.10)](../06-building-llm-apps-in-python/README.md) explains the protocol in detail and builds a server; here is its place in the agent picture.
 
 ### How it works
 
-A **host** (Claude Desktop, an IDE, your agent) contains one **client** per connected **server**. Servers expose **tools** (functions the model may call), **resources** (read-only data such as files or records) and **prompts** (reusable templates), over JSON-RPC 2.0 via **stdio** (a local subprocess) or **Streamable HTTP** (remote, with OAuth-based authorisation). The client lists a server's tools (`tools/list`), the host adds them to the model's menu, and a model request becomes `tools/call`. That is exactly the cycle of Section 9.3 — MCP standardises *where the tools come from*.
+A **host** (Claude Desktop, an **IDE** — integrated development environment, i.e. a code editor such as VS Code — or your agent) contains one **client** per connected **server**. Servers expose **tools** (functions the model may call), **resources** (read-only data such as files or records) and **prompts** (reusable templates), over **JSON-RPC 2.0** (a simple standard for sending function calls and replies as JSON messages) via **stdio** (standard input/output of a local **subprocess**, a program the host starts itself) or **Streamable HTTP** (remote, with **OAuth**-based authorisation — OAuth is the standard "log in with …" protocol that grants an app limited access without sharing your password). The client lists a server's tools (`tools/list`), the host adds them to the model's menu, and a model request becomes `tools/call`. That is exactly the cycle of Section 9.3 — MCP standardises *where the tools come from*.
 
 ### What MCP does not do
 
-MCP makes tools portable, **not safe**: Section 9.4 still applies. An untrusted server can ship misleading tool descriptions ("tool poisoning") or return injected instructions, and installing one is installing code — use trusted servers, pin versions, review descriptions.
+MCP makes tools portable, **not safe**: Section 9.4 still applies. An untrusted server can ship misleading tool descriptions ("tool poisoning") or return injected instructions, and installing one is installing code — use trusted servers, **pin versions** (lock to a specific reviewed release), review descriptions.
 
 **Agent-to-agent protocols.** Google's **A2A** (Agent2Agent, April 2025; moved to the Linux Foundation in June 2025) standardises how agents from different vendors discover each other (through "agent cards") and delegate tasks. MCP connects an agent to tools; A2A connects agents to agents.
 
@@ -697,13 +697,13 @@ MCP plugs tools into apps, A2A connects agents; neither replaces guardrails.
 
 ### What it is
 
-For an agent you grade a **trajectory**, not just an output: two agents may both "resolve the ticket", one in four clean steps, the other in nineteen with three refund attempts and some luck. Agent evaluation grades **the destination and the route**. The general machinery — golden sets, LLM judges, metrics, statistics — is in [Chapter 8 (§8.5)](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md); here is what agents add.
+For an agent you grade a **trajectory**, not just an output: two agents may both "resolve the ticket", one in four clean steps, the other in nineteen with three refund attempts and some luck. Agent evaluation grades **the destination and the route**. The general machinery — golden sets, **LLM judges** (a model that scores another model's output against a rubric), metrics, statistics — is in [Chapter 8 (§8.5)](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md); here is what agents add.
 
 ### How it works
 
 **1. A scenario bank.** Each scenario has a resettable **initial world state** (fake customer, orders, balances); **checkable success criteria**, ideally in code (refund exists for the right amount; tests pass), including forbidden effects; an optional expert **reference trajectory** for judging the route (not the only valid path); and a **category** — normal, edge, attack, unclear request. Report per category; every reviewed incident becomes a new scenario.
 
-**2. A sandbox** of **replica tools** on synthetic data (a test that refunds a real customer is not a test) that **fail like the real ones** — timeouts, rate limits, denials, empty results — or you learn nothing about recovery.
+**2. A sandbox** of **replica tools** on **synthetic data** (made-up but realistic records) (a test that refunds a real customer is not a test) that **fail like the real ones** — timeouts, rate limits, denials, empty results — or you learn nothing about recovery.
 
 **3. Three graders, rising in cost and falling in frequency.**
 
@@ -720,7 +720,7 @@ Task success per category; steps compared with the expert baseline (efficient or
 
 **5. Reliability: pass@k vs pass^k.** With n runs of a scenario of which c succeed:
 
-- **pass@k** — probability that *at least one* of k attempts succeeds, estimated as 1 − C(n − c, k) / C(n, k). Fine when a person picks the best of several drafts.
+- **pass@k** — probability that *at least one* of k attempts succeeds, estimated as 1 − C(n − c, k) / C(n, k), where C(n, k) is "n choose k", the number of ways to pick k items from n. Fine when a person picks the best of several drafts.
 - **pass^k** — probability that *all* k attempts succeed, estimated as C(c, k) / C(n, k). This is what a customer-facing agent needs, since each customer gets one try. τ-bench (Sierra, 2024), which simulates users talking to tool-using agents and checks the final database state, introduced pass^k and showed it falling sharply with k even when pass^1 looked good.
 
 Worked example: n = 8, c = 6, k = 4. pass@4 = 1 − C(2,4)/C(8,4) = 1 − 0/70 = 1.0; pass^4 = C(6,4)/C(8,4) = 15/70 ≈ 0.21. Same agent, very different picture.
@@ -766,11 +766,11 @@ timeout rate 40%:  overall success 38/48 = 79%
 
 ### Public benchmarks
 
-SWE-bench (real GitHub issues judged by the repo's tests; Verified = a human-checked 500-task subset), WebArena (websites), GAIA (tool-using assistant questions), OSWorld (desktop use), τ-bench (customer service). Good for comparing models; only your own scenarios tell you whether *your* agent works.
+**Benchmarks** are fixed public test sets that everyone runs so systems can be compared. SWE-bench (real GitHub issues judged by the **repo**'s — repository's, i.e. the project's version-controlled code — tests; Verified = a human-checked 500-task subset), WebArena (websites), GAIA (tool-using assistant questions), OSWorld (desktop use), τ-bench (customer service). Good for comparing models; only your own scenarios tell you whether *your* agent works.
 
 ### Observability in production
 
-Every task emits a redacted **trace** (steps, tool calls and results, tokens, cost, gate decisions, approvals) for **incident forensics**, **dashboards and alerts** (success, cost, loop alarms when steps spike) and **new eval cases**. A model's own explanation helps triage but is not proof of what drove it.
+**Observability** means being able to tell what a running system is doing from what it records (logs, metrics, traces). Every task emits a redacted **trace** (steps, tool calls and results, tokens, cost, gate decisions, approvals) for **incident forensics**, **dashboards and alerts** (success, cost, loop alarms when steps spike) and **new eval cases**. A model's own explanation helps **triage** (quickly sorting what to look at first) but is not proof of what drove it.
 
 ### Common mistakes
 
@@ -802,7 +802,7 @@ An agent **earns freedom one action tier at a time, as evidence accumulates**.
 3. **Bounded autonomy** — low-risk tiers run alone inside caps; high tiers still need approval.
 4. **Audited autonomy** — approved low-risk actions run alone and are reviewed afterwards.
 
-Promotion is a **measured decision** — representative tests, reliable reviewers, verified outcomes, acceptable error and abuse rates, bounded exposure — not just "reviewers approved 98%": a canary rollout for authority instead of traffic. Tiers climb at different speeds (case notes may reach stage 4 in weeks; refunds may stay at stage 3), and a regression **demotes** a tier automatically.
+Promotion is a **measured decision** — representative tests, reliable reviewers, verified outcomes, acceptable error and abuse rates, bounded exposure — not just "reviewers approved 98%": a **canary rollout** (release to a small slice first and widen only if it stays healthy; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) for authority instead of traffic. Tiers climb at different speeds (case notes may reach stage 4 in weeks; refunds may stay at stage 3), and a regression **demotes** a tier automatically.
 
 **Controls that never switch off:** per-task and per-account caps on steps, tokens, money and actions (e.g. "at most three refunds per chat", enforced in code), a kill switch per tool, and alarms on abnormal action rates.
 
@@ -859,7 +859,7 @@ Identifying the customer and classifying intent is workflow code; policy questio
 
 ### 2. Tools, grouped by what can go wrong
 
-- **Reads** — `get_customer_orders`, `get_order_status`, `search_policies` (permission-filtered retrieval), `get_risk_signals` (refund history, account age, address velocity). All scoped to the verified customer.
+- **Reads** — `get_customer_orders`, `get_order_status`, `search_policies` (permission-filtered retrieval), `get_risk_signals` (refund history, account age, address **velocity** — how fast something changes, e.g. many new addresses in a week). All scoped to the verified customer.
 - **Undoable writes** — `add_case_note`, `update_ticket_state`, logged with an undo path.
 - **Capped writes** — `reschedule_delivery` (windows and eligibility in code; may need customer confirmation), `apply_credit` up to $15, `issue_refund` up to $30 — each with per-order and per-customer velocity limits, idempotency keys and sampled review.
 - **Approval-only** — refunds over $30 and account-level changes.
@@ -873,7 +873,7 @@ Pick models by measured resolution and safety on your scenarios (start strong, t
 
 ### 4. Abuse and evaluation
 
-People will learn the rules and repeat the same "never arrived" story. Borrow from fraud systems: risk signals, caps that hold regardless, refund-rate alarms per cohort, and reviewers sampling *both* granted and denied refunds (or wrong denials stay invisible). Test with fake customers — genuine and ineligible refunds, injection attempts, vague upset users — and replay every incident.
+People will learn the rules and repeat the same "never arrived" story. Borrow from fraud systems: risk signals, caps that hold regardless, refund-rate alarms per **cohort** (a group of customers sharing a trait, such as sign-up month), and reviewers sampling *both* granted and denied refunds (or wrong denials stay invisible). Test with fake customers — genuine and ineligible refunds, injection attempts, vague upset users — and replay every incident.
 
 ### 5. Rollout and arithmetic
 
@@ -902,7 +902,7 @@ The skeleton transfers: an airline rebooking agent spends seats, vouchers and ho
 
 ### Where agentic AI is heading
 
-AI is moving from single-task tools to systems that plan, adapt and work alongside people: **collaborative robots (cobots)** that share space with workers, stop when someone steps into their path and refine movements from past runs (handing parts for fine assembly, preparing surgical instruments); and **"digital employees"** — software agents that research, schedule and carry out multi-step work around the clock (tracking shipments and returns, running email campaigns and retargeting from feedback).
+AI is moving from single-task tools to systems that plan, adapt and work alongside people: **collaborative robots (cobots)** that share space with workers, stop when someone steps into their path and refine movements from past runs (handing parts for fine assembly, preparing surgical instruments); and **"digital employees"** — software agents that research, schedule and carry out multi-step work around the clock (tracking shipments and returns, running email campaigns and **retargeting** — following up with people who already showed interest — from feedback).
 
 Three ingredients drive this: **reasoning plus memory** (logging outcomes and consulting the log), **tool and API integration**, and **human-in-the-loop mechanisms** (full autonomy is risky in safety-critical or regulated settings). As routine work runs continuously, people shift towards creative and supervisory work — so **reskilling** matters.
 
@@ -915,7 +915,7 @@ No official scale exists; this informal one combines the autonomy dial (9.1) and
 | 0 | Single call / fixed workflow | No runtime decisions | Summarise every support call |
 | 1 | Router | Model chooses a branch | Classify and route emails |
 | 2 | Assistant, human approves | Model picks tools; a person confirms each write | Drafted refunds for approval |
-| 3 | Bounded autonomy | Acts alone within caps; high risk gated | Refunds under $30; code changes via pull request |
+| 3 | Bounded autonomy | Acts alone within caps; high risk gated | Refunds under $30; code changes via pull request (a proposed change submitted for review) |
 | 4 | Audited autonomy ("digital employee") | Long jobs, reviewed afterwards | Coding agents opening PRs overnight |
 | 5 | Open-ended autonomy | Sets its own goals, unbounded tools | Not advisable in production today |
 
@@ -928,7 +928,7 @@ Moving up is a per-tier, evidence-based decision; moving down is automatic when 
 | 2022 | ReAct paper | Reason-act loop with tools |
 | 2023 | AutoGPT, BabyAGI | Self-prompting demos: promise, but loops and cost blow-ups |
 | Jun 2023 | Function calling in the OpenAI API | Structured tool requests became standard |
-| 2024 | Devin announced; Claude computer use; τ-bench; SWE-bench Verified | Agents for software and GUIs; reliability benchmarks |
+| 2024 | Devin announced; Claude computer use; τ-bench; SWE-bench Verified | Agents for software and GUIs (graphical interfaces: windows, buttons); reliability benchmarks |
 | Nov 2024 | Model Context Protocol | Standard tool/data connections |
 | 2025 | Claude Code, OpenAI Codex, GitHub Copilot coding agent, Operator / ChatGPT agent, deep-research modes, A2A | Agents become everyday products |
 | Dec 2025 | Agentic AI Foundation (Linux Foundation) | Vendor-neutral home for MCP and related standards |
@@ -967,7 +967,7 @@ From demos (AutoGPT) to products (coding, research, support); climb maturity lev
 - *Wrong tool keeps being picked?* — Measure on a tool-choice golden set; sharpen "use X, not Y" descriptions, merge confusable tools; fine-tune only once the menu is stable.
 - *Why not direct database access?* — Policy must live where the model cannot argue with it; task-shaped tools make it code.
 - *Repeats a mistake from 20 steps ago?* — Compaction dropped the failure; keep a standing "what didn't work" list.
-- *90% in the sandbox, 70% in production?* — Distribution gap: harvest failing traces; check timeouts, data freshness and real permission denials first.
+- *90% in the sandbox, 70% in production?* — Distribution gap (real inputs differ from the test inputs): harvest failing traces; check timeouts, data freshness and real permission denials first.
 - *One metric on the dashboard?* — Refuse: tasks finished without a human *next to* cost per finished task, with action-rate alarms underneath.
 
 ---

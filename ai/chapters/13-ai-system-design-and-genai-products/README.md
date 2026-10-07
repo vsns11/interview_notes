@@ -2,7 +2,7 @@
 
 The previous chapters gave you the parts: tokens and transformers ([Chapter 3](../03-transformers-and-embeddings/README.md)), LLMs ([Chapter 4](../04-large-language-models/README.md)), prompting ([Chapter 5](../05-prompt-engineering/README.md)), LLM apps ([Chapter 6](../06-building-llm-apps-in-python/README.md)), RAG ([Chapter 7](../07-embeddings-vector-databases-and-rag/README.md)), evaluation and fine-tuning ([Chapter 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)), agents ([Chapter 9](../09-ai-agents/README.md)), serving ([Chapter 11](../11-llm-serving-and-inference/README.md)) and safety ([Chapter 12](../12-safety-ethics-governance/README.md)). This chapter **assembles those parts into a product** and shows how to explain that assembly in a 45-minute **AI system design interview**.
 
-The central idea: a model is **one component** in a distributed system, next to gateways, databases, caches and queues. What makes AI systems different is that the model's answer can be wrong even when every server returns `200 OK`, that every call costs real money, and that quality drifts over time. So every good design has two loops: a **request path** (how an answer is produced) and a **feedback loop** (how you learn whether answers are good and improve them safely).
+The central idea: a model is **one component** in a **distributed system** (software spread across many machines that talk over a network), next to gateways, databases, caches and queues (all introduced in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)). What makes AI systems different is that the model's answer can be wrong even when every server returns `200 OK` (the HTTP code for "success"), that every call costs real money, and that quality drifts over time. So every good design has two loops: a **request path** (how an answer is produced) and a **feedback loop** (how you learn whether answers are good and improve them safely).
 
 The general interview method — the five question forms, the three families, the seven-step framework and its time budget — is taught in full in the [ML Handbook, Chapter 15](../../../ml/chapters/15-ml-system-design-framework/README.md). Sections 13.1–13.4 here are a **compact recap plus what changes for GenAI**; the rest of the chapter is GenAI-specific.
 
@@ -10,11 +10,11 @@ The general interview method — the five question forms, the three families, th
 
 1. The interview method (forms, families, seven steps) as a one-page recap with the GenAI emphasis.
 2. **Requirements** as numbers; **build vs buy** with a runnable cost crossover.
-3. The **GenAI reference architecture** as a runnable miniature, and **LLMOps** (versioning, golden sets, canaries, A/B) — runnable.
+3. The **GenAI reference architecture** as a runnable miniature, and **LLMOps** (versioning, golden sets, canaries — releasing to a small slice of users first — and A/B tests, which compare two versions on split live traffic) — runnable.
 4. **Cost modelling**: token bill, chat-history trap, routing and caching, fleet and memory sizing.
-5. Archetypes — **chat**, **code assistant**, **AI search**, **image generation** — and a capstone **AI platform inside a SaaS product**.
+5. Archetypes — **chat**, **code assistant**, **AI search**, **image generation** — and a capstone **AI platform inside a SaaS product** (software as a service — software rented over the internet).
 
-All code is in `code/` and runs offline with the shared environment. Where a real API would be called, a deterministic **fake LLM** and a toy embedder stand in, so the logic is real and the output reproducible.
+All code is in `code/` and runs offline with the shared environment. Where a real API would be called, a **deterministic** (same input, same output) **fake LLM** and a toy **embedder** (a function that turns text into a vector of numbers capturing its meaning) stand in, so the logic is real and the output reproducible.
 
 | Script | What it shows |
 |---|---|
@@ -29,7 +29,7 @@ All code is in `code/` and runs offline with the shared environment. Where a rea
 ## 13.1 The AI system design interview
 
 ### What it is
-An **AI system design interview** asks you to design a product in which a learned model does part of the work — "Build a ChatGPT-like helper into our app" — in the same whiteboard format as "Design Twitter". A **model** is a function learned from data rather than written as rules: treat it like any component (latency, cost, failure modes) except that its output can be *wrong* even when the call succeeds. **Inference** is using a trained model — **online** (a live request waits) or **batch** (a background job stores results); **training** is a separate, usually offline, box in every diagram.
+An **AI system design interview** asks you to design a product in which a learned model does part of the work — "Build a ChatGPT-like helper into our app" — in the same whiteboard format as "Design Twitter" (the classic **system design interview**, where you sketch servers, databases and data flow). A **model** is a function learned from data rather than written as rules: treat it like any component (latency, cost, failure modes) except that its output can be *wrong* even when the call succeeds. **Inference** is using a trained model — **online** (a live request waits) or **batch** (a background job stores results); **training** is a separate, usually offline, box in every diagram.
 
 ### How it works — recap
 Full treatment, with the role table and worked examples: [ML Handbook §15.1](../../../ml/chapters/15-ml-system-design-framework/README.md).
@@ -60,8 +60,8 @@ All distributed-systems knowledge still applies. What changes are four assumptio
 
 | Broken assumption | GenAI example | What you add |
 |---|---|---|
-| **Correctness is binary** | An answer can be fluent, on-topic and still unhelpful or unsupported | Quality metrics (resolution rate, groundedness, acceptance) next to latency SLOs — remembering they are *signals*, not truth |
-| **The code is the behaviour** | Same prompt, new provider model version, different answers; the documents and user questions also **drift** (change over time) | Versioned prompts and models, a golden set that gates every change (13.8) |
+| **Correctness is binary** | An answer can be fluent, on-topic and still unhelpful or unsupported | Quality metrics (resolution rate, groundedness — answers supported by sources — acceptance) next to latency SLOs (service level objectives: target numbers such as "p95 under 1 s") — remembering they are *signals*, not truth |
+| **The code is the behaviour** | Same prompt, new provider model version, different answers; the documents and user questions also **drift** (change over time) | Versioned prompts and models, a golden set (fixed test cases with agreed answers) that gates every change (13.8) |
 | **Compute is cheap** | A call costs cents and seconds, not micro-cents and milliseconds: 20M requests/day × $0.005 = $100,000/day | A cost and latency budget; routing, caching and batch work (13.9) |
 | **Failures are loud** | An invented citation or a leaked document arrives with `200 OK` | Treat user and retrieved text as untrusted; enforce permissions **outside** the model; output checks; human approval for risky actions; a fallback |
 
@@ -87,9 +87,9 @@ Classify the task by **what the system mainly produces** ([ML Handbook §15.2](.
 
 | Family | Output | Graded on | Classic failure |
 |---|---|---|---|
-| **Predictive** | A score or **label** (fraud / not fraud) | Features, candidate generation → ranking, offline and online metrics | "Ask an LLM to rank the feed" — no personalisation, evaluation, latency or cost story |
+| **Predictive** | A score or **label** (fraud / not fraud) | Features (input signals), candidate generation (cheaply picking a shortlist) → ranking, offline (on stored data) and online (on live users) metrics | "Ask an LLM to rank the feed" — no personalisation, evaluation, latency or cost story |
 | **Generative** | Content: an answer, summary, code, an image | Retrieval and context assembly, cost (streaming, caching, **model routing**), output evaluation, safety (**hallucination** = unsupported content, injection) | Pre-training a **foundation model** (a large model trained on broad data) from scratch; no quality metric; ignoring cost |
-| **Agentic** | Actions: which **tool** to call next | Tool permissions, step/time/cost limits, approvals, outcome and trajectory evaluation | Unlimited access and no stop rule — or approval on every harmless step. If steps are known in advance, a fixed **workflow** beats an agent |
+| **Agentic** | Actions: which **tool** to call next | Tool permissions, step/time/cost limits, approvals, outcome and trajectory (the agent's full sequence of steps) evaluation | Unlimited access and no stop rule — or approval on every harmless step. If steps are known in advance, a fixed **workflow** beats an agent |
 
 Real products mix families: a support system routes tickets (predictive), drafts replies (generative) and files refunds through an authorised tool (agentic). *Writing* a refund explanation and *issuing* the refund are different problems — the second needs authorisation in code outside the model.
 
@@ -113,10 +113,10 @@ The classic outline (requirements, estimates, high-level design, deep dive, wrap
 |---|---|---|
 | 1. Frame (3) | Family? Which known design? Scope? | Name the archetype: chat, code, search, image, embedded platform (13.10–13.11) |
 | 2. Success (5) | Quality, latency, scale, cost targets | Latency splits into **TTFT** (time to first token) and full answer; cost per conversation or per resolved task |
-| 3. Data (5) | Sources, labels, freshness | The corpus to retrieve from and its permissions; thumbs-up is feedback, not a correctness label |
-| 4. Model (5) | Simplest baseline, upgrade condition | Prompted existing model → + RAG → fine-tune; workflow → single agent → multi-agent (13.6) |
+| 3. Data (5) | Sources, labels, freshness | The **corpus** (the document collection) to retrieve from and its permissions; thumbs-up is feedback, not a correctness label |
+| 4. Model (5) | Simplest baseline, upgrade condition | Prompted existing model → + RAG (retrieval-augmented generation: fetch relevant documents into the prompt) → fine-tune (extra training on your examples); workflow → single agent → multi-agent (13.6) |
 | 5. Serving (12) | Offline vs online, caches, which model, failure behaviour | Context assembly, router, guards, streaming (13.7) |
-| 6. Keep it working (8) | Logging, outcomes, evaluation, safe release | Golden set, shadow, canary, A/B (13.8) |
+| 6. Keep it working (8) | Logging, outcomes, evaluation, safe release | Golden set, shadow (new version runs on real traffic with its output hidden), canary, A/B (13.8) |
 | 7. Failures and cost (5) | Top risks with controls; unit cost × volume | Hallucination, injection, leakage; token bill (13.9) |
 | Slack (2) | Follow-ups | — |
 
@@ -146,13 +146,13 @@ Frame 3 · success 5 · data 5 · model 5 · serving 12 · keep working 8 · fai
 | Category | What to pin down | Example (assumed) | Architectural consequence |
 |---|---|---|---|
 | **Functional** | Use cases; what the model may *read*; what it may *do* (read-only vs actions); channels; languages | "Answer order and policy questions; read the caller's own orders; no refunds > $10" | Tool list, permission model, generative vs agentic parts |
-| **Latency** | TTFT and full-response time at a stated percentile and load; batch deadlines | p95 TTFT < 1 s; completion < 5 s; inline code completion < 300 ms | Streaming, model size, context length, what is precomputed, whether retrieval fits on the hot path |
-| **Quality** | Primary metric + guardrail metrics + how measured | ≥ 50% correct resolution; groundedness ≥ 95% on sampled answers; CSAT no worse | RAG, reranking, verification, human review |
+| **Latency** | TTFT and full-response time at a stated percentile and load; batch deadlines | p95 TTFT < 1 s; completion < 5 s; inline code completion < 300 ms | Streaming, model size, context length, what is precomputed, whether retrieval fits on the **hot path** (the steps a live request waits for) |
+| **Quality** | Primary metric + guardrail metrics + how measured | ≥ 50% correct resolution; groundedness ≥ 95% on sampled answers; CSAT (customer-satisfaction score) no worse | RAG, reranking (re-sorting retrieved results with a stronger model), verification, human review |
 | **Cost** | Budget per request / user-month / resolved task | ≤ $0.10 per conversation; ≤ $2 per seat per month | Routing, caching, summarisation, self-host vs API |
 | **Safety** | Harm categories, refusals, actions needing approval, injection exposure | "Never reveal another customer's data" | Guardrails, permissions outside the model, approval gates |
-| **Scale** | Users, requests/day, peak RPS, tokens per request, corpus size | 40,000 conversations/day, peak 3× average | Fleet size, rate limits, index sharding |
-| **Privacy / compliance** | Retention, region, training on customer data, deletion | "No training on customer data; EU data stays in the EU" | Provider choice, zero-retention terms, regional or self-hosted inference |
-| **Availability** | Behaviour when the model or provider is down | "Degrade to search results or human handoff" | Fallback providers, graceful degradation |
+| **Scale** | Users, requests/day, peak RPS (requests per second), tokens per request, corpus size | 40,000 conversations/day, peak 3× average | Fleet size, rate limits, index **sharding** (splitting the index across machines; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) |
+| **Privacy / compliance** | Retention, region, training on customer data, deletion | "No training on customer data; EU data stays in the EU" | Provider choice, zero-retention terms (the provider stores nothing), regional or self-hosted inference |
+| **Availability** | Behaviour when the model or provider is down | "Degrade to search results or human handoff" | Fallback providers, graceful degradation (falling back to a simpler but still useful behaviour) |
 
 **TTFT (time to first token)** is the delay until the first piece of the reply appears — what makes a chat *feel* fast; streaming hides the rest of the generation time ([§11.3](../11-llm-serving-and-inference/README.md)). A **p95** target means 95% of requests meet it.
 
@@ -183,9 +183,9 @@ Deciding **where the model comes from and who runs it**. For generative features
 
 | Option | What it means | Pros | Cons / checks |
 |---|---|---|---|
-| **1. Hosted API** (Anthropic, OpenAI, Google; or via Amazon Bedrock, Azure OpenAI, Vertex AI) | Call a provider's model, pay per token | Fastest launch; frontier quality; no GPU operations | Data terms, rate limits, availability, per-token cost at scale, lock-in. Still needs evals and monitoring |
-| **2. Self-host open weights** (Llama, Mistral, Qwen, Gemma families; served with vLLM, TGI or TensorRT-LLM — [§11.6](../11-llm-serving-and-inference/README.md)) | Run downloaded weights (under their licence) on your infrastructure | Control over data, deployment, latency; can be cheaper at high, steady utilisation | You own capacity, security, upgrades, on-call. Savings are not guaranteed; check the licence |
-| **3. Train or fine-tune** | Adapt an existing model with extra training (LoRA or full fine-tune, [§8.2](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)) | For narrow tasks, better format/behaviour or a smaller model matching a larger one | Data preparation, pipelines, evaluation, re-tuning on every base-model upgrade |
+| **1. Hosted API** (Anthropic, OpenAI, Google; or via Amazon Bedrock, Azure OpenAI, Vertex AI) | Call a provider's model, pay per token | Fastest launch; frontier (most capable) quality; no GPU operations | Data terms, rate limits, availability, per-token cost at scale, lock-in (hard to switch away). Still needs evals and monitoring |
+| **2. Self-host open weights** (Llama, Mistral, Qwen, Gemma families; served with vLLM, TGI or TensorRT-LLM — [§11.6](../11-llm-serving-and-inference/README.md)) | Run downloaded weights (under their licence) on your infrastructure | Control over data, deployment, latency; can be cheaper at high, steady utilisation | You own capacity, security, upgrades, on-call (round-the-clock incident duty). Savings are not guaranteed; check the licence |
+| **3. Train or fine-tune** | Adapt an existing model with extra training (LoRA — a cheap method that trains small add-on matrices — or full fine-tune, [§8.2](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md)) | For narrow tasks, better format/behaviour or a smaller model matching a larger one | Data preparation, pipelines, evaluation, re-tuning on every base-model upgrade |
 
 ### How it works — decide with the variables, not with taste
 
@@ -206,7 +206,7 @@ flowchart TD
 Score the options on **eval-set quality, data sensitivity, volume, latency, all-in cost and what your team can operate**; pick the lightest that passes and say what would flip it. The general decision rules (RAG for facts, fine-tuning for behaviour) are in [§8.1](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md); the API-vs-self-host factor table is in [§11.15](../11-llm-serving-and-inference/README.md). Here we compute the crossover.
 
 ### Worked cost crossover
-`code/cost_model.py` compares a hosted API priced for a model *of the same class* you would self-host (illustrative $0.40/M input, $1.60/M output; 1,500 in / 500 out per request → $0.0014 per request) with a fleet of nodes at $3/hour sustaining 3,000 output tokens/s each, sized for a peak of 3× the daily average plus 25% headroom, plus $1.2M/year of engineering operations.
+`code/cost_model.py` compares a hosted API priced for a model *of the same class* you would self-host (illustrative $0.40/M input, $1.60/M output; 1,500 in / 500 out per request → $0.0014 per request) with a fleet of nodes at $3/hour sustaining 3,000 output tokens/s each, sized for a peak of 3× the daily average plus 25% **headroom** (spare capacity), plus $1.2M/year of engineering operations.
 
 ```python
 # code/cost_model.py (key parts)
@@ -243,7 +243,7 @@ Check the crossover by hand: at 4M requests/day the API costs 4M × $0.0014 × 3
 Many companies start on a hosted API, then move high-volume narrow tasks (classification, extraction, autocomplete) to smaller self-hosted or fine-tuned models while keeping a frontier API for hard requests.
 
 ### In the interview
-**30-second answer:** "I'd start with a hosted model behind our own gateway so we can swap providers, and prove quality on an eval set. RAG for private or changing facts, fine-tuning only for a measured behaviour gap, and a self-hosted tier when steady volume or data-residency rules justify the operational cost."
+**30-second answer:** "I'd start with a hosted model behind our own gateway so we can swap providers, and prove quality on an eval set. RAG for private or changing facts, fine-tuning only for a measured behaviour gap, and a self-hosted tier when steady volume or **data-residency** rules (laws on which country data must stay in) justify the operational cost."
 
 ### Self-check
 1. **Q:** Why is a same-class API the fair comparison for self-hosting? **A:** Comparing with a frontier API mixes a quality difference into a cost comparison.
@@ -260,7 +260,7 @@ API first for speed and quality; RAG for knowledge; fine-tune for behaviour; sel
 Most GenAI products share one skeleton; every product in 13.10 is a variation. Two terms first:
 
 - **Context assembly** — building the prompt anew for each request: system instructions + relevant history + retrieved documents + user memory, packed into a **token budget** (the context window is finite, and every token costs money and latency). What goes in is where a chat product and a coding product differ most.
-- **Guardrail** — a check that runs *outside* the generating model, before or after it: input classifiers, injection screens, output filters, action gates. It may be a rule, a classifier, another model or a human. Guardrails make their own mistakes, so pair them with access control and monitoring ([§12.6](../12-safety-ethics-governance/README.md)).
+- **Guardrail** — a check that runs *outside* the generating model, before or after it: input classifiers, injection screens, output filters, action gates. It may be a rule, a classifier, another model or a human. Guardrails make their own mistakes, so pair them with **access control** (rules on who may see or do what) and monitoring ([§12.6](../12-safety-ethics-governance/README.md)).
 
 ![Context assembly builds the model input fresh on every request (course diagram)](img/context-assembly.svg)
 *Figure — Context assembly builds the model input fresh on every request (course diagram)*
@@ -295,20 +295,20 @@ flowchart LR
 
 | Component | Job | Design notes (details in) |
 |---|---|---|
-| **AI gateway** | Single entry for every model call: authentication, per-user/tenant **rate limits** and **token budgets**, audit log, provider abstraction | Both a security device and a **spending control** ([§11.16](../11-llm-serving-and-inference/README.md)) |
+| **AI gateway** | Single entry for every model call: authentication (checking who is calling), per-user/tenant (customer organisation) **rate limits** and **token budgets**, audit log, provider abstraction (one interface hiding which provider is behind it) | Both a security device and a **spending control** ([§11.16](../11-llm-serving-and-inference/README.md)) |
 | **Input guard** | Classify against policy; screen for injection or **jailbreak** (input crafted to talk the model out of its rules) before paying for generation | Fast classifiers first; filters are not a security boundary ([§12.4](../12-safety-ethics-governance/README.md)) |
 | **Context assembler** | Pack instructions, history, retrieved text, memory under a token budget | Stable shared text first (helps prefix caching); retrieved text is *data* — delimit it, never let it grant permissions |
-| **Retriever (RAG)** | Hybrid keyword + vector search, reranking, permission filtering | Filter by ACL *before* ranking; carry source IDs for citations ([§7.7](../07-embeddings-vector-databases-and-rag/README.md), [§7.9](../07-embeddings-vector-databases-and-rag/README.md)) |
+| **Retriever (RAG)** | Hybrid keyword + vector search (exact-word matching combined with meaning-based matching), reranking, permission filtering | Filter by ACL (access-control list: who may see each document) *before* ranking; carry source IDs for citations ([§7.7](../07-embeddings-vector-databases-and-rag/README.md), [§7.9](../07-embeddings-vector-databases-and-rag/README.md)) |
 | **Prompt registry** | Versioned templates with owners and changelogs | Prompts are code: version, test, canary, roll back (13.8) |
 | **Router** | Choose a model tier per request | Rules first (plan, length, task type); a learned classifier later ([§11.14](../11-llm-serving-and-inference/README.md)) |
-| **Caches** | **Prefix cache** (reuse computation on an unchanged prompt opening), **semantic cache** (reuse an answer for a same-meaning question), artefact caches (per-document summaries) | Scope keys by tenant, permissions, prompt/model version, data version; TTLs ([§11.13](../11-llm-serving-and-inference/README.md)) |
-| **Output guard** | Groundedness (claims supported by sources), PII leakage, policy | Stream in sentence-sized buffers: check, then release — shown text can't be recalled |
+| **Caches** | **Prefix cache** (reuse computation on an unchanged prompt opening), **semantic cache** (reuse an answer for a same-meaning question), artefact caches (per-document summaries) | Scope keys by tenant, permissions, prompt/model version, data version; TTLs (time-to-live: how long an entry stays valid) ([§11.13](../11-llm-serving-and-inference/README.md)) |
+| **Output guard** | Groundedness (claims supported by sources), PII (personally identifiable information) leakage, policy | Stream in sentence-sized buffers: check, then release — shown text can't be recalled |
 | **Action gate** | Run tools with the *user's* permissions, validate arguments, require approval above thresholds | The model proposes; trusted code decides ([§9.4](../09-ai-agents/README.md)) |
 | **Observability** | Per-request traces (prompt version, model, retrieved IDs, tokens, latency, cost) | Debugging, incidents, cost attribution ([§11.17](../11-llm-serving-and-inference/README.md)) |
 | **Eval service + feedback** | Golden sets, offline gates, online metrics (thumbs, regenerations, escalations) | Feeds prompts, retrieval, routing and fine-tuning — after curation |
 
 ### Code — the request path in miniature
-`code/genai_gateway.py` implements each box in a few lines, with a toy hashed bag-of-words embedder and a fake LLM that answers from the retrieved sentences and cites them.
+`code/genai_gateway.py` implements each box in a few lines, with a toy hashed bag-of-words embedder (word counts squeezed into a fixed-length vector) and a fake LLM that answers from the retrieved sentences and cites them. The `<4xx …>` lines below are HTTP status codes: 400 = request rejected, 401 = unknown caller, 402 = budget used up, 429 = too many requests.
 
 ```python
 # code/genai_gateway.py (key parts)
@@ -370,9 +370,9 @@ What to notice:
 - **Q2** is a paraphrase served from the semantic cache (zero model cost). **Q3** uses the same words from another tenant and gets *its own* answer — cache and index are tenant-scoped.
 - **Q5/Q8** contain "explain/compare", so the router picks the large model (~20× the cost of a small call). Q8 also shows a weakness: the bigger model padded its answer with an irrelevant source ([A3]).
 - **Q9**: the budget is checked *before* each call, so the last large call overshot ($0.0015 vs $0.0009); real gateways **reserve an estimated cost up front** (max tokens × price) and settle afterwards.
-- Every request, including rejected ones, lands in telemetry — the raw material for chargeback.
+- Every request, including rejected ones, lands in **telemetry** (the measurements the system records about itself) — the raw material for **chargeback** (billing each tenant or team for its own usage).
 
-In production the fake models become real API calls behind the same router. A sketch with the Anthropic Python SDK *(needs an API key — not run)*; the stable system prompt is marked cacheable so repeated requests reuse the provider's prefix cache (only prefixes above a minimum length are cached — check the docs):
+In production the fake models become real API calls behind the same router. A sketch with the Anthropic Python **SDK** (the provider's official client library) *(needs an API key — not run)*; the stable system prompt is marked cacheable so repeated requests reuse the provider's prefix cache (only prefixes above a minimum length are cached — check the docs):
 
 ```python
 import anthropic
@@ -397,7 +397,7 @@ def call_model(tier: str, system_prompt: str, context: str, question: str) -> st
 | Output guard on buffered sentences | Catches unsafe/ungrounded text before users see it | Adds latency to the stream |
 | Semantic cache | Big savings on popular questions | Stale or wrong-context answers unless scoped and invalidated |
 | Rule-based router | Simple, predictable | Misroutes edge cases |
-| Central gateway | One place for auth, budgets, audit, provider swaps | A critical dependency — must be highly available |
+| Central gateway | One place for auth, budgets, audit, provider swaps | A critical dependency — must be **highly available** (kept running through failures) |
 
 ### Common mistakes
 - Permission checks in the prompt ("only answer about this user") instead of in the retriever and tools.
@@ -408,8 +408,8 @@ def call_model(tier: str, system_prompt: str, context: str, question: str) -> st
 **30-second answer:** "Every GenAI product I design has the same spine: a gateway for auth, rate limits and budgets; input guards; context assembly from a versioned prompt, history, memory and permission-filtered retrieval; a router across model tiers; output checks before release; tools behind an action gate with the user's permissions; and traces feeding an eval service that gates every change."
 
 ### Self-check
-1. **Q:** Why filter by ACL before ranking? **A:** Filtering after top-k can leave too few results or leak restricted text into context or logs.
-2. **Q:** What must a multi-tenant semantic-cache key include? **A:** Tenant, permission set, prompt/model version, data version — plus a TTL.
+1. **Q:** Why filter by ACL before ranking? **A:** Filtering after **top-k** (keeping only the k best-scoring results) can leave too few results or leak restricted text into context or logs.
+2. **Q:** What must a **multi-tenant** (one system serving many customer organisations) semantic-cache key include? **A:** Tenant, permission set, prompt/model version, data version — plus a TTL.
 3. **Q:** The output guard's latency trade-off when streaming? **A:** It needs a unit of meaning (a sentence), so text is released in small delays rather than token by token.
 
 ### TL;DR
@@ -441,10 +441,10 @@ flowchart LR
 
 1. **Version everything** — templates with IDs (`support_answer:v3`), owners, changelogs; the live pointer can move back in seconds.
 2. **Golden set** — fixed, representative cases with agreed answers or checkable properties: normal questions, edge cases, **unanswerables** (the right move is to refuse or escalate), **permission probes** (must *not* reveal others' data) and **regression cases** (every past incident becomes a permanent test).
-3. **Offline gate** — score candidate vs current overall, **per slice** and on cost (output tokens); block any regression beyond tolerance. Use programmatic checks where possible, **LLM-as-judge** validated against human labels where needed, humans for high-stakes slices.
+3. **Offline gate** — score candidate vs current overall, **per slice** (a subgroup of cases, such as one language or question type) and on cost (output tokens); block any regression beyond tolerance. Use programmatic checks where possible, **LLM-as-judge** (another model grades the answer) validated against human labels where needed, humans for high-stakes slices.
 4. **Shadow** — the candidate generates on copied traffic, hidden from users (any real actions disabled); sample within a budget, since it still costs inference.
-5. **Canary** — a small, stable slice of users (hash of user ID) gets the change; **guardrail metrics** (regeneration rate, thumbs-down, complaints, latency, cost) trigger automatic rollback.
-6. **A/B test** — randomised control vs treatment on the primary metric, with a significance test and enough sample; read per segment.
+5. **Canary** — a small, stable slice of users (chosen by a **hash** of the user ID — a fixed scrambled number, so the same user always lands in the same group) gets the change; **guardrail metrics** (regeneration rate, thumbs-down, complaints, latency, cost) trigger automatic rollback.
+6. **A/B test** — randomised **control** (old version) vs **treatment** (new version) on the primary metric, with a **significance test** (a statistical check that the difference is unlikely to be chance) and enough sample; read per segment.
 
 ### Code — a regression gate that catches a "harmless" tweak
 ```python
@@ -489,10 +489,10 @@ A/B: control 0.615 vs treatment 0.637 thumbs-up; z=2.92, p=0.0035 -> significant
 ### Trade-offs
 | Practice | Why | Watch out for |
 |---|---|---|
-| Golden set | Fast, repeatable, cheap | Overfitting prompts to it; keep a hidden holdout; add new incidents |
+| Golden set | Fast, repeatable, cheap | **Overfitting** prompts to it (tuning so closely to the test set that it stops predicting real traffic); keep a hidden **holdout** (test cases nobody tunes against); add new incidents |
 | LLM-as-judge | Scales grading of open-ended text | Length, position and self-preference bias; calibrate on human labels |
-| Canary | Limits blast radius | Too small to see rare harms — pair with targeted evals |
-| A/B | Causal answer on real behaviour | Sample size, novelty effects, segment differences |
+| Canary | Limits **blast radius** (how many users a bad change can hurt) | Too small to see rare harms — pair with targeted evals |
+| A/B | Causal answer on real behaviour | Sample size, **novelty effects** (people react to something just because it is new), segment differences |
 
 ### Real-world examples
 Eval tools such as OpenAI Evals, promptfoo, LangSmith and Braintrust implement this pattern: datasets, scorers, version comparisons, tracing.
@@ -504,7 +504,7 @@ Eval tools such as OpenAI Evals, promptfoo, LangSmith and Braintrust implement t
 
 ### In the interview
 **30-second answer:** "Prompts, router rules and models are versioned like code. Every change runs a golden set with per-slice metrics, refusal and permission probes and a cost check; then shadow, a stable-hash canary with auto-rollback guardrails, then an A/B on the primary metric. Every incident becomes a permanent regression case."
-- *"The provider silently updated the model."* → Pin model versions where possible; run the golden set nightly against the live endpoint to detect behaviour changes.
+- *"The provider silently updated the model."* → **Pin** model versions (request one exact dated version) where possible; run the golden set nightly against the live endpoint to detect behaviour changes.
 
 ### Self-check
 1. **Q:** Why hash user IDs for canary assignment? **A:** Each user gets a consistent experience and metrics aren't contaminated by switching arms.
@@ -520,7 +520,7 @@ Version → offline gate (per slice + cost) → shadow → canary with auto-roll
 ### What it is
 **Back-of-the-envelope estimation**: rough math, out loud, to size cost and capacity. In GenAI the numbers swing by orders of magnitude with tokens, model tier and serving method, so the estimate *is* the argument — you want the right power of ten and the right *decision*. The method (unit → price → volume → decision), the anchor table and more worked examples are in [§11.15](../11-llm-serving-and-inference/README.md); GPU memory sizing in [§11.10](../11-llm-serving-and-inference/README.md). This section runs the numbers in code.
 
-**Anchors used here (illustrative):** a token ≈ ¾ of an English word (tokens ≈ words ÷ 0.75); large model $3 / $15 per million input / output tokens; small model $0.25 / $1.25 (12× cheaper — validate quality first); weights = parameters × bytes per parameter (2 at 16-bit, 1 at 8-bit, 0.5 at 4-bit); vectors = chunks × dimensions × 4 bytes (float32). **Prefill** (reading the prompt, dominates TTFT) and **decode** (generating one token at a time, dominates total time) are explained in [§11.2](../11-llm-serving-and-inference/README.md).
+**Anchors used here (illustrative):** a token ≈ ¾ of an English word (tokens ≈ words ÷ 0.75); large model $3 / $15 per million input / output tokens; small model $0.25 / $1.25 (12× cheaper — validate quality first); weights = parameters × bytes per parameter (2 at 16-bit, 1 at 8-bit, 0.5 at 4-bit); vectors = chunks × dimensions × 4 bytes (**float32**, a 32-bit decimal number). **Prefill** (reading the prompt, dominates TTFT) and **decode** (generating one token at a time, dominates total time) are explained in [§11.2](../11-llm-serving-and-inference/README.md).
 
 ### Calculation 1 — the token bill (unit first, then volume)
 ```python
@@ -577,7 +577,7 @@ Output (abridged — the script also prints 8-bit rows):
 A 70B model at 16-bit needs ~140 GB for weights alone — more than one 80 GB GPU — plus the **KV cache** (stored attention keys/values per active sequence, [§11.4](../11-llm-serving-and-inference/README.md)). Fitting is necessary, not sufficient: benchmark throughput. A billion 1,024-dim vectors (≈ 4 TB) needs sharding.
 
 ### Scale estimate template
-Average QPS = requests/day ÷ 86,400 (40,000 conversations × 6 turns ÷ 86,400 ≈ 2.8/s); peak = average × a measured 2–5× factor (≈ 8/s at 3×); tokens/day = requests × (in + out) (240,000 turns × 2,800 ≈ 672M); then dollars (calculation 3), GPUs (calculation 4) and storage (calculation 5).
+Average **QPS** (queries per second) = requests/day ÷ 86,400 (40,000 conversations × 6 turns ÷ 86,400 ≈ 2.8/s); peak = average × a measured 2–5× factor (≈ 8/s at 3×); tokens/day = requests × (in + out) (240,000 turns × 2,800 ≈ 672M); then dollars (calculation 3), GPUs (calculation 4) and storage (calculation 5).
 
 ### Common mistakes
 - Pricing only input (or only output) tokens.
@@ -618,7 +618,7 @@ Safety runs through all of them: which harms must never happen, and what the sys
 ![Three stores, solving state at three timescales (course diagram)](img/chat-three-stores.svg)
 *Figure — Three stores, solving state at three timescales (course diagram)*
 
-1. **Conversation store** (durable source of truth) — messages keyed by conversation and message ID, partitioned by conversation ID; mostly appends, but must support edits, deletes, access checks and multi-device writes; governed by retention policy. The model never reads it directly.
+1. **Conversation store** (durable source of truth) — messages keyed by conversation and message ID, **partitioned** (split across storage machines) by conversation ID; mostly appends, but must support edits, deletes, access checks and multi-device writes; governed by retention policy. The model never reads it directly.
 2. **Context window** (per call) — packed fresh: recent turns verbatim, older turns as a **running summary** rebuilt in the background by a cheap model, plus pinned facts. Say the trade-off: summaries lose detail, which users feel as the assistant "forgetting" ([§9.6](../09-ai-agents/README.md) covers memory patterns).
 3. **User memory** (across chats) — durable preferences and facts ("answer in Spanish"), extracted in the background, retrieved only when relevant, visible and deletable. Memory is **a tiny RAG system whose corpus is one person**.
 
@@ -648,7 +648,7 @@ sequenceDiagram
     O->>S: persist reply or checkpoints
 ```
 
-- Gateway: authentication, rate limits, token budgets, abuse controls. Persist the user message *before* acknowledging; persist the reply per turn; telemetry async.
+- Gateway: authentication, rate limits, token budgets, abuse controls. Persist the user message *before* acknowledging; persist the reply per turn; telemetry **async** (sent in the background, not on the user's wait).
 - **SSE (server-sent events)** — a one-way server→client stream for tokens ([§11.12](../11-llm-serving-and-inference/README.md)); output checks buffer a sentence, check, then release.
 
 **Keep it working.** Online proxies by tier feed canary guardrails; prompts, fine-tunes and model upgrades all pass the same golden-set gate (13.8); feedback is curated before training.
@@ -676,12 +676,12 @@ sequenceDiagram
 | Trigger | Nearly every typing pause | "Explain", "write tests", "why does this fail?" |
 | Latency | **200–400 ms end to end** | A second or two is fine |
 | Model | Small (single-digit billions of parameters), trained for **fill-in-the-middle (FIM)** — complete the gap between code before and after the cursor | Frontier models allowed |
-| Context | Heuristics: code around the cursor, imports, signatures, recently edited files | RAG over the repository + compiler knowledge |
+| Context | Heuristics: code around the cursor, imports, signatures (function names with their inputs and outputs), recently edited files | RAG over the **repository** (the project's version-controlled code) + compiler knowledge |
 | Primary metric | **Acceptance rate**, and whether accepted code survives 30–60 s later (**retained-code rate**) | Task-level signals, thumbs |
 
-Fully autonomous ticket-to-PR work is the agent case ([§14.5](../14-ai-case-studies/README.md)) — scope it out.
+Fully autonomous ticket-to-PR (PR = pull request, a proposed code change submitted for review) work is the agent case ([§14.5](../14-ai-case-studies/README.md)) — scope it out.
 
-**Data.** Every suggestion is shown → dismissed/accepted → kept/edited: a rich *behavioural* stream (permitted telemetry only; acceptance isn't correctness). The chat corpus is the repo, indexed in the background per push, plus the symbol graph, types, diffs and test output.
+**Data.** Every suggestion is shown → dismissed/accepted → kept/edited: a rich *behavioural* stream (permitted telemetry only; acceptance isn't correctness). The chat corpus is the repo, indexed in the background per **push** (each upload of new commits), plus the **symbol graph** (a map of which functions and classes use which), types, **diffs** (line-by-line changes) and test output.
 
 **Serving: when the budget drops 10×, change components, not settings.**
 
@@ -690,18 +690,18 @@ Fully autonomous ticket-to-PR work is the agent case ([§14.5](../14-ai-case-stu
 
 - No retrieval per keystroke: a background job keeps a per-file context cache fresh; the hot path only reads it.
 - **The client is a design component**: **debounce** (wait for a typing pause), cancel in-flight requests on the next keystroke (so cancellation must be cheap), keep the previous suggestion for an instant backspace, never block the editor. Showing nothing is acceptable; lag makes people uninstall.
-- Latency-optimised fleet: **continuous batching**, short max-tokens, **speculative decoding** (a small draft model proposes tokens, the target model verifies several at once) — see [§11.5](../11-llm-serving-and-inference/README.md) and [§11.9](../11-llm-serving-and-inference/README.md).
-- Chat path: chunk by function/class, **hybrid retrieval** because identifiers need exact matches (BM25 + vectors), then symbol graph, signatures, recent diffs, failing tests.
+- Latency-optimised fleet: **continuous batching** (the server adds new requests to the GPU batch at every step), short max-tokens, **speculative decoding** (a small draft model proposes tokens, the target model verifies several at once) — see [§11.5](../11-llm-serving-and-inference/README.md) and [§11.9](../11-llm-serving-and-inference/README.md).
+- Chat path: chunk by function/class, **hybrid retrieval** because identifiers need exact matches (BM25 — a classic keyword-ranking formula — + vectors), then symbol graph, signatures, recent diffs, failing tests.
 
-**Where source code may travel.** Verify provider retention terms per endpoint (self-host for the strictest customers); add an outbound **secrets filter** and an inbound **attribution filter** for verbatim licensed code.
+**Where source code may travel.** Verify provider retention terms per endpoint (self-host for the strictest customers); add an outbound **secrets filter** (blocks passwords and API keys from leaving) and an inbound **attribution filter** for verbatim licensed code.
 
-**Evaluation you can execute.** Parse → type-check/compile → run the repo's tests → security checks, in a sandbox; plus benchmarks, human review and acceptance telemetry segmented by language, IDE and suggestion length.
+**Evaluation you can execute.** Parse → type-check/compile → run the repo's tests → security checks, in a **sandbox** (an isolated environment where code cannot harm anything); plus benchmarks, human review and acceptance telemetry segmented by language, **IDE** (the code editor, e.g. VS Code) and suggestion length.
 
 **Cost.** Opposite shape to chat: each completion is tiny, but a developer triggers hundreds a day, so **cost per call** dominates (small model, batching, prefix-cached file context). Two cost profiles, one seat price — compute both.
 
 **Follow-ups.**
 - *"One great model for both?"* → Budgets differ ~10× and the tasks differ in kind; a compact specialist fed the right context is far faster at similar acceptance.
-- *"Acceptance dropped 3% after a model update."* → Segment by language/IDE/length, check the canary cohort, beware confounders (a new plugin version, slower responses — users type past late suggestions). Rollback = repoint the registry.
+- *"Acceptance dropped 3% after a model update."* → Segment by language/IDE/length, check the canary **cohort** (the group of users on the new version), beware **confounders** (other changes at the same time that could explain the drop) (a new plugin version, slower responses — users type past late suggestions). Rollback = repoint the registry.
 
 ### 13.10.3 Design AI-powered search
 
@@ -716,7 +716,7 @@ The classic stack (query understanding → hybrid retrieval → ranking) stays t
 
 **The trigger is the economic decision.** 10,000 QPS × 86,400 s = 864M queries/day; at $0.01 per answer, answering all of them is **~$8.6M/day**. A fast **trigger classifier** says *yes* for informational and multi-source questions, *no* for navigational ("facebook login"), transactional and exact-lookup queries, and is **conservative** for medical, financial and legal ones. The trigger is the model your team trains; the **synthesiser** is bought and does constrained "summarise these sources and cite them" work, so a mid-tier model may suffice — let the golden set decide.
 
-**Serving.** Reuse retrieval (checking the top results hold enough evidence), stream a cited synthesis, run entailment checks on high-stakes answers, and omit the answer when sources conflict or coverage is thin. **Source-quality gates** decide admission to context; pages may carry **indirect prompt injection**, so page text is untrusted data ([§12.4](../12-safety-ethics-governance/README.md)). The lane has its own quotas and timeouts and can be switched off if it threatens core latency.
+**Serving.** Reuse retrieval (checking the top results hold enough evidence), stream a cited synthesis, run **entailment** checks (does the source text actually imply each claim?) on high-stakes answers, and omit the answer when sources conflict or coverage is thin. **Source-quality gates** decide admission to context; pages may carry **indirect prompt injection**, so page text is untrusted data ([§12.4](../12-safety-ethics-governance/README.md)). The lane has its own quotas and timeouts and can be switched off if it threatens core latency.
 
 **Second control: a semantic answer cache.** Search traffic is **Zipfian** — a small head of queries carries most traffic — so cached answers serve the head when intent, language, permissions and freshness match.
 
@@ -731,9 +731,9 @@ The classic stack (query understanding → hybrid retrieval → ranking) stays t
 
 A **diffusion model** turns noise into a picture over N denoising steps, each a full GPU pass — several to tens of GPU-seconds per image ([§10.4–§10.5](../10-generative-models-beyond-text/README.md)). That makes it a **queue-and-workers** design, not a request/response one: accept the job, return a job ID, generate in the background, push progress, deliver to a gallery. The signature ideas, worked in full with capacity math, a fleet simulation and follow-ups in [§14.4](../14-ai-case-studies/README.md):
 
-- **Priority queues are the business model** — paid tiers first, free tiers wait, off-peak batch sells idle capacity; queue depth drives autoscaling and wait estimates.
+- **Priority queues are the business model** — paid tiers first, free tiers wait, off-peak batch sells idle capacity; queue depth drives **autoscaling** (adding or removing machines automatically with load) and wait estimates.
 - **Utilisation is the business metric** — 2M images/day ≈ 23.1 images/s × 10 GPU-s ≈ 231 busy GPUs; an idle GPU-second costs as much as a busy one.
-- **Gates on both sides of the GPU** — moderate the prompt before spending GPU, check the finished image before anyone can see it; both fail closed. **Provenance** (watermarks, C2PA content credentials) records origin but is not a safety check.
+- **Gates on both sides of the GPU** — moderate the prompt before spending GPU, check the finished image before anyone can see it; both fail closed. **Provenance** (watermarks, C2PA content credentials — signed records of how media was made) records origin but is not a safety check.
 
 ### Self-check (13.10)
 1. **Q:** Why does the chat assistant need three stores? **A:** Durable history (truth), per-call packed context (cost/latency) and cross-chat memory (personalisation) solve state at different timescales.
@@ -749,7 +749,7 @@ Chat = state + routing + caching. Code = two products; latency changes component
 ## 13.11 Capstone — AI features for a SaaS product (one platform, many features)
 
 ### The question
-> A CRM vendor with 40,000 business customers and 2M seats wants AI throughout the product within the year: drafting emails, summarising calls, and letting reps query their pipeline in plain English. Design it.
+> A CRM (customer-relationship-management software: tracks customers, contacts and deals) vendor with 40,000 business customers and 2M **seats** (paid user licences) wants AI throughout the product within the year: drafting emails, summarising calls, and letting reps query their pipeline in plain English. Design it.
 
 This is form 3. A weak answer ships three stand-alone features that each re-implement model access, safety and metrics. A strong answer builds **one shared platform with three features on it**: model access, safety checks, evals, spend control and tenant isolation exist exactly once.
 
@@ -762,7 +762,7 @@ This is form 3. A weak answer ships three stand-alone features that each re-impl
 |---|---|---|---|
 | **Email drafting** | Generative, chat-like, embedded in a workflow; conversational latency | Thread, contact record, the user's writing style | Human review before send, edit rate |
 | **Call summaries** | Generative, **async batch pipeline** after each call | Transcript | Programmatic checks + sampled human review |
-| **"Ask my pipeline"** ("which deals are slipping this quarter?") | **Text-to-query, not document RAG** | Structured CRM data via a semantic layer | Question→query pairs run on fixture data |
+| **"Ask my pipeline"** ("which deals are slipping this quarter?") | **Text-to-query, not document RAG** | Structured CRM data via a semantic layer (curated, consistently defined business views) | Question→query pairs run on fixture data |
 
 The classic trap is hearing "ask questions about my data" and designing document RAG. **Sequencing:** summaries first (async, easy to evaluate), drafting second, pipeline Q&A third — it needs the evaluation discipline the first two build.
 
@@ -774,6 +774,8 @@ The classic trap is hearing "ask questions about my data" and designing document
 - **Telemetry** — prices every call by feature and tenant.
 
 ### Tenant isolation — the B2B invariant
+
+**B2B** means business-to-business; an **invariant** is a rule that must hold at all times.
 
 ![Tenant isolation holds at every surface, and fails closed (course diagram)](img/tenant-isolation.svg)
 *Figure — Tenant isolation holds at every surface, and fails closed (course diagram)*
@@ -797,14 +799,14 @@ flowchart LR
 ```
 
 - The model never queries raw tables; it writes against a **semantic layer** — curated views with consistent business definitions (**least privilege** applied to data, but no substitute for authorisation).
-- Execution runs **as the asking user**: read-only, approved views, parameterised values, row-level permissions, time and size limits — enforced in the execution service, not the prompt.
+- Execution runs **as the asking user**: read-only, approved views, parameterised values, row-level permissions, time and size limits — enforced in the execution service (row-level permissions = the database shows each user only the rows they may see), not the prompt.
 - **Narration**: numbers come from the database, never from the model — groundedness for structured data.
 - Evaluation: golden question→query pairs per schema version, run on **fixture data** (a small stand-in dataset) and scored on returned rows; heavily customised tenants get their own canary cohort.
 
 ### Costs, failures, rollout
 - **Cost:** estimate each feature naive vs optimised (summaries: transcript tokens × volume × price, routed small once validated; Q&A: low volume, maybe frontier), then **price per tenant per month** — a paid "AI add-on" tier recovers it.
 - **Failures:** provider outage → labelled fallback tier; eval regression → automatic canary rollback; injected instructions in an ingested email → access and action controls bound the damage.
-- **Rollout:** design-partner customers first, then each feature GA behind per-tenant flags.
+- **Rollout:** design-partner customers first, then each feature **GA** (general availability: open to all customers) behind per-tenant **feature flags** (switches that turn a feature on or off per customer).
 
 **What separates levels:** mid-level builds three separate features and calls pipeline Q&A "RAG"; senior says "one platform, three features" and spots text-to-query unprompted; staff adds fail-closed isolation everywhere and treats the platform as the durable asset.
 

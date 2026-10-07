@@ -1,8 +1,8 @@
 # Chapter 3 — Transformers and Embeddings
 
-Every modern large language model — GPT, Claude, Gemini, Llama, Qwen, DeepSeek — is built on the same architecture: the **transformer**, introduced in the 2017 paper *Attention Is All You Need* (Vaswani et al., Google). This chapter opens the box. We follow one piece of text as it becomes **tokens**, then **vectors**, picks up **position** information, flows through **self-attention** and **feed-forward** layers, and finally turns into a probability for the next token.
+Every modern large language model (LLM: a very large neural network trained on huge amounts of text to predict what comes next) — GPT, Claude, Gemini, Llama, Qwen, DeepSeek — is built on the same architecture (overall network design): the **transformer**, introduced in the 2017 paper *Attention Is All You Need* (Vaswani et al., Google). This chapter opens the box. We follow one piece of text as it becomes **tokens**, then **vectors** (lists of numbers), picks up **position** information, flows through **self-attention** (each token gathering information from the others) and **feed-forward** (a small per-token neural network) layers, and finally turns into a probability for the next token.
 
-Everything is shown with tiny numbers you can check by hand, plus runnable NumPy and PyTorch code. If you have read the ML Handbook's [Chapter 12 — Sequences, RNNs and Attention](../../../ml/chapters/12-sequences-rnns-and-attention/README.md), this chapter picks up exactly where RNNs stop; if not, nothing here depends on it.
+Everything is shown with tiny numbers you can check by hand, plus runnable NumPy (Python's array-maths library) and PyTorch (a popular deep-learning library) code. If you have read the ML Handbook's [Chapter 12 — Sequences, RNNs and Attention](../../../ml/chapters/12-sequences-rnns-and-attention/README.md), this chapter picks up exactly where RNNs (recurrent neural networks, which read text one token at a time while carrying a running memory) stop; if not, nothing here depends on it.
 
 **What you'll learn**
 
@@ -44,18 +44,18 @@ Analogy: LEGO. Instead of manufacturing a unique brick for every possible object
 ```
 
 ### The problem it solves
-A neural network can only process numbers, so text must become integers. There are three obvious ways to cut text, and two of them fail:
+A neural network (a model built from layers of simple arithmetic whose numeric weights are learned from data) can only process numbers, so text must become integers. There are three obvious ways to cut text, and two of them fail:
 
 | Approach | Vocabulary size | Problem |
 |---|---|---|
 | **Word-level** ("cat", "cats", "catlike" are separate entries) | Huge (hundreds of thousands+) | Any word not seen in training becomes an unknown token `<UNK>`. Typos, names, code, new slang all break. |
-| **Character-level** (a, b, c, …) | Tiny (~100s) | Never unknown, but sequences get ~4–5x longer, so the model needs more compute and must learn spelling from scratch. |
+| **Character-level** (a, b, c, …) | Tiny (~100s) | Never unknown, but sequences get ~4–5x longer, so the model needs more compute (processing work) and must learn spelling from scratch. |
 | **Subword** (BPE, WordPiece, Unigram) | Medium (roughly 30K–200K in real models) | Frequent words stay whole, rare words split into known pieces. **Nothing is ever unknown.** This is what every modern LLM uses. |
 
 ### How it works — Byte-Pair Encoding (BPE)
-BPE began as a 1994 data-compression trick and was adapted for neural machine translation by Sennrich et al. (2016). Training a BPE tokenizer:
+BPE began as a 1994 data-compression trick and was adapted for neural machine translation (translation done by a neural network) by Sennrich et al. (2016). Training a BPE tokenizer:
 
-1. Start with a vocabulary of single characters (or, in **byte-level BPE**, the 256 possible byte values). Split every word in the training corpus into those symbols. Mark word ends (here with `</w>`) so "est" at the end of a word differs from "est" inside one.
+1. Start with a vocabulary of single characters (or, in **byte-level BPE**, the 256 possible byte values; a byte is the 8-bit unit computers store text in). Split every word in the training corpus (the body of text used for training) into those symbols. Mark word ends (here with `</w>`) so "est" at the end of a word differs from "est" inside one.
 2. Count every **adjacent pair** of symbols across the corpus, weighted by how often each word appears.
 3. **Merge** the most frequent pair into a new single symbol and add it to the vocabulary. Record this merge rule.
 4. Repeat steps 2–3 until the vocabulary reaches the target size (e.g. 50,000 merges).
@@ -128,24 +128,24 @@ What to notice:
 
 | Algorithm | How it picks merges / pieces | Used by (examples) |
 |---|---|---|
-| **Byte-level BPE** | BPE over raw UTF-8 bytes, so any string (emoji, Chinese, code) is representable with no unknown token | GPT-2 (vocab 50,257), later GPT models via OpenAI's `tiktoken` library, Llama 3 (~128K vocab) |
-| **WordPiece** | Like BPE but merges the pair that most increases the training-data likelihood; continuation pieces are marked `##` | BERT (≈30K vocab) |
+| **Byte-level BPE** | BPE over raw UTF-8 (the standard byte encoding for all text) bytes, so any string (emoji, Chinese, code) is representable with no unknown token | GPT-2 (vocab 50,257), later GPT models via OpenAI's `tiktoken` library, Llama 3 (~128K vocab) |
+| **WordPiece** | Like BPE but merges the pair that most increases the training-data likelihood (how probable the model finds the training text); continuation pieces are marked `##` | BERT (≈30K vocab) |
 | **Unigram LM** (usually via Google's **SentencePiece** library) | Starts with a big candidate vocabulary and prunes the pieces that matter least | T5, ALBERT; SentencePiece also packages BPE (used by Llama 1/2, 32K vocab) |
 
 SentencePiece treats the input as a raw stream and encodes spaces as a visible symbol (`▁`), which makes it language-agnostic (no need to pre-split words on spaces, which matters for Japanese or Chinese).
 
 ### Rules of thumb
 - For typical English, **1 token ≈ 4 characters ≈ ¾ of a word**, so 100 tokens ≈ 75 words. It varies by tokenizer and language.
-- Other languages, code, and numbers often need **more tokens per word**, so the same content costs more and fills the context window faster.
+- Other languages, code, and numbers often need **more tokens per word**, so the same content costs more and fills the context window (the maximum number of tokens a model can take in at once) faster.
 - Spaces usually attach to the *following* word: `" is"` and `"is"` are different tokens.
-- **Special tokens** mark structure: start/end of text, padding, and in chat models the boundaries between system, user and assistant turns.
+- **Special tokens** mark structure: start/end of text, padding (filler tokens that make sequences equal length), and in chat models the boundaries between system, user and assistant turns.
 
 ### Trade-offs
 
 | Bigger vocabulary | Smaller vocabulary |
 |---|---|
 | Shorter sequences → less compute per sentence and more text fits in the context | Longer sequences |
-| Larger embedding and output matrices (vocab × d_model parameters each) | Fewer parameters |
+| Larger embedding and output matrices (vocab × d_model learned numbers, or *parameters*, each; d_model = the model's vector width) | Fewer parameters |
 | Each rare token sees fewer training examples | Each token is well trained |
 
 The industry trend has been toward larger vocabularies (GPT-2's ~50K → Llama 3's ~128K) mainly to encode multilingual text and code more efficiently.
@@ -154,18 +154,18 @@ The industry trend has been toward larger vocabularies (GPT-2's ~50K → Llama 3
 You don't choose a tokenizer for an existing model — **you must use the one the model was trained with**. Training your own only makes sense when you pre-train a model from scratch (e.g. for a specialized language or DNA sequences).
 
 ### Common mistakes
-- **Budgeting in words or characters.** Limits and prices are in tokens. Count with the provider's tokenizer or token-counting endpoint.
+- **Budgeting in words or characters.** Limits and prices are in tokens. Count with the provider's tokenizer or token-counting endpoint (a web address the provider's API exposes for that job).
 - **Mixing tokenizers.** Token IDs from one model are meaningless to another.
 - **Expecting character-level skills.** Because "strawberry" may be one or two tokens, models have historically struggled with "count the r's", reversing strings, or digit-by-digit arithmetic. The model never sees the letters directly.
-- **Forgetting special tokens and chat templates** when calling an open-weights model directly — the model was trained with a specific format.
+- **Forgetting special tokens and chat templates** (the exact text format that wraps each conversation turn) when calling an open-weights model (one whose trained weights you can download and run yourself) directly — the model was trained with a specific format.
 
 ### Real-world examples
 - OpenAI publishes `tiktoken` so developers can count tokens locally before sending a request.
-- Hugging Face's `tokenizers` library (Rust) implements BPE, WordPiece and Unigram and is used by most open models.
-- API pricing is per million input and output tokens at every major provider, which is why tokenization directly affects cost.
+- Hugging Face's (the main hub for open models and tools) `tokenizers` library (written in Rust, a fast systems language) implements BPE, WordPiece and Unigram and is used by most open models.
+- API (application programming interface: here, the web service through which your code calls a hosted model) pricing is per million input and output tokens at every major provider, which is why tokenization directly affects cost.
 
 ### In the interview
-**30-second answer:** "LLMs work on tokens, which are subword units. A BPE tokenizer starts from bytes or characters and repeatedly merges the most frequent adjacent pair until it reaches the target vocabulary size. That keeps common words as single tokens while splitting rare words into known pieces, so there are no out-of-vocabulary words. In English one token is roughly four characters, and everything — context limits, latency, and price — is measured in tokens."
+**30-second answer:** "LLMs work on tokens, which are subword units. A BPE tokenizer starts from bytes or characters and repeatedly merges the most frequent adjacent pair until it reaches the target vocabulary size. That keeps common words as single tokens while splitting rare words into known pieces, so there are no out-of-vocabulary words. In English one token is roughly four characters, and everything — context limits, latency (response time), and price — is measured in tokens."
 
 - *Why not word-level?* Unbounded vocabulary and unknown words; subwords handle new words, typos and code.
 - *Why can LLMs struggle to count letters?* They see token IDs, not characters; a word may be one token, so the letters are never explicitly visible.
@@ -192,24 +192,24 @@ Analogy: GPS coordinates for meaning. Paris and Lyon are close on a map; "cat" a
 ### The problem it solves
 The simplest numeric encoding is **one-hot**: with a vocabulary of V words, word *i* is a vector of length V with a 1 in position *i* and 0 everywhere else. Two problems:
 1. **Size.** With a 100K vocabulary, each word is a 100K-long, almost all-zero vector.
-2. **No meaning.** Every pair of one-hot vectors is **orthogonal** (dot product 0). "cat" is exactly as far from "kitten" as it is from "carburetor".
+2. **No meaning.** Every pair of one-hot vectors is **orthogonal** (at right angles: their dot product, i.e. multiply matching entries and add them up, is 0). "cat" is exactly as far from "kitten" as it is from "carburetor".
 
 A **dense embedding** fixes both: a short vector (hundreds to thousands of numbers) where every dimension is used and distances carry meaning.
 
 ### How it works
 1. The model owns an **embedding matrix** E of shape (vocab_size × d_model), where **d_model** is the model's vector width.
 2. For token ID *i*, the embedding is simply **row i of E** — a table lookup. Mathematically, this is the same as `one_hot(i) @ E`, but a lookup is far cheaper.
-3. E starts random and is **learned by backpropagation** together with the rest of the network. Tokens used in similar contexts get pushed toward similar vectors, because that helps predict the next token (the *distributional hypothesis*: "you shall know a word by the company it keeps").
+3. E starts random and is **learned by backpropagation** (the training algorithm that works out how each number should change to reduce the prediction error) together with the rest of the network. Tokens used in similar contexts get pushed toward similar vectors, because that helps predict the next token (the *distributional hypothesis*: "you shall know a word by the company it keeps").
 
 ### Measuring similarity
 
 | Measure | Formula | Range | Notes |
 |---|---|---|---|
 | **Dot product** | a·b = Σ aᵢbᵢ | any | Grows with vector length. Used inside attention. |
-| **Cosine similarity** | cos(a,b) = a·b / (‖a‖ ‖b‖) | −1 to 1 | Only the angle matters. The default for comparing text embeddings. |
+| **Cosine similarity** | cos(a,b) = a·b / (‖a‖ ‖b‖) | −1 to 1 | ‖a‖ = vector length. Only the angle matters. The default for comparing text embeddings. |
 | **Euclidean distance** | ‖a − b‖ = √Σ(aᵢ − bᵢ)² | 0 to ∞ | Straight-line distance; smaller = more similar. |
 
-If vectors are **normalized** to length 1, cosine similarity equals the dot product, and ranking by Euclidean distance gives the same order as ranking by cosine. That is why vector databases often normalize once and then use fast dot products.
+If vectors are **normalized** to length 1, cosine similarity equals the dot product, and ranking by Euclidean distance gives the same order as ranking by cosine. That is why vector databases (databases built to store vectors and quickly find the nearest ones) often normalize once and then use fast dot products.
 
 **Worked cosine example.** king = [0.9, 1.0, 0.7, 0], queen = [0.9, 1.0, −0.7, 0] (dimensions: royalty, is_person, maleness, is_food).
 - Dot product: 0.81 + 1.0 − 0.49 + 0 = 1.32
@@ -256,29 +256,29 @@ E[queen]            = [-0.54  0.36  1.3   0.95]
 one_hot(queen) @ E  = [-0.54  0.36  1.3   0.95]
 ```
 
-The hand-made dimensions are for teaching. In a real model, no single dimension means "royalty"; meaning is spread across many dimensions, and the famous king − man + woman ≈ queen result (word2vec, Mikolov et al., 2013) holds only approximately.
+The hand-made dimensions are for teaching. In a real model, no single dimension means "royalty"; meaning is spread across many dimensions, and the famous king − man + woman ≈ queen result (word2vec, an early method for learning word embeddings; Mikolov et al., 2013) holds only approximately.
 
 ### Static vs contextual embeddings
 
 | Kind | Example | "bank" in "river bank" vs "bank loan" |
 |---|---|---|
 | **Static** word embeddings | word2vec (2013), GloVe (2014) | Same vector — one per word |
-| **Contextual** embeddings | Hidden states inside BERT, GPT | Different vectors — attention mixes in the surrounding words |
-| **Sentence/document embeddings** | Sentence-BERT (2019), provider embedding APIs | One vector for a whole passage — used for search and RAG |
+| **Contextual** embeddings | Hidden states (intermediate vectors) inside BERT, GPT | Different vectors — attention mixes in the surrounding words |
+| **Sentence/document embeddings** | Sentence-BERT (2019), provider embedding APIs | One vector for a whole passage — used for search and RAG (retrieve documents, then generate) |
 
-Inside a transformer, the lookup table gives the *static* starting vector; every attention layer then turns it into a more *contextual* one. **Embedding models** (a separate kind of model you call through an API or run locally) output one vector per text so that you can compare texts — the foundation of semantic search and retrieval-augmented generation ([Chapter 7](../07-embeddings-vector-databases-and-rag/README.md)).
+Inside a transformer, the lookup table gives the *static* starting vector; every attention layer then turns it into a more *contextual* one. **Embedding models** (a separate kind of model you call through an API or run locally) output one vector per text so that you can compare texts — the foundation of semantic search (search by meaning rather than exact words) and retrieval-augmented generation (RAG: look up relevant documents and hand them to an LLM) ([Chapter 7](../07-embeddings-vector-databases-and-rag/README.md)).
 
 ### Trade-offs
 
 | Higher dimension | Lower dimension |
 |---|---|
 | Can capture finer distinctions | Cheaper to store and search |
-| More memory in a vector database (e.g. 1M docs × 3,072 floats × 4 bytes ≈ 12 GB) | May blur fine distinctions |
+| More memory in a vector database (e.g. 1M docs × 3,072 floats (decimal numbers) × 4 bytes ≈ 12 GB) | May blur fine distinctions |
 
 Some embedding models are trained so you can **truncate** the vector (Matryoshka representation learning) and trade a little quality for much less storage.
 
 ### When not to use it
-- For exact matches (IDs, SKUs, error codes), keyword search (BM25) often beats embeddings. Many production systems use **hybrid search** — both.
+- For exact matches (IDs, SKUs (product codes), error codes), keyword search (BM25, a classic word-matching ranking formula) often beats embeddings. Many production systems use **hybrid search** — both.
 - Embedding similarity is not truth: two sentences that contradict each other ("the drug is safe" / "the drug is not safe") can have very similar vectors.
 
 ### Common mistakes
@@ -287,9 +287,9 @@ Some embedding models are trained so you can **truncate** the vector (Matryoshka
 - Embedding a query with one instruction/prefix and documents with another when the model expects a specific convention.
 
 ### Real-world examples
-- Semantic search and RAG: documents and queries are embedded; nearest neighbours are retrieved.
+- Semantic search and RAG: documents and queries are embedded; nearest neighbours (the stored vectors closest to the query) are retrieved.
 - Recommendations: YouTube, Spotify and others embed users and items in the same space (see the ML Handbook's recommender chapter).
-- Deduplication and clustering of support tickets or news articles.
+- Deduplication and clustering (automatically grouping similar items) of support tickets or news articles.
 
 ### In the interview
 **30-second answer:** "An embedding is a dense learned vector for a token or a piece of content, where geometric closeness means semantic similarity. In a transformer the embedding layer is a lookup table of shape vocab × d_model, learned with the rest of the model. We compare embeddings with cosine similarity; if the vectors are normalized, that's just a dot product, which vector databases exploit."
@@ -323,7 +323,7 @@ Self-attention (next section) compares every token with every other token using 
 |---|---|---|
 | **Sinusoidal** (fixed) | Add a vector of sines and cosines of different frequencies to each embedding | Original 2017 Transformer |
 | **Learned absolute** | A second lookup table: position p → a learned vector, added to the token embedding | BERT, GPT-2 (max 512 / 1,024 positions) |
-| **RoPE** (rotary position embedding, Su et al., 2021) | Rotate the query and key vectors by an angle proportional to position, so their dot product depends on the **relative** distance | Llama, Mistral, Qwen and most modern open LLMs |
+| **RoPE** (rotary position embedding, Su et al., 2021) | Rotate the query and key vectors (see Section 3.4) by an angle proportional to position, so their dot product depends on the **relative** distance | Llama, Mistral, Qwen and most modern open LLMs |
 | **ALiBi** (Press et al., 2021) | Add a penalty to attention scores that grows with distance | BLOOM, MPT |
 
 **Sinusoidal formula** for position *pos* and dimension pair *i*:
@@ -383,7 +383,7 @@ The context-window growth of LLMs (from 2K tokens in GPT-3 to hundreds of thousa
 ### In the interview
 **30-second answer:** "Attention is permutation-invariant, so we inject order. The original transformer added fixed sinusoids of different frequencies; BERT and GPT-2 learned a vector per position, which caps the length; most modern LLMs use RoPE, which rotates queries and keys so attention scores depend on relative distance, and which can be extended to longer contexts."
 
-- *Why sines and cosines?* Unique per position, bounded in [−1, 1], and a fixed offset corresponds to a linear transformation, which makes relative positions easy to learn.
+- *Why sines and cosines?* Unique per position, bounded in [−1, 1], and a fixed offset corresponds to a linear transformation (a matrix multiplication), which makes relative positions easy to learn.
 - *Why did GPT-2 have a hard 1,024-token limit?* Learned absolute positions: there is no embedding for position 1,025.
 
 ### Self-check
@@ -404,7 +404,7 @@ Attention ignores order, so position is added: fixed sinusoids (2017), learned p
 In "The animal didn't cross the street because **it** was too tired", attention lets the vector for "it" draw heavily from "animal" — so after the layer, "it" carries the meaning of what it refers to.
 
 ### The problem it solves
-Before transformers, RNNs passed information along one step at a time. Distant words had to survive many steps (they often faded), and the steps could not run in parallel. Attention connects **any two positions in one step** and processes the whole sequence **in parallel**, which is what made training on internet-scale data practical on GPUs.
+Before transformers, RNNs passed information along one step at a time. Distant words had to survive many steps (they often faded), and the steps could not run in parallel. Attention connects **any two positions in one step** and processes the whole sequence **in parallel**, which is what made training on internet-scale data practical on GPUs (graphics processors, chips that run thousands of calculations in parallel).
 
 ### How it works — Query, Key, Value
 Think of a library search:
@@ -414,6 +414,8 @@ Think of a library search:
 
 For an input matrix X (one row per token, width d_model):
 
+> **Key term — matrix multiplication:** A *matrix* is a grid of numbers. Writing X·W (or `X @ W` in code) means: for each row of X and each column of W, multiply matching entries and add them up. The result has as many rows as X and as many columns as W, so multiplying by a learned W turns each token's vector into a new vector of a chosen width. Kᵀ ("K transposed") is K flipped so its rows become columns.
+
 1. **Project.** Q = X·W_Q, K = X·W_K, V = X·W_V, where the W's are learned matrices of shape (d_model × d_k).
 2. **Score.** S = Q·Kᵀ — entry (i, j) is how well token *i*'s query matches token *j*'s key.
 3. **Scale.** Divide by √d_k.
@@ -422,7 +424,7 @@ For an input matrix X (one row per token, width d_model):
 
 In one line: **Attention(Q, K, V) = softmax(Q·Kᵀ / √d_k) · V**
 
-**Why divide by √d_k?** If the entries of q and k are roughly independent with variance 1, their dot product has variance d_k. With d_k = 64 the variance is 64, so raw scores typically spread about √64 = 8 times wider than with d_k = 1; the softmax would then saturate (one weight ≈ 1, the rest ≈ 0), and gradients would vanish. Dividing by √d_k (here 8) brings the variance back to about 1.
+**Why divide by √d_k?** If the entries of q and k are roughly independent with variance 1 (variance measures how spread out values are), their dot product has variance d_k. With d_k = 64 the variance is 64, so raw scores typically spread about √64 = 8 times wider than with d_k = 1; the softmax would then saturate (one weight ≈ 1, the rest ≈ 0), and gradients (the signals training uses to adjust each weight) would vanish. Dividing by √d_k (here 8) brings the variance back to about 1.
 
 ### Worked example with tiny numbers
 Three tokens "the cat sat", d_model = 4, one head with d_k = 2.
@@ -487,16 +489,16 @@ Check row 1 ("the") by hand:
 - Softmax: e⁰ = 1, e^2.828 ≈ 16.9. Sum ≈ 34.8. Weights ≈ [0.029, 0.486, 0.486].
 - Output: 0.029·[2, 0] + 0.486·[0, 1] + 0.486·[2, 1] = [1.03, 0.97]. ✓
 
-So "the" ignores itself and draws half from "cat", half from "sat". In a trained model these weights reflect learned patterns (syntax, coreference, and so on).
+So "the" ignores itself and draws half from "cat", half from "sat". In a trained model these weights reflect learned patterns (syntax, i.e. grammar; coreference, i.e. which words refer to the same thing; and so on).
 
 ![Attention weight heatmaps for 'the cat sat': full attention on the left, causal on the right](img/attention_weights.png)
 
 ### Cost
-The score matrix is T × T for a sequence of T tokens, so attention costs **O(T² · d)** time and O(T²) memory per head per layer. Doubling the context quadruples that part of the work. This is why long contexts are expensive, and why techniques such as **FlashAttention** (Dao et al., 2022 — an exact attention algorithm that avoids storing the full T × T matrix in slow GPU memory), sparse or sliding-window attention, and the **KV cache** ([Chapter 4](../04-large-language-models/README.md), [Chapter 11](../11-llm-serving-and-inference/README.md)) exist.
+The score matrix is T × T for a sequence of T tokens, so attention costs **O(T² · d)** time and O(T²) memory per head per layer (Big-O notation: the work grows in proportion to T² times d). Doubling the context quadruples that part of the work. This is why long contexts are expensive, and why techniques such as **FlashAttention** (Dao et al., 2022 — an exact attention algorithm that avoids storing the full T × T matrix in slow GPU memory), sparse or sliding-window attention (each token looks only at a fixed number of recent tokens), and the **KV cache** (stored keys and values of earlier tokens, so they are not recomputed) ([Chapter 4](../04-large-language-models/README.md), [Chapter 11](../11-llm-serving-and-inference/README.md)) exist.
 
 ### Trade-offs — attention vs recurrence
 
-| | Self-attention | RNN / LSTM |
+| | Self-attention | RNN / LSTM (long short-term memory, an improved RNN) |
 |---|---|---|
 | Path between distant tokens | 1 step | T steps |
 | Parallel over sequence in training | Yes | No |
@@ -529,7 +531,7 @@ softmax(Q·Kᵀ/√d_k)·V: each token asks a question (Q), matches it against e
 ## 3.5 Multi-head attention
 
 ### What it is
-Instead of one attention computation, run **h smaller ones in parallel** ("heads"), each with its own W_Q, W_K, W_V, then concatenate their outputs and mix them with an output matrix W_O.
+Instead of one attention computation, run **h smaller ones in parallel** ("heads"), each with its own W_Q, W_K, W_V, then concatenate (join end to end) their outputs and mix them with an output matrix W_O.
 
 ### Why it matters
 One softmax produces one weighting per token. But a word may need several things at once: its grammatical subject, the adjective describing it, the previous mention of the same entity. Separate heads can specialize — studies of trained models found heads that track the previous token, syntactic relations, or copying patterns.
@@ -540,7 +542,7 @@ One softmax produces one weighting per token. But a word may need several things
 3. **Concatenate** the h outputs back to width d_model.
 4. Multiply by **W_O** (d_model × d_model) so the heads' results are mixed.
 
-The total cost is about the same as one full-width head, because each head is narrower. Parameters: four d_model × d_model matrices (Q, K, V, O) = **4·d_model²** (plus biases).
+The total cost is about the same as one full-width head, because each head is narrower. Parameters: four d_model × d_model matrices (Q, K, V, O) = **4·d_model²** (plus biases, small learned offsets added after each multiplication).
 
 From our NumPy demo, two heads with random weights (and the causal mask from Section 3.7, which is why the upper-right entries are 0) attend differently to the same input:
 
@@ -559,7 +561,7 @@ multi-head output shape: (3, 4)
 ```
 
 ### Production variants
-During generation, a model stores every past token's keys and values (the **KV cache**). With many heads that cache gets large, so newer models share K and V across heads:
+During generation (also called **inference**: using a trained model, as opposed to training it), a model stores every past token's keys and values (the **KV cache**). With many heads that cache gets large, so newer models share K and V across heads:
 
 | Variant | Keys/values | Used by (examples) |
 |---|---|---|
@@ -567,7 +569,7 @@ During generation, a model stores every past token's keys and values (the **KV c
 | **Multi-query (MQA)** (Shazeer, 2019) | One K/V shared by all heads | PaLM, Falcon |
 | **Grouped-query (GQA)** (Ainslie et al., 2023) | One K/V per group of heads | Llama 2 70B, Llama 3, Mistral |
 
-GQA keeps most of MHA's quality while shrinking the KV cache several-fold — a big deal for serving cost ([Chapter 11](../11-llm-serving-and-inference/README.md)). DeepSeek-V2/V3 use a further variant, multi-head latent attention (MLA), which compresses K/V into a smaller latent vector.
+GQA keeps most of MHA's quality while shrinking the KV cache several-fold — a big deal for serving cost ([Chapter 11](../11-llm-serving-and-inference/README.md)). DeepSeek-V2/V3 use a further variant, multi-head latent attention (MLA), which compresses K/V into a smaller latent (compressed, internal) vector.
 
 ### Common mistakes
 - Thinking more heads always help. With fixed d_model, more heads means narrower heads; the original paper found quality dropped with too many.
@@ -592,7 +594,7 @@ Several narrow attention heads in parallel, concatenated and mixed by W_O. Heads
 ## 3.6 The transformer block
 
 ### What it is
-The repeating unit of every transformer. A block = **multi-head attention** + a position-wise **feed-forward network (FFN)**, each wrapped with a **residual connection** and **layer normalization**. Models stack N identical blocks (6 in the original encoder, 12 in GPT-2 small and BERT-base, 32 in Llama-2-7B, and many more in frontier models).
+The repeating unit of every transformer. A block = **multi-head attention** + a position-wise **feed-forward network (FFN)**, each wrapped with a **residual connection** and **layer normalization**. Models stack N identical blocks (6 in the original encoder, 12 in GPT-2 small and BERT-base, 32 in Llama-2-7B, and many more in frontier models, the most capable current ones).
 
 ```mermaid
 flowchart TB
@@ -609,14 +611,14 @@ flowchart TB
 
 ### The three ingredients
 
-**1. Residual (skip) connection: x + f(x).** Each sub-layer only has to learn a *change* to its input, not a whole new representation. Gradients can flow straight back through the "+" path, which makes networks with dozens of layers trainable (the idea comes from ResNets, 2015). You can think of the residual path as a shared "stream" that each layer reads from and writes into.
+**1. Residual (skip) connection: x + f(x).** Each sub-layer only has to learn a *change* to its input, not a whole new representation. Gradients can flow straight back through the "+" path, which makes networks with dozens of layers trainable (the idea comes from ResNets, residual networks for image recognition, 2015). You can think of the residual path as a shared "stream" that each layer reads from and writes into.
 
-**2. Layer normalization.** For each token's vector separately, subtract its mean and divide by its standard deviation, then apply a learned scale γ and shift β: LN(x) = γ · (x − μ) / √(σ² + ε) + β. This keeps activations in a stable range. Unlike batch norm, it does not depend on other examples in the batch, which suits variable-length text.
+**2. Layer normalization.** For each token's vector separately, subtract its mean (average) and divide by its standard deviation (the typical distance of values from the mean), then apply a learned scale γ and shift β: LN(x) = γ · (x − μ) / √(σ² + ε) + β. This keeps activations (the values flowing between layers) in a stable range. Unlike batch norm (normalizing across all examples in a *batch*, the group of examples processed together), it does not depend on other examples in the batch, which suits variable-length text.
 - **Post-LN** (original 2017 paper): normalize *after* adding the residual.
-- **Pre-LN** (GPT-2 onward, and most LLMs): normalize the *input* of each sub-layer, as in the diagram. Easier to train deep stacks without careful warm-up.
+- **Pre-LN** (GPT-2 onward, and most LLMs): normalize the *input* of each sub-layer, as in the diagram. Easier to train deep stacks without careful warm-up (starting training with a tiny learning rate that slowly rises).
 - **RMSNorm** (used by Llama and many others) skips the mean subtraction and only rescales — slightly cheaper, works as well in practice.
 
-**3. Feed-forward network (FFN).** Two linear layers with a non-linearity, applied **to each token independently**: FFN(x) = W₂ · act(W₁·x + b₁) + b₂. The hidden layer is usually **4x wider** (512 → 2,048 in the original). The original used ReLU; GPT and BERT use GELU; Llama-style models use **SwiGLU**, a gated variant with three weight matrices instead of two, so its hidden layer is made about 8/3·d wide (not 4·d) to keep the parameter count roughly the same. A common intuition: attention moves information *between* tokens, and the FFN processes it *within* each token — much of the model's factual knowledge seems to be stored in FFN weights.
+**3. Feed-forward network (FFN).** Two linear layers (matrix multiply plus bias) with a non-linearity (a function that bends the output so the network can model more than straight-line relationships), applied **to each token independently**: FFN(x) = W₂ · act(W₁·x + b₁) + b₂. The hidden layer is usually **4x wider** (512 → 2,048 in the original). The original used ReLU (max(0, x)); GPT and BERT use GELU (a smooth version of ReLU); Llama-style models use **SwiGLU**, a gated variant with three weight matrices instead of two, so its hidden layer is made about 8/3·d wide (not 4·d) to keep the parameter count roughly the same. A common intuition: attention moves information *between* tokens, and the FFN processes it *within* each token — much of the model's factual knowledge seems to be stored in FFN weights.
 
 **Parameter count per block** ≈ attention 4·d² + FFN 2·(d × 4d) = 8·d² → **≈ 12·d²** (ignoring biases and norms). For GPT-3 (d_model = 12,288, 96 layers): 12 × 12,288² × 96 ≈ 174 billion — close to its advertised 175B. The FFN holds about two-thirds of the parameters.
 
@@ -670,7 +672,7 @@ rule of thumb 12*d_model^2 = 3072
 ```
 
 What each line shows:
-- Our hand-written attention matches PyTorch's fused kernel `scaled_dot_product_attention` to floating-point precision (1e-7). In real code, use the built-in: it dispatches to FlashAttention-style kernels on GPUs.
+- Our hand-written attention matches PyTorch's fused kernel (several GPU steps merged into one fast routine) `scaled_dot_product_attention` to floating-point precision (the tiny rounding error of computer decimals, here 1e-7). In real code, use the built-in: it dispatches to FlashAttention-style kernels on GPUs.
 - Changing the last token changes **only** the last position's output — the causal mask works (next section).
 - The block keeps the shape (B, T, d_model), which is why blocks can be stacked.
 - 3,280 parameters vs the 12·d² estimate of 3,072; the difference is biases and LayerNorm parameters.
@@ -706,10 +708,10 @@ A **causal mask** (or look-ahead mask) blocks each position from attending to po
 ### The problem it solves
 A decoder LLM is trained to predict the next token. If position 3 could see position 4 during training, it would simply copy the answer. The mask enforces "no peeking at the future".
 
-It also enables a key efficiency: for a training sentence of T tokens, **one forward pass produces T predictions at once** — position 0 predicts token 1, position 1 predicts token 2, and so on — each seeing only its own past. This parallel next-token training (a form of *teacher forcing*: the true previous tokens are fed in, not the model's own guesses) is a major reason transformers train so much faster than RNNs.
+It also enables a key efficiency: for a training sentence of T tokens, **one forward pass (one run of the input through the network to its output) produces T predictions at once** — position 0 predicts token 1, position 1 predicts token 2, and so on — each seeing only its own past. This parallel next-token training (a form of *teacher forcing*: the true previous tokens are fed in, not the model's own guesses) is a major reason transformers train so much faster than RNNs.
 
 ### How it works
-1. Build a lower-triangular boolean matrix of shape T × T (1 = allowed).
+1. Build a lower-triangular (ones on and below the diagonal, zeros above) boolean (true/false) matrix of shape T × T (1 = allowed).
 2. Before softmax, set every disallowed score to −∞.
 3. Softmax turns −∞ into weight 0.
 
@@ -778,8 +780,8 @@ flowchart LR
 | | Encoder-only | Decoder-only | Encoder-decoder |
 |---|---|---|---|
 | Attention | Bidirectional | Causal | Encoder bidirectional; decoder causal + cross-attention |
-| Pre-training objective | **Masked language modeling**: hide ~15% of tokens, predict them | **Next-token prediction** | Reconstruct corrupted spans (T5), denoising (BART) |
-| Best at | Understanding: classification, NER, embeddings, reranking | Generation of any kind; with scale, nearly everything | Input → output transformations: translation, summarization |
+| Pre-training objective | **Masked language modeling**: hide ~15% of tokens, predict them | **Next-token prediction** | Reconstruct corrupted spans (T5), denoising, i.e. repairing deliberately damaged text (BART) |
+| Best at | Understanding: classification, NER (finding names of people, places, etc.), embeddings, reranking (re-scoring a search shortlist) | Generation of any kind; with scale, nearly everything | Input → output transformations: translation, summarization |
 | Classic models | BERT (Google, 2018; base 110M, large 340M params), RoBERTa | GPT-1/2/3 (OpenAI 2018/2019/2020), and today's chat LLMs | Original Transformer (2017), T5 (Google, 2019), BART (Meta, 2019) |
 | Generates text? | Not naturally | Yes | Yes |
 
@@ -791,7 +793,7 @@ flowchart LR
 
 ### When not to use each
 - Don't use an encoder-only model to generate text.
-- Don't use a large decoder LLM for a high-volume classification task that a small fine-tuned encoder can do at a fraction of the cost and latency.
+- Don't use a large decoder LLM for a high-volume classification task that a small fine-tuned (further trained on task-specific examples) encoder can do at a fraction of the cost and latency.
 
 ### Common mistakes
 - Saying "GPT uses the transformer encoder" — GPT is decoder-only (without cross-attention).
@@ -826,9 +828,9 @@ A decoder-only LLM forward pass, end to end:
 2. **Embed** → a 7 × d_model matrix (plus positional information, or RoPE inside attention).
 3. Pass through **N transformer blocks** with causal masking. Shape stays 7 × d_model.
 4. Apply a **final layer norm**.
-5. **Output head (unembedding)**: multiply each position's vector by a d_model × vocab_size matrix → **logits**, one score per vocabulary token. Many models **tie** this matrix to the embedding matrix (reuse Eᵀ) to save parameters.
+5. **Output head (unembedding)**: multiply each position's vector by a d_model × vocab_size matrix → **logits**, one raw, unnormalized score per vocabulary token. Many models **tie** this matrix to the embedding matrix (reuse Eᵀ) to save parameters.
 6. **Softmax** the last position's logits → a probability for every possible next token.
-7. Choose a token (greedy or sampling — [Chapter 4](../04-large-language-models/README.md)), append it, and repeat.
+7. Choose a token (greedy = take the most likely one, or sampling = pick at random according to the probabilities — [Chapter 4](../04-large-language-models/README.md)), append it, and repeat.
 
 Training uses the same pass: compare the predicted distribution at every position to the actual next token with **cross-entropy loss** (−log of the probability assigned to the correct token), and backpropagate through everything — including the embedding table.
 

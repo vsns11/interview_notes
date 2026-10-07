@@ -1,6 +1,6 @@
 # Chapter 2 — Classical AI: Search
 
-Before machine learning dominated AI, the central idea was **search**: describe a problem as a set of situations connected by actions, then explore systematically until you reach a goal. Search is still everywhere: route planners, game engines, robot navigation, schedulers, puzzle solvers, compilers, and the planning loops inside modern AI agents. AlphaGo, one of the most famous deep learning results, was a search algorithm guided by neural networks.
+Before machine learning dominated AI, the central idea was **search**: describe a problem as a set of situations connected by actions, then explore systematically until you reach a goal. Search is still everywhere: route planners, game engines, robot navigation, schedulers, puzzle solvers, compilers (programs that translate source code into machine instructions), and the planning loops inside modern AI agents. AlphaGo, one of the most famous deep learning results (deep learning = machine learning with many-layered neural networks, mathematical models loosely inspired by brain cells that learn from data), was a search algorithm guided by neural networks.
 
 This chapter builds search from the ground up and ends with a working pathfinding agent.
 
@@ -15,7 +15,7 @@ This chapter builds search from the ground up and ends with a working pathfindin
 - Constraint satisfaction problems in brief
 - A project: a grid pathfinding agent that prints its path and plots what it explored
 
-All scripts are in [`code/`](code/) and run in seconds: `python code/<file>.py`. Prerequisites: basic Python (lists, dicts, functions) and the idea of a queue and a stack; see the Python Handbook's [collections chapter](../../../python/chapters/06-dicts-sets-collections/README.md) for `deque` and its [standard library tour](../../../python/chapters/14-standard-library-tour/README.md) for `heapq`.
+All scripts are in [`code/`](code/) and run in seconds: `python code/<file>.py`. Prerequisites: basic Python (lists, dicts, functions) and the idea of a queue (items leave in the order they arrived, like a checkout line) and a stack (the last item added is the first taken off, like a pile of plates); see the Python Handbook's [collections chapter](../../../python/chapters/06-dicts-sets-collections/README.md) for `deque` (a double-ended queue) and its [standard library tour](../../../python/chapters/14-standard-library-tour/README.md) for `heapq` (Python's built-in priority-queue helpers).
 
 ---
 
@@ -41,7 +41,7 @@ A **goal-based agent** (Chapter 1) first writes the problem down in five parts:
 | **Transition model** | Which state an action leads to | Drive(Arad → Sibiu) gives Sibiu | Right from (1, 1) gives (1, 2) |
 | **Goal test** and **action cost** | How to recognise success; cost of each step | In Bucharest? Cost = road km | At (5, 5)? Cost = 1 per move |
 
-Together, states plus actions form the **state space**, a graph where nodes are states and edges are actions. A **solution** is a path from the initial state to a goal; an **optimal solution** has the lowest total **path cost**.
+Together, states plus actions form the **state space**, a **graph** (a network of points, called *nodes*, joined by links, called *edges*) where nodes are states and edges are actions. A **solution** is a path from the initial state to a goal; an **optimal solution** has the lowest total **path cost**.
 
 Search algorithms explore this graph by growing a **search tree**:
 
@@ -62,7 +62,7 @@ flowchart LR
     E --> B
 ```
 
-The classic running example from Russell and Norvig's AIMA is a simplified road map of Romania. We will use it throughout:
+The classic running example from Russell and Norvig's AIMA (*Artificial Intelligence: A Modern Approach*, the standard AI textbook) is a simplified road map of Romania. We will use it throughout:
 
 ```mermaid
 flowchart LR
@@ -97,10 +97,12 @@ flowchart LR
 
 Complexity is expressed with three numbers: **b** = branching factor (successors per state), **d** = depth of the shallowest goal, **m** = maximum depth of the state space. Search spaces grow as bᵈ, which is why they explode: with b = 10 and d = 10 that is 10 billion nodes.
 
+> **Key term — Big-O notation:** Expressions such as O(bᵈ) or O(b·m) describe how work or memory *grows* as the problem gets bigger, ignoring constant factors. O(bᵈ) reads "on the order of b to the power d": add one level of depth and the work multiplies by about b. O(b·m) grows only in proportion to b times m, which is far gentler. Big-O is about the shape of growth, not exact counts.
+
 ### Real-world examples
 
 - Navigation apps (route search over road graphs), game AI (chess engines, video-game unit movement), robotics (motion planning), e-commerce and web search (retrieving and ranking matches from millions of items; that is information retrieval, a related but different kind of "search").
-- Puzzles: the 8-puzzle has 9!/2 = 181,440 reachable states, small enough for any method here; Rubik's cube (about 4.3 × 10¹⁹ states) is not.
+- Puzzles: the 8-puzzle has 9!/2 = 181,440 reachable states (9! = 9 × 8 × … × 1), small enough for any method here; Rubik's cube (about 4.3 × 10¹⁹ states) is not.
 
 ### Common mistakes
 
@@ -133,7 +135,7 @@ Search = formulate states, actions, transitions, goal and costs, then expand nod
 - Memory-hungry: it must store the whole frontier, which grows as bᵈ.
 - It can test for the goal when a node is *generated* (early goal test), saving a layer of work.
 
-**Depth-first search (DFS)** always expands the deepest node: follow one path as far as possible, then back up (**backtrack**) and try the next branch. The frontier is a **LIFO stack** (or recursion). Analogy: walking a maze with one hand on the wall until a dead end, then going back to the last junction.
+**Depth-first search (DFS)** always expands the deepest node: follow one path as far as possible, then back up (**backtrack**) and try the next branch. The frontier is a **LIFO stack** (or recursion, a function calling itself). Analogy: walking a maze with one hand on the wall until a dead end, then going back to the last junction.
 
 - Memory is tiny: only the current path plus siblings, O(b·m).
 - Not optimal, and can wander down very long or infinite paths (incomplete in infinite spaces).
@@ -142,7 +144,7 @@ Search = formulate states, actions, transitions, goal and costs, then expand nod
 
 **Iterative deepening DFS (IDDFS)** runs depth-limited search with ℓ = 0, 1, 2, … until it finds a goal. It combines BFS's guarantees (complete, fewest steps) with DFS's small memory. Re-generating the shallow levels sounds wasteful but is cheap: most nodes live in the deepest level. With b = 10, d = 5, BFS generates about 111,110 nodes; IDDFS about 123,450, only 11% more.
 
-**Uniform-cost search (UCS)**, also known as **Dijkstra's algorithm** when run from one source, expands the node with the lowest path cost so far, g(n), using a **priority queue**. It is optimal for any positive action costs, not just equal ones. It must test for the goal when a node is *expanded* (popped), not when generated, otherwise a cheaper path found later is missed.
+**Uniform-cost search (UCS)**, also known as **Dijkstra's algorithm** when run from one source, expands the node with the lowest path cost so far, g(n), using a **priority queue** (a container that always hands back the item with the smallest key first, whatever order items were added). It is optimal for any positive action costs, not just equal ones. It must test for the goal when a node is *expanded* (popped), not when generated, otherwise a cheaper path found later is missed.
 
 **Bidirectional search** runs two searches, forward from the start and backward from the goal, and stops when they meet. Two searches of depth d/2 cost about 2·b^(d/2), far less than bᵈ. It needs actions that can be reversed and a single, explicit goal state.
 
@@ -243,14 +245,14 @@ When you have a good heuristic (use A\*), when the state space is astronomically
 
 - **Goal-testing UCS on generation.** You may return a more expensive path that happened to be generated first.
 - **Using BFS on weighted graphs** and assuming the result is the cheapest.
-- **Recursive DFS on deep graphs** hits Python's recursion limit (about 1,000 frames by default); use an explicit stack.
-- **Storing full paths in the frontier** on huge problems; store parent pointers instead (the pathfinding project does this).
+- **Recursive DFS on deep graphs** hits Python's recursion limit (about 1,000 nested calls, or *frames*, by default); use an explicit stack.
+- **Storing full paths in the frontier** on huge problems; store parent pointers instead (each node records only which node it came from; the pathfinding project does this).
 
 ### Real-world examples
 
-- **BFS**: shortest hops in unweighted graphs, such as "degrees of connection" on a social network, or web crawlers exploring links level by level.
-- **DFS**: maze generation, cycle detection, topological sorting in build systems (e.g. deciding compile order), backtracking solvers.
-- **Dijkstra**: network routing protocols such as OSPF compute shortest paths with it; it is the baseline for road routing.
+- **BFS**: shortest hops in unweighted graphs, such as "degrees of connection" on a social network, or web crawlers (programs that download pages and follow their links) exploring links level by level.
+- **DFS**: maze generation, cycle detection, topological sorting (ordering tasks so each comes after everything it depends on) in build systems (e.g. deciding compile order), backtracking solvers.
+- **Dijkstra**: network routing protocols such as OSPF (the rules routers inside one organisation's network use to share routes) compute shortest paths with it; it is the baseline for road routing.
 
 ### Everyday practice: solve a maze two ways
 
@@ -262,7 +264,7 @@ Draw a small maze on paper. Solve it once with BFS (number cells in rings outwar
 
 - *Why is iterative deepening not wasteful?* Most nodes are at the deepest level, so re-expanding shallow levels adds only a small constant factor.
 - *When is BFS optimal?* When every action has the same cost.
-- *Why does Dijkstra fail with negative edges?* Once a node is expanded its cost is treated as final; a negative edge found later could make it cheaper. Use Bellman–Ford instead.
+- *Why does Dijkstra fail with negative edges?* Once a node is expanded its cost is treated as final; a negative edge found later could make it cheaper. Use Bellman–Ford (a slower shortest-path algorithm that tolerates negative costs) instead.
 
 ### Self-check
 
@@ -398,7 +400,7 @@ How to read it:
 | Complete? | Yes as graph search in finite spaces; can loop as tree search | Yes (finite b, costs ≥ ε > 0) |
 | Memory | Can be large | Keeps every generated node: the main weakness |
 
-Memory-saving variants: **IDA\*** (iterative deepening on f, linear memory; used for sliding puzzles) and **SMA\*** (drops the worst nodes when memory is full). Production road routers (e.g. OSRM, GraphHopper) combine A\*-family search with heavy **preprocessing** such as contraction hierarchies, so queries on continent-sized maps take milliseconds.
+Memory-saving variants: **IDA\*** (iterative deepening on f, linear memory; used for sliding puzzles) and **SMA\*** (drops the worst nodes when memory is full). Production road routers (e.g. OSRM, GraphHopper) combine A\*-family search with heavy **preprocessing** (work done once, in advance) such as contraction hierarchies (precomputed "shortcut" edges that skip over minor roads), so queries on continent-sized maps take milliseconds.
 
 ### When not to use it
 
@@ -406,15 +408,15 @@ When you cannot write a sensible heuristic (A\* degenerates to UCS), when memory
 
 ### Common mistakes
 
-- **Using an inadmissible heuristic and expecting optimal paths**, e.g. Euclidean distance × 2, or Manhattan distance on a grid that allows diagonal moves (a diagonal step reduces Manhattan distance by 2 while costing less than 2; use Chebyshev or octile distance instead).
+- **Using an inadmissible heuristic and expecting optimal paths**, e.g. Euclidean distance (ordinary straight-line distance) × 2, or Manhattan distance on a grid that allows diagonal moves (a diagonal step reduces Manhattan distance by 2 while costing less than 2; use Chebyshev distance, the larger of |Δrow| and |Δcol|, or octile distance, which also prices diagonals at √2, instead).
 - **Stopping when the goal is generated** instead of popped.
 - **Forgetting to update** a node already on the frontier when a cheaper path to it appears (the code handles this by pushing a new entry and skipping stale ones).
 
 ### Real-world examples
 
-- Video games: Unity's NavMesh navigation and many game engines use A\* to move characters around obstacles.
-- Robotics: global planners in ROS navigation stacks use Dijkstra or A\* on occupancy grids.
-- Maps and logistics: route and ETA systems use A\*-style search with preprocessing; delivery companies plan routes on top of shortest-path queries.
+- Video games: Unity's NavMesh (navigation mesh: a precomputed map of walkable areas) navigation and many game engines use A\* to move characters around obstacles.
+- Robotics: global planners in ROS (Robot Operating System, a popular open-source robotics software framework) navigation stacks use Dijkstra or A\* on occupancy grids (maps that mark each cell as free or blocked).
+- Maps and logistics: route and ETA (estimated time of arrival) systems use A\*-style search with preprocessing; delivery companies plan routes on top of shortest-path queries.
 
 ### Everyday practice: shortest path on a city map
 
@@ -445,7 +447,7 @@ Heuristics guide search toward the goal. Greedy uses h (fast, not optimal); A\* 
 
 ### What it is
 
-Sometimes the *path* does not matter, only the final state: arrange 8 queens so none attack, lay out components on a chip, build a timetable. **Local search** keeps just one (or a few) current states and repeatedly moves to a neighbouring state that scores better on an **objective function**. It uses almost no memory and works on huge or continuous spaces, but it does not guarantee the best answer.
+Sometimes the *path* does not matter, only the final state: arrange 8 queens so none attack, lay out components on a chip, build a timetable. **Local search** keeps just one (or a few) current states and repeatedly moves to a neighbouring state that scores better on an **objective function** (the formula that gives each state a score to maximise or minimise). It uses almost no memory and works on huge or continuous spaces, but it does not guarantee the best answer.
 
 Picture the objective as a landscape: hills are good states (for maximising) and you are hiking in fog, seeing only the ground next to you.
 
@@ -462,10 +464,10 @@ It gets stuck on **local maxima** (a peak lower than the highest), **ridges** (a
 **Simulated annealing** borrows from metallurgy, where metal is cooled slowly so atoms settle into a low-energy structure:
 
 1. Pick a *random* neighbour.
-2. If it is better, move. If it is worse by Δ, still move with probability e^(−Δ/T), where T is the "temperature".
+2. If it is better, move. If it is worse by Δ, still move with probability e^(−Δ/T) (e ≈ 2.718 is the mathematical constant; this value shrinks as Δ grows or T falls), where T is the "temperature".
 3. Lower T gradually (e.g. multiply by 0.995 each step).
 
-Early on (high T) the search accepts many bad moves and roams freely; later (low T) it behaves like hill climbing. Worked numbers: a move that is worse by Δ = 2 is accepted with probability e^(−2/2) ≈ 0.37 at T = 2, but only e^(−2/0.2) ≈ 0.00005 at T = 0.2. With a slow enough cooling schedule, it finds a global optimum with probability approaching 1.
+Early on (high T) the search accepts many bad moves and roams freely; later (low T) it behaves like hill climbing. Worked numbers: a move that is worse by Δ = 2 is accepted with probability e^(−2/2) ≈ 0.37 at T = 2, but only e^(−2/0.2) ≈ 0.00005 at T = 0.2. With a slow enough cooling schedule, it finds a global optimum (the best state anywhere, not just the best nearby) with probability approaching 1.
 
 **Genetic algorithms (GAs)** evolve a *population* of states:
 
@@ -479,7 +481,7 @@ Crossover helps when good partial solutions (building blocks) from different par
 
 ### Code: 8-queens four ways
 
-State = a tuple of 8 row numbers, one queen per column. Cost = number of attacking pairs (0 = solved; 28 pairs exist).
+State = a tuple (an unchangeable Python list) of 8 row numbers, one queen per column. Cost = number of attacking pairs (0 = solved; 28 pairs exist).
 
 ```python
 # code/local_search.py (core)
@@ -545,18 +547,18 @@ Plain hill climbing solves only about one start in eight (AIMA reports about 14%
 
 ### When not to use it
 
-When you need a guaranteed optimal answer or proof that none exists (use systematic search or an exact solver), or when the objective is differentiable (use gradient descent, which is hill climbing with calculus; see the [ML Handbook math chapter](../../../ml/chapters/02-math-for-ml/README.md)).
+When you need a guaranteed optimal answer or proof that none exists (use systematic search or an exact solver), or when the objective is differentiable (a smooth formula whose slope can be calculated at any point; use gradient descent, which is hill climbing with calculus: step repeatedly in the direction the slope says improves the score fastest; see the [ML Handbook math chapter](../../../ml/chapters/02-math-for-ml/README.md)).
 
 ### Common mistakes
 
 - Cooling too fast in simulated annealing (it becomes plain hill climbing and gets stuck).
 - GA populations collapsing to copies of one individual (too little mutation), or a representation where crossover produces mostly invalid children.
-- Reporting one lucky run; always run several seeds.
+- Reporting one lucky run; always run several seeds (starting values for the random-number generator; the same seed reproduces the same "random" run).
 
 ### Real-world examples
 
-- Simulated annealing has a long history in VLSI chip placement and routing, and in scheduling.
-- NASA's ST5 mission (2006) flew antennas whose shapes were found by an evolutionary algorithm.
+- Simulated annealing has a long history in VLSI (very-large-scale integration, i.e. designing chips with billions of transistors) chip placement and routing, and in scheduling.
+- NASA's ST5 mission (2006) flew antennas whose shapes were found by an evolutionary algorithm (the wider family genetic algorithms belong to).
 - Gradient descent, which trains every neural network, is a continuous form of hill climbing.
 
 ### In the interview
@@ -564,7 +566,7 @@ When you need a guaranteed optimal answer or proof that none exists (use systema
 **30-second answer:** "Local search keeps one state and moves to better neighbours, so it uses constant memory and scales to huge spaces, but it can get stuck. Hill climbing stalls on local optima, ridges and plateaus; random restarts and simulated annealing (accept worse moves with probability e^(−Δ/T) while cooling T) escape them; genetic algorithms search with a population using selection, crossover and mutation."
 
 - *Is local search complete?* No. It can fail to find a solution that exists.
-- *What is the temperature doing?* Controlling how often bad moves are accepted; high = explore, low = exploit.
+- *What is the temperature doing?* Controlling how often bad moves are accepted; high = explore (try unfamiliar options), low = exploit (stick with what already scores well).
 
 ### Self-check
 
@@ -691,7 +693,7 @@ What it shows:
 
 - The game's value is 0: with perfect play, tic-tac-toe is always a **draw**.
 - Plain minimax walks the whole game tree: 549,946 nodes. Alpha-beta returns the same value after 18,297, about 30 times fewer.
-- Caching by position (a transposition table) needs only 5,478 evaluations, because that is how many distinct legal positions exist. Chess engines rely on the same trick.
+- Caching by position (a transposition table; in the code, Python's `@lru_cache` decorator does this **memoisation**, i.e. remembering the result for inputs already seen) needs only 5,478 evaluations, because that is how many distinct legal positions exist. Chess engines rely on the same trick.
 - In the puzzle position, X correctly completes the top row at cell 2.
 
 ### Trade-offs
@@ -704,19 +706,19 @@ What it shows:
 
 ### When not to use it
 
-With huge branching factors and no good evaluation function (Go, b ≈ 250): use Monte Carlo tree search (next section). With chance (backgammon dice), use **expectiminimax**, which averages over chance nodes. With hidden information (poker), you need different methods (e.g. counterfactual regret minimisation).
+With huge branching factors and no good evaluation function (Go, b ≈ 250): use Monte Carlo tree search (next section). With chance (backgammon dice), use **expectiminimax**, which averages over chance nodes. With hidden information (poker), you need different methods (e.g. counterfactual regret minimisation, which improves a strategy by tracking how much better each alternative move would have done).
 
 ### Common mistakes
 
 - Mixing up whose turn it is, or evaluating from the wrong player's perspective.
 - Assuming the opponent is optimal when it is not: minimax plays safe, not exploitatively.
-- Evaluating in the middle of a capture sequence (the **horizon effect**); quiescence search addresses it.
+- Evaluating in the middle of a capture sequence (the **horizon effect**: a threat just beyond the search depth stays invisible); quiescence search addresses it.
 
 ### Real-world examples
 
 - IBM's Deep Blue beat Garry Kasparov in 1997 using alpha-beta search on custom hardware, searching roughly 100–200 million positions per second (IBM quoted about 200 million; the designers later reported an average nearer 126 million).
-- Stockfish, the leading open-source chess engine, still uses alpha-beta-style search, now paired with an efficiently updatable neural network (NNUE) as its evaluation function.
-- Checkers was "weakly solved" in 2007 (Chinook project): perfect play is a draw.
+- Stockfish, the leading open-source (code published for anyone to use and modify) chess engine, still uses alpha-beta-style search, now paired with an efficiently updatable neural network (NNUE) as its evaluation function.
+- Checkers was "weakly solved" in 2007 (perfect play from the starting position is known; Chinook project): perfect play is a draw.
 
 ### In the interview
 
@@ -749,7 +751,7 @@ Minimax: MAX maximises, MIN minimises, perfect play assumed. Alpha-beta prunes w
 
 Each iteration has four steps:
 
-1. **Selection**: from the root, walk down the tree choosing children by a formula that balances **exploitation** (moves that have won often) and **exploration** (moves tried rarely). The common choice is **UCB1** (the UCT algorithm): pick the child maximising w/n + c·√(ln N / n), where w = wins through that child, n = its visits, N = the parent's visits, c ≈ 1.4.
+1. **Selection**: from the root, walk down the tree choosing children by a formula that balances **exploitation** (moves that have won often) and **exploration** (moves tried rarely). The common choice is **UCB1** (the UCT algorithm): pick the child maximising w/n + c·√(ln N / n) (ln = natural logarithm), where w = wins through that child, n = its visits, N = the parent's visits, c ≈ 1.4.
 2. **Expansion**: add one new child node.
 3. **Simulation**: play random (or cheaply guided) moves from there to the end of the game.
 4. **Back-propagation**: update win and visit counts on the path back to the root.
@@ -801,14 +803,14 @@ Go has about 250 legal moves per turn and no good hand-written evaluation functi
 - a **policy network** that suggests promising moves, narrowing selection and expansion (the "tiny brain" that predicts which paths are worth exploring), and
 - a **value network** that estimates who is winning from a position, reducing the need for long random play-outs.
 
-Its networks were first trained on human expert games, then improved by **reinforcement learning** (RL, learning by trial and error from rewards) through self-play. **AlphaGo Zero** (2017) learned from self-play alone, and **AlphaZero** applied the same recipe to chess and shogi. The loop is: search produces better moves than the network alone → train the network to imitate the search's choices → the improved network makes the next search stronger.
+Its networks were first trained on human expert games, then improved by **reinforcement learning** (RL, learning by trial and error from rewards) through self-play (the program playing millions of games against itself). **AlphaGo Zero** (2017) learned from self-play alone, and **AlphaZero** applied the same recipe to chess and shogi (Japanese chess). The loop is: search produces better moves than the network alone → train the network to imitate the search's choices → the improved network makes the next search stronger.
 
 The same two ideas appear outside games:
 
 - **Neural-guided search**: a learned model predicts which branches are likely to succeed so the search skips the rest. Example: a robot exploring an unfamiliar building uses a learned model of which corridors are likely open, saving time and memory.
 - **Search plus reinforcement learning**: an agent learns from previous searches and improves future ones. Examples: a delivery-drone planner that remembers which routes were fast at which times of day; a scheduling assistant that starts with generic guesses, learns when you are most productive, and plans your day around that.
 
-Modern LLM agents follow the same pattern at a higher level: the model proposes candidate steps (a learned policy), and an outer loop tries, checks and backtracks (search). Chapter 9 returns to this.
+Modern LLM (large language model, the technology behind chatbots) agents follow the same pattern at a higher level: the model proposes candidate steps (a learned policy), and an outer loop tries, checks and backtracks (search). Chapter 9 returns to this.
 
 ### Trade-offs
 
@@ -854,7 +856,7 @@ MCTS = selective tree growth by simulated games and UCB1. Paired with learned po
 
 A **constraint satisfaction problem (CSP)** has **variables**, each with a **domain** of possible values, and **constraints** that restrict which combinations are allowed. A solution assigns every variable a value that satisfies all constraints. Unlike path search, only the final assignment matters, and the structure of the constraints can be exploited.
 
-Classic example (AIMA): colour the seven regions of Australia (WA, NT, SA, Q, NSW, V, T) with red, green or blue so that no two neighbours share a colour. Other examples: Sudoku, N-queens, exam timetabling, staff rostering, register allocation in compilers.
+Classic example (AIMA): colour the seven regions of Australia (WA, NT, SA, Q, NSW, V, T) with red, green or blue so that no two neighbours share a colour. Other examples: Sudoku, N-queens, exam timetabling, staff rostering, register allocation in compilers (deciding which values live in the processor's few ultra-fast storage slots).
 
 ### How it works
 
@@ -906,7 +908,7 @@ Australia is solved with no backtracking at all. On 20-queens, MRV plus forward 
 
 ### Trade-offs and real-world examples
 
-Hand-written backtracking is fine for teaching and small problems; for real scheduling and planning use a dedicated solver such as Google OR-Tools (CP-SAT), which layers constraint propagation, SAT-solving techniques and search. Airlines, sports leagues and universities use such solvers for crew scheduling, fixtures and timetables.
+Hand-written backtracking is fine for teaching and small problems; for real scheduling and planning use a dedicated solver such as Google OR-Tools (CP-SAT), which layers constraint propagation, SAT-solving techniques (SAT = deciding whether a big true/false formula can be made true) and search. Airlines, sports leagues and universities use such solvers for crew scheduling, fixtures and timetables.
 
 ### Common mistakes
 
@@ -996,7 +998,7 @@ Expanding a cell means: pop it, mark it closed, and push each open neighbour (up
 
 ### Step 4 — visualise
 
-The agent prints the mini maze (`*` = path, `o` = expanded but not on the path) and draws the big maze with matplotlib: expanded cells in blue, frontier cells in orange, the final path in red.
+The agent prints the mini maze (`*` = path, `o` = expanded but not on the path) and draws the big maze with matplotlib (Python's most common plotting library): expanded cells in blue, frontier cells in orange, the final path in red.
 
 Output (mini maze):
 

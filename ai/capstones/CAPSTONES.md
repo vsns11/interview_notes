@@ -7268,3 +7268,574 @@ Argument names change between TRL versions, so check the docs for the version yo
 
 ### TL;DR
 Train SFT then DPO with LoRA on carefully built, on-policy preference pairs, watch reward margins and drift, and prove gains with pairwise win rates while guarding against verbosity, over-refusal and capability regressions.
+
+## Appendix: Concepts you need
+
+Every technical term, acronym, tool and library used in the 40 briefs above, in alphabetical order and in plain English, so you can look up anything a brief takes for granted. Each entry lists the projects that use it and, where this handbook teaches the idea, links to that chapter. Distributed-systems ideas such as caching, queues, load balancing, latency and replication are explained in depth in [System Design Fundamentals](../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
+
+### A
+
+- **A\* search** — Path-finding search that ranks frontier nodes by f = g + h (cost so far plus an estimate of the cost still to go); it finds the cheapest path when the estimate never overestimates. Used in project 1. ([Ch 2](../chapters/02-classical-ai-search/README.md))
+- **A/A test** — An experiment where both groups get the identical version; any "significant" difference reveals a bug in assignment or analysis. Used in project 39. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **A/B test** — Randomly splitting users between two versions and comparing a pre-chosen metric to decide which is better. Used in projects 24, 39. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Ablation** — Removing or switching off one component at a time to measure how much it contributes. Used in projects 31, 35. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Abstention** — The system deliberately answering "I don't know" or refusing when evidence is too weak, instead of guessing. Used in projects 8, 11, 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Abstract syntax tree (AST)** — A tree representation of code or a query's structure, used to inspect it safely (for example to list the tables a SQL query touches). Used in projects 14, 22.
+- **Acceptance rate** — In speculative decoding, the share of draft tokens the large model accepts; in products, the share of suggestions users keep. Used in projects 21, 25, 30, 33, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Access control list (ACL)** — A list on each item saying which users or groups may see or change it. Used in project 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Action item** — A task someone agreed to do, extracted from a meeting with an owner and due date. Used in project 20. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Activity (workflow)** — In durable-execution engines, a step that touches the outside world (an API call, an email) and may be retried, unlike pure workflow code. Used in project 37. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **AdamW** — A widely used optimiser that adapts each weight's step size and applies weight decay separately from the gradient. Used in project 9.
+- **Adapter (LoRA)** — The small set of extra trained weights produced by LoRA, which can be loaded on top of a base model or merged into it. Used in projects 2, 3, 17, 22, 26, 30, 31, 34, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Adapter merging / multi-LoRA serving** — Folding LoRA weights permanently into the base model, or serving one base model with many swappable LoRA adapters. Used in projects 17, 30, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Adapter pattern (provider adapter)** — A thin wrapper giving several model providers one common interface so the rest of the code does not care which is used. Used in projects 2, 3, 17, 26, 30, 31, 34, 40. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Admissible heuristic** — A distance estimate that never overestimates the true remaining cost, which guarantees A* finds an optimal path. Used in project 1. ([Ch 2](../chapters/02-classical-ai-search/README.md))
+- **Agent** — A program in which a model repeatedly chooses the next action (often a tool call) from what it has observed, until a goal is met or a limit is hit. Used in projects 1, 13, 14, 19, 21, 22, 23, 27, 28, 29, 31, 32, 33, 37. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Agent loop** — The repeat-until-done cycle: call the model, run any requested tools, feed results back, check budgets. Used in projects 13, 27, 28, 33. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Agent–computer interface (ACI)** — The set of commands and outputs designed for an agent to use a computer (view file, edit lines, run tests), shaped for models rather than humans. Used in project 28. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Alert fatigue** — When too many noisy alerts fire, people start ignoring all of them, including real ones. Used in project 33. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Alignment (transcript)** — Matching words or segments in two sequences in time, such as transcript words to audio timestamps or speakers. Used in project 20. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Allow-list** — An explicit list of what is permitted (tables, tools, domains); everything else is refused by default. Used in projects 14, 23, 26, 28. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Alt text** — A short text description of an image that screen readers read aloud for people who cannot see it. Used in project 16. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Answerability check** — Verifying that a generated test question can actually be answered from its source passage. Used in projects 11, 25. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **API (application programming interface)** — A defined way for one program to call another, usually by sending HTTP requests to a provider's endpoint. Used in projects 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 18, 19, 20, 21, 22, 23, 25, 26, 27, 29, 30, 31, 32, 33, 34, 37, 38. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **API gateway** — A single entry service that authenticates, rate-limits and routes requests to back-end services. Used in projects 3, 13, 18, 23, 26, 27, 32, 33, 38. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **API key** — A secret string that identifies your account to a model provider; keep it in an environment variable, never in code. Used in projects 2, 23, 26. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **ASGI** — Asynchronous Server Gateway Interface: the Python standard that lets async web frameworks such as FastAPI talk to a server. Used in project 32.
+- **ASR (automatic speech recognition)** — Turning spoken audio into text; also called speech-to-text. Used in projects 18, 20, 27, 31. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **async / asyncio** — Python's built-in way to run many waiting tasks (such as network calls) concurrently in one thread. Used in projects 2, 3, 4, 11, 13, 15, 18, 19, 22, 26, 27, 28, 30, 31, 33, 35, 37. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Attack success rate (ASR)** — In red-teaming, the share of attack attempts that achieved their harmful goal. Used in project 31. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Attention (self-attention)** — The transformer mechanism where each token builds its new representation as a weighted mix of other tokens, using query, key and value vectors. Used in projects 9, 17, 34, 35. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Audit log** — An append-only record of who did what, when and with which inputs, kept for investigation and compliance. Used in projects 19, 21, 23, 31, 32, 37. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Authentication / authorisation** — Proving who someone is / deciding what they are allowed to do. Used in projects 15, 26, 30, 32, 38. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **AutoGen** — Microsoft's open-source framework for building multi-agent conversations. Used in project 27. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Automation bias** — People over-trusting automated suggestions and approving them without real checking. Used in project 21. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Autoscaling** — Automatically adding or removing workers or GPUs as load rises and falls. Used in projects 20, 30, 34. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **AWQ** — Activation-aware weight quantization: a 4-bit weight compression method that protects the weights that matter most. Used in projects 30, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+
+### B
+
+- **Backoff (exponential) and jitter** — Waiting longer after each failed retry (1 s, 2 s, 4 s…) plus a random offset, so clients do not all retry at once. Used in projects 2, 37. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Barge-in** — The user starting to speak while the assistant is still talking; the assistant must stop and listen. Used in project 18. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Baseline** — The simple reference system (or current version) every new idea must beat to count as progress. Used in projects 4, 8, 9, 12, 17, 24, 25, 27, 29, 30, 35, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Batching** — Processing several requests together so the GPU does more useful work per step. Used in projects 2, 4, 6, 8, 9, 11, 16, 17, 19, 20, 24, 25, 26, 29, 30, 33, 34, 35, 40. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Beta (β) in DPO** — The DPO setting that controls how far the tuned model may drift from the reference model; larger β keeps it closer. Used in project 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **BFS (breadth-first search)** — Search that explores all nodes one step away, then two steps, and so on; it finds the fewest-steps path. Used in project 1. ([Ch 2](../chapters/02-classical-ai-search/README.md))
+- **Bi-encoder** — A retrieval model that embeds query and document separately so documents can be pre-computed; fast but less precise than a cross-encoder. Used in project 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Bigram model** — A tiny language model that predicts the next token from the current token only; a common first baseline. Used in project 9.
+- **bitsandbytes** — A library that loads model weights in 8-bit or 4-bit form to save GPU memory; used for QLoRA. Used in projects 17, 35. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Blast radius** — How much damage a single failure or compromised component can cause; good design keeps it small. Used in projects 13, 31. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **BLEU** — A text-similarity metric counting overlapping word sequences with a reference; a rough signal for translation or captions. Used in project 16. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **BLIP** — A family of open vision-language models used for image captioning. Used in project 16. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Blue-green deployment** — Building a complete new version (such as a new index) beside the live one, then switching traffic over in one step. Used in project 11.
+- **BM25** — A classic keyword-ranking formula that scores documents by how often query words appear, adjusted for word rarity and document length. Used in project 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Bootstrap confidence interval** — Estimating a metric's uncertainty by recomputing it on many random resamples of the data. Used in projects 12, 25, 39. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **BPE (byte-pair encoding)** — A tokenizer method that builds its vocabulary by repeatedly merging the most frequent adjacent pair of symbols. Used in projects 7, 9. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Bradley–Terry model** — A statistical model that turns many pairwise wins and losses into one strength score per competitor. Used in project 39. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Budget (step / token / cost)** — A hard cap on how many steps, tokens or dollars a run may use, so loops cannot run away. Used in projects 3, 4, 7, 13, 14, 18, 19, 22, 26, 27, 28, 29, 32, 33, 34, 36. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Business glossary** — A curated mapping from business words ("active customer") to exact database definitions, given to a text-to-SQL model. Used in project 14. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Business re-ranking** — Adjusting search order with business rules (stock, margin, freshness) after relevance scoring. Used in project 24. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+
+### C
+
+- **Cache** — A store of previous results kept so repeated requests are answered without recomputing. Used in projects 2, 4, 6, 7, 8, 9, 10, 12, 14, 15, 16, 19, 21, 24, 26, 29, 30, 31, 32, 33, 35, 38. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Cache hit / miss** — A request answered from the cache / one that had to be computed. Used in projects 5, 6, 7, 14, 15, 22, 23, 24, 26, 27, 29, 34. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Cacheability policy** — Rules deciding which requests may be cached at all (no personal data, no time-sensitive answers). Used in project 15. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Cached input price** — The discounted price providers charge for input tokens served from a prompt cache. Used in projects 2, 7. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Calibration** — Whether a score or confidence matches reality (a 70%-confident label is right about 70% of the time), or aligning a judge with human ratings. Used in projects 12, 29, 31, 39, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Canary release** — Sending a small share of traffic to a new version first and watching metrics before rolling it out to everyone. Used in projects 31, 33. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Canary string** — A unique secret marker planted in a system prompt or document; if it shows up in output, data has leaked. Used in project 31. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Cascade (speech)** — A voice pipeline built from separate steps: speech-to-text, then an LLM, then text-to-speech. Used in project 18. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Catastrophic forgetting** — A model losing earlier abilities after being fine-tuned on new, narrow data. Used in projects 3, 9, 17, 38. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Causal mask** — An attention mask that blocks each token from seeing later tokens, so a model learns to predict the next one. Used in project 9. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Change detection** — Spotting which source documents were added, edited or deleted, so only those are re-indexed. Used in project 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Chat template** — The model-specific format that marks system, user and assistant turns in the token stream; training and inference must use the same one. Used in projects 17, 40. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Chunk / chunking** — Splitting long documents into passages small enough to embed, retrieve and fit in a prompt; overlap keeps ideas from being cut in half. Used in projects 2, 3, 4, 5, 7, 11, 20, 25, 29, 30, 36, 38. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Chunked prefill** — Splitting a long prompt's prefill into pieces interleaved with other users' decode steps, so they are not stalled. Used in project 30. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **CI (continuous integration)** — Automatically running tests (and evals) on every code change, blocking merges that fail. Used in projects 2, 12, 23, 28, 31. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **CIDEr** — An image-captioning metric that compares a caption with several human references, weighting rare informative words more. Used in project 16. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Circuit breaker** — A guard that stops calling a failing dependency for a while after repeated errors, then tests it again. Used in project 26.
+- **Citation** — A pointer from a claim in an answer to the source passage that supports it, so readers and checkers can verify it. Used in projects 4, 5, 10, 11, 20, 21, 27, 29, 33, 36, 38. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Citation verification** — Checking that each cited source exists and really supports the sentence that cites it. Used in project 27. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Classifier** — A model that assigns inputs to categories, such as ticket types or safe/unsafe. Used in projects 8, 16, 21, 23, 25, 26, 31, 34. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Classifier-free guidance (CFG)** — A diffusion setting that pushes images to follow the prompt more strongly by comparing predictions with and without the prompt. Used in project 34. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **CLI (command-line interface)** — A program you use by typing commands in a terminal rather than clicking a window. Used in projects 2, 3, 5, 12, 13.
+- **CLIP** — A model trained so that matching images and captions get similar embeddings; used for image search and image–text scoring. Used in projects 9, 16, 24, 34. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **ColBERT** — A retrieval model that compares every query token with every document token ("late interaction"); between bi- and cross-encoders in cost. Used in project 29.
+- **Cold start** — The slow first request while a model loads or a cache warms, or the lack of history for a new user or item. Used in project 34. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Community detection** — Graph algorithms (such as Leiden or Louvain) that group densely connected nodes into clusters. Used in project 36. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Community summary** — An LLM-written summary of one cluster of related entities in a GraphRAG graph. Used in project 36. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Compensation (saga)** — An action that undoes an earlier completed step when a later step in a multi-step process fails. Used in project 37. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Concurrency** — Several tasks in progress at the same time, such as many model calls waiting on the network. Used in projects 2, 4, 12, 13, 18, 22, 26, 27, 28, 29, 30, 31, 35, 37, 39. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Confidence interval** — A range that likely contains the true value of a metric, showing how uncertain the measurement is. Used in projects 12, 26, 31, 39, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Confusion matrix** — A table counting, for each true label, how often each label was predicted; shows which classes get mixed up. Used in project 8.
+- **Consent and retention** — Getting people's agreement before recording or processing their data, and deleting it after a set period. Used in projects 2, 3, 19, 20, 27, 33, 34. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Consistent heuristic** — A heuristic where the estimate never drops by more than the step cost; A* then never needs to reopen a node. Used in projects 1, 8, 36. ([Ch 2](../chapters/02-classical-ai-search/README.md))
+- **Consolidation (memory)** — Merging, updating or removing stored memories so duplicates and contradictions do not pile up. Used in project 19. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Container** — A packaged, isolated process with its own files and libraries (for example a Docker container), sharing the host's operating-system kernel. Used in projects 28, 30. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Content hash** — A fingerprint computed from content (for example SHA-256); identical text gives the identical hash, so unchanged items can be skipped. Used in projects 4, 5, 6, 8, 10, 12, 15, 16, 29, 34, 39.
+- **Context compression** — Shrinking what goes into the prompt (summaries, top passages only) so the important facts fit the budget. Used in projects 4, 27, 34. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Context selection** — Choosing which surrounding code, files or documents to show the model alongside the main input. Used in project 22. ([Ch 5](../chapters/05-prompt-engineering/README.md))
+- **Context window** — The maximum number of tokens a model can read and write in one request. Used in projects 3, 4, 7, 19, 27. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Contextual retrieval** — Adding a short model-written note about where a chunk sits in its document before indexing it, so the chunk is findable on its own. Used in project 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Continuous batching** — A serving technique that adds and removes requests from the running GPU batch at every decoding step. Used in projects 30, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Copilot** — An assistant that drafts or suggests while a human stays in control of the final action. Used in projects 21, 31, 33. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Cosine decay** — A learning-rate schedule that lowers the rate smoothly along a cosine curve towards the end of training. Used in project 9.
+- **Cosine similarity** — Similarity of two vectors measured by the angle between them; 1 means same direction. Used in projects 5, 9, 11, 15, 19, 25. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Cost attribution** — Tagging every model call with user, team or feature so spend can be traced and charged back. Used in project 33. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **CPU** — The general-purpose processor in every computer; slower than a GPU for the large parallel maths of neural networks. Used in projects 5, 9, 18, 28, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Cross-attention** — Attention where one sequence (such as image latents) looks up information in another (such as the text prompt). Used in project 34. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Cross-encoder** — A model that reads a query and a document together and outputs a relevance score; accurate but too slow to run on every document. Used in projects 15, 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **CSV** — Comma-separated values: a plain-text table format. Used in project 17.
+- **CTE (common table expression)** — A named temporary result inside a SQL query (`WITH … AS`), used to break complex queries into steps. Used in project 36.
+- **CUDA** — NVIDIA's platform for running general computation on its GPUs. Used in projects 20, 34, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Custom vocabulary** — A list of names and jargon given to a speech recogniser or extractor so it spells them correctly. Used in project 20. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+
+### D
+
+- **Data leakage** — Information from the test set (or the future) slipping into training, which makes results look better than they really are. Used in projects 8, 17, 23, 31, 38. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Data minimisation** — Collecting and sending only the personal data a task truly needs. Used in project 10. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Data model** — The tables (or objects), their fields and the relationships between them that a system stores. Used in nearly all projects.
+- **Dataset split (train / dev / test)** — Dividing examples into a set to learn from, a set to tune on, and a held-out set for the final score. Used in projects 8, 17. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Decoder-only transformer** — A transformer that generates text left to right with a causal mask (GPT-style models). Used in project 34. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Deduplication** — Finding and removing repeated or near-identical items. Used in projects 16, 17, 19, 20, 22, 24, 25. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Defence in depth** — Several independent safety layers, so one failure alone does not cause harm. Used in projects 14, 31. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Determinism** — Getting exactly the same output for the same input every time; LLMs and GPU kernels often lack it. Used in projects 2, 4, 9, 10, 12, 13, 21, 27, 31, 37, 39. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Determinism requirement (workflow)** — Durable-workflow code must make the same decisions when replayed, so randomness, clocks and I/O go into activities. Used in project 37. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Deterministic assignment** — Putting each user in an experiment group by hashing their ID, so they always see the same variant. Used in project 39. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Diarisation (speaker)** — Working out who spoke when in a recording. Used in project 20. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Diff / diff hunk** — The lines changed between two versions of a file; a hunk is one contiguous block of changes. Used in projects 2, 3, 12, 22, 28.
+- **Diff position** — Where in a pull request's diff a review comment is attached, which must be mapped from file line numbers. Used in project 22.
+- **Diffusers (Hugging Face)** — Hugging Face's library of diffusion pipelines for text-to-image, img2img and inpainting. Used in project 34. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Diffusion model** — A generative model that learns to remove noise step by step, so it can turn pure noise into an image. Used in project 34. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Dijkstra's algorithm** — A shortest-path algorithm that always expands the cheapest-so-far node; A* without a heuristic. Used in project 1. ([Ch 2](../chapters/02-classical-ai-search/README.md))
+- **Distance metric** — A rule for how far apart two vectors are (cosine, dot product, Euclidean). Used in projects 1, 5, 11, 18, 21, 25. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Diversity grid** — A planned mix of topics, difficulties and personas used to generate varied synthetic data deliberately. Used in project 25. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Docker** — The most common tool for building and running containers. Used in projects 28, 30.
+- **DPO (direct preference optimisation)** — Fine-tuning a model straight from pairs of preferred and rejected answers, with no separate reward model. Used in project 40. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Draft model** — The small, fast model in speculative decoding that proposes tokens for the large model to check. Used in projects 10, 21, 30, 33, 34, 35, 37. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Durable execution** — Running a long workflow so that every step's result is saved and it resumes exactly where it stopped after a crash or restart. Used in projects 19, 37. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Durable timer** — A wait (hours or days) recorded by the workflow engine so it survives restarts. Used in project 37. ([Ch 9](../chapters/09-ai-agents/README.md))
+
+### E
+
+- **Echo cancellation** — Removing the assistant's own voice from the microphone signal so it does not hear and answer itself. Used in projects 2, 18. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Edit distance** — The number of character or word edits needed to turn one text into another; measures how much a human changed a draft. Used in projects 18, 21.
+- **Effort scaling** — Telling a lead agent how many sub-agents and tool calls to spend based on how hard the question is. Used in project 27. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Embedding** — A list of numbers (vector) representing meaning, so that similar texts or images get nearby vectors. Used in projects 4, 5, 7, 8, 9, 11, 12, 14, 15, 16, 17, 19, 21, 24, 25, 26, 27, 29, 36, 38. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Embedding model** — The model that turns text (or images) into embedding vectors; changing it means re-embedding everything. Used in projects 5, 11, 15, 24, 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Entailment / NLI** — Natural language inference: a check of whether one text logically supports another; used to test whether a summary is backed by its source. Used in projects 4, 10, 25. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Entity extraction** — Using a model to pull named things (people, organisations, concepts) and their relationships out of text. Used in projects 23, 36. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Entity resolution** — Deciding when different mentions ("IBM", "International Business Machines") refer to the same real thing and merging them. Used in project 36. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Environment variable** — A named setting supplied to a program by its operating environment; the standard place for API keys. Used in project 28. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Episodic vs semantic memory** — Memory of specific past events vs memory of general facts about the user or world. Used in project 19. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Error as observation** — Returning a tool's error message to the model as a normal result so it can correct itself instead of crashing the loop. Used in project 13. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Evaluation (eval)** — Systematically measuring how well a model or system performs on a defined set of cases. Used in projects 2, 5, 6, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 39, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Evaluation harness** — The code that runs a set of test cases through a system, scores each result and reports changes. Used in projects 2, 12, 25, 26, 29, 31, 35. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Event history** — The append-only log of every step result a durable workflow has recorded; replaying it rebuilds the workflow's state. Used in project 37. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Evidence span** — The exact stretch of transcript or document that supports an extracted item. Used in projects 2, 4, 10, 11, 19, 20, 22, 27, 29, 31. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Exact cache** — A cache keyed on the exact request text, returning a stored response only for identical requests. Used in project 15. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Exact-snippet edit** — An agent editing a file by naming the exact text to replace, which fails loudly if that text is not found. Used in project 28. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Excessive agency** — Giving a model more tools, permissions or autonomy than its task needs (an OWASP LLM risk). Used in projects 14, 21, 31. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Execution accuracy** — For text-to-SQL, whether running the generated query returns the same result as the correct query. Used in project 14. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **EXIF** — Metadata stored inside photo files (camera, time, often GPS location); strip it before sharing images. Used in project 16.
+
+### F
+
+- **F1 score** — The harmonic mean of precision and recall, a single number balancing the two. Used in projects 8, 17. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Fail open / fail closed** — When a check cannot run: allow the request (open) or deny it (closed); safety checks should fail closed. Used in projects 15, 26. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Faithfulness** — Whether every claim in an answer is supported by the provided sources. Used in projects 4, 11, 29, 40. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Fallback chain** — An ordered list of alternative models or providers tried when the first choice fails. Used in projects 6, 11, 26. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **False hit (cache)** — A semantic cache returning a stored answer for a query that only looked similar but needed a different answer. Used in project 15. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **FastAPI** — A popular Python web framework for building HTTP APIs, with automatic validation through Pydantic. Used in projects 1, 2, 6, 7, 11, 14, 15, 16, 18, 19, 21, 22, 23, 26, 33, 34, 37, 38.
+- **faster-whisper** — A faster re-implementation of Whisper speech recognition for local use. Used in projects 18, 20.
+- **Feature flag** — A switch in configuration that turns a feature on or off for some or all users without redeploying. Used in projects 4, 16, 21, 23, 27, 33, 39. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Few-shot prompting** — Putting a handful of worked examples in the prompt to show the model the task. Used in projects 8, 17. ([Ch 5](../chapters/05-prompt-engineering/README.md))
+- **FID (Fréchet Inception Distance)** — An image-quality metric comparing statistics of generated and real images; lower is better. Used in project 34. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Field and model validators** — Pydantic functions that check one field or a whole object against business rules. Used in projects 6, 14, 25. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Field-level accuracy** — Scoring extraction per field (date, total, vendor) rather than all-or-nothing per document. Used in project 6. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Fine-tuning** — Continuing to train a pretrained model on your own examples to change its behaviour. Used in projects 8, 9, 11, 12, 16, 17, 23, 25, 29, 30, 31, 33, 36, 39, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Firecracker / microVM** — A very small, fast-starting virtual machine with its own kernel, giving stronger isolation than a container. Used in project 28. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **FOR UPDATE SKIP LOCKED** — A PostgreSQL query clause that lets many workers pull different jobs from one table without blocking each other. Used in project 11.
+- **Foreign key (FK)** — A column that points to a row in another table, linking records together. Used in projects 2, 5, 11, 12, 14, 15, 16, 19, 20, 21, 22, 24, 26, 27, 28, 29, 31, 33, 34, 36, 37, 38, 39.
+- **Full fine-tuning** — Updating every weight of a model during fine-tuning; most accurate but most memory-hungry. Used in projects 17, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Full-text search** — Database keyword search over words in text, with stemming and ranking (PostgreSQL's `tsvector`). Used in projects 5, 21, 24, 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+
+### G
+
+- **GIN index** — A PostgreSQL index type for searching inside values such as full-text `tsvector` columns or JSONB. Used in project 29.
+- **Git / GitHub** — Git tracks versions of code; GitHub hosts Git repositories and adds pull requests, issues and CI (GitHub Actions). Used in projects 12, 22, 28.
+- **GitHub App** — A GitHub integration with its own identity and fine-grained permissions on chosen repositories. Used in project 22.
+- **Gleaning** — Asking the extraction model a second time "did you miss anything?" to recover entities it skipped. Used in project 36. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Global search (GraphRAG)** — Answering broad questions by map-reducing over community summaries instead of retrieving individual chunks. Used in project 36. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Golden set** — A fixed, versioned set of test inputs with expected answers or properties, run on every change. Used in projects 2, 3, 4, 6, 8, 11, 12, 29. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **GPTCache** — An open-source library for semantic caching of LLM responses. Used in project 15.
+- **GPTQ** — A post-training method that compresses weights to about 4 bits while correcting for rounding error. Used in projects 30, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **GPU** — Graphics processing unit: a chip with thousands of small cores, used to train and run neural networks. Used in projects 7, 9, 16, 17, 18, 20, 29, 30, 34, 35, 40. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Graceful degradation** — Keeping a reduced but useful service when parts fail or budgets run out, instead of failing completely. Used in projects 26, 27, 30. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Grafana** — An open-source tool for building dashboards over metrics such as those stored in Prometheus. Used in projects 30, 33.
+- **GraphRAG** — Retrieval that first builds a knowledge graph and community summaries from documents, then answers using them. Used in project 36. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Greedy decoding** — Always choosing the single most likely next token. Used in projects 2, 9, 25, 35. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Grounding** — Making a model answer from supplied sources or tool results rather than from memory. Used in projects 10, 11, 14, 21, 24, 25, 27. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Guardrail** — A check around a model (on input, output or actions) that enforces a policy. Used in projects 13, 14, 23, 25, 31, 39. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Guardrail metric** — A metric that must not get worse during an experiment even if the main metric improves (errors, latency, complaints). Used in project 39. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **gVisor** — A sandbox runtime that intercepts a container's system calls in a user-space kernel, adding isolation. Used in project 28. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+
+### H
+
+- **Hallucination** — Fluent output that is false or not supported by any source. Used in projects 4, 10, 11, 36. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **heapq** — Python's standard-library binary heap, used as a priority queue. Used in project 1.
+- **Heuristic** — A quick estimate of the remaining cost to the goal, used to guide search. Used in project 1. ([Ch 2](../chapters/02-classical-ai-search/README.md))
+- **Hidden tests** — Tests the agent cannot see, used to check its fix really works rather than just passing tests it edited. Used in project 28. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Hierarchical communities** — Communities nested at several levels (broad topics containing narrower ones) in a GraphRAG graph. Used in project 36. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **HMAC signature** — A cryptographic tag computed from a message and a shared secret; checking it proves a webhook really came from the sender. Used in project 22.
+- **HNSW** — Hierarchical Navigable Small World: a graph index that finds approximate nearest vectors quickly. Used in projects 5, 11, 15, 24. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **HTTP** — The request–response protocol of the web; APIs use its methods (GET, POST) and status codes (200, 429, 500). Used in projects 2, 3, 26, 32, 34.
+- **Hugging Face** — The main hub and set of libraries (Transformers, Datasets, Diffusers, PEFT) for open models. Used in projects 7, 16, 17, 34, 35, 40. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Human review queue** — A list of low-confidence or risky outputs waiting for a person to approve, edit or reject. Used in projects 16, 22, 24, 25, 28, 33, 34. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Human-in-the-loop** — A person reviews or approves model outputs or actions before they take effect. Used in projects 10, 13, 21, 31, 37. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Hybrid search** — Combining keyword (BM25 or full-text) and vector search results, usually with RRF. Used in projects 5, 11, 21, 24, 29, 36, 38. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Hyperparameter** — A setting chosen before training (learning rate, rank, batch size) rather than learned. Used in project 17.
+
+### I
+
+- **Idempotency key** — A unique ID attached to an action so that a retried request is recognised and not performed twice. Used in projects 5, 13, 21, 37. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Image captioning** — Generating a text description of an image. Used in projects 16, 20. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Image role** — Whether an image is decorative, informative or functional, which decides what alt text it needs. Used in project 16. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Img2img / inpainting** — Diffusion editing: transforming an existing image, or regenerating only a masked area. Used in project 34. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Implicit feedback** — Signals inferred from behaviour (copying, editing, regenerating, abandoning) rather than explicit ratings. Used in project 33. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Index (database / vector)** — A data structure that makes lookups fast without scanning every row or vector. Used in projects 2, 5, 11, 12, 13, 15, 19, 24, 25, 27, 29, 33, 36, 38. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Indirect prompt injection** — Instructions hidden in content the model reads (documents, web pages, emails, tool results) that try to hijack it. Used in projects 11, 13, 27, 31. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Inference** — Running a trained model to produce outputs. Used in projects 4, 7, 15, 16, 17, 18, 26, 30, 33, 34, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Inference server** — Software that loads a model on GPUs and serves many requests efficiently (for example vLLM). Used in project 17. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Input vs output price** — Providers charge per token, with output tokens usually several times dearer than input tokens. Used in projects 2, 7. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Inter-annotator agreement** — How often independent human labellers give the same label; it caps how accurate any model can look. Used in projects 6, 8, 12, 16, 25, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Isolation models (multi-tenant)** — Ways to separate tenants: shared tables with a tenant column, a schema per tenant, or a database per tenant. Used in project 38. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **IVFFlat** — A pgvector index that clusters vectors and searches only the closest clusters; faster to build than HNSW. Used in projects 5, 11. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+
+### J
+
+- **Jailbreak** — A prompt crafted to make a model ignore its safety rules. Used in project 31. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **JSON** — A lightweight text format for structured data made of objects, arrays, strings and numbers. Used in projects 2, 3, 6, 7, 8, 10, 12, 13, 14, 15, 17, 20, 21, 22, 24, 26, 27, 28, 31, 32, 36, 37, 39. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **JSON Schema** — A standard way to describe the required shape of JSON data; used to define tools and structured outputs. Used in projects 6, 8, 12, 13. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **JSONB** — PostgreSQL's binary JSON column type, which can be indexed and queried. Used in projects 2, 6, 12, 14, 20, 21, 22, 24, 26, 27, 28, 31, 37, 39.
+- **JSON-RPC** — A protocol for calling remote functions with JSON request and response messages; MCP is built on it. Used in project 32. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Judge (LLM-as-a-judge)** — Using a model with a written rubric to grade other model outputs; must be checked against human labels. Used in projects 3, 11, 12, 16, 17, 21, 22, 24, 25, 26, 27, 28, 29, 31, 33, 35, 36, 39, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+
+### K
+
+- **Key-fact recall** — The share of a document's key facts that appear in its summary. Used in project 4. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Key-value (KV) cache** — Stored attention keys and values for tokens already processed, so each new token does not recompute them. Used in projects 9, 30, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **KL divergence** — A measure of how different one probability distribution is from another; used to keep a tuned model near its reference. Used in project 40. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **k-NN (nearest-neighbour search)** — Finding the k stored vectors closest to a query vector. Used in projects 5, 11, 15, 20, 24, 25. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Knowledge graph** — Data stored as entities (nodes) connected by typed relationships (edges). Used in project 36. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Kubernetes** — A widely used system for running, scaling and restarting containers across many machines. Used in project 30.
+
+### L
+
+- **Label-first generation** — Choosing the target label or property first, then asking a model to write an example with it, for balanced synthetic data. Used in project 25. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Langfuse** — An open-source platform for LLM tracing, prompt management and evaluation. Used in project 33. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Latency** — The time one request takes from start to finish; usually reported as percentiles such as p95. Used in projects 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 15, 17, 18, 21, 23, 26, 29, 30, 32, 33, 35, 38, 39. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Latent diffusion** — Running diffusion in a compressed latent space produced by a VAE, which is far cheaper than pixel space. Used in project 34. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Layer normalisation** — Rescaling the values inside a layer to a stable range, which keeps deep networks trainable. Used in project 9. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Lazy deletion** — Leaving outdated entries in a priority queue and skipping them when popped, instead of updating them in place. Used in project 1. ([Ch 2](../chapters/02-classical-ai-search/README.md))
+- **Learned router** — A small model that predicts which model (cheap or strong) a request needs. Used in project 26. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Learning rate (warm-up, cosine decay)** — How big each training update is; warm-up raises it gradually at the start, cosine decay lowers it smoothly towards the end. Used in projects 9, 17, 35. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Least outstanding requests** — Load balancing that sends each request to the replica with the fewest requests in progress. Used in project 30. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Least privilege** — Giving each component only the minimum permissions it needs. Used in projects 14, 28, 31, 32. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Leiden / Louvain** — Community-detection algorithms that split a graph into tightly connected groups; Leiden fixes some Louvain flaws. Used in project 36. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Length bias** — A judge or reward model preferring longer answers regardless of quality. Used in projects 7, 12, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Lexical search** — Search that matches the actual words of the query; see BM25. Used in projects 25, 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **LiteLLM** — An open-source library and proxy giving one OpenAI-style interface to many model providers. Used in project 26.
+- **LLM gateway** — A proxy in front of all model providers that handles keys, routing, fallbacks, rate limits, caching and cost tracking. Used in projects 3, 13, 18, 23, 26, 27, 32, 33, 38. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **LLM (large language model)** — A transformer trained on huge amounts of text to predict the next token, which lets it write, answer and reason in text. Used in nearly all projects. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **LLMOps** — Practices for versioning, evaluating, deploying and monitoring LLM features. Used in projects 33, 37, 39. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Load balancer** — A component that spreads incoming requests across several servers. Used in projects 26, 30, 32.
+- **Load test** — Sending controlled, realistic traffic to measure how a system behaves as load rises. Used in projects 15, 26, 29, 30, 34, 38. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Local search (GraphRAG)** — Answering specific questions by starting from matching entities and their neighbours in the graph. Used in project 36. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Logistic regression** — A simple, fast linear classifier that outputs probabilities; a strong baseline for text classification with TF-IDF. Used in project 8.
+- **LoRA (low-rank adaptation)** — Fine-tuning by training two small matrices added beside frozen weights, so only a tiny fraction of parameters change. Used in projects 16, 17, 30, 34, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Loss / loss curve** — The number training tries to minimise / its plot over training steps, used to spot under- and overfitting. Used in projects 9, 17, 35, 39, 40. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Loss masking** — Computing training loss only on the assistant's reply tokens, not on the prompt. Used in project 17. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Lost in the middle** — LLMs tend to use information at the start and end of a long context better than information in the middle. Used in projects 3, 4. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Lua script (Redis)** — A small script Redis runs atomically, so a read-check-update cannot be interleaved with other clients. Used in project 26.
+
+### M
+
+- **Macro-averaged recall** — Recall computed per class and then averaged equally, so rare classes count as much as common ones. Used in project 8.
+- **Map-reduce** — Processing pieces separately (map) and then combining the partial results (reduce). Used in projects 4, 36. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Markdown** — A plain-text formatting syntax (# headings, **bold**, lists) used for READMEs and reports. Used in projects 3, 4, 5, 8, 10, 11, 31.
+- **Masking modes** — Ways to hide PII: redact (remove), replace with a type label, or pseudonymise reversibly. Used in projects 9, 17, 23. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **matplotlib** — The standard Python plotting library. Used in projects 9, 35.
+- **Max output tokens** — A hard cap on the reply length, which bounds both cost and latency. Used in projects 2, 13, 26. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **MCP (Model Context Protocol)** — An open standard for connecting AI applications to tools and data: hosts run clients that talk to servers exposing tools, resources and prompts. Used in projects 13, 32. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **MemGPT** — A research system that lets an LLM manage its own long-term memory, like an operating system paging data. Used in project 19. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Memory (agent / conversation)** — Information an assistant keeps across turns or sessions: recent turns in the prompt, plus stored facts retrieved when relevant. Used in projects 1, 3, 5, 11, 13, 16, 17, 19, 24, 26, 27, 28, 30, 34, 35, 37, 40. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Memory injection** — An attacker planting instructions in stored memory so they affect future conversations. Used in project 19. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Memory-bound vs compute-bound** — Limited by moving data from memory (decode) vs limited by arithmetic (prefill). Used in projects 30, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Message alternation** — Chat APIs expect user and assistant messages to alternate; breaking the pattern causes errors. Used in project 3. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Metadata** — Data about data: source, author, date, owner, permissions, page number. Used in projects 3, 5, 11, 15, 16, 34. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Metering (usage)** — Recording each tenant's or user's consumption (tokens, requests, storage) for limits and billing. Used in projects 3, 38. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Middleware** — Code that runs on every request before or after the main handler (logging, auth, caching). Used in project 15.
+- **Mock** — A fake stand-in for a real service (a model, an API) used in tests so they are fast and repeatable. Used in projects 2, 3, 13, 21, 24, 26, 35, 37.
+- **Model alias / capability tier** — A stable name (such as "fast" or "smart") mapped to a concrete model ID, so models can be swapped without code changes. Used in project 26. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Model collapse / shared blind spots** — Quality decay or repeated mistakes when models learn from, or are tested with, data made by similar models. Used in project 25. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Moderation** — Classifying text or images against a content policy (violence, self-harm, sexual content) and blocking or flagging violations. Used in project 23. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Moderation policy** — The written rules defining which content is blocked, flagged or allowed, separate from the classifier that applies them. Used in project 23. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **MRR (mean reciprocal rank)** — The average of 1 ÷ the rank of the first relevant result; rewards putting the right answer near the top. Used in projects 5, 11. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **MT-Bench** — A benchmark of multi-turn questions graded by a strong LLM judge. Used in project 12. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Multi-agent system** — Several model-driven agents working together, often a lead that delegates to sub-agents. Used in project 27. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Multi-head attention** — Several attention operations run in parallel, each free to learn a different kind of relationship. Used in project 9. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Multi-hop question** — A question that needs facts from several linked sources combined in sequence. Used in projects 25, 29, 36. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Multimodal model** — A model that takes or produces more than one kind of data, such as text and images. Used in projects 4, 6, 16, 24. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Multi-tenancy** — One system serving many customer organisations (tenants) while keeping their data and resources separate. Used in projects 15, 33, 38. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Mutation testing** — Deliberately varying test inputs (or attacks) to check that defences catch the variants too. Used in project 31. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+
+### N
+
+- **nanoGPT** — Andrej Karpathy's minimal, readable GPT training code, a common reference for small from-scratch models. Used in project 9.
+- **NDCG** — Normalised discounted cumulative gain: a ranking metric that rewards highly relevant items near the top. Used in project 24. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Near-duplicate detection** — Finding items that are almost the same (reworded text, resized images), often by embedding similarity. Used in projects 17, 24, 25. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Negative prompt** — Text telling a diffusion model what to avoid in the image. Used in project 34. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **NER (named-entity recognition)** — Finding names of people, organisations, places and similar items in text. Used in project 23. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Next-token prediction** — The training task of guessing the following token from all previous ones; how LLMs learn. Used in projects 9, 17, 40. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Noisy neighbour** — One tenant's heavy usage slowing everyone else on shared infrastructure. Used in project 38.
+- **Novelty effect** — Users reacting to something simply because it is new; early experiment results can fade. Used in projects 25, 39. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Nullable field** — A schema field allowed to be empty, so a model can say "not present" instead of inventing a value. Used in projects 6, 22, 38. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **NumPy** — The core Python library for fast arrays and maths. Used in projects 1, 5, 12.
+
+### O
+
+- **OAuth** — A standard for letting an app act on a user's behalf with limited, revocable access, without sharing the password. Used in project 32. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Object storage** — Storage for whole files (images, audio, logs) addressed by key, such as Amazon S3 and compatible services. Used in projects 11, 20, 27, 28, 34, 37.
+- **Observability** — Logs, metrics and traces that let you see what a system is doing and why. Used in projects 26, 30, 33. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **OCR** — Optical character recognition: reading text from images or scanned pages. Used in projects 4, 11. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Offboarding / deletion** — Removing a user's or tenant's data everywhere (database, indexes, caches, backups) when they leave. Used in projects 1, 11, 18, 19, 20, 29, 38. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Online evaluation** — Measuring quality on live traffic (sampled judge scores, user feedback, A/B tests) rather than only offline. Used in projects 29, 33, 39. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **On-policy data** — Training examples generated by the current model itself rather than by another model. Used in project 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **OpenAI-compatible API** — An HTTP interface shaped like OpenAI's, which many servers (vLLM, local runners) imitate so one client works with all. Used in projects 2, 3, 17, 26, 30. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **OpenTelemetry (OTel)** — An open standard and set of SDKs for producing traces, metrics and logs; its GenAI conventions name LLM-call attributes. Used in projects 26, 33. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Open-weight model** — A model whose trained weights are published so you can download and run it yourself. Used in projects 2, 3, 5, 8, 10, 16, 17, 20, 30, 35, 40. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Orchestrator–worker pattern** — A lead agent breaks a task into subtasks, hands each to a worker agent and combines their results. Used in projects 27, 28, 37. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Output truncation** — Cutting very long tool output (logs, files) before it goes back to the model, keeping the useful parts. Used in projects 28, 32. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Overfitting** — Fitting the training data so closely that performance on new data gets worse. Used in projects 9, 12, 17. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Over-refusal** — A model refusing safe, legitimate requests because they look superficially risky. Used in projects 11, 23, 31, 34, 40. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **OWASP** — An open security community whose Top 10 lists (including one for LLM applications) name the most critical risks. Used in projects 14, 21, 23, 31, 38. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+
+### P
+
+- **p50 / p95 / p99 latency** — The time within which 50%, 95% or 99% of requests complete; tail percentiles show the worst user experience. Used in projects 5, 6, 7, 8, 11, 12, 15, 16, 18, 19, 23, 24, 26, 29, 30, 32, 33, 34, 35, 38. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **PagedAttention** — Storing the KV cache in fixed-size blocks, like operating-system memory pages, to waste less GPU memory (vLLM). Used in project 30. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Parallel tool calls** — A model asking for several independent tool calls in one turn so they can run at the same time. Used in project 13. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **PDF parsing** — Extracting text, layout and page numbers from PDF files (with `pypdf` or `pdfplumber`), often the hardest part of RAG. Used in projects 4, 5, 6, 10, 11, 27, 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Peeking problem** — Repeatedly checking an experiment and stopping as soon as it looks significant, which inflates false positives. Used in project 39. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **PEFT** — Parameter-efficient fine-tuning (and the Hugging Face library of that name): adapting a model by training only a small number of parameters. Used in projects 17, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Permission filtering** — Restricting retrieval to what the asking user may see, inside the search query itself. Used in projects 11, 13, 22, 29, 31, 32, 38. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Perplexity** — A measure of how surprised a language model is by text; lower means it predicts the text better. Used in project 35. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **pgvector** — A PostgreSQL extension that stores vectors and supports nearest-neighbour search with HNSW or IVFFlat indexes. Used in projects 5, 11, 15, 19, 21, 24, 29, 38. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **PII (personally identifiable information)** — Data that can identify a person: names, emails, phone numbers, ID numbers, addresses. Used in projects 17, 23, 26, 33. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Policy as code** — Writing business or safety rules as testable code rather than as prompt instructions. Used in project 21. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Position bias** — Higher-ranked or first-shown items getting more clicks or judge preference regardless of quality. Used in projects 12, 24, 36. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Positional embedding** — Information added to token vectors so the transformer knows their order. Used in project 9. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **PostgreSQL** — A popular open-source relational database; the shared storage choice for these projects. Used in projects 2, 5, 6, 10, 11, 12, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 32, 33, 34, 36, 37, 38, 39.
+- **PPO** — Proximal policy optimisation: the reinforcement-learning algorithm classically used in RLHF. Used in project 40. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Precision and recall** — Of the items flagged, the share that were right / of the items that should be flagged, the share found. Used in projects 4, 5, 8, 9, 11, 14, 15, 19, 20, 22, 23, 24, 29, 30, 34, 35, 36, 38. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Preference pair** — One prompt with a chosen (better) and a rejected (worse) response, used for DPO or reward-model training. Used in project 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Prefill vs decode** — Processing the whole prompt in parallel (prefill) vs generating output tokens one at a time (decode). Used in projects 30, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Pre-filter vs post-filter** — Applying metadata filters before vector search (exact but can be slow) or after it (fast but can return too few results). Used in project 24. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Prefix caching / prompt caching** — Reusing the computed state of a prompt prefix shared across requests, cutting cost and time to first token. Used in projects 3, 6, 7, 8, 13, 15, 19, 26, 28, 29, 30, 35, 38. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Presidio** — Microsoft's open-source toolkit for detecting and anonymising PII. Used in project 23. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Primary key (PK)** — The column that uniquely identifies each row in a table. Used in projects 2, 5, 11, 12, 14, 15, 16, 19, 20, 21, 22, 24, 26, 27, 28, 29, 31, 33, 34, 36, 37, 38, 39.
+- **Primary metric** — The one metric an experiment is designed to move and decide on. Used in project 39. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Priority queue** — A data structure that always gives back the item with the smallest key first. Used in project 1. ([Ch 2](../chapters/02-classical-ai-search/README.md))
+- **Prometheus** — An open-source monitoring system that scrapes and stores numeric metrics over time. Used in projects 30, 33. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Prompt** — The instructions and context given to a model for one request. Used in projects 2, 3, 4, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 39, 40. ([Ch 5](../chapters/05-prompt-engineering/README.md))
+- **Prompt injection** — Text that tries to override a model's instructions, typed directly or hidden in content it reads. Used in projects 6, 11, 12, 13, 14, 19, 21, 22, 27, 28, 31, 32, 37. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Prompt registry** — A versioned store of prompts, so each output can be traced to the exact prompt that produced it. Used in project 33. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Prompt template** — Prompt text with placeholders (such as `{{ticket_text}}`) filled in at run time. Used in projects 2, 4, 6, 17, 31, 32, 33, 40. ([Ch 5](../chapters/05-prompt-engineering/README.md))
+- **Prompt versioning** — Giving every prompt change a version ID and recording it with every result. Used in projects 2, 8, 12, 15, 25, 28, 33. ([Ch 5](../chapters/05-prompt-engineering/README.md))
+- **Proposal / execution separation** — The model only proposes an action; separate trusted code checks and performs it after approval. Used in project 21. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Provenance** — A record of where data or content came from and how it was produced or changed (C2PA for media). Used in projects 25, 34. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Proxy** — A server that sits between clients and another service, forwarding and possibly checking or changing requests. Used in projects 15, 26, 30.
+- **Pseudonymisation** — Replacing personal data with consistent placeholders (PERSON_1) that can be reversed only with a separately stored key. Used in project 23. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Pydantic** — A Python library that defines data shapes as classes and validates data against them; exports JSON Schema. Used in projects 4, 6, 12, 13, 25. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **pytest** — The most widely used Python testing framework. Used in project 1.
+- **Python** — The programming language used across this handbook; version 3.14 is the shared choice here. Used in nearly all projects.
+- **PyTorch** — The most widely used open-source deep-learning library. Used in projects 9, 17, 34, 40. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+
+### Q
+
+- **QLoRA** — LoRA fine-tuning on top of a base model loaded in 4-bit precision, to save memory. Used in projects 17, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Quantisation** — Storing weights (and sometimes activations) with fewer bits, such as 8 or 4, to save memory and speed up inference. Used in projects 5, 17, 30, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Query rewriting** — Reformulating the user's question (adding context, expanding acronyms) before retrieval. Used in projects 10, 11, 29, 33. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Query understanding** — Turning a raw search query into structured intent and filters (category, price, colour). Used in project 24. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Queue (job queue)** — A waiting line of tasks that workers pull from, decoupling slow work from the request. Used in projects 1, 4, 6, 11, 16, 18, 19, 20, 21, 22, 27, 28, 30, 34, 37, 38, 39. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+
+### R
+
+- **RAG (retrieval-augmented generation)** — Retrieving relevant passages and adding them to the prompt so the model answers from them. Used in projects 5, 8, 10, 11, 12, 15, 17, 19, 21, 23, 24, 25, 27, 29, 31, 33, 36, 38, 39, 40. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Rank agreement** — Whether two evaluation sets (such as synthetic and real) rank systems in the same order. Used in project 25. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Rank (r) and alpha in LoRA** — The size of LoRA's small matrices (r) and the scale applied to their update (alpha). Used in project 17. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Rate limit** — A cap on requests or tokens per time window; exceeding it returns HTTP 429. Used in projects 2, 3, 4, 7, 13, 14, 22, 26, 27, 30, 32, 34, 37, 38. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **React** — A JavaScript library for building interactive web interfaces; the shared front-end choice here. Used in projects 1, 2, 5, 7, 11, 12, 13, 14, 16, 20, 21, 22, 24, 25, 27, 28, 31, 33, 34, 36, 37, 38, 39.
+- **ReAct** — An agent pattern that interleaves reasoning, an action (tool call) and the resulting observation. Used in projects 13, 27. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Read replica** — A read-only copy of a database kept in sync with the primary, so heavy reads cannot change or slow the main one. Used in project 14.
+- **Read-only tools** — Tools that can look things up but cannot change anything, so they are safe to run without approval. Used in projects 13, 14, 21, 27, 28, 32. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Recall scoring (memory)** — Ranking stored memories by relevance, recency and importance to choose which to inject. Used in project 19. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Recall@k** — The share of questions whose relevant passage appears in the top k results. Used in projects 5, 11, 19, 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Reciprocal rank fusion (RRF)** — Merging ranked lists by giving each item 1 ÷ (k + rank) from every list and summing. Used in projects 5, 11, 24, 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Redaction / masking** — Removing or replacing sensitive text (such as PII) before it is stored or sent on. Used in projects 2, 8, 12, 23, 26, 33. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Redis** — A very fast in-memory key-value store, used for caches, counters and simple queues. Used in projects 15, 26, 27, 34.
+- **Red-teaming** — Deliberately attacking your own system to find failures before real users or attackers do. Used in projects 25, 28, 31. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Reference model** — The frozen starting model DPO or RLHF compares against, so the tuned model does not drift too far. Used in project 40. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Reference-based metric** — A metric that scores output by comparing it with human-written references (BLEU, ROUGE, CIDEr). Used in project 16. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Refine strategy** — Summarising a long document by updating a running summary chunk by chunk. Used in projects 1, 4, 32. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Regression gate** — A CI step that blocks a change if evaluation scores fall below the current version's. Used in projects 2, 5, 8, 12, 16, 17, 28, 29, 31, 39, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Rejection sampling** — Accepting or rejecting proposed samples by a probability rule so the final output follows the target distribution. Used in project 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Reranker** — A slower, more accurate second-stage model that reorders the top retrieved candidates. Used in project 29. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Reserve-and-reconcile** — Rate limiting on tokens: reserve the estimated tokens before a call, then correct the count with real usage afterwards. Used in project 26. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Residual connection** — Adding a layer's input to its output, which keeps deep networks trainable. Used in project 9. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Resources (MCP)** — Read-only data an MCP server exposes for the application to put into context. Used in project 32. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Retrieved few-shot examples** — Choosing the examples in a prompt by similarity to the current input rather than using a fixed set. Used in project 8. ([Ch 5](../chapters/05-prompt-engineering/README.md))
+- **Retry with feedback** — When output fails validation, sending the error back to the model and asking it to fix it. Used in projects 2, 3, 6, 13, 14, 21, 24, 26, 30, 33, 37. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Reward margin** — In DPO, how much more the model now prefers the chosen answer than the rejected one, relative to the reference. Used in project 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Right to erasure** — The legal right (under GDPR and similar laws) to have your personal data deleted. Used in project 19. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Risk tiers** — Classing actions by how much harm they could do (read, reversible write, irreversible) and controlling each tier differently. Used in projects 13, 14. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **RLHF** — Reinforcement learning from human feedback: train a reward model on human preferences, then optimise the model against it. Used in project 40. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Row-level security (RLS)** — A PostgreSQL feature that automatically filters table rows by the current user or tenant. Used in project 38. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Run memory** — A shared store where agents in one research run record findings, so the lead and sub-agents do not repeat work. Used in project 27. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Runbook** — A written step-by-step guide for handling a specific alert or incident. Used in project 33. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+
+### S
+
+- **Sample ratio mismatch (SRM)** — When experiment groups end up a different size from the planned split, signalling a bug that invalidates results. Used in project 39. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Sample size / statistical power** — How many users an experiment needs / the chance it detects a real effect of a given size. Used in projects 12, 39. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Sandbox** — An isolated environment where code or agent actions cannot reach real systems, networks or secrets. Used in projects 13, 22, 28. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Scaled dot-product attention** — Attention computed as softmax of query–key dot products divided by √d, then used to weight the values. Used in project 9. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Scheduler / sampler (diffusion)** — The algorithm deciding how much noise to remove at each diffusion step; fewer steps are faster but rougher. Used in project 34. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Schema** — The required structure of data: field names, types and which fields are required. Used in projects 6, 8, 10, 12, 13, 14, 25, 32, 38. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Schema linking** — Choosing which tables and columns a text-to-SQL question needs before generating the query. Used in project 14. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **scikit-learn** — The standard Python library for classic machine learning (classifiers, metrics, splits). Used in project 8.
+- **SciPy** — The Python library of scientific and statistical functions. Used in project 39.
+- **Scope key** — The part of a cache key that limits reuse to the right user, tenant or permission set. Used in project 15. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **SDK (software development kit)** — A provider's client library that wraps its API in convenient functions. Used in projects 2, 3, 26, 30, 32, 33, 37. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Secrets management** — Keeping credentials (API keys, tokens) out of code and logs, stored and injected securely. Used in projects 2, 11, 19, 22, 23, 28, 31. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Seed** — The starting value of a random-number generator; fixing it makes runs repeatable. Used in projects 1, 8, 9, 12, 17, 25, 31, 34, 36, 40.
+- **Self-attention** — See Attention. Used in project 9. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Self-Instruct** — Generating instruction-following training data by prompting a model with a few seed tasks to write many more. Used in project 25.
+- **Self-speculative decoding** — Speculative decoding where the model drafts with part of itself (early layers or extra heads) instead of a separate model. Used in project 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Semantic cache** — A cache that returns a stored answer when a new query is close in meaning (by embedding similarity) to an earlier one. Used in projects 15, 26, 29, 38. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Semantic search** — Search by meaning using embeddings rather than exact words. Used in project 5. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Semaphore** — A counter that limits how many tasks may run at once, for example concurrent API calls. Used in project 4.
+- **Sensitive inference** — A model guessing protected traits (health, religion, ethnicity) from an image or text; captions must not do this. Used in project 16. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **SentencePiece / WordPiece** — Subword tokenizer algorithms used by many models. Used in project 7. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **sentence-transformers** — A Python library of models for sentence embeddings and cross-encoder reranking. Used in project 29.
+- **Server-sent events (SSE)** — A one-way HTTP stream where the server pushes `data:` lines to the client; used to stream tokens. Used in projects 2, 3, 11, 27, 34. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **SFT (supervised fine-tuning)** — Training a model on example prompts paired with ideal responses. Used in projects 17, 40. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Shadow mode** — Running a new version on real traffic without showing its output to users, to compare it safely. Used in project 26. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Short-term vs long-term memory** — What is kept in the current prompt vs facts stored outside and retrieved in later sessions. Used in projects 3, 19. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Signal (workflow)** — A message sent into a running durable workflow, such as a human approval, that it can wait for. Used in projects 21, 37. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Silero VAD** — A small, accurate open-source voice-activity-detection model. Used in project 18.
+- **Similarity threshold** — The minimum similarity score needed to count two items as a match (for example a semantic-cache hit). Used in projects 15, 25. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Sliding window (context)** — Keeping only the most recent turns of a conversation in the prompt. Used in projects 3, 26, 35. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **SLO (service-level objective)** — An internal reliability target, such as "p95 time to first token under 1 second". Used in projects 30, 34, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Soft delete** — Marking a record deleted (hidden) instead of erasing it, often with an audit entry; real erasure may follow later. Used in project 19.
+- **Softmax** — A function that turns a list of scores into probabilities that add up to 1. Used in projects 9, 16. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Speculative decoding** — A small draft model proposes several tokens and the large model checks them in one pass, with identical output quality. Used in projects 30, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Speech-to-speech model** — A model that listens and speaks directly without separate text steps, cutting latency. Used in project 18. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **SQL** — The standard language for querying and changing relational databases. Used in projects 2, 5, 11, 14, 22, 29.
+- **SQLite** — A small database stored in a single file, needing no server. Used in projects 2, 12.
+- **State space search** — Framing a problem as states, actions, a goal test and a path cost, then searching for a path to the goal. Used in project 1. ([Ch 2](../chapters/02-classical-ai-search/README.md))
+- **Stateless** — Keeping no memory between requests; each model call must include everything it needs. Used in projects 3, 26, 32. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **statement_timeout** — A PostgreSQL setting that cancels any query running longer than a limit. Used in project 14.
+- **Static analysis** — Checking code for problems without running it (linters, type checkers). Used in project 22.
+- **Stop reason** — Why the model stopped generating: finished, hit max tokens, requested a tool, or hit a stop sequence. Used in projects 2, 13. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Streaming** — Sending output to the user piece by piece as it is generated, instead of all at the end. Used in projects 1, 2, 3, 7, 11, 18, 20, 23, 26, 30, 32, 35, 39. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Structured output** — Model output constrained to match a schema (such as JSON with given fields). Used in projects 4, 6, 12, 19, 20, 22, 24, 25, 36, 37. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **STT (speech-to-text)** — Converting spoken audio into text; see ASR. Used in projects 18, 20. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Stuff strategy** — Putting the whole document into one prompt when it fits the context window. Used in projects 4, 10, 19. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Sub-agent** — A worker agent given a focused task and its own clean context by a lead agent. Used in project 27. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Sub-agent brief** — The task description a lead agent writes for a worker: goal, scope, output format and limits. Used in project 27. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Summarisation** — Producing a shorter text that keeps the key points of a longer one. Used in projects 3, 4, 7, 19, 20, 22, 23, 28, 29, 32, 36, 37. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Summarise-and-drop** — Replacing old conversation turns with a short summary to stay within the context budget. Used in project 3. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **SWE-bench** — A benchmark of real GitHub issues where an agent must produce a fix that passes the project's tests. Used in projects 22, 28. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Synthetic data** — Training or test data generated by models or programs rather than collected from real users. Used in projects 8, 23, 25. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **System prompt** — High-priority instructions setting the model's role, rules and output format for a conversation. Used in projects 2, 3, 7, 11, 18, 19, 28, 31, 35. ([Ch 5](../chapters/05-prompt-engineering/README.md))
+
+### T
+
+- **Target modules (LoRA)** — Which weight matrices (attention projections, MLP layers) get LoRA adapters. Used in project 17. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Temperature** — A sampling setting: low values make output predictable, high values make it more varied. Used in projects 2, 9, 30, 31, 35. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Temporal (workflow engine)** — An open-source durable-execution engine that persists each workflow step so long processes survive crashes. Used in projects 36, 37. ([Ch 9](../chapters/09-ai-agents/README.md))
+- **Tenant / tenant context** — One customer organisation in a shared system / the tenant ID attached to every request and query. Used in projects 15, 33, 38. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Test tampering** — An agent editing or deleting tests to make them pass instead of fixing the code. Used in project 28. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Text-to-SQL** — Turning a natural-language question into a database query. Used in project 14. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **TF-IDF** — Word weighting: how often a word appears in a document times how rare it is across all documents. Used in project 8. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Throughput** — Work completed per unit of time, such as requests or tokens per second. Used in projects 4, 6, 25, 26, 30, 34, 37. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Tie-breaking** — The rule for ordering items with equal scores, which can change efficiency and must avoid comparing incomparable objects. Used in project 1. ([Ch 2](../chapters/02-classical-ai-search/README.md))
+- **tiktoken** — OpenAI's fast open-source BPE tokenizer library. Used in projects 4, 7. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Time per output token (TPOT)** — The average time to generate each output token after the first. Used in projects 7, 30, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Time to first token (TTFT)** — The delay between sending a request and receiving the first output token. Used in projects 2, 3, 7, 15, 18, 30, 35. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Token** — The unit of text a model reads and writes, often a word piece of about four characters of English. Used in projects 2, 3, 4, 6, 7, 8, 9, 11, 13, 15, 17, 18, 19, 22, 23, 26, 27, 28, 30, 31, 32, 33, 35, 38, 40. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Token bucket** — A rate-limiting method where a bucket refills at a steady rate and each request spends tokens from it. Used in project 26. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Token passthrough** — An anti-pattern where a server forwards a client's access token to another service unchanged instead of using its own. Used in project 32. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Token vault** — A secure store mapping placeholder tokens back to the original sensitive values. Used in project 23. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Tokenizer** — The component that splits text into tokens and maps them to numeric IDs. Used in projects 2, 4, 7, 9, 17, 35, 40. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Tool annotations (MCP)** — Hints a server attaches to a tool, such as read-only or destructive; clients must not trust them blindly. Used in project 32. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Tool calling (tool use)** — The model asking your code to run a named function with JSON arguments; your code validates, runs it and returns the result. Used in projects 3, 6, 13, 21, 26, 27, 28, 31, 32, 33. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Tool schema** — The name, description and JSON Schema of a tool's arguments that the model sees. Used in projects 13, 32. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Top-k / top-p sampling** — Sampling the next token only from the k most likely tokens, or from the smallest set whose probabilities add up to p. Used in project 9. ([Ch 4](../chapters/04-large-language-models/README.md))
+- **Trace and span** — A trace records one whole request; spans are its timed steps (a model call, a tool call), nested inside it. Used in projects 2, 4, 6, 7, 10, 12, 13, 20, 23, 26, 27, 28, 33, 38, 39, 40. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Transformer** — The neural architecture behind modern LLMs, built from stacked attention and feed-forward blocks. Used in projects 5, 7, 9, 16, 17, 24, 29, 35, 40. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+- **Transport (MCP)** — How MCP messages travel: stdio for a local process, or Streamable HTTP for a remote server. Used in project 32. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **tree-sitter** — A library that parses source code in many languages into syntax trees, used to find function boundaries. Used in project 22.
+- **TRL** — Hugging Face's library of trainers for SFT, DPO and other post-training methods. Used in projects 17, 40.
+- **TTL (time to live)** — How long a cached item stays valid before it expires. Used in projects 15, 23, 24. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **TTS (text-to-speech)** — Generating spoken audio from text. Used in project 18. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Turn detection (endpointing)** — Deciding when the user has finished speaking so the assistant can reply. Used in project 18. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Two-stage retrieval** — A fast first stage fetches many candidates; a slower, more accurate stage reranks a few. Used in projects 29, 40. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Typer** — A Python library for building command-line interfaces from type-hinted functions. Used in project 12.
+
+### U
+
+- **UI (user interface)** — The screens and controls people use to interact with a system. Used in projects 1, 2, 4, 5, 6, 7, 11, 13, 14, 16, 19, 20, 21, 24, 25, 27, 28, 33, 34, 36, 38, 39.
+- **Unicode normalisation** — Converting text to one standard form (such as NFC) so the same characters always have the same bytes and offsets. Used in projects 7, 15.
+- **Unit economics** — Cost and revenue per unit (per request, per user, per tenant), used to check a product can pay for itself. Used in project 38. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Unit of randomisation** — What gets randomly assigned in an experiment (user, session, request); it should match how effects spread. Used in project 39. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Unit test** — A small automated test of one function or component in isolation. Used in projects 1, 4, 5, 7, 8, 10, 12, 13, 15, 25, 31, 37.
+- **Untrusted input** — Any content not written by you (user text, documents, web pages, diffs) that must not be obeyed as instructions. Used in projects 13, 22, 28, 32. ([Ch 12](../chapters/12-safety-ethics-governance/README.md))
+- **Usage ledger** — An append-only record of every metered event, from which bills and quotas are computed. Used in project 38. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+
+### V
+
+- **VAD (voice activity detection)** — Detecting when someone is speaking in an audio stream. Used in project 18. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **VAE (variational autoencoder)** — A network that compresses images into a small latent space and decodes them back; latent diffusion uses one. Used in project 34. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Validation (output)** — Checking model output against a schema and business rules before using it. Used in projects 1, 2, 6, 8, 9, 12, 13, 14, 16, 17, 21, 23, 24, 25, 32, 37, 39. ([Ch 6](../chapters/06-building-llm-apps-in-python/README.md))
+- **Vector database / vector store** — A store that indexes embeddings for fast nearest-neighbour search, with filters and updates. Used in projects 5, 11, 15, 19, 21, 24, 27, 29, 36, 38. ([Ch 7](../chapters/07-embeddings-vector-databases-and-rag/README.md))
+- **Virtual key** — A gateway-issued key per team or app that maps to real provider keys, with its own limits and usage tracking. Used in project 26. ([Ch 13](../chapters/13-ai-system-design-and-genai-products/README.md))
+- **Vision-language model (VLM)** — A model that takes images and text together and answers in text. Used in project 16. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Vite** — A fast build tool and development server for front-end JavaScript apps. Used in project 2.
+- **vLLM** — A popular open-source LLM inference server built around PagedAttention and continuous batching. Used in projects 3, 17, 26, 30, 35, 40. ([Ch 11](../chapters/11-llm-serving-and-inference/README.md))
+- **Vocabulary size** — How many distinct tokens a tokenizer has; bigger vocabularies mean fewer tokens per text but a larger model layer. Used in projects 7, 9. ([Ch 3](../chapters/03-transformers-and-embeddings/README.md))
+
+### W
+
+- **Warm pool** — Pre-started sandboxes or workers kept ready so new jobs do not wait for a cold start. Used in project 28. ([Ch 14](../chapters/14-ai-case-studies/README.md))
+- **Watermarking** — Embedding a hidden, machine-detectable signal in generated content to mark it as AI-made. Used in project 34. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Webhook** — An HTTP call a service makes to your URL when an event happens (for example a new pull request). Used in project 22.
+- **WebSocket** — A two-way connection between browser and server that stays open, suited to streaming audio. Used in project 18.
+- **Weighted A\*** — A* with the heuristic multiplied by a weight above 1: faster, with cost at most that many times the optimum. Used in project 1. ([Ch 2](../chapters/02-classical-ai-search/README.md))
+- **WER (word error rate)** — Speech-recognition error rate: substituted, deleted and inserted words divided by reference words. Used in projects 18, 20. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Whisper** — OpenAI's open speech-recognition model family. Used in projects 18, 20. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Win rate** — The share of head-to-head comparisons one model's answer wins against another's. Used in projects 12, 35, 40. ([Ch 8](../chapters/08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md))
+- **Word timestamps** — Start and end times for each recognised word, used to link transcript text back to audio. Used in project 20. ([Ch 10](../chapters/10-generative-models-beyond-text/README.md))
+- **Worker** — A background process that takes jobs from a queue and does the slow work. Used in projects 11, 20, 22, 27, 34, 37, 38.
+- **Workflow versioning / patching** — Changing durable-workflow code safely while old runs are still in progress, by branching on a version marker. Used in project 37. ([Ch 9](../chapters/09-ai-agents/README.md))
+
+### Y
+
+- **YAML** — A human-readable configuration format based on indentation. Used in projects 10, 12, 17, 23, 35.
+
+### Z
+
+- **Zero-shot prompting** — Asking a model to do a task from instructions alone, with no examples. Used in projects 8, 16, 17. ([Ch 5](../chapters/05-prompt-engineering/README.md))

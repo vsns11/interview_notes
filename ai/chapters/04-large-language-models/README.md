@@ -1,13 +1,13 @@
 # Chapter 4 — Large Language Models
 
-[Chapter 3](../03-transformers-and-embeddings/README.md) built the transformer. This chapter answers what happens when you make one enormous, train it on a large fraction of the public internet, and then teach it to follow instructions. The result — a **large language model (LLM)** — powers ChatGPT, Claude, Gemini, Copilot and thousands of products built on their APIs.
+[Chapter 3](../03-transformers-and-embeddings/README.md) built the transformer. This chapter answers what happens when you make one enormous, train it on a large fraction of the public internet, and then teach it to follow instructions. The result — a **large language model (LLM)** — powers ChatGPT, Claude, Gemini, Copilot and thousands of products built on their APIs (application programming interfaces: web services your code calls to use the model).
 
-We cover the LLM as a *model* (how it is trained and why scale works) and as a *system component* (how it behaves when you build on it: latency, cost, context limits, failure modes). Interviewers probe both.
+We cover the LLM as a *model* (how it is trained and why scale works) and as a *system component* (how it behaves when you build on it: latency, i.e. how long a response takes, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md); cost, context limits, failure modes). Interviewers probe both.
 
 **What you'll learn**
 
-1. What an LLM is, the GPT lineage, and how it differs from earlier NLP models.
-2. **Next-token prediction** — trained end to end on a tiny CPU-sized GPT.
+1. What an LLM is, the GPT lineage, and how it differs from earlier NLP (natural language processing: computers working with human language) models.
+2. **Next-token prediction** — trained end to end on a tiny GPT small enough for a CPU (an ordinary computer processor).
 3. **Pretraining data and scale**, and **scaling laws** (Kaplan, Chinchilla's ~20 tokens per parameter).
 4. **Post-training**: instruction tuning (SFT), **RLHF**, **DPO**, and RL from verifiable rewards.
 5. **Decoding**: greedy, beam search, temperature, top-k, top-p — with a runnable demo.
@@ -25,7 +25,7 @@ All code lives in `code/` and runs on CPU in seconds. Outputs below are real.
 ## 4.1 What an LLM is
 
 ### What it is
-A **large language model** is a neural network — almost always a decoder-only transformer — trained on a huge amount of text to **predict the next token**. "Large" refers to both the number of **parameters** (learned numbers; billions to trillions) and the amount of training text (trillions of tokens).
+A **large language model** is a neural network — almost always a decoder-only transformer (Chapter 3's design that only looks back at earlier tokens) — trained on a huge amount of text to **predict the next token**. "Large" refers to both the number of **parameters** (learned numbers; billions to trillions) and the amount of training text (trillions of tokens).
 
 Analogy: your phone keyboard's word suggestion, scaled up by many orders of magnitude. The keyboard has seen your messages; an LLM has seen books, websites, code and papers, so its "suggestions" can continue an essay, a proof, or a Python function.
 
@@ -50,10 +50,10 @@ flowchart LR
 
 | Model (OpenAI) | Year | What changed |
 |---|---|---|
-| GPT-1 | 2018 | Showed that generative pre-training on unlabeled text, followed by fine-tuning, beats task-specific models |
+| GPT-1 | 2018 | Showed that generative pre-training on unlabeled text, followed by fine-tuning (extra, targeted training on a smaller dataset), beats task-specific models |
 | GPT-2 | 2019 | 1.5B parameters; surprisingly coherent long text; staged release over misuse concerns |
 | GPT-3 | 2020 | 175B parameters, 300B training tokens; **few-shot learning from examples in the prompt** without any fine-tuning |
-| InstructGPT / ChatGPT | 2022 | Instruction tuning + RLHF made the model follow requests; ChatGPT (Nov 2022) brought LLMs to the public |
+| InstructGPT / ChatGPT | 2022 | Instruction tuning + RLHF (training from human ratings; Section 4.6) made the model follow requests; ChatGPT (Nov 2022) brought LLMs to the public |
 | GPT-4 | 2023 | Large gains in reasoning and factual accuracy, stronger multilingual ability, image input |
 | GPT-4o, o1, GPT-5 and later | 2024–2026 | Native multimodality (text, image, audio), much longer context windows, and separate **reasoning** modes that spend extra computation thinking before answering |
 
@@ -61,7 +61,7 @@ Other labs followed similar arcs (Section 4.14).
 
 ### How LLMs differ from earlier NLP
 - **Scale.** Training sets grew from millions of words to trillions of tokens; models from millions to hundreds of billions of parameters.
-- **Architecture.** Transformers process a whole sequence in parallel with attention instead of word by word (Chapter 3), capturing long-range context and training efficiently on GPUs.
+- **Architecture.** Transformers process a whole sequence in parallel with attention instead of word by word (Chapter 3), capturing long-range context and training efficiently on GPUs (graphics processors built for massively parallel arithmetic).
 - **Pre-train once, adapt many times.** One general model is pre-trained on broad text, then adapted — by fine-tuning, by instructions and examples in the prompt, or by retrieval — instead of training a new model per task.
 
 ### Real-world uses
@@ -71,7 +71,7 @@ Other labs followed similar arcs (Section 4.14).
 | Code generation | GitHub Copilot, Claude Code, Cursor: completing lines, writing functions from descriptions, fixing bugs |
 | Summarization | Condensing reports, meeting transcripts, research papers, legal documents |
 | Writing and creative work | Drafting blog posts, product descriptions, social posts; brainstorming plots and characters |
-| Extraction and classification | Turning emails or invoices into structured JSON; routing and tagging |
+| Extraction and classification | Turning emails or invoices into structured JSON (a standard text format for structured data); routing and tagging |
 | Agents | Models that call tools and act in multi-step loops ([Chapter 9](../09-ai-agents/README.md)) |
 
 ### TL;DR
@@ -91,11 +91,11 @@ This one objective is **self-supervised**: every position of every document prov
 
 ### How it works
 1. **Input:** a window of tokens, e.g. `[The, cat, sat, on, the]`.
-2. **Targets:** the same sequence **shifted by one**: `[cat, sat, on, the, mat]`. With a causal mask (Chapter 3), one forward pass yields a prediction at every position.
-3. **Loss:** **cross-entropy** = −log P(correct next token), averaged over positions. If the model gives the right token probability 0.5, the loss is −ln 0.5 = 0.69; at 0.9 it is 0.105; at 0.01 it is 4.6.
+2. **Targets:** the same sequence **shifted by one**: `[cat, sat, on, the, mat]`. With a causal mask (Chapter 3; it hides future tokens), one forward pass (one run of the input through the network) yields a prediction at every position.
+3. **Loss:** **cross-entropy** = −log P(correct next token), averaged over positions. If the model gives the right token probability 0.5, the loss is −ln 0.5 = 0.69 (ln = natural logarithm); at 0.9 it is 0.105; at 0.01 it is 4.6.
 4. **Perplexity** = e^loss — roughly "how many tokens the model is choosing between". A uniform guess over V tokens has loss ln V and perplexity V.
-5. **Backpropagate** and update all parameters. Repeat over trillions of tokens.
-6. **At inference**, the model produces a distribution for the last position only; a **decoding strategy** (Section 4.7) picks the token.
+5. **Backpropagate** (work out how each parameter should change to reduce the loss) and update all parameters. Repeat over trillions of tokens.
+6. **At inference** (when the trained model is used, rather than trained), the model produces a distribution for the last position only; a **decoding strategy** (Section 4.7) picks the token.
 
 ### Code: a tiny GPT trained on a toy "internet"
 The script generates 400 random sentences from a tiny grammar ("the cat saw a dog.", "a bird sat on the log.") and trains a 2-layer, character-level GPT for 400 steps.
@@ -150,10 +150,10 @@ sample T=1 : 'the dog sat on a dog. the cat saw the log. the c'
 
 What to notice:
 - The loss starts near ln(18), the uniform-guess level, and falls fast. It cannot reach 0 because the data is genuinely random at some positions.
-- After "the cat sat on the ", the grammar allows *mat*, *log* or *cat* (1/3 each). The model has learned that exactly those three letters are plausible — its estimates (0.47 / 0.38 / 0.14) are imperfect after only 400 steps, which is a small-scale picture of how real LLMs are **calibrated but not perfectly**.
+- After "the cat sat on the ", the grammar allows *mat*, *log* or *cat* (1/3 each). The model has learned that exactly those three letters are plausible — its estimates (0.47 / 0.38 / 0.14) are imperfect after only 400 steps, which is a small-scale picture of how real LLMs are **calibrated but not perfectly** (calibrated = the probabilities it states roughly match how often it is right).
 - Greedy decoding always takes the top letter; sampling produces varied, still grammatical sentences. Real LLMs are this loop with ~100,000-token vocabularies, billions of parameters and trillions of training tokens.
 
-(The training time depends on your CPU, and the sampled line may differ slightly across PyTorch versions; the greedy line is deterministic.)
+(The training time depends on your CPU, and the sampled line may differ slightly across PyTorch versions; the greedy line is deterministic, i.e. identical on every run.)
 
 ### Common mistakes
 - Thinking the model retrieves stored sentences. It generates token by token from learned probabilities, which is why it can produce text that never existed — both creative text and false "facts".
@@ -181,12 +181,12 @@ Predict the next token, score with cross-entropy, repeat over trillions of token
 **Pretraining** is the first and most expensive stage: next-token prediction over a massive, mixed corpus. The output is a **base model** (also called a foundation or pretrained model) that continues text but does not reliably follow instructions.
 
 ### How it works
-1. **Collect** text: web crawls (Common Crawl is the usual starting point), books, Wikipedia, scientific papers, code (e.g. GitHub), math, multilingual data, and increasingly **synthetic data** generated by other models.
-2. **Filter** for quality: remove spam, boilerplate, adult or toxic content, and machine-generated junk; classifiers often score "educational quality".
+1. **Collect** text: web crawls (bulk downloads of public web pages; Common Crawl is the usual starting point), books, Wikipedia, scientific papers, code (e.g. GitHub), math, multilingual data, and increasingly **synthetic data** generated by other models.
+2. **Filter** for quality: remove spam, boilerplate (repeated menus, footers and legal text), adult or toxic content, and machine-generated junk; classifiers (small models that assign labels) often score "educational quality".
 3. **Deduplicate** at document and near-duplicate level — duplicated text wastes compute and increases memorization.
 4. **Remove sensitive data** (e.g. personal information) and respect licensing and opt-out signals as policy requires.
 5. **Mix** sources in chosen proportions (e.g. more code improves reasoning-style tasks), then **tokenize**.
-6. **Train** on thousands of GPUs/TPUs for weeks to months, with data, tensor and pipeline parallelism, checkpointing, and constant monitoring for loss spikes.
+6. **Train** on thousands of GPUs/TPUs (Google's custom AI chips) for weeks to months, with data, tensor and pipeline parallelism (different ways of splitting the data or the model across many chips), checkpointing (saving the model regularly so a crash does not lose weeks of work), and constant monitoring for loss spikes.
 
 ### Scale in numbers (publicly reported)
 
@@ -212,17 +212,17 @@ Pretraining = next-token prediction over trillions of filtered, deduplicated tok
 ## 4.4 Scaling laws
 
 ### What it is
-**Scaling laws** are empirical formulas showing that a language model's loss falls **smoothly and predictably** — as a power law — as you increase parameters (N), training tokens (D), and compute (C).
+**Scaling laws** are empirical (measured from experiments rather than derived) formulas showing that a language model's loss falls **smoothly and predictably** — as a power law — as you increase parameters (N), training tokens (D), and compute (C).
 
 ### Why it matters
 They turned model building from guesswork into planning. Labs train many small models, fit the curve, and predict how a model 100x bigger will do before spending the money. They also answer the key budgeting question: **for a fixed compute budget, how big should the model be and how much data should it see?**
 
 ### How it works
-1. **Compute rule of thumb:** training a dense transformer costs **C ≈ 6·N·D** FLOPs (about 2 for the forward pass and 4 for the backward pass, per parameter per token).
+1. **Compute rule of thumb:** training a dense transformer (one that uses every parameter for every token) costs **C ≈ 6·N·D** FLOPs (floating-point operations, i.e. individual arithmetic steps; about 2 for the forward pass and 4 for the backward pass, the backpropagation step, per parameter per token).
    - GPT-3: 6 × 175×10⁹ × 300×10⁹ ≈ 3.15×10²³ FLOPs.
 2. **Kaplan et al. (OpenAI, 2020)** found power laws in N, D and C and concluded that model size mattered most — so the next generation of models grew very large on relatively little data (GPT-3: fewer than 2 tokens per parameter).
 3. **Hoffmann et al. — "Chinchilla" (DeepMind, 2022)** redid the analysis with better-tuned training runs and found parameters and data should grow **in equal proportion**. The widely used takeaway: a compute-optimal model sees **about 20 training tokens per parameter**.
-   - Their test: Chinchilla (70B params, 1.4T tokens) vs their own Gopher (280B, 300B tokens) at a similar compute budget. The 4x smaller Chinchilla won on almost every benchmark — and was 4x cheaper to run.
+   - Their test: Chinchilla (70B params, 1.4T tokens) vs their own Gopher (280B, 300B tokens) at a similar compute budget. The 4x smaller Chinchilla won on almost every benchmark (standard test set) — and was 4x cheaper to run.
 4. Combining C = 6ND with D = 20N gives **N ≈ √(C/120)**. Step by step: substitute D = 20N into C = 6·N·D to get C = 6·N·20N = 120·N², so N² = C/120 and N = √(C/120). Example: C = 1.2×10²³ FLOPs → N² = 10²¹ → N ≈ 3.2×10¹⁰ (32B parameters) and D = 20N ≈ 630B tokens.
 
 **What "power law" means here.** A term like A/N^α shrinks by the same *factor* every time N is multiplied by the same amount. With α = 0.34, multiplying the parameter count by 10 divides that term by 10^0.34 ≈ 2.2. So each 10x in size buys roughly the same *relative* improvement — which is why progress needs multiplicative, not additive, increases in budget.
@@ -301,7 +301,7 @@ Ask a base model "What is the capital of France?" and it may continue with more 
 1. Collect tens of thousands to millions of high-quality demonstrations: human-written answers, expert-curated examples, and (increasingly) filtered model-generated data.
 2. Format each as a conversation with a **chat template** — special tokens marking system, user and assistant turns.
 3. Train with the same next-token loss, but usually **only on the assistant's tokens** (the prompt tokens are masked out of the loss).
-4. Result: an **instruct** or **chat** model. Open-weight releases often ship both versions (e.g. a "base" and an "Instruct" checkpoint).
+4. Result: an **instruct** or **chat** model. Open-weight releases (models whose trained weights anyone can download) often ship both versions (e.g. a "base" and an "Instruct" checkpoint, i.e. saved copy of the weights).
 
 ### Trade-offs
 - Cheap relative to pretraining; quality of examples matters far more than quantity (the LIMA paper, 2023, got strong results from 1,000 carefully chosen examples).
@@ -333,8 +333,8 @@ flowchart LR
 
 1. Start from the SFT model.
 2. For many prompts, sample several answers; humans rank them.
-3. Train a **reward model** (often an LLM with a scalar output head) to give preferred answers a higher score. Loss (Bradley–Terry): −log σ(r_chosen − r_rejected), where σ is the sigmoid function.
-4. Optimize the LLM with reinforcement learning (classically **PPO**, proximal policy optimization) to maximize the reward, **minus a KL-divergence penalty** that keeps it close to the SFT model. Without the penalty, the model learns to "hack" the reward model — e.g. overly long, flattering answers that score well but aren't better.
+3. Train a **reward model** (often an LLM with a scalar output head, i.e. one that outputs a single number) to give preferred answers a higher score. Loss (Bradley–Terry): −log σ(r_chosen − r_rejected), where σ is the sigmoid function (it squashes any number into the range 0 to 1).
+4. Optimize the LLM with reinforcement learning (classically **PPO**, proximal policy optimization, a standard RL algorithm that takes small, cautious update steps) to maximize the reward, **minus a KL-divergence penalty** (KL divergence measures how different two probability distributions are) that keeps it close to the SFT model. Without the penalty, the model learns to "hack" the reward model — e.g. overly long, flattering answers that score well but aren't better.
 
 InstructGPT's headline result: labelers preferred outputs from a **1.3B** InstructGPT model over the **175B** GPT-3 base model. Post-training can matter more than raw size for usefulness.
 
@@ -343,7 +343,7 @@ DPO shows you can skip the separate reward model and the RL loop. It trains dire
 
 loss = −log σ( β · [ (log π(chosen) − log π_ref(chosen)) − (log π(rejected) − log π_ref(rejected)) ] )
 
-where π is the model being trained, π_ref is the frozen SFT model, and β controls how far the model may move from the reference.
+where π is the model being trained (the *policy*, in RL terms), π_ref is the frozen (no longer updated) SFT model, and β controls how far the model may move from the reference.
 
 ```python
 # code/preference_losses.py (key parts)
@@ -374,7 +374,7 @@ The loss falls whenever the model prefers the chosen answer *more than the refer
 
 ### Other variants
 - **RLAIF / Constitutional AI** (Anthropic, 2022): an AI model, guided by a written set of principles, produces the preference labels, reducing the amount of human labeling.
-- **RL from verifiable rewards (RLVR):** for math and code, the reward is automatic — did the answer match, did the tests pass? This is central to training reasoning models (Section 4.11); DeepSeek-R1 (2025) used it at scale with the GRPO algorithm.
+- **RL from verifiable rewards (RLVR):** for math and code, the reward is automatic — did the answer match, did the tests pass? This is central to training reasoning models (Section 4.11); DeepSeek-R1 (2025) used it at scale with the GRPO algorithm (group relative policy optimization: score several answers to the same prompt against each other, no separate value model needed).
 
 ### Trade-offs
 
@@ -386,7 +386,7 @@ The loss falls whenever the model prefers the chosen answer *more than the refer
 | Typical use | Frontier chat models | Widely used for open models | Math, code, reasoning |
 
 ### Common mistakes
-- Believing alignment adds knowledge. Post-training mostly shapes **behavior and format**; knowledge mostly comes from pretraining.
+- Believing alignment (shaping a model to behave as people intend) adds knowledge. Post-training mostly shapes **behavior and format**; knowledge mostly comes from pretraining.
 - Ignoring side effects: preference tuning can cause **sycophancy** (agreeing with the user) or verbosity if raters favored those traits.
 
 ### In the interview
@@ -418,7 +418,7 @@ Logits (raw scores) → softmax: e^2.0 = 7.39, e^1.8 = 6.05, … sum ≈ 24.79, 
 | **Greedy** | Always take the most probable token | Deterministic; can be repetitive or get stuck in loops |
 | **Beam search** | Keep the *k* best partial sequences, extend each, keep the best *k* by total probability | Finds higher-probability sequences; good for translation; bland for open-ended chat |
 | **Temperature T** | Divide logits by T before softmax | T < 1 sharpens (more predictable), T > 1 flattens (more varied); T → 0 approaches greedy |
-| **Top-k** | Keep only the k most probable tokens, renormalize | Cuts off the long tail of unlikely tokens |
+| **Top-k** | Keep only the k most probable tokens, renormalize (rescale so they sum to 1 again) | Cuts off the long tail of unlikely tokens |
 | **Top-p (nucleus)** (Holtzman et al., 2019) | Keep the smallest set of tokens whose probabilities add up to at least p, renormalize | Adapts: few tokens when the model is confident, many when it's unsure |
 
 ```python
@@ -474,7 +474,7 @@ Worked details:
 - **stop sequences** — strings that end generation.
 - **frequency / presence penalties** — reduce repetition by lowering scores of tokens already used.
 - **seed** — some APIs accept one for more repeatable sampling.
-- **Structured / constrained decoding** — only tokens that keep the output valid against a JSON schema or grammar are allowed (Chapter 5).
+- **Structured / constrained decoding** — only tokens that keep the output valid against a JSON schema (a description of which fields and types valid JSON must have) or grammar are allowed (Chapter 5).
 
 Note on current APIs (as of September 2026): several recent reasoning-focused models do not accept sampling parameters at all — for example, Anthropic's newest Claude models reject `temperature`, `top_p` and `top_k`, and OpenAI's reasoning models have long restricted them. There you control behavior through the prompt, structured outputs and "effort" settings instead.
 
@@ -485,19 +485,19 @@ Note on current APIs (as of September 2026): several recent reasoning-focused mo
 | Extraction, classification, code, factual Q&A | Temperature 0 (or low), or the model's default for reasoning models |
 | General chat | Provider default (often T ≈ 0.7–1 with top-p) |
 | Brainstorming, creative writing | Higher temperature (≈1) — more variety |
-| Translation (classic seq2seq) | Beam search |
+| Translation (classic seq2seq, i.e. sequence in, sequence out) | Beam search |
 
 ### Common mistakes
-- Believing temperature 0 is perfectly deterministic. Batching and floating-point effects on GPUs can still change outputs slightly — treat it as **nearly** deterministic and validate outputs that must be exact.
+- Believing temperature 0 is perfectly deterministic. Batching (running many requests through the GPU together) and floating-point effects (tiny rounding differences in computer decimals) on GPUs can still change outputs slightly — treat it as **nearly** deterministic and validate outputs that must be exact.
 - Tuning temperature and top-p simultaneously without measuring; usually change one.
 - Using high temperature for tasks with one right answer.
 
 ### In the interview
-**30-second answer:** "The model gives a distribution; decoding picks a token. Greedy takes the argmax, beam search keeps the k best sequences, and sampling draws from the distribution, shaped by temperature — lower is sharper — and truncated by top-k or top-p, which keeps the smallest set covering probability p. I'd use temperature 0 for extraction and classification and moderate sampling for creative tasks, plus max-token caps and stop sequences."
+**30-second answer:** "The model gives a distribution; decoding picks a token. Greedy takes the argmax (the single most probable token), beam search keeps the k best sequences, and sampling draws from the distribution, shaped by temperature — lower is sharper — and truncated by top-k or top-p, which keeps the smallest set covering probability p. I'd use temperature 0 for extraction and classification and moderate sampling for creative tasks, plus max-token caps and stop sequences."
 
 - *Top-k vs top-p?* Top-k keeps a fixed count; top-p adapts the count to the model's confidence.
 - *Why isn't beam search used for chat?* It favors generic, high-probability text and costs k times more.
-- *Can we make outputs deterministic?* Temperature 0 gets close; batching and floating-point nondeterminism mean "nearly"; use validators and, where appropriate, cache responses.
+- *Can we make outputs deterministic?* Temperature 0 gets close; batching and floating-point nondeterminism mean "nearly"; use validators (code that checks the output) and, where appropriate, cache responses.
 
 ### Self-check
 1. What does temperature 2 do to the distribution? → Flattens it — rarer tokens become more likely.
@@ -521,7 +521,7 @@ The model's weights don't change between requests, and the model does not rememb
 
 Two design consequences:
 
-**1. Context assembly is your subsystem.** For every call you decide what instructions, how much history, and which retrieved documents and tool results go in. RAG ([Chapter 7](../07-embeddings-vector-databases-and-rag/README.md)) and chat products are largely about getting this right.
+**1. Context assembly is your subsystem.** For every call you decide what instructions, how much history, and which retrieved documents and tool results go in. RAG (retrieval-augmented generation, [Chapter 7](../07-embeddings-vector-databases-and-rag/README.md)) and chat products are largely about getting this right.
 
 **2. Re-sending full history grows fast.** If each turn adds ~200 tokens and you send everything each time, turn *n* carries ~200·*n* input tokens, and the **total** across a conversation grows with the **square** of the number of turns:
 
@@ -542,7 +542,7 @@ Chat history re-sent every turn (200 tokens per turn):
   turn 20: prompt= 4000 tokens, cumulative input= 42000
 ```
 
-Doubling the conversation (10 → 20 turns) almost quadruples the input tokens (11K → 42K). The fixes are product decisions: **truncate** old turns (keep the last *k*), **summarize** older history into a short running summary, or **retrieve** only relevant past turns. **Prompt caching** (supported by the major APIs) reduces repeated computation and cost for an unchanged prefix, but the logical context still grows.
+Doubling the conversation (10 → 20 turns) almost quadruples the input tokens (11K → 42K). The fixes are product decisions: **truncate** old turns (keep the last *k*), **summarize** older history into a short running summary, or **retrieve** only relevant past turns. **Prompt caching** (supported by the major APIs: the provider reuses work already done on a prompt's unchanged opening part, its *prefix*) reduces repeated computation and cost for an unchanged prefix, but the logical context still grows.
 
 ### Long context is not a strategy by itself
 - **Cost and latency** grow with input length.
@@ -556,7 +556,7 @@ Doubling the conversation (10 → 20 turns) almost quadruples the input tokens (
 | Option | Freshness | Cost to change | Best for |
 |---|---|---|---|
 | Instructions and examples in the prompt | Immediate | Edit the prompt | Behavior, format, small facts |
-| Retrieval (RAG) | Per request | Update the index | Large, changing, private knowledge |
+| Retrieval (RAG) | Per request | Update the index (the searchable document store) | Large, changing, private knowledge |
 | Fine-tuning | Frozen at training | Retrain | Consistent style, specialized formats, narrow skills |
 
 ([Chapter 8](../08-prompting-vs-finetuning-vs-rag-and-llm-evaluation/README.md) compares these in depth.)
@@ -588,8 +588,8 @@ Generating a response has two phases with different performance profiles:
 *Figure — Prefill reads the prompt in parallel; decode writes the answer one token at a time (course diagram).*
 
 ### The two latency numbers
-- **TTFT — time to first token.** Driven by prefill (longer prompt → longer prefill), plus network time, queueing, retrieval and any other work before the first visible token.
-- **TPOT — time per output token** (inter-token latency). Driven by decode; depends on model size, context length, batch size and load — not a constant.
+- **TTFT — time to first token.** Driven by prefill (longer prompt → longer prefill), plus network time, queueing (waiting behind other requests), retrieval and any other work before the first visible token.
+- **TPOT — time per output token** (inter-token latency). Driven by decode; depends on model size, context length, batch size (how many requests share each GPU step) and load — not a constant.
 - Total ≈ TTFT + TPOT × (output tokens).
 
 **Illustrative example** (not a benchmark): 3,000 input tokens and 500 output tokens. Prefill might take ~0.5 s, while 500 sequential decode steps take ~15 s. Generation dominates here; with a very long prompt and a short answer, prefill would dominate instead.
@@ -598,13 +598,13 @@ Generating a response has two phases with different performance profiles:
 
 *Figure — Illustrative timing for 3,000 tokens in and 500 out (course diagram).*
 
-Knowing which number is bad tells you which phase to fix: slow TTFT → shorten or cache the prompt, reduce queueing; slow TPOT → smaller/faster model, better batching, speculative decoding, shorter outputs.
+Knowing which number is bad tells you which phase to fix: slow TTFT → shorten or cache the prompt, reduce queueing; slow TPOT → smaller/faster model, better batching, speculative decoding (explained below), shorter outputs.
 
 ### Different hardware bottlenecks
-- Prefill is usually **compute-bound**: lots of matrix math on many tokens at once, limited by the GPU's arithmetic throughput.
+- Prefill is usually **compute-bound**: lots of matrix math on many tokens at once, limited by the GPU's arithmetic throughput (work done per second; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
 - Small-batch decode is usually **memory-bandwidth-bound**: for each new token the GPU must read all model weights and the KV cache from memory, doing little math per byte moved.
 
-That difference is why serving engines treat prefill and decode as separate scheduling problems and batch many users' decode steps together ([Chapter 11](../11-llm-serving-and-inference/README.md)).
+That difference is why serving engines (software that hosts models and answers requests) treat prefill and decode as separate scheduling problems and batch many users' decode steps together ([Chapter 11](../11-llm-serving-and-inference/README.md)).
 
 ### The KV cache in code
 ```python
@@ -637,7 +637,7 @@ KV-cache memory (16-bit values):
 
 What this shows:
 - **Same result, far less work.** Without a cache, step *t* recomputes keys and values for all *t* tokens (total grows quadratically: 2,550 projections); with it, each step does only the new token (100).
-- **The price is memory.** The shapes above match Llama-2-7B (full multi-head attention) and Llama-3-8B/70B (grouped-query attention, 8 KV heads). A single 8K-token conversation on the 7B MHA model needs ~4 GiB of cache; GQA cuts that 4x. Multiply by hundreds of concurrent users and the KV cache — not the weights — often limits how many requests a GPU can serve.
+- **The price is memory.** The shapes above match Llama-2-7B (full multi-head attention) and Llama-3-8B/70B (grouped-query attention, 8 KV heads). A single 8K-token conversation on the 7B MHA model needs ~4 GiB (gibibytes; 1 GiB = 1,024 MiB ≈ 1.07 billion bytes, and 1 KiB = 1,024 bytes) of cache; GQA cuts that 4x. Multiply by hundreds of concurrent (simultaneous) users and the KV cache — not the weights — often limits how many requests a GPU can serve.
 - **Speculative decoding** reduces the number of expensive steps: a small "draft" model proposes several tokens and the big model verifies them in one pass, accepting the ones it agrees with.
 
 ### Streaming and output limits
@@ -668,12 +668,12 @@ Fluent writing and rewriting in many languages; summarization; extraction into s
 
 | Limit | What happens | Why | Mitigation |
 |---|---|---|---|
-| **Hallucination** | Fluent, confident, **wrong** statements: invented citations, APIs, facts | The model predicts plausible text; nothing forces it to be true, and training rewarded answering over abstaining | Grounding with retrieval and citations, asking the model to say "I don't know", verification steps, human review for high stakes |
+| **Hallucination** | Fluent, confident, **wrong** statements: invented citations, APIs, facts | The model predicts plausible text; nothing forces it to be true, and training rewarded answering over abstaining | Grounding (tying answers to supplied sources) with retrieval and citations, asking the model to say "I don't know", verification steps, human review for high stakes |
 | **Knowledge cutoff** | No knowledge of events after training data ends | Weights are frozen | Retrieval, web-search tools, stating the current date in the prompt |
-| **No private or user-specific knowledge** | Doesn't know your company's docs or your user's account | Never saw them | Authorized retrieval and tools, with access control |
+| **No private or user-specific knowledge** | Doesn't know your company's docs or your user's account | Never saw them | Authorized retrieval and tools, with access control (rules on who may see what) |
 | **Reasoning brittleness** | Errors in long multi-step logic, arithmetic, counting characters | Token-level prediction, tokenization, limited "working memory" | Reasoning modes, tool use (calculator, code execution), verification |
-| **Non-determinism** | Same input, different output | Sampling and GPU numerics | Low temperature, semantic (not exact-string) tests, validators |
-| **Prompt injection** | Text in documents or user input overrides your instructions | The model cannot structurally separate your rules from text it merely reads | Separate and label untrusted content, least-privilege tools, output checks ([Chapter 12](../12-safety-ethics-governance/README.md)) |
+| **Non-determinism** | Same input, different output | Sampling and GPU numerics | Low temperature, semantic (meaning-based, not exact-string) tests, validators |
+| **Prompt injection** | Text in documents or user input overrides your instructions | The model cannot structurally separate your rules from text it merely reads | Separate and label untrusted content, least-privilege tools (each tool gets only the permissions it strictly needs), output checks ([Chapter 12](../12-safety-ethics-governance/README.md)) |
 | **Bias and sycophancy** | Reflects biases in data; tends to agree with the user | Training data and preference tuning | Evaluation, instructions, human oversight |
 
 ### The component "properties sheet"
@@ -682,11 +682,11 @@ When an LLM is one box in your architecture, each property implies a design requ
 | Property | Design consequence |
 |---|---|
 | Output is sampled; decoding settings affect variation | The same input can give different outputs: cache carefully, test with semantic comparison, and expect "it answered differently yesterday" |
-| Output can be fluent and wrong | Expect a spread of quality rather than a promise; build grounding, guardrails and evals as first-class parts |
+| Output can be fluent and wrong | Expect a spread of quality rather than a promise; build grounding, guardrails (automatic checks on inputs and outputs) and evals (systematic quality tests) as first-class parts |
 | Your instructions and untrusted data arrive in the same context window | Prompt injection is possible — treat retrieved and user text as untrusted |
 | Priced per input and output token (rates vary by model, provider and caching) | Treat cost as a core requirement and give every design a token budget |
 | Finite context window | Long chats and large corpora must be trimmed, condensed or retrieved selectively |
-| Latency is seconds, not milliseconds | Measure end-to-end latency; stream, set deadlines, have fallbacks |
+| Latency is seconds, not milliseconds | Measure end-to-end latency; stream, set deadlines, have fallbacks (a backup answer or model when the main one fails) |
 
 A related component: an **embedding model** converts text (or images) into a vector for similarity search. It supports retrieval rather than generating answers. It is often cheaper per token than a generative model, but benchmark cost and quality for your case rather than assuming.
 
@@ -696,7 +696,7 @@ A related component: an **embedding model** converts text (or images) into a vec
 ### Self-check
 1. Why can't a model tell you about last week's news by default? → Knowledge cutoff; weights are frozen.
 2. Why is prompt injection possible at all? → Instructions and untrusted data share the same token stream.
-3. How should you test an LLM feature whose output varies? → Semantic comparisons, rubrics, or validators — not exact string matches.
+3. How should you test an LLM feature whose output varies? → Semantic comparisons, rubrics (written scoring guides), or validators — not exact string matches.
 
 ### TL;DR
 LLMs are powerful but hallucinate, have a cutoff, don't know your data, can be injected, and vary run to run. Grounding, validation, evaluation and budgets turn that into a reliable system.
@@ -717,7 +717,7 @@ It opened a second scaling axis: **test-time compute**. Instead of only making t
 3. At inference, the model emits reasoning tokens (often hidden or summarized by the provider), then the answer. APIs typically expose a knob — a thinking budget or an "effort" level — to trade quality against latency and cost.
 
 ### Trade-offs
-- **Better** on multi-step math, logic, planning, complex coding and agentic tasks.
+- **Better** on multi-step math, logic, planning, complex coding and agentic tasks (multi-step tasks where the model acts through tools).
 - **Slower and costlier**: reasoning tokens are generated (and billed) like output tokens.
 - Often unnecessary for simple extraction, classification or chit-chat.
 
@@ -739,13 +739,13 @@ Reasoning models think (in tokens) before answering, trained with RL on checkabl
 A **multimodal** LLM accepts (and sometimes produces) more than text: images, audio, video, documents.
 
 ### How it works (common design)
-1. A modality **encoder** turns the input into vectors — e.g. a vision transformer splits an image into patches (say 16×16 pixels each) and embeds each patch.
+1. A modality **encoder** turns the input into vectors — e.g. a vision transformer (a transformer adapted to images) splits an image into patches (say 16×16 pixels each) and embeds each patch.
 2. A projection layer maps those vectors into the LLM's embedding space, so image patches become "tokens" the transformer attends over alongside text tokens.
 3. Some models are trained on mixed modalities from the start ("natively multimodal"); others bolt an encoder onto a text model and fine-tune.
-4. Output of images or speech is usually handled by separate generators (diffusion models, speech synthesis — [Chapter 10](../10-generative-models-beyond-text/README.md)) or by predicting special image/audio tokens.
+4. Output of images or speech is usually handled by separate generators (diffusion models, which build an image by refining random noise step by step; speech synthesis — [Chapter 10](../10-generative-models-beyond-text/README.md)) or by predicting special image/audio tokens.
 
 ### Uses
-- **Image + text:** describe photos, answer questions about charts and screenshots, read receipts and forms, understand UI screenshots for computer-use agents.
+- **Image + text:** describe photos, answer questions about charts and screenshots, read receipts and forms, understand UI (user interface) screenshots for computer-use agents (AI that operates a screen, mouse and keyboard).
 - **Audio + text:** transcribe speech and respond in real time (voice assistants), analyze calls.
 - **Documents and video:** PDFs with figures, long video understanding.
 
@@ -768,14 +768,14 @@ Encoders turn images/audio into token-like vectors the LLM attends over. Multimo
 | | Closed API | Open-weight |
 |---|---|---|
 | Peak capability | Usually the frontier | Historically a few months behind; the gap narrowed in 2024–2025 |
-| Setup | An API key | GPUs, a serving stack (vLLM, TGI, llama.cpp, Ollama), operations |
-| Data control | Data goes to the vendor (with contractual terms) | Can run fully on-premises or on-device |
-| Customization | Prompting, provider fine-tuning where offered | Full fine-tuning, LoRA, quantization, any changes |
+| Setup | An API key | GPUs, a serving stack (model-hosting software: vLLM, TGI, llama.cpp, Ollama), operations |
+| Data control | Data goes to the vendor (with contractual terms) | Can run fully on-premises (on your own servers) or on-device |
+| Customization | Prompting, provider fine-tuning where offered | Full fine-tuning, LoRA (cheap fine-tuning of small add-on matrices), quantization (storing weights in fewer bits), any changes |
 | Cost profile | Pay per token; no idle cost | Pay for hardware; cheap at high steady volume |
 | Model changes | Vendor updates and retires models on its schedule | You pin the version forever |
 
 ### When to choose which
-Prototype on the best closed model to learn what quality is possible. Move to (or add) an open-weight model when you need data residency, offline or edge deployment, heavy customization, or lower cost at large steady volume — and your evaluation shows quality is sufficient.
+Prototype on the best closed model to learn what quality is possible. Move to (or add) an open-weight model when you need data residency (keeping data inside a given country or region), offline or edge deployment (running on local devices rather than in the cloud), heavy customization, or lower cost at large steady volume — and your evaluation shows quality is sufficient.
 
 ### TL;DR
 Closed = best convenience and often best quality; open-weight = control, privacy, customization, and potentially lower cost at scale. Most "open" models are open-weight, not fully open-source.
@@ -791,10 +791,10 @@ Model names change fast; the families and organizations change slowly. Learn the
 | **GPT** | OpenAI | Closed (plus open-weight gpt-oss, Aug 2025) | GPT-3 2020 · ChatGPT Nov 2022 · GPT-4 Mar 2023 · GPT-4o May 2024 · o1 reasoning Sep 2024 · GPT-5 Aug 2025 · GPT-6 family (Astra, Sol, Luna) listed as flagship in the API docs, Sep 2026 |
 | **Claude** | Anthropic | Closed | Claude 3 Mar 2024 · Claude 3.7 Sonnet (first hybrid reasoning) Feb 2025 · Claude 4 May 2025 · Claude 5 generation 2026; as of Sep 2026 the docs list Fable 5.1 (most capable), Opus 5.5, Sonnet 5.5 and Haiku 4.5 (Opus 5 and Sonnet 5 are now legacy) — 1M-token context except Haiku 4.5 (200K) |
 | **Gemini** | Google (DeepMind) | Closed (open-weight sibling: Gemma) | Gemini 1.0 Dec 2023 · Gemini 1.5 (1M context) Feb 2024 · Gemini 2.5 Mar 2025 · Gemini 3 Nov 2025 (1M context) · as of Sep 2026 the API docs list Gemini 3.1 Pro (preview) and Gemini 3.5–3.8 Flash models |
-| **Llama** | Meta | Open-weight (custom license) | Llama 1 Feb 2023 · Llama 2 Jul 2023 · Llama 3 Apr 2024 · Llama 4 (MoE) Apr 2025 |
+| **Llama** | Meta | Open-weight (custom license) | Llama 1 Feb 2023 · Llama 2 Jul 2023 · Llama 3 Apr 2024 · Llama 4 (MoE, mixture of experts) Apr 2025 |
 | **Mistral** | Mistral AI | Mix of open-weight and closed | Mistral 7B Sep 2023 · Mixtral 8x7B (MoE) Dec 2023 |
 | **Qwen** | Alibaba | Mostly open-weight | Qwen2.5 Sep 2024 · Qwen3 Apr 2025 |
-| **DeepSeek** | DeepSeek | Open-weight | DeepSeek-V3 Dec 2024 · DeepSeek-R1 (reasoning, MIT license) Jan 2025 |
+| **DeepSeek** | DeepSeek | Open-weight | DeepSeek-V3 Dec 2024 · DeepSeek-R1 (reasoning, MIT license, a very permissive open-source licence) Jan 2025 |
 | **Grok** | xAI | Mostly closed | Grok-1 weights released Mar 2024 |
 
 Sources checked in September 2026: Anthropic, OpenAI (developers.openai.com models page) and Google (ai.google.dev Gemini models page) documentation. For anything newer, the vendor's "models" page is the authority — third-party leaderboards and aggregators are useful for comparisons but often lag or contain errors.
@@ -808,11 +808,11 @@ Where LLMs are heading (trends visible as of 2026, not predictions of specific p
 1. **Multi-step reasoning.** Models chain intermediate steps, keep track of earlier parts of a conversation and revise their own work — which helps long documents, step-by-step math, structured arguments, and reduces (but does not eliminate) contradictions and hallucinations.
 2. **Grounded, verifiable answers.** Models connected to search, knowledge bases, code execution or other checking tools can verify claims, **cite sources**, and ask clarifying questions when a request is ambiguous instead of guessing.
 3. **Multimodality everywhere.** Captioning and questioning images, real-time speech conversations, video understanding — closer to how people experience the world.
-4. **Agentic models.** Models that plan and carry out multi-step tasks with tools and little supervision: research assistants that survey literature, summarize findings and propose hypotheses; coding agents that open pull requests ([Chapter 9](../09-ai-agents/README.md)).
+4. **Agentic models.** Models that plan and carry out multi-step tasks with tools and little supervision: research assistants that survey literature, summarize findings and propose hypotheses; coding agents that open pull requests (proposed code changes submitted for review) ([Chapter 9](../09-ai-agents/README.md)).
 5. **Interpretability and transparency.** As LLMs influence decisions in healthcare, finance and law, there is pressure to explain *why* they answered; research that exposes and describes what a model's internal features represent is an active area.
 6. **Personalized and specialized models.** Smaller, fine-tuned models tuned to a domain (a marketing assistant vs a medical-research assistant) or a person's style — including ones small enough to run on a phone or private server, keeping data local.
-7. **Data efficiency.** Better few-shot and zero-shot generalization, synthetic data and RL let models reach niche domains that lack billions of documents.
-8. **Edge AI.** Running generative models on phones, AR glasses and IoT devices without a constant cloud connection: lower latency, better privacy, real-time help (e.g. a co-pilot on a factory floor).
+7. **Data efficiency.** Better few-shot and zero-shot (no examples at all) generalization, synthetic data and RL let models reach niche domains that lack billions of documents.
+8. **Edge AI.** Running generative models on phones, AR (augmented reality) glasses and IoT (internet of things: connected everyday devices) devices without a constant cloud connection: lower latency, better privacy, real-time help (e.g. a co-pilot on a factory floor).
 9. **Efficiency at the architecture level.** Mixture-of-experts, grouped/latent attention, quantization, speculative decoding, and hybrid attention/state-space designs to make long contexts and high traffic affordable.
 
 ---

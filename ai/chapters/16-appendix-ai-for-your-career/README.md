@@ -1,27 +1,27 @@
 # Appendix (Chapter 16) — AI for Your Career
 
-*Last reviewed: September 2026. Platform menus (LinkedIn, Upwork, Fiverr) and chatbot features change often; the prompt patterns and the honesty rules in this appendix do not.*
+*Last reviewed: September 2026. Platform menus (LinkedIn, Upwork, Fiverr — a professional networking site and two freelance-work marketplaces) and chatbot (a chat-style AI assistant you type to) features change often; the prompt patterns and the honesty rules in this appendix do not.*
 
-The rest of this book teaches you how AI systems work and how to build them. This appendix is about using them for yourself: to write a stronger resume, portfolio, cover letter and LinkedIn profile, to send better networking messages, to find and filter jobs, and to rehearse interviews. It is practical — mostly **prompt patterns** you can copy, fill in, and iterate on — and it has one rule that sits above every other: **the AI may improve how you say things; it may never change what is true.**
+The rest of this book teaches you how AI systems work and how to build them. This appendix is about using them for yourself: to write a stronger resume, portfolio, cover letter and LinkedIn profile, to send better networking messages, to find and filter jobs, and to rehearse interviews. It is practical — mostly **prompt patterns** (reusable fill-in-the-blanks instructions for an AI model) you can copy, fill in, and iterate on (improve over several rounds) — and it has one rule that sits above every other: **the AI may improve how you say things; it may never change what is true.**
 
-Prompting technique itself (role, context, few-shot examples, iteration, fixing bad outputs) is taught in [Chapter 5](../05-prompt-engineering/README.md). Here we apply it to career documents.
+Prompting technique itself (role, context, few-shot examples — a handful of worked examples placed in the prompt to show the model what you want — iteration, fixing bad outputs) is taught in [Chapter 5](../05-prompt-engineering/README.md). Here we apply it to career documents.
 
 **What you'll learn**
 
 - How to treat a chatbot as a writing partner without letting it invent your history (the *fact sheet* method, with a runnable checker)
 - One master prompt pattern that works for every career document
 - Portfolio: the four core sections, project write-ups with challenge → solution → result, bullet expansion, a consistent voice
-- Resume: how it differs from a portfolio, section-by-section prompts, bullet templates, tailoring to a job description and applicant tracking systems (with a runnable keyword-gap script)
+- Resume: how it differs from a portfolio, section-by-section prompts, bullet templates, tailoring to a job description and applicant tracking systems (with a runnable keyword-gap script — a small program you can execute yourself)
 - Cover letters: structure, company-specific drafts, keeping your own voice, length and common mistakes
 - Networking and job-search emails: cold outreach, follow-ups, referrals, thank-you notes, informational interviews
 - LinkedIn: headline, About, Experience, Featured, Skills, media and links, staying active
 - Freelancing: choosing marketplaces, proposals that win, link hubs and personal sites
 - Job-hunt automation and keywords (search optimisation) across portfolio, resume and LinkedIn
-- Interview preparation: technical practice, behavioural answers with STAR, follow-up and reflection
+- Interview preparation: technical practice, behavioural answers with STAR (Situation, Task, Action, Result — explained in §16.10), follow-up and reflection
 - Personal brand, consistency across platforms, reputation management, and keeping everything current
 - The ethics: fabrication, disclosure, privacy, and interview rules
 
-**Prerequisites.** None beyond access to any chat assistant (ChatGPT, Claude, Gemini, Copilot…). The two scripts in [`code/`](code/) run offline with the book's Python environment.
+**Prerequisites.** None beyond access to any chat assistant (ChatGPT, Claude, Gemini, Copilot…). The two scripts in [`code/`](code/) run offline (no internet or paid service needed) with the book's Python environment (the Python interpreter plus the libraries the book installs).
 
 ---
 
@@ -29,7 +29,7 @@ Prompting technique itself (role, context, few-shot examples, iteration, fixing 
 
 ### What it is
 
-A chat assistant is a **large language model (LLM)** — a model trained on huge amounts of text to predict likely next words, which lets it write fluent, context-aware prose ([Chapter 4](../04-large-language-models/README.md)). Because it is built on the **transformer** architecture ([Chapter 3](../03-transformers-and-embeddings/README.md)), it takes in your whole request and the conversation so far at once, so it can use details you gave earlier in the same chat. It does not remember other chats unless the product has a memory feature, and very long chats can exceed what it can take in — so paste your fact sheet again when you start a new document.
+A chat assistant is a **large language model (LLM)** — a model trained on huge amounts of text to predict likely next words, which lets it write fluent, context-aware prose ([Chapter 4](../04-large-language-models/README.md)). Because it is built on the **transformer** architecture ([Chapter 3](../03-transformers-and-embeddings/README.md)), it takes in your whole request and the conversation so far at once, so it can use details you gave earlier in the same chat. It does not remember other chats unless the product has a memory feature (a setting that saves facts about you between conversations), and very long chats can exceed what it can take in — its **context window**, the maximum amount of text it can read at once — so paste your fact sheet again when you start a new document.
 
 For career writing it plays four roles:
 
@@ -53,7 +53,7 @@ Career documents are short, high-stakes, and must be tailored again and again. A
 3. **Check the draft against the fact sheet.** Every number, tool, title and employer in the output must trace back to it.
 4. **Edit into your own voice.** Read it aloud; if you would not say it in an interview, change it.
 
-The script below automates step 3 with a simple rule: any number or capitalised name in the draft that is not in your fact sheet is flagged.
+The script below automates step 3 with a simple rule (it uses regular expressions — compact text patterns such as "any run of digits" — to pull out numbers and names): any number or capitalised name in the draft that is not in your fact sheet is flagged.
 
 ```python
 # code/claim_check.py (core)
@@ -95,7 +95,7 @@ DRAFT: Data Analyst with 2 years of experience who automated weekly reporting (6
 Verdict: REWRITE before using
 ```
 
-The first sentence is fine — every detail traces to the fact sheet. The second sentence is invented. That is exactly the failure you must catch by hand even without a script. (The checker is deliberately simple: it reports "Power BI" as two unknown words and would miss an invented claim with no number or capitalised name, such as "led the team" — so it supports your own reading rather than replacing it.) With a real API the same prompt is sent like this (needs an API key — not run; see [Chapter 6](../06-building-llm-apps-in-python/README.md)):
+The first sentence is fine — every detail traces to the fact sheet. The second sentence is invented. That is exactly the failure you must catch by hand even without a script. (The checker is deliberately simple: it reports "Power BI" as two unknown words and would miss an invented claim with no number or capitalised name, such as "led the team" — so it supports your own reading rather than replacing it.) (The `FakeLLM` in the script is a stand-in that returns a fixed draft, so the example runs without calling a real model.) With a real API (application programming interface — the web endpoint a program calls to use the model) the same prompt is sent like this (needs an API key, a secret password-like string that identifies your account and is billed for usage — not run; see [Chapter 6](../06-building-llm-apps-in-python/README.md)):
 
 ```python
 import anthropic
@@ -112,7 +112,7 @@ draft = msg.content[0].text
 
 - Pasting a one-line request and accepting the first answer.
 - Letting the model "estimate" a metric you never measured.
-- Pasting other people's personal data (a manager's email, a client's figures under NDA) into a consumer chatbot. Check the tool's data settings and strip what you do not need.
+- Pasting other people's personal data (a manager's email, a client's figures under NDA — a non-disclosure agreement, a contract promising to keep information confidential) into a consumer chatbot. Check the tool's data settings and strip what you do not need.
 
 ### Self-check
 
@@ -158,17 +158,17 @@ Role, context, facts, task, constraints, format — then iterate in small steps 
 
 ### What it is
 
-A **portfolio** is a curated showcase of your work — usually a website, sometimes a PDF or a GitHub profile — that *shows* what you can do rather than listing it. Most strong portfolios rest on four sections.
+A **portfolio** is a curated showcase of your work — usually a website, sometimes a PDF or a GitHub profile (GitHub is a website that hosts code repositories, i.e. project folders tracked with the version-control tool Git) — that *shows* what you can do rather than listing it. Most strong portfolios rest on four sections.
 
 ![Four sections of a portfolio](img/portfolio-sections.jpg)
 *Figure — The four core portfolio sections (course diagram)*
 
 | Section | Purpose | What goes in | Prompt pattern |
 |---|---|---|---|
-| **Professional summary** | Who you are in 2–3 sentences | Role or core skill, a distinctive focus, a human tone | "From these facts, write three 40-word summaries for a backend developer focused on payments systems." |
+| **Professional summary** | Who you are in 2–3 sentences | Role or core skill, a distinctive focus, a human tone | "From these facts, write three 40-word summaries for a backend (server-side) developer focused on payments systems." |
 | **Projects** | Proof of ability | Title and context, *your* part, results and numbers, tools | "Turn these notes into 4 scannable bullets: problem, my part, result, stack." |
 | **Testimonials** | Social proof from others | Short quotes with name and role, **used with permission** | "Here is what my former lead wrote to me; suggest a 2-sentence excerpt that keeps her exact meaning." |
-| **Contact** | Make it easy to reach you | Professional email, LinkedIn, GitHub, optional booking link | "Write a two-line closing inviting recruiters to get in touch." |
+| **Contact** | Make it easy to reach you | Professional email, LinkedIn, GitHub, optional booking link (a page where people pick a meeting slot) | "Write a two-line closing inviting recruiters to get in touch." |
 
 A note on testimonials: a testimonial must come from the named person. Never ask an AI to *create* a quote and attribute it to someone — that is fabrication. Use AI only to help you *request* one ("draft a short, polite message asking my former manager for a two-sentence recommendation about the migration project") or to suggest an excerpt the person then approves.
 
@@ -177,7 +177,7 @@ A note on testimonials: a testimonial must come from the named person. Never ask
 The strongest project descriptions follow **challenge → solution → result**, then translate numbers into **impact**:
 
 1. **Challenge** — what problem existed and why it mattered. *"Support tickets waited two days for a first reply."*
-2. **Solution** — what *you* did, with tools. *"I built a triage classifier in scikit-learn that routed tickets to the right queue."*
+2. **Solution** — what *you* did, with tools. *"I built a triage classifier in scikit-learn that routed tickets to the right queue."* (A **classifier** is a model that sorts inputs into categories; scikit-learn is a popular Python machine-learning library.)
 3. **Result** — a measured outcome. *"First-reply time fell to 6 hours."*
 4. **Impact** — what the number meant to people or the business. *"Customers got answers the same day, and the team stopped weekend catch-up shifts."*
 5. **Link to a bigger goal** — cost, growth, reliability, reputation, where true.
@@ -248,15 +248,15 @@ The resume earns you a closer look; the portfolio is the evidence that converts 
 
 ### Bullet templates
 
-- **Achievement:** "For a [job title], write bullets about [one project]: what I did and the measured result I give you." → *"Cut monthly cloud spend by 22% by right-sizing idle compute and adding autoscaling."*
-- **Hard + soft skill together:** "Write 3 bullets showing my [technical skill] and my [soft skill, e.g. mentoring]." → *"Mentored two new hires through their first on-call rotation while leading the migration to Kubernetes."*
+- **Achievement:** "For a [job title], write bullets about [one project]: what I did and the measured result I give you." → *"Cut monthly cloud spend by 22% by right-sizing idle compute and adding autoscaling."* (Right-sizing = moving to smaller rented servers that still fit the load; **autoscaling** = automatically adding or removing servers as traffic rises and falls.)
+- **Hard + soft skill together:** "Write 3 bullets showing my [technical skill] and my [soft skill, e.g. mentoring]." → *"Mentored two new hires through their first on-call rotation while leading the migration to Kubernetes."* (On-call = taking turns being the person paged when production breaks; Kubernetes = a widely used system for running and scaling containerised applications.)
 - **Problem solved:** "Describe how I fixed [problem] at [company]: issue, action, outcome — one line." → *"Replaced a manual invoice-matching step with a Python script, reducing errors from ~40 to ~5 per month."*
 
 (The numbers above are illustrations; yours must come from your fact sheet.)
 
 ### How it works: tailoring to a job
 
-An **applicant tracking system (ATS)** is software employers use to receive, store and search applications (Workday, Greenhouse, Lever, iCIMS are common examples). Recruiters often search or filter candidates by keywords, and human reviewers also scan for the job's terms. How much automatic ranking happens varies by employer and product, so the safe goal is simple: a resume that is easy to parse (plain headings, no text inside images) and that uses the job's own words *for skills you really have*.
+An **applicant tracking system (ATS)** is software employers use to receive, store and search applications (Workday, Greenhouse, Lever, iCIMS are common examples). Recruiters often search or filter candidates by keywords, and human reviewers also scan for the job's terms. How much automatic ranking happens varies by employer and product, so the safe goal is simple: a resume that is easy to parse — for software to read and split into fields such as name, jobs and skills — (plain headings, no text inside images) and that uses the job's own words *for skills you really have*.
 
 1. **Keep a base resume** with everything true you might ever want to include.
 2. **Extract the job's keywords.** Paste the job description and ask: "List the 10–15 skills, tools and qualities this posting emphasises, most important first."
@@ -297,11 +297,13 @@ Coverage     : 58.3%
 Next step    : for each missing term, ask 'Is this true for me?' Only true ones get added, in your own words.
 ```
 
-If you really set up the GitHub Actions pipeline at your last job, "CI/CD" belongs on the resume. If you have never touched Kafka, it does not — "a plus" in a posting is not a requirement.
+(The script's *coverage* is simply the percentage of the job's keywords found in your resume. In the sample output, REST APIs are web interfaces programs call over HTTP; Docker packages software into portable containers; AWS is Amazon's cloud platform; PostgreSQL is an open-source database; Kafka is a system for streaming high volumes of event messages between services.)
+
+If you really set up the GitHub Actions pipeline (GitHub's built-in automation that runs jobs such as tests on every code change) at your last job, "CI/CD" — continuous integration / continuous delivery, automatically testing every change and shipping it once it passes — belongs on the resume. If you have never touched Kafka, it does not — "a plus" in a posting is not a requirement.
 
 ### Common mistakes
 
-- **Keyword stuffing** — long lists of terms, or white-on-white text. Humans notice, and it reads as dishonest.
+- **Keyword stuffing** — cramming in search terms to game a filter: long lists of terms, or white-on-white text. Humans notice, and it reads as dishonest.
 - Letting the model "upgrade" your title or scope ("contributed to" becoming "led").
 - One generic resume for every job.
 - Not checking dates and titles match your LinkedIn and portfolio.
@@ -345,10 +347,10 @@ Aim for roughly **250–350 words**; readers skim.
 ### How it works: prompting
 
 1. **Research first.** Collect the company's stated values, a recent product or project, and the job's top requirements. The model cannot know what the company announced last month unless you paste it in.
-2. **Draft**: "Write a cover letter for a [role] at [company]. Their values: [pasted]. Job priorities: [pasted]. My matching facts: [fact sheet]. Tone: [match the company — formal for a bank, warmer for a startup]. 300 words."
+2. **Draft**: "Write a cover letter for a [role] at [company]. Their values: [pasted]. Job priorities: [pasted]. My matching facts: [fact sheet]. Tone: [match the company — formal for a bank, warmer for a startup (a young, fast-growing company)]. 300 words."
 3. **Inject yourself**: "Add a short paragraph about [a real experience, e.g. volunteering as a coding tutor] and link it to their mission." Then read it and ask *does this sound like me?*
 4. **Adjust in small steps**: "Make paragraph two more enthusiastic but still professional." "Cut to two paragraphs without losing the migration story."
-5. **Customise per job** — tone (corporate vs startup), length, and which projects you highlight ("Emphasise my SQL and dashboard work; this role is reporting-heavy").
+5. **Customise per job** — tone (corporate vs startup), length, and which projects you highlight ("Emphasise my SQL and dashboard work; this role is reporting-heavy"). (SQL is the standard language for querying databases; a dashboard is a page of live charts and numbers.)
 6. **Proofread** — let the model do a grammar pass, then have a human read it.
 
 ### Common mistakes
@@ -392,7 +394,7 @@ Four kinds of email drive most job-search networking.
 
 ### How it works: structure with AI help
 
-1. **Subject line** — short (aim for under about 60 characters so it is not cut off on most screens), specific. Prompt: "Suggest 5 subject lines for an email asking a data engineer at [company] for a 15-minute chat about their team's migration to dbt." Then: "Make these less formal." Pick one yourself — the model cannot know real open rates, so treat any "this one will perform best" answer as a guess.
+1. **Subject line** — short (aim for under about 60 characters so it is not cut off on most screens), specific. Prompt: "Suggest 5 subject lines for an email asking a data engineer at [company] for a 15-minute chat about their team's migration to dbt." (dbt is a popular tool for writing and testing data transformations in SQL.) Then: "Make these less formal." Pick one yourself — the model cannot know real open rates (the share of recipients who actually open an email), so treat any "this one will perform best" answer as a guess.
 2. **Opening (1–2 sentences)** — who you are and why you are writing, from the reader's point of view. "Write a two-sentence opener to [name] that mentions her conference talk on [topic] and says why I'm writing."
 3. **Body** — at most two short paragraphs; one ask.
 4. **Closing** — a clear call to action ("Would a 15-minute call next week work?") and sincere thanks.
@@ -400,17 +402,17 @@ Four kinds of email drive most job-search networking.
 
 ### Prompt templates
 
-- **Informational interview:** "Help me write a short, friendly-professional email to [name], [title] at [company]. I'm a [your status] interested in [topic]. Mention [specific thing about their work]. Request a short (about 15 minutes) chat on how they got into [field]."
+- **Informational interview** (an informal chat to learn about someone's job or field, not a job interview)**:** "Help me write a short, friendly-professional email to [name], [title] at [company]. I'm a [your status] interested in [topic]. Mention [specific thing about their work]. Request a short (about 15 minutes) chat on how they got into [field]."
 - **Application follow-up:** "Write a brief follow-up to the hiring manager at [company] about my [position] application sent on [date]. Restate interest, name one skill I bring ([skill]), offer more information. Polite, not pushy."
 - **Thank-you after an interview:** "Write a thank-you email to [name] after my [position] interview. Mention our discussion about [specific topic], show enthusiasm for next steps, offer to send anything else they need." Send it within about 24 hours.
 - **Referral:** "Write a short email to the hiring manager at [company]. [Referrer], who works on their [team], suggested I contact them about the [role]. Include my two most relevant facts: [facts]."
-- **LinkedIn connection note:** "Write a connection note under 200 characters to [name] mentioning [shared event or interest]." (In 2026 LinkedIn allows about 200 characters on free accounts and 300 on Premium, and free accounts can add only a limited number of personalised notes per month; check the current limits.)
+- **LinkedIn connection note:** "Write a connection note under 200 characters to [name] mentioning [shared event or interest]." (In 2026 LinkedIn allows about 200 characters on free accounts and 300 on Premium — its paid subscription — and free accounts can add only a limited number of personalised notes per month; check the current limits.)
 
 ### Common mistakes
 
 | Pitfall | Why it hurts | Fix |
 |---|---|---|
-| **Tone mismatch** | Too casual reads as unprofessional; too stiff reads as cold | Match the recipient (startup founder vs corporate HR); ask the model for "friendlier" or "more formal" and choose |
+| **Tone mismatch** | Too casual reads as unprofessional; too stiff reads as cold | Match the recipient (startup founder vs corporate HR, i.e. human resources); ask the model for "friendlier" or "more formal" and choose |
 | **Grammar and typos** | Signals carelessness | Proofread; read aloud; use a grammar checker as a second pass |
 | **Robotic AI phrasing** | Formulaic lines make the email feel mass-produced and reduce trust | Add a real detail in your own words; replace stock phrases; ask for "more personal, less formal" versions |
 | **Following up too soon or too often** | Feels pushy | Wait about a week; one or two polite follow-ups at most |
@@ -432,24 +434,24 @@ Short subject, reader-centred opening, one ask, clear close, real personal detai
 
 ### What it is
 
-LinkedIn is a professional network and, in practice, a public portfolio page that ranks well in search engines. It serves three purposes: **networking** (connecting with peers, mentors, groups and companies), **job hunting** (job listings, applying with your profile, and recruiters searching for candidates), and **personal branding** (posts, articles, and a Featured section that pins your best work). Unlike a resume, it can be updated any time and hold links, documents and media.
+LinkedIn is a professional network and, in practice, a public portfolio page that ranks well in search engines (it tends to appear near the top when someone searches your name). It serves three purposes: **networking** (connecting with peers, mentors, groups and companies), **job hunting** (job listings, applying with your profile, and recruiters searching for candidates), and **personal branding** (posts, articles, and a Featured section that pins your best work). Unlike a resume, it can be updated any time and hold links, documents and media.
 
 ### How it works: the five key sections
 
 | Section | Job | Tips | Prompt pattern |
 |---|---|---|---|
-| **Headline** (up to 220 characters) | The line under your name, shown in search results | Role + specialty + value, using words recruiters search for; readable, not a keyword pile | "Give 5 headline options for a frontend developer focused on accessibility and design systems. Under 120 characters each." |
+| **Headline** (up to 220 characters) | The line under your name, shown in search results | Role + specialty + value, using words recruiters search for; readable, not a keyword pile | "Give 5 headline options for a frontend developer focused on accessibility and design systems. Under 120 characters each." (Frontend = the part of an app users see in the browser; accessibility = making it usable by people with disabilities; design system = a shared library of UI components and style rules.) |
 | **About** (up to 2,600 characters) | Your story: what you do, how, what next | Hook in the first two lines (only they show before "see more"); two or three real achievements; some personality | "From these facts, draft a warm, first-person About section: what I do, two results, what I'm looking for. 200 words." |
 | **Experience** | Roles with outcomes | Bullets, results over duties, numbers you can defend | "Turn these notes on my product manager role into 3 bullets on research, launch and metrics. Use only my numbers." |
-| **Featured** | Pinned work at the top | Only your best; mix formats (article, repo, demo video, PDF case study); a short caption each | "Write a 1-sentence caption for my Featured case study on reducing checkout drop-off." |
-| **Skills & endorsements** | Lets search match you; endorsements add proof | Put the most relevant skills first; be specific ("Agile project management", not "management"); ask real colleagues to endorse skills they saw | "Suggest 10 specific skills a cloud engineer with AWS, Kubernetes and Terraform should list, most searched first." Then keep only the true ones. |
+| **Featured** | Pinned work at the top | Only your best; mix formats (article, repo i.e. code repository, demo video, PDF case study); a short caption each | "Write a 1-sentence caption for my Featured case study on reducing checkout drop-off." |
+| **Skills & endorsements** | Lets search match you; endorsements add proof | Put the most relevant skills first; be specific ("Agile project management", i.e. working in short, iterative cycles, not "management"); ask real colleagues to endorse skills they saw | "Suggest 10 specific skills a cloud engineer with AWS, Kubernetes and Terraform (a tool that creates cloud infrastructure from configuration files) should list, most searched first." Then keep only the true ones. |
 
 ### How it works: links and media
 
 - **Featured** — add links, documents (PDF case studies, slides) or media; give each a clear title and a one-line takeaway; put the strongest item first. Menus move between app versions: look for *Add profile section* or the edit pencil on the section.
 - **Projects** — name, your contribution, tools, a result, a link, and teammates if relevant.
-- **Personal website** — say what visitors will find there; a custom domain (`yourname.dev`) looks polished; keep it current.
-- **GitHub** — link a handful of representative repositories, each with a clear README (what it does, how to run it, your role).
+- **Personal website** — say what visitors will find there; a custom domain (your own web address, such as `yourname.dev`) looks polished; keep it current.
+- **GitHub** — link a handful of representative repositories, each with a clear README (the front-page text file of a repository: what it does, how to run it, your role).
 - **Do:** high-quality media, a short story per item, best first. **Don't:** dozens of links, empty descriptions, stale projects.
 
 ### How it works: staying current and active
@@ -488,21 +490,21 @@ Freelance **marketplaces** connect independent workers with clients. They differ
 ### How it works: proposals that convert
 
 1. **Read like the client.** "Analyse this job post. List the client's main problem, the outcome they want, and any unstated worries." Answer *those*, not your life story.
-2. **Hook in the first line** — address their need directly. "Write three opening sentences for a proposal to speed up a slow Shopify store."
+2. **Hook in the first line** — address their need directly. "Write three opening sentences for a proposal to speed up a slow Shopify store." (Shopify is a popular hosted platform for online shops.)
 3. **Show only relevant proof** — one or two similar projects with results. "Turn these bullets from my past ad campaign into a 3-sentence mini case study."
-4. **Give a short plan** — 3–4 steps (e.g. audit → fix the biggest bottlenecks → measure → iterate). "Outline a plan for this redesign in under 120 words."
+4. **Give a short plan** — 3–4 steps (e.g. audit → fix the biggest bottlenecks, the slowest steps that limit everything else → measure → iterate). "Outline a plan for this redesign in under 120 words."
 5. **Say why you** — one distinctive strength.
 6. **End with a call to action** — "Happy to do a 15-minute call to review your current setup."
 
 ### How it works: researching the market
 
-You can ask a model what top profiles in your category usually emphasise, and to summarise common elements of strong bios. But a chatbot **cannot see live marketplace data** unless it has a browsing tool, and its training data may be old. For rates and demand, look at real profiles and job posts on the platform, or paste a set of job posts into the chat and ask it to find recurring requirements and keywords — then build your profile around what clients actually ask for.
+You can ask a model what top profiles in your category usually emphasise, and to summarise common elements of strong bios. But a chatbot **cannot see live marketplace data** unless it has a browsing tool (a built-in ability to fetch web pages), and its training data — the text it learned from — may be old. For rates and demand, look at real profiles and job posts on the platform, or paste a set of job posts into the chat and ask it to find recurring requirements and keywords — then build your profile around what clients actually ask for.
 
 ### How it works: one link for everything
 
-- A **link-in-bio page** (Linktree and similar services) gives one URL that lists your profiles: Upwork, Fiverr, portfolio, GitHub, LinkedIn. Use descriptive labels ("See my case studies", "Hire me on Upwork"), keep the list short, and order by importance. Put it in your email signature and social bios.
+- A **link-in-bio page** (Linktree and similar services) gives one URL (web address) that lists your profiles: Upwork, Fiverr, portfolio, GitHub, LinkedIn. Use descriptive labels ("See my case studies", "Hire me on Upwork"), keep the list short, and order by importance. Put it in your email signature and social bios.
 - A **personal website** gives more room: case studies, testimonials, a blog, and a chance to be found by search engines. Keep branding (colours, fonts, photo, bio) consistent with your other profiles and lead with your niche.
-- Prompts: "Write a 100-word homepage intro for a full-stack developer specialising in e-commerce performance." "Describe my three services in one sentence each, focusing on the client's benefit." "Suggest five short call-to-action buttons for my site."
+- Prompts: "Write a 100-word homepage intro for a full-stack developer (one who works on both the browser side and the server side) specialising in e-commerce performance." "Describe my three services in one sentence each, focusing on the client's benefit." "Suggest five short call-to-action buttons for my site."
 
 ### Common mistakes
 
@@ -538,12 +540,12 @@ A fit score from a model is a rough sorting aid, not a judgement — it can miss
 
 ### How it works: keywords
 
-1. **List your terms** — role titles ("data analyst"), tools ("Power BI", "dbt"), methods ("A/B testing"), and broad skills ("stakeholder management").
-2. **Ask for more**: "List 10 terms recruiters search for when hiring a mid-level React and TypeScript developer." Narrow by level, industry or methodology; run it twice and keep terms that appear consistently.
+1. **List your terms** — role titles ("data analyst"), tools ("Power BI" — Microsoft's dashboard tool —, "dbt"), methods ("A/B testing", comparing two versions on randomly split users), and broad skills ("stakeholder management").
+2. **Ask for more**: "List 10 terms recruiters search for when hiring a mid-level React and TypeScript developer." (React is a JavaScript library for building web interfaces; TypeScript is JavaScript with type checking.) Narrow by level, industry or methodology; run it twice and keep terms that appear consistently.
 3. **Cross-check with real postings** — if several current job ads use the term, it matters. A model's "trending skills for this year" list reflects its training data, which may be out of date.
 4. **Place them where they count** — portfolio titles, headings and first sentences; resume skills and summary; LinkedIn headline, About and Experience; job titles with a specialty where accurate ("Software Engineer — Backend").
-5. **Be specific** — "Scrum" or "Agile project management" rather than "management"; group related skills together.
-6. **Keep it readable** — a natural sentence ("Built a React and Node.js checkout that loads 40% faster") beats a keyword list; stuffing hurts with humans and with search.
+5. **Be specific** — "Scrum" (a common Agile method built on fixed-length sprints) or "Agile project management" rather than "management"; group related skills together.
+6. **Keep it readable** — a natural sentence ("Built a React and Node.js checkout that loads 40% faster" — Node.js runs JavaScript on servers) beats a keyword list; stuffing hurts with humans and with search.
 7. **Refresh** every few months as the language of your field changes — but only with terms that are true for you.
 
 ### Self-check
@@ -568,10 +570,12 @@ Using a chatbot as a practice partner: it can play the interviewer, set problems
 
 1. **Set the scene**: "You are interviewing me for an entry-level Python job. Set one problem I can finish in 30 minutes, on lists and dictionaries. Don't show the solution until I ask."
 2. **Cover the core topics** — patterns such as two pointers, sliding windows and recursion; algorithms like binary search, sorting and dynamic programming; and the structures they run on — arrays, hash maps, stacks, queues, trees and graphs. "Give me a medium tree problem that needs depth-first search, with a sample input and expected output."
+
+   > **Key term — the classic interview toolkit:** *Two pointers* walks two indexes through a list (often from both ends) instead of nesting loops; a *sliding window* keeps a moving range of items and updates it one step at a time; *recursion* is a function calling itself on a smaller piece of the problem. *Binary search* finds an item in a sorted list by halving the range each step; *dynamic programming* solves a problem by storing answers to overlapping sub-problems so each is computed once. A *hash map* (dictionary) looks values up by key in about constant time; a *stack* is last-in-first-out and a *queue* first-in-first-out; *trees* and *graphs* are nodes joined by links, and *depth-first search* explores one branch fully before backing up.
 3. **Debugging drills**: "Give me a short function with one subtle bug. I'll find it; then show the fix."
-4. **Discuss after solving**: "My solution is O(n²). Is there an O(n log n) or O(n) approach? Compare time and space."
-5. **Scenario questions** (system design and troubleshooting): "Act as a senior engineer. Our API's latency tripled after a release — ask me how I'd find the bottleneck, one question at a time." "Traffic to our web app spikes 10× on sale days; interview me on how I'd scale it." (For AI-specific design interviews, see [Chapter 13](../13-ai-system-design-and-genai-products/README.md).)
-6. **Mix in soft skills**: "During the scaling discussion, sometimes ask how I'd explain the change to non-technical stakeholders."
+4. **Discuss after solving**: "My solution is O(n²). Is there an O(n log n) or O(n) approach? Compare time and space." (This is **Big-O notation**: how running time or memory grows as the input size n grows — O(n²) means doubling the input roughly quadruples the work.)
+5. **Scenario questions** (system design and troubleshooting): "Act as a senior engineer. Our API's latency (the time one request takes from start to finish) tripled after a release — ask me how I'd find the bottleneck, one question at a time." "Traffic to our web app spikes 10× on sale days; interview me on how I'd scale it." (For the building blocks these questions assume — latency, throughput, caching, load balancing — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md); for AI-specific design interviews, see [Chapter 13](../13-ai-system-design-and-genai-products/README.md).)
+6. **Mix in soft skills**: "During the scaling discussion, sometimes ask how I'd explain the change to non-technical stakeholders (the people affected by or deciding on the work)."
 
 Practice tips: set a real timer; **talk through your reasoning out loud** (interviewers score the thinking, not just the code); keep a log of where you got stuck and ask for explanations of those gaps; include some hard problems, not only easy ones. And check the model's answers — it can be wrong about complexity or produce buggy code, so run the code.
 
@@ -586,7 +590,7 @@ Behavioural questions ("Tell me about a time you…") test how you work with peo
 |---|---|---|
 | **Situation** | Context in one or two sentences | "Two weeks before a client launch, our payment provider changed its API." |
 | **Task** | Your responsibility | "I owned the integration and had to keep the launch date." |
-| **Action** | What *you* did (most of the answer) | "I split the work into two parallel streams, wrote contract tests against the new API, and gave the client daily status notes." |
+| **Action** | What *you* did (most of the answer) | "I split the work into two parallel streams, wrote contract tests (automated checks that the API still sends and accepts the agreed data shapes) against the new API, and gave the client daily status notes." |
 | **Result** | Outcome, measured if possible, plus what you learned | "We launched on time with zero payment failures in the first month; we now run contract tests for every provider." |
 
 Choose stories that match the job (collaboration-heavy role → a collaboration story). Prepare 6–8 stories that can flex across common questions (conflict, failure, leadership, tight deadline, ambiguity).
@@ -601,7 +605,7 @@ With AI:
 
 1. **Thank-you email within 24 hours** — two or three short paragraphs, one specific reference to the conversation, a brief restatement of fit, an offer to answer further questions.
 2. **Reflect while it is fresh** — what went well, which questions surprised you, where your explanation was unclear, technical or behavioural gaps.
-3. **Plan** — pick one or two things to improve; ask the model for practice questions on exactly those ("Give me five behavioural questions about handling scope creep").
+3. **Plan** — pick one or two things to improve; ask the model for practice questions on exactly those ("Give me five behavioural questions about handling scope creep" — a project's requirements slowly growing beyond what was agreed).
 4. **Ask for feedback** from the recruiter, or a mentor, where possible.
 5. **Track progress** across interviews and adjust your preparation.
 
@@ -633,7 +637,7 @@ Your **personal brand** is what people consistently associate with you professio
 2. **Write a brand statement** — "Using these words, write three one-line brand statements I could adapt for a LinkedIn headline." Adjust tone ("friendlier, still professional").
 3. **Stay authentic**:
    - Include challenges and lessons, not only wins.
-   - Replace vague claims with evidence: not "passionate about open source" but "merged 30 pull requests into two open-source libraries this year" (if true).
+   - Replace vague claims with evidence: not "passionate about open source" but "merged 30 pull requests into two open-source libraries this year" (if true). (A **pull request** is a proposed code change submitted for review; **open source** means the code is public and anyone may use and improve it.)
    - Highlight what makes you different — for example, a teacher turned developer who writes unusually clear docs.
    - Edit AI output until it sounds like you; generic polish is forgettable.
 
@@ -644,7 +648,7 @@ Recruiters check several places. Make them tell one story.
 | Platform | Keep aligned |
 |---|---|
 | **LinkedIn** | Headline and About echo your portfolio bio; Featured shows the same flagship projects; endorsed skills match those you emphasise |
-| **GitHub** | Repository names match portfolio project names; READMEs describe the goal and your part; pin the projects your LinkedIn mentions |
+| **GitHub** | Repository (project folder) names match portfolio project names; READMEs describe the goal and your part; pin the projects your LinkedIn mentions |
 | **Website / blog** | Same photo, colours and bio; links to LinkedIn and GitHub and back |
 | **Everywhere** | Same dates, titles and numbers — "three years leading an Agile team" must match your work history |
 
@@ -660,9 +664,9 @@ Prompt: "Here are my LinkedIn About, GitHub bio and website intro. List any cont
 
 ### How it works: growing your reach
 
-- **Thought leadership** — share what you know: a blog (your site or a platform like Medium) for long posts, LinkedIn posts for shorter ones. Plan one or two pieces a month: project write-ups, lessons learned, commentary on your field. Use AI for outlines and editing ("Suggest an outline for a 600-word post on what I learned migrating to PostgreSQL 16"), but the experience and opinions must be yours. Reply to comments.
-- **Collaboration** — partner with people whose skills complement yours (developer + designer), co-write posts, run a joint webinar, guest on a podcast. "Draft a short email inviting a UX designer I met at a meetup to co-write a post on accessible forms."
-- **Events and communities** — meetups, conferences (offer a talk), and field-specific Slack or Discord groups where you answer questions.
+- **Thought leadership** — share what you know: a blog (your site or a platform like Medium) for long posts, LinkedIn posts for shorter ones. Plan one or two pieces a month: project write-ups, lessons learned, commentary on your field. Use AI for outlines and editing ("Suggest an outline for a 600-word post on what I learned migrating to PostgreSQL 16" (a popular open-source database)), but the experience and opinions must be yours. Reply to comments.
+- **Collaboration** — partner with people whose skills complement yours (developer + designer), co-write posts, run a joint webinar (an online live talk), guest on a podcast. "Draft a short email inviting a UX (user experience) designer I met at a meetup to co-write a post on accessible forms."
+- **Events and communities** — meetups (small local in-person gatherings), conferences (offer a talk), and field-specific Slack or Discord groups (online group-chat communities) where you answer questions.
 - Networking works when it is mutual: offer help, not just requests.
 
 ### TL;DR
@@ -677,14 +681,14 @@ A few true values, expressed consistently everywhere; evidence over adjectives; 
 
 1. **Pick a rhythm** — monthly if your work changes fast, otherwise quarterly — and put it in your calendar.
 2. **Content check**: "Review my portfolio homepage and About text for clarity, consistency and anything that sounds dated."
-3. **Structure check**: "Here is my site's page list and navigation. Suggest how to make my recent analytics projects easier to find."
+3. **Structure check**: "Here is my site's page list and navigation. Suggest how to make my recent analytics (data-analysis) projects easier to find."
 4. **Broken links** — use a link-checker tool or browser extension; a chatbot cannot click links, but it can spot suspicious ones in a pasted list (renamed services, old URL formats).
 5. **Stale content** — update old roles and skills; replace "in progress" with final outcomes; refresh metrics and screenshots; archive projects that no longer represent you.
 6. **Change gradually** and keep a small log of what you changed, so you can see what improved responses.
 
 ### How it works: tracking your field
 
-Ask a model to summarise emerging roles, skills or tools in your field — then **confirm with current sources**: job boards, company engineering blogs, industry reports. Model knowledge has a cutoff and is not live; salary comparisons from a model are broad impressions at best. Follow trends that match your goals, not all of them, and when you pick up a new skill, add a line to your portfolio about why and how you used it.
+Ask a model to summarise emerging roles, skills or tools in your field — then **confirm with current sources**: job boards, company engineering blogs, industry reports. Model knowledge has a cutoff (a **knowledge cutoff**: the date after which its training data contains nothing) and is not live; salary comparisons from a model are broad impressions at best. Follow trends that match your goals, not all of them, and when you pick up a new skill, add a line to your portfolio about why and how you used it.
 
 ### Quick checklist
 
@@ -720,8 +724,8 @@ Ask a model to summarise emerging roles, skills or tools in your field — then 
 | **Follow each employer's AI rules** | Some forbid AI in applications, take-homes or live interviews; ask when unclear |
 | **Protect privacy** | Don't paste confidential employer data, client figures under NDA, or others' contact details into consumer tools; check data-use settings |
 | **Keep it your voice** | Heavily generic AI text reads as low effort and can erode trust in outreach |
-| **Watch for bias** | Models can reproduce stereotypes (e.g. gendered wording, assumptions about age or background); review tone and word choice |
-| **Don't rely on AI "detectors" or "ATS scores"** | Both are unreliable signals; write clearly for humans |
+| **Watch for bias** (systematic unfairness toward some groups) | Models can reproduce stereotypes (e.g. gendered wording, assumptions about age or background); review tone and word choice |
+| **Don't rely on AI "detectors" or "ATS scores"** | Both (tools claiming to spot AI-written text, and match scores some ATS tools show) are unreliable signals; write clearly for humans |
 
 A useful test before you send anything: *could I explain every sentence in this document, with specifics, to the person who will read it?* If not, rewrite it.
 
