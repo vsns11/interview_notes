@@ -1,8 +1,8 @@
 # Chapter 2 — The Math You Need for Machine Learning
 
-You do not need to be a mathematician to do machine learning, but four areas of math appear in every model, every library call and every interview: **linear algebra** (how data and models are stored and combined), **calculus** (how models learn), **probability** (how models express uncertainty) and **statistics** (how we judge results). A fifth, small area, **information theory**, explains the most common loss function in classification.
+You do not need to be a mathematician to do machine learning, but four areas of math appear in every model, every library call and every interview: **linear algebra** (how data and models are stored and combined), **calculus** (how models learn), **probability** (how models express uncertainty) and **statistics** (how we judge results). A fifth, small area, **information theory**, explains the most common loss function (the formula that scores how wrong a model's predictions are) in classification.
 
-This chapter teaches each idea with a plain definition, a small hand calculation, and NumPy code you can run. It keeps only what ML practitioners actually use.
+This chapter teaches each idea with a plain definition, a small hand calculation, and NumPy code you can run (**NumPy** is the core Python library for fast calculations on arrays, i.e. blocks of numbers such as lists and grids). It keeps only what ML practitioners actually use.
 
 **What you'll learn**
 
@@ -24,7 +24,7 @@ All code is in [`code/`](code/). Notation: bold or plain lowercase letters (x, w
 
 ### What it is
 
-A **vector** is an ordered list of numbers, such as [2, 5, −3]. In ML, **one data point is one vector**: a house with 120 m², 3 bedrooms and 2 bathrooms is x = [120, 3, 2]. Each position is a **feature**, and the number of positions is the vector's **dimension**. Geometrically, a vector is an arrow from the origin to a point in space; a 3-feature house is a point in 3-D space, and a 784-pixel image is a point in 784-D space.
+A **vector** is an ordered list of numbers, such as [2, 5, −3]. In ML, **one data point is one vector**: a house with 120 m², 3 bedrooms and 2 bathrooms is x = [120, 3, 2]. Each position is a **feature**, and the number of positions is the vector's **dimension**. Geometrically, a vector is an arrow from the origin (the zero point, where every coordinate is 0) to a point in space; a 3-feature house is a point in 3-D space, and a 784-pixel image is a point in 784-D space.
 
 ### Why it matters
 
@@ -35,7 +35,7 @@ Once data is a vector, "similar houses" becomes "nearby points", "a model" becom
 | Operation | Rule | Example with a = [1, 2, 3], b = [4, 5, 6] |
 |---|---|---|
 | Addition | Add position by position | a + b = [5, 7, 9] |
-| Scalar multiplication | Multiply every entry | 2a = [2, 4, 6] |
+| Scalar (single-number) multiplication | Multiply every entry | 2a = [2, 4, 6] |
 | **Dot product** a · b | Multiply position by position, then sum | 1·4 + 2·5 + 3·6 = **32** |
 | **L2 norm** ‖a‖₂ (length) | √(sum of squares) | √(1 + 4 + 9) = √14 ≈ 3.74 |
 | L1 norm ‖a‖₁ | Sum of absolute values | 1 + 2 + 3 = 6 |
@@ -43,7 +43,7 @@ Once data is a vector, "similar houses" becomes "nearby points", "a model" becom
 | Unit vector | a / ‖a‖₂ (length 1, same direction) | [0.27, 0.53, 0.80] |
 | Cosine similarity | (a · b) / (‖a‖ ‖b‖) | 32 / (3.74 · 8.77) ≈ 0.975 |
 
-**The dot product is the most important operation in ML.** A linear model's prediction is a dot product plus a constant:
+**The dot product is the most important operation in ML.** (A *linear model* is one that predicts with a weighted sum of the features.) A linear model's prediction is a dot product plus a constant:
 
 ŷ = w · x + b = w₁x₁ + w₂x₂ + w₃x₃ + b
 
@@ -51,7 +51,7 @@ With weights w = [2, 10, 5] and the house x = [120, 3, 2]: w · x = 2·120 + 10�
 
 Geometrically, a · b = ‖a‖ ‖b‖ cos θ, where θ is the angle between the arrows. So the dot product is large when vectors point the same way, zero when they are perpendicular, and negative when they point in opposite directions. **Cosine similarity** keeps only the angle; it is how search engines and recommendation systems compare text or item **embeddings** (learned vectors that represent meaning).
 
-**Norms** measure size. The L2 norm is ordinary distance; the distance between two points is ‖a − b‖₂. L1 and L2 norms of the *weights* appear as regularisation penalties (Lasso uses L1, Ridge uses L2).
+**Norms** measure size. The L2 norm is ordinary distance; the distance between two points is ‖a − b‖₂. L1 and L2 norms of the *weights* appear as regularisation penalties (extra terms added to the loss that discourage large weights, to reduce overfitting); Lasso and Ridge are the two classic penalised versions of linear regression, Lasso using L1 and Ridge using L2.
 
 ### Code
 
@@ -120,20 +120,20 @@ A = | 1 2 |     B = | 5 6 |
 
 Order matters: in general **AB ≠ BA** (here BA = [[23, 34], [31, 46]]).
 
-**Why it matters: batch prediction is one matrix product.** For all four houses at once, ŷ = Xw + b. Each row of X dotted with w gives one prediction. Libraries run this on optimised CPU/GPU code, which is why ML code avoids Python loops. A neural-network layer computes h = activation(Wx + b) in exactly the same way; deep networks are mostly long chains of matrix multiplications, which is why GPUs, built for fast matrix maths, power deep learning.
+**Why it matters: batch prediction is one matrix product.** For all four houses at once, ŷ = Xw + b. Each row of X dotted with w gives one prediction. Libraries run this on optimised CPU/GPU code (the CPU is the computer's general-purpose processor; a GPU is a graphics chip that performs thousands of simple calculations in parallel), which is why ML code avoids Python loops. A neural-network layer computes h = activation(Wx + b) in exactly the same way (an *activation function* is a simple non-linear function, such as "replace negatives with 0", applied to every number; without it, stacked layers would collapse into one linear map); deep networks are mostly long chains of matrix multiplications, which is why GPUs, built for fast matrix maths, power deep learning.
 
 ### Transpose, identity, inverse, determinant
 
 | Concept | Definition | Example / use |
 |---|---|---|
-| **Transpose** Aᵀ | Swap rows and columns (shape n × m) | [[1, 2], [3, 4]]ᵀ = [[1, 3], [2, 4]]; Xᵀ appears in gradients and covariance |
+| **Transpose** Aᵀ | Swap rows and columns (shape n × m) | [[1, 2], [3, 4]]ᵀ = [[1, 3], [2, 4]]; Xᵀ appears in gradients and covariance (how features vary together) |
 | **Identity** I | 1s on the diagonal, 0s elsewhere; AI = A | The "1" of matrices |
 | **Inverse** A⁻¹ | The matrix with A A⁻¹ = I (only for square matrices with det ≠ 0) | "Undoes" A; used to solve linear equations |
 | **Determinant** det(A) | One number measuring how A scales area/volume; 0 means A squashes space flat and has no inverse | For 2 × 2: det = ad − bc = 1·4 − 2·3 = **−2** |
 
 The 2 × 2 inverse by formula: A⁻¹ = (1/det) · [[d, −b], [−c, a]] = (1/−2) · [[4, −2], [−3, 1]] = [[−2, 1], [1.5, −0.5]].
 
-**Solving equations.** The system x₁ + 2x₂ = 5, 3x₁ + 4x₂ = 11 is Ax = c. Then x = A⁻¹c = [1, 2]. In code, use `np.linalg.solve(A, c)` rather than computing the inverse: it is faster and numerically more accurate. The closed-form linear-regression solution (the "normal equation") w = (XᵀX)⁻¹Xᵀy is solved the same way; scikit-learn's `LinearRegression` uses a least-squares solver based on matrix decompositions rather than an explicit inverse.
+**Solving equations.** The system x₁ + 2x₂ = 5, 3x₁ + 4x₂ = 11 is Ax = c. Then x = A⁻¹c = [1, 2]. In code, use `np.linalg.solve(A, c)` rather than computing the inverse: it is faster and numerically more accurate. The closed-form (computed directly by a formula, with no step-by-step search) linear-regression solution (the "normal equation") w = (XᵀX)⁻¹Xᵀy is solved the same way; scikit-learn's `LinearRegression` (scikit-learn is the standard Python machine-learning library) uses a least-squares solver (an algorithm that finds the weights minimising the sum of squared errors) based on matrix decompositions (rewriting a matrix as a product of simpler matrices) rather than an explicit inverse.
 
 ### Code
 
@@ -180,15 +180,15 @@ First house check: 2·120 + 10·3 + 5·2 + 50 = 330. ✓
 ### Common mistakes
 
 - **Shape errors.** Before multiplying, write the shapes: (4 × 3)(3,) → (4,). If inner sizes differ, you need a transpose or you have the wrong matrix.
-- Inverting nearly singular matrices (det ≈ 0), e.g. when two features are almost copies of each other (*multicollinearity*). Results blow up; regularisation or `solve`/`lstsq` helps.
+- Inverting nearly singular (almost non-invertible) matrices (det ≈ 0), e.g. when two features are almost copies of each other (*multicollinearity*). Results blow up; regularisation or `solve`/`lstsq` helps.
 - Confusing `*` (element-wise) with `@` (matrix product).
 
 ### In the interview
 
-**30-second answer:** "A dataset is a matrix with examples as rows and features as columns, and a linear model's predictions for the whole dataset are one matrix-vector product, Xw + b. Neural network layers are matrix multiplications followed by nonlinearities, which is why GPUs, which are very fast at matrix math, dominate deep learning."
+**30-second answer:** "A dataset is a matrix with examples as rows and features as columns, and a linear model's predictions for the whole dataset are one matrix-vector product, Xw + b. Neural network layers are matrix multiplications followed by nonlinearities (activation functions), which is why GPUs, which are very fast at matrix math, dominate deep learning."
 
 - *Is matrix multiplication commutative?* — No; AB ≠ BA in general, and the shapes may not even allow BA.
-- *When does a matrix have no inverse?* — When it is not square or its determinant is 0 (its columns are linearly dependent).
+- *When does a matrix have no inverse?* — When it is not square or its determinant is 0 (its columns are linearly dependent: at least one column can be built as a weighted sum of the others).
 
 ### Self-check
 
@@ -214,10 +214,10 @@ Worked example: A = [[2, 1], [1, 2]] and v = [1, 1]. A v = [2+1, 1+2] = [3, 3] =
 
 ### Why it matters
 
-- **PCA (principal component analysis)**, the standard dimensionality-reduction method, finds the eigenvectors of the data's covariance matrix (equivalently, the SVD of the centred data). The top eigenvectors are the directions along which data varies most; the eigenvalues say how much variance each captures.
-- **Compression and denoising:** keeping only the top k singular values gives the best rank-k approximation of a matrix (Eckart–Young theorem).
+- **PCA (principal component analysis)**, the standard dimensionality-reduction method (reducing many features to a few that keep most of the information), finds the eigenvectors of the data's covariance matrix (a table of how much every pair of features varies together) (equivalently, the SVD of the centred data, i.e. data with each column's mean subtracted). The top eigenvectors are the directions along which data varies most; the eigenvalues say how much variance (spread, §2.6) each captures.
+- **Compression and denoising:** keeping only the top k singular values gives the best rank-k approximation (the closest matrix that can be built from only k independent directions) of a matrix (Eckart–Young theorem).
 - **Recommender systems:** matrix-factorisation methods, made famous during the Netflix Prize (2006–2009), approximate the huge user × movie ratings matrix as a product of two thin matrices, an idea closely related to SVD.
-- **PageRank**, Google's original ranking algorithm, is the leading eigenvector of a matrix built from the web's link graph.
+- **PageRank**, Google's original ranking algorithm, is the leading eigenvector of a matrix built from the web's link graph (the network of which pages link to which).
 
 ### Code
 
@@ -292,7 +292,7 @@ A model's **loss** is a function of its parameters. The gradient of the loss tel
 | Constant multiple | (c f)′ = c f′ | (5x²)′ = 10x |
 | Exponential / log | (eˣ)′ = eˣ, (ln x)′ = 1/x | |
 | **Chain rule** | (f(g(x)))′ = f′(g(x)) · g′(x) | ((3x + 1)²)′ = 2(3x + 1) · 3 |
-| Sigmoid | σ(z) = 1/(1 + e⁻ᶻ), σ′(z) = σ(z)(1 − σ(z)) | σ(0) = 0.5, σ′(0) = 0.25 |
+| Sigmoid (S-shaped curve squashing any number into 0–1) | σ(z) = 1/(1 + e⁻ᶻ), σ′(z) = σ(z)(1 − σ(z)) | σ(0) = 0.5, σ′(0) = 0.25 |
 
 **Partial derivatives, worked.** f(x, y) = x²y + 3y at (2, 5):
 - ∂f/∂x: treat y as a constant → 2xy = 2·2·5 = **20**
@@ -301,7 +301,7 @@ A model's **loss** is a function of its parameters. The gradient of the loss tel
 
 ### The chain rule (the engine of backpropagation)
 
-When functions are nested, multiply the local slopes along the chain. A one-weight "neuron" with squared error:
+When functions are nested, multiply the local slopes along the chain. A one-weight "neuron" (a single unit of a neural network: weighted input, then an activation) with squared error:
 
 z = w·x → ŷ = σ(z) → L = (ŷ − y)²
 
@@ -311,7 +311,7 @@ With x = 2, y = 1, w = 0.5:
 2. Local slopes: dL/dŷ = 2(ŷ − y) = −0.5379; dŷ/dz = ŷ(1 − ŷ) = 0.1966; dz/dw = x = 2
 3. Chain: dL/dw = −0.5379 × 0.1966 × 2 = **−0.2115**
 
-The negative sign says "increase w to reduce the loss" (makes sense: ŷ is below the target 1). **Backpropagation** is exactly this, applied efficiently to millions of weights, reusing shared intermediate products from the output layer backwards. Frameworks such as PyTorch compute it automatically (*autograd*).
+The negative sign says "increase w to reduce the loss" (makes sense: ŷ is below the target 1). **Backpropagation** is exactly this, applied efficiently to millions of weights, reusing shared intermediate products from the output layer backwards. Frameworks such as PyTorch (a popular Python deep-learning library) compute it automatically (*autograd*, short for automatic differentiation: the library records each operation and works out the derivatives for you).
 
 ### Code: check every derivative numerically
 
@@ -336,7 +336,7 @@ dL/dw via chain rule -0.21151 | numeric -0.21151
 MSE gradient: formula [-4.         -9.33333333] | numeric [-4.     -9.3333]
 ```
 
-**The MSE gradient formula**, which you will see everywhere: for L(w) = (1/n) Σ (xᵢ·w − yᵢ)², ∇L = (2/n) Xᵀ(Xw − y). In words: multiply each example's error by its features and average. Here X has a column of 1s (so w[0] acts as the bias), y = [2, 4, 6], w = [0, 1]; the errors are [−1, −2, −3], giving gradient [2/3·(−6), 2/3·(−14)] = [−4, −9.33].
+**The MSE gradient formula** (MSE, mean squared error, is the average of the squared prediction errors), which you will see everywhere: for L(w) = (1/n) Σ (xᵢ·w − yᵢ)², ∇L = (2/n) Xᵀ(Xw − y). In words: multiply each example's error by its features and average. Here X has a column of 1s (so w[0] acts as the bias, the constant term b that shifts every prediction), y = [2, 4, 6], w = [0, 1]; the errors are [−1, −2, −3], giving gradient [2/3·(−6), 2/3·(−14)] = [−4, −9.33].
 
 ### Common mistakes
 
@@ -361,7 +361,7 @@ Derivative = slope; partial derivative = slope along one input; gradient = vecto
 
 **Gradient descent** is an algorithm for finding the parameters that minimise a function: start somewhere, compute the gradient, take a small step in the opposite direction, repeat. Picture walking down a foggy hill by always stepping in the steepest downhill direction you can feel under your feet.
 
-Update rule: **w ← w − η · ∇L(w)**, where η (eta) is the **learning rate**, a hyperparameter that sets the step size.
+Update rule: **w ← w − η · ∇L(w)**, where η (eta) is the **learning rate**, a hyperparameter (a setting you choose before training rather than one the model learns) that sets the step size.
 
 ### Worked by hand
 
@@ -412,19 +412,19 @@ scikit-learn closed form: w=3.974 b=6.985
 
 ![Gradient descent fitting a line](img/gd_linear_regression.png)
 
-Gradient descent lands on the same answer as scikit-learn's exact solver. Notice w shoots past 4 early on and b creeps up slowly: the loss surface is a long, narrow valley because x (0–10) and the constant 1 have very different scales. **Standardising features** makes the valley rounder and gradient descent much faster, one reason feature scaling matters.
+Gradient descent lands on the same answer as scikit-learn's exact solver. Notice w shoots past 4 early on and b creeps up slowly: the loss surface (the loss plotted as a landscape over all possible parameter values) is a long, narrow valley because x (0–10) and the constant 1 have very different scales. **Standardising features** makes the valley rounder and gradient descent much faster, one reason feature scaling matters.
 
 ### Variants
 
 | Variant | Gradient computed on | Pros | Cons |
 |---|---|---|---|
 | **Batch GD** | All n examples per step | Smooth, exact gradient | Slow per step on big data |
-| **Stochastic GD (SGD)** | One random example per step | Very cheap steps; noise can escape shallow local minima | Noisy; needs a decaying learning rate |
+| **Stochastic GD (SGD)** | One random example per step | Very cheap steps; noise can escape shallow local minima (dips that are lowest only nearby) | Noisy; needs a decaying learning rate |
 | **Mini-batch GD** | A small batch (e.g. 32–512) | Best of both; uses GPU parallelism | One more hyperparameter (batch size) |
 
-One pass over the whole training set is an **epoch**. Deep-learning optimisers such as Momentum, RMSProp and Adam are mini-batch gradient descent with smarter, adaptive step sizes.
+One pass over the whole training set is an **epoch**. Deep-learning optimisers (the algorithms that decide how to update the weights) such as Momentum, RMSProp and Adam are mini-batch gradient descent with smarter, adaptive step sizes.
 
-**Convex vs non-convex.** A convex loss (bowl-shaped, like MSE for linear regression or log loss for logistic regression) has no separate local minima: every minimum is a global one, so gradient descent with a suitable learning rate reaches the best possible loss. Neural-network losses are non-convex, with many local minima and saddle points; in practice, mini-batch methods still find good solutions.
+**Convex vs non-convex.** A convex loss (bowl-shaped, like MSE for linear regression or log loss for logistic regression) has no separate local minima: every minimum is a global one, so gradient descent with a suitable learning rate reaches the best possible loss. Neural-network losses are non-convex, with many local minima and saddle points (spots where the surface is flat but curves up in some directions and down in others); in practice, mini-batch methods still find good solutions.
 
 ### When not to use it
 
@@ -432,8 +432,8 @@ If a closed-form or specialised solver exists and the data fits in memory (small
 
 ### Common mistakes
 
-- Unscaled features → slow, zig-zagging convergence.
-- Learning rate too large → loss grows or becomes NaN. First fix: divide η by 10.
+- Unscaled features → slow, zig-zagging convergence (the process of settling on the final answer).
+- Learning rate too large → loss grows or becomes NaN ("Not a Number", what a computer produces for invalid maths such as infinity minus infinity). First fix: divide η by 10.
 - Not shuffling data between epochs for SGD.
 - Stopping too early; plot the loss curve.
 
@@ -469,9 +469,9 @@ Probability itself is a number between 0 (impossible) and 1 (certain) measuring 
 
 | Distribution | Models | Parameters | Mean | Variance | ML use |
 |---|---|---|---|---|---|
-| **Bernoulli** | One yes/no trial | p = P(1) | p | p(1 − p) | A binary label; logistic regression outputs p |
-| **Binomial** | Number of successes in n independent trials | n, p | np | np(1 − p) | Count of clicks out of n impressions; A/B tests |
-| **Normal (Gaussian)** | Continuous values clustered symmetrically around a mean | μ (mean), σ (std) | μ | σ² | Measurement noise, heights, errors of linear regression; weight initialisation |
+| **Bernoulli** | One yes/no trial | p = P(1) | p | p(1 − p) | A binary label; logistic regression (a classic yes/no classifier) outputs p |
+| **Binomial** | Number of successes in n independent trials | n, p | np | np(1 − p) | Count of clicks out of n impressions (times an ad was shown); A/B tests (comparing two versions on random groups of users) |
+| **Normal (Gaussian)** | Continuous values clustered symmetrically around a mean | μ (mean), σ (std) | μ | σ² | Measurement noise, heights, errors of linear regression; weight initialisation (random starting weights) |
 
 Worked binomial: P(exactly 3 successes in 10 trials, p = 0.3) = C(10, 3) · 0.3³ · 0.7⁷ = 120 · 0.027 · 0.0824 ≈ **0.2668**. C(10, 3) = 120 is the number of ways to choose which 3 trials succeed.
 
@@ -512,7 +512,7 @@ die: E[X] = 3.500, Var[X] = 2.917 | simulated mean 3.510, var 2.925
 ### Common mistakes
 
 - Reading a PDF value as a probability. For continuous variables, P(X = exactly 170) = 0; only ranges have probability.
-- Assuming everything is normal. Incomes, session lengths and prices are usually right-skewed; a log transform often helps.
+- Assuming everything is normal. Incomes, session lengths and prices are usually right-skewed (most values are small, with a long tail of large ones); a log transform (replacing each value by its logarithm, which squeezes large values together) often helps.
 
 ### Self-check
 
@@ -585,7 +585,7 @@ after a second independent positive test: 0.766
 
 ### In the interview
 
-**30-second answer:** "Bayes' theorem updates a prior belief with evidence: P(A|B) = P(B|A)P(A)/P(B). A classic example is a test with 90% sensitivity and 5% false positives for a disease with 1% prevalence: a positive result gives only about a 15% chance of disease, because the healthy population is so much larger. It underlies Naive Bayes and explains why precision is low for rare-event classifiers."
+**30-second answer:** "Bayes' theorem updates a prior belief with evidence: P(A|B) = P(B|A)P(A)/P(B). A classic example is a test with 90% sensitivity and 5% false positives for a disease with 1% prevalence: a positive result gives only about a 15% chance of disease, because the healthy population is so much larger. It underlies Naive Bayes and explains why precision (the share of flagged cases that really are positive) is low for rare-event classifiers."
 
 - *What's "naive" in Naive Bayes?* — It assumes features are conditionally independent given the class.
 - *How does this relate to precision?* — P(sick | positive) is exactly the precision of the test.
@@ -619,11 +619,11 @@ P(A | B) = P(A and B) / P(B). Bayes: posterior ∝ likelihood × prior. Rare eve
 
 **Worked example.** Salaries (in $1000s): 40, 42, 45, 47, 50, 52, 55, 300 (one CEO).
 - Mean = 631 / 8 = **78.9**; median = (47 + 50)/2 = **48.5**. The single outlier drags the mean far above what a typical person earns; the median barely notices.
-- **Population vs sample std:** dividing by n (NumPy's default `ddof=0`) describes this exact group; dividing by n − 1 (`ddof=1`, pandas' default) gives an unbiased variance estimate when the data is a sample from a bigger population. For large n the difference is negligible.
+- **Population vs sample std:** dividing by n (NumPy's default `ddof=0`) describes this exact group; dividing by n − 1 (`ddof=1`, the default in pandas, Python's main library for data tables) gives an unbiased (correct on average) variance estimate when the data is a sample from a bigger population. For large n the difference is negligible.
 
 **Standardisation (z-scores).** Subtract the mean and divide by the standard deviation: z = (x − μ)/σ. The result has mean 0 and standard deviation 1, and z says "how many standard deviations from the mean". For x = [2, 4, 4, 4, 5, 5, 7, 9]: μ = 5, σ = 2, so 9 → (9 − 5)/2 = **2.0** and 2 → **−1.5**.
 
-Standardising puts features on a common scale so that no feature dominates just because of its units. It speeds up gradient descent and is essential for distance-based methods (k-NN, k-means, SVMs) and regularised models. scikit-learn's `StandardScaler` does exactly this, learning μ and σ from the training data only.
+Standardising puts features on a common scale so that no feature dominates just because of its units. It speeds up gradient descent and is essential for distance-based methods (k-NN, which predicts from the nearest stored examples; k-means, which groups nearby points; SVMs, which draw a widest-margin boundary between classes) and regularised models. scikit-learn's `StandardScaler` does exactly this, learning μ and σ from the training data only.
 
 Output of [`code/statistics_basics.py`](code/statistics_basics.py):
 
@@ -717,7 +717,7 @@ n=50: mean of sample means 49.89, std of sample means 7.11 (theory sigma/sqrt(n)
 
 ![Central limit theorem](img/clt.png)
 
-With n = 50 the sample means form a bell curve even though the population is heavily skewed. The CLT is why normal-based confidence intervals and t-tests work for averages of most real data, and why larger test sets give more reliable accuracy estimates.
+With n = 50 the sample means form a bell curve even though the population is heavily skewed. The CLT is why normal-based confidence intervals and t-tests (standard tests for comparing averages; both explained in §2.11) work for averages of most real data, and why larger test sets give more reliable accuracy estimates.
 
 ### Self-check
 
@@ -747,7 +747,7 @@ A **hypothesis test** asks whether an observed effect could plausibly be random 
 | **Type I (false positive)** | Reject H₀ when it is true | α |
 | **Type II (false negative)** | Miss a real effect | β; **power** = 1 − β |
 
-A **confidence interval (CI)** gives a range of plausible values for a parameter: estimate ± (critical value × standard error). A 95% CI is built by a method that, over many repeated experiments, captures the true value 95% of the time.
+A **confidence interval (CI)** gives a range of plausible values for a parameter: estimate ± (critical value × standard error), where the *critical value* is a cut-off read from a reference distribution (about 1.96 for 95% with large samples). A 95% CI is built by a method that, over many repeated experiments, captures the true value 95% of the time.
 
 ### Worked example: an A/B test
 
@@ -770,15 +770,15 @@ coverage of 2000 simulated 95% CIs: 0.949
 ```
 
 - p = 0.0075: if the new model truly made no difference, a gap this large would appear less than 1% of the time. We reject H₀.
-- The CI for the new mean is 187.3 ± 2.001 × 4.02 (2.001 is the t critical value for 59 degrees of freedom; it approaches 1.96 for large samples).
+- The CI for the new mean is 187.3 ± 2.001 × 4.02 (2.001 is the t critical value for 59 degrees of freedom, roughly the sample size minus the number of quantities estimated from it; it approaches 1.96 for large samples).
 - **Bootstrap CI** for a model's test accuracy: resample the 200 test predictions with replacement 5,000 times and take the 2.5th and 97.5th percentiles. An accuracy of 85% on 200 examples is really "somewhere between about 80% and 90%": worth remembering before celebrating a 1-point improvement on a small test set.
 - The last line verifies the meaning of "95%": in 2,000 simulated experiments, 94.9% of the intervals contained the true mean.
 
 ### Common mistakes
 
 - **"p = 0.03 means a 3% chance H₀ is true."** No. The p-value assumes H₀ is true and measures how surprising the data is.
-- **Significant ≠ important.** With huge samples, trivial differences become significant; always report the effect size and its CI.
-- **Multiple comparisons / p-hacking:** test 20 useless features at α = 0.05 and expect one "significant" result by chance. Correct for it (e.g. Bonferroni: use α/20) or pre-register the test.
+- **Significant ≠ important.** With huge samples, trivial differences become significant; always report the effect size (how big the difference actually is, e.g. "15 ms faster") and its CI.
+- **Multiple comparisons / p-hacking:** test 20 useless features at α = 0.05 and expect one "significant" result by chance. Correct for it (e.g. Bonferroni: use α/20) or pre-register the test (write down what you will test before seeing the data).
 - Stopping an A/B test the moment p dips below 0.05 ("peeking") inflates false positives.
 
 ### In the interview
@@ -786,7 +786,7 @@ coverage of 2000 simulated 95% CIs: 0.949
 **30-second answer:** "A p-value is the probability of seeing data at least as extreme as ours if the null hypothesis were true. If it's below a pre-chosen α, like 0.05, we reject the null. It's not the probability the null is true, and significance isn't practical importance, so I report effect sizes with confidence intervals and correct for multiple comparisons."
 
 - *What's statistical power?* — The probability of detecting a real effect; it rises with sample size and effect size.
-- *How would you compare two models' accuracy?* — Evaluate on the same test set and use a paired test (e.g. McNemar's test) or bootstrap the difference.
+- *How would you compare two models' accuracy?* — Evaluate on the same test set and use a paired test (e.g. McNemar's test, which compares the examples one model gets right and the other gets wrong) or bootstrap the difference.
 
 ### Self-check
 
@@ -810,9 +810,9 @@ Set α, compute p; p < α → reject H₀. p is not P(H₀ true). Report effect 
 
 ### Why it matters
 
-- **Classification loss.** For a labelled example, the true distribution p is one-hot (probability 1 on the right class). Cross-entropy then simplifies to −log q(correct class): the model is penalised by how little probability it gave the right answer. Averaged over the data, this is **log loss**, the loss minimised by logistic regression and nearly every neural-network classifier, including language models predicting the next token.
+- **Classification loss.** For a labelled example, the true distribution p is one-hot (probability 1 on the right class). Cross-entropy then simplifies to −log q(correct class): the model is penalised by how little probability it gave the right answer. Averaged over the data, this is **log loss**, the loss minimised by logistic regression and nearly every neural-network classifier, including language models predicting the next token (the word or word-piece a text model reads and writes).
 - **Decision trees** choose splits that most reduce entropy (information gain).
-- **KL divergence** appears in variational autoencoders, knowledge distillation, and in RLHF, where it keeps a fine-tuned language model close to its original.
+- **KL divergence** appears in variational autoencoders (neural networks that learn to compress data and generate new samples), knowledge distillation (training a small model to copy a big model's predicted probabilities), and in RLHF (reinforcement learning from human feedback, the step that tunes chatbots using human ratings), where it keeps a fine-tuned language model close to its original.
 
 ### Worked numbers
 
@@ -853,8 +853,8 @@ The last four lines show why log loss punishes **confident mistakes** heavily: g
 ### Common mistakes
 
 - Mixing log bases: information theory often uses log₂ (bits); ML libraries use the natural log (nats). Only the scale changes.
-- Treating KL as a distance; it is asymmetric and does not satisfy the triangle inequality.
-- Predicting exact 0 or 1 probabilities; log(0) is −∞. Libraries clip probabilities for this reason.
+- Treating KL as a distance; it is asymmetric and does not satisfy the triangle inequality (the rule that going directly from A to C is never longer than going via B).
+- Predicting exact 0 or 1 probabilities; log(0) is −∞. Libraries clip probabilities (force them into a range such as 0.000000000000001 to 0.999999999999999) for this reason.
 
 ### Self-check
 

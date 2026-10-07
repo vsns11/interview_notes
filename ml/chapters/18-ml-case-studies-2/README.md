@@ -1,6 +1,6 @@
 # Chapter 18 — ML Case Studies II: Ads, Fraud, Moderation, PYMK, Music, Visual Search, Blurring, Events, Similar Listings
 
-Chapter 17 worked through the four retrieval-and-ranking designs. This chapter adds nine more, each bringing one new pressure: money riding on every probability (ads), an opponent who adapts (fraud), platform-wide scale with harm in both directions (moderation), a two-sided graph problem (people you may know), two serving modes for one product (music), an index that changes every minute (visual search), a detector whose misses are privacy breaches (street-imagery blurring), a catalogue where every item is new and perishable (events), and similarity learned from browsing sessions (similar listings). Each uses the **eleven-part template** of 17.0 and ends with a runnable toy on synthetic data. Generic A/B-testing and monitoring mechanics are not repeated — see [Chapter 16](../16-ml-in-production/README.md) (16.8 monitoring, 16.9 experiments).
+Chapter 17 worked through the four retrieval-and-ranking designs. This chapter adds nine more, each bringing one new pressure: money riding on every probability (ads), an opponent who adapts (fraud), platform-wide scale with harm in both directions (moderation), a two-sided graph problem (people you may know), two serving modes for one product (music), an index that changes every minute (visual search), a detector whose misses are privacy breaches (street-imagery blurring), a catalogue where every item is new and perishable (events), and similarity learned from browsing sessions (similar listings). Each uses the **eleven-part template** of 17.0 and ends with a runnable toy on synthetic data (randomly generated, not real logs). Generic A/B-testing (randomly splitting users between the old and new version and comparing outcomes) and monitoring mechanics are not repeated — see [Chapter 16](../16-ml-in-production/README.md) (16.8 monitoring, 16.9 experiments).
 
 **What you'll learn**
 
@@ -8,7 +8,7 @@ Chapter 17 worked through the four retrieval-and-ranking designs. This chapter a
 2. **Fraud detection**: extreme imbalance, velocity and graph features, rules + model, two cost-based thresholds, censored labels (18.2).
 3. **Harmful content** (including the platform-scale version): the risk cascade, the action ladder, prevalence of violating views, reviewer capacity, reach-aware re-scoring (18.3).
 4. **People You May Know**: friends-of-friends retrieval, Adamic-Adar, the two-sided objective P(send) × P(accept), privacy that fails closed (18.4).
-5. **Music discovery**: weekly batch playlists vs online radio, audio embeddings for new tracks, session context (18.5).
+5. **Music discovery**: weekly batch playlists vs online radio, audio embeddings (learned lists of numbers placed so that similar items sit close together) for new tracks, session context (18.5).
 6. **Visual search**: a shared image-text space (CLIP-style), contrastive training, IVF/HNSW, index churn and encoder upgrades (18.6).
 7. **Privacy blurring**: recall-first detection, object-level recall across views, box padding, audits instead of A/B tests, failing closed (18.7).
 8. **Event recommendation**: an all-cold catalogue scored by content, place, time and social features; point-in-time features; a two-sided marketplace (18.8).
@@ -24,22 +24,22 @@ Code is in `code/`; every output shown is real.
 > "Design the system that picks which ad to show and predicts whether it will be clicked."
 
 ### 1. Clarify requirements
-Ranking again, plus auctions, budgets and billing. The key difference: **the model's output is part of a financial transaction**. In a simplified cost-per-click (CPC) setup ads are ranked by **expected value per impression = bid × pCTR** (**pCTR** = predicted click-through rate, CTR = clicks ÷ impressions). A wrong probability changes who wins and what the platform earns.
+Ranking again, plus auctions (advertisers bid for each ad slot; the system picks the winner and the price), budgets and billing. The key difference: **the model's output is part of a financial transaction**. In a simplified cost-per-click (CPC) setup ads are ranked by **expected value per impression = bid × pCTR** (**pCTR** = predicted click-through rate, CTR = clicks ÷ impressions; an **impression** is one showing of an ad on someone's screen). A wrong probability changes who wins and what the platform earns.
 
 | Question | Assumption used below |
 |---|---|
 | Traffic | 100 K ad requests/s at peak |
-| Latency | 50–100 ms for the whole auction (eligibility → retrieval → scoring → auction) |
+| Latency (time to answer one request) | 50–100 ms for the whole auction (eligibility → retrieval → scoring → auction) |
 | Pricing | CPC and cost-per-conversion campaigns both exist |
-| Auction | State one (e.g. quality-weighted second-price); real auctions add reserves |
+| Auction | State one (e.g. quality-weighted second-price); real auctions add reserves (minimum prices) |
 | Freshness | Campaigns start, pause and change budgets all day |
 
 ### 2. Frame it as an ML task
 - **Input**: user and context (page, device, time), ad and creative, advertiser history.
 - **Output**: **pCTR** = P(click | impression) and, for conversion campaigns, **pCVR** = P(conversion | click) — a conversion being the purchase or sign-up the advertiser actually wants.
-- **Category**: binary classification whose output must be a **calibrated probability**, not just a good ordering; minimise **log loss** (cross-entropy), which rewards accurate probabilities.
+- **Category**: binary classification (predicting one of two outcomes — here click or no click) whose output must be a **calibrated probability**, not just a good ordering; minimise **log loss** (cross-entropy), which rewards accurate probabilities and punishes confident wrong ones hardest.
 
-**Calibration** — what this question is really about. A model is calibrated if, of many impressions given pCTR = 2%, about 2% are clicked. **AUC** only checks ordering, so a model can have excellent AUC while every probability is 3× too high — tolerable in a feed, not in an auction that multiplies the probability by money.
+**Calibration** — what this question is really about. A model is calibrated if, of many impressions given pCTR = 2%, about 2% are clicked. **AUC** (area under the ROC curve — the chance that a randomly chosen positive is scored above a randomly chosen negative) only checks ordering, so a model can have excellent AUC while every probability is 3× too high — tolerable in a feed, not in an auction that multiplies the probability by money.
 
 ![Ranking quality vs calibration](img/ads_calibration_vs_ranking.svg)
 *Figure — Good ranking and accurate probabilities are different properties (course diagram)*
@@ -58,26 +58,26 @@ Also: **eligibility data** (targeting, remaining budget, policy approval) for a 
 | Group | Examples |
 |---|---|
 | User / context | Interest segments, recent activity, device, OS, placement, page topic, time, country |
-| Ad / creative | Format, text and image embeddings, landing-page category |
+| Ad / creative (the actual ad content) | Format, text and image embeddings, landing-page category |
 | Advertiser history | Historical CTR by placement/device, account age, policy record |
-| Cross features | User segment × ad category, placement × format (hand-made for LR, learned by deep models) |
-| Counters | Impressions/clicks per ad in the last hour/day (streaming) |
+| Cross features | User segment × ad category, placement × format (hand-made for logistic regression (LR), learned by deep models) |
+| Counters | Impressions/clicks per ad in the last hour/day (streaming — updated continuously as events arrive) |
 
-Features are sparse (millions of IDs): **embedding tables** or **feature hashing** (map each ID into a fixed number of buckets), all cached for the 50–100 ms budget.
+Features are sparse (millions of IDs): **embedding tables** (one learned vector per ID, looked up by index) or **feature hashing** (map each ID into a fixed number of buckets), all cached (kept in fast memory, ready to read — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) for the 50–100 ms budget.
 
 ### 5. Model: baseline → advanced
-- **Baseline**: logistic regression on hashed and crossed features — cheap, usually well calibrated under log loss, the historical workhorse (Google's search-ads system: online LR with FTRL-Proximal, McMahan et al., 2013).
-- **Next**: boosted-tree outputs used as features for a logistic model (Facebook, He et al., 2014), then deep CTR models that learn feature crosses — factorisation machines (Rendle, 2010), Wide & Deep (Cheng et al., 2016, Google Play), DeepFM, DCN.
-- **Multi-head**: shared body, pCTR and pCVR heads (17.2's pattern). Alibaba's ESMM (Ma et al., 2018) trains on *all* impressions by predicting pCTCVR = pCTR × pCVR, so the conversion head isn't learned only from the biased "clicked" subset.
-- **Calibration layer** (part of the model, not an afterthought): map raw scores to probabilities on held-out data with **Platt scaling** (a one-feature logistic regression on the score) or **isotonic regression** (a non-decreasing step function). If you **down-sample negatives**, keeping a fraction w of them to save training cost, correct analytically: q = p / (p + (1 − p)/w) (the formula in He et al., 2014).
+- **Baseline**: logistic regression on hashed and crossed features — cheap, usually well calibrated under log loss, the historical workhorse (Google's search-ads system: online LR — updated continuously as new examples arrive — with FTRL-Proximal, an update rule that keeps most weights at exactly zero; McMahan et al., 2013).
+- **Next**: boosted-tree (many small decision trees, each correcting the errors of the ones before) outputs used as features for a logistic model (Facebook, He et al., 2014), then deep CTR models that learn feature crosses (combinations such as device × ad category) — factorisation machines (Rendle, 2010; they model every pair of features through small learned vectors), Wide & Deep (Cheng et al., 2016, Google Play), DeepFM, DCN.
+- **Multi-head**: shared body, pCTR and pCVR heads (17.2's pattern; a **head** is a small output layer on top of a shared network, one per prediction). Alibaba's ESMM (Ma et al., 2018) trains on *all* impressions by predicting pCTCVR = pCTR × pCVR, so the conversion head isn't learned only from the biased "clicked" subset.
+- **Calibration layer** (part of the model, not an afterthought): map raw scores to probabilities on held-out data (examples not used for training) with **Platt scaling** (a one-feature logistic regression on the score) or **isotonic regression** (a non-decreasing step function). If you **down-sample negatives**, keeping a fraction w of them to save training cost, correct analytically: q = p / (p + (1 − p)/w) (the formula in He et al., 2014).
 
 ### 6. Offline metrics
 - **Log loss** and **normalised entropy** — log loss divided by the log loss of always predicting the average CTR (Facebook's metric; lower is better) — both sensitive to calibration.
 - **AUC** for ordering.
-- **Calibration**: predicted/observed ratio, reliability curves, and **expected calibration error (ECE)** — bucket predictions, then average |mean prediction − observed rate| across buckets weighted by bucket size. Break it down **per segment** (advertiser size, slot, device, market): a model can be calibrated on average while over-predicting for new advertisers and under-predicting on mobile.
+- **Calibration**: predicted/observed ratio, reliability curves (predicted vs observed rate, plotted bucket by bucket), and **expected calibration error (ECE)** — bucket predictions, then average |mean prediction − observed rate| across buckets weighted by bucket size. Break it down **per segment** (advertiser size, slot, device, market): a model can be calibrated on average while over-predicting for new advertisers and under-predicting on mobile.
 
 ### 7. Online metrics and A/B testing
-- **Platform**: revenue per thousand impressions (RPM), CTR. **Advertiser**: cost per click / conversion, return on ad spend — advertisers who lose money leave. **User guardrails**: ad load, ad hide/report rate, page latency.
+- **Platform**: revenue per thousand impressions (RPM), CTR. **Advertiser**: cost per click / conversion, return on ad spend (revenue earned per dollar of advertising) — advertisers who lose money leave. **User guardrails**: ad load, ad hide/report rate, page latency.
 - Ads-specific trap: **budget interference** — both arms spend the same campaign budgets, so one can starve the other; split budgets per arm (A/B basics: 16.9).
 
 ### 8. Serving architecture
@@ -115,14 +115,14 @@ flowchart LR
 | Outage cost | revenue/day ÷ 86,400 | An ads outage is priced in dollars per second |
 
 ### 10. Monitoring and failure modes
-- **Update loop**: among the fastest in ML — incremental updates every minutes to hours, each validated with a tested rollback.
-- **Cold start is permanent**: start new campaigns from **priors** (guesses from advertiser, category, creative) plus a small, capped **exploration** budget.
-- **Delayed conversions**: train on **mature** examples inside an attribution window, or model the delay (Chapelle, 2014).
+- **Update loop**: among the fastest in ML — incremental updates every minutes to hours, each validated with a tested rollback (a quick, rehearsed way back to the previous model).
+- **Cold start is permanent**: start new campaigns from **priors** (guesses from advertiser, category, creative) plus a small, capped **exploration** budget (deliberately showing less-proven ads to learn how they perform).
+- **Delayed conversions**: train on **mature** examples inside an attribution window (the period after a click during which a conversion is credited to it), or model the delay (Chapelle, 2014).
 
 | Failure | Response |
 |---|---|
 | pCTR service degraded | Warm fallbacks: last-known-good model → segment-average CTR tables; eligibility and budget checks never skipped |
-| Calibration drift in one segment | Per-segment alerts; recalibrate; investigate the feature pipeline |
+| Calibration drift (predictions slowly moving away from reality) in one segment | Per-segment alerts; recalibrate; investigate the feature pipeline |
 | Invalid-traffic spike | Filter before billing and training; credits and label fixes for what's found later |
 | Budget over-delivery | Pacing plus hard budget accounting |
 
@@ -132,7 +132,7 @@ flowchart LR
 - **"Conversions are scarce — how does pCVR learn?"** → Factor into click × conversion-given-click (ESMM-style) so each head uses the densest labels; correct for delay; priors for thin advertisers.
 
 ### Toy — calibration, down-sampling and the auction (`code/ads_calibration_toy.py`)
-Synthetic impressions, ~4% CTR; a GBDT trained on all clicks but only 10% of non-clicks. We correct the probabilities, check calibration per segment, and run a two-advertiser auction.
+Synthetic impressions, ~4% CTR; a GBDT (gradient-boosted decision trees) trained on all clicks but only 10% of non-clicks. We correct the probabilities, check calibration per segment, and run a two-advertiser auction.
 
 ```python
 keep = (ytr == 1) | (rng.random(len(ytr)) < w)          # all clicks, 10% of non-clicks
@@ -178,7 +178,7 @@ What it shows:
 ### Self-check
 1. Why can't an ads model be judged on AUC alone? → The auction multiplies the probability by a bid; AUC ignores whether probabilities are accurate.
 2. You kept 5% of negatives and the model outputs p = 0.5. Corrected probability? → q = 0.5 / (0.5 + 0.5/0.05) = 0.5 / 10.5 ≈ 0.048.
-3. Platt vs isotonic? → Platt fits a smooth sigmoid (2 parameters, little data needed); isotonic fits any monotone step function (more flexible, needs more data, can overfit).
+3. Platt vs isotonic? → Platt fits a smooth sigmoid (an S-shaped curve that maps any score to 0–1; 2 parameters, little data needed); isotonic fits any monotone step function (more flexible, needs more data, can overfit — fit noise in its training data that doesn't hold on new data).
 
 ### TL;DR
 | | |
@@ -202,15 +202,15 @@ No funnel: no catalog to narrow, just a stream of transactions, each needing a d
 | Volume | 10 K transactions/s at peak |
 | Fraud rate | Below 1% (the toy uses ~0.2%) |
 | Latency | ~50 ms inside the payment authorisation call, ~10 ms of it for the model |
-| Actions | Approve, step-up authentication (3-D Secure, one-time passcode), review, block |
+| Actions | Approve, step-up authentication (an extra identity check: 3-D Secure, one-time passcode), review, block |
 | Costs | Missed fraud → loss + **chargeback** fees (a disputed payment reversed to the cardholder, at the merchant's cost); false decline → lost sale and trust; review → analyst time |
 
-**Class imbalance**: at 0.2% fraud, "approve everything" is 99.8% accurate and catches nothing — accuracy is off the table from minute one.
+**Class imbalance** (one class far rarer than the other): at 0.2% fraud, "approve everything" is 99.8% accurate and catches nothing — accuracy is off the table from minute one.
 
 ### 2. Frame it as an ML task
 - **Input**: transaction (amount, merchant, channel), card/account, device, recent activity, graph links.
 - **Output**: a risk score ≈ P(fraud). **Category**: binary classification on heavily imbalanced data.
-- **Decision** — *separate from the score*: an **action policy** maps score (plus amount, review capacity, mandatory rules) to **approve** (below the low threshold — the vast majority), **extra checks** between thresholds (step-up, or human review via a pending/delayed-capture state, since humans can't answer in 50 ms), or **decline** (above the high threshold).
+- **Decision** — *separate from the score*: an **action policy** maps score (plus amount, review capacity, mandatory rules) to **approve** (below the low threshold — the vast majority), **extra checks** between thresholds (step-up, or human review via a pending/delayed-capture state (the payment is approved but the money is taken later), since humans can't answer in 50 ms), or **decline** (above the high threshold).
 
 ![Three-way decision](img/fraud_three_way.svg)
 *Figure — The decision is three-way, set by two thresholds (course diagram)*
@@ -222,7 +222,7 @@ Three label problems — name all three:
 
 1. **Delayed labels.** Chargebacks and fraud reports arrive weeks later (assume 2–8 weeks); not every chargeback is fraud, not every fraud is reported. Fresh recall *doesn't exist yet*, so early warning comes from score distributions and rule-hit rates.
 2. **Censored labels.** A blocked payment never produces an outcome, so the data has holes exactly where the model sees most risk. Partial remedies: analyst investigations, verification results, appeals — record each label's source. **Letting likely fraud through to learn its outcome is off the table** (any deliberate test needs risk-owner sign-off and a loss cap).
-3. **Imbalance.** Class weights or down-sampling in training (then recalibrate — 18.1); report **PR-AUC**, precision/recall at the operating thresholds, or best, **expected dollar loss**.
+3. **Imbalance.** Class weights (counting each rare-class example more in the loss) or down-sampling in training (then recalibrate — 18.1); report **PR-AUC** (area under the precision–recall curve, see 6 below), precision/recall at the operating thresholds, or best, **expected dollar loss**.
 
 ![Censored labels](img/fraud_censored_labels.svg)
 *Figure — Blocked payments have missing outcomes; audited evidence helps but doesn't remove all bias (course diagram)*
@@ -234,9 +234,9 @@ Dominated by **velocity** (how much activity, how fast) and **graph** signals:
 |---|---|---|
 | Velocity | Transactions on this card in the last 10 min / 1 h; distinct merchants today; amount vs this card's usual | Seconds (streaming) |
 | "Impossible travel" | Distance between consecutive in-person transactions ÷ time between them | Request time |
-| Device / session | New device? Device seen with other cards? Emulator, proxy, typing cadence | Request time |
-| Graph | Device linked to a confirmed-stolen card; many accounts sharing one address or IP | Minutes |
-| Merchant / account | Merchant fraud rate (from *past* windows only — leakage risk), account age | Hourly–daily |
+| Device / session | New device? Device seen with other cards? Emulator (software pretending to be a phone), proxy (a relay that hides the real network address), typing cadence | Request time |
+| Graph | Device linked to a confirmed-stolen card; many accounts sharing one address or IP (internet address) | Minutes |
+| Merchant / account | Merchant fraud rate (from *past* windows only — leakage risk: accidentally using information from after the decision), account age | Hourly–daily |
 
 **Fraud rings** show up as dense clusters in the card–device–address graph before any single transaction looks odd. Shared devices also occur innocently (families, offices), so a graph link is evidence, not proof.
 
@@ -244,22 +244,22 @@ Dominated by **velocity** (how much activity, how fast) and **graph** signals:
 **Rules and model, together on purpose.** A **rules engine** (explicit, human-written conditions) gives three things a learned score can't: **hard constraints** (sanctions checks, verified blocklists aren't probabilities), **speed** against a new attack (a rule ships in minutes; a model has no training data for a scheme that appeared today), and **explainability** for regulators and dispute teams. The **model** catches combinations of weak signals no short rule list captures.
 
 - **Baseline**: rules + logistic regression on velocity features.
-- **Standard**: **GBDT** on tabular features (the common choice for card fraud) plus graph features or a graph neural network for rings; optionally an anomaly score (e.g. isolation forest) for never-seen patterns.
+- **Standard**: **GBDT** on tabular features (the common choice for card fraud) plus graph features or a graph neural network (a network that learns from each node's neighbours in a graph) for rings; optionally an anomaly score (e.g. isolation forest, which flags points that random splits separate unusually fast) for never-seen patterns.
 - **Rule hygiene**: each rule gets an owner, a precision/recall dashboard and an **expiry date**, or stale rules pile up (**rule sprawl**).
 
-Real-world: Stripe Radar combines ML risk scores with merchant-written rules; in Europe, PSD2's strong customer authentication makes 3-D Secure step-up a standard middle action.
+Real-world: Stripe Radar combines ML risk scores with merchant-written rules; in Europe, PSD2's (the EU's payment-services law) strong customer authentication makes 3-D Secure step-up a standard middle action.
 
 ### 6. Offline metrics
 - **PR-AUC** (area under the precision–recall curve) — meaningful under heavy imbalance, where ROC-AUC can look excellent while the flagged queue is mostly false alarms.
-- **Recall at a fixed false-positive rate**, or **precision at a fixed review capacity**.
+- **Recall at a fixed false-positive rate** (share of legitimate payments wrongly flagged), or **precision at a fixed review capacity**.
 - **Expected cost** of the whole policy (missed fraud + false declines + review), on a **time-based** split with **mature** labels only — a **backtest** on past windows whose outcomes are known.
 
 ### 7. Online metrics and A/B testing
 - **Business**: fraud loss in **basis points** of volume (1 bp = 0.01%), chargeback rate, false-decline rate, review-queue size and SLA (promised turnaround).
-- You can't A/B a fraud model like a feed ranker (letting fraud through on purpose is unacceptable). Rollout: backtest → **shadow scoring** (score live traffic silently; compare distributions and reviewer agreement) → **canary** under approved risk limits → wait for mature labels → full rollout (16.6).
+- You can't A/B a fraud model like a feed ranker (letting fraud through on purpose is unacceptable). Rollout: backtest → **shadow scoring** (score live traffic silently; compare distributions and reviewer agreement) → **canary** (release to a small slice of real traffic first) under approved risk limits → wait for mature labels → full rollout (16.6).
 
 ### 8. Serving architecture
-~50 ms end to end, set by the payment network: **rules** → **feature assembly** (online store + streaming velocity) → **model** (~10 ms) → **policy**. Labels return as three streams at different speeds: analyst findings, verification results, late chargebacks.
+~50 ms end to end, set by the payment network: **rules** → **feature assembly** (online store — a low-latency database of precomputed features — + streaming velocity) → **model** (~10 ms) → **policy**. Labels return as three streams at different speeds: analyst findings, verification results, late chargebacks.
 
 ![50 ms decision path](img/fraud_50ms_path.svg)
 *Figure — An example 50 ms automated decision path, with labels arriving separately (course diagram)*
@@ -287,7 +287,7 @@ flowchart LR
 |---|---|---|
 | Fraud events | 10 K/s × 0.2% | ~20 fraudulent attempts/s at peak |
 | Review load | 0.5% in the middle band: 10 K × 0.005 × 3,600 | 180 K reviews per peak hour — impossible for humans, so step-up handles most of the band and review is kept for high-value cases |
-| Velocity state | 200 M active cards × 4 counters × 8 bytes | ≈ 6.4 GB in memory (plus keys, replicas), updated per transaction |
+| Velocity state | 200 M active cards × 4 counters × 8 bytes | ≈ 6.4 GB in memory (plus keys, replicas — extra copies on other machines for safety and load), updated per transaction |
 
 ### 10. Monitoring and failure modes
 - **Early warning** while labels are weeks late: score distributions, rule-hit rates, approval rate — per merchant, country, channel (drift basics: 16.8).
@@ -301,7 +301,7 @@ flowchart LR
 
 ### 11. Interview follow-ups
 - **"Once the model is strong, can the rules go?"** → No: speed during an attack, hard constraints, readable logic. Manage rules with metrics and expiry dates instead.
-- **"How do you catch a fraud ring?"** → Graph features, community detection, and tools to expand from one confirmed case to its neighbours — checking for innocent shared infrastructure.
+- **"How do you catch a fraud ring?"** → Graph features, community detection (algorithms that find tightly connected groups in a graph), and tools to expand from one confirmed case to its neighbours — checking for innocent shared infrastructure.
 
 ### Toy — velocity features and two thresholds (`code/fraud_thresholds_toy.py`)
 One synthetic week of card transactions (~0.23% fraud); stolen cards are used in quick bursts. Train on days 1–5, test on days 6–7 (time split), then pick approve/review/block thresholds by expected dollar cost under a review-capacity limit.
@@ -363,12 +363,12 @@ What it shows:
 
 ## 18.3 Case study: harmful content detection (and running it at platform scale)
 
-> "Design a system to detect harmful content — hate speech, harassment, spam, graphic violence, misinformation." Scale-up version: trust and safety for a short-video app receiving ~200 M new items daily (clips, sound, captions, comments), with a rulebook from CSAM (zero tolerance, legally mandated handling) to grey-zone health misinformation.
+> "Design a system to detect harmful content — hate speech, harassment, spam, graphic violence, misinformation." Scale-up version: trust and safety for a short-video app receiving ~200 M new items daily (clips, sound, captions, comments), with a rulebook from CSAM (child sexual abuse material; zero tolerance, legally mandated handling) to grey-zone health misinformation.
 
 ### 1. Clarify requirements
 Fraud's adaptive adversary and unequal error costs, plus three things:
 
-1. **Multimodal input** — a harmless photo plus a hateful caption is harmful though neither half is: several models (per modality or harm) plus a policy layer combining their scores.
+1. **Multimodal input** (several kinds of data — image, text, audio — at once) — a harmless photo plus a hateful caption is harmful though neither half is: several models (per modality or harm) plus a policy layer combining their scores.
 2. **Costs both ways, not only money.** A **false negative** (missed violation) exposes people to harm; a **false positive** (wrongful removal) silences a legitimate user. Thresholds become an explicit policy conversation.
 3. **Huge scale, low base rates** that differ by harm type and surface.
 
@@ -380,13 +380,13 @@ Fraud's adaptive adversary and unequal error costs, plus three things:
 | Scope | Public posts; ads and private messages have their own pipelines and privacy rules |
 | Jurisdiction | One policy engine keyed by **harm category and country**, since legal lines differ |
 
-**The highest-harm category first.** CSAM (child sexual abuse material) needs a dedicated, tightly governed process: hash matching against approved databases of known material (Microsoft's **PhotoDNA**; Meta open-sourced **PDQ** and **TMK+PDQF** in 2019), restricted-access review, evidence preservation, and legally required reporting. In the US, for example, providers must report apparent CSAM to NCMEC's CyberTipline once they know of it (18 U.S.C. § 2258A); that statute does not itself require proactive scanning, and duties differ by country — name who owns policy and escalation. Hashes find *known* material only.
+**The highest-harm category first.** CSAM (child sexual abuse material) needs a dedicated, tightly governed process: hash matching (comparing a short fingerprint computed from the file) against approved databases of known material (Microsoft's **PhotoDNA**; Meta open-sourced **PDQ** and **TMK+PDQF** in 2019), restricted-access review, evidence preservation, and legally required reporting. In the US, for example, providers must report apparent CSAM to NCMEC's (the US National Center for Missing & Exploited Children) CyberTipline once they know of it (18 U.S.C. § 2258A); that statute does not itself require proactive scanning, and duties differ by country — name who owns policy and escalation. Hashes find *known* material only.
 
 ### 2. Frame it as an ML task
 - **Input**: the item (frames, audio, text), its context (account, where posted, replies) and its distribution (views, share velocity).
-- **Output**: per-category risk scores P(violates policy c). **Category**: multi-label classification run as a **cascade**, then a policy decision — an **action ladder**, not remove/allow (section 8).
+- **Output**: per-category risk scores P(violates policy c). **Category**: multi-label classification (one item can get several labels at once) run as a **cascade** (a chain of models — cheap ones on everything, expensive ones only on what earlier stages flag), then a policy decision — an **action ladder**, not remove/allow (section 8).
 
-**The metric that matters: prevalence of violating views** = (views landing on violating content) ÷ (all views), estimated by human-labelling a random sample of *views*, so each miss counts by its reach. Report it **per category, with confidence intervals** (Meta's Community Standards Enforcement Report gives violating views per 10,000). **Opposite-direction guardrails**: **false-removal rate** (audits) and **appeal-overturn rate**; plus **time to action** and **views before action**.
+**The metric that matters: prevalence of violating views** = (views landing on violating content) ÷ (all views), estimated by human-labelling a random sample of *views*, so each miss counts by its reach. Report it **per category, with confidence intervals** (a range that likely contains the true value) (Meta's Community Standards Enforcement Report gives violating views per 10,000). **Opposite-direction guardrails**: **false-removal rate** (audits) and **appeal-overturn rate**; plus **time to action** and **views before action**.
 
 ### 3. Data and labels
 1. **Rare, expensive labels.** Reviewer time is the bottleneck. **Active learning** sends the most useful items (uncertain, diverse, high reach) to reviewers; a *separate* random sample measures prevalence, since active-learning samples are biased by design.
@@ -401,15 +401,15 @@ Fraud's adaptive adversary and unequal error costs, plus three things:
 | Group | Examples |
 |---|---|
 | Content | Text embeddings (after normalising leetspeak/homoglyphs), image and frame embeddings, OCR text, **ASR** (speech-to-text) transcript, audio embeddings |
-| Hashes | Exact hash, perceptual hash of keyframes, audio fingerprint |
+| Hashes | Exact hash, perceptual hash (stays similar after small edits) of keyframes, audio fingerprint |
 | Account / context | Account age, prior strikes, posting rate; surface (comment, post, live), the thread it replies to |
 | Distribution | Views, **share velocity** (how fast it's spreading), audience |
 | Reports | Count weighted by reporter reputation, report-graph clustering |
 
 ### 5. Model: baseline → advanced (one model per stage)
 1. **Hashes and high-confidence rules** — **exact hashes** catch identical files; **perceptual hashes** tolerate some edits (test robustness to crops and mirroring; audio fingerprints survive a mirrored video). Hash-sharing programmes exist for some categories (e.g. GIFCT's database for terrorist content).
-2. **Fast classifiers on everything** — small per-modality models (a distilled text transformer, a small image CNN) whose only job is triage.
-3. **Heavy multimodal models on the flagged slice** — large image-text models and LLM-based classifiers for nuanced text and memes.
+2. **Fast classifiers on everything** — small per-modality models (a distilled — trained to copy a bigger model — text transformer, a small image CNN, i.e. convolutional neural network) whose only job is triage.
+3. **Heavy multimodal models on the flagged slice** — large image-text models and LLM-based (large language model) classifiers for nuanced text and memes.
 4. **Human review** — borderline and appealed cases; also the label source.
 
 **Baseline** for a new category: rules + hashes + report routing; then a fast classifier as labels accumulate; heavy models last. **Upgrade** by distilling the heavy model into the fast one.
@@ -477,7 +477,7 @@ flowchart TB
 | Human review at 0.1% | 200 M × 0.001 | 200,000 decisions/day |
 | Reviewers | 200,000 ÷ ~300 decisions per reviewer-day | ≈ 670 reviewer-days per day → with shifts and leave, many hundreds of staff |
 
-The flag rate is the GPU bill; the review threshold is a **headcount** setting.
+The flag rate is the GPU (graphics processor, the chip that runs large models) bill; the review threshold is a **headcount** setting.
 
 ![Volumes through the funnel](img/harm_scale_funnel_volumes.svg)
 *Figure — The risk funnel, with the volume said out loud at every stage (course diagram)*
@@ -503,7 +503,7 @@ The flag rate is the GPU bill; the review threshold is a **headcount** setting.
 - **"A government bans a new category within a week."** → Rules, hashes and report routing on day one, classifier in weeks; the region-keyed policy engine scopes it to one jurisdiction.
 
 ### Toy — the cascade dial and prevalence sampling (`code/moderation_cascade_toy.py`)
-One million uploads, 0.5% violating, heavy-tailed views. The fast classifier scores everything; the heavy model (100× the cost) scores the flagged slice; removal needs a high heavy score. We vary the flag rate, add view-tier re-scoring, then estimate prevalence by sampling views. (Simplification: removals happen before any views.)
+One million uploads, 0.5% violating, heavy-tailed views (a few items get most of the views). The fast classifier scores everything; the heavy model (100× the cost) scores the flagged slice; removal needs a high heavy score. We vary the flag rate, add view-tier re-scoring, then estimate prevalence by sampling views. (Simplification: removals happen before any views.)
 
 ```python
 def run(bad, views, fast, heavy, flag_rate, viral_tier=None):
@@ -545,7 +545,7 @@ What it shows:
 | Thresholds read off a PR curve | Thresholds as policy, per category and region, informed by measured errors |
 
 ### Same design, other questions
-- **Marketplace counterfeits** — photos, text and price that don't fit (a luxury bag at a tenth of retail); actions hit listings and sellers. **DM spam** — private content, so triage uses sending behaviour and reports; rate limits before removal.
+- **Marketplace counterfeits** — photos, text and price that don't fit (a luxury bag at a tenth of retail); actions hit listings and sellers. **DM spam** — private content, so triage uses sending behaviour and reports; rate limits (caps on how many messages an account can send per minute) before removal.
 
 ### Self-check
 1. Why measure prevalence on views rather than uploads? → Harm scales with exposure; an unseen violating item does little harm, a viral one a lot.
@@ -607,11 +607,11 @@ What it shows:
 | Context | New vs tenured member; surface; times this pair was already shown |
 
 ### 5. Model: baseline → advanced
-**Candidate generation — four sources, unioned and deduped** (17.1's multi-source retrieval, with people as the catalog):
-1. **Friends-of-friends (FoF)** / **triangle closing** — if A–B and B–C are connected, C is a candidate for A. The main source, precomputed and **bounded**: expand only top neighbours by interaction, sample very-high-degree accounts' lists, cap candidates per member.
+**Candidate generation — four sources, unioned and deduped (merged, duplicates removed)** (17.1's multi-source retrieval, with people as the catalog):
+1. **Friends-of-friends (FoF)** / **triangle closing** — if A–B and B–C are connected, C is a candidate for A. The main source, precomputed and **bounded**: expand only top neighbours by interaction, sample very-high-degree (huge number of connections) accounts' lists, cap candidates per member.
 2. **Shared affiliations** — same company/school/group with overlapping dates; catches the new coworker with no mutuals yet.
 3. **Imported contacts** — permission-based matches.
-4. **Embedding similarity** — two-tower member vectors from profile and activity, or graph embeddings (node2vec-style random walks, graph neural networks), queried through an ANN index.
+4. **Embedding similarity** — two-tower member vectors (one network encodes the viewer, another the candidate, and the score is how close the two vectors are) from profile and activity, or graph embeddings (node2vec-style random walks — node vectors learned from random paths through the graph — or graph neural networks), queried through an ANN index (approximate nearest neighbour: finds the closest vectors fast by accepting small errors).
 
 **Hard filters at retrieval** (re-checked before display): already connected, blocked, dismissed, opted out. **Impression discounting** lowers candidates shown many times without action — softer than an explicit, permanent dismissal.
 
@@ -621,17 +621,17 @@ What it shows:
 **Ranker**: baseline = sort FoF candidates by mutual count or Adamic-Adar; advanced = GBDT or a two-head network predicting P(send) and P(accept | sent), multiplied.
 
 ### 6. Offline metrics
-- **Recall@K of future edges**: hide connections formed after a cutoff and check whether retrieval would have produced them.
+- **Recall@K of future edges** (share of the true items that appear in the top K): hide connections formed after a cutoff and check whether retrieval would have produced them.
 - **AUC / log loss** per head, plus calibration — the heads are multiplied.
 - Diversity: share of suggestions going to the top-1% most-connected members; share crossing community boundaries.
 
 ### 7. Online metrics and A/B testing
 - The three metric layers, measured on **both sides** (inviter and recipient).
 - **Network interference**: a treated viewer invites a control member, so user-level randomisation leaks. Use **graph-cluster randomisation** (assign whole communities to one arm) or model the interference.
-- The interaction metric takes weeks, so keep a long-running **holdback** (16.9).
+- The interaction metric takes weeks, so keep a long-running **holdback** (a small group kept on the old system for months, 16.9).
 
 ### 8. Serving architecture
-- **Nightly batch**: bounded FoF, affiliations, scoring → top candidates per active member in a **key-value (KV) store**, with **idempotent, versioned** writes (a retry can't overwrite a newer run).
+- **Nightly batch**: bounded FoF, affiliations, scoring → top candidates per active member in a **key-value (KV) store** (a database that returns a value for a given key, like a giant dictionary), with **idempotent** (repeating a write has the same effect as doing it once), **versioned** writes (see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) (a retry can't overwrite a newer run).
 - **Streaming path**: new connections, dismissals and blocks update a **suppression store** within minutes (seconds for dismissals).
 - **Request time**: read the list, merge with suppressions, re-check current privacy settings, render.
 - **New members**: contacts and affiliations carry the first session, refreshed within minutes as first connections form.
@@ -674,10 +674,10 @@ The dominant cost is usually the **graph computation**, not inference.
 
 ### 11. Interview follow-ups
 - **"FoF for 900 M members without melting the cluster?"** → Top neighbours only, 30-day-active members nightly, sampled celebrity neighbour lists, capped outputs — never the full two-hop closure.
-- **"Legal asks you to prove opted-out members never appear."** → Auditable filters at retrieval *and* before display, fail-closed on timeouts, prompt cache invalidation, filter-version logging, tests for stale caches and races.
+- **"Legal asks you to prove opted-out members never appear."** → Auditable filters at retrieval *and* before display, fail-closed on timeouts, prompt cache invalidation (removing stale stored copies), filter-version logging, tests for stale caches and races (bugs when two updates land at nearly the same moment).
 
 ### Toy — FoF retrieval, Adamic-Adar, two-sided ranking (`code/pymk_toy.py`)
-A 4,000-member clustered graph (networkx `powerlaw_cluster_graph`) with 10% of edges hidden as "future". Part 1 ranks FoF candidates three ways; part 2 simulates viewers who like inviting popular members who rarely accept.
+A 4,000-member clustered graph (networkx, a Python graph library: `powerlaw_cluster_graph` builds a few hubs and many small clusters) with 10% of edges hidden as "future". Part 1 ranks FoF candidates three ways; part 2 simulates viewers who like inviting popular members who rarely accept.
 
 ```python
 def fof_candidates(G, u):
@@ -723,7 +723,7 @@ What it shows:
 | Dismissals wait for the nightly batch | Streamed suppression merged at render time |
 
 ### Same design, other questions
-- **Groups to join** — one side is an aggregate, so predict join × stay-and-participate; big groups dominate triangles, so a diversity cap is mandatory. **CRM contact suggestions** — shared accounts matter more than mutuals; the second side is "will this contact reply".
+- **Groups to join** — one side is an aggregate, so predict join × stay-and-participate; big groups dominate triangles, so a diversity cap is mandatory. **CRM (customer-relationship management) contact suggestions** — shared accounts matter more than mutuals; the second side is "will this contact reply".
 
 ### Self-check
 1. Why multiply P(send) by P(accept | sent)? → The product is the probability of an accepted invite per impression — both sides must want it.
@@ -773,7 +773,7 @@ Three signal families — and what each does for **cold start**:
 
 | Signal | What it captures | New track with zero plays? |
 |---|---|---|
-| **Collaborative** (listening co-occurrence, matrix factorisation) | Who listens to what together | Useless until plays accumulate |
+| **Collaborative** (listening co-occurrence, matrix factorisation — learning user and track vectors from the play matrix) | Who listens to what together | Useless until plays accumulate |
 | **Audio content embeddings** (model over the raw audio) | Tempo, timbre (texture of the sound), mood, instrumentation | Works from day zero |
 | **Text / metadata embeddings** (tags, playlist titles, editorial, web text) | Genre, scene, cultural context | Works from day zero |
 
@@ -784,13 +784,13 @@ Radio session features: seed track, last N tracks, skips this session, time of d
 
 ### 5. Model: baseline → advanced
 1. **Baseline**: popularity within a **cohort** (a group of similar users, e.g. new listeners in one country who like a genre).
-2. **Collaborative embeddings**: matrix factorisation on implicit feedback (implicit ALS — Hu, Koren & Volinsky, 2008) or a two-tower model (Chapter 13).
-3. **Content encoders**: a CNN or audio transformer over spectrograms (van den Oord, Dieleman & Schrauwen, 2013, showed CNNs can predict collaborative-filtering vectors from audio); a text model for metadata. Map content embeddings into the collaborative space so new tracks are retrieved like established ones.
-4. **Sequence model for radio**: from item-to-item transitions, to recurrent GRU4Rec (Hidasi et al., 2016), to self-attention SASRec (Kang & McAuley, 2018).
+2. **Collaborative embeddings**: matrix factorisation on implicit feedback (behaviour such as plays and skips, not explicit ratings; implicit ALS, alternating least squares — Hu, Koren & Volinsky, 2008) or a two-tower model (Chapter 13).
+3. **Content encoders**: a CNN or audio transformer over spectrograms (pictures of how sound frequencies change over time; van den Oord, Dieleman & Schrauwen, 2013, showed CNNs can predict collaborative-filtering vectors from audio); a text model for metadata. Map content embeddings into the collaborative space so new tracks are retrieved like established ones.
+4. **Sequence model for radio**: from item-to-item transitions, to recurrent (reads the sequence step by step, carrying a memory) GRU4Rec (Hidasi et al., 2016), to self-attention (each position weighs every earlier one) SASRec (Kang & McAuley, 2018).
 5. **Ranker**: GBDT or neural, with features from all three families plus session context.
 
 ### 6. Offline metrics
-- **Recall@K / Hit@K** on held-out listens (**Hit@K** = share of cases where the true next item is in the top K); **MRR** for radio's next track.
+- **Recall@K / Hit@K** on held-out listens (**Hit@K** = share of cases where the true next item is in the top K); **MRR** (mean reciprocal rank: the average of 1 ÷ the true item's position) for radio's next track.
 - **Coverage and diversity**: share of catalogue ever recommended, artist concentration (e.g. **Gini coefficient** of exposure — 0 = perfectly even, 1 = one artist gets everything), novelty.
 - **Cold-start slice**: tracks released after the training cutoff.
 
@@ -833,17 +833,17 @@ flowchart LR
 | Weekly batch | 250 M users × 30 tracks | 7.5 B playlist entries/week — a compute job with a deadline, not a latency problem |
 | Waste avoided | 150 M inactive users not scored | ~37.5% of the batch |
 | Track embeddings | 100 M × 128 dims × 4 bytes | 51.2 GB raw per embedding space (before index overhead and replicas) |
-| Radio QPS | e.g. 20 M concurrent radio listeners ÷ ~200 s per track | ≈ 100 K next-track decisions/s |
+| Radio QPS (queries per second) | e.g. 20 M concurrent radio listeners ÷ ~200 s per track | ≈ 100 K next-track decisions/s |
 
 ### 10. Monitoring and failure modes
-- **Loops**: skips update session state in seconds; embeddings refresh nightly to weekly; ranker training uses **position-bias-corrected** logs (17.3), or it copies its own previous ordering.
+- **Loops**: skips update session state in seconds; embeddings refresh nightly to weekly; ranker training uses **position-bias-corrected** logs (17.3; position bias = people click higher slots more, whatever their quality), or it copies its own previous ordering.
 - **Funnel observability**: log per track, per stage — retrieved → ranked where → shown → played. If a label claims its artists are buried, you can show which stage dropped them.
 
 | Failure | Fallback |
 |---|---|
 | Weekly batch fails | Last week's playlists keep serving; alert on staleness |
 | ANN index or ranker down during radio | Cached queue → genre-station heuristic. **Never silence** |
-| Embedding refresh out of sync | Version index + vectors as a pair, promote atomically, check versions per request |
+| Embedding refresh out of sync | Version index + vectors as a pair, promote atomically (switch both at once so no request sees a mix), check versions per request |
 
 ### 11. Interview follow-ups
 - **"Power users are bored by midweek."** → Keep the weekly ritual; add a daily shelf re-ranked on this week's listens from the same precomputed candidates — cheap freshness.
@@ -907,14 +907,14 @@ What it shows:
 > A used-goods marketplace has about 100 M active listings, and each one disappears when it sells, so the catalogue turns over constantly. Shoppers should be able to snap a picture of something they like — say a vintage lamp or a coat a friend is wearing — and see comparable items on sale. A second request: let people type a description to find things among listings they have saved.
 
 ### 1. Clarify requirements
-The recognition sentence: **"This is the search funnel of 17.3, except the query is a photo."** The front stage becomes an **encoder** and retrieval runs in an embedding space, not an inverted index (which can search captions but not visual similarity). The hard part is **the index**: 100 M listings where every sale is a deletion. The second request is a clue: if photos and text share **one embedding space** (encoders trained so a photo and its description land close together), a single index answers both.
+The recognition sentence: **"This is the search funnel of 17.3, except the query is a photo."** The front stage becomes an **encoder** (a model that turns an input into an embedding) and retrieval runs in an embedding space, not an inverted index (a map from each word to the items containing it — it can search captions but not visual similarity). The hard part is **the index**: 100 M listings where every sale is a deletion. The second request is a clue: if photos and text share **one embedding space** (encoders trained so a photo and its description land close together), a single index answers both.
 
 | Question | Assumption used below |
 |---|---|
 | Listings | 100 M live, millions of new listings/day with several photos each |
 | Latency | ~300 ms photo-to-results — say whether upload and compression count |
 | In scope | Picture-to-listing lookup; typed lookup within a user's *saved* items |
-| Out of scope | Exact-product recognition, AR try-on, anything generative |
+| Out of scope | Exact-product recognition, AR (augmented reality) try-on, anything generative |
 | Signature failure | Showing items that are already sold |
 
 ![Shared embedding space](img/visual_shared_space.svg)
@@ -928,7 +928,7 @@ The recognition sentence: **"This is the search funnel of 17.3, except the query
 ### 3. Data and labels
 - **Photos**: a few per listing, amateur phone shots; **query photos are often worse** — include them in training and evaluation. **Text and attributes**: title, description, brand, size, condition, price, category.
 - **Labels in two phases** (at launch there are no behaviour logs — the **bootstrap problem**):
-  1. **Human-judged pairs**: raters mark (query photo, listing) as close match, partial or miss; scored with NDCG. The judged set becomes the permanent **regression suite**.
+  1. **Human-judged pairs**: raters mark (query photo, listing) as close match, partial or miss; scored with NDCG (normalised discounted cumulative gain — rewards putting the best results at the top). The judged set becomes the permanent **regression suite** (a fixed test set re-run on every new version to catch backsliding).
   2. **Behaviour** later: clicks, then **contact-seller** events, then transactions — with position-bias correction on the results grid (17.3).
 - **Free positive pairs**: different photos of the same single-item listing (after screening out bundles and stock images).
 
@@ -942,8 +942,8 @@ The recognition sentence: **"This is the search funnel of 17.3, except the query
 **Retrieval finds lookalikes; the ranker decides what's worth buying.**
 
 ### 5. Model: baseline → advanced
-- **Baseline**: a **pretrained image-text model**, no fine-tuning — CLIP-style (OpenAI's CLIP, Radford et al., 2021, trained contrastively on ~400 M image-caption pairs). Ship it against the judged set in week one.
-- **Upgrade — fine-tune on marketplace pairs** with **InfoNCE** (the contrastive loss CLIP uses: a softmax over similarities that should pick the true partner out of the batch):
+- **Baseline**: a **pretrained image-text model**, no fine-tuning (extra training on your own data) — CLIP-style (OpenAI's CLIP, Radford et al., 2021, trained contrastively on ~400 M image-caption pairs). Ship it against the judged set in week one.
+- **Upgrade — fine-tune on marketplace pairs** with **InfoNCE** (the contrastive loss CLIP uses: a softmax (turns scores into probabilities that sum to 1) over similarities that should pick the true partner out of the batch):
   - positives: two photos of the same listing; photo ↔ its title/description;
   - **in-batch negatives**: other items in the batch — cheap, but near-duplicates become false negatives;
   - **category-hard negatives**: a *different sofa* rather than a toaster — sharpens distinctions buyers actually make.
@@ -956,14 +956,14 @@ The recognition sentence: **"This is the search funnel of 17.3, except the query
 
 ### 7. Online metrics and A/B testing
 - **Primary**: contact-seller rate per search. **Guardrails**: sold-item impressions (target ≈ 0), zero-results rate, latency, offensive-adjacency reports.
-- **Testing an encoder that needs a full re-embed**: judged-suite gate → index one category with it → **interleave** for a sliver of users → only then re-embed everything.
+- **Testing an encoder that needs a full re-embed**: judged-suite gate → index one category with it → **interleave** (mix both models' results in one list and see which get chosen) for a sliver of users → only then re-embed everything.
 
 ### 8. Serving architecture
-**Request path**: upload → crop → image encoder (e.g. a 20 ms GPU budget — benchmark it) → **ANN search** with filters → light ranker → **live-status hydration** → results.
+**Request path**: upload → crop → image encoder (e.g. a 20 ms GPU budget — benchmark it) → **ANN search** with filters → light ranker → **live-status hydration** (filling in the latest data — here, whether it has sold — just before display) → results.
 
 **ANN index families** (details in Chapter 13.9):
-- **IVF** (inverted file): k-means groups vectors into buckets; a query scans only the `nprobe` nearest buckets. Often combined with **product quantisation (PQ)**, which compresses each vector into a few bytes (FAISS, Johnson, Douze & Jégou, 2017).
-- **HNSW**: a layered proximity graph walked greedily from coarse to fine (17.1).
+- **IVF** (inverted file): k-means (a clustering algorithm that groups points around k centres) groups vectors into buckets; a query scans only the `nprobe` nearest buckets. Often combined with **product quantisation (PQ)**, which compresses each vector into a few bytes (FAISS, Meta's vector-search library; Johnson, Douze & Jégou, 2017).
+- **HNSW** (hierarchical navigable small world): a layered proximity graph walked greedily from coarse to fine (17.1).
 
 **Filtered ANN**: a very selective post-filter can leave too few results — fall back to more candidates, partitioned indexes or exact search on small subsets.
 
@@ -1003,7 +1003,7 @@ flowchart LR
 | Encoding load | e.g. 5 M new listings/day × 4 photos | 20 M encodings/day ≈ 230/s — possibly more than query traffic |
 | Re-embed on upgrade | 100 M listings × several photos | a multi-day batch plus temporary dual-index capacity |
 
-Shard the index; a lost shard means reduced recall, backed up by text search or category browse — degrade, don't error.
+Shard the index (split it across machines); a lost shard means reduced recall, backed up by text search or category browse — degrade, don't error.
 
 ### 10. Monitoring and failure modes
 - Every encoder version replays the growing judged suite; online, watch contact-seller rate **per category**. **Seasonal drift** (coat season → swimwear) means budgeted periodic retrains and index rebuilds.
@@ -1065,7 +1065,7 @@ What it shows:
 | Stops at "nearest neighbours" | A ranker with price, condition, seller, distance — lookalikes aren't purchases |
 
 ### Same design, other questions
-- **On-device photo search** — distilled, quantised encoder and a small index on the phone; battery is the cost, nothing leaves the device. **Video moment search** — chunk videos into timestamped shots; the corpus multiplies while churn nearly disappears.
+- **On-device photo search** — distilled, quantised (numbers stored with fewer bits to save memory and time) encoder and a small index on the phone; battery is the cost, nothing leaves the device. **Video moment search** — chunk videos into timestamped shots; the corpus multiplies while churn nearly disappears.
 
 ### Self-check
 1. Why does one index serve photo and text queries? → Both encoders map into one shared space.
@@ -1105,15 +1105,15 @@ The recognition sentence: **"This is object detection where one kind of error is
 Say the target out loud: *"maximise recall per person; spend precision only where it hurts the product."* The published system Google described for Street View (Frome et al., 2009) framed it exactly this way and reported automatically blurring about 89% of faces and 94–96% of licence plates on their evaluation sets at the time — which is also why a manual **report path** is a permanent part of the design, not a temporary patch.
 
 ### 2. Frame it as an ML task
-- **Input**: a panorama (plus the neighbouring panoramas along the drive, camera pose, GPS).
+- **Input**: a panorama (plus the neighbouring panoramas along the drive, camera pose — position and direction — GPS).
 - **Output**: a set of regions to blur, each from a detected box with a class (face / plate) and a confidence.
-- **Category**: **object detection** ([11.7](../11-cnns-and-computer-vision/README.md)): predict boxes + classes + confidences, then **NMS** to remove duplicates.
+- **Category**: **object detection** ([11.7](../11-cnns-and-computer-vision/README.md)): predict boxes + classes + confidences, then **NMS** (non-maximum suppression: among heavily overlapping boxes keep only the highest-scoring) to remove duplicates.
 - **Objective**: at the chosen threshold, maximise **object-level recall** (every view of every person is covered) subject to a budget on falsely blurred area.
 
 ### 3. Data and labels
 - **Labelled panoramas**: boxes on faces and plates, including tiny, blurry, side-on, partly hidden and reflected ones. Guidelines matter: is a face on a poster a face? (Usually yes — blurring it is cheap.) Decide the minimum identifiable size and write it down.
 - **Hard-case mining**: the rare cases (night, rain, crowds, motorbike plates, foreign plates) are where errors live. Mine them by running the current model and sending low-confidence and disagreement regions to labellers — **active learning**.
-- **Public datasets** for pre-training: WIDER FACE (Yang et al., 2016) was built for faces with large variation in scale, pose and occlusion, including many tiny faces; plate datasets exist per region (e.g. CCPD, Xu et al., 2018, for Chinese plates).
+- **Public datasets** for pre-training: WIDER FACE (Yang et al., 2016) was built for faces with large variation in scale, pose and occlusion (objects partly hidden), including many tiny faces; plate datasets exist per region (e.g. CCPD, Xu et al., 2018, for Chinese plates).
 - **The training data is itself sensitive**: annotators see unblurred faces. Restrict access, log it, and delete labelled originals on the retention schedule.
 
 **Labels from users**: every "please blur this" report is a missed detection with a location — the most valuable label you get. Feed confirmed reports back into training as hard positives.
@@ -1123,7 +1123,7 @@ This is an image model, so there is no feature table; the design choices are abo
 
 | Choice | Why |
 |---|---|
-| **Tiling** the panorama into overlapping perspective views (e.g. cube faces), not the raw equirectangular image | Panoramas stretch objects near the top and bottom; detectors are trained on normal photos |
+| **Tiling** the panorama into overlapping perspective views (e.g. cube faces), not the raw equirectangular (flat, stretched world-map-style) image | Panoramas stretch objects near the top and bottom; detectors are trained on normal photos |
 | **Multiple scales**: run once at normal resolution and once on 2× upscaled tiles near the horizon | Far-away faces are 10–20 pixels tall — too small for a detector's default input size |
 | **Overlap between tiles** | An object cut by a tile edge is missed in both tiles |
 | **Neighbouring panoramas** (the car took another picture 5–10 m later) | The same person appears in 2–4 consecutive panoramas; one view is often easier than the others |
@@ -1132,7 +1132,7 @@ This is an image model, so there is no feature table; the design choices are abo
 ### 5. Model: baseline → advanced
 **Baseline**: off-the-shelf face and plate detectors on tiles, threshold 0.5, blur every box. The audit set shows where it misses (small, side-on, dark).
 
-**Upgrade 1 — one fine-tuned detector for both classes.** A one-stage detector (the YOLO family, Redmon et al., 2016; or RetinaNet, Lin et al., 2017, whose **focal loss** down-weights the millions of easy background locations so training focuses on hard examples) fine-tuned on in-domain panoramas with tiling and multi-scale training. Transformer detectors such as DETR (Carion et al., 2020) predict a set of boxes directly without NMS — worth benchmarking, but one-stage CNN detectors remain the usual choice for high-resolution, high-throughput batch work.
+**Upgrade 1 — one fine-tuned detector for both classes.** A one-stage detector (predicts boxes in a single pass, with no separate region-proposal step; the YOLO family, Redmon et al., 2016; or RetinaNet, Lin et al., 2017, whose **focal loss** down-weights the millions of easy background locations so training focuses on hard examples) fine-tuned on in-domain panoramas with tiling and multi-scale training. Transformer detectors such as DETR (Carion et al., 2020) predict a set of boxes directly without NMS — worth benchmarking, but one-stage CNN detectors remain the usual choice for high-resolution, high-throughput batch work.
 
 **Upgrade 2 — a cascade (18.3's idea) for recall at a sane false-alarm rate.**
 1. Stage 1 runs at a **very low threshold** (high recall, many false alarms).
@@ -1141,14 +1141,14 @@ This is an image model, so there is no feature table; the design choices are abo
 
 **Upgrade 3 — multi-view fusion.** Track objects across consecutive panoramas using camera motion: a face detected confidently in one view is projected into its neighbours, and blurred there even if the detector missed it. The unit of success becomes the *person*, not the box.
 
-**Blurring itself**: pad each box (localisation is imperfect — see the toy), blur with a method that destroys information (a strong Gaussian blur or solid fill; light pixelation of text can sometimes be reversed), and apply it to the published copy only.
+**Blurring itself**: pad each box (localisation is imperfect — see the toy), blur with a method that destroys information (a strong Gaussian blur — a smooth weighted average of nearby pixels — or solid fill; light pixelation of text can sometimes be reversed), and apply it to the published copy only.
 
 ### 6. Offline metrics
 - **Recall by size bucket, class, region and lighting** at the operating threshold — overall recall hides the tiny-object failure.
 - **Object-level recall**: share of physical people/plates covered in *every* view they appear in.
 - **Pixel coverage**: share of each true object's area inside a blur region; count an object as **leaked** if more than, say, 5% of it is uncovered. A detection that is found but misplaced still leaks.
 - **Cost of false alarms**: false blurs per panorama and share of image area blurred wrongly; separately track blurred **text** (signs, house numbers) because that is the useful content.
-- mAP (11.7) is still useful for comparing detectors, but it is not the launch metric — it averages over thresholds nobody will use.
+- mAP (mean average precision, 11.7) is still useful for comparing detectors, but it is not the launch metric — it averages over thresholds nobody will use.
 
 ### 7. Online metrics and A/B testing
 There is no A/B test on privacy: you cannot publish a less-safe variant to half the users. Instead:
@@ -1204,7 +1204,7 @@ The last row is the hidden cost: improving the model helps new captures immediat
 
 ### 11. Interview follow-ups
 - **"Can you guarantee 100% of faces are blurred?"** → No detector reaches 100%. Layer the defences: high-recall detector, multi-view tracking, padding, human review of uncertain cases, audits, and a fast report-and-fix path — and state the audited miss rate honestly.
-- **"Why not blur every person entirely with a segmentation model?"** → Possible (segmenting whole bodies, 11.7), and some operators blur people fully. It costs more of the image and more compute; faces and plates are the identifying parts. It is a policy choice to name, not a default.
+- **"Why not blur every person entirely with a segmentation model?"** (a model that labels every pixel) → Possible (segmenting whole bodies, 11.7), and some operators blur people fully. It costs more of the image and more compute; faces and plates are the identifying parts. It is a policy choice to name, not a default.
 - **"Should the model recognise people who asked to be removed?"** → No — that would require face *recognition*, a far more sensitive capability. Handle such requests by location (blur this house, this spot), not by identity.
 
 ### Toy — the recall decisions around a detector (`code/blur_recall_toy.py`)
@@ -1298,7 +1298,7 @@ It is a **two-sided marketplace** (like PYMK's two sides in 18.4, but between us
 ### 2. Frame it as an ML task
 - **Input**: user (location, history, friends), context (time, device, surface), candidate event.
 - **Output**: P(register | shown), optionally P(attend | registered); the ranking score is their product for free events (no-shows waste capacity) or P(register) × price for revenue-weighted surfaces.
-- **Category**: **pointwise learning-to-rank** on a **content- and context-based** model. Item-ID embeddings are nearly useless because each item's life is short.
+- **Category**: **pointwise learning-to-rank** (learn a score for each item on its own, then sort by it) on a **content- and context-based** model. Item-ID embeddings are nearly useless because each item's life is short.
 - **Hard constraints first**: time window, distance or online, capacity, age restrictions — filters, not features.
 
 ### 3. Data and labels
@@ -1327,7 +1327,7 @@ It is a **two-sided marketplace** (like PYMK's two sides in 18.4, but between us
 ### 5. Model: baseline → advanced
 **Baseline**: rules — upcoming events within 20 km, in categories the user has attended, sorted by registrations so far. It ships in days and it is a fair number to beat. Its weakness: "registrations so far" is zero for every new event, so the ranking is decided by events that are already popular (see the toy).
 
-**Main model — gradient-boosted trees on the features above.** GBDT (e.g. XGBoost, Chen & Guestrin, 2016) handles this mix of distances, counts, prices and categorical fields well without heavy feature engineering, and it generalises to events it has never seen because it scores **features of the event**, not its ID. Research on event-based social networks took the same route: Macedo, Marinho & Santos (2015) combined content, social, location and time signals with learning-to-rank on Meetup data, precisely because collaborative filtering struggles when every event is new.
+**Main model — gradient-boosted trees on the features above.** GBDT (e.g. XGBoost, Chen & Guestrin, 2016) handles this mix of distances, counts, prices and categorical fields (values from a fixed set, like 'music' or 'sport') well without heavy feature engineering, and it generalises to events it has never seen because it scores **features of the event**, not its ID. Research on event-based social networks took the same route: Macedo, Marinho & Santos (2015) combined content, social, location and time signals with learning-to-rank on Meetup data, precisely because collaborative filtering struggles when every event is new.
 
 **Candidate generation** for 1 M events:
 - **Geo + time index**: events within the user's radius (a geohash or S2 cell lookup — the cells of a hierarchical grid over the map) in the next N weeks, plus online events. This alone cuts 1 M to a few thousand.
@@ -1366,7 +1366,7 @@ flowchart LR
     IDX --> MAIL["Weekly email batch, same ranker"]
 ```
 
-Candidate sources = geo + time filter, content-only two-tower ANN, events friends registered for, followed organisers, and an exploration quota. The ranker's momentum features (registrations in the last hour, remaining capacity) come from a stream processor, computed as of now; impressions, registrations and check-ins are logged for training.
+Candidate sources = geo + time filter, content-only two-tower ANN, events friends registered for, followed organisers, and an exploration quota. The ranker's momentum features (registrations in the last hour, remaining capacity) come from a stream processor (a service that keeps running counts over the live event stream), computed as of now; impressions, registrations and check-ins are logged for training.
 
 - **Event lifecycle drives the index**: an event is embedded and indexed **when it is created** (minutes, not nightly — a new event matters most in its first days), and removed when it sells out, is cancelled or starts. Remaining capacity is **hydrated at render time**, the same rule as sold listings in 18.6.
 - **Streaming features**: registrations in the last hour and remaining capacity come from a stream processor; they change fastest just when an event is most in demand.
@@ -1375,7 +1375,7 @@ Candidate sources = geo + time filter, content-only two-tower ANN, events friend
 ### 9. Scale numbers
 | Quantity | Arithmetic | Result |
 |---|---|---|
-| Home-page QPS | 10 M MAU × ~10 visits/month ÷ (30 × 86,400 s) | ≈ 40/s average; ~150/s at a weekend-evening peak |
+| Home-page QPS | 10 M MAU (monthly active users) × ~10 visits/month ÷ (30 × 86,400 s) | ≈ 40/s average; ~150/s at a weekend-evening peak |
 | Ranker load | 150 QPS × 500 candidates | 75 K scores/s — small for a GBDT |
 | Event vectors | 1 M × 128 dims × 4 B | 512 MB — fits in memory per region, no sharding needed |
 | Weekly email | 10 M users × 500 candidates | 5 B scores per week in batch — a few hours on a modest cluster |
@@ -1436,7 +1436,7 @@ What it shows:
 - **Item-ID collaborative filtering has nothing to work with**: every test event is new, so it is no better than random (AUC ≈ 0.5).
 - **Popularity helps but needs a warm-up**: it only works because the toy lets early registrations accumulate first; at the moment an event is posted it is zero for everyone.
 - **The feature-based GBDT generalises to unseen events** (AUC 0.894, hit@3 0.797) because it scores *what, where, when and who*, not *which ID*.
-- **Ablations price each feature group**: removing topic affinity costs the most (0.894 → 0.810), distance next (→ 0.837). The social feature is powerful where it exists (about 4.5× the register rate) but present on only 4% of impressions, so it barely moves the overall AUC — measure such features on their own slice, not only in aggregate.
+- **Ablations** (retraining with one feature group removed) **price each feature group**: removing topic affinity costs the most (0.894 → 0.810), distance next (→ 0.837). The social feature is powerful where it exists (about 4.5× the register rate) but present on only 4% of impressions, so it barely moves the overall AUC — measure such features on their own slice, not only in aggregate.
 
 ### Common mistakes
 | Weak | Strong |
@@ -1494,18 +1494,18 @@ Watch the goal: a carousel that steals clicks from a listing the guest would hav
 - **Objective for the embedding**: listings clicked close together in the same session should be close; listings eventually booked should pull the session's clicks toward them.
 
 ### 3. Data and labels
-1. **Click sessions**: the sequence of listing pages a guest opens during one search. Clean them: count only clicks with a meaningful dwell time (e.g. ≥ 30 s, so mis-taps don't count), and split a user's activity into sessions at gaps of 30+ minutes.
+1. **Click sessions**: the sequence of listing pages a guest opens during one search. Clean them: count only clicks with a meaningful dwell time (how long the page stayed open) (e.g. ≥ 30 s, so mis-taps don't count), and split a user's activity into sessions at gaps of 30+ minutes.
 2. **Bookings**: which listing each session ended in (a minority of sessions book).
 3. **Listing attributes**: location, type (entire home, private room), price, capacity, bedrooms, amenities, photos, review score, host responsiveness.
 4. **Availability calendar**: which nights are free — changes constantly.
 5. **Carousel impression logs** (once the carousel exists): shown, clicked, booked, position.
 
-**Labels**: there are no labelled "similar pairs". The embedding learns from **co-occurrence** in sessions (self-supervised, like word2vec learning from sentences). The later ranker learns from carousel impressions → clicks → bookings.
+**Labels**: there are no labelled "similar pairs". The embedding learns from **co-occurrence** in sessions (self-supervised — the labels come from the data itself — like word2vec, which learns word vectors from neighbouring words in sentences). The later ranker learns from carousel impressions → clicks → bookings.
 
 ### 4. Features
 | Stage | Features |
 |---|---|
-| Retrieval | Cosine similarity of listing embeddings (anchor vs candidate) |
+| Retrieval | Cosine similarity (how closely two vectors point the same way) of listing embeddings (anchor vs candidate) |
 | Filters | Same market, available for the dates, capacity ≥ guests, not the anchor itself, not hidden by the host |
 | Ranker | Embedding similarity, **similarity to the guest's session** (mean of recently clicked listings' vectors), distance to the anchor, price ratio to the anchor, type/capacity match, review score and count, host response rate, instant-book, listing age |
 
@@ -1529,7 +1529,7 @@ Watch the goal: a carousel that steals clicks from a listing the guest would hav
 - **Slices**: big vs small markets, cold-start listings, luxury and budget ends.
 
 ### 7. Online metrics and A/B testing
-- **Primary**: **site-wide bookings per visitor** (captures cannibalisation).
+- **Primary**: **site-wide bookings per visitor** (captures cannibalisation — the carousel stealing bookings the anchor listing would have got anyway).
 - **Secondary**: carousel click-through, carousel-attributed bookings.
 - **Guardrails**: bookings of the anchor listing (a big drop means the carousel distracts), host-side exposure concentration (a few listings appearing in every carousel), latency, empty-carousel rate.
 - Randomise by **guest**; for marketplace-wide effects (hosts losing exposure), check by market as well.
@@ -1547,11 +1547,11 @@ flowchart LR
     CAR -.-> SES
 ```
 
-The skip-gram uses the booked listing as global context and same-market negatives; k-NN fetches ~200 neighbours in the anchor's market, the calendar service removes those unavailable for the dates or too small for the guests, and a GBDT ranker (similarity, session similarity, price ratio, quality) plus a host-diversity rule picks ~12.
+The skip-gram uses the booked listing as global context and same-market negatives; k-NN (k-nearest-neighbour search) fetches ~200 neighbours in the anchor's market, the calendar service removes those unavailable for the dates or too small for the guests, and a GBDT ranker (similarity, session similarity, price ratio, quality) plus a host-diversity rule picks ~12.
 
 - **Per-market indexes**: similarity search never crosses a market, so build one small index per market. Most markets hold a few hundred to a few thousand listings — exact (brute-force) search is fast enough; only the largest need ANN (13.9).
 - **Availability is the expensive filter**: fetch 200 neighbours, then check the calendar service for the dates, then rank. In peak season many neighbours are booked, so fetch more when the filter empties the list — the filtered-ANN issue of 18.6.
-- **Versioning**: a retrained skip-gram model produces a *new, unrelated* vector space (it can come out rotated). Swap vectors and index together, atomically (the 18.6 rule), or warm-start each night's training from the previous vectors to keep neighbours stable.
+- **Versioning**: a retrained skip-gram model produces a *new, unrelated* vector space (it can come out rotated). Swap vectors and index together, atomically (the 18.6 rule), or warm-start (begin from the previous vectors rather than random ones) each night's training from the previous vectors to keep neighbours stable.
 - **Precompute for popular anchors**: the top-200 neighbour list per listing can be computed nightly and cached; only availability filtering and ranking run per request.
 
 ### 9. Scale numbers
@@ -1561,7 +1561,7 @@ The skip-gram uses the booked listing as global context and same-market negative
 | Vectors | 5 M × 32 dims × 4 B | 640 MB — the whole catalogue fits in memory on each server |
 | Largest market | e.g. 60 K listings × 32 dims | ~2 M multiply-adds per exact k-NN query — well under a millisecond |
 | Training pairs | e.g. 300 M sessions/month × 8 clicks × 4 context listings | ~10 B pairs/month — a few hours per nightly run on a small cluster, or incremental training |
-| Availability checks | 1,700/s × 200 candidates | 340 K listing-date lookups/s → cache calendars; precompute "available next 30 days" bitmaps |
+| Availability checks | 1,700/s × 200 candidates | 340 K listing-date lookups/s → cache calendars; precompute "available next 30 days" bitmaps (one bit per night: free or booked) |
 
 Small vectors (32 dimensions) are enough here: the space only needs to separate listings *within* a market.
 
@@ -1659,10 +1659,10 @@ What it shows:
 |---|---|---|---|---|---|
 | **Video recommendations** (17.1) | Retrieval + learning-to-rank | Watch history, item embeddings, user×item similarity, session state | Popularity → two-tower ANN + co-occurrence → GBDT / deep multi-objective ranker | Recall@K, AUC / watch time, return rate | Cold start and position bias; clickbait proxy trap |
 | **Feed ranking** (17.2) | Multi-task ranking over a social candidate pool | Viewer–author closeness, content embeddings, live engagement counts, integrity scores | Chronological / P(like) LR → shared-body multi-task net + value formula | Per-head AUC + calibration / sessions per user or worthwhileness, with hide/report guardrails | Balancing many goals without rewarding bait; ~87 K ranking calls/s |
-| **Search ranking** (17.3) | Query understanding + learning-to-rank | Query–item match (BM25, embedding similarity, attributes), item quality, capped personalisation | BM25 + popularity → hybrid retrieval, L1 GBDT → L2 LambdaMART/deep, cross-encoder on top-k | NDCG@k / session success, revenue per search, reformulation | Position-biased clicks; revenue vs relevance |
+| **Search ranking** (17.3) | Query understanding + learning-to-rank | Query–item match (BM25, embedding similarity, attributes), item quality, capped personalisation | BM25 (a classic keyword-match score) + popularity → hybrid retrieval, L1 GBDT → L2 LambdaMART (a GBDT trained for ranking)/deep, cross-encoder (reads query and item together) on top-k | NDCG@k / session success, revenue per search, reformulation | Position-biased clicks; revenue vs relevance |
 | **Text-to-video search** (17.4) | Cross-modal retrieval + learning-to-rank | Per-channel match (title, ASR transcript, OCR, visual), channel availability, satisfied-watch rate, freshness | BM25 on metadata → + ASR transcripts → + CLIP-style text–frame embeddings (video + segment vectors) → learned fusion ranker | Recall@K per channel, NDCG@10 / searches ending in a satisfied watch | Indexing cost (frames, ASR per upload); missing or misleading text; moments inside long videos |
-| **Ad click prediction** (18.1) | Binary classification with calibrated probabilities feeding an auction | Sparse user/context/ad IDs, crosses, advertiser history, streaming counters | Logistic regression → GBDT+LR / deep CTR, pCTR+pCVR heads, calibration layer | Log loss, calibration by segment / RPM, advertiser ROI | Calibration per segment; delayed conversions; 100 K QPS in 50–100 ms |
-| **Fraud detection** (18.2) | Imbalanced binary classification + cost-based action policy | Velocity counters, impossible travel, device and graph links | Rules + LR → GBDT + graph features (GNN for rings) | PR-AUC, expected $ loss / fraud bps, false-decline rate | Adaptive adversary; weeks-late and censored labels |
+| **Ad click prediction** (18.1) | Binary classification with calibrated probabilities feeding an auction | Sparse user/context/ad IDs, crosses, advertiser history, streaming counters | Logistic regression → GBDT+LR / deep CTR, pCTR+pCVR heads, calibration layer | Log loss, calibration by segment / RPM, advertiser ROI (return on investment) | Calibration per segment; delayed conversions; 100 K QPS in 50–100 ms |
+| **Fraud detection** (18.2) | Imbalanced binary classification + cost-based action policy | Velocity counters, impossible travel, device and graph links | Rules + LR → GBDT + graph features (GNN, graph neural network, for rings) | PR-AUC, expected $ loss / fraud bps, false-decline rate | Adaptive adversary; weeks-late and censored labels |
 | **Harmful content** (18.3) | Multi-label multimodal classification in a cost cascade | Text/image/audio/OCR embeddings, hashes, account history, share velocity, weighted reports | Hashes + rules → fast per-modality classifiers → heavy multimodal/LLM → humans | Per-category precision/recall / prevalence of violating views, false-removal & overturn rates | Harm both ways at huge scale; reviewer capacity; evasion |
 | **People You May Know** (18.4) | Link prediction + two-sided ranking | Mutual count, Adamic-Adar, shared affiliations, accept history, graph embeddings | Mutual-count sort → two-head P(send)×P(accept) model over FoF+affiliation+contacts+ANN candidates | Recall of future edges / accepted invites per impression, "don't know" reports | Two-sided objective; privacy fail-closed; graph-scale batch; rich-get-richer |
 | **Music discovery** (18.5) | Batch recommendation + online sequential recommendation | Collaborative vectors, audio embeddings, metadata/playlist text, session context | Cohort popularity → MF/two-tower + audio encoder → sequence model (GRU4Rec/SASRec) for radio | Recall/Hit@K, diversity / saves, skip rate, long-term repeat listening | New-track cold start; skip-responsive radio; diversity and artist fairness |

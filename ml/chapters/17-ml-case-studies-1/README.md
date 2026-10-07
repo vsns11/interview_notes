@@ -7,10 +7,10 @@ This chapter covers the four **retrieval-and-ranking** designs: video recommenda
 **What you'll learn**
 
 1. A single case-study template you can run for any predictive design question (17.0).
-2. **Recommendations**: the retrieval → ranking → re-ranking funnel, two-tower embeddings with an ANN index, cold start, position bias and the proxy trap (17.1).
+2. **Recommendations**: the retrieval → ranking → re-ranking funnel, two-tower embeddings with an ANN (approximate-nearest-neighbour) index, cold start (users or items with no history yet), position bias and the proxy trap (17.1).
 3. **Feed ranking**: a social candidate pool, multi-task models with one head per reaction, a product-owned value formula, and an integrity layer (17.2).
-4. **Search ranking**: query understanding, hybrid lexical + semantic retrieval, L1/L2 rankers, NDCG, and click bias correction with inverse-propensity weighting (17.3).
-5. **Text-to-video search**: indexing what videos say (ASR) and show (CLIP-style frame embeddings), fusing evidence channels, segment vectors for moments (17.4).
+4. **Search ranking**: query understanding, hybrid lexical + semantic retrieval (word matching + meaning matching), L1/L2 rankers, NDCG (a ranking-quality score), and click bias correction with inverse-propensity weighting (17.3).
+5. **Text-to-video search**: indexing what videos say (ASR, automatic speech recognition) and show (CLIP-style frame embeddings — CLIP maps pictures and text into one shared vector space), fusing evidence channels, segment vectors for moments (17.4).
 6. Four small runnable toys (synthetic data) that show the core modelling idea of each design.
 
 Code for this chapter is in `code/` and runs with the shared environment. All outputs below are real.
@@ -30,9 +30,9 @@ One fixed order of questions for every design in Chapters 17–18. It is the sev
 | 4 | Features | Which feature groups, how fresh, what leakage risk? | 3 |
 | 5 | Model: baseline → advanced | What's the simplest thing that works, and what's worth upgrading to? | 4 |
 | 6 | Offline metrics | How do we pick models before exposing users? | 2, 6 |
-| 7 | Online metrics and A/B | What decides a launch, and what may never get worse (guardrails)? | 2, 6 |
+| 7 | Online metrics and A/B (randomised live experiment) | What decides a launch, and what may never get worse (guardrails)? | 2, 6 |
 | 8 | Serving architecture | What runs offline vs per request; draw the request path | 5 |
-| 9 | Scale numbers | QPS, candidates scored per second, memory — with the arithmetic shown | 5, 7 |
+| 9 | Scale numbers | QPS (queries per second; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), candidates scored per second, memory — with the arithmetic shown | 5, 7 |
 | 10 | Monitoring and failure modes | What breaks silently, what are the fallbacks? | 6–7 |
 | 11 | Interview follow-ups | The questions you'll get, with answers | — |
 
@@ -61,7 +61,7 @@ Not every design is a funnel. **Fraud detection** scores one transaction at a ti
 | Feed ranking | Many goals at once (like, comment, hide, report) → value formula | 17.2 |
 | Search ranking | A query as input; clicks are biased by position | 17.3 |
 | Text-to-video search | Documents with no reliable text: index speech and pictures, fuse channels | 17.4 |
-| Ad click prediction | Probabilities feed an auction, so **calibration** matters | 18.1 |
+| Ad click prediction | Probabilities feed an auction, so **calibration** (predicted probabilities matching real rates) matters | 18.1 |
 | Fraud detection | An adversary who adapts; asymmetric, per-transaction costs | 18.2 |
 | Harmful content | Platform-wide scale, high stakes both ways, human review | 18.3 |
 | People you may know | Graph-based candidates, two-sided acceptance | 18.4 |
@@ -99,22 +99,22 @@ The scale *is* the design: running a careful model on 50 million videos for each
 
 ### 2. Frame it as an ML task
 - **Input**: user (history, profile), context (time, device, location), candidate video.
-- **Output**: a score per (user, video) — e.g. P(click) and expected watch time, or P(watch ≥ 30 s).
+- **Output**: a score per (user, video) — e.g. P(click) (the predicted probability of a click) and expected watch time, or P(watch ≥ 30 s).
 - **Category**: retrieval + **learning-to-rank** (sorting items by predicted value).
-- **Objective**: predicted engagement per **impression** (one item shown to one user once). Engagement arrives within minutes, so the model can learn fast, while the true business goal (daily return rate, long-term retention) takes weeks.
+- **Objective**: predicted engagement per **impression** (one item shown to one user once). Engagement arrives within minutes, so the model can learn fast, while the true business goal (daily return rate, long-term **retention** — users continuing to come back) takes weeks.
 
 Why not optimise one proxy? Clicks alone reward misleading thumbnails; watch time alone rewards needlessly long videos. This is the **proxy trap** — a *proxy* being a stand-in metric you optimise because the real one is too slow. The mature framing combines several predicted outcomes and checks the long-term metric in experiments.
 
 ### 3. Data and labels
 Three sources:
 
-1. **Interaction logs** — the source of labels. Log every impression with: user and item IDs, timestamp, position on the page, model version, the features used for ranking, then join outcomes (click, watch seconds, like, "not interested") within a defined **observation window** (e.g. 24 h). Respect privacy and retention rules.
-2. **Catalog content** — title, tags, description, channel, audio/visual embeddings.
+1. **Interaction logs** — the source of labels. Log every impression with: user and item IDs, timestamp, position on the page, model version, the features used for ranking, then join (match up) outcomes (click, watch seconds, like, "not interested") within a defined **observation window** (e.g. 24 h). Respect privacy and retention rules.
+2. **Catalog content** — title, tags, description, channel, audio/visual embeddings (defined in 17.0).
 3. **Signup signals** — language, country, declared interests, device.
 
 **Labels**: an engaged impression is a positive. A skipped impression is only a *weak* negative — the user may never have noticed it. Two flaws to name unprompted:
 
-- **Exposure bias** — you only observe outcomes for items you showed. The model may generalise to unshown items, but their outcomes are never directly measured.
+- **Exposure bias** — you only observe outcomes for items you showed. The model may **generalise** (make reasonable predictions) to unshown items, but their outcomes are never directly measured.
 - **Position bias** — an item in slot 1 gets more clicks than the same item in slot 15, so clicks mix relevance with placement. (Fixes in section 10 and in 17.3.)
 
 Content and signup data exist precisely for what logs can't cover: brand-new users and brand-new videos.
@@ -128,7 +128,7 @@ Content and signup data exist precisely for what logs can't cover: brand-new use
 | User × item (cross) | Has the user watched this channel before? Similarity of item embedding to the user's recent watches | Request time |
 | Context | Device, hour of day, day of week, network speed | Request time |
 
-**Leakage** to avoid: any feature computed with data from after the impression (e.g. total watch count including the watch you're predicting). Use point-in-time-correct joins (Chapter 16).
+**Leakage** to avoid: any feature computed with data from after the impression (e.g. total watch count including the watch you're predicting). Use point-in-time-correct joins (each training row only sees data that existed at its timestamp; Chapter 16).
 
 ### 5. Model: baseline → advanced
 One model per funnel stage.
@@ -137,18 +137,18 @@ One model per funnel stage.
 
 **Candidate generation** — several cheap sources running in parallel, results merged:
 
-1. **Two-tower embeddings (collaborative filtering)** — the main source. One neural "tower" turns user features into a vector, a second turns item features into a vector of the same length; training pushes a user's vector close to the vectors of items they engaged with (and away from sampled negatives). Relevance = dot product. Items are precomputed; only the user vector is computed per request.
+1. **Two-tower embeddings (collaborative filtering — learning from what similar users did)** — the main source. One neural "tower" turns user features into a vector, a second turns item features into a vector of the same length; training pushes a user's vector close to the vectors of items they engaged with (and away from sampled negatives — randomly chosen items treated as "not engaged"). Relevance = **dot product** (multiply matching entries of the two vectors and add them up). Items are precomputed; only the user vector is computed per request.
 2. **Co-occurrence** (viewers of video X frequently went on to watch Y) — item-to-item lists precomputed offline and looked up from the user's recent watches. Cheap, explainable, surprisingly strong. Amazon's item-to-item collaborative filtering (Linden, Smith & York, 2003) is the classic example.
 3. **Non-personalised sources** — trending now, fresh uploads, popular in region. They serve new users and keep the page fresh.
 
 ![Three candidate sources in parallel](img/rec_three_sources.svg)
 *Figure — Three cheap candidate sources running at the same time (course diagram)*
 
-**Ranker** — the candidate list is now small (~500), so use rich features and a stronger model: gradient-boosted decision trees (**GBDT**) as the first ranker, then a deep network predicting several engagement events (click, watch time, like). Most modelling effort goes here. YouTube's published systems follow exactly this split: a candidate-generation network and a separate ranking network (Covington et al., 2016), later a multi-task ranker with a separate small "shallow tower" that models position bias (Zhao et al., 2019).
+**Ranker** — the candidate list is now small (~500), so use rich features and a stronger model: gradient-boosted decision trees (**GBDT**) as the first ranker, then a deep network predicting several engagement events (click, watch time, like) — a **multi-task** model. Most modelling effort goes here. YouTube's published systems follow exactly this split: a candidate-generation network and a separate ranking network (Covington et al., 2016), later a multi-task ranker with a separate small "shallow tower" that models position bias (Zhao et al., 2019).
 
 ### 6. Offline metrics
 - **Retrieval**: **recall@K** — take the videos a person really watched during a later, held-out week; what share of them show up in the K retrieved candidates?
-- **Ranking**: **AUC** (probability a random positive is scored above a random negative) or a ranking loss; **NDCG@k** if you have graded outcomes.
+- **Ranking**: **AUC** (probability a random positive is scored above a random negative) or a ranking loss; **NDCG@k** (defined with a worked example in 17.3) if you have graded outcomes.
 - Always use a **time-based split** (train on weeks 1–4, test on week 5) — random splits leak the future.
 
 Offline metrics only *select candidates for an online test*; they don't decide launches.
@@ -156,13 +156,13 @@ Offline metrics only *select candidates for an online test*; they don't decide l
 ### 7. Online metrics and A/B testing
 - **Primary**: watch time per user, daily return rate (retention) over a long enough window.
 - **Guardrails**: "not interested" / dislike rate, policy-violating impressions, latency, creator-side diversity.
-- Standard user-level A/B test (16.9); run it long enough to see return behaviour, not just first-week novelty.
+- Standard user-level A/B test (16.9); run it long enough to see return behaviour, not just first-week **novelty** (a temporary bump because something is new).
 
 ### 8. Serving architecture
 Stage by stage, with example numbers:
 
 1. **Candidate generation: 50 M → ~500.** Item vectors are computed offline and loaded into an **approximate nearest neighbour (ANN)** index — a data structure such as **HNSW** (a layered graph of vectors; Malkov & Yashunin, 2016) that finds close vectors without comparing against every item. At request time: fetch the user vector, pull the nearest few hundred in a few ms, merge with co-occurrence and trending results. ANN trades a little recall for huge speed; measure that recall loss and choose index settings (memory, update speed, latency) from benchmarks.
-2. **Ranking: ~500 → ~50.** All candidates go to the model in one batch. Treat 20–40 ms for this step as an illustrative budget and verify it with your model, hardware and concurrent load.
+2. **Ranking: ~500 → ~50.** All candidates go to the model in one **batch** (a single combined model call). Treat 20–40 ms for this step as an illustrative budget and verify it with your model, hardware and concurrent load (many requests running at the same time).
 3. **Re-ranking: ~50 → ~20 on screen.** Rules: cap slots per channel, lift recent uploads, apply policy demotions, drop just-seen items, honour editor-pinned slots. Keep mandatory rules **outside** the model so policy changes need no retraining; re-check fast-changing restrictions just before display.
 
 ![Candidate counts and latency targets](img/rec_funnel_counts.svg)
@@ -196,7 +196,7 @@ flowchart LR
 |---|---|---|
 | Homepage QPS | 100 M DAU × 5 loads/day ÷ 86,400 s (assumed 5 loads) | ≈ 5,800 avg; ~17 K at a 3× peak |
 | Items scored by ranker | 17 K QPS × 500 | ≈ 8.7 M scores/s at peak |
-| Raw item vectors | 50 M × 128 dims × 4 bytes | 25.6 GB (before index structure, IDs, metadata, replicas) |
+| Raw item vectors | 50 M × 128 dims × 4 bytes | 25.6 GB (before index structure, IDs, metadata, replicas — extra copies for reliability) |
 
 The design deliberately moves heavy work offline (embedding and index builds, co-occurrence lists) so each request is cheap. Incremental updates avoid recomputing unchanged items.
 
@@ -221,7 +221,7 @@ The design deliberately moves heavy work offline (embedding and index builds, co
 - **"Why not one end-to-end model?"** → Any model smart enough to order items well costs too much to evaluate 50 M times per page load. Stages fix that, each with its own yardstick (recall for the shortlist, top precision for the final order).
 - **"Recall looks fine but users seem bored."** → Check the re-rank layer and the objective per user segment: diversity may have collapsed into one taste cluster, or the proxy over-rewards short-term clicks. A shrinking week-by-week category mix is the warning sign.
 - **"How do you do real-time personalisation?"** → Session events stream into short-term features within seconds and nudge the user vector (cheap version: a recency-weighted average of the last few videos' vectors); full retraining stays daily.
-- **"Someone proposes a new candidate source. Include it?"** → Measure its **marginal** value — watched items it finds that no other source does — then shadow, then a small experiment slice. (The toy below computes exactly this.)
+- **"Someone proposes a new candidate source. Include it?"** → Measure its **marginal** value — watched items it finds that no other source does — then **shadow** (run it on real traffic without showing its results), then a small experiment slice. (The toy below computes exactly this.)
 
 ### Toy — multi-source retrieval and marginal value (`code/rec_funnel_toy.py`)
 Synthetic users and videos live in a hidden 8-dimensional "taste space"; each user watches 35 videos sampled by taste + popularity; the last 5 are held out. Three candidate sources each return K = 100 items; then we take their union.
@@ -257,14 +257,14 @@ hits found ONLY by two-tower (MF)  : 0.096 of held-out watches
 ```
 
 What it shows:
-- The learned embeddings beat popularity and co-occurrence, but **the union** (≈223 unique candidates) reaches clearly higher recall than any single source — sources overlap only partly, which is why real systems run several.
+- ("MF" = matrix factorisation, the simplest two-tower model: each tower is just an embedding table.) The learned embeddings beat popularity and co-occurrence, but **the union** (≈223 unique candidates) reaches clearly higher recall than any single source — sources overlap only partly, which is why real systems run several.
 - **Marginal value** is how to judge a source: popularity finds 12.9% of held-out watches, but only 2.2% that nobody else finds. It still earns its place as the only source that works for brand-new users — a benefit this offline test can't see. (Numbers are synthetic.)
 
 ### Common mistakes
 | Weak | Strong |
 |---|---|
 | Opens by naming a model architecture | Opens with 50 M items vs 200 ms, which forces the funnel |
-| Treats clicks as ground truth | Raises position bias unprompted, offers a validated correction |
+| Treats clicks as ground truth (the true answer) | Raises position bias unprompted, offers a validated correction |
 | Hides diversity and policy inside the model | Separate rule layer that product can change without retraining |
 | Waits to be asked about cold start | Covers both kinds, with different fixes |
 
@@ -311,21 +311,21 @@ Say in one sentence that the recommendation funnel carries over — a candidate 
 ### 2. Frame it as an ML task
 - **Input**: viewer, post (author, content, age, engagement so far), viewer–author relationship, context.
 - **Output**: a *vector* of predictions per post: P(like), P(comment), P(reshare), E[dwell time], P(profile visit), and negatives P(hide), P("see less"), P(unfollow), P(report). (P(x) = the model's estimated probability of event x; E[·] = expected value.)
-- **Category**: **multi-task** classification/regression feeding a ranking.
+- **Category**: **multi-task** (one model, several predicted outcomes) classification/regression feeding a ranking.
 - **Objective**: rank by a **value formula** that combines the predictions — the formula, not any single probability, is what you optimise.
 
 ### 3. Data and labels
 - **Retrieval data = the social graph.** Candidates come from (a) **fan-in**: recent posts by accounts you follow; (b) **engagement spillover**: posts that people you're connected to reacted to, written by accounts outside your follow list; (c) a slice of **out-of-network suggestions** retrieved with the same two-tower + ANN machinery as 17.1.
 - **Labels = the event stream.** Each (impression, event kind) pair becomes a row, stamped with the feature values the ranker actually saw. Log positives (like, comment, reshare, dwell) *and* negatives (hide, report).
 - **Negative events are valuable but not ground truth.** A hide is a much clearer preference signal than a scroll-past, but its meaning depends on context; a report needs validation — it's not automatic proof of a violation.
-- **Survey labels**: ask a sample of users "was this post worth your time?" and train a satisfaction head on the answers. Useful beyond engagement, but check response bias, sample size and differences across user groups.
+- **Survey labels**: ask a sample of users "was this post worth your time?" and train a satisfaction head on the answers. Useful beyond engagement, but check **response bias** (people who answer surveys differ from those who don't), sample size and differences across user groups.
 
 ### 4. Features
 | Group | Examples |
 |---|---|
 | Viewer | Interests, past engagement rates by content type, language, session depth so far |
 | Author | Follower count, posting frequency, historical engagement and hide rates, integrity history |
-| Viewer × author | Interaction history (DMs, comments, profile visits), closeness, how recently they interacted |
+| Viewer × author | Interaction history (DMs — direct messages — comments, profile visits), closeness, how recently they interacted |
 | Post content | Type (photo/video/text/link), text and image embeddings, topic, integrity classifier scores |
 | Post engagement (streaming) | Likes/comments/hides in the last 5 min, 1 h — sparse for new posts |
 | Session | Posts already seen this session (dedupe), in-session reactions |
@@ -333,7 +333,7 @@ Say in one sentence that the recommendation funnel carries over — a candidate 
 A brand-new post has zero reactions to count, so at first the ranker relies on who wrote it, what it contains and who its likely audience is, until first-hour engagement streams in.
 
 ### 5. Model: baseline → advanced
-- **Baseline**: reverse-chronological fan-in, or a single logistic regression predicting P(like). It works, and it's the "Following" tab many apps still offer.
+- **Baseline**: reverse-chronological fan-in, or a single **logistic regression** (a simple linear classifier that outputs a probability) predicting P(like). It works, and it's the "Following" tab many apps still offer.
 - **Advanced — multi-task learning (MTL)**: one network with a **shared body** (layers that read viewer, post and context once) and a small **head** per event on top. Shared layers learn a common representation, so rare events (reports, reshares) borrow statistical strength from common ones (likes). Variants such as MMoE (multi-gate mixture of experts) help when tasks conflict.
 - **Value formula** (the product's definition of "good"):
 
@@ -353,7 +353,7 @@ Harm terms are *subtracted*, so a post you'd likely hide ranks lower. Rules for 
 Real-world: Facebook's 2018 "meaningful social interactions" change re-weighted the feed toward comments and reshares among friends; Twitter's open-sourced 2023 "heavy ranker" predicted about ten engagement probabilities and combined them with fixed weights — e.g. +0.5 for a like, −74 for negative feedback ("show less", mute, block) and −369 for a report.
 
 ### 6. Offline metrics
-- Per-head **AUC** and **log loss**; **calibration** per head (reliability curve, expected-vs-actual rate) because the formula adds them up.
+- Per-head **AUC** and **log loss** (the cross-entropy of the predicted probabilities; lower is better); **calibration** per head (reliability curve — predicted vs actual rate per score bucket — expected-vs-actual rate) because the formula adds them up.
 - Ranking-level: offline replay of the value formula — expected likes/comments/hides in the top-k under each weight setting (the toy below does this).
 - Slice by viewer segment, content type and new vs established authors.
 
@@ -374,7 +374,7 @@ Real-world: Facebook's 2018 "meaningful social interactions" change re-weighted 
 - **diversity** interleaving across friends, groups and suggested content;
 - durable **per-user suppression** after explicit "see less".
 
-The classifiers feeding this layer are a separate adversarial ML system (compare 18.2, 18.3).
+The classifiers feeding this layer are a separate **adversarial** ML system (one that attackers actively try to evade; compare 18.2, 18.3).
 
 ![Feed serving path](img/feed_serving.svg)
 *Figure — The feed serving path, from fan-in to the screen (course diagram)*
@@ -421,11 +421,11 @@ What makes this affordable: the two-pass funnel (the light ranker absorbs most v
 
 ### 11. Interview follow-ups
 - **"Defend ranking over chronological."** → Most users follow enough accounts that newest-first buries the few posts they'd value; test that ranking improves interaction *and* satisfaction. Concede the downsides (less transparent order, possible bubbles) and offer a newest-first tab plus a "why am I seeing this" link.
-- **"A post went up seconds ago — how can it be ranked?"** → The streaming path adds it to candidate pools at once; with no reaction counts, the model uses the author's history, a content embedding and audience priors; a modest freshness boost buys exploration data.
+- **"A post went up seconds ago — how can it be ranked?"** → The streaming path adds it to candidate pools at once; with no reaction counts, the model uses the author's history, a content embedding and audience **priors** (starting estimates borrowed from similar posts); a modest freshness boost buys exploration data.
 - **"Who sets the weights, and how?"** → Offline sweeps propose settings, A/B tests judge them against the primary metric and guardrails, product leadership signs off because weights are policy. No retraining needed while the heads still predict the right events.
 
 ### Toy — multi-task heads + value formula (`code/feed_multitask_toy.py`)
-Synthetic impressions have 6 features; some posts are "bait" that attract likes *and* hides. A small PyTorch network with a shared body and three heads (like, comment, hide) is trained with one binary cross-entropy loss per head, summed. Then 500 simulated users each get 200 candidates, and we compare what the top 10 contains under three rankings.
+Synthetic impressions have 6 features; some posts are "bait" that attract likes *and* hides. A small PyTorch network with a shared body and three heads (like, comment, hide) is trained with one **binary cross-entropy** loss (the standard yes/no classification loss) per head, summed. Then 500 simulated users each get 200 candidates, and we compare what the top 10 contains under three rankings.
 
 ```python
 class MultiTask(nn.Module):
@@ -513,7 +513,7 @@ It's the funnel again, reshaped by one new input: the **query**. Recommendations
 - **Input**: query text, user, context (locale, device), candidate product.
 - **Output**: a relevance/purchase score per (query, product) — e.g. P(purchase | query, product), or a graded relevance estimate.
 - **Category**: **learning-to-rank**. Three standard loss styles: **pointwise** (predict each item's label independently), **pairwise** (predict which of two items is better — e.g. RankNet), **listwise** (optimise a whole-list metric such as NDCG). **LambdaMART** — gradient-boosted trees trained on pairs whose weights come from how much swapping them would change NDCG — sits between the last two and is the classic industrial default.
-- **Supporting ML tasks** inside query understanding: spelling correction (sequence-to-sequence or noisy-channel), query classification, attribute extraction (named-entity-style tagging).
+- **Supporting ML tasks** inside query understanding: spelling correction (sequence-to-sequence models that rewrite one text into another, or noisy-channel models of how typos corrupt the intended word), query classification, attribute extraction (named-entity-style tagging — labelling spans of text as brand, colour, size…).
 
 ### 3. Data and labels
 1. **Catalog**: titles, descriptions, attributes (brand, colour, size), category tree, price, ratings, stock.
@@ -528,8 +528,8 @@ The ranker's defining ingredient is **query–item features** — how well *this
 
 | Group | Examples |
 |---|---|
-| Query–item match | BM25 text score per field (title, brand, description), embedding similarity, attribute agreement (query says "red", item is red), category match |
-| Item quality | Rating, review count, sales velocity, return rate, in stock, shipping speed |
+| Query–item match | BM25 text score (a keyword-match score, explained in section 5) per field (title, brand, description), embedding similarity, attribute agreement (query says "red", item is red), category match |
+| Item quality | Rating, review count, sales velocity (how fast it sells), return rate, in stock, shipping speed |
 | Query | Length, class (product / brand / help), head vs tail, predicted category |
 | Personalisation | User's brand and price-range history, past purchases (capped influence) |
 | Context | Locale, device, time, season |
@@ -544,10 +544,10 @@ The ranker's defining ingredient is **query–item features** — how well *this
 *Figure — The three jobs of the query-understanding stage (course diagram)*
 
 **Retrieval — two engines in parallel**:
-- **Lexical** via an **inverted index** (like a book's index for the whole catalog: for each word, the list of products containing it), scored with **BM25** — a formula that rewards query words appearing in the document, more for rare words (IDF), with diminishing returns for repeats and a correction for document length. It shines on literal hits — part numbers, brand names, tokens such as "X200-B" — and is fast and explainable. Its blind spot is **vocabulary mismatch**: a shopper typing "something warm for the snow" misses a parka described only as a "thermal winter jacket", because no word matches.
+- **Lexical** via an **inverted index** (like a book's index for the whole catalog: for each word, the list of products containing it), scored with **BM25** — a formula that rewards query words appearing in the document, more for rare words (IDF, inverse document frequency), with diminishing returns for repeats and a correction for document length. It shines on literal hits — part numbers, brand names, tokens such as "X200-B" — and is fast and explainable. Its blind spot is **vocabulary mismatch**: a shopper typing "something warm for the snow" misses a parka described only as a "thermal winter jacket", because no word matches.
 - **Semantic** via embeddings: a two-tower model trained on (query, clicked product) pairs encodes the query; an ANN index returns the nearest products. It captures meaning across wordings but is unreliable on exact codes and can confidently return a plausible wrong item.
 
-**Ranking — two levels** at this volume: a light **L1** ranker (e.g. a small GBDT on cheap features) trims the union; a heavy **L2** ranker (LambdaMART-style GBDT or a deep model with query–item features) orders the final list. Optionally, a **cross-encoder** (a transformer that reads query and product text *together* — slower, sharper) re-ranks only the top ~20 if the latency budget allows.
+**Ranking — two levels** at this volume: a light **L1** ranker (e.g. a small GBDT on cheap features) trims the union; a heavy **L2** ranker (LambdaMART-style GBDT or a deep model with query–item features) orders the final list. Optionally, a **cross-encoder** (a transformer — the attention-based network behind modern language models — that reads query and product text *together* — slower, sharper) re-ranks only the top ~20 if the latency budget allows.
 
 **Baseline**: BM25 + popularity + in-stock filter. Everything above is the upgrade path.
 
@@ -559,7 +559,7 @@ The ranker's defining ingredient is **query–item features** — how well *this
 
 Worked example (k = 3): results with relevance [3, 0, 2]: DCG = 7/1 + 0/1.585 + 3/2 = 8.5. Ideal order [3, 2, 0]: IDCG = 7 + 3/1.585 + 0 = 8.89. NDCG = 8.5 / 8.89 ≈ 0.956. Swapping the 0 and the 2 would reach 1.0.
 
-Also: **MRR** (mean reciprocal rank of the first relevant result) for navigational queries, and recall of the retrieval stage. Compute on human-graded sets; use behaviour-based labels only after bias correction.
+Also: **MRR** (mean reciprocal rank of the first relevant result) for navigational queries (looking for one specific product or page), and recall of the retrieval stage. Compute on human-graded sets; use behaviour-based labels only after bias correction.
 
 ### 7. Online metrics and A/B testing
 - **Primary**: session success rate (a search session that ends in add-to-cart or purchase), revenue per search.
@@ -569,7 +569,7 @@ Also: **MRR** (mean reciprocal rank of the first relevant result) for navigation
 - **Interleaving** (mix rankers A and B in one list, see which side gets clicks; 16.9) is a more sensitive way to compare rankers.
 
 ### 8. Serving architecture
-Run both retrieval engines **in parallel** and take the **union** (a few hundred candidates). This isn't redundancy: each catches what the other misses. The same **hybrid retrieval** pattern (BM25 + vectors) reappears in RAG systems in the AI book. Each index needs a defined **update path** (both inverted and ANN indexes can be updated incrementally, depending on the implementation) — measure how long a new or changed product takes to become searchable.
+Run both retrieval engines **in parallel** and take the **union** (a few hundred candidates). This isn't redundancy: each catches what the other misses. The same **hybrid retrieval** pattern (BM25 + vectors) reappears in RAG (retrieval-augmented generation) systems in the AI book. Each index needs a defined **update path** (both inverted and ANN indexes can be updated incrementally, depending on the implementation) — measure how long a new or changed product takes to become searchable.
 
 The **business layer** matters more in search than anywhere else: anything out of stock or not shippable to the user is removed outright; boosts for margin or strategy are applied afterwards; **paid placements** appear only in marked slots and only if they clear a minimum **relevance floor**. Money and relevance genuinely pull in different directions — present that as a decision product leadership owns, protected by guardrail metrics.
 
@@ -594,7 +594,7 @@ flowchart LR
     SERP --> LOG["Log page, positions, clicks, purchases"]
 ```
 
-**Caching done right**: cache the **ranked list of IDs** for head queries — with locale, permissions and personalisation in the cache key — while the fast-changing fields — **price, stock, delivery eligibility** — are looked up live as the page is assembled, then checked once more at checkout. Inventory events invalidate the filter layer. A cache holding yesterday's availability sells products you can't ship: a correctness bug even though the service "works".
+**Caching done right**: cache the **ranked list of IDs** for head queries — with locale, permissions and personalisation in the **cache key** (the values that identify a cached entry) — while the fast-changing fields — **price, stock, delivery eligibility** — are looked up live as the page is assembled, then checked once more at checkout. Inventory events **invalidate** (throw away stale cached copies of) the filter layer. A cache holding yesterday's availability sells products you can't ship: a correctness bug even though the service "works".
 
 ### 9. Scale numbers
 | Quantity | Arithmetic | Result |
@@ -602,7 +602,7 @@ flowchart LR
 | Peak QPS | given | 10,000 /s |
 | Cache misses (assume 40% miss — *measure it*) | 10,000 × 0.4 | 4,000 /s pay full price |
 | L2 scores | 4,000 × 200 candidates after L1 | 800 K scores/s |
-| Per-item LLM ranking | 4,000 × 200 LLM calls | 800 K LLM calls/s — not viable; benchmark before any LLM on the request path |
+| Per-item LLM (large language model) ranking | 4,000 × 200 LLM calls | 800 K LLM calls/s — not viable; benchmark before any LLM on the request path |
 
 The head is cheap (cached); the long tail pays for query understanding, two retrievals and two rankers. LLMs still help **offline**: generating training labels, enriching product text, rewriting queries.
 
@@ -666,7 +666,7 @@ saved img/search_ctr_by_position.png
 What it shows:
 - CTR falls 16× from position 1 to 10 while true relevance barely moves (1.11 → 0.79) — clicks mostly measure **where** an item was shown.
 - The **naive** model gives the irrelevant promoted feature x2 a large weight (0.82): it learned to copy the old ranker. **IPW** shrinks that to 0.22 and reaches NDCG 0.948, close to the **oracle** (0.956) trained on true labels we'd never have in real life.
-- IPW falls short of the oracle partly because weights are clipped at 10× — a little bias traded for much lower variance — and its guarantee holds only if the propensities are right.
+- IPW falls short of the oracle partly because weights are clipped at 10× — a little bias traded for much lower **variance** (noise from run to run) — and its guarantee holds only if the propensities are right.
 - Why it works: with click c and propensity p, the weight c/p has expected value P(attracted), so on average the loss equals the loss on true attraction labels. The negative weight 1 − c/p is below zero for clicks below slot 1 — fine in a custom PyTorch loss, rejected by libraries that forbid negative weights.
 
 ### Common mistakes
@@ -750,10 +750,10 @@ Business goal: a **satisfied** watch — a click followed by 5 seconds of viewin
 **Upgrade 1 — index what is said.** Run ASR on every upload and index the transcript (with timestamps) as another text field. Modern ASR such as Whisper (Radford et al., 2022, trained on 680 K hours of weakly labelled audio) makes speech searchable across many languages. A large gain for tutorials and talks; nothing for music or silent footage.
 
 **Upgrade 2 — index what is shown.** A **shared text–image embedding space** in the style of CLIP (Radford et al., 2021; contrastive training on image–caption pairs so that a caption and its picture land close together — the same idea as [18.6](../18-ml-case-studies-2/README.md)). Encode sampled frames with the image tower and the query with the text tower; similarity is a dot product. From frames to a video:
-- **Mean-pool** all frame vectors into one video vector — one entry per video in the ANN index, cheap, but a short scene gets diluted.
+- **Mean-pool** (average) all frame vectors into one video vector — one entry per video in the ANN index, cheap, but a short scene gets diluted.
 - **Segment vectors** — one vector per shot or per few seconds — find moments inside long videos, at many times the index size.
 - **Temporal models** (a small transformer over frame vectors) learn which frames matter. CLIP4Clip (Luo et al., 2022) compared these choices on top of CLIP: parameter-free mean-pooling is strong on small datasets; learned temporal models need more training data.
-Fine-tune the towers contrastively (InfoNCE, 18.6) on (query, satisfied-watch video) pairs once search logs exist.
+Fine-tune (continue training) the towers contrastively (InfoNCE — the standard contrastive loss: pick the true pair out of many — 18.6) on (query, satisfied-watch video) pairs once search logs exist.
 
 **Fusion.** Each channel (lexical text, text embedding, visual embedding) returns its own top few hundred. Merge them:
 - **Reciprocal rank fusion** (RRF; Cormack, Clarke & Büttcher, 2009): score = Σ over channels of 1 / (k + rank), with k ≈ 60. It needs no training and ignores the fact that the channels' raw scores are on different scales.
@@ -807,14 +807,14 @@ Query understanding = spelling, language, query class, freshness intent (17.3). 
 
 **Staged freshness**: title and description are indexed within minutes; ASR and visual vectors follow in minutes to hours. Until then the ranker sees "transcript: not yet available", not "no match". For fresh queries a small **real-time index** of the last day's uploads is searched alongside the main one.
 
-**Caching**: head queries' ranked ID lists are cached (language and region in the key; short TTLs for fresh queries); policy status (taken down, age-restricted, region-blocked) is checked at render time.
+**Caching**: head queries' ranked ID lists are cached (language and region in the key; short TTLs — time-to-live, how long a cache entry stays valid — for fresh queries); policy status (taken down, age-restricted, region-blocked) is checked at render time.
 
 ### 9. Scale numbers
 | Quantity | Arithmetic | Result |
 |---|---|---|
-| Video-level vectors | 1 B × 512 dims × 2 bytes (float16) | 1 TB raw → shard it; with PQ (18.6) at 64 B/vector, 64 GB |
+| Video-level vectors | 1 B × 512 dims × 2 bytes (float16, 16-bit numbers) | 1 TB raw → shard it (split across machines; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)); with PQ (product quantisation, a vector-compression method, 18.6) at 64 B/vector, 64 GB |
 | Segment vectors | long videos only, say 100 M × 30 segments × 64 B (PQ) | 192 GB — 3× the video-level index, so index segments selectively |
-| Frame encoding | 1 M uploads/day × 600 s ÷ 2 s per sampled frame | 300 M frames/day ≈ 3,500/s — a steady GPU fleet |
+| Frame encoding | 1 M uploads/day × 600 s ÷ 2 s per sampled frame | 300 M frames/day ≈ 3,500/s — a steady GPU fleet (many graphics chips running constantly) |
 | ASR | 1 M × 10 min of audio | 10 M audio-minutes/day to transcribe |
 | Query side | 20 K QPS × (1 text-tower pass + 3 index lookups) | cheap compared with indexing; L2 on 20 K × 300 = 6 M scores/s |
 
@@ -823,7 +823,7 @@ The expensive half of this design is **indexing**, not querying — the reverse 
 ### 10. Monitoring and failure modes
 - **Indexing lag**: time from upload to (a) title-searchable, (b) transcript-searchable, (c) visually searchable. Alert on each.
 - **Coverage**: share of videos with a transcript, with visual vectors, per language. A broken ASR language model silently makes a whole language unsearchable by speech.
-- **Encoder upgrades**: a new visual encoder needs a full re-embed and an atomic swap of model + index (the 18.6 rule); budget weeks of GPU time for 1 B videos.
+- **Encoder upgrades**: a new visual encoder needs a full re-embed and an **atomic swap** (switching both at the same instant) of model + index (the 18.6 rule); budget weeks of GPU time for 1 B videos.
 - **Keyword stuffing**: creators pack popular words into titles and tags; content channels plus satisfied-watch labels are the defence.
 
 | Failure | Fallback / effect |

@@ -1,6 +1,6 @@
 # Chapter 6 — Evaluation and Tuning
 
-Training a model is the easy part. The hard questions come after: *Is it any good? Good at what? Compared to what? Will it still be good on next month's data? Could different settings make it better?* This chapter gives you the tools to answer them honestly — the right metric for the job, reliable ways to estimate performance, a clear picture of over- and underfitting, and systematic hyperparameter tuning.
+Training a model is the easy part. The hard questions come after: *Is it any good? Good at what? Compared to what? Will it still be good on next month's data? Could different settings make it better?* This chapter gives you the tools to answer them honestly — the right metric for the job, reliable ways to estimate performance, a clear picture of over- and underfitting, and systematic hyperparameter tuning (searching for the best values of the settings you choose before training).
 
 **What you'll learn**
 
@@ -20,10 +20,10 @@ All code is in `code/` and runs with the shared environment (scikit-learn 1.9). 
 ## 6.1 Baselines, and offline vs business metrics
 
 ### What it is
-An **evaluation metric** is a number that summarises how well predictions match reality. A **baseline** is the score of a trivially simple predictor. An **offline metric** is computed on held-out historical data; an **online** or **business metric** is what the product actually cares about (revenue, retention, fraud losses, delivery promises kept), measured on live traffic.
+An **evaluation metric** is a number that summarises how well predictions match reality. A **baseline** is the score of a trivially simple predictor. An **offline metric** is computed on held-out (set aside, never used for training) historical data; an **online** or **business metric** is what the product actually cares about (revenue, retention, i.e. how many customers stay, fraud losses, delivery promises kept), measured on live traffic (real requests from real users).
 
 ### Why it matters
-A metric on its own is meaningless. "MAE of 6 minutes" or "PR-AUC 0.41" says nothing until you know what a naive approach scores and what the current production system scores. If predicting "same as last week" already gives an MAE of 8 minutes, a model at 6 is a real gain; if the naive approach gives 6.2, the model is an expensive way to save 12 seconds.
+A metric on its own is meaningless. "MAE of 6 minutes" or "PR-AUC 0.41" says nothing until you know what a naive approach scores and what the current production system (the version serving real users today) scores. If predicting "same as last week" already gives an MAE of 8 minutes, a model at 6 is a real gain; if the naive approach gives 6.2, the model is an expensive way to save 12 seconds.
 
 ### How it works — baselines to always compute
 
@@ -38,11 +38,11 @@ A metric on its own is meaningless. "MAE of 6 minutes" or "PR-AUC 0.41" says not
 ### Offline metric vs business metric
 Offline metrics are **proxies**. They're cheap, fast and repeatable, so you use them to compare candidates, debug, and decide what deserves a live test. But they can disagree with the business outcome:
 - The label is a proxy (clicks ≠ satisfaction; a chargeback ≠ all fraud).
-- The test set no longer resembles live traffic (drift, new users, new items).
-- Serving differs from training (feature delays, timeouts, fallbacks).
-- The metric ignores costs the business cares about (latency, review-team workload, fairness across groups).
+- The test set no longer resembles live traffic (drift, i.e. live data gradually changing, new users, new items).
+- Serving differs from training (feature delays, timeouts where a lookup gives up after a time limit, fallbacks where a default value is used instead).
+- The metric ignores costs the business cares about (latency, the time a prediction takes to return, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md); review-team workload; fairness across groups).
 
-So the pattern in practice is two gates (the production view of metric choice is in [Chapter 16, section 16.7](../16-ml-in-production/README.md)): **offline evaluation** to shortlist, then an **online experiment** (A/B test, covered in [Chapter 16](../16-ml-in-production/README.md)) to confirm business impact. Choose the offline metric so that improving it is *likely* to improve the business metric, and report it together with the dataset, base rate and threshold used.
+So the pattern in practice is two gates (the production view of metric choice is in [Chapter 16, section 16.7](../16-ml-in-production/README.md)): **offline evaluation** to shortlist, then an **online experiment** (A/B test: randomly sending some users to the new model and some to the old one and comparing the business metric; covered in [Chapter 16](../16-ml-in-production/README.md)) to confirm business impact. Choose the offline metric so that improving it is *likely* to improve the business metric, and report it together with the dataset, base rate and threshold used.
 
 ![The problem type chooses the metric family; the base rate helps choose within it](img/course_metric_map.svg)
 *Figure — mapping problem types to metric families (course diagram)*
@@ -50,7 +50,7 @@ So the pattern in practice is two gates (the production view of metric choice is
 ### In the interview
 **30 seconds:** *"I'd pick the offline metric from the task and the cost of each kind of error — precision/recall and PR-AUC for rare-event classification, recall@k and NDCG for ranking, MAE or RMSE plus tail and per-segment errors for regression — check calibration separately if scores are used as probabilities, and always compare against a naive baseline and the production model before going to an A/B test."*
 
-- *"Offline metric improved, A/B test flat — why?"* — The offline metric is a proxy that drifted from the goal: proxy labels, a stale test set, or training/serving differences. Also check the experiment's statistical power and logging before blaming the metric.
+- *"Offline metric improved, A/B test flat — why?"* — The offline metric is a proxy that drifted from the goal: proxy labels, a stale test set, or training/serving differences. Also check the experiment's statistical power (its chance of detecting a real effect of the expected size) and logging before blaming the metric.
 
 ### Self-check
 1. Your churn model has PR-AUC 0.41. Is that good? → Unknown until you compare: a no-skill model scores the churn rate (e.g. 0.12), and the production model scores something too.
@@ -121,7 +121,7 @@ cohort B: n= 59  MAE 39.9
 1. **Tail percentiles.** The median error here is 41 but the p90 is 91: one prediction in ten is off by more than 90 points. Products often promise on the tail (e.g. "delivered within the promised window" for 90%+ of orders).
 2. **Cohorts.** Report error per segment the business cares about (city, device, customer type, new vs mature market). Here cohort A's MAE is 20% worse than cohort B's; a model can look fine on average while failing a new region entirely.
 
-The mean baseline has R² ≈ 0 by construction (slightly negative on a test set, because the training mean isn't exactly the test mean). The Ridge model explains 40% of the variance and cuts MAE by 26% — a real but modest improvement, which is the honest way to report it.
+The mean baseline has R² ≈ 0 by construction (slightly negative on a test set, because the training mean isn't exactly the test mean). The Ridge model (linear regression with a penalty on large weights, Chapter 5) explains 40% of the variance (the spread of the target) and cuts MAE by 26% — a real but modest improvement, which is the honest way to report it.
 
 ### Common mistakes
 - Reporting R² alone — it depends on the target's variance in the test set, so it isn't comparable across datasets.
@@ -131,7 +131,7 @@ The mean baseline has R² ≈ 0 by construction (slightly negative on a test set
 ### In the interview
 **30 seconds:** *"MAE is the typical error in the target's units; RMSE squares errors first, so big misses count more — use it when large misses are disproportionately costly. R² compares against predicting the mean. I'd add a tail percentile like p90 and per-segment errors, because averages hide the failures that matter."*
 
-- *"Why might RMSE be much larger than MAE?"* — A few large errors: RMSE is inflated by the tail, MAE isn't. The gap itself is a signal of heavy-tailed errors.
+- *"Why might RMSE be much larger than MAE?"* — A few large errors: RMSE is inflated by the tail, MAE isn't. The gap itself is a signal of heavy-tailed errors (mostly small errors plus a few very large ones).
 
 ### Self-check
 1. MAE of errors (1, −1, 4)? → 2. RMSE? → √(18/3) = 2.45.
@@ -204,7 +204,7 @@ always-'legit' baseline accuracy = 0.900
 ```
 
 ### Thresholds: the model gives scores, you choose the operating point
-Most classifiers output a **score** or probability; a **threshold** turns it into yes/no. Raising the threshold flags fewer items: recall goes down, and precision *usually* goes up (not necessarily at every step on a finite dataset). One model therefore supports many **operating points**, and you should quote precision and recall *at a stated threshold* ("90% precision at 70% recall"), or summarise across all thresholds with an area under a curve:
+Most classifiers output a **score** or probability; a **threshold** turns it into yes/no. Raising the threshold flags fewer items: recall goes down, and precision *usually* goes up (not necessarily at every step on a finite dataset). One model therefore supports many **operating points** (threshold choices, each with its own precision and recall), and you should quote precision and recall *at a stated threshold* ("90% precision at 70% recall"), or summarise across all thresholds with an area under a curve:
 
 - **ROC curve** — recall (TPR) against FPR as the threshold sweeps. **ROC-AUC** = the probability that a randomly chosen positive gets a higher score than a randomly chosen negative (ties count half). 0.5 = random, 1.0 = perfect ranking.
 - **Precision–recall (PR) curve** — precision against recall. **PR-AUC**, usually computed as **average precision (AP)**, summarises it. A no-skill model's PR-AUC equals the positive rate.
@@ -271,7 +271,7 @@ The default 0.5 would cost twice as much as the best threshold. Mature fraud sys
 | Need one number balancing both, imbalanced data | F1 or Fβ | Harmonic mean punishes a weak side |
 | Compare rankers across thresholds, moderate imbalance | ROC-AUC | Threshold-free, base-rate-insensitive ranking quality |
 | Rare positives (fraud, ads, disease) | PR-AUC / average precision, plus precision & recall at the chosen threshold | Shows the false-alarm burden |
-| Probabilities feed decisions (bids, expected cost) | Log-loss, Brier score, calibration plot | Rewards honest probabilities |
+| Probabilities feed decisions (bids, expected cost) | Log-loss (punishes confident wrong probabilities), Brier score (mean squared probability error), calibration plot | Rewards honest probabilities |
 | Multiclass | Per-class P/R/F1 with **macro** (unweighted mean over classes) or **weighted** averages; `classification_report` | Macro exposes weak minority classes |
 
 ### Common mistakes
@@ -313,12 +313,12 @@ Search, recommendation and feeds return an **ordered list**. Ranking metrics rew
 | **Precision@k** | Relevant items in the top k ÷ k | The user sees exactly k slots |
 | **Recall@k** | Relevant items in the top k ÷ all relevant items | Candidate generation: did the good items survive? |
 | **AP** (average precision) | Mean of precision@i at each rank i holding a relevant item (divided by all relevant items) | Binary relevance, whole list |
-| **MAP** | Mean of AP over queries | Standard IR benchmark metric |
+| **MAP** | Mean of AP over queries | Standard IR (information retrieval, i.e. search) benchmark metric |
 | **MRR** (mean reciprocal rank) | Mean of 1/rank of the first relevant item (0 if none) | Finding one good answer fast (Q&A, navigation search) |
 | **NDCG@k** | DCG@k ÷ ideal DCG@k, with DCG = Σ relᵢ / log₂(i + 1) | Graded relevance (perfect/good/fair/bad), position matters |
 
 ### How it works — worked example
-Query A returns 6 results with graded relevance [3, 0, 2, 1, 0, 0] (3 = perfect … 0 = bad). The collection holds 4 relevant documents; one (grade 2) wasn't returned.
+Query A returns 6 results with graded relevance [3, 0, 2, 1, 0, 0] (3 = perfect … 0 = bad). The collection (all documents the system could have returned) holds 4 relevant documents; one (grade 2) wasn't returned.
 - Precision@3 = 2/3 = 0.667; recall@3 = 2/4 = 0.5.
 - AP: relevant items sit at ranks 1, 3, 4 with precision 1/1, 2/3, 3/4 → (1 + 0.667 + 0.75)/4 = **0.604** (the missing one contributes 0).
 - Reciprocal rank = 1/1 = 1.
@@ -368,10 +368,10 @@ Full treatment with case studies: [Chapter 13 (recommenders)](../13-recommenders
 
 ### Common mistakes
 - Comparing NDCG numbers computed with different gains (rel vs 2^rel − 1) or different "ideal" lists.
-- Evaluating a ranking only on items the old system showed (exposure bias — see [Chapter 13, sections 13.11–13.12](../13-recommenders-and-embeddings/README.md)).
+- Evaluating a ranking only on items the old system showed (exposure bias: only items that were shown could collect clicks — see [Chapter 13, sections 13.11–13.12](../13-recommenders-and-embeddings/README.md)).
 
 ### In the interview
-**30 seconds:** *"For a ranked list I'd use recall@k for the retrieval stage — did good items survive the cut — and NDCG@k or MRR for the ranking stage, because position matters. NDCG handles graded relevance with a log discount; MRR fits tasks with one right answer. Labels come from judged sets or clicks, and clicks carry position bias."*
+**30 seconds:** *"For a ranked list I'd use recall@k for the retrieval stage — did good items survive the cut — and NDCG@k or MRR for the ranking stage, because position matters. NDCG handles graded relevance with a log discount; MRR fits tasks with one right answer. Labels come from judged sets or clicks, and clicks carry position bias (items placed higher get more clicks just because of where they sit)."*
 
 - *"MAP or NDCG?"* — MAP for binary relevant/not-relevant labels; NDCG when relevance is graded (perfect/good/fair).
 
@@ -391,13 +391,13 @@ Precision@k/recall@k for set quality, MAP for binary relevance over the list, MR
 A model is **calibrated** if its probabilities match reality: among all cases it scores 0.8, about 80% are positive. **Ranking well and being calibrated are different properties.** ROC-AUC only depends on the order of scores — you could square every score and AUC wouldn't change — so a model with ROC-AUC 0.95 can still say "0.9" for events that happen 50% of the time.
 
 ### Why it matters
-You need calibration whenever downstream logic does arithmetic with the score instead of merely sorting by it: ad auctions (bid = value × predicted click probability), expected-cost thresholds (section 6.3), risk scores shown to people, and combining models. After class re-weighting or negative downsampling, scores are systematically inflated and must be corrected (section 4.9 gives the closed-form fix for downsampling; [Chapter 16, section 16.3](../16-ml-in-production/README.md) compares it with Platt and isotonic on a production-sized example).
+You need calibration whenever downstream logic (later code or decisions that consume the score) does arithmetic with the score instead of merely sorting by it: ad auctions (bid = value × predicted click probability), expected-cost thresholds (section 6.3), risk scores shown to people, and combining models. After class re-weighting (making rare-class errors count more in the loss) or negative downsampling (training on only a fraction of the negative examples), scores are systematically inflated and must be corrected (section 4.9 gives the closed-form fix for downsampling; [Chapter 16, section 16.3](../16-ml-in-production/README.md) compares it with Platt and isotonic on a production-sized example).
 
 ### How it works
 1. **Measure** with a **reliability diagram**: bin predictions (e.g. 10 bins), plot the mean predicted probability against the observed fraction of positives per bin. Perfect calibration is the diagonal. Summaries: **Brier score** = mean((p − y)²) (lower is better) and **log-loss**; both are *proper scoring rules* — they are minimised by the true probabilities.
 2. **Fix** by learning a mapping from raw score to probability on held-out data:
    - **Platt scaling** (`method="sigmoid"`) — fit a logistic regression on the score: p = σ(a·s + b). Two parameters; works with little data; assumes an S-shaped distortion.
-   - **Isotonic regression** (`method="isotonic"`) — fit any non-decreasing step function. More flexible; needs more data (roughly ≥ 1,000 calibration examples) or it overfits.
+   - **Isotonic regression** (`method="isotonic"`) — fit any non-decreasing step function (a staircase-shaped curve that never goes down). More flexible; needs more data (roughly ≥ 1,000 calibration examples) or it overfits.
    - `CalibratedClassifierCV` does this with cross-validation so the calibrator never sees the base model's own training rows.
 3. **Re-check** when the serving population changes — calibration drifts with the base rate.
 
@@ -426,7 +426,7 @@ Brier by hand: mean((p - y)^2) = 0.175  sklearn 0.175
 
 ![Reliability diagram: naive Bayes is far from the diagonal; isotonic calibration pulls it back](img/calibration_reliability.png)
 
-Naive Bayes ranks nearly as well as logistic regression (ROC-AUC 0.975 vs 0.980) but its probabilities are badly off: its "naive" independence assumption double-counts the many redundant features in this data, pushing scores toward 0 and 1 (log-loss 0.335 vs 0.176). Isotonic calibration leaves ROC-AUC essentially unchanged (it is a non-decreasing map) and cuts log-loss to 0.201. Logistic regression, trained on log-loss, is close to calibrated out of the box. Random forests often have the opposite distortion (averaging many trees pulls probabilities away from 0 and 1); boosted trees and neural nets can drift either way.
+Naive Bayes (a simple probabilistic classifier that assumes features are independent once you know the class; Chapter 8) ranks nearly as well as logistic regression (ROC-AUC 0.975 vs 0.980) but its probabilities are badly off: its "naive" independence assumption double-counts the many redundant features in this data, pushing scores toward 0 and 1 (log-loss 0.335 vs 0.176). Isotonic calibration leaves ROC-AUC essentially unchanged (it is a non-decreasing map) and cuts log-loss to 0.201. Logistic regression, trained on log-loss, is close to calibrated out of the box. Random forests (averages of many decision trees, Chapter 7) often have the opposite distortion (averaging many trees pulls probabilities away from 0 and 1); boosted trees (trees added one after another, each correcting the last) and neural nets can drift either way.
 
 ### Common mistakes
 - Calibrating on the training data (the calibrator learns the model's overconfidence on data it memorised).
@@ -475,12 +475,12 @@ flowchart LR
 
 | Splitter | How folds are formed | Use for |
 |---|---|---|
-| `KFold(k, shuffle=True)` | Random equal folds | Regression, i.i.d. data |
+| `KFold(k, shuffle=True)` | Random equal folds | Regression, i.i.d. data (independent rows all drawn from the same distribution) |
 | `StratifiedKFold` | Each fold keeps the class proportions | Classification — the default in `cross_val_score` for classifiers |
 | `GroupKFold` / `StratifiedGroupKFold` | All rows of a group (user, patient) in one fold | Correlated rows; generalising to new entities |
-| `TimeSeriesSplit(gap=…)` | Train on the past, validate on the next block; optional gap | Anything time-ordered; the gap mimics label delay |
+| `TimeSeriesSplit(gap=…)` | Train on the past, validate on the next block; optional gap | Anything time-ordered; the gap mimics label delay (the wait before the true outcome is known) |
 | `RepeatedStratifiedKFold` | Repeat k-fold with different shuffles | Small data, more stable estimates |
-| `LeaveOneOut` | k = n | Tiny datasets only (expensive, high variance) |
+| `LeaveOneOut` | k = n | Tiny datasets only (expensive, high variance: the estimate jumps around) |
 
 Typical k is 5 or 10. Larger k → more training data per fold (less pessimistic) but more compute and more correlated estimates.
 
@@ -512,13 +512,13 @@ non-nested best CV score 0.979 (optimistic) | nested CV 0.975
 ```
 
 Notes on the output:
-- Report CV as **mean ± standard deviation** (0.981 ± 0.007). Two models whose means differ by less than about one standard deviation are not clearly different.
+- Report CV as **mean ± standard deviation** (0.981 ± 0.007; the standard deviation shows how spread out the fold scores are). Two models whose means differ by less than about one standard deviation are not clearly different.
 - Unshuffled `KFold` on data sorted by label produces folds that are 0% or 100% positive — nonsense evaluation. Stratification fixes the class mix (~63% in every fold).
 - `cross_validate` with `return_train_score=True` shows the train–validation gap (here small: little overfitting).
 - **Nested CV.** If you tune hyperparameters with CV and report the *best* CV score, that score is optimistically biased — you picked the maximum of several noisy estimates. Nested CV wraps the whole tuning procedure in an outer CV loop to estimate how well "tune then train" will do on new data (0.975 vs 0.979 here; the gap grows with the size of the search). In practice a held-out test set used once serves the same purpose.
 
 ### Common mistakes
-- Preprocessing (scaling, imputation, feature selection, target encoding) outside the CV loop → leakage (Chapter 4). Put it in a `Pipeline`.
+- Preprocessing (scaling, imputation, feature selection, target encoding) outside the CV loop → leakage (validation-fold information sneaking into training; Chapter 4). Put it in a `Pipeline`.
 - Shuffled k-fold on time series.
 - Using CV for model *selection* and then reporting the same CV score as the final performance.
 
@@ -581,7 +581,7 @@ Output:
 
 ![As k shrinks the model gets more flexible: bias falls, variance rises, total error is U-shaped](img/bias_variance.png)
 
-With k = 40 (averaging 40 of 50 points) the prediction is almost flat: huge bias. With k = 1 it copies the nearest noisy point: zero bias, highest variance. The total is lowest around k = 6–10. Every model family has a "complexity knob" like this: tree depth, polynomial degree, regularization strength (inverse), number of boosting rounds, network size.
+With k = 40 (averaging 40 of 50 points) the prediction is almost flat: huge bias. With k = 1 it copies the nearest noisy point: zero bias, highest variance. The total is lowest around k = 6–10. Every model family has a "complexity knob" like this: tree depth, polynomial degree, regularization strength (inverse), number of boosting rounds (trees added one after another in gradient boosting), network size.
 
 ### Over- and underfitting: symptoms and remedies
 
@@ -591,6 +591,8 @@ With k = 40 (averaging 40 of 50 points) the prediction is almost flat: huge bias
 | More data helps? | No — the model can't use it | Yes |
 | Remedies | More flexible model (deeper trees, more features, polynomial/interaction terms, a neural net); **less** regularization; train longer; better features | More data; **more** regularization (L1/L2, dropout, weight decay); simpler model (shallower trees, fewer features); early stopping; bagging/ensembles; data augmentation; fix leakage-free feature selection |
 
+Terms in the table: *regularization* is any penalty or constraint that discourages an overly complex fit; *dropout* randomly switches off neural-network units during training; *weight decay* is an L2 penalty on weights; *early stopping* halts training when validation error stops improving (§6.10); *bagging* trains many models on random resamples of the data and averages them, and an *ensemble* is any combination of several models; *data augmentation* creates extra training examples by modifying existing ones (e.g. flipping images). A model's *capacity* is how complex a pattern it is able to represent.
+
 ### Common mistakes
 - Adding data to a high-bias model and expecting improvement.
 - Judging overfitting from the training score alone — always compare with validation.
@@ -599,7 +601,7 @@ With k = 40 (averaging 40 of 50 points) the prediction is almost flat: huge bias
 ### In the interview
 **30 seconds:** *"Test error = bias² + variance + noise. Simple models have high bias and underfit — both scores bad; flexible models have high variance and overfit — training much better than validation. I diagnose with learning curves: if the curves have converged at a low score, add capacity or features; if there's a big gap, add data or regularization."*
 
-- *"Does bagging reduce bias or variance?"* — Mainly variance (averaging unstable models). Boosting mainly reduces bias.
+- *"Does bagging reduce bias or variance?"* — Mainly variance (averaging unstable models). Boosting (adding models one after another, each fixing the previous ones' errors) mainly reduces bias.
 - *"What happens to bias and variance as you increase regularization?"* — Bias up, variance down.
 
 ### Self-check
@@ -644,11 +646,11 @@ validation curve: best gamma = 3e-02, validation acc 0.981
 
 How to read learning curves:
 - **Naive Bayes (left):** training and validation scores meet at about 0.85 and flatten. The model is too simple for the data (high bias); more data won't help — change the model or features.
-- **Unpruned tree (right):** training accuracy is always 1.0 (memorisation) and validation climbs slowly — a big gap = high variance. More data would help; so would pruning (`max_depth`, `min_samples_leaf`) or a random forest.
+- **Unpruned tree (right):** an unpruned tree is one allowed to keep splitting until every leaf is pure. Training accuracy is always 1.0 (memorisation) and validation climbs slowly — a big gap = high variance. More data would help; so would pruning (`max_depth`, `min_samples_leaf`) or a random forest.
 
 ![Validation curve for an RBF SVM: gamma too small underfits, too large overfits](img/validation_curve.png)
 
-How to read the validation curve: with tiny **gamma** (the RBF kernel's reach — larger gamma = each training point influences only a tiny neighbourhood = wigglier boundary) both scores are low (underfit: 0.15, close to the 0.10 chance level for 10 digits). As gamma grows both rise; past about 0.03 the training score stays at 1.0 while validation falls (overfit). Pick the peak of the validation curve.
+How to read the validation curve: with tiny **gamma** (the RBF kernel's reach; the RBF kernel is the SVM's similarity measure, which falls off with distance between points — larger gamma = each training point influences only a tiny neighbourhood = wigglier boundary) both scores are low (underfit: 0.15, close to the 0.10 chance level for 10 digits). As gamma grows both rise; past about 0.03 the training score stays at 1.0 while validation falls (overfit). Pick the peak of the validation curve.
 
 ### Common mistakes
 - Plotting only the training curve.
@@ -676,16 +678,16 @@ Learning curve (score vs data size) tells you whether more data will help; valid
 ### How it works — the main strategies
 
 **1. Grid search** (`GridSearchCV`) — list values for each hyperparameter; try **every combination** with CV; keep the best.
-- *Pros:* systematic; guaranteed to find the best point *on the grid*; easy to parallelise.
+- *Pros:* systematic; guaranteed to find the best point *on the grid*; easy to parallelise (run many fits at the same time on different processor cores).
 - *Cons:* cost multiplies: 3 values × 3 values × 5 folds = 45 fits; 5 hyperparameters × 5 values = 3,125 combinations. And the grid may miss the good region entirely.
 
-**2. Random search** (`RandomizedSearchCV`) — sample a fixed number of combinations from **distributions** (e.g. `randint`, `loguniform`).
+**2. Random search** (`RandomizedSearchCV`) — sample a fixed number of combinations from **distributions** (e.g. `randint`, whole numbers drawn evenly from a range, and `loguniform`, values spread evenly on a log scale).
 - *Pros:* you control the budget (`n_iter`); explores more distinct values of each hyperparameter; usually as good as grid search in far fewer trials when only a few hyperparameters really matter (Bergstra & Bengio, 2012).
-- *Cons:* results vary with the random seed; no guarantee of hitting the exact optimum.
+- *Cons:* results vary with the random seed (the starting number of the random generator); no guarantee of hitting the exact optimum.
 
 **3. Successive halving / Hyperband** (`HalvingGridSearchCV`, `HalvingRandomSearchCV` — still experimental in scikit-learn 1.9, so first run `from sklearn.experimental import enable_halving_search_cv`) — evaluate many candidates cheaply (few samples or few iterations), keep the best fraction, give survivors more resources, repeat. With `factor=2`, each round keeps half the candidates and doubles the samples per candidate.
 
-**4. Bayesian optimisation** — build a **surrogate model** of "hyperparameters → score" from the trials so far (a Gaussian process, or TPE — Tree-structured Parzen Estimator), then choose the next trial with an **acquisition function** such as **expected improvement**, which balances *exploiting* promising regions and *exploring* uncertain ones. It shines when each trial is expensive (minutes to hours). Tools: **Optuna** (TPE by default, plus pruning of bad trials), Hyperopt, scikit-optimize, Ray Tune.
+**4. Bayesian optimisation** — build a **surrogate model** of "hyperparameters → score" from the trials so far (a Gaussian process, a model that predicts both a value and how uncertain it is; or TPE — Tree-structured Parzen Estimator), then choose the next trial with an **acquisition function** such as **expected improvement**, which balances *exploiting* promising regions and *exploring* uncertain ones. It shines when each trial is expensive (minutes to hours). Tools: **Optuna** (TPE by default, plus pruning, i.e. stopping unpromising trials early), Hyperopt, scikit-optimize, Ray Tune.
 
 Scale matters: search learning rates, C, α and gamma on a **log scale** (`loguniform(1e-4, 1e1)`), not linearly.
 
@@ -798,10 +800,10 @@ Grid for tiny spaces, random for most, halving to prune early, Bayesian (Optuna)
 ## 6.10 Early stopping
 
 ### What it is
-For models trained iteratively (gradient boosting, neural networks, SGD), **early stopping** monitors a validation score during training and stops when it hasn't improved for a set number of iterations (the **patience**). The number of iterations becomes a hyperparameter tuned automatically and almost for free.
+For models trained iteratively (gradient boosting, neural networks, SGD, i.e. stochastic gradient descent), **early stopping** monitors a validation score during training and stops when it hasn't improved for a set number of iterations (the **patience**). The number of iterations becomes a hyperparameter tuned automatically and almost for free.
 
 ### Why it matters
-Training loss keeps falling forever; validation loss falls, bottoms out, then rises as the model starts fitting noise. Stopping near the bottom is a cheap, effective regularizer — and saves compute.
+Training loss keeps falling forever; validation loss falls, bottoms out, then rises as the model starts fitting noise. Stopping near the bottom is a cheap, effective regularizer (anything that limits overfitting) — and saves compute.
 
 ```python
 # code/tuning.py (early stopping)
@@ -823,7 +825,7 @@ The validation loss is lowest at iteration 25; with patience 10, training stops 
 
 ### How to use it
 - scikit-learn: `HistGradientBoosting*(early_stopping=True, validation_fraction=0.1, n_iter_no_change=10)` (on by default when n_samples > 10,000), `GradientBoosting*(n_iter_no_change=…)`, `SGDClassifier(early_stopping=True)`, `MLPClassifier(early_stopping=True)`.
-- XGBoost / LightGBM: pass an evaluation set and early-stopping rounds; Keras: the `EarlyStopping` callback.
+- XGBoost / LightGBM: pass an evaluation set and early-stopping rounds; Keras: the `EarlyStopping` callback (a function the training loop calls automatically, e.g. after every epoch, a full pass over the training data).
 - Set a generous maximum (iterations/epochs) and a small learning rate; let early stopping choose the count.
 
 ### Common mistakes

@@ -1,6 +1,6 @@
 # Chapter 7 — Decision Trees and Ensembles
 
-Decision trees are the most "human" ML model: a chain of yes/no questions you can print and read. On their own they overfit easily, but when you combine many of them — by **averaging** (Random Forests) or by **correcting each other's mistakes** (gradient boosting) — you get the models that win most real-world problems on **tabular data** (rows and columns, like a spreadsheet or SQL table).
+Decision trees are the most "human" ML model: a chain of yes/no questions you can print and read. On their own they overfit (memorise the training data, noise included, and then do worse on new data) easily, but when you combine many of them — by **averaging** (Random Forests) or by **correcting each other's mistakes** (gradient boosting) — you get the models that win most real-world problems on **tabular data** (rows and columns, like a spreadsheet or SQL table, i.e. a table in a relational database).
 
 **What you'll learn**
 
@@ -41,14 +41,14 @@ flowchart TD
 ### How it works — growing a tree (CART)
 scikit-learn implements **CART** (Classification And Regression Trees), which always makes **binary** splits.
 
-1. Start with all training rows at the root.
+1. Start with all training rows at the root (the top node).
 2. For every feature and every candidate threshold (midpoints between sorted unique values), split the rows into left (≤ threshold) and right (> threshold).
 3. Score each split by how much it reduces **impurity** (how mixed the labels are). Pick the best one.
-4. Recurse on each child.
+4. Recurse on each child (apply the same procedure again to each new node).
 5. Stop when a stopping rule fires: node is pure, `max_depth` reached, too few samples (`min_samples_split`, `min_samples_leaf`), or no split improves impurity enough.
 6. Each leaf predicts the majority class (classification; it also stores class proportions, which become `predict_proba`) or the mean target value (regression).
 
-This is **greedy**: the best split now, never revisited. Finding the globally optimal tree is NP-hard, so greedy is the practical choice.
+This is **greedy**: the best split now, never revisited. Finding the globally optimal tree is NP-hard (in a class of problems with no known fast exact algorithm), so greedy is the practical choice.
 
 ### Impurity measures
 For a node where class k has proportion pₖ:
@@ -154,7 +154,7 @@ Two ways to keep a tree small:
 | **Pre-pruning** (early stopping) | Stop growing early | `max_depth`, `min_samples_split`, `min_samples_leaf`, `max_leaf_nodes`, `min_impurity_decrease` |
 | **Post-pruning** (cost-complexity pruning) | Grow a full tree, then cut back branches that don't pay for themselves | `ccp_alpha` |
 
-**Cost-complexity pruning** minimises  R_α(T) = R(T) + α·|leaves(T)|, where R(T) is total training impurity (error) and α is a price per leaf. α = 0 keeps the full tree; larger α removes the weakest branches first. `cost_complexity_pruning_path` lists the α values at which a branch disappears; you choose α by cross-validation.
+**Cost-complexity pruning** minimises  R_α(T) = R(T) + α·|leaves(T)|, where R(T) is total training impurity (error) and α is a price per leaf. α = 0 keeps the full tree; larger α removes the weakest branches first. `cost_complexity_pruning_path` lists the α values at which a branch disappears; you choose α by cross-validation (training and scoring on several different splits of the training data and averaging).
 
 ```
 full tree: 16 leaves, test acc 0.906
@@ -167,7 +167,7 @@ ccp_alpha=0.05   leaves=  2  test acc=0.889
 A 5-leaf tree beats the 16-leaf tree: simpler *and* better. Pruning too hard (2 leaves) underfits.
 
 ### Regression trees
-Same algorithm, different impurity: a regression tree picks the split that most reduces the **squared error** (equivalently, the variance) of the target in the children, and each leaf predicts the **mean** of its training targets. (`criterion="absolute_error"` uses the median instead and is more robust to outliers.) The result is a **step function**:
+Same algorithm, different impurity: a regression tree picks the split that most reduces the **squared error** (equivalently, the variance: the average squared distance from the mean) of the target in the children, and each leaf predicts the **mean** of its training targets. (`criterion="absolute_error"` uses the median instead and is more robust to outliers.) The result is a **step function** (flat pieces joined by sudden jumps):
 
 ![Regression tree predictions for depth 2 and depth 5](img/regression_tree.png)
 
@@ -191,7 +191,7 @@ Depth 2 = 4 flat steps (underfit); depth 5 chases individual noisy points (overf
 |---|---|
 | Readable rules, easy to explain | High variance: small data change → very different tree |
 | No feature scaling; handles non-linearity and interactions | Overfits without depth limits or pruning |
-| Fast prediction: O(depth) | Axis-aligned splits: a diagonal boundary needs a staircase of many splits |
+| Fast prediction: O(depth) (time grows only with depth) | Axis-aligned splits (each split tests one feature): a diagonal boundary needs a staircase of many splits |
 | Works with numeric + categorical data (scikit-learn ≥ 1.3 trees also handle missing values natively) | Cannot extrapolate beyond the training range |
 | | Greedy — may miss the best overall tree |
 
@@ -204,11 +204,11 @@ Depth 2 = 4 flat steps (underfit); depth 5 chases individual noisy points (overf
 - Leaving `max_depth=None` and reporting training accuracy (it is ~100% and meaningless).
 - Scaling features "for the tree" — harmless but pointless.
 - Over-reading a single tree's structure: retrain on a slightly different sample and the top split may change.
-- One-hot encoding a categorical with thousands of levels into a single tree — each split can only isolate one level; prefer target/ordinal encoding or a library with native categorical support.
+- One-hot encoding a categorical with thousands of levels into a single tree — each split can only isolate one level; prefer target encoding (replace each category with its average target) or ordinal encoding (one integer per category), or a library with native categorical support.
 
 ### Real-world examples
 - Credit scoring and medical triage rules, where regulators or clinicians must read the logic.
-- As the weak learner inside every gradient-boosting library.
+- As the weak learner (a simple model only slightly better than guessing; §7.4) inside every gradient-boosting library.
 
 ### In the interview
 **30-second answer:** "A decision tree recursively splits the data on the feature/threshold that most reduces impurity — Gini or entropy for classification, variance for regression. Leaves predict the majority class or the mean. Trees are interpretable and need no scaling, but they have high variance and overfit unless you limit depth or prune with cost-complexity pruning, which is why we usually use them inside ensembles."
@@ -234,10 +234,10 @@ Trees ask the best yes/no question at each step (max impurity decrease), are rea
 Recall: **bias** = error from wrong assumptions (model too simple); **variance** = error from sensitivity to the particular training sample (model too flexible). Test error ≈ bias² + variance + irreducible noise.
 
 - A **shallow** tree (stump) = high bias, low variance.
-- A **deep** tree = low bias, **very high variance** — retrain on a bootstrap sample and you get a noticeably different tree.
+- A **deep** tree = low bias, **very high variance** — retrain on a bootstrap sample (a random resample of the rows; §7.3) and you get a noticeably different tree.
 
 ### Why it matters
-Deep trees have exactly the property that averaging can fix: they are accurate *on average* but noisy. If you average B models, each with variance σ² and pairwise correlation ρ, the variance of the average is:
+Deep trees have exactly the property that averaging can fix: they are accurate *on average* but noisy. If you average B models, each with variance σ² and pairwise correlation ρ (how alike their errors are, from 0 = unrelated to 1 = identical), the variance of the average is:
 
   **Var(average) = ρσ² + (1 − ρ)σ²/B**
 
@@ -249,7 +249,7 @@ As B grows, the second term vanishes — but the first term, ρσ², stays. So *
 | Method | Base trees | Mainly reduces | Trees built |
 |---|---|---|---|
 | Bagging / Random Forest | Deep (low bias, high variance) | Variance | Independently, in parallel |
-| Boosting | Shallow (high bias, low variance) | Bias (and some variance via shrinkage) | Sequentially |
+| Boosting | Shallow (high bias, low variance) | Bias (and some variance via shrinkage, i.e. a small learning rate) | Sequentially |
 
 ### TL;DR
 Deep trees = low bias, high variance → average them (bagging/RF). Shallow trees = high bias → chain them (boosting).
@@ -284,14 +284,14 @@ flowchart LR
 1. For b = 1..B (`n_estimators`, e.g. 100–500):
    1. Draw a bootstrap sample of n rows.
    2. Grow a deep tree on it (usually unpruned). At each node, pick `max_features` features at random and search for the best split **only among those**.
-2. Predict: average the trees' predicted probabilities (scikit-learn does soft voting) or values.
+2. Predict: average the trees' predicted probabilities (scikit-learn does soft voting, averaging probabilities rather than counting votes) or values.
 
 **Why feature subsampling helps:** if one feature is very strong, each bagged tree chooses it for the first split, so the trees end up nearly identical (high ρ). Hiding it from some splits forces other trees to find other useful patterns, making trees less correlated.
 
 **Defaults (scikit-learn):** `max_features="sqrt"` for classification (√p features per split) and `1.0` (all features, i.e. plain bagging) for regression. The classic textbook suggestion for regression is p/3; try a few values.
 
 ### Out-of-bag (OOB) evaluation
-The chance a given row is **never** picked in n draws with replacement is (1 − 1/n)ⁿ ≈ 1/e ≈ **36.8%**. So each tree never sees about a third of the rows — its **out-of-bag** rows. Predict each row using only the trees that didn't train on it, and you get a free validation score without a hold-out set (`oob_score=True`).
+The chance a given row is **never** picked in n draws with replacement is (1 − 1/n)ⁿ ≈ 1/e ≈ **36.8%**. So each tree never sees about a third of the rows — its **out-of-bag** rows. Predict each row using only the trees that didn't train on it, and you get a free validation score without a hold-out set (rows kept back purely for evaluation) (`oob_score=True`).
 
 ### Code — single tree vs bagging vs Random Forest
 `code/forest_demo.py`:
@@ -326,7 +326,7 @@ Averaging lifts accuracy by ~4 points; feature subsampling adds a little more. T
 **Impurity-based importance** (Mean Decrease in Impurity, **MDI**; `feature_importances_`): for each feature, sum the impurity decrease of every split that uses it, weighted by the fraction of samples reaching that node, averaged over trees, normalised to sum to 1.
 
 Pitfalls:
-1. **Biased toward high-cardinality features** — a continuous feature (or an ID column) offers many thresholds, so it can find chance splits. A pure-noise continuous column gets non-zero importance.
+1. **Biased toward high-cardinality features** (features with many distinct values) — a continuous feature (or an ID column) offers many thresholds, so it can find chance splits. A pure-noise continuous column gets non-zero importance.
 2. **Computed on training data** — it rewards features the model used to *overfit*, not features that help on new data.
 3. **Correlated features share credit** — if radius, perimeter and area carry the same information, importance is split among them unpredictably, so each looks less important than the concept really is.
 
@@ -352,7 +352,7 @@ feature              impurity(MDI)  permutation(test)
 
 Two lessons in one table: (1) MDI gives the random continuous column ~6× more importance than the random binary one — pure cardinality bias; permutation importance correctly puts both at ≈ 0. (2) Radius, perimeter and area are nearly the same measurement; MDI ranks them top-3, but permutation importance ranks texture and smoothness above radius and area because shuffling one of the three size features barely hurts while its twins remain.
 
-**Better still:** SHAP values (Shapley-value-based per-prediction attributions; `shap` library, with a fast exact algorithm for trees) explain individual predictions and aggregate to global importance.
+**Better still:** SHAP values (Shapley-value-based per-prediction attributions; Shapley values come from game theory and split credit fairly among the features; `shap` library, with a fast exact algorithm for trees) explain individual predictions and aggregate to global importance.
 
 ### Trade-offs
 
@@ -364,14 +364,14 @@ Two lessons in one table: (1) MDI gives the random continuous column ~6× more i
 | OOB score for free, robust to outliers and noisy features | Memory heavy with deep trees on big data |
 
 ### When not to use it
-- Very high-dimensional sparse data (text) — linear models are faster and often better.
-- Latency- or memory-critical deployment with hundreds of deep trees.
+- Very high-dimensional (very many features) sparse (mostly zeros, like word counts) data (text) — linear models are faster and often better.
+- Latency-critical (where the time each prediction takes matters; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) or memory-critical deployment with hundreds of deep trees.
 - When you need the last percent of accuracy — try gradient boosting.
 
 ### Common mistakes
 - Treating `feature_importances_` as causal or as "true" importance.
 - Tuning `n_estimators` as if more trees overfits — it doesn't; stop when the score plateaus.
-- Forgetting `n_jobs=-1` and waiting on one core.
+- Forgetting `n_jobs=-1` and waiting on one core (one of the processor's parallel workers).
 - Using OOB score with `bootstrap=False` (there are no OOB rows then; scikit-learn raises an error).
 
 ### Real-world examples
@@ -424,7 +424,7 @@ flowchart LR
 
 Worked numbers: ε = 0.2 → α = ½·ln 4 ≈ 0.693, so wrong samples ×2 and right samples ×0.5. Total weight on the wrong ones becomes 0.2·2 = 0.4, on the right ones 0.8·0.5 = 0.4 → after renormalising, the next stump sees the previously misclassified 20% as **half** of the problem.
 
-(scikit-learn's `AdaBoostClassifier` uses the multi-class **SAMME** variant: its vote is α = ln((1 − ε)/ε) + ln(K − 1) for K classes (so exactly twice the α above when K = 2), scaled by a `learning_rate`; the idea is identical.) AdaBoost can be shown to be gradient boosting with an **exponential loss**, which also makes it sensitive to outliers and label noise: a mislabelled point keeps getting heavier.
+(scikit-learn's `AdaBoostClassifier` uses the multi-class **SAMME** variant: its vote is α = ln((1 − ε)/ε) + ln(K − 1) for K classes (so exactly twice the α above when K = 2), scaled by a `learning_rate`; the idea is identical.) AdaBoost can be shown to be gradient boosting with an **exponential loss**, which also makes it sensitive to outliers and label noise (wrongly labelled training rows): a mislabelled point keeps getting heavier.
 
 ### Gradient boosting, step by step on residuals
 **Gradient boosting** (Friedman 2001) re-fits *targets* rather than re-weighting samples. For squared error it is wonderfully simple:
@@ -436,7 +436,7 @@ Worked numbers: ε = 0.2 → α = ½·ln 4 ≈ 0.693, so wrong samples ×2 and r
    3. Update Fₘ(x) = F_{m−1}(x) + η·hₘ(x), where η is the **learning rate** (shrinkage), e.g. 0.1.
 3. Predict with F_M.
 
-**Why "gradient"?** For loss L = ½(y − F)², the negative gradient with respect to the prediction F is exactly y − F, the residual. For other losses you fit the tree to the **negative gradient** ("pseudo-residuals") instead — e.g. for log-loss in classification, it is y − p (label minus predicted probability). So gradient boosting is gradient descent in *function space*: each tree is one step downhill.
+**Why "gradient"?** For loss L = ½(y − F)², the negative gradient with respect to the prediction F is exactly y − F, the residual. For other losses you fit the tree to the **negative gradient** (the direction that lowers the loss fastest; "pseudo-residuals") instead — e.g. for log-loss (the standard classification loss) in classification, it is y − p (label minus predicted probability). So gradient boosting is gradient descent in *function space*: each tree is one step downhill.
 
 **Worked example** (4 houses, size in 100 m² → price in k$, η = 0.5, stumps), from `code/boosting_demo.py`:
 
@@ -473,7 +473,7 @@ sklearn GB      test RMSE = 51.01
 Our toy matches scikit-learn's `GradientBoostingRegressor` with the same settings.
 
 ### Learning rate and number of trees
-The learning rate η and the number of trees M trade off: smaller η means each tree corrects less, so you need more trees, but the final model usually generalises better (shrinkage is a form of regularisation).
+The learning rate η and the number of trees M trade off: smaller η means each tree corrects less, so you need more trees, but the final model usually generalises better (does better on new data; shrinkage is a form of regularisation, i.e. anything that restrains overfitting).
 
 ![Test RMSE vs number of trees for four learning rates](img/learning_rate_curve.png)
 
@@ -482,7 +482,7 @@ The learning rate η and the number of trees M trade off: smaller η means each 
 - η = 0.1: best result here (49.9) by 400 trees.
 - η = 0.03: still improving at 400 trees — would need more.
 
-Practical recipe: fix η around 0.05–0.1, set a large M, and use **early stopping** on a validation set (stop when the validation score hasn't improved for, say, 50 rounds). scikit-learn: `n_iter_no_change` + `validation_fraction` (`GradientBoostingClassifier`) or `early_stopping=True` (`HistGradientBoosting*`; it's on automatically above 10,000 samples); XGBoost/LightGBM: `early_stopping_rounds` / an early-stopping callback. Other regularisers: shallow trees (depth 3–8 or `num_leaves` ≤ 31–255), **row subsampling** (`subsample` < 1 = *stochastic* gradient boosting), column subsampling, min samples per leaf, L1/L2 penalties on leaf values.
+Practical recipe: fix η around 0.05–0.1, set a large M, and use **early stopping** on a validation set (stop when the validation score hasn't improved for, say, 50 rounds). scikit-learn: `n_iter_no_change` + `validation_fraction` (`GradientBoostingClassifier`) or `early_stopping=True` (`HistGradientBoosting*`; it's on automatically above 10,000 samples); XGBoost/LightGBM: `early_stopping_rounds` / an early-stopping callback (a function the library calls during training). Other regularisers: shallow trees (depth 3–8 or `num_leaves` ≤ 31–255), **row subsampling** (`subsample` < 1 = *stochastic* gradient boosting), column subsampling, min samples per leaf, L1/L2 penalties on leaf values.
 
 ### Comparison on a real dataset
 ```python
@@ -498,7 +498,7 @@ models = {
   RandomForest           0.960 +/- 0.019
   HistGradientBoosting   0.965 +/- 0.018
 ```
-On a small, clean dataset all three are within ~2 points and the ranking can change with the seed — the difference between ensemble families shows more clearly on larger, messier data.
+On a small, clean dataset all three are within ~2 points and the ranking can change with the seed (the random starting number) — the difference between ensemble families shows more clearly on larger, messier data.
 
 ### XGBoost vs LightGBM vs CatBoost (and scikit-learn)
 All four are gradient-boosted decision trees (**GBDT**). They differ in engineering and defaults:
@@ -512,6 +512,8 @@ All four are gradient-boosted decision trees (**GBDT**). They differ in engineer
 | Missing values | Native (learns default direction) | Native | Native | Native |
 | GPU | Yes | Yes | Yes | No |
 | Best when | Solid all-rounder, huge ecosystem | Large datasets, speed | Many categorical features, good defaults with little tuning | Mid-size data, no extra dependency |
+
+> **Key terms — reading this table:** *Histogram* split finding first buckets each feature into at most a few hundred bins, so only bin edges need testing as thresholds — much faster than testing every value. *Level-wise* growth splits every node at the current depth before going deeper; *leaf-wise* growth always splits whichever single leaf gives the biggest loss reduction. A *Newton step* uses second derivatives (the curvature of the loss) as well as first derivatives to size each update. *Target leakage* here means a row's own label influencing its features. A *GPU* is a graphics chip that runs many calculations in parallel and speeds up training; a *dependency* is an extra library you must install.
 
 XGBoost's regularised objective, for the curious: minimise Σ loss(yᵢ, ŷᵢ) + Σ_trees (γ·T + ½λ·‖w‖²), where T = number of leaves and w = leaf values. With gradients G and second derivatives H summed over a leaf, the optimal leaf value is w* = −G/(H + λ).
 
@@ -554,9 +556,9 @@ cat = CatBoostClassifier(iterations=2000, learning_rate=0.05, cat_features=["cit
 - Deep trees in boosting (depth 15) — boosting wants weak learners.
 
 ### Real-world examples
-- GBDT dominates Kaggle tabular competitions; XGBoost's 2016 paper noted it was used in 17 of 29 winning Kaggle solutions published in 2015.
-- Web search ranking: LambdaMART (gradient-boosted trees for learning-to-rank, from Microsoft Research) was used in Bing's ranker, and an ensemble of LambdaMART models won the 2010 Yahoo! Learning to Rank Challenge.
-- Fraud detection, credit scoring, click-through-rate and demand forecasting across the industry; Yandex uses CatBoost in search and recommendation.
+- GBDT dominates Kaggle (a website that hosts public ML competitions) tabular competitions; XGBoost's 2016 paper noted it was used in 17 of 29 winning Kaggle solutions published in 2015.
+- Web search ranking: LambdaMART (gradient-boosted trees for learning-to-rank, i.e. training a model to put search results in the best order, from Microsoft Research) was used in Bing's ranker, and an ensemble of LambdaMART models won the 2010 Yahoo! Learning to Rank Challenge.
+- Fraud detection, credit scoring, click-through-rate (share of shown items that get clicked) and demand forecasting across the industry; Yandex uses CatBoost in search and recommendation.
 
 ### In the interview
 **30-second answer:** "Boosting builds trees sequentially, each one correcting the current ensemble. In gradient boosting, you start from a constant, and each new shallow tree is fitted to the negative gradient of the loss — for squared error that's just the residuals — and added with a small learning rate. It mainly reduces bias. It's usually the most accurate model on tabular data but it can overfit as you add trees, so you use a small learning rate with early stopping."
@@ -582,8 +584,8 @@ Boosting = shallow trees in sequence, each fixing the last one's errors (residua
 ### What it is
 Ensembles of **different** model families:
 - **Hard voting**: each model votes a class; majority wins.
-- **Soft voting**: average the predicted probabilities; pick the highest. Usually better when models are well calibrated.
-- **Stacking** (stacked generalisation, Wolpert 1992): train a **meta-model** (often logistic/linear regression) on the base models' predictions. To avoid leakage, the meta-model is trained on **out-of-fold** predictions — each base prediction comes from a model that did not see that row (scikit-learn does this with the `cv` argument).
+- **Soft voting**: average the predicted probabilities; pick the highest. Usually better when models are well calibrated (their probabilities match how often things really happen).
+- **Stacking** (stacked generalisation, Wolpert 1992): train a **meta-model** (often logistic/linear regression) on the base models' predictions. To avoid leakage (the meta-model seeing information it would not have on new data), the meta-model is trained on **out-of-fold** predictions — each base prediction comes from a model that did not see that row (scikit-learn does this with the `cv` argument).
 
 ```mermaid
 flowchart LR
@@ -624,15 +626,15 @@ models["stacking (meta = LR)"] = StackingClassifier(
   soft voting            0.975 +/- 0.016
   stacking (meta = LR)   0.979 +/- 0.019
 ```
-An honest result: the ensembles beat three of the four base models but **not** the best single one (scaled logistic regression, since this dataset is nearly linearly separable). Ensembles reduce risk — you don't need to know in advance which model is best — but they are not guaranteed to win.
+An honest result: the ensembles beat three of the four base models but **not** the best single one (scaled logistic regression, since this dataset is nearly linearly separable, i.e. a flat boundary splits the classes almost perfectly). Ensembles reduce risk — you don't need to know in advance which model is best — but they are not guaranteed to win.
 
 ### Trade-offs / when not to use it
 - More models = more training time, latency, and maintenance. Netflix famously did not deploy the full Prize-winning blend of 100+ models because the extra accuracy did not justify the engineering cost.
 - Gains are small when base models are highly correlated (e.g. five boosting libraries on the same features).
 
 ### Common mistakes
-- Training the meta-model on in-sample base predictions (leakage — the meta-model learns to trust overfit models).
-- Soft voting with poorly calibrated models (e.g. SVM scores) without calibration.
+- Training the meta-model on in-sample base predictions (predictions made on the same rows the base models trained on) (leakage — the meta-model learns to trust overfit models).
+- Soft voting with poorly calibrated models (e.g. SVM, support vector machine, scores) without calibration.
 
 ### In the interview
 **30-second answer:** "Voting averages diverse models' predictions — hard voting by majority, soft voting by averaged probability. Stacking trains a meta-model on out-of-fold predictions of the base models so it learns how to weight them. It helps when base models make different errors."
@@ -650,16 +652,16 @@ Combine diverse models; use soft voting for simplicity, stacking with out-of-fol
 
 ## 7.6 When trees beat neural networks
 
-On **tabular data**, tree ensembles (especially GBDT) are still the default winner over deep learning for typical dataset sizes. Grinsztajn, Oyallon and Varoquaux (NeurIPS 2022, *"Why do tree-based models still outperform deep learning on typical tabular data?"*) benchmarked 45 medium-sized datasets (~10K samples) and identified reasons:
+On **tabular data**, tree ensembles (especially GBDT) are still the default winner over deep learning for typical dataset sizes. Grinsztajn, Oyallon and Varoquaux (NeurIPS, a leading ML research conference, 2022, *"Why do tree-based models still outperform deep learning on typical tabular data?"*) benchmarked 45 medium-sized datasets (~10K samples) and identified reasons:
 
 | Property of tabular data | Why trees handle it well | Why neural nets struggle |
 |---|---|---|
 | Target functions are **irregular** (sharp jumps, thresholds) | Splits create sharp steps naturally | Networks are biased toward smooth functions |
-| Many **uninformative features** | Splits simply ignore useless features | MLPs are hurt by them |
-| Features have individual meaning (not rotation-invariant) | Axis-aligned splits respect each column | MLPs are rotation-invariant — they mix columns, which wastes that structure |
+| Many **uninformative features** | Splits simply ignore useless features | MLPs (multi-layer perceptrons, the basic fully connected neural network) are hurt by them |
+| Features have individual meaning (not rotation-invariant) | Axis-aligned splits respect each column | MLPs are rotation-invariant (unchanged if columns are blended into new combinations) — they mix columns, which wastes that structure |
 | Mixed types, skewed distributions, missing values | No scaling, native categoricals/missing | Need careful normalisation and encoding |
 
-Practical factors add up too: GBDTs train in minutes on a CPU, need far less tuning, and are easier to explain (SHAP). Neural nets win when the data is **unstructured** (images, text, audio), when there is a huge amount of data, or when you need end-to-end learning with embeddings (e.g. recommender systems with millions of IDs, or combining tabular + text + images). Newer tabular foundation models (e.g. TabPFN for small datasets) are narrowing the gap, but a tuned GBDT remains the baseline to beat.
+Practical factors add up too: GBDTs train in minutes on a CPU (an ordinary processor, no graphics card needed), need far less tuning, and are easier to explain (SHAP). Neural nets win when the data is **unstructured** (images, text, audio), when there is a huge amount of data, or when you need end-to-end learning (one model learning everything from raw input to output) with embeddings (learned vectors that represent IDs, words or images) (e.g. recommender systems with millions of IDs, or combining tabular + text + images). Newer tabular foundation models (large models pre-trained on many datasets and reused on new ones; e.g. TabPFN for small datasets) are narrowing the gap, but a tuned GBDT remains the baseline to beat.
 
 **Rule of thumb:** tabular problem → start with a GBDT (LightGBM/XGBoost/CatBoost/`HistGradientBoosting`) and a Random Forest baseline.
 

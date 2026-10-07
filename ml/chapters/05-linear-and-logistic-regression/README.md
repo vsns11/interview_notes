@@ -1,6 +1,6 @@
 # Chapter 5 — Linear and Logistic Regression
 
-Linear regression and logistic regression are the "hello world" of machine learning — and they are still everywhere in production: as baselines, as the final layer of neural networks, as click-through-rate models, credit scores and A/B-test analyses. They are also the best place to learn the machinery every other model uses: a **model**, a **loss function**, and an **optimizer** (gradient descent) that lowers the loss.
+Linear regression and logistic regression are the "hello world" of machine learning — and they are still everywhere in production: as baselines (simple reference models any fancier model must beat), as the final layer of neural networks (models built from layers of simple numeric units), as click-through-rate models (predicting the share of shown items that get clicked), credit scores and A/B-test analyses (experiments that compare two versions on random groups of users). They are also the best place to learn the machinery every other model uses: a **model**, a **loss function**, and an **optimizer** (gradient descent) that lowers the loss.
 
 **What you'll learn**
 
@@ -27,13 +27,13 @@ All code is in `code/` and runs with the shared environment (Python 3.14, scikit
 - **Classification** = the answer is a category (spam / not spam, species).
 
 ### How it works — the steps
-1. **Get data.** Download a public dataset (Kaggle, UCI, `sklearn.datasets`) or collect your own; it may arrive as CSV, Excel, database tables or text.
-2. **Inspect and clean.** Look for missing values (`NaN`, blanks). Drop rows or columns that are mostly empty and unimportant, or **impute** (fill in) with the mean, median, mode or a default. Some models refuse missing values entirely; others just get worse.
+1. **Get data.** Download a public dataset (Kaggle and the UCI repository are well-known websites hosting free datasets; `sklearn.datasets` ships some with scikit-learn) or collect your own; it may arrive as CSV (a plain-text table, one row per line), Excel, database tables or text.
+2. **Inspect and clean.** Look for missing values (`NaN`, blanks). Drop rows or columns that are mostly empty and unimportant, or **impute** (fill in) with the mean, median, mode (the most common value) or a default. Some models refuse missing values entirely; others just get worse.
 3. **Encode categories.** Models need numbers. **Label (integer) encoding** maps Red → 0, Blue → 1, Green → 2 — fine for trees, but it tells a linear model that Green > Blue > Red, which is meaningless. **One-hot encoding** creates `is_Red`, `is_Blue`, `is_Green` 0/1 columns and avoids the fake order. (Chapter 4 covers all encoders.)
 4. **Split** into training and test sets — commonly 80/20 or 70/30 — so you measure performance on data the model has never seen.
 5. **Choose a model**, fit it on the training set.
-6. **Evaluate** on the test set with a suitable metric, and compare with a trivial baseline.
-7. **Iterate** — features, model, hyperparameters (Chapter 6).
+6. **Evaluate** on the test set with a suitable metric, and compare with a trivial baseline (e.g. always predicting the average).
+7. **Iterate** — features, model, hyperparameters (settings you choose before training, such as tree depth; Chapter 6).
 
 ### Choosing between linear regression and a decision tree
 
@@ -41,8 +41,8 @@ All code is in `code/` and runs with the shared environment (Python 3.14, scikit
 |---|---|---|
 | Task | Regression (logistic regression for classification) | Regression and classification |
 | How it works | Fits a line / plane / **hyperplane** (a flat surface in many dimensions) that minimises squared error | Splits the data with if-then questions into groups with similar outcomes |
-| Strengths | Simple, fast, interpretable coefficients, extrapolates a trend | Captures non-linear patterns and interactions, handles mixed feature types, easy to visualise |
-| Weaknesses | Misses non-linear patterns unless you engineer features | Overfits if grown too deep; can't extrapolate beyond training range |
+| Strengths | Simple, fast, interpretable coefficients, extrapolates (extends beyond the data seen) a trend | Captures non-linear patterns and interactions (one feature's effect depending on another), handles mixed feature types, easy to visualise |
+| Weaknesses | Misses non-linear patterns unless you engineer features | Overfits (memorises training noise) if grown too deep; can't extrapolate beyond training range |
 | Pick it when | The relationship looks roughly linear (e.g. weight vs height) | The data has clear thresholds or if-then structure |
 
 (Chapter 7 covers trees in depth.)
@@ -93,9 +93,9 @@ tree, no depth limit             0.001     0.142
 tree, max_depth=3                0.078     0.121
 ```
 
-**Interpreting the result.** **MSE** (mean squared error) is in squared units (cm²), and "lower is better" only means something against the target's scale and a baseline. Petal length spans 1–6.9 cm; predicting the mean gives MSE 3.3, so 0.088 (an average error of roughly √0.088 ≈ 0.3 cm) is good, while an MSE of 5 would be worse than guessing the mean. The unlimited tree scores almost 0 on training data but worse on test: it **overfit** (memorised the training set). Limiting `max_depth` (or raising `min_samples_split`) trades a bit of training accuracy for better generalisation.
+**Interpreting the result.** **MSE** (mean squared error) is in squared units (cm²), and "lower is better" only means something against the target's scale and a baseline. Petal length spans 1–6.9 cm; predicting the mean gives MSE 3.3, so 0.088 (an average error of roughly √0.088 ≈ 0.3 cm) is good, while an MSE of 5 would be worse than guessing the mean. The unlimited tree scores almost 0 on training data but worse on test: it **overfit** (memorised the training set). Limiting `max_depth` (or raising `min_samples_split`) trades a bit of training accuracy for better generalisation (performance on new, unseen data).
 
-One subtlety: the three species columns always sum to 1, which duplicates the intercept (the **dummy-variable trap**). `LinearRegression` still works — it returns the minimum-norm solution, which is why the three species coefficients sum to 0 — but the individual species coefficients are then only meaningful relative to each other. Use `drop="first"` in `OneHotEncoder` (or `drop_first=True` in `get_dummies`) if you want each one read against a reference species.
+One subtlety: the three species columns always sum to 1, which duplicates the intercept (the **dummy-variable trap**). `LinearRegression` still works — it returns the minimum-norm solution (of all equally good weight sets, the one with the smallest weights), which is why the three species coefficients sum to 0 — but the individual species coefficients are then only meaningful relative to each other. Use `drop="first"` in `OneHotEncoder` (or `drop_first=True` in `get_dummies`) if you want each one read against a reference species.
 
 ### Self-check
 1. Test MSE 0.088 — good or bad? → Only meaningful against the target's scale and a baseline: the mean-predictor scores 3.3, so it's good.
@@ -126,9 +126,9 @@ Training means choosing θ to make predictions close to the targets. For m train
 
 MSE(θ) = (1/m) Σᵢ (ŷᵢ − yᵢ)²
 
-*Worked example:* targets y = (3, 5, 7), predictions ŷ = (2.5, 5, 8). Errors = (−0.5, 0, 1). Squared = (0.25, 0, 1). MSE = 1.25/3 = **0.417**. RMSE = √0.417 = 0.65 (back in the target's units).
+*Worked example:* targets y = (3, 5, 7), predictions ŷ = (2.5, 5, 8). Errors = (−0.5, 0, 1). Squared = (0.25, 0, 1). MSE = 1.25/3 = **0.417**. RMSE (root mean squared error) = √0.417 = 0.65 (back in the target's units).
 
-Why squares? They make every error positive, punish big errors more than small ones, and give a smooth bowl-shaped (convex) function with a single minimum that calculus can find. Minimising MSE is also what you get from **maximum likelihood** if the noise is Gaussian.
+Why squares? They make every error positive, punish big errors more than small ones, and give a smooth bowl-shaped (convex) function with a single minimum that calculus can find. Minimising MSE is also what you get from **maximum likelihood** (choosing the parameters under which the observed data is most probable) if the noise is Gaussian (normally distributed, bell-shaped).
 
 ### Self-check
 1. Errors (1, −1, 2): MSE? → (1 + 1 + 4)/3 = 2.
@@ -151,17 +151,17 @@ Analogy: the normal equation is reading the lowest point off a map; gradient des
 
 ### How it works
 
-**Normal equation.** At the bottom of the bowl the slope is zero. The gradient of MSE is (2/m) Xᵀ(Xθ − y) (derived just below); setting it to zero gives XᵀXθ = Xᵀy — the "normal equations" — and, if XᵀX is invertible:
+**Normal equation.** At the bottom of the bowl the slope is zero. The gradient of MSE is (2/m) Xᵀ(Xθ − y) (derived just below); setting it to zero gives XᵀXθ = Xᵀy — the "normal equations" — and, if XᵀX is invertible (has an inverse, so the equations have exactly one solution):
 
 θ = (XᵀX)⁻¹ Xᵀy
 
-where X is the m × (d+1) matrix of examples (with the column of 1s) and y the vector of targets. In code, never compute the inverse explicitly; solve the linear system XᵀX θ = Xᵀy (`np.linalg.solve`) or use a least-squares routine (`np.linalg.lstsq`, which uses the SVD and also works when XᵀX is not invertible). scikit-learn's `LinearRegression` calls SciPy's least-squares solver.
+where X is the m × (d+1) matrix of examples (with the column of 1s) and y the vector of targets. In code, never compute the inverse explicitly; solve the linear system XᵀX θ = Xᵀy (`np.linalg.solve`) or use a least-squares routine (`np.linalg.lstsq`, which uses the SVD, singular value decomposition, a standard way of factoring a matrix, and also works when XᵀX is not invertible). scikit-learn's `LinearRegression` calls SciPy's (the scientific-computing library built on NumPy) least-squares solver.
 
 **Gradient descent.** The gradient (vector of slopes) of MSE is:
 
 ∇MSE(θ) = (2/m) Xᵀ(Xθ − y)
 
-Why: MSE = (1/m) Σᵢ (θᵀxᵢ − yᵢ)². By the chain rule, the derivative of one squared term with respect to weight θⱼ is 2(θᵀxᵢ − yᵢ)·xᵢⱼ — "twice the error times that feature". Averaging over the m examples and stacking all j gives (2/m) Xᵀ(error vector).
+Why: MSE = (1/m) Σᵢ (θᵀxᵢ − yᵢ)². By the chain rule (the calculus rule for nested functions: multiply the slopes of each layer), the derivative of one squared term with respect to weight θⱼ is 2(θᵀxᵢ − yᵢ)·xᵢⱼ — "twice the error times that feature". Averaging over the m examples and stacking all j gives (2/m) Xᵀ(error vector).
 
 Then repeat: **θ ← θ − η ∇MSE(θ)**, where η (eta) is the **learning rate** (step size). Each full pass over the training data is an **epoch**.
 
@@ -212,7 +212,7 @@ largest standardized effects (+1 std in feature -> change in disease score):
 intercept = mean training target: 151.6 = 151.6
 ```
 
-All three methods agree on the toy problem (3.949, 3.038 — close to the true 4 and 3; the gap is noise). On the diabetes data the normal equation matches scikit-learn to 12 decimal places. Gradient descent is close but still slightly off after 5,000 epochs on the coefficients of `s1` and `s2` — two strongly correlated blood-serum measurements that create a long, narrow valley in the loss surface where GD crawls (section 5.4 shows why). Because the features are standardized (mean 0), the intercept equals the mean training target.
+All three methods agree on the toy problem (3.949, 3.038 — close to the true 4 and 3; the gap is noise). On the diabetes data the normal equation matches scikit-learn to 12 decimal places. Gradient descent is close but still slightly off after 5,000 epochs on the coefficients of `s1` and `s2` — two strongly correlated blood-serum measurements that create a long, narrow valley in the loss surface (the loss drawn as a landscape over all weight values) where GD crawls (section 5.4 shows why). Because the features are standardized (mean 0), the intercept equals the mean training target.
 
 ### Trade-offs
 
@@ -225,24 +225,26 @@ All three methods agree on the toy problem (3.949, 3.038 — close to the true 4
 | Feature scaling | Not needed | Needed for fast convergence |
 | Works for other losses | Only squared error (and Ridge) | Any differentiable loss — logistic regression, neural networks |
 
+(The O(…) "big-O" notation says how cost grows with m rows and d features, ignoring constant factors: O(d³) means doubling the features makes solving about 8× slower. *Mini-batches* are small chunks of rows, §5.4; a *differentiable* loss is one smooth enough to have a slope everywhere.)
+
 ### When not to use each
 - Don't use the normal equation when d is very large (tens of thousands of features) or data doesn't fit in memory.
-- Don't hand-roll GD when a closed form or a well-tuned library solver exists — use it for learning and for losses without closed forms.
+- Don't hand-roll GD when a closed form (a direct formula for the answer) or a well-tuned library solver exists — use it for learning and for losses without closed forms.
 
 ### Common mistakes
-- Computing `np.linalg.inv(X.T @ X)` explicitly — slower and numerically less stable than `solve`/`lstsq`.
+- Computing `np.linalg.inv(X.T @ X)` explicitly — slower and numerically less stable (more prone to rounding errors) than `solve`/`lstsq`.
 - Forgetting the column of ones (no intercept).
 - Running GD on unscaled features and concluding "GD doesn't work".
 
 ### Real-world examples
-- `LinearRegression` in scikit-learn (least squares via SciPy); `statsmodels` OLS for statistical inference (p-values, confidence intervals).
-- `SGDRegressor` / `SGDClassifier` and Vowpal Wabbit fit linear models one small batch at a time with SGD, so the dataset never has to fit in RAM.
-- Every neural network is trained by variants of gradient descent (SGD with momentum, Adam).
+- `LinearRegression` in scikit-learn (least squares via SciPy); `statsmodels` OLS (ordinary least squares) for statistical inference (p-values: how likely a result this strong would be by pure chance; confidence intervals: ranges of plausible values).
+- `SGDRegressor` / `SGDClassifier` and Vowpal Wabbit fit linear models one small batch at a time with SGD (stochastic gradient descent, §5.4), so the dataset never has to fit in RAM (the computer's working memory).
+- Every neural network is trained by variants of gradient descent (SGD with momentum, Adam: refinements that smooth the step direction and adapt the step size per weight).
 
 ### In the interview
 **30 seconds:** *"Linear regression minimises MSE. You can solve it exactly with the normal equation, θ = (XᵀX)⁻¹Xᵀy — in practice with a least-squares solver — which is cheap when there are few features. Gradient descent iterates θ ← θ − η·(2/m)Xᵀ(Xθ − y); it scales to huge data, works for any differentiable loss, but needs a learning rate and scaled features."*
 
-- *"When would the normal equation fail?"* — XᵀX singular (duplicate or perfectly collinear features, or more features than rows); use the pseudo-inverse (SVD) or Ridge, which makes XᵀX + αI invertible.
+- *"When would the normal equation fail?"* — XᵀX singular (non-invertible: duplicate or perfectly collinear features, or more features than rows); use the pseudo-inverse (a generalised inverse that still returns a least-squares answer, computed with the SVD) or Ridge, which makes XᵀX + αI invertible (I is the identity matrix: 1s on the diagonal, 0s elsewhere).
 - *"Is the MSE loss convex?"* — Yes, for linear regression; GD with a small enough learning rate reaches the global minimum.
 
 ### Self-check
@@ -264,8 +266,8 @@ Gradient descent comes in three flavours, differing only in **how many examples 
 | Variant | Examples per update | Updates per epoch (m = 100) | Behaviour |
 |---|---|---|---|
 | **Batch GD** | All m | 1 | Smooth, exact gradient; slow per step on big data |
-| **Mini-batch GD** | A batch, e.g. 16–512 | m / batch size (100/16 → 7) | Noisy but efficient; uses vectorised hardware (GPUs); the default in deep learning |
-| **Stochastic GD (SGD)** | 1 | m (100) | Very noisy, cheap steps; noise can escape shallow local minima; never settles unless the learning rate decays |
+| **Mini-batch GD** | A batch, e.g. 16–512 | m / batch size (100/16 → 7) | Noisy but efficient; uses vectorised hardware (GPUs, graphics chips built for parallel arithmetic); the default in deep learning |
+| **Stochastic GD (SGD)** | 1 | m (100) | Very noisy, cheap steps; noise can escape shallow local minima (dips that are lowest only nearby); never settles unless the learning rate decays |
 
 ### How it works
 1. Shuffle the training data at the start of each epoch.
@@ -310,7 +312,7 @@ standardized  condition number         1  lr=4.86e-01  iterations to converge: 5
 - **Good** (0.1): reaches the minimum (≈ 0.96, the noise level).
 - **Too large** (0.6): every step overshoots further; the loss explodes to 10²³ — **divergence**.
 
-For MSE the rule is concrete: GD converges if η < 2/λ_max, where λ_max is the largest eigenvalue of the loss's curvature matrix (the **Hessian**, here (2/m)XᵀX). In practice you try values on a log scale (0.001, 0.01, 0.1, …) and watch the loss curve.
+For MSE the rule is concrete: GD converges if η < 2/λ_max, where λ_max is the largest eigenvalue (the stretch factor along the matrix's steepest direction, Chapter 2) of the loss's curvature matrix (the **Hessian**, here (2/m)XᵀX). In practice you try values on a log scale (0.001, 0.01, 0.1, …) and watch the loss curve.
 
 ![Training loss for three learning rates: too small crawls, 0.1 converges, 0.6 diverges](img/gd_learning_rates.png)
 
@@ -326,16 +328,16 @@ If one feature has a much larger spread than another, the MSE bowl becomes a lon
 Here a feature with 6× the spread of the other gives a condition number of 36 and needs **485** iterations; after standardizing both features the bowl is round (condition number ≈ 1) and GD converges in **5**. With 100× spread the unscaled version needs well over 100,000 iterations. Correlated features (like `s1`/`s2` in the diabetes data) stretch the bowl too — scaling doesn't fully fix that; regularization helps.
 
 ### Trade-offs / common mistakes
-- Batch size: larger batches give smoother gradients and better hardware use, but fewer updates per epoch; very large batches may need a larger learning rate or warm-up.
+- Batch size: larger batches give smoother gradients and better hardware use, but fewer updates per epoch; very large batches may need a larger learning rate or warm-up (starting with a small learning rate and ramping it up over the first steps).
 - Forgetting to shuffle — batches become unrepresentative (e.g. sorted by class).
-- Judging SGD by its final iterate without a decaying learning rate — it keeps bouncing.
+- Judging SGD by its final iterate (the parameter values after the last step) without a decaying learning rate — it keeps bouncing.
 - Stopping by a fixed number of epochs instead of monitoring validation loss (**early stopping**, Chapter 6).
 
 ### In the interview
 **30 seconds:** *"Batch GD uses all data per step — smooth but expensive; SGD uses one example — cheap and noisy, needs a decaying learning rate; mini-batch is the practical middle ground and fits GPUs. The learning rate is the key hyperparameter: too small is slow, too large diverges. Scale features first — otherwise the loss surface is a narrow valley and GD zig-zags or crawls."*
 
-- *"Why does SGD sometimes generalise better?"* — Its noise acts like a regularizer and can escape sharp minima; this is an empirical observation in deep learning, not a guarantee.
-- *"How do you pick a learning rate?"* — Log-scale search, look at the training-loss curve; or a learning-rate range test; then add a schedule.
+- *"Why does SGD sometimes generalise better?"* — Its noise acts like a regularizer (anything that discourages overfitting; §5.7) and can escape sharp minima; this is an empirical observation in deep learning, not a guarantee.
+- *"How do you pick a learning rate?"* — Log-scale search, look at the training-loss curve; or a learning-rate range test (raise the rate a little every step and note where the loss starts to blow up); then add a schedule.
 
 ### Self-check
 1. With m = 1,000 and batch size 50, how many updates per epoch? → 20.
@@ -355,12 +357,12 @@ Linear regression will always return *some* line. Whether that line's **predicti
 | Assumption | Meaning | If violated |
 |---|---|---|
 | **Linearity** | y is a linear function of the (possibly transformed) features | Systematic errors; add polynomial/log terms or use a non-linear model |
-| **Independence** | Errors of different rows are unrelated | Typical with time series or repeated measures; standard errors too small |
-| **Homoscedasticity** | Error spread is constant across predictions | "Funnel" residuals; coefficients still unbiased but standard errors wrong; try log(y) or weighted least squares |
+| **Independence** | Errors of different rows are unrelated | Typical with time series or repeated measures (several rows from the same subject); standard errors (estimated uncertainty of each coefficient) too small |
+| **Homoscedasticity** | Error spread is constant across predictions | "Funnel" residuals; coefficients still unbiased (right on average) but standard errors wrong; try log(y) or weighted least squares (noisier rows count less) |
 | **Normal errors** | Residuals roughly normal | Matters mainly for small-sample confidence intervals and p-values |
 | **No (perfect) multicollinearity** | Features aren't (near-)copies of each other | Coefficients unstable and hard to interpret (predictions can still be fine) |
 
-For pure prediction, linearity and a stable data distribution matter most; the others matter most when you interpret coefficients or report statistical significance.
+For pure prediction, linearity and a stable data distribution matter most; the others matter most when you interpret coefficients or report statistical significance (evidence that an effect is unlikely to be pure chance).
 
 ### How to check: residual plots
 A **residual** is yᵢ − ŷᵢ. Plot residuals against fitted values: a good model leaves a structureless horizontal band around 0.
@@ -376,11 +378,11 @@ ax.scatter(lin.predict(x[:, None]), resid); ax.axhline(0)
 
 - **U-shape** (left): the straight line misses curvature — add x², or transform.
 - **Random band** (middle): the quadratic model captures the pattern.
-- **Funnel** (right): noise grows with x — heteroscedasticity. Log-transform y, use weighted least squares, or report robust standard errors.
+- **Funnel** (right): noise grows with x — heteroscedasticity. Log-transform y, use weighted least squares, or report robust standard errors (uncertainty estimates that stay valid when the error spread varies).
 
 ### Common mistakes
-- Checking only R² and never plotting residuals.
-- Interpreting coefficients causally ("raising x by 1 *causes* y to rise by w"). Regression finds associations in observational data.
+- Checking only R² (the share of the target's variance the model explains) and never plotting residuals.
+- Interpreting coefficients causally ("raising x by 1 *causes* y to rise by w"). Regression finds associations in observational data (data recorded as it happened, not from a controlled experiment).
 
 ### In the interview
 **30 seconds:** *"Linear regression assumes a linear relationship, independent errors with constant variance, roughly normal errors, and no strong multicollinearity. For prediction, linearity and a stable distribution matter most; the rest matter when you interpret coefficients or p-values. I check with a residuals-vs-fitted plot."*
@@ -404,8 +406,8 @@ Plot residuals vs fitted values: a U means missing non-linearity, a funnel means
 
 ### Why it matters
 It is the simplest way to fit curves, and the clearest demonstration of **underfitting vs overfitting**:
-- **Underfitting** — the model is too simple to capture the pattern: high error on training *and* test data (high **bias**).
-- **Overfitting** — the model is so flexible that it fits the noise: low training error, higher test error (high **variance**).
+- **Underfitting** — the model is too simple to capture the pattern: high error on training *and* test data (high **bias**: systematic error from a model too rigid for the pattern).
+- **Overfitting** — the model is so flexible that it fits the noise: low training error, higher test error (high **variance**: the fit changes a lot depending on which training sample it happened to get).
 
 ```python
 # code/polynomial_and_assumptions.py (key parts) — truth: y = 0.5x² + x + 2 + noise, 40 training points
@@ -429,7 +431,7 @@ Degree 2 recovers the true coefficients (0.54, 1.08, 2.16 vs 0.5, 1, 2). Degree 
 
 ### Trade-offs / when not to use it
 - Features explode with degree and number of inputs: d features at degree k gives C(d+k, k) − 1 columns (10 features at degree 2 → 65; at degree 3 → 285).
-- High-degree polynomials are unstable at the edges and extrapolate badly. For smooth curves prefer low degrees, **splines** (`SplineTransformer`) or tree/boosting models.
+- High-degree polynomials are unstable at the edges and extrapolate badly. For smooth curves prefer low degrees, **splines** (smooth curves built from short low-degree polynomial pieces joined end to end; `SplineTransformer`) or tree/boosting models.
 - Always scale after expanding: x¹⁵ dwarfs x.
 
 ### In the interview
@@ -454,13 +456,13 @@ Expand features with powers and products, then fit a linear model. Too low a deg
 |---|---|---|---|
 | **Ridge** (L2) | α Σ wⱼ² | ‖y − Xw‖² + α‖w‖₂² | Shrinks all weights smoothly toward 0; never exactly 0; splits weight among correlated features |
 | **Lasso** (L1) | α Σ \|wⱼ\| | (1/2m)‖y − Xw‖² + α‖w‖₁ | Sets some weights **exactly 0** → automatic feature selection; picks one of a correlated group |
-| **ElasticNet** | mix of both | (1/2m)‖y − Xw‖² + α·r‖w‖₁ + ½α(1 − r)‖w‖₂² | Sparse *and* stable with correlated features; r = `l1_ratio` |
+| **ElasticNet** | mix of both | (1/2m)‖y − Xw‖² + α·r‖w‖₁ + ½α(1 − r)‖w‖₂² | Sparse (many weights exactly 0) *and* stable with correlated features; r = `l1_ratio` |
 
 Notes:
 - **α** (alpha) is the regularization strength: α = 0 is plain least squares; large α pushes weights toward 0. Note that Ridge's and Lasso's α are on different scales in scikit-learn (Ridge's squared-error term is a sum, Lasso's is divided by 2m), so the same α means different amounts of shrinkage.
 - The **intercept is not penalized**.
 - **Scale features first.** The penalty treats all weights equally, so it only makes sense if features are on the same scale.
-- In logistic regression and SVMs, scikit-learn uses **C = 1/regularization strength** instead: *smaller* C means *stronger* regularization.
+- In logistic regression and SVMs (support vector machines, Chapter 8), scikit-learn uses **C = 1/regularization strength** instead: *smaller* C means *stronger* regularization.
 
 ### Why it matters
 - Reduces overfitting when there are many features relative to rows, or correlated features.
@@ -515,8 +517,8 @@ What the numbers show:
 |---|---|---|---|
 | Feature selection | No | Yes | Yes (less aggressive) |
 | Correlated features | Shares weight — stable | Picks one arbitrarily — unstable | Groups them — stable |
-| Closed form | Yes | No (coordinate descent) | No |
-| When p > n | Works | Selects at most n features | Works |
+| Closed form | Yes | No (coordinate descent: one weight at a time) | No |
+| When p > n (more features than rows) | Works | Selects at most n features | Works |
 | Good default when | Many small effects | Few features truly matter | Correlated groups + want sparsity |
 
 ### When not to use it
@@ -528,8 +530,8 @@ Regularization matters little when you have plenty of rows per feature (diabetes
 - Forgetting that C in `LogisticRegression` is the *inverse* of the strength.
 
 ### Real-world examples
-- Ridge is the classic fix for multicollinearity in econometrics; L2 "weight decay" is standard when training neural networks.
-- L1-regularized logistic regression is used for sparse, high-dimensional text and click models (e.g. Google's FTRL-Proximal ad click model from 2013 used L1 to keep models sparse).
+- Ridge is the classic fix for multicollinearity in econometrics (statistics applied to economic data); L2 "weight decay" (the deep-learning name for an L2 penalty) is standard when training neural networks.
+- L1-regularized logistic regression is used for sparse, high-dimensional text and click models (e.g. Google's FTRL-Proximal ad click model from 2013, an online learning method that updates as each example arrives, used L1 to keep models sparse).
 - In genomics (thousands of genes, few patients), Lasso and ElasticNet are standard tools for selecting predictive genes.
 
 ### In the interview
@@ -553,7 +555,7 @@ Penalize big weights: L2 shrinks, L1 selects, ElasticNet does both. Scale first,
 ## 5.8 Logistic regression
 
 ### What it is
-**Logistic regression** is a linear model for **binary classification**. It computes the same weighted sum z = w·x + b (called the **logit**), then squashes it into a probability with the **sigmoid** (logistic) function:
+**Logistic regression** is a linear model for **binary classification** (exactly two possible classes, such as spam / not spam). It computes the same weighted sum z = w·x + b (called the **logit**), then squashes it into a probability with the **sigmoid** (logistic) function:
 
 p = P(y = 1 | x) = σ(z) = 1 / (1 + e^−z)
 
@@ -567,7 +569,7 @@ Despite the name, it's a classifier. The name comes from the logistic function i
 
 **3. Decision rule and boundary.** Predict class 1 when p ≥ threshold (default 0.5). Since p = 0.5 exactly when z = 0, the **decision boundary** is the set of points where w·x + b = 0 — a straight line (in 2-D) or a hyperplane. Changing the threshold shifts the boundary parallel to itself (Chapter 6 covers choosing thresholds).
 
-**4. Loss: log-loss (binary cross-entropy).** Squared error would make the optimisation non-convex, so logistic regression uses:
+**4. Loss: log-loss (binary cross-entropy).** Squared error would make the optimisation non-convex (a landscape with several dips, where the optimiser can get stuck), so logistic regression uses:
 
 Loss = −(1/m) Σ [ yᵢ ln pᵢ + (1 − yᵢ) ln(1 − pᵢ) ]
 
@@ -580,7 +582,7 @@ Only one term is active per example: −ln p if y = 1, −ln(1 − p) if y = 0.
 | 1 | 0.1 | −ln 0.1 = 2.303 | confident and wrong: big loss |
 | 0 | 0.1 | −ln 0.9 = 0.105 | confident and right |
 
-It is the negative log-likelihood of the data under a Bernoulli model, so minimising it is maximum likelihood. It's convex in the weights, so gradient descent finds the global minimum. There's no closed-form solution, so it must be solved iteratively.
+It is the negative log-likelihood of the data under a Bernoulli model (a single yes/no trial that comes out 1 with probability p), so minimising it is maximum likelihood. It's convex in the weights, so gradient descent finds the global minimum. There's no closed-form solution, so it must be solved iteratively.
 
 **5. Gradient.** Remarkably, the gradient has the same form as linear regression's:
 
@@ -627,7 +629,7 @@ test accuracy scratch 0.850 | sklearn 0.850
 w1 = 2.454: +1 std in x1 multiplies the odds of class 1 by e^w1 = 11.64
 ```
 
-Our 10-line gradient descent matches scikit-learn's L-BFGS solver to about three decimals.
+Our 10-line gradient descent matches scikit-learn's L-BFGS solver (a faster optimiser that also uses an estimate of the loss's curvature) to about three decimals.
 
 ![Left: the sigmoid curve. Right: the logistic-regression decision boundary (p = 0.5) with probability bands](img/logreg_sigmoid_boundary.png)
 
@@ -639,18 +641,18 @@ The probability changes smoothly across the boundary; points near the line get p
 
 | Strengths | Weaknesses |
 |---|---|
-| Fast to train and serve, tiny model | Linear boundary only (needs feature engineering or kernels for curves) |
-| Outputs probabilities that are often reasonably calibrated | Sensitive to correlated features and outliers in X |
-| Coefficients interpretable as odds ratios | On perfectly separable data, unregularized weights grow without bound |
-| Convex: one global optimum | Usually beaten by gradient boosting on complex tabular data |
+| Fast to train and serve, tiny model | Linear boundary only (needs feature engineering or kernels, tricks that let linear methods draw curves) |
+| Outputs probabilities that are often reasonably calibrated (a predicted 0.7 comes true about 70% of the time) | Sensitive to correlated features and outliers in X |
+| Coefficients interpretable as odds ratios | On perfectly separable data (a straight line splits the classes with no errors), unregularized weights grow without bound |
+| Convex: one global optimum | Usually beaten by gradient boosting (ensembles of decision trees, Chapter 7) on complex tabular data |
 
 ### When not to use it
-Strongly non-linear boundaries without good features (use trees/boosting or neural nets); very high-cardinality interactions you can't enumerate.
+Strongly non-linear boundaries without good features (use trees/boosting or neural nets); very high-cardinality (very many distinct values) interactions you can't enumerate.
 
 ### Common mistakes
 - Using `LinearRegression` for a 0/1 target — predictions fall outside [0, 1] and the fit is dominated by easy points.
 - Forgetting that the default is regularized (C = 1) — compare coefficients across models only with the same C and scaling.
-- Assuming 0.5 is the right threshold for imbalanced data.
+- Assuming 0.5 is the right threshold for imbalanced data (one class much rarer than the other).
 
 ### Real-world examples
 - **Credit scoring** scorecards are traditionally logistic regression, because regulators and loan officers need to read the coefficients.
@@ -662,7 +664,7 @@ Strongly non-linear boundaries without good features (use trees/boosting or neur
 
 - *"Why not MSE for classification?"* — With a sigmoid, MSE is non-convex and gives weak gradients for confidently wrong predictions; log-loss is convex and punishes them hard.
 - *"What happens on perfectly separable data?"* — The unregularized loss keeps decreasing as weights grow, so they diverge; regularization keeps them finite.
-- *"Is logistic regression's output calibrated?"* — Often roughly, because log-loss is a proper scoring rule, but check with a reliability curve (Chapter 6).
+- *"Is logistic regression's output calibrated?"* — Often roughly, because log-loss is a proper scoring rule (a loss that is lowest only when the predicted probabilities are the true ones), but check with a reliability curve (a plot of predicted probability against how often the event really happened; Chapter 6).
 
 ### Self-check
 1. σ(0)? → 0.5.
@@ -741,7 +743,7 @@ Current scikit-learn (1.9 here) has no `multi_class` argument any more: `Logisti
 ### In the interview
 **30 seconds:** *"For K classes you can train K one-vs-rest binary models, or one softmax model that outputs K scores and normalises them with e^z / Σe^z, trained with cross-entropy. Softmax gives coherent probabilities for mutually exclusive classes and is the output layer of neural classifiers; OvR works with any binary model and suits multi-label problems."*
 
-- *"Why subtract the max in softmax?"* — Numerical stability: e^1000 overflows, and subtracting a constant from all scores doesn't change the result.
+- *"Why subtract the max in softmax?"* — Numerical stability: e^1000 overflows (is too large for the computer to represent), and subtracting a constant from all scores doesn't change the result.
 - *"Softmax with 2 classes?"* — Equivalent to logistic regression on the score difference.
 
 ### Self-check
@@ -761,7 +763,7 @@ A linear model's coefficients are its explanation. Reading them correctly depend
 
 ### How it works
 - **Raw units:** wⱼ = change in ŷ per 1-unit increase in xⱼ, **holding all other features fixed**. Change the unit (m² → km²) and the number changes by a factor of a million — the model doesn't.
-- **Standardized features:** wⱼ = change in ŷ per 1 standard deviation of xⱼ. Now magnitudes are comparable across features — a rough importance ranking.
+- **Standardized features:** wⱼ = change in ŷ per 1 standard deviation (the typical spread of the feature) of xⱼ. Now magnitudes are comparable across features — a rough importance ranking.
 - **Logistic regression:** wⱼ is a change in log-odds; e^wⱼ is the **odds ratio**. e^w > 1 raises the odds, < 1 lowers them.
 - **Intercept:** the prediction when all features are 0 (with standardized features: at the average feature values).
 
@@ -800,7 +802,7 @@ bootstrap coefficients for two near-duplicate features (true: 1.0 and 1.0):
 Reading it:
 - Each extra m² adds about $2,980 and each year of age subtracts about $1,490 (the price unit is $1000s). In raw units, age's coefficient looks half as big as size's; standardized, size matters about 6.6× more (137.6 vs 20.8), because sizes vary much more than ages.
 - In the cancer model, one standard deviation more "worst texture" multiplies the odds of *benign* by 0.55 (about halves them).
-- With near-duplicate features, individual coefficients swing wildly between resamples (even flipping sign), while their **sum** stays stable at ≈ 2. Predictions are fine; the individual numbers are meaningless. Diagnose with correlations or the **variance inflation factor (VIF)**; fix by dropping/combining features or using Ridge.
+- With near-duplicate features, individual coefficients swing wildly between resamples (bootstrap resamples: new datasets drawn at random, with replacement, from the original rows) (even flipping sign), while their **sum** stays stable at ≈ 2. Predictions are fine; the individual numbers are meaningless. Diagnose with correlations or the **variance inflation factor (VIF)**, a score of how much a coefficient's uncertainty is inflated by its correlation with the other features; fix by dropping/combining features or using Ridge.
 
 ### Common mistakes
 - Comparing raw coefficients across features with different units.
@@ -809,7 +811,7 @@ Reading it:
 - Forgetting that regularization shrinks coefficients (they are biased toward 0).
 
 ### In the interview
-**30 seconds:** *"A coefficient is the change in prediction per unit of that feature, holding the others constant. Standardize features to compare magnitudes; in logistic regression exponentiate to get odds ratios. Coefficients are unstable under multicollinearity and are associations, not causal effects."*
+**30 seconds:** *"A coefficient is the change in prediction per unit of that feature, holding the others constant. Standardize features to compare magnitudes; in logistic regression exponentiate (compute e to the power of the coefficient) to get odds ratios. Coefficients are unstable under multicollinearity and are associations, not causal effects."*
 
 ### Self-check
 1. Logistic coefficient −0.69: effect on odds? → ×e^−0.69 ≈ 0.5, halves the odds.

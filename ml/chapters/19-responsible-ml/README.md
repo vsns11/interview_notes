@@ -2,7 +2,7 @@
 
 Every chapter so far asked "is the model accurate?". This one asks the questions that decide whether a model *should ship*: Is it fair to every group it touches? Can we explain its decisions? Does it leak the private data it learned from? Can someone fool it, poison it, or steal it? Which laws apply?
 
-These are not side topics. A credit model that quietly rejects qualified applicants from one neighbourhood, or a medical model that reveals who was in its training set, is *broken* however good its AUC. Such failures have measurable symptoms and concrete fixes, and this chapter treats them as engineering problems.
+These are not side topics. A credit model that quietly rejects qualified applicants from one neighbourhood, or a medical model that reveals who was in its training set, is *broken* however good its AUC (the standard score of how well a model ranks positive cases above negative ones). Such failures have measurable symptoms and concrete fixes, and this chapter treats them as engineering problems.
 
 **What you'll learn**
 1. Where bias enters an ML system, from historical data to feedback loops.
@@ -11,9 +11,9 @@ These are not side topics. A credit model that quietly rejects qualified applica
 4. Explainability: permutation importance, partial dependence, SHAP (computed exactly) and LIME.
 5. Privacy: why "anonymised" data often isn't, k-anonymity, differential privacy, federated learning.
 6. Security: adversarial examples (FGSM), poisoning, model extraction and inversion, membership inference, generative-AI misuse.
-7. Model cards, datasheets, regulation (GDPR, EU AI Act, US rules), real incidents and a pre-launch checklist.
+7. Model cards, datasheets, regulation (GDPR — the EU's data-protection law — the EU AI Act, US rules), real incidents and a pre-launch checklist.
 
-All code is in `code/` (one script per section), figures in `img/`. Every output shown is real (Python 3.14, scikit-learn 1.9, PyTorch 2.14, NumPy 2.5). The optional libraries `shap`, `lime` and `fairlearn` are not installed in the book environment, so their snippets are marked **(not run)**; each has a runnable from-scratch equivalent.
+All code is in `code/` (one script per section), figures in `img/`. Every output shown is real (Python 3.14, scikit-learn 1.9, PyTorch 2.14, NumPy 2.5 — Python's standard classic-ML, deep-learning and array-maths libraries). The optional libraries `shap`, `lime` and `fairlearn` are not installed in the book environment, so their snippets are marked **(not run)**; each has a runnable from-scratch equivalent.
 
 ```mermaid
 flowchart LR
@@ -40,8 +40,8 @@ Analogy: a model is an apprentice who learns only by watching past decisions. If
 Data records human choices and who was measured. Three mechanisms matter most:
 
 1. **Data encodes past decisions.** Hiring, lending and arrest records carry the inequalities of their time: a résumé screener trained on "who we hired" learns "who we used to prefer", not "who does the job well".
-2. **Some groups are thin in the data.** The model sees few of their examples, and the training loss barely notices errors on them. Classic result: the *Gender Shades* study (Buolamwini & Gebru, 2018) found commercial gender classifiers erred on up to 34.7% of darker-skinned women versus at most 0.8% of lighter-skinned men.
-3. **Stereotyped associations get learned and amplified.** Word embeddings trained on web text place "nurse" near "she" and "programmer" near "he" (Bolukbasi et al., 2016). Anything built on top — job recommendations, ad targeting, autocomplete — inherits the association.
+2. **Some groups are thin in the data.** The model sees few of their examples, and the training loss (the error score that training tries to push down) barely notices errors on them. Classic result: the *Gender Shades* study (Buolamwini & Gebru, 2018) found commercial gender classifiers erred on up to 34.7% of darker-skinned women versus at most 0.8% of lighter-skinned men.
+3. **Stereotyped associations get learned and amplified.** Word embeddings (vectors of numbers that represent words, learned from which words appear together) trained on web text place "nurse" near "she" and "programmer" near "he" (Bolukbasi et al., 2016). Anything built on top — job recommendations, ad targeting, autocomplete — inherits the association.
 
 The harm (denied loans, misidentification, worse service) tends to land on people who were already disadvantaged; for the organisation it means legal exposure and lost trust.
 
@@ -52,9 +52,9 @@ The harm (denied loans, misidentification, worse service) tends to land on peopl
 |---|---|---|
 | **Historical bias** | The world itself was unequal; even perfect data reproduces it | Past hiring favoured men, so "good hire" labels skew male |
 | **Sampling / representation bias** | Some groups are under-sampled or missing | Face datasets dominated by lighter-skinned faces; a voice assistant trained mostly on one accent |
-| **Measurement bias** | A feature or proxy is measured differently, or means different things, across groups | "Number of prior arrests" reflects policing intensity, not just behaviour |
+| **Measurement bias** | A feature or proxy (a stand-in for something you can't measure directly) is measured differently, or means different things, across groups | "Number of prior arrests" reflects policing intensity, not just behaviour |
 | **Label bias** | The target is a flawed proxy, or is recorded unevenly | Health *cost* used as a stand-in for health *need* (Obermeyer et al., 2019): less was spent on Black patients at the same level of illness, so the algorithm under-rated their need |
-| **Aggregation bias** | One model for groups whose feature–outcome relationship differs | A single HbA1c threshold across ethnicities with different typical values |
+| **Aggregation bias** | One model for groups whose feature–outcome relationship differs | A single HbA1c (a blood-sugar test) threshold across ethnicities with different typical values |
 | **Evaluation bias** | The benchmark doesn't represent the users; only an overall metric is reported | 95% overall accuracy hiding 70% accuracy on a minority group |
 | **Deployment bias** | The model is used for a purpose or population it was not built for | A risk score designed to target help being used to set punishment |
 | **Feedback loops** | The model's decisions shape the next training data | Predictive policing (below) |
@@ -85,7 +85,7 @@ flowchart LR
 ### Self-check
 1. A hiring model is trained on which applicants managers promoted. Which bias is most likely? → Historical and label bias: "promoted" encodes past managers' preferences.
 2. Your speech model works well overall but poorly for Scottish accents. Which bias? → Sampling/representation bias (and evaluation bias if nobody measured per-accent accuracy).
-3. Why can't you fix a feedback loop just by retraining more often? → Retraining on the loop's own output reinforces it; you need exploration or external ground truth.
+3. Why can't you fix a feedback loop just by retraining more often? → Retraining on the loop's own output reinforces it; you need exploration or external ground truth (the real, independently verified outcome).
 
 ### TL;DR
 Bias enters at every stage, from history to feedback loops. Representative data and per-group evaluation come first; no algorithm fixes a biased label.
@@ -95,7 +95,7 @@ Bias enters at every stage, from history to feedback loops. Representative data 
 ## 19.2 Fairness definitions and the impossibility trade-off
 
 ### What it is
-A **fairness criterion** is a precise statistical condition on a model's predictions across groups. Notation used below: **A** is the group, **Y** the true outcome (1 = good, e.g. repays), **Ŷ** the decision (1 = approve), **S** the model's score. TPR (true-positive rate, recall), FPR (false-positive rate), FNR = 1 − TPR and PPV (precision) are the confusion-matrix rates from Chapter 6, computed separately per group. Most criteria fall into three families (Barocas, Hardt & Narayanan's *Fairness and Machine Learning*):
+A **fairness criterion** is a precise statistical condition on a model's predictions across groups. Notation used below: **A** is the group, **Y** the true outcome (1 = good, e.g. repays), **Ŷ** the decision (1 = approve), **S** the model's score. TPR (true-positive rate, recall), FPR (false-positive rate), FNR = 1 − TPR and PPV (precision) are the confusion-matrix rates (built from the counts of true/false positives and negatives) from Chapter 6, computed separately per group. Most criteria fall into three families (Barocas, Hardt & Narayanan's *Fairness and Machine Learning*):
 
 - **Independence** — the decision doesn't depend on the group.
 - **Separation** — errors don't depend on the group, given the true outcome.
@@ -112,11 +112,11 @@ A **fairness criterion** is a precise statistical condition on a model's predict
 
 Two other ideas you should know by name:
 - **Individual fairness** (Dwork et al., 2012): similar individuals should get similar predictions. Hard in practice because you must define "similar".
-- **Counterfactual fairness** (Kusner et al., 2017): the prediction should not change if the person's group were different, with everything causally downstream of it adjusted. Needs a causal model of the data.
+- **Counterfactual fairness** (Kusner et al., 2017): the prediction should not change if the person's group were different, with everything causally downstream of it adjusted. Needs a causal model of the data (a map of which variables cause which).
 
 ### Why it matters
 "Make it fair" is not actionable; "equalise TPR between groups within 2 points" is. Picking a definition is a **values decision** tied to the harm you care about:
-- Hiring shortlist where the base rates are themselves the product of discrimination → **demographic parity** may be justified.
+- Hiring shortlist where the base rates (the true share of positives in each group) are themselves the product of discrimination → **demographic parity** may be justified.
 - Loans, medical screening, where missing a qualified person is the key harm → **equal opportunity**.
 - Criminal justice, where both false accusations and missed risks matter → **equalized odds**.
 - Risk scores read by humans (a doctor, a judge) → **calibration**, so a number means the same thing for everyone.
@@ -162,11 +162,11 @@ Reading it: both groups are calibrated (scores near 0.74 come true about 74% of 
 ### When not to use a given metric
 - Demographic parity, when base-rate differences are real and legitimate (disease prevalence by age).
 - Equal opportunity, when the labels themselves are biased — you would equalise against a distorted target.
-- The 4/5 rule as a legal safe harbour; it is only a screening heuristic.
+- The 4/5 rule as a legal safe harbour (a rule that guarantees you're legally in the clear); it is only a screening heuristic.
 
 ### Common mistakes
 - Reporting one fairness number without saying which definition.
-- Comparing groups with tiny sample sizes — gaps of 10 points can be noise; report confidence intervals.
+- Comparing groups with tiny sample sizes — gaps of 10 points can be noise; report confidence intervals (a range likely to contain the true value).
 - Forgetting **intersectional** groups (e.g. older women), where gaps are often largest.
 
 ### In the interview
@@ -284,16 +284,16 @@ print(mf.by_group); print(mf.difference())
 |---|---|---|
 | Collect the sensitive attribute | Lets you measure and fix bias | Privacy risk; some jurisdictions restrict it; needs consent and access controls |
 | Don't collect it | Simpler legally | Bias still happens through proxies — you just can't see it |
-| Infer it (e.g. BISG surname + geography method used by US regulators) | Enables audits without collection | Error-prone; must be used only for auditing |
+| Infer it (e.g. BISG — Bayesian Improved Surname Geocoding — surname + geography method used by US regulators) | Enables audits without collection | Error-prone; must be used only for auditing |
 
 ### Common mistakes
-- Auditing on the training set instead of held-out data.
+- Auditing on the training set instead of held-out data (examples kept aside and never used for training).
 - Reporting gaps without group sizes and confidence intervals.
 - Treating recorded labels as ground truth when the labelling process itself is suspect.
-- Checking fairness once before launch and never again — drift changes gaps.
+- Checking fairness once before launch and never again — drift (the live population or data shifting after launch) changes gaps.
 
 ### Real-world examples
-Fairlearn (started at Microsoft) and IBM's AIF360 are open-source fairness toolkits; Google's What-If Tool visualises per-group metrics. US lenders run fair-lending analyses on underwriting models for regulatory compliance.
+Fairlearn (started at Microsoft) and IBM's AIF360 are open-source fairness toolkits; Google's What-If Tool visualises per-group metrics. US lenders run fair-lending analyses on underwriting (deciding whether to lend, and on what terms) models for regulatory compliance.
 
 ### In the interview
 **30-second answer:** "I slice held-out data by group, compute selection rate, TPR, FPR, PPV and calibration per group and the gaps between groups, and predict the sensitive attribute from the features to find proxies. I report group sizes and confidence intervals and keep tracking the metrics in production."
@@ -318,9 +318,9 @@ Slice metrics by group, compute the gaps and per-group calibration, test for pro
 
 | Stage | Idea | Techniques |
 |---|---|---|
-| **Pre-processing** (fix the data) | Change what the model learns from | Collect more data for thin groups, re-sample, **reweighing** (Kamiran & Calders, 2012), relabel suspect labels, learn fair representations, synthetic augmentation for rare groups |
-| **In-processing** (fix the training) | Add fairness to the objective | **Fairness penalties / constraints** (e.g. Zafar et al., 2017), reductions approach (Agarwal et al., 2018; Fairlearn's `ExponentiatedGradient`), adversarial debiasing (Zhang et al., 2018) |
-| **Post-processing** (fix the decisions) | Keep the model, change how scores become decisions | **Group-specific thresholds** (Hardt, Price & Srebro, 2016), reject-option classification |
+| **Pre-processing** (fix the data) | Change what the model learns from | Collect more data for thin groups, re-sample, **reweighing** (Kamiran & Calders, 2012), relabel suspect labels, learn fair representations, synthetic augmentation (adding generated examples) for rare groups |
+| **In-processing** (fix the training) | Add fairness to the objective | **Fairness penalties / constraints** (e.g. Zafar et al., 2017), reductions approach (Agarwal et al., 2018; Fairlearn's `ExponentiatedGradient`; turns the constraint into a series of reweighted ordinary training runs), adversarial debiasing (Zhang et al., 2018; a second network tries to guess the group from the model's output and the model learns to defeat it) |
+| **Post-processing** (fix the decisions) | Keep the model, change how scores become decisions | **Group-specific thresholds** (Hardt, Price & Srebro, 2016), reject-option classification (flip uncertain decisions near the threshold in favour of the disadvantaged group) |
 
 ```mermaid
 flowchart LR
@@ -334,7 +334,7 @@ flowchart LR
 Measurement without mitigation only documents harm. Post-processing needs no retraining (good for a vendor model); pre-processing leaves training code untouched; in-processing usually gives the best accuracy–fairness trade-off but needs custom training.
 
 ### How it works
-**Reweighing.** Give each (group, label) cell a weight so that, in the weighted data, label and group are statistically independent:
+**Reweighing.** Give each (group, label) cell a weight so that, in the weighted data, label and group are statistically independent (knowing one tells you nothing about the other):
 
   w(g, y) = P(A=g) · P(Y=y) / P(A=g, Y=y)
 
@@ -342,10 +342,10 @@ Cells that are rarer than independence predicts (here: group B with a good outco
 
 **Fairness penalty.** Add a term to the loss that grows with the gap you want to close. Here: logistic loss + λ·(mean score of A − mean score of B)². Larger λ means more parity, less accuracy.
 
-**Threshold adjustment (post-processing).** Keep the scores; choose a separate threshold per group, fitted on a *validation* set, so the chosen rate matches:
+**Threshold adjustment (post-processing).** Keep the scores; choose a separate threshold per group, fitted on a *validation* set (held-out data used for tuning choices, separate from the final test set), so the chosen rate matches:
 1. Fix group A's threshold (0.5).
 2. Measure the target rate for A on validation data — its TPR (for equal opportunity) or selection rate (for demographic parity).
-3. For group B pick the threshold at the matching quantile of its scores (among its true positives for TPR, among all its members for selection rate).
+3. For group B pick the threshold at the matching quantile (the score below which a given fraction of values falls) of its scores (among its true positives for TPR, among all its members for selection rate).
 4. Apply both thresholds on the test set and re-audit.
 
 Key code from `code/mitigation.py`:
@@ -415,8 +415,8 @@ inproc.fit(X_train, y_train, sensitive_features=g_train)
 | Method | Pros | Cons |
 |---|---|---|
 | Reweighing / resampling | Simple, model-agnostic, no group needed at prediction time | Limited control over which criterion improves |
-| Fairness penalty / constraints | Directly targets a criterion; good trade-offs | Custom training; hyperparameter λ; can be unstable |
-| Group thresholds | No retraining; precise control; works on vendor models | Uses the group at decision time — **may be unlawful disparate treatment** in some settings (e.g. US employment law) |
+| Fairness penalty / constraints | Directly targets a criterion; good trade-offs | Custom training; hyperparameter (a setting you choose rather than learn) λ; can be unstable |
+| Group thresholds | No retraining; precise control; works on vendor models | Uses the group at decision time — **may be unlawful disparate treatment** (explicitly treating people differently because of their group) in some settings (e.g. US employment law) |
 | Collecting better data / labels | Fixes the cause | Slow and costly |
 
 ### When not to use it
@@ -424,7 +424,7 @@ Don't bolt on post-processing when the real issue is a broken label (fix the lab
 
 ### Common mistakes
 - Fitting thresholds on the test set (leaks information; always use a validation set).
-- Tiny groups: thresholds become noisy — pool data or use Bayesian estimates.
+- Tiny groups: thresholds become noisy — pool data or use Bayesian estimates (which blend a small group's data with what the whole population suggests).
 - Declaring victory on one metric while another gets worse.
 
 ### Real-world examples
@@ -438,7 +438,7 @@ LinkedIn has described re-ranking for gender-representative candidate search res
 
 ### Self-check
 1. P(B)=0.3, P(Y=1)=0.5, P(B, Y=1)=0.1. Reweighing weight for (B, 1)? → 0.3·0.5/0.1 = 1.5.
-2. Why fit thresholds on validation, not test? → To avoid overfitting the fairness adjustment to the evaluation data.
+2. Why fit thresholds on validation, not test? → To avoid overfitting (tuning so closely to one dataset that it fails on new data) the fairness adjustment to the evaluation data.
 3. Which stage suits a model bought from a vendor? → Post-processing.
 
 ### TL;DR
@@ -450,13 +450,13 @@ Pre-processing fixes data (reweighing), in-processing fixes the loss (fairness p
 
 ### What it is
 **Explainability** (or **interpretability**) is the ability to say *why* a model made a prediction in terms a human can check.
-A **global** explanation describes the model's overall behaviour (which features matter, and how); a **local** one explains a single prediction (why *this* applicant was declined). An **intrinsically interpretable** model is readable directly (linear models, small trees, rule lists, GAMs, i.e. generalised additive models); a **post-hoc** method explains a black box from outside.
+A **global** explanation describes the model's overall behaviour (which features matter, and how); a **local** one explains a single prediction (why *this* applicant was declined). An **intrinsically interpretable** model is readable directly (linear models, small trees, rule lists, GAMs, i.e. generalised additive models); a **post-hoc** method explains a black box (a model whose inner workings a person can't read) from outside.
 
 Analogy: a global explanation is a restaurant's recipe book; a local one is why tonight's dish tasted salty.
 ### Why it matters
-- **Debugging**: spot leakage, shortcuts and proxies.
+- **Debugging**: spot leakage (training inputs that secretly contain the answer), shortcuts (spurious cues the model latched onto) and proxies.
 - **Trust**: doctors, underwriters and judges need reasons.
-- **Law**: US lenders must state the principal reasons for denying credit (ECOA/Regulation B adverse-action notices); GDPR requires meaningful information about the logic of solely automated significant decisions (§19.9).
+- **Law**: US lenders must state the principal reasons for denying credit (ECOA/Regulation B — the US Equal Credit Opportunity Act and its implementing rule — adverse-action notices); GDPR requires meaningful information about the logic of solely automated significant decisions (§19.9).
 - **Recourse**: telling a person what would change the decision.
 
 ### How it works
@@ -466,23 +466,23 @@ Analogy: a global explanation is a restaurant's recipe book; a local one is why 
 2. Shuffle one column, breaking its link with the target; score again.
 3. Importance = drop in score; repeat several shuffles and average.
 
-Unlike tree impurity importance (Chapter 7), it is model-agnostic and measured on held-out data.
+Unlike tree impurity importance (Chapter 7; how much a feature's splits purify the tree's nodes), it is model-agnostic (works with any model) and measured on held-out data.
 
 **2. Partial dependence (PDP) and ICE (global/local).**
 PD(x_s) = (1/n) Σᵢ f(x_s, x_c⁽ⁱ⁾): set feature s to a value for *every* row, average the predictions, repeat across a grid. **ICE** (individual conditional expectation) curves plot the same for each row separately; the PDP is their average. ICE reveals interactions that the average hides.
 
 **3. SHAP (local, adds up to global).**
-**Shapley values** come from cooperative game theory (Shapley, 1953): the features are "players" sharing the "payout" f(x) − E[f]. Feature i's value is its average marginal contribution over all orders in which features could be added:
+**Shapley values** come from cooperative game theory (Shapley, 1953): the features are "players" sharing the "payout" f(x) − E[f]. Feature i's value is its average marginal contribution (how much the prediction changes when that feature is added) over all orders in which features could be added:
 
   φᵢ = Σ over subsets S not containing i of |S|!(M−|S|−1)!/M! · [v(S ∪ {i}) − v(S)]
 
-where v(S) is the expected prediction when only the features in S are known (the others drawn from background data). The weight |S|!(M−|S|−1)!/M! is just the fraction of all M! orderings of the features in which exactly the features of S come before i, so φᵢ is i's average extra contribution over every order of arrival. Properties: **efficiency** (φ's sum to f(x) − E[f]), **symmetry**, **dummy** (a feature that never changes the output gets 0), **additivity**. Exact computation needs 2^M subsets, so the SHAP library (Lundberg & Lee, 2017) uses approximations: KernelSHAP (any model, sampling) and TreeSHAP (exact and fast for tree ensembles).
+where v(S) is the expected prediction when only the features in S are known (the others drawn from background data). The weight |S|!(M−|S|−1)!/M! is just the fraction of all M! orderings of the features in which exactly the features of S come before i, so φᵢ is i's average extra contribution over every order of arrival. Properties: **efficiency** (φ's sum to f(x) − E[f]), **symmetry**, **dummy** (a feature that never changes the output gets 0), **additivity**. Exact computation needs 2^M subsets, so the SHAP library (Lundberg & Lee, 2017) uses approximations: KernelSHAP (any model, sampling) and TreeSHAP (exact and fast for tree ensembles — models built from many decision trees).
 
-**4. LIME (local).** Ribeiro et al., 2016: perturb the input around x, weight the black box's predictions by closeness to x, and fit a sparse linear model whose coefficients are the explanation. Fast, but results shift with the kernel width and seed.
+**4. LIME (local).** Ribeiro et al., 2016: perturb (make small random changes to) the input around x, weight the black box's predictions by closeness to x, and fit a sparse linear model (one with few non-zero coefficients) whose coefficients are the explanation. Fast, but results shift with the kernel width (how fast the closeness weight falls off) and seed (the starting value of the random-number generator).
 
 **5. Counterfactual explanations (local).** "You would have been approved if your debt ratio were 0.25 instead of 0.40" — the smallest *actionable* change that flips the decision.
 
-`code/explainability.py` trains a histogram gradient-boosting model on the credit data (without `group`):
+`code/explainability.py` trains a histogram gradient-boosting model (boosted decision trees that bin feature values into buckets for speed) on the credit data (without `group`):
 
 ```python
 pi = permutation_importance(model, Xte, yte, scoring="roc_auc", n_repeats=10, random_state=0)
@@ -574,13 +574,13 @@ shap.plots.beeswarm(sv)                        # global: distribution of impacts
 - Computing importance on training data (rewards overfitting).
 - Ignoring correlated features — two twin features can each look unimportant.
 - Treating one LIME run as the truth; check stability across seeds.
-- Explaining the wrong output (log-odds vs probability) and confusing readers.
+- Explaining the wrong output (log-odds — the logarithm of p/(1−p), a logistic model's raw output — vs probability) and confusing readers.
 
 ### Real-world examples
-Lenders produce "reason codes" for adverse-action notices; the major cloud ML platforms (Vertex AI, SageMaker Clarify, Azure ML) offer SHAP-style attributions; TreeSHAP is built into XGBoost and LightGBM (`pred_contribs=True` / `pred_contrib=True`).
+Lenders produce "reason codes" for adverse-action notices; the major cloud ML platforms (Vertex AI, SageMaker Clarify, Azure ML) offer SHAP-style attributions; TreeSHAP is built into XGBoost and LightGBM (popular gradient-boosting libraries) (`pred_contribs=True` / `pred_contrib=True`).
 
 ### In the interview
-**30-second answer:** "Global explanations — permutation importance on held-out data, PDP and ICE — describe the whole model. Local ones explain a single prediction: SHAP splits it into additive feature contributions with game-theory guarantees; LIME fits a local linear surrogate. Both are correlational, so I use them for debugging and reason codes, not causal claims."
+**30-second answer:** "Global explanations — permutation importance on held-out data, PDP and ICE — describe the whole model. Local ones explain a single prediction: SHAP splits it into additive feature contributions with game-theory guarantees; LIME fits a local linear surrogate (a simple stand-in model). Both are correlational, so I use them for debugging and reason codes, not causal claims."
 
 - *SHAP vs LIME?* → SHAP has axioms (efficiency, symmetry, dummy) and consistent results; LIME is faster but less stable. TreeSHAP is exact for trees.
 - *How do you explain a decline to a customer?* → Top negative SHAP contributors mapped to plain-language reason codes, plus a counterfactual if possible.
@@ -604,7 +604,7 @@ Global: permutation importance, PDP. Local: SHAP (adds up to f(x) − E[f]), LIM
 ### Why it matters
 ML runs on data about people — photos, messages, purchases, scraped pages. Every team must answer:
 1. **Consent and ownership.** Did people agree to their data training a model? If you send company data to a third-party AI service, is it used to train the vendor's models, and where can it flow next?
-2. **Legal duties.** GDPR, California's CCPA/CPRA and similar laws require transparency, a lawful basis, and rights to access, delete or opt out.
+2. **Legal duties.** GDPR, California's CCPA/CPRA (its consumer-privacy laws) and similar laws require transparency, a lawful basis, and rights to access, delete or opt out.
 3. **Harms.** Leaked data enables identity theft, harassment and discrimination; companies face fines and lost trust.
 4. **Models memorise.** A trained model can reveal training records (§19.7), so "we only ship the model" is no privacy guarantee.
 
@@ -626,7 +626,7 @@ Small ε = strong privacy (ε = 1 means any outcome is at most e ≈ 2.72 times 
 The **Laplace mechanism** achieves ε-DP for a numeric query f:
 1. Compute the **sensitivity** Δf = the most one person can change f. A count has Δf = 1; a mean of values clipped to [L, U] over n people has Δf = (U − L)/n.
 2. Add noise drawn from Laplace(0, b) with scale b = Δf/ε.
-3. Release f(D) + noise. The expected absolute error is b; the standard deviation √2·b.
+3. Release f(D) + noise. The expected absolute error is b; the standard deviation (the typical spread around the average) √2·b.
 
 Useful DP properties: **composition** (answering k queries at ε each costs up to kε in total — the privacy budget), and **post-processing** (anything computed from a DP output stays DP).
 
@@ -673,9 +673,9 @@ Reading it:
 2. Two harmless-looking exact counts ("all patients", "all except Bob") reveal Bob's HIV status: a **differencing attack**. With DP noise the difference (+4.0) says nothing reliable.
 3. The mean-income query stays accurate even at ε = 0.01 because its sensitivity is tiny ((300 − 0)/10,000 = 0.03). **DP is cheap for large aggregates and expensive for small groups** — the central trade-off.
 
-**DP in model training.** **DP-SGD** (Abadi et al., 2016) clips each example's gradient and adds Gaussian noise before each update; the PyTorch library Opacus and TensorFlow Privacy implement it. It costs accuracy, especially on small datasets and rare classes.
+**DP in model training.** **DP-SGD** (Abadi et al., 2016) clips each example's gradient (the direction in weight space that increases the loss fastest) and adds Gaussian (bell-curve-shaped) noise before each update; the PyTorch library Opacus and TensorFlow Privacy implement it. It costs accuracy, especially on small datasets and rare classes.
 
-**Federated learning (FL)** (McMahan et al., 2017) keeps raw data on devices or at institutions and moves the *model* instead: the server sends the global model to clients, each trains a few epochs locally and returns only its updated weights, and the server averages them weighted by client data size (**FedAvg**) before the next round.
+**Federated learning (FL)** (McMahan et al., 2017) keeps raw data on devices or at institutions and moves the *model* instead: the server sends the global model to clients, each trains a few epochs (full passes over its data) locally and returns only its updated weights, and the server averages them weighted by client data size (**FedAvg**) before the next round.
 
 ```mermaid
 sequenceDiagram
@@ -715,7 +715,7 @@ client 1 alone (n=1500):            0.767
 client 2 alone (n=1000):            0.775
 ```
 
-The federated model matches the pooled model (0.826 vs 0.824) and beats every client training alone — without any raw row leaving a client. Caveat: updates themselves can leak information (gradient inversion attacks), so production FL adds **secure aggregation** (the server sees only the sum of updates) and often DP noise.
+The federated model matches the pooled model (0.826 vs 0.824) and beats every client training alone — without any raw row leaving a client. Caveat: updates themselves can leak information (gradient inversion attacks, which rebuild training examples from shared updates), so production FL adds **secure aggregation** (the server sees only the sum of updates) and often DP noise.
 
 ### Trade-offs
 | Technique | Protects against | Cost / limits |
@@ -724,7 +724,7 @@ The federated model matches the pooled model (0.826 vs 0.824) and beats every cl
 | Pseudonymisation | Casual identification | Easily reversed by linkage |
 | k-anonymity (+ l-diversity, t-closeness) | Linkage on quasi-identifiers | Loses detail; weak against background knowledge; no formal guarantee |
 | Differential privacy | Any attacker, any side information (formal bound) | Noise reduces accuracy; budget accounting; hard for small groups |
-| Federated learning | Raw data centralisation | Communication cost, non-IID data, updates can leak — combine with secure aggregation/DP |
+| Federated learning | Raw data centralisation | Communication cost, non-IID data (clients' data differ in distribution), updates can leak — combine with secure aggregation/DP |
 | Synthetic data | Sharing raw records | Can memorise real records unless generated with DP |
 
 ### When not to use it
@@ -735,11 +735,11 @@ The federated model matches the pooled model (0.826 vs 0.824) and beats every cl
 ### Common mistakes
 - Forgetting composition: many queries at ε = 1 each add up to a weak guarantee.
 - Not clipping inputs, so sensitivity is unbounded and the "DP" is fake.
-- Logging raw PII in feature stores, debug logs or prompts.
+- Logging raw PII in feature stores (databases that serve model inputs), debug logs or prompts (the text sent to a language model).
 - Keeping training data forever "just in case" (violates storage limitation under GDPR).
 
 ### Real-world examples
-The US Census Bureau protected 2020 census results with differential privacy (its "TopDown" algorithm). Apple uses local DP to learn popular emoji and new words from devices; Google's RAPPOR (2014) collected Chrome statistics with local DP. Google's Gboard keyboard trains next-word prediction with federated learning. Hospitals use FL consortia for medical imaging models.
+The US Census Bureau protected 2020 census results with differential privacy (its "TopDown" algorithm). Apple uses local DP (noise is added on the user's device before anything is sent) to learn popular emoji and new words from devices; Google's RAPPOR (2014) collected Chrome statistics with local DP. Google's Gboard keyboard trains next-word prediction with federated learning. Hospitals use FL consortia for medical imaging models.
 
 ### In the interview
 **30-second answer:** "Removing names isn't anonymisation — quasi-identifiers link back to people. k-anonymity resists linkage without a formal guarantee. Differential privacy bounds any one person's influence: Laplace noise of scale sensitivity/ε, with ε budgeted across queries; DP-SGD applies it to training. Federated learning keeps data local and averages updates, with secure aggregation and DP because updates can leak."
@@ -760,7 +760,7 @@ Pseudonymised ≠ anonymous. k-anonymity resists linkage but not background know
 ## 19.7 Security: attacks on ML models
 
 ### What it is
-**Adversarial ML** studies attackers who target the model itself rather than the servers around it. A **threat model** states what the attacker wants and can do: **white-box** (knows weights and code) or **black-box** (can only send queries and read answers); attacking at **training time** (the data) or **inference time** (the inputs).
+**Adversarial ML** studies attackers who target the model itself rather than the servers around it. A **threat model** states what the attacker wants and can do: **white-box** (knows weights — the learned numbers inside the model — and code) or **black-box** (can only send queries and read answers); attacking at **training time** (the data) or **inference time** (the inputs, when the trained model is being used).
 
 | Attack | When | Goal |
 |---|---|---|
@@ -769,7 +769,7 @@ Pseudonymised ≠ anonymous. k-anonymity resists linkage but not background know
 | **Model extraction (stealing)** | Inference, via queries | Copy a paid or proprietary model |
 | **Model inversion** | Inference, via queries | Reconstruct sensitive features or typical training inputs |
 | **Membership inference** | Inference, via queries | Learn whether a record was in the training set |
-| **Training-data extraction** | Inference, via queries | Make a generative model emit memorised training text or images |
+| **Training-data extraction** | Inference, via queries | Make a generative model (one that produces text or images) emit memorised training text or images |
 
 ### Why it matters
 Models guard money and safety (fraud filters, malware detection, moderation, driving perception), so each attack maps to a real harm: fraud slipping through, a stolen model, or proof that a named person was in a cancer study.
@@ -782,11 +782,11 @@ Models guard money and safety (fraud filters, malware detection, moderation, dri
 
 1. Compute the gradient of the loss with respect to the *input* pixels (not the weights).
 2. Take its sign: +1 or −1 per pixel — the direction that increases the loss.
-3. Move every pixel by ε in that direction (an L∞ budget of ε per pixel) and clip to the valid range.
+3. Move every pixel by ε in that direction (an L∞ budget of ε per pixel — a cap on the largest change to any single pixel) and clip to the valid range.
 
-Many small nudges, each pointing the "wrong" way, add up to a large change in the logit. Their paper's famous image: a panda classified with 57.7% confidence becomes a "gibbon" at 99.3% after an imperceptible perturbation. **PGD** (Madry et al., 2018) repeats FGSM-style steps and is the standard strong attack. The main defence is **adversarial training**: include adversarial examples in each training batch.
+Many small nudges, each pointing the "wrong" way, add up to a large change in the logit (the raw score before it is turned into a probability). Their paper's famous image: a panda classified with 57.7% confidence becomes a "gibbon" at 99.3% after an imperceptible perturbation. **PGD** (Madry et al., 2018) repeats FGSM-style steps and is the standard strong attack. The main defence is **adversarial training**: include adversarial examples in each training batch.
 
-`code/fgsm_attack.py` (an MLP on sklearn's 8×8 digits, pixels scaled to [0, 1]):
+`code/fgsm_attack.py` (an MLP — multi-layer perceptron, a basic fully connected neural network — on sklearn's 8×8 digits, pixels scaled to [0, 1]):
 
 ```python
 def fgsm(model, x, y, eps):
@@ -822,11 +822,11 @@ Reading it: a per-pixel budget of 0.1 cuts the plain model from 97.6% to 36.5%. 
 
 **2. Data poisoning.** The attacker corrupts training data. **Label flipping** changes labels; a **backdoor** (e.g. BadNets, Gu et al., 2017) adds a trigger pattern to some examples with a chosen label, so the model behaves normally until it sees the trigger. Risk grows when training on scraped web data, user feedback or crowd-sourced labels. Microsoft's Tay chatbot (2016) was withdrawn within a day after users deliberately taught it offensive content — a well-known case of manipulated learning from user input.
 
-**3. Model extraction.** Tramèr et al. (2016) showed that prediction APIs can be copied by querying them and training a surrogate on the answers. The stolen copy also enables white-box attacks against the original.
+**3. Model extraction.** Tramèr et al. (2016) showed that prediction APIs (interfaces other programs call over the network — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) can be copied by querying them and training a surrogate on the answers. The stolen copy also enables white-box attacks against the original.
 
 **4. Model inversion.** Fredrikson et al. (2015) reconstructed recognisable face images of individuals from a face-recognition model using its confidence scores.
 
-**5. Membership inference.** Shokri et al. (2017): models are more confident on examples they trained on, so high confidence on the true label suggests membership. Overfitting is the main driver. Carlini et al. (2021) extracted verbatim memorised training text — including personal contact details — from GPT-2.
+**5. Membership inference.** Shokri et al. (2017): models are more confident on examples they trained on, so high confidence on the true label suggests membership. Overfitting is the main driver. Carlini et al. (2021) extracted verbatim memorised training text — including personal contact details — from GPT-2 (OpenAI's 2019 language model).
 
 `code/attacks_demo.py`:
 
@@ -858,9 +858,9 @@ Output:
    regularised forest (depth 4)     train acc 0.896  test acc 0.851  attack AUC 0.556
 ```
 
-Reading it: **random** label noise barely hurts, but **targeted** flipping of 10–30% of positives drags recall from 0.84 to 0.57, so a fraud filter can be taught to miss exactly the attacker's class. **Extraction** reaches 93% agreement with 5,000 realistic queries. **Membership inference** is strong (AUC 0.84) against an overfit model and near chance (0.56) after regularisation: generalisation is also a privacy defence.
+Reading it: **random** label noise barely hurts, but **targeted** flipping of 10–30% of positives drags recall from 0.84 to 0.57, so a fraud filter can be taught to miss exactly the attacker's class. **Extraction** reaches 93% agreement with 5,000 realistic queries. **Membership inference** is strong (AUC 0.84) against an overfit model and near chance (0.56) after regularisation (constraints that keep a model simple, here a depth limit): generalisation is also a privacy defence.
 
-**6. Generative-AI misuse.** **Deepfakes** (fake video, audio or images impersonating real people for fraud, blackmail or non-consensual imagery) and cheap **misinformation at scale** are harms of a different kind. Responses combine detection classifiers (an arms race), **provenance** standards such as C2PA "Content Credentials", watermarking (e.g. Google DeepMind's SynthID), platform policies, labelling duties such as the EU AI Act's (§19.9), and media literacy.
+**6. Generative-AI misuse.** **Deepfakes** (fake video, audio or images impersonating real people for fraud, blackmail or non-consensual imagery) and cheap **misinformation at scale** are harms of a different kind. Responses combine detection classifiers (an arms race), **provenance** (a verifiable record of where content came from) standards such as C2PA "Content Credentials", watermarking (hidden marks embedded in generated content) (e.g. Google DeepMind's SynthID), platform policies, labelling duties such as the EU AI Act's (§19.9), and media literacy.
 
 ### Defences at a glance
 | Threat | Defences |
@@ -869,7 +869,7 @@ Reading it: **random** label noise barely hurts, but **targeted** flipping of 10
 | Poisoning / backdoors | Data provenance and access control, outlier and label-noise detection, robust training, dataset versioning, backdoor scanning |
 | Extraction | Rate limits, authentication, returning labels instead of full probabilities, query-pattern monitoring, watermarking the model |
 | Inversion / membership | Regularisation, DP-SGD, limiting confidence outputs, deduplicating training data |
-| Generative misuse | Provenance and watermarking, usage policies, abuse monitoring, red-teaming |
+| Generative misuse | Provenance and watermarking, usage policies, abuse monitoring, red-teaming (testers deliberately trying to break the system) |
 
 ### Common mistakes
 - Evaluating robustness only against weak attacks (e.g. FGSM) — test with PGD and adaptive attacks.
@@ -878,7 +878,7 @@ Reading it: **random** label noise barely hurts, but **targeted** flipping of 10
 - Training on unvetted scraped or user-feedback data with no provenance.
 
 ### Real-world examples
-Spam and malware detection are adversarial by nature (attackers constantly probe filters). MITRE ATLAS catalogues real attacks on ML systems; the OWASP Top 10 for LLM Applications lists data/model poisoning and sensitive-information disclosure among its risks.
+Spam and malware detection are adversarial by nature (attackers constantly probe filters). MITRE ATLAS catalogues real attacks on ML systems; the OWASP (an open web-security community) Top 10 for LLM (large language model) Applications lists data/model poisoning and sensitive-information disclosure among its risks.
 
 ### In the interview
 **30-second answer:** "Evasion uses adversarial examples — FGSM moves each input feature by ε along the sign of the loss gradient — and is countered by adversarial training. Poisoning corrupts training data or plants backdoors; defend with provenance and anomaly checks. Through a query API attackers can extract, invert or probe the model for membership; rate limits, label-only outputs, regularisation and DP help."
@@ -919,12 +919,12 @@ Most harms come from a model being used outside the conditions it was built for.
 **Datasheet questions** are grouped as *motivation* (why, by whom, funded by whom), *composition* (contents, gaps, sensitive data, identifiability), *collection process* (how, consent), *preprocessing and labelling*, *uses*, *distribution* and *maintenance*.
 
 ### Common mistakes
-- Writing it once for launch and never updating it — keep it in the repo, generate the metric tables in the training pipeline, and version it with each release.
+- Writing it once for launch and never updating it — keep it in the repo (the project's version-controlled code repository), generate the metric tables in the training pipeline, and version it with each release.
 - Only aggregate metrics — the whole point is disaggregated (per-group) results.
 - Omitting "out-of-scope uses".
 
 ### Real-world examples
-Hugging Face model cards (a README on every model page), Google's Model Card Toolkit, and system cards published by AI labs for large language models; Hugging Face also supports dataset cards.
+Hugging Face (a popular site for sharing models) model cards (a README on every model page), Google's Model Card Toolkit, and system cards published by AI labs for large language models; Hugging Face also supports dataset cards.
 
 ### In the interview
 **30-second answer:** "A model card documents intended use, out-of-scope uses, training and evaluation data, per-group metrics and limitations; a datasheet documents a dataset's motivation, composition, collection, labelling, uses and maintenance. I generate the metric sections automatically in the pipeline and version them with the model."
@@ -968,10 +968,10 @@ Separately, providers of **general-purpose AI models** (e.g. large language mode
 
 ### Other rules worth knowing
 - **CCPA/CPRA (California)**: rights to know, delete, correct and opt out of the sale or sharing of personal information.
-- **US anti-discrimination law**: disparate *treatment* (using a protected attribute) and disparate *impact* (a neutral rule with unequal effect and no business necessity); under ECOA/Regulation B lenders must give specific denial reasons, and the CFPB says complex algorithms are no excuse (Circular 2022-03).
+- **US anti-discrimination law**: disparate *treatment* (using a protected attribute) and disparate *impact* (a neutral rule with unequal effect and no business necessity); under ECOA/Regulation B lenders must give specific denial reasons, and the CFPB (the US Consumer Financial Protection Bureau) says complex algorithms are no excuse (Circular 2022-03).
 - **NYC Local Law 144** (enforced from July 2023): automated employment decision tools used for NYC jobs need an annual independent bias audit, published results, and candidate notice.
 - **Sector rules** such as HIPAA (US health data) and model-risk-management guidance for banks (US SR 11-7).
-- **Frameworks** (voluntary): NIST AI Risk Management Framework (2023), ISO/IEC 42001 (AI management systems, 2023).
+- **Frameworks** (voluntary): NIST (the US national standards agency) AI Risk Management Framework (2023), ISO/IEC 42001 (AI management systems, 2023).
 
 ### In the interview
 **30-second answer:** "GDPR governs personal data: lawful basis, minimisation, rights such as erasure, and Article 22 safeguards for solely automated significant decisions. The EU AI Act is risk-based: some uses are banned; high-risk systems such as credit scoring and hiring need risk management, data governance, documentation, logging and human oversight; chatbots and deepfakes carry transparency duties. In the US, fair-lending and employment law (adverse-action reasons, disparate impact, NYC's bias audits) shape design."
@@ -989,7 +989,7 @@ GDPR governs personal data (lawful basis, minimisation, rights, Art. 22); the EU
 ## 19.10 Real-world incidents
 
 ### COMPAS recidivism scores (2016)
-- **What happened**: ProPublica analysed COMPAS risk scores (by Northpointe, now Equivant) for defendants in Broward County, Florida, checking who was re-arrested within two years. Among defendants who did **not** reoffend, Black defendants were labelled higher risk about twice as often as white defendants (44.9% vs 23.5%); among those who **did** reoffend, white defendants were more often labelled lower risk (47.7% vs 28.0%).
+- **What happened**: ProPublica analysed COMPAS recidivism-risk scores (predictions of whether someone will reoffend) (by Northpointe, now Equivant) for defendants in Broward County, Florida, checking who was re-arrested within two years. Among defendants who did **not** reoffend, Black defendants were labelled higher risk about twice as often as white defendants (44.9% vs 23.5%); among those who **did** reoffend, white defendants were more often labelled lower risk (47.7% vs 28.0%).
 - **The response**: Northpointe argued the scores were equally predictive for both groups — a given score corresponded to similar reoffence rates (calibration/predictive parity).
 - **Lesson**: *both sides were right about their own metric*. With different base rates, calibration and equal error rates cannot both hold — this debate triggered the impossibility proofs (§19.2). Also: "re-arrest" is a proxy label shaped by policing (measurement bias).
 
@@ -1032,8 +1032,8 @@ Use this before launch and at every major retrain.
 
 **Deployment and monitoring**
 - [ ] Model card with intended and out-of-scope uses; human oversight and an appeal path.
-- [ ] API hardening (authentication, rate limits, minimal outputs).
-- [ ] Per-group monitoring, drift and feedback-loop checks; incident and rollback plan; scheduled re-audits.
+- [ ] API hardening (authentication — checking who the caller is; rate limits — capping requests per caller; minimal outputs).
+- [ ] Per-group monitoring, drift and feedback-loop checks; incident and rollback (return to the previous model) plan; scheduled re-audits.
 
 ---
 

@@ -9,6 +9,8 @@ In supervised learning every example came with an answer (a label). **Unsupervis
 | **Anomaly detection** | Which examples don't fit? | z-score, Isolation Forest, One-Class SVM, LOF |
 | **Association rules** | Which items occur together? | Apriori, FP-Growth |
 
+Don't worry about the algorithm names yet; each one is explained in its own section below.
+
 The hard part is always **evaluation**: without labels, what does "good" mean? We finish with that.
 
 **What you'll learn**
@@ -31,7 +33,7 @@ All code is in `code/`, all figures in `img/`; outputs are real (scikit-learn 1.
 Analogy: placing k pizza shops in a town so every household walks to its nearest shop and total walking is as small as possible. Then you move each shop to the middle of its customers, reassign customers, and repeat.
 
 ### Why it matters
-It is simple, fast (roughly O(n·k·d) per iteration), scales to millions of points, and is the default first clustering method: customer segmentation, grouping documents, compressing colours in an image (colour quantisation), building "visual words" or codebooks, and initialising other models.
+It is simple, fast (roughly O(n·k·d) per iteration: time grows with points × clusters × features), scales to millions of points, and is the default first clustering method: customer segmentation (splitting customers into groups that behave alike), grouping documents, compressing colours in an image (colour quantisation), building "visual words" or codebooks (a fixed list of representative patterns), and initialising other models.
 
 ### How it works (Lloyd's algorithm)
 k-means minimises the **inertia** (within-cluster sum of squares, WCSS): the sum of squared distances from each point to its centroid.
@@ -41,7 +43,7 @@ k-means minimises the **inertia** (within-cluster sum of squares, WCSS): the sum
 3. **Update** each centroid to the mean of its assigned points.
 4. **Repeat** 2–3 until assignments stop changing.
 
-Each step can only lower (or keep) the inertia, so it always converges — but to a **local** minimum that depends on the starting centroids.
+Each step can only lower (or keep) the inertia, so it always converges — but to a **local** minimum (a solution no small change can improve, though a better one may exist elsewhere) that depends on the starting centroids.
 
 **Worked example (1-D).** Points 1, 2, 3, 10, 11, 12; k = 2; start with centroids 1 and 2.
 - Assign: {1} → c₁; {2, 3, 10, 11, 12} → c₂. Update: c₁ = 1, c₂ = (2+3+10+11+12)/5 = 7.6.
@@ -79,7 +81,7 @@ Bad starts give bad local minima. **k-means++** (Arthur & Vassilvitskii, 2007) s
 3. Pick the next centroid at random with probability **proportional to D(x)²** — far points are much more likely.
 4. Repeat until k centroids; then run normal k-means.
 
-It comes with a guarantee: the expected result is within O(log k) of the optimal inertia. On 8 well-separated blobs, with a single run per seed:
+It comes with a guarantee: the expected result is within O(log k) (a factor that grows only with the logarithm of k) of the optimal inertia. On 8 well-separated blobs, with a single run per seed (the starting number of the random generator):
 
 ```
 init          inertia over 20 single-run seeds, 8 true clusters (min / mean / max)
@@ -116,8 +118,8 @@ k-means implicitly assumes clusters are **round (spherical), similar in size and
 - **Non-convex shapes** (moons, rings) — see the comparison in §9.4.
 - **Elongated or differently-spread clusters** — a big diffuse cluster gets cut up.
 - **Outliers** — they drag the means.
-- **Unscaled features** — distance-based, so always standardise.
-- **Categorical data** — means are meaningless (use k-modes or k-prototypes).
+- **Unscaled features** — distance-based, so always standardise (rescale each feature to mean 0, standard deviation 1).
+- **Categorical data** — means are meaningless (use k-modes or k-prototypes, k-means variants that handle categories).
 - You must choose k.
 
 ### Common mistakes
@@ -129,7 +131,7 @@ k-means implicitly assumes clusters are **round (spherical), similar in size and
 **30-second answer:** "k-means picks k centroids, assigns each point to the nearest, moves each centroid to the mean of its points, and repeats until nothing changes. It minimises within-cluster squared distance and converges to a local minimum, so we use k-means++ initialisation and multiple restarts. We choose k with the elbow or silhouette score. It assumes round, similar-sized clusters and needs scaled features."
 
 - *Why k-means++?* It spreads initial centroids (probability ∝ squared distance), giving faster convergence and better, more consistent results.
-- *Complexity?* O(n·k·d) per iteration; Mini-Batch k-means for very large data.
+- *Complexity?* O(n·k·d) per iteration; Mini-Batch k-means (updates centroids from small random batches of points) for very large data.
 - *Does k-means always converge?* Yes (inertia never increases and there are finitely many assignments), but only to a local optimum.
 
 ### Self-check
@@ -159,7 +161,7 @@ k-means = assign to nearest mean, move means, repeat. Scale data, use k-means++ 
 | **Single** | Closest pair of points | Follows chains — finds snakes and moons, but a thin bridge of noise merges clusters ("chaining") |
 | **Complete** | Farthest pair of points | Compact clusters of similar diameter |
 | **Average** | Mean of all pairwise distances | Compromise |
-| **Ward** (default in scikit-learn) | Increase in total within-cluster variance caused by the merge | Similar to k-means: round, balanced clusters |
+| **Ward** (default in scikit-learn) | Increase in total within-cluster variance (spread) caused by the merge | Similar to k-means: round, balanced clusters |
 
 ```python
 Z = linkage(X, method="ward")          # SciPy: the full merge history
@@ -175,12 +177,12 @@ Merges below height ~4 are within groups; the jump to 14.37 and 44.1 shows those
 ### Trade-offs
 | Strengths | Weaknesses |
 |---|---|
-| No need to fix k in advance — one tree, any number of clusters | O(n²) memory for the distance matrix; slow beyond ~10–20k points |
-| Dendrogram is an interpretable picture of nested structure | Merges are greedy and never undone |
+| No need to fix k in advance — one tree, any number of clusters | O(n²) memory (grows with the square of the number of points) for the distance matrix; slow beyond ~10–20k points |
+| Dendrogram is an interpretable picture of nested structure | Merges are greedy (each is the best choice at that moment) and never undone |
 | Any distance metric; linkage choice adapts to shapes | Sensitive to noise (single) or biased to round shapes (Ward) |
 
 ### Real-world examples
-Phylogenetic trees in biology, gene-expression heatmaps (clustered rows/columns), organising documents or products into taxonomies.
+Phylogenetic trees (evolutionary family trees of species) in biology, gene-expression heatmaps (clustered rows/columns), organising documents or products into taxonomies (category hierarchies).
 
 ### In the interview
 **30-second answer:** "Agglomerative clustering starts with each point alone and repeatedly merges the closest pair of clusters, where 'closest' is defined by the linkage — single, complete, average or Ward. The dendrogram records the merges; cutting it at a height gives the clusters. It's great for small data and nested structure, but it's O(n²) in memory."
@@ -231,7 +233,7 @@ Too small an eps shatters the data into 28 fragments plus noise; too large merge
 |---|---|
 | Any cluster shape; no k needed | One global density: fails when clusters have **different densities** |
 | Built-in noise/outlier detection | Sensitive to eps; eps hard to choose in high dimensions |
-| Deterministic for core points | Distance-based: needs scaling, suffers from curse of dimensionality |
+| Deterministic (same result every run) for core points | Distance-based: needs scaling, suffers from curse of dimensionality (distances lose meaning with many features; Chapter 8) |
 
 **HDBSCAN** (available as `sklearn.cluster.HDBSCAN` since 1.3) extends the idea to varying densities and removes eps, needing mainly `min_cluster_size` — often the better modern choice. **OPTICS** is a related alternative.
 
@@ -264,12 +266,12 @@ We don't know the Gaussians' parameters, and we don't know which Gaussian each p
 1. **Initialise** means, covariances and weights (scikit-learn uses k-means by default).
 2. **E-step (Expectation):** for every point, compute its **responsibility** under each Gaussian — the probability it came from that component, given current parameters (Bayes' rule: weight × density, normalised).
 3. **M-step (Maximisation):** re-estimate each Gaussian using all points **weighted by responsibility**: weighted mean, weighted covariance, and weight = average responsibility.
-4. Repeat until the log-likelihood stops improving.
+4. Repeat until the log-likelihood (the log of how probable the data is under the current model) stops improving.
 
 EM never decreases the likelihood, but like k-means it finds a local optimum (use `n_init` > 1). In fact, k-means is a limiting case of GMM with hard assignments and identical round (spherical) covariances.
 
 ### Choosing k: BIC
-GMMs are probabilistic models, so you can use the **Bayesian Information Criterion** (BIC) — likelihood penalised by the number of parameters; **lower is better**. (`gmm.bic(X)`, also `aic`.)
+GMMs are probabilistic models, so you can use the **Bayesian Information Criterion** (BIC) — likelihood penalised by the number of parameters; **lower is better**. (`gmm.bic(X)`, also `aic`, the Akaike Information Criterion, a similar score with a lighter penalty.)
 
 ```
 GMM model selection by BIC (lower is better)
@@ -297,7 +299,7 @@ GMM (full cov)                      0.50            1.00            1.00
 ```
 ![Five clustering algorithms on three datasets](img/clustering_comparison.png)
 
-- **Moons** (non-convex): only density/chaining methods (DBSCAN, single linkage) succeed.
+- **Moons** (non-convex: shapes with dents, where a straight line between two points of a cluster can leave the cluster): only density/chaining methods (DBSCAN, single linkage) succeed.
 - **Elongated** clusters close together: only GMM with full covariance models the stretched ellipses; DBSCAN and single linkage merge everything through the dense bridge.
 - **Unequal spread**: GMM and Ward are perfect; DBSCAN's one eps can't fit both the tight and diffuse clusters.
 
@@ -336,7 +338,7 @@ Analogy: photographing a teapot. From some angles the photo shows almost everyth
 - **Compression / speed**: fewer features → faster training, less memory.
 - **Noise reduction**: the small-variance directions are often noise.
 - **Visualisation**: project to 2-D or 3-D.
-- **Removing correlation** (multicollinearity): components are uncorrelated.
+- **Removing correlation** (multicollinearity: features that are near-copies of one another): components are uncorrelated.
 - Fights the **curse of dimensionality** before distance-based methods (k-NN, clustering).
 
 ### How it works — the maths made concrete
@@ -346,7 +348,7 @@ Analogy: photographing a teapot. From some angles the photo shows almost everyth
 4. Sort by eigenvalue; the **explained variance ratio** of component i is λᵢ / Σλ.
 5. **Project**: new coordinates Z = X_centred · V_k (the top-k eigenvectors as columns).
 
-(In practice libraries compute the same thing with the **singular value decomposition** (SVD) of the centred data, which is more numerically stable; scikit-learn does this.)
+(In practice libraries compute the same thing with the **singular value decomposition** (SVD, a standard way of factoring any matrix into rotations and stretches) of the centred data, which is more numerically stable (less affected by rounding errors); scikit-learn does this.)
 
 **Worked example** — hours studied vs exam score for 5 students (`code/dim_reduction.py`):
 
@@ -380,27 +382,27 @@ PCA(n_components=0.95) keeps 40 components, reconstruction MSE = 0.047
 ```
 ![Cumulative explained variance on digits](img/pca_explained_variance.png)
 
-Common choices: keep enough components for 90–99% of variance (`PCA(n_components=0.95)` does it for you), look for an elbow in the **scree plot** (eigenvalues vs component number), or tune the number by cross-validating the downstream model. `inverse_transform` maps back to the original space; the **reconstruction error** tells you what was lost.
+Common choices: keep enough components for 90–99% of variance (`PCA(n_components=0.95)` does it for you), look for an elbow in the **scree plot** (eigenvalues vs component number), or tune the number by cross-validating the downstream model (the model that will use these components as features). `inverse_transform` maps back to the original space; the **reconstruction error** tells you what was lost.
 
 ### Variants
-- **Incremental PCA**: data that doesn't fit in memory (mini-batches).
+- **Incremental PCA**: data that doesn't fit in memory (mini-batches: small chunks of rows processed one at a time).
 - **Randomized PCA** (`svd_solver="randomized"`): fast approximate top components for large matrices.
 - **Kernel PCA**: non-linear PCA via the kernel trick (Chapter 8).
-- **TruncatedSVD**: PCA-like for sparse matrices (text), without centring.
+- **TruncatedSVD**: PCA-like for sparse matrices (mostly zeros, e.g. word counts in text), without centring.
 
 ### Trade-offs / when not to use it
-- Only captures **linear** structure — curved manifolds (a rolled-up "Swiss roll") need non-linear methods.
+- Only captures **linear** structure — curved manifolds (curved surfaces the data lies on, like a rolled-up "Swiss roll") need non-linear methods.
 - Components are mixtures of all features → harder to interpret.
 - Sensitive to scaling and outliers.
-- Max variance ≠ most useful for prediction: a low-variance direction may be the one that separates classes (for supervised reduction, see LDA).
+- Max variance ≠ most useful for prediction: a low-variance direction may be the one that separates classes (for supervised reduction, see LDA, linear discriminant analysis, which picks directions that best separate known classes).
 
 ### Common mistakes
 - Forgetting to standardise features with different units (the large-unit feature becomes PC1).
-- Fitting PCA on the full dataset before splitting (leakage) — put it in the pipeline.
+- Fitting PCA on the full dataset before splitting (leakage: test-set information sneaking into training) — put it in the pipeline.
 - Reading t-SNE-like meaning into a 2-component PCA plot that explains only 20% of the variance.
 
 ### Real-world examples
-Eigenfaces for face recognition (Turk & Pentland, 1991); compressing embeddings before vector search; population-structure plots in genetics; removing correlated features before regression; image compression.
+Eigenfaces for face recognition (Turk & Pentland, 1991); compressing embeddings (learned vectors that represent items or text) before vector search (finding the nearest stored vectors to a query); population-structure plots in genetics; removing correlated features before regression; image compression.
 
 ### In the interview
 **30-second answer:** "PCA centres (and usually scales) the data, computes the covariance matrix, and takes its eigenvectors ordered by eigenvalue. Each eigenvalue is the variance along that direction, so the explained-variance ratio tells you how much information each component keeps. You project onto the top k — chosen for, say, 95% variance — to compress, denoise or visualise. It's linear, unsupervised, and sensitive to scaling."
@@ -426,9 +428,9 @@ PCA rotates the data onto uncorrelated axes of decreasing variance; keep the top
 ### How t-SNE works (intuition)
 1. In the original space, turn distances into probabilities: for each point, nearby points get high "I'd pick you as a neighbour" probability (Gaussian kernel). **Perplexity** (typically 5–50) sets roughly how many neighbours each point considers.
 2. In 2-D, define similar probabilities using a heavy-tailed **Student-t** distribution — the heavy tails let moderately distant points be pushed far apart, avoiding everything crowding into the middle.
-3. Move the 2-D points by gradient descent to make the two sets of probabilities match (minimise KL divergence).
+3. Move the 2-D points by gradient descent (repeated small steps that reduce the mismatch) to make the two sets of probabilities match (minimise KL divergence, a measure of how different two probability distributions are).
 
-**UMAP** builds a weighted k-nearest-neighbour graph of the data (`n_neighbors`), then optimises a low-dimensional layout whose graph matches it (`min_dist` controls how tightly points pack). It is typically faster than t-SNE on large datasets, tends to keep more of the global arrangement, and can `transform` new points.
+**UMAP** builds a weighted k-nearest-neighbour graph (a network linking each point to its closest neighbours) of the data (`n_neighbors`), then optimises a low-dimensional layout whose graph matches it (`min_dist` controls how tightly points pack). It is typically faster than t-SNE on large datasets, tends to keep more of the global arrangement, and can `transform` new points.
 
 ### Code — PCA vs t-SNE on digits
 ```python
@@ -466,7 +468,7 @@ Z_new = reducer.transform(X_new_scaled)   # UMAP can embed new points; sklearn's
 |---|---|---|---|
 | Type | Linear | Non-linear | Non-linear |
 | Preserves | Global variance | Local neighbourhoods | Local, and more global structure than t-SNE |
-| Speed | Very fast | Slow on big data (Barnes-Hut O(n log n)) | Fast |
+| Speed | Very fast | Slow on big data (Barnes-Hut approximation, O(n log n)) | Fast |
 | New points | `transform` | No (in scikit-learn) | `transform` |
 | Deterministic | Yes | No (seed) | No (seed) |
 | Use for | Compression, pre-processing, denoising, quick look | 2-D visualisation of clusters | Visualisation, sometimes pre-processing for clustering |
@@ -495,7 +497,7 @@ PCA to compress; t-SNE/UMAP to see. Only local neighbourhoods in t-SNE/UMAP plot
 Two settings (scikit-learn terms): **outlier detection** — the training data itself contains outliers to find; **novelty detection** — train on clean data, flag new points that look different.
 
 ### Statistical baseline: z-score and robust z-score
-**z-score**: z = (x − mean) / std; flag |z| > 3. Simple — but the outlier itself inflates the mean and std (**masking**). A more robust version uses the median and the **MAD** (median absolute deviation): modified z = 0.6745·(x − median)/MAD, flag |modified z| > 3.5 (Iglewicz & Hoaglin). The box-plot **IQR rule** (flag outside Q1 − 1.5·IQR, Q3 + 1.5·IQR) is another robust option.
+**z-score**: z = (x − mean) / std (standard deviation, the typical spread); flag |z| > 3. Simple — but the outlier itself inflates the mean and std (**masking**). A more robust version uses the median and the **MAD** (median absolute deviation): modified z = 0.6745·(x − median)/MAD, flag |modified z| > 3.5 (Iglewicz & Hoaglin). The box-plot **IQR rule** (flag outside Q1 − 1.5·IQR, Q3 + 1.5·IQR, where Q1 and Q3 are the 25th and 75th percentiles and IQR = Q3 − Q1 is the spread of the middle half) is another robust option.
 
 ```
 amount   z-score   robust z
@@ -505,7 +507,7 @@ amount   z-score   robust z
    950      3.32     121.95  <- anomaly
 mean=121.7 (dragged up by the outlier), median=46.0
 ```
-The $950 payment only just passes z = 3. In fact, with population standard deviation, no point in a sample of n can ever have |z| above √(n − 1) — here √11 = 3.32 — so with small samples the plain z-score **cannot** flag extreme values reliably. The robust z-score says 122. Statistical rules work for one feature at a time; for many features, use the methods below.
+The $950 payment only just passes z = 3. In fact, with population standard deviation (dividing by n rather than n − 1), no point in a sample of n can ever have |z| above √(n − 1) — here √11 = 3.32 — so with small samples the plain z-score **cannot** flag extreme values reliably. The robust z-score says 122. Statistical rules work for one feature at a time; for many features, use the methods below.
 
 ### Isolation Forest
 **Idea** (Liu, Ting & Zhou, 2008): anomalies are **few and different, so they are easy to isolate**. Build many random trees: at each node pick a random feature and a random split value between its min and max. A normal point in a dense region needs many splits before it's alone in a leaf; an anomaly gets isolated in a few.
@@ -517,10 +519,10 @@ The $950 payment only just passes z = 3. In fact, with population standard devia
 ```
 anomaly score of (6,6): 0.82   typical point (median): 0.43
 ```
-(scikit-learn's `score_samples` returns the *negative* of this score: lower = more abnormal.) Fast (linear time), scales to large, high-dimensional data, no distance computations, no scaling needed. Weakness: axis-parallel splits can miss anomalies that are only unusual in a *combination* of features.
+(scikit-learn's `score_samples` returns the *negative* of this score: lower = more abnormal.) Fast (linear time: work grows in proportion to the data size), scales to large, high-dimensional data, no distance computations, no scaling needed. Weakness: axis-parallel splits (each split tests a single feature) can miss anomalies that are only unusual in a *combination* of features.
 
 ### One-Class SVM
-Learns a boundary around the normal data (Schölkopf et al., 2001): with an RBF kernel it finds a smooth region containing most points; points outside are anomalies. **ν** (`nu`) is an upper bound on the fraction of training points treated as outliers (and a lower bound on the fraction of support vectors). Good for **novelty detection** with clean training data; sensitive to γ and ν; needs scaling; doesn't scale well past tens of thousands of points (`SGDOneClassSVM` is a linear, scalable alternative).
+Learns a boundary around the normal data (Schölkopf et al., 2001): with an RBF kernel (a similarity measure that decays with distance) it finds a smooth region containing most points; points outside are anomalies. **ν** (`nu`) is an upper bound on the fraction of training points treated as outliers (and a lower bound on the fraction of support vectors, the training points that define the boundary). Good for **novelty detection** with clean training data; sensitive to γ (how far each point's influence reaches) and ν; needs scaling; doesn't scale well past tens of thousands of points (`SGDOneClassSVM` is a linear, scalable alternative).
 
 ### Local Outlier Factor (LOF)
 Compares a point's **local density** with the density of its k neighbours (Breunig et al., 2000). LOF ≈ 1: as dense as its neighbours (normal); LOF ≫ 1: much sparser than its neighbours (outlier). Because it's **local**, it catches a point slightly outside a *tight* cluster even if that point would look normal next to a *diffuse* cluster. By default it only scores the training data; use `novelty=True` to score new points.
@@ -544,7 +546,7 @@ LOF (k=20)            0.886           0.617        30   18 / 30
 ```
 ![Points flagged by three detectors](img/anomaly_detectors.png)
 
-Roughly a third of the "anomalies" were generated uniformly and happened to land **inside** the normal clusters — no method can (or should) find those; that's why recall tops out near 18/30. The `contamination` parameter sets the expected fraction of outliers, which fixes the score threshold; in real projects you rarely know it, so rank by score and review the top cases. When a few labelled anomalies exist, evaluate with **precision–recall** metrics (average precision), because anomalies are rare and ROC-AUC looks flattering under heavy imbalance.
+Roughly a third of the "anomalies" were generated uniformly and happened to land **inside** the normal clusters — no method can (or should) find those; that's why recall tops out near 18/30. The `contamination` parameter sets the expected fraction of outliers, which fixes the score threshold; in real projects you rarely know it, so rank by score and review the top cases. When a few labelled anomalies exist, evaluate with **precision–recall** metrics (average precision; precision is the share of flagged points that are real anomalies, recall the share of real anomalies caught), because anomalies are rare and ROC-AUC (a score of how well the model ranks anomalies above normal points) looks flattering under heavy imbalance.
 
 | Method | Idea | Strengths | Weaknesses |
 |---|---|---|---|
@@ -553,7 +555,7 @@ Roughly a third of the "anomalies" were generated uniformly and happened to land
 | One-Class SVM | Boundary around normal data | Flexible shapes, good for novelty | Slow on big n; tuning γ, ν; needs scaling |
 | LOF | Density vs neighbours' density | Handles clusters of different density | O(n²)-ish neighbour search; choice of k; needs scaling |
 
-Other tools worth knowing: **autoencoders** (flag high reconstruction error; covered with neural networks later in the book), Elliptic Envelope (robust Gaussian fit), and time-series methods for seasonal data.
+Other tools worth knowing: **autoencoders** (flag high reconstruction error; covered with neural networks later in the book), Elliptic Envelope (robust Gaussian fit), and time-series methods for seasonal data (data with repeating daily, weekly or yearly patterns).
 
 ### Real-world examples
 Card-fraud scoring, detecting failing disks or turbines from sensor logs, intrusion detection on network traffic, flagging data-quality problems before training a model.
@@ -561,7 +563,7 @@ Card-fraud scoring, detecting failing disks or turbines from sensor logs, intrus
 ### In the interview
 **30-second answer:** "For one feature, a robust z-score or IQR rule is enough. For multivariate data, Isolation Forest is my default: anomalies get isolated by random splits in fewer steps, so short average path length means anomaly — it's fast and scales. LOF compares local density to neighbours and handles clusters of different density. One-Class SVM learns a boundary around clean data for novelty detection. Evaluate with precision–recall on whatever labels exist, and set the threshold from business cost."
 
-- *Why not plain z-scores?* The outlier inflates mean and std (masking), and it's univariate.
+- *Why not plain z-scores?* The outlier inflates mean and std (masking), and it's univariate (looks at one feature at a time).
 - *Isolation Forest intuition?* Few-and-different points are separated by random cuts quickly.
 
 ### Self-check
@@ -586,7 +588,7 @@ Robust statistics for one feature; Isolation Forest as the multivariate default;
 | **Lift**(A → B) | confidence(A → B) / support(B) | > 1: A makes B more likely than usual; = 1: independent; < 1: less likely |
 
 ### How Apriori works
-**Key property (anti-monotone / "Apriori principle"):** every subset of a frequent itemset must also be frequent. So if {beer} is rare, no set containing beer need be counted.
+**Key property (anti-monotone / "Apriori principle"):** every subset of a frequent itemset (a set of items that often appear together) must also be frequent. So if {beer} is rare, no set containing beer need be counted.
 
 1. Count single items; keep those with support ≥ min_support (L1).
 2. **Join**: combine frequent (k−1)-itemsets into k-item candidates. **Prune**: drop any candidate with an infrequent (k−1)-subset.
@@ -607,10 +609,10 @@ rule                         support  confidence  lift
 ```
 Every beer basket has diapers (confidence 1.0) and lift 1.25 > 1: a real association. But bread → milk, despite 75% confidence, has lift 0.94: milk is in 80% of all baskets anyway, so bread makes it slightly *less* likely. **High confidence alone can mislead — check lift.** (The only 3-item candidate, {bread, diapers, milk}, has support 0.4 and is dropped.)
 
-**FP-Growth** finds the same itemsets without generating candidates (compresses the data into a prefix tree) and is usually faster; libraries such as `mlxtend` provide both.
+**FP-Growth** finds the same itemsets without generating candidates (compresses the data into a prefix tree, which stores shared beginnings of baskets only once) and is usually faster; libraries such as `mlxtend` (a Python add-on library for ML utilities) provide both.
 
 ### Real-world examples and limits
-Product placement and "frequently bought together" bundles, cross-selling, co-occurring symptoms or web-page visits. (The famous beer-and-diapers supermarket story is often retold but its details are partly legend.) Limits: many rules, most trivial; thresholds are arbitrary; association is not causation; modern recommenders mostly use collaborative filtering and learned embeddings instead.
+Product placement and "frequently bought together" bundles, cross-selling, co-occurring symptoms or web-page visits. (The famous beer-and-diapers supermarket story is often retold but its details are partly legend.) Limits: many rules, most trivial; thresholds are arbitrary; association is not causation; modern recommenders mostly use collaborative filtering (recommending from the behaviour of similar users) and learned embeddings instead.
 
 ### In the interview
 **30-second answer:** "Association rules find co-occurrence patterns like A → B. Support is how common an itemset is, confidence is P(B | A), and lift is confidence divided by B's base rate — lift above 1 means a genuine positive association. Apriori finds frequent itemsets level by level and prunes candidates using the fact that all subsets of a frequent set must be frequent."
@@ -627,7 +629,7 @@ Support, confidence, lift; Apriori prunes by "subsets of frequent sets are frequ
 ## 9.9 Evaluating unsupervised models
 
 ### The problem
-There is no ground-truth answer to compare against — and clustering algorithms **always return clusters**, even from pure noise. So evaluate from several angles.
+There is no ground-truth (known correct) answer to compare against — and clustering algorithms **always return clusters**, even from pure noise. So evaluate from several angles.
 
 ### Metrics
 
@@ -641,7 +643,7 @@ There is no ground-truth answer to compare against — and clustering algorithms
 | | Normalized Mutual Information (NMI) | 0 to 1, higher | Shared information between labelings |
 | **Dimensionality reduction** | Explained variance, reconstruction error | higher / lower | PCA-type methods |
 | | Trustworthiness | 0 to 1, higher | Are map neighbours true neighbours? |
-| **Anomaly detection** | Precision@k, average precision (on a small labelled set) | higher | Rank-based; matches how analysts review alerts |
+| **Anomaly detection** | Precision@k (share of real anomalies in the top k flagged), average precision (on a small labelled set) | higher | Rank-based; matches how analysts review alerts |
 
 ### Internal metrics can disagree with reality
 `code/evaluate_clustering.py`:
@@ -661,7 +663,7 @@ moons (true k = 2, non-convex)
 ### A practical evaluation checklist
 1. **Look at it**: plot clusters on a PCA/UMAP projection; read samples from each cluster.
 2. **Internal metrics** to compare settings of the *same* algorithm (k, eps), knowing their shape bias.
-3. **Stability**: re-run with different seeds or bootstrap samples — do the clusters persist (measure with ARI between runs)?
+3. **Stability**: re-run with different seeds or bootstrap samples (random resamples of the rows, drawn with replacement) — do the clusters persist (measure with ARI between runs)?
 4. **External check**: a small labelled sample, or known categories, via ARI/NMI.
 5. **Downstream value** — the real test: do the segments lead to better campaigns, do PCA features improve the model, do flagged anomalies turn out to be fraud when investigated?
 

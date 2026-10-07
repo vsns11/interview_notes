@@ -2,7 +2,7 @@
 
 Text, speech, stock prices, sensor readings, click streams, DNA — much of the world's data comes as **sequences**, where order carries meaning. "Dog bites man" and "man bites dog" contain the same words. The networks of Chapters 10 and 11 take a fixed-size input all at once; sequence models read data **step by step** (RNNs) or **all positions against each other** (attention), so they can handle variable lengths and dependencies across time.
 
-This chapter follows the historical path, because each step fixes the previous one's weakness: RNNs → vanishing gradients → LSTM/GRU gates → seq2seq encoder-decoders → the bottleneck problem → attention → self-attention and the transformer. Along the way we cover how text becomes numbers (tokenization and word embeddings) and a short introduction to time-series forecasting.
+This chapter follows the historical path, because each step fixes the previous one's weakness: RNNs → vanishing gradients (training signals that shrink to almost nothing as they travel back through many steps) → LSTM/GRU gates → seq2seq encoder-decoders → the bottleneck problem → attention → self-attention and the transformer. Along the way we cover how text becomes numbers (tokenization and word embeddings) and a short introduction to time-series forecasting.
 
 **What you'll learn**
 
@@ -15,28 +15,28 @@ This chapter follows the historical path, because each step fixes the previous o
 7. Self-attention and the transformer at a high level. The step-by-step treatment is in the AI Handbook, [Chapter 3 — Transformers and Embeddings](../../../ai/chapters/03-transformers-and-embeddings/README.md).
 8. Text preprocessing and tokenization (word, character, subword/BPE) and word embeddings (word2vec intuition).
 9. Time-series forecasting: lags, baselines, ARIMA vs ML.
-10. Runnable PyTorch: an LSTM on two toy sequence tasks, a seq2seq model with and without attention, a tiny word2vec.
+10. Runnable PyTorch (the Python deep-learning library used throughout): an LSTM on two toy sequence tasks, a seq2seq model with and without attention, a tiny word2vec.
 
-All code is in `code/`, runs on CPU in seconds, and every output shown is real.
+All code is in `code/`, runs on CPU (the computer's ordinary processor — no **GPU**, the graphics chip that does thousands of calculations at once, needed) in seconds, and every output shown is real.
 
 ---
 
 ## 12.1 Sequence data
 
 ### What it is
-A **sequence** is an ordered list x₁, x₂, …, x_T where position matters and T can vary. Each element (a **time step** or **token**) may be a number (temperature), a vector (a video frame's features), or a symbol (a word).
+A **sequence** is an ordered list x₁, x₂, …, x_T where position matters and T can vary. Each element (a **time step** or **token**) may be a number (temperature), a **vector** (an ordered list of numbers — e.g. a video frame's features), or a symbol (a word).
 
 | Data | Element | Typical task |
 |---|---|---|
 | Text | word / subword token | classification, translation, generation |
 | Speech | audio frame (e.g. 10–25 ms) | speech recognition |
-| Time series | measurement per time unit | forecasting, anomaly detection |
-| User events | click, purchase | next-item recommendation, churn |
+| Time series | measurement per time unit | forecasting, anomaly detection (spotting unusual values) |
+| User events | click, purchase | next-item recommendation, churn (a customer leaving) |
 | Biology | nucleotide / amino acid | structure and function prediction |
 
 ### Why ordinary networks struggle
-- **Variable length**: an MLP needs a fixed input size.
-- **Order and context**: the meaning of "bank" depends on nearby words; a bag of features loses order.
+- **Variable length**: an MLP (multi-layer perceptron — the plain fully connected network of Chapter 10) needs a fixed input size.
+- **Order and context**: the meaning of "bank" depends on nearby words; a "bag" of features (an unordered collection) loses order.
 - **Parameter sharing across time**: a pattern ("not good") should be recognised wherever it appears, just as a CNN kernel is shared across image positions.
 
 ### Input/output patterns
@@ -44,8 +44,8 @@ A **sequence** is an ordered list x₁, x₂, …, x_T where position matters an
 | Pattern | Example |
 |---|---|
 | One-to-many | Image captioning (image in, word sequence out) |
-| Many-to-one | Sentiment classification, "is this transaction sequence fraud?", next-value forecast |
-| Many-to-many, aligned | Part-of-speech tagging, per-frame video labels |
+| Many-to-one | Sentiment classification (is this text positive or negative?), "is this transaction sequence fraud?", next-value forecast |
+| Many-to-many, aligned | Part-of-speech tagging (labelling each word noun, verb, …), per-frame video labels |
 | Many-to-many, not aligned (seq2seq) | Machine translation, summarisation, speech-to-text |
 
 ### TL;DR
@@ -60,6 +60,8 @@ A **recurrent neural network** reads a sequence one step at a time and keeps a *
 
   **h_t = tanh(W_xh x_t + W_hh h_{t−1} + b_h)**
   **ŷ_t = W_hy h_t + b_y**  (an output, if the task needs one at this step)
+
+Here the W's are learned **weight matrices**, the b's are learned **bias** vectors (constant offsets), **tanh** (hyperbolic tangent) squashes every number into the range −1 to 1, and ŷ ("y-hat") is the model's prediction.
 
 Analogy: reading a novel and keeping a running mental summary. Each new sentence updates the summary; you never re-read the whole book — you carry the summary forward.
 
@@ -96,13 +98,13 @@ PyTorch's `nn.RNN` with the same weights gives the same final state.
 **Parameters don't grow with sequence length**: here 2 + 4 + 2 = 8 numbers process sequences of any length.
 
 ### Backpropagation through time (BPTT)
-To train, unroll the network over the sequence, compute the loss (summed over steps that have targets), and run ordinary backprop through the unrolled graph. Because the weights are shared, each weight's gradient is the **sum** of its gradients from every time step: ∂L/∂W_hh = Σₜ (∂L/∂h_t · local derivative at step t), where ∂L/∂h_t itself collects contributions from all later steps. This is **backpropagation through time**. For long sequences, **truncated BPTT** backpropagates only k steps (e.g. 100) at a time while still carrying the hidden state forward — cheaper, but it can't learn dependencies longer than k.
+To train, unroll the network over the sequence, compute the **loss** (a single number measuring how wrong the predictions are), summed over steps that have targets, and run ordinary **backprop** (backpropagation: working out each weight's **gradient**, i.e. how the loss would change if that weight changed slightly) through the unrolled graph (the chain of computations). Because the weights are shared, each weight's gradient is the **sum** of its gradients from every time step: ∂L/∂W_hh = Σₜ (∂L/∂h_t · local derivative at step t), where ∂L/∂h_t itself collects contributions from all later steps. This is **backpropagation through time**. For long sequences, **truncated BPTT** backpropagates only k steps (e.g. 100) at a time while still carrying the hidden state forward — cheaper, but it can't learn dependencies longer than k.
 
 ### Variants
 - **Stacked (deep) RNNs**: the hidden-state sequence of one RNN layer is the input sequence of the next (`num_layers=2`).
-- **Bidirectional RNNs**: one RNN reads left-to-right, another right-to-left, and their states are concatenated — each position sees both past and future context. Good for tagging and classification; impossible for real-time generation (the future isn't known yet).
+- **Bidirectional RNNs**: one RNN reads left-to-right, another right-to-left, and their states are concatenated (joined end to end) — each position sees both past and future context. Good for tagging and classification; impossible for real-time generation (the future isn't known yet).
 
-In PyTorch: `nn.RNN(input_size, hidden_size, num_layers=1, batch_first=True, bidirectional=False)`; input shape (batch, time, features); it returns `output` (every step's top-layer h) and `h_n` (final state per layer).
+In PyTorch: `nn.RNN(input_size, hidden_size, num_layers=1, batch_first=True, bidirectional=False)`; input shape (batch, time, features) — a **batch** is a group of sequences processed together; it returns `output` (every step's top-layer h) and `h_n` (final state per layer).
 
 ### Self-check
 1. What does the hidden state h_t hold? → A fixed-size summary of everything read up to step t.
@@ -117,7 +119,7 @@ RNN = the same cell applied at every step, carrying a hidden state; unroll it an
 ## 12.3 Vanishing and exploding gradients through time
 
 ### The problem
-The gradient of a late loss with respect to an early hidden state is a **product of T Jacobians**, one per step: ∂h_T/∂h_0 = ∏ₜ diag(tanh′(·)) · W_hh. Like depth in Chapter 10, but now "depth" is sequence length — often hundreds of steps. If the recurrent weights' largest singular value (roughly: how much W_hh stretches vectors) combined with tanh′ ≤ 1 is below 1, gradients shrink **exponentially** with distance; above 1, they can grow exponentially. Bengio, Simard and Frasconi analysed this in 1994; in practice a simple RNN struggles to learn dependencies more than a few tens of steps apart.
+The gradient of a late loss with respect to an early hidden state is a **product of T Jacobians** (a Jacobian is the matrix of how every output number changes with every input number), one per step: ∂h_T/∂h_0 = ∏ₜ diag(tanh′(·)) · W_hh. Like depth in Chapter 10, but now "depth" is sequence length — often hundreds of steps. If the recurrent weights' largest singular value (roughly: how much W_hh stretches vectors) combined with tanh′ ≤ 1 is below 1, gradients shrink **exponentially** with distance; above 1, they can grow exponentially. Bengio, Simard and Frasconi analysed this in 1994; in practice a simple RNN struggles to learn dependencies more than a few tens of steps apart.
 
 `code/rnn_by_hand.py` measures ‖∂h_T/∂h_0‖ in a 32-unit tanh RNN for different recurrent-weight scales:
 ```
@@ -134,8 +136,8 @@ scale 3.0: |d h_T / d h_0| at T=1: 1.60e+01  T=10: 3.90e+02  T=60: 1.29e+07
 
 | Problem | Fix |
 |---|---|
-| Exploding | **Gradient clipping**: rescale the gradient if its norm exceeds a threshold — `torch.nn.utils.clip_grad_norm_(params, 1.0)`. Standard for all recurrent models (and transformers). |
-| Vanishing | **Gated cells (LSTM, GRU)** with an additive memory path; careful init (e.g. orthogonal W_hh); shorter paths via **attention** or skip connections. |
+| Exploding | **Gradient clipping**: rescale the gradient if its **norm** (its overall size, the length of the gradient vector) exceeds a threshold — `torch.nn.utils.clip_grad_norm_(params, 1.0)`. Standard for all recurrent models (and transformers). |
+| Vanishing | **Gated cells (LSTM, GRU)** with an additive memory path; careful init (e.g. orthogonal W_hh — a rotation-like matrix that keeps vector lengths unchanged); shorter paths via **attention** or skip connections. |
 
 ### In the interview
 **30-second answer:** "BPTT multiplies one Jacobian per time step, so gradients from distant steps shrink or grow exponentially with the distance — vanishing or exploding. Exploding is fixed by gradient clipping. Vanishing is fixed architecturally: LSTM/GRU gates create an additive path for information and gradients, and attention gives every position a direct connection to every other."
@@ -153,7 +155,7 @@ Gradients through time are products of per-step factors → vanish or explode. C
 ## 12.4 LSTM and GRU
 
 ### What it is
-**Long Short-Term Memory** (Hochreiter & Schmidhuber, 1997; the forget gate was added by Gers et al., 2000) adds a separate **cell state** c_t — a memory "conveyor belt" — and three **gates** that decide what to erase, what to write, and what to reveal. A **gate** is a vector of numbers between 0 and 1 (from a sigmoid) that multiplies another vector element-wise: 0 = block, 1 = let through.
+**Long Short-Term Memory** (Hochreiter & Schmidhuber, 1997; the forget gate was added by Gers et al., 2000) adds a separate **cell state** c_t — a memory "conveyor belt" — and three **gates** that decide what to erase, what to write, and what to reveal. A **gate** is a vector of numbers between 0 and 1 (from a **sigmoid**, an S-shaped function that maps any number into the range 0 to 1) that multiplies another vector element-wise: 0 = block, 1 = let through.
 
 Analogy: a notebook you carry through a lecture. At each moment you decide what to **cross out** (forget gate), what **new notes** to add (input gate), and which parts of your notes to **say aloud** right now (output gate).
 
@@ -190,7 +192,7 @@ The **Gated Recurrent Unit** (Cho et al., 2014) merges cell and hidden state and
 ### Code — an LSTM on two toy tasks
 `code/lstm_toy.py`.
 
-**A) Forecasting a noisy signal.** The LSTM reads the last 30 values of a sum of two sine waves plus noise and predicts the next value (many-to-one regression). Training uses the first 900 windows; testing uses the **later** part of the series (never shuffle time across the train/test boundary).
+**A) Forecasting a noisy signal.** The LSTM reads the last 30 values of a sum of two sine waves plus noise and predicts the next value (many-to-one **regression** — predicting a number rather than a class). Training uses the first 900 **windows** (fixed-length slices of the series); testing uses the **later** part of the series (never shuffle time across the train/test boundary).
 
 ```python
 class Forecaster(nn.Module):
@@ -204,7 +206,7 @@ class Forecaster(nn.Module):
         return self.head(out[:, -1])            # predict from the last hidden state
 ```
 
-**B) Long memory.** Read T random symbols (1–8) and output the **first** one. The answer must survive T steps of distracting input, which isolates the vanishing-gradient problem. Each model embeds symbols (`nn.Embedding`), runs a 32-unit RNN / LSTM / GRU, and classifies from the last hidden state; gradients are clipped at norm 1. The LSTM's forget-gate bias is initialised to 1 ("remember by default") — a widely used trick (Jozefowicz et al., 2015) that noticeably helps LSTMs start learning long dependencies.
+**B) Long memory.** Read T random symbols (1–8) and output the **first** one. The answer must survive T steps of distracting input, which isolates the vanishing-gradient problem. Each model embeds symbols (`nn.Embedding` — a learned lookup table that turns each symbol id into a vector), runs a 32-unit RNN / LSTM / GRU, and classifies from the last hidden state; gradients are clipped at norm 1. The LSTM's forget-gate bias is initialised to 1 ("remember by default") — a widely used trick (Jozefowicz et al., 2015) that noticeably helps LSTMs start learning long dependencies.
 
 ```python
 if cell == "LSTM":                                         # forget-gate bias = 1: "remember by default"
@@ -225,7 +227,7 @@ saved img/lstm_sine_forecast.png
 ```
 
 ![LSTM forecast](img/lstm_sine_forecast.png)
-*Figure — One-step-ahead LSTM forecasts on the held-out future. The error (MSE 0.019) is less than half the naive "next = last" baseline and approaches the noise floor (0.010), which no model can beat.*
+*Figure — One-step-ahead LSTM forecasts on the held-out (not used for training) future. The error (MSE — mean squared error, the average of squared prediction errors — 0.019) is less than half the naive "next = last" baseline and approaches the noise floor (0.010), which no model can beat.*
 
 Reading part B: with 5 steps all three cells solve the task. With 15 steps the plain RNN stalls near 50% while LSTM and GRU reach 100%. (With much longer gaps, even gated cells need more training steps — and this is exactly where attention, which connects positions directly, shines.) Parameter counts confirm the 1 : 4 : 3 ratio of RNN : LSTM : GRU weight blocks (16·32 + 32·32 + 2·32 = 1,600 for the RNN).
 
@@ -236,18 +238,18 @@ Reading part B: with 5 steps all three cells solve the task. With 15 steps the p
 | Long-range memory | Poor (a few tens of steps at best) | Good | Good | Excellent (direct connections) |
 | Parameters (same width) | 1× | 4× | 3× | Different design |
 | Training parallelism across time | None (sequential) | None | None | Full |
-| Inference memory for long sequences | Constant | Constant | Constant | Grows with length (KV cache) |
-| Typical use today | Teaching | Small/streaming models, time series, on-device | Same as LSTM | NLP, vision, audio, most large models |
+| Inference memory for long sequences | Constant | Constant | Constant | Grows with length (KV cache: stored attention keys/values) |
+| Typical use today | Teaching | Small/streaming models, time series, on-device | Same as LSTM | NLP (natural language processing), vision, audio, most large models |
 
 ### When not to use it
 - Large-scale NLP: transformers win on quality and trainability (they parallelise over time on GPUs).
-- Tabular time series with good lag features: gradient-boosted trees are often better and simpler (12.10).
+- Tabular time series with good lag features: gradient-boosted trees (ensembles of decision trees, Chapter 7) are often better and simpler (12.10).
 
 ### Common mistakes
 - Forgetting `batch_first=True` and feeding (batch, time, features) to a layer expecting (time, batch, features).
-- Using `out[:, -1]` on **padded** batches — the last position may be padding. Either pack the batch (`nn.utils.rnn.pack_padded_sequence`) or pick out the real final step of every sequence using its length.
+- Using `out[:, -1]` on **padded** batches (short sequences filled with dummy tokens to match the longest) — the last position may be padding. Either pack the batch (`nn.utils.rnn.pack_padded_sequence`) or pick out the real final step of every sequence using its length.
 - Not clipping gradients.
-- Shuffling time-series data across the train/test boundary (future leaks into training).
+- Shuffling time-series data across the train/test boundary (future leaks into training — **leakage** means information the model won't have at prediction time sneaks into training and inflates the scores).
 
 ### Real-world examples
 LSTMs powered Google's voice-search speech recognition (2015), Google Neural Machine Translation (2016) and many handwriting-recognition systems before transformers took over. They remain common in on-device and streaming settings and in industrial time-series forecasting and anomaly detection.
@@ -290,12 +292,12 @@ flowchart LR
 ```
 
 ### How it works
-- **Training with teacher forcing**: the decoder's input at step t is the **true** previous token (the target sequence shifted right, starting with a start-of-sequence token SOS), not its own prediction. This makes training fast and stable. The loss is cross-entropy at every output step.
+- **Training with teacher forcing**: the decoder's input at step t is the **true** previous token (the target sequence shifted right, starting with a start-of-sequence token SOS), not its own prediction. This makes training fast and stable. The loss is **cross-entropy** (the standard classification loss — large when the correct token gets low probability) at every output step.
 - **Inference (decoding)**: the true tokens aren't available, so the decoder feeds back its own predictions.
   - **Greedy decoding**: pick the most likely token each step.
   - **Beam search**: keep the k most probable partial sequences (the "beam"), extend each, keep the best k again. Finds higher-probability outputs than greedy; standard in translation.
-  - **Sampling** (temperature, top-k, top-p): for creative generation (AI Handbook, [Chapter 4](../../../ai/chapters/04-large-language-models/README.md)).
-- **Exposure bias**: the model is trained on perfect prefixes but tested on its own, possibly wrong, prefixes; errors can compound. Scheduled sampling is one mitigation.
+  - **Sampling** (temperature, top-k, top-p — ways of randomly picking among the likely tokens, with temperature controlling how adventurous): for creative generation (AI Handbook, [Chapter 4](../../../ai/chapters/04-large-language-models/README.md)).
+- **Exposure bias**: the model is trained on perfect prefixes but tested on its own, possibly wrong, prefixes; errors can compound. Scheduled sampling (gradually feeding the model its own predictions during training) is one mitigation.
 
 ### The bottleneck problem
 The whole input must be squeezed into one fixed-size vector. For long sentences, early information gets lost — translation quality of early seq2seq models dropped sharply with sentence length. Sutskever et al. found that simply **reversing the source sentence** helped (it shortens the distance between the first source and first target words) — a hint that shorter paths matter. The real fix is attention.
@@ -329,11 +331,11 @@ Modern notation (from the transformer paper) describes attention as a soft dicti
 - **Values (v)**: the content returned (often the same encoder states).
 
 Steps:
-1. **Score** each key against the query. Dot-product (Luong, 2015): score = q·k. Additive (Bahdanau): score = vᵀ tanh(W₁q + W₂k). Transformers use **scaled dot-product**: score = q·k / √d_k.
-2. **Softmax** the scores into weights that are positive and sum to 1.
+1. **Score** each key against the query. Dot-product (Luong, 2015): score = q·k (the **dot product**: multiply matching entries and add them up — large when two vectors point the same way). Additive (Bahdanau): score = vᵀ tanh(W₁q + W₂k). Transformers use **scaled dot-product**: score = q·k / √d_k.
+2. **Softmax** the scores into weights that are positive and sum to 1 (softmax exponentiates each score and divides by the total).
 3. **Output** = Σ weightᵢ · vᵢ — a weighted average of the values.
 
-In matrix form for many queries at once: **Attention(Q, K, V) = softmax(Q Kᵀ / √d_k) V**.
+In matrix form for many queries at once: **Attention(Q, K, V) = softmax(Q Kᵀ / √d_k) V**. (Kᵀ is K **transposed** — rows and columns swapped — and d_k is the length of each key vector.)
 
 ### Worked example with small numbers
 Three tokens ("the", "cat", "sat"), d_k = 2. (In a real model Q, K and V are the token vectors multiplied by learned matrices W_Q, W_K, W_V; here we pick them directly.)
@@ -373,7 +375,7 @@ def attention(Q, K, V, mask=None):
     return weights @ V, scores, weights              # weighted average of values
 ```
 
-**Why divide by √d_k?** For random vectors with unit-variance entries, the dot product's standard deviation grows like √d_k. Large scores push softmax into a nearly one-hot, saturated regime with tiny gradients. Scaling keeps scores around unit variance:
+**Why divide by √d_k?** For random vectors with unit-variance entries (**variance** measures spread; its square root, the **standard deviation**, is the typical distance from the mean), the dot product's standard deviation grows like √d_k. Large scores push softmax into a nearly one-hot (almost all weight on a single item), **saturated** regime — small changes in the scores barely change the output — with tiny gradients. Scaling keeps scores around unit variance:
 ```
 d_k=  4: std of q.k =   1.99   std after / sqrt(d_k) = 1.00
 d_k= 64: std of q.k =   8.05   std after / sqrt(d_k) = 1.01
@@ -418,26 +420,26 @@ Without attention, the model gets the first few outputs (recent inputs) right an
 3. Why scale by √d_k? → To keep the variance of scores ≈ 1 so softmax doesn't saturate.
 
 ### TL;DR
-Attention = softmax(QKᵀ/√d_k)·V — a learned, differentiable, weighted lookup. In seq2seq it removes the bottleneck and gives interpretable alignments.
+Attention = softmax(QKᵀ/√d_k)·V — a learned, **differentiable** (gradients can flow through it, so it trains with backprop), weighted lookup. In seq2seq it removes the bottleneck and gives interpretable alignments.
 
 ---
 
 ## 12.7 Self-attention and the transformer (high level)
 
 ### What it is
-In **self-attention**, queries, keys and values all come from the **same** sequence: every token looks at every other token of its own sentence to build a context-aware representation. ("The animal didn't cross the street because **it** was too tired" — self-attention lets "it" draw information from "animal".) The **transformer** (Vaswani et al., 2017, "Attention Is All You Need") drops recurrence entirely and builds a network from self-attention plus small feed-forward layers.
+In **self-attention**, queries, keys and values all come from the **same** sequence: every token looks at every other token of its own sentence to build a context-aware representation. ("The animal didn't cross the street because **it** was too tired" — self-attention lets "it" draw information from "animal".) The **transformer** (Vaswani et al., 2017, "Attention Is All You Need") drops recurrence entirely and builds a network from self-attention plus small **feed-forward** layers (ordinary dense layers applied to each position separately).
 
 ### Why it matters
 - **Parallel**: all positions are computed at once — no step-by-step dependency — so it trains efficiently on GPUs over huge datasets.
 - **Short paths**: any two positions are one attention step apart, so long-range dependencies are easy to learn (no vanishing through time).
-- **Scales**: it is the architecture behind BERT, GPT, T5, Claude, Gemini, LLaMA, Whisper (speech) and ViT (vision, Chapter 11).
+- **Scales**: it is the architecture behind BERT, GPT, T5, Claude, Gemini, LLaMA (well-known language models), Whisper (speech) and ViT (vision, Chapter 11).
 
 ### How it works — the building blocks
 1. **Token embeddings**: each token id becomes a vector of size d_model (512 in the original paper).
-2. **Positional encoding**: self-attention alone ignores order (shuffle the tokens and the outputs are just shuffled), so position information is added to each embedding — originally fixed sine/cosine waves of different frequencies, PE(pos, 2i) = sin(pos / 10000^(2i/d)) and PE(pos, 2i+1) = cos(pos / 10000^(2i/d)); later models learn positions or use rotary embeddings (RoPE).
-3. **Multi-head attention**: h attention "heads" run in parallel, each with its own W_Q, W_K, W_V projecting to d_model/h dimensions; their outputs are concatenated and projected back.
+2. **Positional encoding**: self-attention alone ignores order (shuffle the tokens and the outputs are just shuffled), so position information is added to each embedding — originally fixed sine/cosine waves of different frequencies, PE(pos, 2i) = sin(pos / 10000^(2i/d)) and PE(pos, 2i+1) = cos(pos / 10000^(2i/d)); later models learn positions or use rotary embeddings (RoPE — encode position by rotating the query and key vectors).
+3. **Multi-head attention**: h attention "heads" run in parallel, each with its own W_Q, W_K, W_V **projecting** (multiplying by a learned matrix) to d_model/h dimensions; their outputs are concatenated and projected back.
 4. **Feed-forward network**: a 2-layer MLP applied to each position independently (typically 4× wider inside).
-5. **Residual connections + layer normalization** around each sub-layer (the ResNet idea from Chapter 11).
+5. **Residual connections + layer normalization** (rescaling each token's vector to zero mean and unit variance, for stable training) around each sub-layer (the ResNet idea from Chapter 11).
 6. Stack N blocks (original: 6 encoder + 6 decoder, 8 heads).
 
 Each of these pieces is worked through with numbers and code in the AI Handbook, [Chapter 3](../../../ai/chapters/03-transformers-and-embeddings/README.md) (§3.3 positions, §3.5 multi-head, §3.6 the block, §3.7 causal masking, §3.8 the three families); here we only need the big picture.
@@ -481,21 +483,21 @@ positional encoding rows 0 and 1 (first 4 dims): [0. 1. 0. 1.] [0.841 0.54  0.68
 ### Trade-offs
 | | RNN/LSTM | Transformer |
 |---|---|---|
-| Compute per layer | O(n · d²) | O(n² · d) for attention — quadratic in sequence length n |
+| Compute per layer (big-O: how cost grows) | O(n · d²) | O(n² · d) for attention — quadratic in sequence length n |
 | Parallel over sequence | No | Yes |
 | Path length between distant tokens | O(n) | O(1) |
 | Memory at inference | Constant state | Key/value cache grows with context |
 
-Long contexts are expensive (n²), which motivates efficient-attention variants (FlashAttention computes exact attention faster and with less memory; sparse/linear attention and state-space models such as Mamba trade off differently).
+Long contexts are expensive (n²), which motivates efficient-attention variants (FlashAttention computes exact attention faster and with less memory; sparse/linear attention and **state-space models** (a recurrent-style family that keeps a fixed-size state) such as Mamba trade off differently).
 
-**Where to go next:** the AI Handbook's [Chapter 3 — Transformers and Embeddings](../../../ai/chapters/03-transformers-and-embeddings/README.md) builds the transformer step by step, from tokens to next-token probabilities; its [Chapter 4 — Large Language Models](../../../ai/chapters/04-large-language-models/README.md) covers training objectives, scaling, fine-tuning and RLHF. This book stops at the ML foundations.
+**Where to go next:** the AI Handbook's [Chapter 3 — Transformers and Embeddings](../../../ai/chapters/03-transformers-and-embeddings/README.md) builds the transformer step by step, from tokens to next-token probabilities; its [Chapter 4 — Large Language Models](../../../ai/chapters/04-large-language-models/README.md) covers training objectives, scaling, **fine-tuning** (further training a pretrained model on a specific task) and **RLHF** (reinforcement learning from human feedback — tuning a model toward answers people prefer). This book stops at the ML foundations.
 
 ### In the interview
 **30-second answer:** "Self-attention lets each token compute a weighted average of all tokens' value vectors, with weights from softmax of query-key dot products scaled by √d. A transformer stacks multi-head self-attention and position-wise feed-forward layers with residuals and layer norm, adding positional encodings because attention is order-agnostic. Encoders attend bidirectionally; decoders use causal masks and cross-attention to the encoder. It replaced RNNs because it's parallel over the sequence and connects any two positions in one step; its cost is quadratic in sequence length."
 
 - *Q: Why multiple heads?* A: Each head attends in a different learned subspace, capturing different relations; concatenation combines them at the same total cost as one full-width head.
 - *Q: Why is a causal mask needed in a decoder?* A: During training all positions are processed at once; the mask stops position i from seeing the tokens it's supposed to predict.
-- *Q: Why positional encodings?* A: Self-attention is permutation-equivariant — without positions, "dog bites man" = "man bites dog".
+- *Q: Why positional encodings?* A: Self-attention is permutation-equivariant (shuffling the inputs just shuffles the outputs the same way) — without positions, "dog bites man" = "man bites dog".
 
 ### Self-check
 1. In self-attention where do Q, K, V come from? → The same sequence (via three learned projections).
@@ -514,13 +516,13 @@ Transformer = embeddings + positional encoding + N × (multi-head self-attention
 Neural networks need numbers. **Tokenization** splits text into units (**tokens**) and maps each to an integer id from a **vocabulary**; an embedding layer then maps ids to vectors.
 
 ### How it works — a classic pipeline
-1. **Normalise**: lowercase (sometimes), Unicode normalisation, replace URLs/numbers with placeholders, strip markup.
+1. **Normalise**: lowercase (sometimes), Unicode normalisation (making characters that look identical use the same underlying code), replace URLs/numbers with placeholders, strip markup (e.g. HTML tags).
 2. **Tokenize**: split into tokens.
 3. **Build a vocabulary** from the training data, usually with a frequency cut-off; add special tokens: `<pad>` (padding), `<unk>` (unknown/out-of-vocabulary), and for seq2seq `<sos>`/`<eos>`.
 4. **Encode**: tokens → ids; unknown words → `<unk>`.
 5. **Pad/truncate** to a fixed length so sequences can be batched (and use masks so padding is ignored).
 
-Classic NLP also used **stop-word removal** ("the", "a") and **stemming/lemmatization** ("running" → "run"). These help bag-of-words models (TF-IDF + logistic regression) but are usually **not** used with neural models — the model benefits from every word, and "not" is a stop word you really don't want to drop in sentiment analysis.
+Classic NLP also used **stop-word removal** ("the", "a") and **stemming/lemmatization** (cutting words down to a root form: "running" → "run"). These help **bag-of-words** models (text represented only by word counts, ignoring order) such as **TF-IDF** (term frequency–inverse document frequency: word counts down-weighted for words common in every document) + logistic regression (the linear classifier of Chapter 5) but are usually **not** used with neural models — the model benefits from every word, and "not" is a stop word you really don't want to drop in sentiment analysis.
 
 ```python
 def normalize(text):
@@ -549,15 +551,15 @@ characters of 'mat': ['m', 'a', 't'] | bytes of 'café' (UTF-8): [99, 97, 102, 1
 |---|---|---|---|---|
 | Word | Huge (100k+), still misses rare words and typos | Short | `<unk>` problem | Classic NLP, word2vec |
 | Character / byte | Tiny (≈100 chars, 256 bytes) | Very long | None | Some specialised models (ByT5) |
-| **Subword** (BPE, WordPiece, Unigram) | Medium (≈30k–200k) | Medium | Rare words split into known pieces | Essentially all modern LLMs |
+| **Subword** (BPE, WordPiece, Unigram) | Medium (≈30k–200k) | Medium | Rare words split into known pieces | Essentially all modern LLMs (large language models) |
 
-**Byte-Pair Encoding (BPE)** (applied to NLP by Sennrich et al., 2016): start from characters; repeatedly find the **most frequent adjacent pair** of symbols in the training corpus and merge it into a new symbol; stop after a set number of merges (= vocabulary size). Frequent words become single tokens; rare words split into meaningful pieces ("lowest" → "low" + "est").
+**Byte-Pair Encoding (BPE)** (applied to NLP by Sennrich et al., 2016): start from characters; repeatedly find the **most frequent adjacent pair** of symbols in the training **corpus** (the body of training text) and merge it into a new symbol; stop after a set number of merges (= vocabulary size). Frequent words become single tokens; rare words split into meaningful pieces ("lowest" → "low" + "est").
 
 ```
 BPE merges learned: ['lo', 'low', 'er', 'er</w>', 'low</w>', 'es']
 words as subword tokens: ['low er</w>', 'low es t </w>', 'low</w>', 'n e w er</w>', 'n e w es t </w>', 'w i d er</w>', 'w i d es t </w>']
 ```
-(`</w>` marks the end of a word.) After six merges, "low" is a single token and the suffixes "er" and "es" are emerging; more merges would produce "est" and whole frequent words. GPT-2 onward use **byte-level BPE** (start from bytes, so any string — any language, emoji, code — can be encoded with no `<unk>`); BERT uses **WordPiece**; T5 and many multilingual models use **SentencePiece** (Unigram or BPE). As a rough rule, one token is about three-quarters of an English word (≈4 characters), which is why API prices and context windows are quoted in tokens.
+(`</w>` marks the end of a word.) After six merges, "low" is a single token and the suffixes "er" and "es" are emerging; more merges would produce "est" and whole frequent words. GPT-2 onward use **byte-level BPE** (start from **bytes** — the 256 basic values, 0–255, that computers store text as; UTF-8 encodes each character as 1–4 bytes — so any string — any language, emoji, code — can be encoded with no `<unk>`); BERT uses **WordPiece**; T5 and many multilingual models use **SentencePiece** (Unigram or BPE). As a rough rule, one token is about three-quarters of an English word (≈4 characters), which is why API prices (charges for calling a hosted model through its programming interface) and **context windows** (the maximum number of tokens a model can read at once) are quoted in tokens.
 
 ### Common mistakes
 - Building the vocabulary (or fitting a tokenizer) on validation/test text.
@@ -583,14 +585,14 @@ A **word embedding** is a dense vector (e.g. 100–300 numbers) representing a w
 Intuition — the **distributional hypothesis**: "you shall know a word by the company it keeps" (J. R. Firth, 1957). Words that appear with the same neighbours ("pet", "fur", "vet") end up close together.
 
 ### How word2vec works (Mikolov et al., 2013)
-Two variants, both shallow networks trained on raw text:
+Two variants, both shallow networks (a single hidden layer) trained on raw text:
 - **Skip-gram**: from a centre word, predict each word in a window around it.
 - **CBOW** (continuous bag of words): from the surrounding words, predict the centre word.
 
 Skip-gram with **negative sampling** in steps:
 1. Slide a window (e.g. ±2 words) over the corpus; every (centre, context) pair is a positive example.
 2. For each positive pair, draw k random "negative" words from the vocabulary (frequency^0.75 distribution).
-3. Each word has an input vector and a context vector. Train so σ(v_centre · u_context) → 1 for real pairs and → 0 for negatives (binary cross-entropy).
+3. Each word has an input vector and a context vector. Train so σ(v_centre · u_context) → 1 for real pairs and → 0 for negatives (binary cross-entropy — the cross-entropy loss for yes/no targets).
 4. Keep the input vectors as the embeddings.
 
 Because words that share contexts receive similar gradient updates, their vectors converge. The famous side effect: vector arithmetic captures relations — vec("king") − vec("man") + vec("woman") is close to vec("queen") in embeddings trained on large corpora.
@@ -616,21 +618,21 @@ word2vec: 3000 sentences, vocab 31, final batch loss 1.709
   nearest to 'mango': [('apple', 0.72), ('cherry', 0.71), ('banana', 0.7)]
   mean cosine: same-group nouns 0.50  vs  different-group nouns 0.20
 ```
-The model was never told the groups: "king" ends up near "queen", "dog" near "cat", "mango" near other fruits purely from co-occurrence. (Topical context words like "kingdom" also rank high — embeddings capture relatedness as well as similarity.)
+(**Cosine similarity** measures the angle between two vectors: 1 = same direction, 0 = unrelated.) The model was never told the groups: "king" ends up near "queen", "dog" near "cat", "mango" near other fruits purely from co-occurrence. (Topical context words like "kingdom" also rank high — embeddings capture relatedness as well as similarity.)
 
 ### Other embeddings
 
 | Method | Idea | Note |
 |---|---|---|
-| **GloVe** (Stanford, 2014) | Factorise global word co-occurrence statistics | Similar quality to word2vec |
-| **fastText** (Facebook, 2016) | Word vector = sum of character n-gram vectors | Handles rare/misspelled words |
+| **GloVe** (Stanford, 2014) | Factorise (split into a product of small matrices) global word co-occurrence statistics | Similar quality to word2vec |
+| **fastText** (Facebook, 2016) | Word vector = sum of character n-gram (runs of n consecutive characters) vectors | Handles rare/misspelled words |
 | **Contextual embeddings** (ELMo 2018, BERT 2018, all transformers) | A word's vector depends on the sentence — "bank" (river) ≠ "bank" (money) | Static word2vec gives one vector per word regardless of meaning |
-| **Sentence/document embeddings** | One vector per text | Semantic search and RAG (AI Handbook, [Chapter 7](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md)) |
+| **Sentence/document embeddings** | One vector per text | Semantic search (search by meaning) and RAG (retrieval-augmented generation) (AI Handbook, [Chapter 7](../../../ai/chapters/07-embeddings-vector-databases-and-rag/README.md)) |
 
 In PyTorch every NLP model starts with `nn.Embedding(vocab_size, dim)` — a trainable lookup table that is learned with the rest of the model (optionally initialised from pretrained vectors).
 
 ### Real-world examples
-Embeddings of words, products, users and songs drive recommendation (e.g. Airbnb published listing embeddings learned word2vec-style from users' browsing sessions, KDD 2018), search ranking, and today's vector databases for retrieval-augmented generation.
+Embeddings of words, products, users and songs drive recommendation (e.g. Airbnb published listing embeddings learned word2vec-style from users' browsing sessions, KDD 2018), search ranking, and today's **vector databases** (databases built to find the nearest vectors quickly) for **retrieval-augmented generation** (fetching relevant documents and handing them to an LLM to answer from).
 
 ### In the interview
 **30-second answer:** "Embeddings map discrete tokens to dense vectors where geometry reflects meaning. word2vec learns them by predicting context words from a centre word (skip-gram) or vice versa (CBOW), using negative sampling to avoid a full softmax; words with similar contexts get similar vectors. Static embeddings give one vector per word; transformers produce contextual embeddings that depend on the sentence."
@@ -639,7 +641,7 @@ Embeddings of words, products, users and songs drive recommendation (e.g. Airbnb
 - *Q: Limitation of word2vec?* A: One vector per word regardless of sense; no vectors for unseen words (fastText helps).
 
 ### Self-check
-1. What's wrong with one-hot vectors? → Huge, sparse, and every pair of words is equally dissimilar.
+1. What's wrong with one-hot vectors? → Huge, sparse (almost all zeros), and every pair of words is equally dissimilar.
 2. Skip-gram predicts what from what? → Context words from the centre word.
 3. What does `nn.Embedding(10000, 128)` hold? → A 10,000 × 128 trainable table, one row per token id.
 
@@ -660,9 +662,11 @@ Vocabulary:
 - **Stationarity**: statistical properties (mean, variance) don't change over time — many classical methods assume it; **differencing** (y_t − y_{t−1}) removes trends.
 
 ### How it works — framing forecasting as supervised learning
+**Supervised learning** means learning from examples whose correct answers (targets) are known.
+
 1. Build a table where each row is a time t and features are **only past information**: lags, rolling means (shifted so the current value doesn't leak), calendar features (day of week, holiday).
 2. Target = the value at t (or t + h for horizon h).
-3. Split **chronologically**: train on the past, test on the future. For cross-validation use expanding/rolling windows (`sklearn.model_selection.TimeSeriesSplit`), never random K-fold.
+3. Split **chronologically**: train on the past, test on the future. For **cross-validation** (scoring a model on several different train/validation splits for a more reliable estimate) use expanding/rolling windows (`sklearn.model_selection.TimeSeriesSplit`), never random **K-fold** (splitting rows randomly into K parts, each taking a turn as validation).
 4. Always compare with **baselines**: naive (repeat the last value) and seasonal naive (repeat the value from one season ago).
 
 `code/time_series.py` — a synthetic daily series with an upward trend, a weekly cycle and noise (std 2):
@@ -675,7 +679,7 @@ def lag_features(s, lags=(1, 2, 3, 7, 14)):
     df["dayofweek"] = s.index.dayofweek
     return df.dropna()
 ```
-Output:
+Output (**MAE**, mean absolute error, is the average size of a miss in the series' own units):
 ```
 feature table (first 3 rows):
                 y  lag_1  lag_2  lag_3  lag_7  lag_14  rolling_mean_7  dayofweek
@@ -697,21 +701,22 @@ train target range 91-154, test range 134-160
 
 Lessons:
 - The **seasonal naive** baseline is already strong (2.20); the naive one is poor because it ignores the weekly cycle.
-- A **linear autoregression** on lags wins here (1.80, close to the noise floor of ≈1.6 = the MAE of pure N(0, 2) noise) — the data is linear.
+- A **linear autoregression** (predicting a value as a weighted sum of its own past values) on lags wins here (1.80, close to the noise floor of ≈1.6 = the MAE of pure N(0, 2) noise — normally distributed with mean 0 and standard deviation 2) — the data is linear.
 - **Gradient boosting on raw levels is worse than the baseline** (2.77): trees can't **extrapolate** — test values (up to 160) exceed most of the training range, and a tree can only output values it saw. Modelling the **change** (differences) fixes it (1.90). This is a classic trap.
 
 ### ARIMA vs ML — brief
+Two classical statistical families: **ARIMA** (built from the series' own lags, differencing and past errors — unpacked in the table) and **exponential smoothing** (forecasts are weighted averages of past values, with weights fading for older values). **GBM** below stands for gradient-boosting machine.
 
 | | ARIMA / exponential smoothing (classical statistics) | ML with lag features (GBM, linear) | Deep learning (LSTM, transformers, N-BEATS…) |
 |---|---|---|---|
 | Model | ARIMA(p, d, q): **AR** — regression on p own lags; **I** — difference d times for stationarity; **MA** — regression on q past forecast errors. SARIMA adds seasonal terms. ETS/Holt-Winters smooth level, trend, season | Any regressor on engineered lag/calendar features | Learn features from raw windows |
-| Series handled | One at a time (univariate) | Many series in one global model | Many series, global |
+| Series handled | One at a time (univariate) | Many series in one global model (one model trained across all series) | Many series, global |
 | Extra features (price, promotions, weather) | Limited (ARIMAX) | Easy | Easy |
 | Data needed | Small (dozens–hundreds of points) | Medium | Large |
-| Uncertainty | Built-in prediction intervals | Needs quantile loss or conformal methods | Needs extra work |
-| Tools | `statsmodels` (ARIMA, ETS), `pmdarima`, Prophet | scikit-learn, LightGBM, XGBoost | PyTorch, `darts`, `neuralforecast` |
+| Uncertainty | Built-in prediction intervals (a range the true value should fall in) | Needs quantile loss (train to predict percentiles) or conformal methods (intervals calibrated on held-out errors) | Needs extra work |
+| Tools | `statsmodels` (ARIMA, ETS), `pmdarima`, Prophet | scikit-learn, LightGBM, XGBoost (popular gradient-boosting libraries) | PyTorch, `darts`, `neuralforecast` |
 
-Practical guidance: start with seasonal-naive and ETS/ARIMA baselines; for many related series with extra features, a global gradient-boosting model on lag features is usually the strongest practical choice (LightGBM-based approaches dominated the M5 retail-forecasting competition in 2020); deep models pay off with lots of data (the M4 competition in 2018 was won by a hybrid of exponential smoothing and an RNN). Pretrained forecasting foundation models (e.g. Amazon's Chronos, Google's TimesFM) are an emerging option.
+Practical guidance: start with seasonal-naive and ETS/ARIMA baselines; for many related series with extra features, a global gradient-boosting model on lag features is usually the strongest practical choice (LightGBM-based approaches dominated the M5 retail-forecasting competition in 2020); deep models pay off with lots of data (the M4 competition in 2018 was won by a hybrid of exponential smoothing and an RNN). Pretrained forecasting **foundation models** (large models pretrained on many datasets and reused as-is; e.g. Amazon's Chronos, Google's TimesFM) are an emerging option.
 
 ### Common mistakes
 - Random train/test splits or K-fold on time series (future leaks into training).
@@ -721,7 +726,7 @@ Practical guidance: start with seasonal-naive and ETS/ARIMA baselines; for many 
 - Evaluating one-step-ahead when the business needs 30 days ahead (multi-step errors compound).
 
 ### In the interview
-**30-second answer:** "I frame forecasting as supervised learning with only past information as features — lags, shifted rolling statistics, calendar effects — and split chronologically with rolling-origin validation. I always beat naive and seasonal-naive baselines first. ARIMA models a single series with autoregressive, differencing and moving-average terms and gives intervals; ML models like LightGBM handle many series and external features but can't extrapolate trends unless I model differences. Deep models help with lots of data."
+**30-second answer:** "I frame forecasting as supervised learning with only past information as features — lags, shifted rolling statistics, calendar effects — and split chronologically with rolling-origin validation (train up to a date, test on the next period, move the date forward, repeat). I always beat naive and seasonal-naive baselines first. ARIMA models a single series with autoregressive, differencing and moving-average terms and gives intervals; ML models like LightGBM handle many series and external features but can't extrapolate trends unless I model differences. Deep models help with lots of data."
 
 - *Q: What does the I in ARIMA do?* A: Differencing to remove trends so the series is closer to stationary.
 - *Q: How do you cross-validate a forecaster?* A: Expanding or sliding windows — always train on earlier data and validate on the following period (`TimeSeriesSplit`).

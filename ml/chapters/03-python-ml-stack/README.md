@@ -1,6 +1,6 @@
 # Chapter 3 — The Python ML Stack
 
-Almost all practical machine learning today happens in Python, not because Python is fast (it isn't), but because a small set of libraries wrap fast C, C++ and Fortran code behind a friendly interface. This chapter teaches the five tools you will use in every later chapter: **NumPy** for arrays, **pandas** for tables, **matplotlib** for plots, **scikit-learn** for classic ML, and **Jupyter** for interactive work. It closes with a short tour of the deep-learning frameworks (PyTorch, TensorFlow/Keras) and when to reach for them.
+Almost all practical machine learning today happens in Python, not because Python is fast (it isn't), but because a small set of libraries wrap fast C, C++ and Fortran code (older *compiled* languages, whose programs are translated into machine instructions ahead of time and run far faster than Python) behind a friendly interface. This chapter teaches the five tools you will use in every later chapter: **NumPy** for arrays, **pandas** for tables, **matplotlib** for plots, **scikit-learn** for classic ML, and **Jupyter** for interactive work. It closes with a short tour of the deep-learning frameworks (libraries for building and training neural networks: PyTorch, TensorFlow/Keras) and when to reach for them.
 
 It assumes basic Python (variables, lists, dicts, functions, loops, classes). If any of that is new, work through the **[Python Handbook](../../../python/chapters/)** first; this chapter only covers what is specific to data work.
 
@@ -22,7 +22,7 @@ All code is in [`code/`](code/).
 
 ### What it is
 
-The **stack** is a set of open-source libraries that build on each other:
+The **stack** is a set of open-source (free to use, with publicly available source code) libraries that build on each other:
 
 ```mermaid
 flowchart TD
@@ -39,27 +39,27 @@ flowchart TD
 
 ### How it works
 
-1. **Install Python 3** from python.org (or your OS package manager). Check it in a terminal: `python --version` (on macOS and many Linux systems the command is `python3`). This book uses Python 3.12 or newer.
-2. **Create a virtual environment** per project, so each project has its own library versions:
+1. **Install Python 3** from python.org (or your OS package manager, the operating system's built-in software installer such as `apt` or Homebrew). Check it in a terminal (the text window where you type commands): `python --version` (on macOS and many Linux systems the command is `python3`). This book uses Python 3.12 or newer.
+2. **Create a virtual environment** (a self-contained project folder with its own copy of Python and its own installed libraries) per project, so each project has its own library versions:
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate          # Windows: .venv\Scripts\activate
    ```
-3. **Install the libraries** with pip:
+3. **Install the libraries** with pip (Python's standard package installer, which downloads libraries from the Python Package Index):
    ```bash
    pip install numpy pandas matplotlib scikit-learn scipy jupyter
    pip install seaborn                  # optional, nicer statistical plots
    pip install torch                    # only when you need deep learning
    ```
-4. **Record versions** so others can reproduce your work: `pip freeze > requirements.txt`, later `pip install -r requirements.txt`. Alternatives such as conda, uv or Poetry do the same job (the Python Handbook's packaging chapter covers them).
-5. **Import with the standard aliases** everyone uses: `import numpy as np`, `import pandas as pd`, `import matplotlib.pyplot as plt`.
+4. **Record versions** so others can reproduce your work: `pip freeze > requirements.txt`, later `pip install -r requirements.txt`. Alternatives such as conda, uv or Poetry (other package and environment managers) do the same job (the Python Handbook's packaging chapter covers them).
+5. **Import with the standard aliases** (short nicknames for a library) everyone uses: `import numpy as np`, `import pandas as pd`, `import matplotlib.pyplot as plt`.
 
 The code in this chapter was run with NumPy 2.5, pandas 3.0, scikit-learn 1.9 and matplotlib 3.11.
 
 ### Common mistakes
 
-- Installing into the system Python with `sudo pip`. Use a virtual environment.
-- Installing with one Python and running with another ("but I installed it!"). `python -m pip install ...` guarantees pip matches the interpreter.
+- Installing into the system Python (the copy your operating system itself relies on) with `sudo pip` (`sudo` runs a command with administrator rights). Use a virtual environment.
+- Installing with one Python and running with another ("but I installed it!"). `python -m pip install ...` guarantees pip matches the interpreter (the program that reads and runs your Python code).
 
 ### TL;DR
 
@@ -71,11 +71,11 @@ One virtual environment per project; `pip install numpy pandas matplotlib scikit
 
 ### What it is
 
-**NumPy** provides the `ndarray`: an n-dimensional grid of numbers, all of the same type, stored in one contiguous block of memory. A 1-D array is a vector, a 2-D array is a matrix (Chapter 2), and higher dimensions hold things like colour images (height × width × 3) or batches of images.
+**NumPy** provides the `ndarray`: an n-dimensional grid of numbers, all of the same type, stored in one contiguous (side by side, with no gaps) block of memory. A 1-D array is a vector, a 2-D array is a matrix (Chapter 2), and higher dimensions hold things like colour images (height × width × 3) or batches of images.
 
 ### Why it matters
 
-A Python list stores pointers to separate Python objects, and a Python loop runs one interpreted instruction at a time. A NumPy array stores raw numbers and runs whole operations in compiled code. The result is often 10–1000× faster and far more compact. pandas, scikit-learn, SciPy and matplotlib all speak NumPy arrays, and PyTorch tensors convert to and from them easily.
+A Python list stores pointers (memory addresses) to separate Python objects, and a Python loop runs one interpreted instruction at a time. A NumPy array stores raw numbers and runs whole operations in compiled code (pre-translated machine instructions). The result is often 10–1000× faster and far more compact. pandas, scikit-learn, SciPy and matplotlib all speak NumPy arrays, and PyTorch tensors (PyTorch's name for its arrays) convert to and from them easily.
 
 ### How it works
 
@@ -84,14 +84,14 @@ A Python list stores pointers to separate Python objects, and a Python loop runs
 | Attribute / function | Meaning | Example |
 |---|---|---|
 | `np.array([1, 2, 3])` | Create from a list | |
-| `a.dtype` | Element type: `int64`, `float64`, `float32`, `bool`, ... | Mixing ints and floats upcasts to float |
+| `a.dtype` | Element type: `int64`, `float64`, `float32`, `bool`, ... | Mixing ints and floats upcasts (converts) to float |
 | `a.shape` | Size of each dimension | `(3, 4)` = 3 rows, 4 columns |
 | `a.ndim`, `a.size`, `a.nbytes` | Dimensions, element count, memory | |
 | `np.zeros`, `np.ones`, `np.eye`, `np.arange`, `np.linspace` | Common constructors | `np.linspace(0, 1, 5)` → 5 evenly spaced values |
 | `a.reshape(3, 4)`, `a.reshape(-1)`, `a.T` | New shape (−1 = "work it out"), flatten, transpose | |
 | `a[:, None]` or `a.reshape(-1, 1)` | Turn shape (n,) into a column (n, 1) | scikit-learn wants 2-D X |
 
-**dtype matters.** `float64` uses 8 bytes per number, `float32` uses 4: 1 million values are 8 MB vs 4 MB. Deep learning usually uses `float32` (or smaller) to save memory and speed up GPUs. Small integer types silently **wrap around** on overflow: `int8` 127 + 1 = −128. And floating point is approximate: `0.1 + 0.2 == 0.3` is `False`; compare floats with `np.isclose`.
+**dtype matters.** `float64` uses 8 bytes per number, `float32` uses 4: 1 million values are 8 MB vs 4 MB. Deep learning usually uses `float32` (or smaller) to save memory and speed up GPUs (graphics chips that do thousands of calculations in parallel). Small integer types silently **wrap around** on overflow (a result too large for the type to hold): `int8` 127 + 1 = −128. And floating point (the way computers store numbers with decimals, using a limited number of binary digits) is approximate: `0.1 + 0.2 == 0.3` is `False`; compare floats with `np.isclose`.
 
 #### Indexing
 
@@ -106,7 +106,7 @@ M[[2, 0]]        # "fancy" indexing with a list: rows 2 and 0
 np.where(M > 5, 1, 0)   # vectorised if/else
 ```
 
-**Views vs copies.** Basic slicing (`M[0]`, `M[:2, 1:3]`) returns a **view**: a window onto the same memory. Changing the view changes the original. Boolean and fancy indexing return **copies**. When you need independent data, call `.copy()`.
+**Views vs copies.** Basic slicing (`M[0]`, `M[:2, 1:3]`) returns a **view**: a window onto the same memory. Changing the view changes the original. Boolean indexing (selecting with an array of True/False values, called a *mask*) and fancy indexing return **copies**. When you need independent data, call `.copy()`.
 
 #### Axis operations
 
@@ -120,7 +120,7 @@ scores.mean(axis=1)     # per student: [80. 73.33]
 scores.argmax(axis=1)   # best exam per student: [1 2]
 ```
 
-`keepdims=True` keeps the reduced axis with size 1 (shape (2, 1) instead of (2,)), which makes the result broadcast back against the original.
+`keepdims=True` keeps the reduced axis with size 1 (shape (2, 1) instead of (2,)), which makes the result broadcast back against the original (broadcasting is explained next).
 
 #### Broadcasting
 
@@ -153,7 +153,7 @@ standardised (X - mu) / sd =
  [ 1.225  1.225]]
 ```
 
-A more advanced example computes the squared distance from every point to every cluster centre (the core step of k-means) with no loops, by inserting axes so shapes (4, 1, 2) and (1, 2, 2) broadcast to (4, 2, 2):
+A more advanced example computes the squared distance from every point to every cluster centre (the core step of k-means, a clustering algorithm that repeatedly assigns each point to its nearest centre) with no loops, by inserting axes so shapes (4, 1, 2) and (1, 2, 2) broadcast to (4, 2, 2):
 
 ```python
 d2 = ((pts[:, None, :] - centres[None, :, :]) ** 2).sum(axis=2)   # (4 points, 2 centres)
@@ -195,7 +195,7 @@ Rule of thumb: if you are writing a `for` loop over the rows of an array, there 
 
 #### Random numbers
 
-Use the modern **Generator** API with an explicit seed so results are reproducible:
+Use the modern **Generator** API (application programming interface: the set of functions and objects a library offers) with an explicit seed (a starting number that fixes the whole random sequence) so results are reproducible:
 
 ```python
 rng = np.random.default_rng(42)
@@ -215,7 +215,7 @@ shuffled indices for a train/test split: [7 0 4 2 3 5 8 1 9 6] -> train [7 0 4 2
 same seed, same numbers: [0.774 0.439 0.859]
 ```
 
-The older `np.random.seed()` / `np.random.rand()` functions still work but share one global state; NumPy's documentation recommends `default_rng` for new code.
+The older `np.random.seed()` / `np.random.rand()` functions still work but share one global state (a single hidden setting the whole program uses, so one part of the code can disturb another); NumPy's documentation recommends `default_rng` for new code.
 
 ### Common mistakes
 
@@ -226,7 +226,7 @@ The older `np.random.seed()` / `np.random.rand()` functions still work but share
 
 ### In the interview
 
-**30-second answer:** "NumPy arrays are homogeneous, contiguous blocks of memory, so operations run in compiled code instead of the Python interpreter. Vectorising, meaning whole-array operations plus broadcasting, is typically orders of magnitude faster than Python loops. Broadcasting aligns shapes from the trailing dimension and stretches size-1 dimensions."
+**30-second answer:** "NumPy arrays are homogeneous (all elements the same type), contiguous blocks of memory, so operations run in compiled code instead of the Python interpreter. Vectorising, meaning whole-array operations plus broadcasting, is typically orders of magnitude faster than Python loops. Broadcasting aligns shapes from the trailing dimension and stretches size-1 dimensions."
 
 - *View or copy?* — Basic slices are views; boolean and fancy indexing return copies.
 - *What does axis=0 mean?* — Operate down the rows, producing one result per column.
@@ -251,7 +251,7 @@ ndarrays are typed, fixed-size and fast. Master shape, dtype, slicing (views!), 
 
 ### Why it matters
 
-Real data arrives as CSV files, Excel sheets and database queries, with mixed types, missing values and messy text. pandas is the standard tool for loading, cleaning, exploring and reshaping it before modelling. scikit-learn accepts DataFrames directly.
+Real data arrives as CSV files (comma-separated values: a plain-text table, one row per line), Excel sheets and database queries, with mixed types, missing values and messy text. pandas is the standard tool for loading, cleaning, exploring and reshaping it before modelling. scikit-learn accepts DataFrames directly.
 
 ### How it works
 
@@ -302,7 +302,7 @@ age           0
 start_date    0
 ```
 
-Two things to notice. `salary` became `float64` because an integer column cannot hold the missing-value marker **NaN** ("not a number"). And `age` was read as text (`str`, pandas 3's default string dtype) because one row contains `"unknown"`, so `isnull()` does not count it as missing. **Always check dtypes after loading.** `read_csv` also reads from URLs and compressed files, and pandas has `read_excel`, `read_parquet`, `read_json` and `read_sql` for other sources.
+Two things to notice. `salary` became `float64` because an integer column cannot hold the missing-value marker **NaN** ("not a number"). And `age` was read as text (`str`, pandas 3's default string dtype) because one row contains `"unknown"`, so `isnull()` does not count it as missing. **Always check dtypes after loading.** `read_csv` also reads from URLs and compressed files, and pandas has `read_excel`, `read_parquet` (Parquet is a compressed, column-oriented file format popular for large data), `read_json` and `read_sql` for other sources.
 
 #### Clean: types and missing values
 
@@ -336,7 +336,7 @@ Choices for missing values:
 | Fill per group | `groupby(...).transform("median")` | Groups differ (Ben's missing salary gets the Eng median, 127,500) |
 | Add a "was missing" flag | `df["x_missing"] = df["x"].isna()` | Missingness itself may be informative |
 
-In a modelling project, do the filling inside a scikit-learn `SimpleImputer` in a pipeline (§3.5), so the fill values are learned from training data only.
+In a modelling project, do the filling inside a scikit-learn `SimpleImputer` (scikit-learn's missing-value filler; *imputation* means filling in missing values) in a pipeline (a chain of processing steps plus a model, §3.5), so the fill values are learned from training data only.
 
 #### Select: `loc` vs `iloc`
 
@@ -367,7 +367,7 @@ Use `&`, `|`, `~` (not `and`, `or`, `not`), and wrap each condition in parenthes
 
 #### groupby: split, apply, combine
 
-`groupby` splits rows into groups, applies a function to each, and combines the results, like SQL's `GROUP BY`.
+`groupby` splits rows into groups, applies a function to each, and combines the results, like SQL's `GROUP BY` (SQL is the standard language for querying databases).
 
 ```python
 df.groupby("dept").agg(headcount=("emp_id", "count"),
@@ -389,7 +389,7 @@ Sales          2     67500.0     41.0
 
 #### merge / join
 
-`merge` combines two tables on a key column, like SQL joins.
+`merge` combines two tables on a key column (a column, such as an ID, whose values identify which rows belong together), like SQL joins.
 
 ```python
 depts = pd.DataFrame({"dept": ["Eng", "Sales", "Legal"], "floor": [3, 1, 5]})
@@ -412,7 +412,7 @@ Check row counts after every merge: duplicate keys in the right table multiply r
 
 #### apply vs vectorised
 
-`df.apply(func, axis=1)` calls a Python function once per row: flexible but slow. Column arithmetic, `np.where`, `pd.cut` and the `.str` / `.dt` accessors are vectorised.
+`df.apply(func, axis=1)` calls a Python function once per row: flexible but slow. Column arithmetic, `np.where`, `pd.cut` and the `.str` / `.dt` accessors (ready-made text and date methods that work on a whole column) are vectorised.
 
 ```python
 big.apply(lambda r: r["price"] * r["qty"], axis=1)   # row by row
@@ -425,11 +425,11 @@ big["bucket"] = pd.cut(big["price"], bins=[0, 25, 75, 100], labels=["cheap", "mi
 row-wise apply: 430 ms | vectorised: 0.21 ms -> ~2068x faster (varies by machine)
 ```
 
-Use `apply` only when no vectorised alternative exists (e.g. calling an external parser on each value).
+Use `apply` only when no vectorised alternative exists (e.g. calling an external parser, code that reads text and turns it into structured data, on each value).
 
 #### A pandas 3 pitfall: chained assignment
 
-Since pandas 3.0, **copy-on-write** is always on: every indexing result behaves as a copy. So the once-common pattern of calling an in-place method on a selected column no longer modifies the DataFrame:
+Since pandas 3.0, **copy-on-write** is always on: every indexing result behaves as a copy. So the once-common pattern of calling an in-place method (one that changes the object itself instead of returning a new one) on a selected column no longer modifies the DataFrame:
 
 ```python
 df["A"].fillna(0, inplace=True)    # does NOT change df (pandas warns: ChainedAssignmentError)
@@ -462,7 +462,7 @@ Prefer assignment over `inplace=True` in general; it is clearer and works in eve
 
 1. `df.loc[0:2]` vs `df.iloc[0:2]` with a default index: how many rows each? → 3 and 2.
 2. A numeric column shows dtype `str`. First step? → `pd.to_numeric(col, errors="coerce")` and inspect the new NaNs.
-3. Why fill missing values inside a scikit-learn pipeline rather than in pandas before splitting? → To learn fill values from training data only (no leakage).
+3. Why fill missing values inside a scikit-learn pipeline rather than in pandas before splitting? → To learn fill values from training data only (no leakage, i.e. no information from the test data sneaking into training).
 
 ### TL;DR
 
@@ -474,15 +474,15 @@ Load → check `dtypes`, `isnull().sum()`, `describe()` → fix types → handle
 
 ### What it is
 
-**matplotlib** is Python's foundational plotting library. **seaborn** is a higher-level library on top of it that makes statistical plots (distributions, pair plots, heatmaps) in one line; pandas' `.plot()` and `.hist()` also call matplotlib. Learning matplotlib's core lets you customise anything the others produce.
+**matplotlib** is Python's foundational plotting library. **seaborn** is a higher-level library on top of it that makes statistical plots (distributions, pair plots, a grid of scatter plots for every pair of columns, and heatmaps) in one line; pandas' `.plot()` and `.hist()` also call matplotlib. Learning matplotlib's core lets you customise anything the others produce.
 
 ### Why it matters
 
-Plots reveal what summary numbers hide: skewed distributions, outliers, class overlap, non-linear relationships, data-entry errors, and overfitting in learning curves. Plot before you model.
+Plots reveal what summary numbers hide: skewed distributions, outliers, class overlap, non-linear relationships, data-entry errors, and overfitting (a model memorising its training data instead of learning patterns that generalise) in learning curves (training and validation error plotted over training time). Plot before you model.
 
 ### How it works
 
-Use the **object-oriented API**: create a figure (`fig`, the whole image) and one or more axes (`ax`, individual plots), then call methods on `ax`.
+Use the **object-oriented API** (you create objects and call their methods, rather than relying on a hidden "current plot"): create a figure (`fig`, the whole image) and one or more axes (`ax`, individual plots), then call methods on `ax`.
 
 ```python
 import matplotlib
@@ -501,7 +501,7 @@ plt.close(fig)                              # free memory when making many figur
 
 ![Line plot of learning curves](img/line_learning_curves.png)
 
-A **line plot** suits ordered x-values (time, epochs). This one shows the classic overfitting signature: validation loss turns upward while training loss keeps falling.
+A **line plot** suits ordered x-values (time, epochs; an epoch is one full pass of training over the data). This one shows the classic overfitting signature: validation loss turns upward while training loss keeps falling.
 
 **Subplots** put several plots in one figure: `fig, axes = plt.subplots(2, 2)` returns a 2 × 2 array of axes.
 
@@ -521,7 +521,7 @@ axes[1, 1].boxplot([...], tick_labels=[...])
 | **Scatter** | Relationship between two numeric variables | Are classes separable? Is a relationship linear? |
 | **Histogram** | Distribution of one variable | Skew, outliers, per-class overlap |
 | **Bar** | A value per category | Class balance, group means |
-| **Box plot** | Median, quartiles (box), whiskers, outliers (dots) | Compare distributions across groups, spot outliers |
+| **Box plot** | Median, quartiles (the 25th and 75th percentile values; the box), whiskers (lines to the typical range), outliers (dots) | Compare distributions across groups, spot outliers |
 | **Line** | Trend over an ordered axis | Learning curves, time series |
 | **Heatmap** | A matrix as colours | Correlation matrices, confusion matrices |
 
@@ -537,7 +537,7 @@ fig.colorbar(im, ax=ax)
 
 ![Correlation heatmap](img/iris_corr_heatmap.png)
 
-Petal length and width correlate at 0.96: they carry nearly the same information, which matters for linear models (Chapter 2's multicollinearity) and feature selection.
+Petal length and width correlate at 0.96: they carry nearly the same information, which matters for linear models (Chapter 2's multicollinearity: features that are near-copies of each other make weights unstable) and feature selection (choosing which columns to keep).
 
 **pandas shortcut**, handy for a first look:
 
@@ -571,7 +571,7 @@ ax = df["sepal_length"].hist(bins=20)
 
 ### What it is
 
-**scikit-learn** is the standard Python library for classic ML: linear models, trees and forests, SVMs, k-NN, clustering, dimensionality reduction, preprocessing, model selection and metrics. Its power comes from **one consistent interface** that every algorithm follows, described in its API design paper (Buitinck et al., 2013).
+**scikit-learn** is the standard Python library for classic ML: linear models, trees and forests, SVMs (support vector machines, which draw a widest-margin boundary between classes), k-NN (k-nearest neighbours, which predicts from the most similar stored examples), clustering (grouping similar rows without labels), dimensionality reduction (compressing many features into a few), preprocessing, model selection and metrics. Its power comes from **one consistent interface** that every algorithm follows, described in its API design paper (Buitinck et al., 2013).
 
 ### How it works
 
@@ -587,7 +587,7 @@ Conventions:
 2. **`fit` learns from data and returns `self`**, so you can chain: `LogisticRegression().fit(X, y).predict(X_new)`.
 3. **Learned attributes end with an underscore**: `scaler.mean_`, `model.coef_`, `model.classes_`. They exist only after fitting.
 4. **X is 2-D** (n_samples × n_features: an array or DataFrame); **y is 1-D**.
-5. `score` returns a default metric: accuracy for classifiers, R² for regressors.
+5. `score` returns a default metric: accuracy for classifiers, R² (the share of the target's variation the model explains; 1 is perfect) for regressors.
 
 ```python
 scaler = StandardScaler()
@@ -618,14 +618,14 @@ score (accuracy) = 1.0 | coef_ [[1.121]] intercept_ [-2.802]
 A **`Pipeline`** chains transformers and a final estimator into one estimator. Calling `fit` fits each step in order on the training data and passes the transformed data along; `predict` runs the same transformations and then predicts.
 
 Why use one:
-- **No leakage:** in cross-validation, every step is refit on each training fold.
-- **One object to tune** (`GridSearchCV` can search any step's hyperparameters) and **one object to save and deploy**, so training and serving apply identical preprocessing.
+- **No leakage:** in cross-validation (splitting the training data into k chunks, or *folds*, and taking turns training on k − 1 of them and validating on the remaining one), every step is refit on each training fold.
+- **One object to tune** (`GridSearchCV`, which tries every combination of the hyperparameter values you list and scores each with cross-validation, can search any step's hyperparameters) and **one object to save and deploy**, so training and serving apply identical preprocessing.
 
 Parameters inside a pipeline are addressed as `step__parameter` (double underscore), nesting as deep as needed: `prep__num__impute__strategy`.
 
 ### ColumnTransformer
 
-Real tables mix numeric and categorical columns that need different preprocessing. **`ColumnTransformer`** applies a different transformer to each group of columns and concatenates the results.
+Real tables mix numeric and categorical columns (columns holding labels from a fixed set, such as a plan name or a country) that need different preprocessing. **`ColumnTransformer`** applies a different transformer to each group of columns and concatenates the results.
 
 ```python
 numeric = ["age", "monthly_spend"]
@@ -657,7 +657,7 @@ flowchart LR
     M --> P["predict or predict_proba"]
 ```
 
-Output on a synthetic 600-customer churn dataset with missing values:
+Output on a synthetic (generated by code rather than collected) 600-customer churn (customers cancelling and leaving) dataset with missing values:
 
 ```
     age  monthly_spend   plan country
@@ -677,7 +677,7 @@ What each part shows:
 - `get_feature_names_out()` lists the 9 columns the model actually sees: 2 scaled numerics plus one 0/1 column per category (**one-hot encoding**).
 - `handle_unknown="ignore"` lets the model score a customer with a plan (`"enterprise"`) and country (`"JP"`) never seen in training, by setting all of that feature's one-hot columns to 0, instead of crashing in production.
 - `GridSearchCV` treated the whole pipeline as one estimator and even swapped the final model; logistic regression won, which makes sense because the data was generated from a logistic formula.
-- The test score (0.827) is higher than the CV mean (0.773); with only 150 test rows, a difference of this size is within normal sampling noise (Chapter 2's bootstrap CI).
+- The test score (0.827) is higher than the CV mean (0.773); with only 150 test rows, a difference of this size is within normal sampling noise (Chapter 2's bootstrap CI, a range of plausible scores found by resampling the test set).
 
 ### Other scikit-learn tools you will use constantly
 
@@ -690,7 +690,7 @@ What each part shows:
 | `sklearn.datasets` | Bundled toy datasets (`load_iris`, `load_breast_cancer`, `load_digits`, `load_diabetes`) and generators (`make_classification`, `make_blobs`) |
 | `sklearn.pipeline`, `sklearn.compose` | `Pipeline`, `make_pipeline`, `ColumnTransformer`, `make_column_transformer` |
 
-`set_output(transform="pandas")` on a transformer or pipeline makes it return DataFrames with named columns, which helps debugging. Save fitted pipelines with `joblib.dump` (Chapter 1) and only load files you trust.
+`set_output(transform="pandas")` on a transformer or pipeline makes it return DataFrames with named columns, which helps debugging. Save fitted pipelines with `joblib.dump` (joblib is a library for saving Python objects to disk; Chapter 1) and only load files you trust.
 
 ### Common mistakes
 
@@ -723,7 +723,7 @@ Constructor = hyperparameters; `fit` learns (attributes_); `transform`/`predict`
 
 ### What it is
 
-**Jupyter** notebooks (`.ipynb`) mix code cells, their outputs (tables, plots) and Markdown notes in one document, running against a live Python process called the **kernel**. You can use them in JupyterLab (`jupyter lab`), VS Code, or hosted services such as Google Colab.
+**Jupyter** notebooks (`.ipynb`) mix code cells, their outputs (tables, plots) and Markdown (a simple plain-text formatting syntax for headings, lists and links) notes in one document, running against a live Python process called the **kernel**. You can use them in JupyterLab (`jupyter lab`), VS Code (a popular code editor), or hosted services such as Google Colab (free notebooks that run on Google's servers).
 
 ### Why it matters
 
@@ -734,10 +734,10 @@ Data work is exploratory: load, look, tweak, look again. Notebooks keep the data
 1. **Start in the project's virtual environment** so the kernel uses its libraries: `source .venv/bin/activate && jupyter lab`. If you install from inside a notebook, use `%pip install package` (installs into the kernel's environment) rather than `!pip`.
 2. **First cell: imports, settings and seeds** (`import numpy as np`, `rng = np.random.default_rng(42)`, display options).
 3. **Explore top to bottom**: load → inspect → clean → plot → model, with a Markdown heading per stage.
-4. **Useful magics**: `%timeit expr` (benchmark), `%time` (one run), `%load_ext autoreload` + `%autoreload 2` (reload your own modules when edited), `df.head()` as the last line to display a table. Plots appear inline by default in current Jupyter.
+4. **Useful magics** (special commands starting with `%` that Jupyter, not Python, understands): `%timeit expr` (benchmark), `%time` (one run), `%load_ext autoreload` + `%autoreload 2` (reload your own modules when edited), `df.head()` as the last line to display a table. Plots appear inline by default in current Jupyter.
 5. **Restart & Run All before trusting or sharing results.** Cells can be run in any order, so hidden state (a variable defined in a deleted cell) is the most common source of "works on my notebook" bugs.
-6. **Move stable code into `.py` modules** and import it; keep notebooks for exploration and reports. `jupyter nbconvert --to script notebook.ipynb` exports the code; `jupyter nbconvert --to html --execute` produces a fresh, fully executed report.
-7. **Version control:** clear large outputs before committing, or pair notebooks with scripts (e.g. the jupytext tool).
+6. **Move stable code into `.py` modules** (plain Python files you can import) and import it; keep notebooks for exploration and reports. `jupyter nbconvert --to script notebook.ipynb` exports the code; `jupyter nbconvert --to html --execute` produces a fresh, fully executed report.
+7. **Version control:** clear large outputs before committing (saving a snapshot of your changes into the project history; *version control* means tracking every change to your files over time, usually with git), or pair notebooks with scripts (e.g. the jupytext tool).
 
 ### Trade-offs
 
@@ -745,14 +745,14 @@ Data work is exploratory: load, look, tweak, look again. Notebooks keep the data
 |---|---|---|
 | Exploration, plots, teaching | Excellent | Clumsy |
 | Reproducibility | Risky (out-of-order execution) | Good |
-| Testing, code review, diffs | Poor | Good |
+| Testing, code review, diffs (line-by-line change views) | Poor | Good |
 | Production pipelines | Avoid | Yes |
 
 ### Common mistakes
 
 - Running cells out of order and trusting the result.
 - Huge notebooks that do everything; split into modules.
-- Committing notebooks with megabytes of output or secrets printed in cells.
+- Committing notebooks with megabytes of output or secrets (passwords, API keys) printed in cells.
 
 ### TL;DR
 
@@ -766,9 +766,9 @@ Notebooks for exploration, scripts for anything that must run again. Seed first,
 
 | Framework | Origin | Focus | Style |
 |---|---|---|---|
-| **scikit-learn** | Community project, started 2007 | Classic ML on tabular data: regression, classification, clustering, preprocessing, evaluation | High level: `fit` / `predict`; CPU |
+| **scikit-learn** | Community project, started 2007 | Classic ML on tabular (rows-and-columns) data: regression, classification, clustering, preprocessing, evaluation | High level: `fit` / `predict`; CPU |
 | **PyTorch** | Meta (Facebook) AI Research, 2016; now governed by the PyTorch Foundation | Deep learning; dominant in research and widely used in industry | Define-by-run ("dynamic graph"): the model is ordinary Python code executed each step; automatic differentiation; GPUs |
-| **TensorFlow** + **Keras** | Google, 2015 | Deep learning with strong deployment tooling (TF Serving, TF Lite / LiteRT for mobile) | Keras is a high-level API (`model.compile`, `model.fit`); since Keras 3 it can run on TensorFlow, JAX or PyTorch backends |
+| **TensorFlow** + **Keras** | Google, 2015 | Deep learning with strong deployment tooling (TF Serving for servers, TF Lite / LiteRT for mobile) | Keras is a high-level API (`model.compile`, `model.fit`); since Keras 3 it can run on TensorFlow, JAX (Google's numerical library) or PyTorch backends (the engine doing the maths) |
 
 ### How the styles differ
 
@@ -799,19 +799,19 @@ PyTorch accuracy:      0.974
 device available: mps
 ```
 
-Both reach about the same accuracy (they optimise slightly different objectives and stop at different points). The PyTorch version is longer, but every piece is replaceable: swap `nn.Linear` for a 50-layer network, the loss for any differentiable function, and move tensors to a GPU (`"cuda"` on NVIDIA, `"mps"` on Apple silicon, as detected here) without changing the loop.
+Both reach about the same accuracy (they optimise slightly different objectives and stop at different points). The PyTorch version is longer, but every piece is replaceable: swap `nn.Linear` for a 50-layer network, the loss for any differentiable function (one whose slope can be computed, so gradients exist), and move tensors to a GPU (`"cuda"` on NVIDIA, `"mps"` on Apple silicon, as detected here) without changing the loop.
 
 ### Which one to choose
 
 - **Start with scikit-learn** for tabular data, small-to-medium datasets, baselines, and anything where a linear model or tree ensemble might suffice. (Gradient-boosting libraries such as XGBoost, LightGBM and CatBoost follow the scikit-learn API and are often the strongest choice for tables.)
-- **Use PyTorch or TensorFlow/Keras** for images, audio, text and other unstructured data, for very large datasets, for GPU training, and for custom neural architectures. PyTorch is the more common choice in current research and many companies; TensorFlow/Keras remains widespread in production and on mobile.
+- **Use PyTorch or TensorFlow/Keras** for images, audio, text and other unstructured data (data without fixed columns), for very large datasets, for GPU training, and for custom neural architectures (your own network designs). PyTorch is the more common choice in current research and many companies; TensorFlow/Keras remains widespread in production and on mobile.
 - They combine well: scikit-learn for splitting, preprocessing and metrics around a PyTorch model is a very common setup.
 
 ### Real-world examples
 
 - scikit-learn is used for classic ML in many companies; its website's testimonials page includes quotes from organisations such as Spotify, J.P. Morgan and Booking.com.
-- PyTorch underlies most open research code and projects such as Hugging Face Transformers' PyTorch models, and Tesla's then AI director Andrej Karpathy described training its Autopilot vision networks with it in a 2019 PyTorch Developer Conference talk.
-- TensorFlow powers many Google products, and TensorFlow Lite (renamed LiteRT in 2024) runs models on mobile and embedded devices.
+- PyTorch underlies most open research code and projects such as Hugging Face Transformers' (a popular library of ready-trained language and vision models) PyTorch models, and Tesla's then AI director Andrej Karpathy described training its Autopilot vision networks with it in a 2019 PyTorch Developer Conference talk.
+- TensorFlow powers many Google products, and TensorFlow Lite (renamed LiteRT in 2024) runs models on mobile and embedded devices (small computers built into products such as cameras and appliances).
 
 ### Self-check
 

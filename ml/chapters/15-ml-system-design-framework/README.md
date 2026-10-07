@@ -1,8 +1,8 @@
 # Chapter 15 — ML System Design: The Interview Framework
 
-"Design YouTube's recommendations." "Design a fraud detector." "Add AI to our support desk." These questions now sit next to the classic "Design Twitter" in system design loops, and they are asked of ordinary backend engineers, not only ML specialists. The good news: everything you know about load balancers, caches, queues and databases still applies. The new part is that one box in your diagram **learns from data** — so its output can be wrong while the request succeeds, its quality can decay while the code stays the same, and each call may cost real money.
+"Design YouTube's recommendations." "Design a fraud detector." "Add AI to our support desk." These questions now sit next to the classic "Design Twitter" in system design loops (the series of interview rounds), and they are asked of ordinary **backend engineers** (who build the server side of a product), not only ML specialists. The good news: everything you know about **load balancers** (spread incoming requests across many servers), **caches** (fast copies of frequently used data), **queues** (buffers that hold work until a worker is free) and databases still applies — if these are new, read [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) first. The new part is that one box in your diagram **learns from data** — so its output can be wrong while the request succeeds, its quality can decay while the code stays the same, and each call may cost real money.
 
-This chapter gives you a repeatable way to answer such questions in 45 minutes. Chapter 16 then goes deep on each production building block (training pipelines, feature stores, serving, evaluation, monitoring, A/B tests, MLOps).
+This chapter gives you a repeatable way to answer such questions in 45 minutes. Chapter 16 then goes deep on each production building block (training pipelines, feature stores — systems that store and serve model inputs — serving, evaluation, monitoring, A/B tests — live experiments comparing two versions on random groups of users — and MLOps, the practices and tooling for running ML in production).
 
 **What you'll learn**
 
@@ -29,13 +29,13 @@ Two words you will use constantly:
 |---|---|---|
 | **Training** | Fitting or updating the model from data. Usually a background job, separate from user traffic. | Nightly job that learns from yesterday's orders |
 | **Inference** | Running the trained model on an input to get an output. | Scoring one transaction at checkout |
-| **Online inference** | Inference inside a live request; must meet the request's latency limit. | Fraud score before a card payment is approved |
+| **Online inference** | Inference inside a live request; must meet the request's latency (response time) limit. | Fraud score before a card payment is approved |
 | **Batch inference** | Inference over many inputs in a scheduled job; results stored for later. | Tonight's recommendation lists for every active user |
 
 Analogy: a model is like a new hire who learned the job from past examples. You still need an office (infrastructure), a way to check their work (evaluation), a way to notice when they get worse (monitoring), a budget (cost), and a plan for when they make a mistake (fallbacks). Knowing how their brain works (model architecture) helps, but it is not what the design interview is mostly about.
 
 ### Why it matters
-A common preparation mistake is to spend weeks on model internals — transformer attention, loss derivations — and then freeze when asked "where does the training data come from?" or "what happens when the model times out?". In a system design round, the interviewer mostly grades the **whole system** around the model.
+A common preparation mistake is to spend weeks on model internals — transformer attention (the core mechanism inside modern language models), loss derivations — and then freeze when asked "where does the training data come from?" or "what happens when the model times out?". In a system design round, the interviewer mostly grades the **whole system** around the model.
 
 ### The five forms of the question
 
@@ -45,7 +45,7 @@ A common preparation mistake is to spend weeks on model internals — transforme
 | # | Form | Example prompts | What to emphasise |
 |---|---|---|---|
 | 1 | **Known ML product** | "Design YouTube recommendations", "Design search autocomplete" | Data, features, training, serving, evaluation, feedback loop |
-| 2 | **GenAI product** | "Design ChatGPT", "Design a docs Q&A assistant" | Retrieval, context assembly, inference cost, output evaluation, safety |
+| 2 | **GenAI product** | "Design ChatGPT", "Design a docs Q&A assistant" | Retrieval, context assembly (building the text sent to the model), inference cost, output evaluation, safety |
 | 3 | **Add AI to an existing system** | "Our online store already runs fine — which part of it should get AI?" | Whether AI is needed at all, choosing one useful feature, simplest viable design |
 | 4 | **Design an agent** | "An agent that books travel for users" | Tool permissions, approvals, step/cost limits, stop conditions, task-success evaluation |
 | 5 | **Critique / scale an AI design** | "Our RAG system is slow and wrong — fix it" | Diagnose with measurements, logs and failed examples *before* changing anything |
@@ -59,7 +59,7 @@ Expected depth depends on role and company — treat this as a preparation guide
 |---|---|---|
 | Software engineer (senior+) | 2, 3, sometimes 1 | Architecture, serving, cost, failure handling; model inputs/outputs/limits |
 | ML engineer | 1, 2, 5 | Above + model choice, features, training pipelines, evaluation metrics |
-| AI / ML platform engineer | 2, 4, 5 | Inference infrastructure: GPUs, batching, caching, latency under load |
+| AI / ML platform engineer | 2, 4, 5 | Inference infrastructure: GPUs (graphics chips that run models fast), batching (grouping requests to process together), caching, latency under load |
 | Engineering manager / staff+ | 3, 5 | Build vs buy, cost limits, ownership, risk, gradual rollout |
 
 A useful question in the first minute: *"Would you like me to go deep on model development, or on the system that serves and maintains the model?"*
@@ -68,10 +68,10 @@ A useful question in the first minute: *"Would you like me to go deep on model d
 
 | Graded | Usually secondary in a system design round |
 |---|---|
-| **Requirements discipline** — users, latency, quality measure, what's out of scope, numeric assumptions | Deriving the transformer or backprop by hand |
+| **Requirements discipline** — users, latency, quality measure, what's out of scope, numeric assumptions | Deriving the transformer or backprop (the gradient computation used to train networks) by hand |
 | **A complete loop**, not just the request path — how outcomes come back and improve the system | Naming this month's newest model |
 | **Cost and latency realism** — state assumptions, estimate, then optimise | Framework trivia ("use library X") without saying why the component is needed |
-| **Failure honesty** — a model can be confidently wrong with HTTP 200; detection, blast-radius limits, fallbacks | |
+| **Failure honesty** — a model can be confidently wrong with HTTP 200 (the web's "success" status code); detection, blast-radius (how much one failure can damage) limits, fallbacks | |
 
 ### How it works — four assumptions that break when a model enters the system
 
@@ -82,29 +82,29 @@ These are contrasts, not absolutes — non-ML systems also need quality checks a
 
 | # | Classic assumption | What changes with a model | Design response |
 |---|---|---|---|
-| 1 | **Correctness is binary** — a payment is either the authorised amount or a bug | Output quality is a spectrum: a recommendation can render fine and still be irrelevant | Define **quality metrics** (CTR, resolution rate, suggestion-acceptance rate) *alongside* latency and availability SLOs; log predictions and join them with later outcomes |
+| 1 | **Correctness is binary** — a payment is either the authorised amount or a bug | Output quality is a spectrum: a recommendation can render fine and still be irrelevant | Define **quality metrics** (CTR — click-through rate, clicks ÷ times shown — resolution rate, suggestion-acceptance rate) *alongside* latency and availability (share of time the service works) SLOs (service-level objectives: target numbers the service promises to hit); log predictions and join them with later outcomes |
 | 2 | **The code is the behaviour** | Behaviour also depends on data. **Drift** — a change in input patterns or in the input→outcome relationship — can degrade a model whose code never changed (new fraud tactics, changed tastes) | A feedback process: collect outcomes, investigate quality changes, evaluate a candidate against the current version, release gradually with rollback. Retrain because evidence says so, not on every alert |
-| 3 | **Compute is cheap** | A model call can cost orders of magnitude more than a DB read, depending on model size, input/output length, hardware and utilisation | Put a number on it: 10M requests/day × $0.01 = $100,000/day ≈ $3M/month (illustrative). Then consider caching (only when permissions/freshness allow), routing easy requests to a smaller model (only if it meets the quality bar), and precomputing in batch |
-| 4 | **Failures are loud** (500s, timeouts) | A wrong answer arrives as `200 OK`: an invented citation, a missed fraud, harmful text | Assume anything a user types, or that retrieval pulls in, may be hostile (prompt injection can't be fully stopped by input filters — enforce permissions outside the model), check outputs, require human approval for high-impact actions, define fallbacks (unpersonalised results, hand-off to a human) |
+| 3 | **Compute is cheap** | A model call can cost orders of magnitude more than a DB read (a database lookup), depending on model size, input/output length, hardware and utilisation (how busy the hardware is kept) | Put a number on it: 10M requests/day × $0.01 = $100,000/day ≈ $3M/month (illustrative). Then consider caching (only when permissions/freshness allow), routing easy requests to a smaller model (only if it meets the quality bar), and precomputing in batch |
+| 4 | **Failures are loud** (500s — server-error responses — and timeouts) | A wrong answer arrives as `200 OK`: an invented citation, a missed fraud, harmful text | Assume anything a user types, or that retrieval pulls in, may be hostile (prompt injection — untrusted text that tries to override the model's instructions — can't be fully stopped by input filters — enforce permissions outside the model), check outputs, require human approval for high-impact actions, define fallbacks (unpersonalised results, hand-off to a human) |
 
 Question to ask yourself for every design: **"Who is hurt by a wrong output, and what limits the damage?"**
 
 ### Build, host, or call an API?
-The other big decision is how you obtain and run the model. The options overlap (you can fine-tune and then use managed hosting).
+An **API** (application programming interface) is a defined way for one program to call another, here over the network. The other big decision is how you obtain and run the model. The options overlap (you can fine-tune and then use managed hosting).
 
 | Option | Pros | Cons / what you still own |
 |---|---|---|
-| **Hosted API** (pay per use) | Fastest to launch, no GPU fleet | Data handling terms, rate limits, provider availability, per-call cost at scale; you still build integration, evaluation, monitoring |
-| **Self-host open-weights model** (weights downloadable under a licence) | Control over data, deployment, latency; can be cheaper at high, steady utilisation | Capacity, security, upgrades, on-call, often GPUs; savings are not guaranteed |
+| **Hosted API** (pay per use) | Fastest to launch, no GPU fleet | Data handling terms, rate limits (caps on calls per second or minute), provider availability, per-call cost at scale; you still build integration, evaluation, monitoring |
+| **Self-host open-weights model** (weights downloadable under a licence) | Control over data, deployment, latency; can be cheaper at high, steady utilisation | Capacity, security, upgrades, on-call (engineers rostered to respond to outages), often GPUs; savings are not guaranteed |
 | **Train / fine-tune your own** | Needed when your own interaction data is the product (ranking, fraud, recommendations); fine-tuning can help a narrow generative task | Data preparation, training infra, ongoing maintenance |
 
 Compare them on quality, data sensitivity, volume, latency, total cost and team skills. Start with the simplest option that meets requirements and say what evidence would make you switch.
 
 ### Trade-offs
-Going ML at all is itself a trade-off. Google's *Rules of ML* open with **Rule #1: don't be afraid to launch without ML** — a heuristic may be good enough to start, and it produces the data you'll later learn from. **Rule #3: choose ML over a complex heuristic** — once hand-written rules become a tangle, a learned model is easier to maintain.
+Going ML at all is itself a trade-off. Google's *Rules of ML* open with **Rule #1: don't be afraid to launch without ML** — a **heuristic** (a simple hand-written rule of thumb) may be good enough to start, and it produces the data you'll later learn from. **Rule #3: choose ML over a complex heuristic** — once hand-written rules become a tangle, a learned model is easier to maintain.
 
 ### Common mistakes
-- Answering an SWE design question like a research talk (15 minutes on fine-tuning objectives, nothing on serving or evaluation).
+- Answering an SWE (software engineer) design question like a research talk (15 minutes on fine-tuning objectives, nothing on serving or evaluation).
 - Drawing only the request path — no logging, no outcome join, no retraining or evaluation loop.
 - Assuming model calls are free or as fast as a cache read.
 - Treating user feedback (thumbs up/down) as automatically trustworthy training labels.
@@ -112,21 +112,21 @@ Going ML at all is itself a trade-off. Google's *Rules of ML* open with **Rule #
 
 ### Real-world examples
 - **Netflix, YouTube, TikTok** feeds: predictive ranking systems (form 1).
-- **GitHub Copilot** style code assistants: generative products measured by suggestion acceptance and retention (form 2).
+- **GitHub Copilot** style code assistants: generative products measured by suggestion acceptance and **retention** (users who keep coming back) (form 2).
 - **Stripe Radar**: a fraud model embedded into an existing payments flow (form 3 in spirit).
 - Customer-support agents that can issue refunds through tools with limits (form 4).
 
 ### In the interview
-**30-second answer** — *"What changes compared with an ordinary backend service?"* → *"Everything from distributed systems still holds. I add three things: quality metrics that sit beside the latency and uptime SLOs; a loop that notices when quality slips and tests any new version before rolling it out step by step; and a budget for per-call latency and spend. Finally, safeguards for bad outputs — validation, fallbacks, and a human reviewer where the stakes warrant one."*
+**30-second answer** — *"What changes compared with an ordinary backend service?"* → *"Everything from distributed systems (software spread across many machines) still holds. I add three things: quality metrics that sit beside the latency and uptime SLOs; a loop that notices when quality slips and tests any new version before rolling it out step by step; and a budget for per-call latency and spend. Finally, safeguards for bad outputs — validation, fallbacks, and a human reviewer where the stakes warrant one."*
 
-- **"What do you mean by quality, concretely?"** → Name a task metric: for a feed, CTR plus a longer-term satisfaction signal (watch time, return visits); for fraud, precision and recall at the chosen threshold; for support, correct resolution rate plus CSAT and repeat-contact rate.
+- **"What do you mean by quality, concretely?"** → Name a task metric: for a feed, CTR plus a longer-term satisfaction signal (watch time, return visits); for fraud, **precision** (share of flagged transactions that really are fraud) and **recall** (share of all fraud that gets flagged) at the chosen threshold; for support, correct resolution rate plus CSAT (customer-satisfaction score) and repeat-contact rate.
 - **"Would you fine-tune?"** → Not first. Check whether an existing model with good instructions (and retrieval if private data is needed) meets the quality and cost bar on an evaluation set; fine-tune only if evaluation shows a specific gap that simpler changes don't close.
 - **"Assume the model already exists."** → Then spend the time on integration, serving, cost, evaluation and feedback; bring training up only when some requirement depends on it.
 
 ### Self-check
 1. Why can a model fail "silently"? → Because a wrong prediction is returned successfully (HTTP 200); error-rate dashboards don't see it — you need quality metrics joined to outcomes.
 2. Name the four broken assumptions. → Binary correctness, code = behaviour, cheap compute, loud failures.
-3. When is a hosted API a poor fit? → Strict data-residency/sensitivity rules, very high steady volume where per-call pricing dominates, or latency needs the provider can't meet.
+3. When is a hosted API a poor fit? → Strict data-residency (which country data may be stored in)/sensitivity rules, very high steady volume where per-call pricing dominates, or latency needs the provider can't meet.
 4. What does Rules of ML #1 say, and why? → You may launch without ML; a simple heuristic gets the product and the data pipeline going, and gives a baseline.
 
 ### TL;DR
@@ -144,9 +144,9 @@ Before choosing an architecture, classify what the system mainly has to **produc
 
 | Family | The model produces… | Typical questions | Focus of your answer | Classic failure |
 |---|---|---|---|---|
-| **1. Predictive** | A score, number or label that the system acts on | Recommendations, feed/search ranking, ads CTR, fraud/spam, ETA, churn | Data & features, candidate generation + ranking, offline & online metrics, feedback loop | Picking a model (e.g. "an LLM ranks the feed") without data, latency or cost reasoning |
+| **1. Predictive** | A score, number or label that the system acts on | Recommendations, feed/search ranking, ads CTR, fraud/spam, ETA (estimated time of arrival), churn (customers leaving) | Data & features, candidate generation + ranking (fetch a shortlist cheaply, then order it carefully), offline & online metrics, feedback loop | Picking a model (e.g. "an LLM ranks the feed") without data, latency or cost reasoning |
 | **2. Generative** | Content: an answer, summary, code, image | ChatGPT-style assistant, docs support bot, code assistant, meeting summaries | Retrieval & context assembly, inference latency/cost (streaming, caching, model routing), output evaluation, safety (prompt injection, hallucination) | Proposing to train a foundation model from scratch; ignoring cost; no quality measurement |
-| **3. Agentic** | A decision about which **action** to take next (call a tool, read result, decide again) | Refund-issuing support agent, travel booking, coding agent opening PRs | Tool interface & permissions, step/time/cost limits, stop conditions, approval for risky actions, task-level evaluation | Unlimited tool access and no stop rule — or, the opposite, human approval for every harmless step |
+| **3. Agentic** | A decision about which **action** to take next (call a tool, read result, decide again) | Refund-issuing support agent, travel booking, coding agent opening PRs (pull requests: proposed code changes) | Tool interface & permissions, step/time/cost limits, stop conditions, approval for risky actions, task-level evaluation | Unlimited tool access and no stop rule — or, the opposite, human approval for every harmless step |
 
 ![The three families side by side](img/three_families.svg)
 *Figure — Predictive, generative and agentic compared (course diagram)*
@@ -222,7 +222,7 @@ flowchart LR
 3. **State scope** in and out: "English text support first; voice and other languages later. OK?"
 4. For predictive problems, **frame it as an ML task** — this is the heart of Aminian & Xu's step 2:
    - **Input and output** of the model (e.g. input = user, video, context; output = probability the user watches ≥ 30 s).
-   - **ML category**: binary/multiclass classification, regression, ranking (learning-to-rank), retrieval, clustering, or generation.
+   - **ML category**: binary/multiclass classification (pick one of two / of many categories), regression (predict a number), ranking (learning-to-rank), retrieval, clustering (group similar items without labels), or generation.
    - **ML objective**: the quantity the model is trained to optimise, chosen because it moves the business metric.
 
 **Business metric → ML objective (worked examples)**
@@ -232,7 +232,7 @@ flowchart LR
 | Increase time spent on video platform | Ranking | P(watch ≥ X seconds) or expected watch time | Optimising raw clicks rewards clickbait |
 | Reduce fraud losses without annoying customers | Binary classification | P(transaction is fraud) → thresholds set by expected cost | Accuracy is meaningless at 0.2% fraud |
 | Accurate delivery promise at checkout | Regression | Minutes from order to delivery | Business also needs a *promise-kept rate*, handled by a display buffer, not the model |
-| Improve marketplace search revenue | Ranking | P(purchase \| query, item), possibly × price | Relevance-only ranking may ignore conversion |
+| Improve marketplace search revenue | Ranking | P(purchase \| query, item), possibly × price | Relevance-only ranking may ignore conversion (a view turning into a purchase) |
 | Reduce subscription churn | Binary classification | P(cancel within 30 days) | The label arrives 30 days late — shapes monitoring |
 
 *Rules of ML* adds two useful reminders: **Rule #12 — don't overthink which objective you directly optimise** at first, and **Rule #13 — pick a simple, observable and attributable metric** for your first objective (a click is observable and attributable to the item shown; "user happiness" is not).
@@ -241,10 +241,10 @@ flowchart LR
 Turn the goal into numbers; when the interviewer doesn't give them, state assumptions.
 
 1. **Quality** — a *business / online metric* and an *offline ML metric* that correlates with it:
-   - "Users find videos they enjoy" → online: watch time, CTR, with guardrails for satisfaction surveys and policy-violating content; offline: NDCG / recall@k on held-out interactions.
+   - "Users find videos they enjoy" → online: watch time, CTR, with **guardrails** (metrics that must not get worse) for satisfaction surveys and policy-violating content; offline: NDCG / recall@k (ranking-quality metrics, Chapter 13) on **held-out** interactions (kept aside, never used for training).
    - "Helpful support bot" → correct resolution rate, CSAT, repeat-contact rate.
-2. **Latency** — a feed might need to load in a few hundred ms; a chatbot has a time-to-first-token target *and* a full-answer target; a batch job needs a completion deadline and a freshness target. Latency decides what must be precomputed.
-3. **Scale and cost** — users, requests/day, peak QPS, cost per request or per *completed task*. A free feature needs a tiny per-request cost; a support bot can cost more per conversation if it genuinely resolves tickets. Use a concrete budget, never "near zero".
+2. **Latency** — a feed might need to load in a few hundred ms; a chatbot has a time-to-first-token target (how long until the first word of the reply appears) *and* a full-answer target; a batch job needs a completion deadline and a freshness target. Latency decides what must be precomputed.
+3. **Scale and cost** — users, requests/day, peak QPS (queries per second at the busiest time; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), cost per request or per *completed task*. A free feature needs a tiny per-request cost; a support bot can cost more per conversation if it genuinely resolves tickets. Use a concrete budget, never "near zero".
 
 Rules of ML **#2: design and implement metrics first** — before building anything, log what you'll need to measure success.
 
@@ -252,20 +252,20 @@ Rules of ML **#2: design and implement metrics first** — before building anyth
 List data sources: interaction logs (clicks, watches, purchases), catalog/content data, user profiles (where use is permitted), documents for generation. Then answer two things:
 
 1. **Label source.** A label is the target value for a supervised training example, and labels are often late or imperfect:
-   - Fraud: confirmed investigations and chargebacks — slow (weeks) and not every chargeback is fraud.
-   - Feeds: clicks — instant but only a proxy for satisfaction.
+   - Fraud: confirmed investigations and **chargebacks** (card payments reversed after the cardholder disputes them) — slow (weeks) and not every chargeback is fraud.
+   - Feeds: clicks — instant but only a **proxy** (a stand-in measure) for satisfaction.
    - Support: reviewed conversations, verified resolutions; a thumbs-down is feedback, not a reliable correctness label.
-   - Self-supervised learning and pretrained models reduce the need for hand-labelled data, but you still need labelled *evaluation* data.
-2. **Freshness.** Daily may be enough for long-term tastes; trending content and fraud need minutes or seconds. Freshness decides batch vs streaming vs request-time computation.
+   - Self-supervised learning (labels created automatically from the data itself, e.g. predicting the next word) and pretrained models reduce the need for hand-labelled data, but you still need labelled *evaluation* data.
+2. **Freshness.** Daily may be enough for long-term tastes; trending content and fraud need minutes or seconds. Freshness decides batch vs **streaming** (processing events continuously as they arrive) vs request-time computation.
 
-Briefly name **feature groups** here (entity, recent-behaviour aggregates, request context, cross features — see Chapter 16.4), and flag **leakage** risk (features that wouldn't exist at prediction time) and **privacy** limits.
+Briefly name **feature groups** here (entity, recent-behaviour aggregates (counts/averages over a time window), request context, cross features (combinations such as user × category) — see Chapter 16.4), and flag **leakage** risk (features that wouldn't exist at prediction time) and **privacy** limits.
 
 ### Step 4 — Choose a model, beginning with a baseline
 Begin from a **baseline**: the least elaborate approach that satisfies the basic requirements. It tests the pipeline end to end, and it's the yardstick for every later model (*Rules of ML #4: keep the first model simple and get the infrastructure right*).
 
 | Family | Baseline | Upgrade path | Trigger to upgrade |
 |---|---|---|---|
-| Predictive | Popularity / rules / per-entity averages; logistic regression | GBDT on tabular features → deep models (two-tower retrieval, multitask rankers) | Baseline misses the quality target on the offline metric and the gain is worth the complexity |
+| Predictive | Popularity / rules / per-entity averages; logistic regression (a simple linear classifier) | GBDT (gradient-boosted decision trees) on tabular (spreadsheet-like) features → deep models (two-tower retrieval, multitask rankers — Chapter 13) | Baseline misses the quality target on the offline metric and the gain is worth the complexity |
 | Generative | Existing model + clear instructions; add retrieval if answers need private/fresh data | Better retrieval, model routing, fine-tuning | Evaluation shows a specific failure that prompts/retrieval don't fix |
 | Agentic | Fixed workflow if the steps are known; otherwise one agent with a few narrow tools | More tools, then multiple agents | The task clearly benefits from separation; extra coordination cost is justified |
 
@@ -309,8 +309,8 @@ buffer (min) -> promise kept % / avg promised minutes   [GBDT]
 ![Baseline vs model MAE, and the promise-kept vs buffer curve](img/baseline_and_buffer.png)
 
 What it shows:
-- Every number is judged **against a baseline**. The heuristic halves the naive error; the GBDT halves it again (on synthetic data — real gains are usually smaller).
-- An unbiased model is late about **half the time** (49.6% kept with no buffer). The business metric depends on a **product decision** (the buffer), not only on model accuracy: +5 min keeps ~94% of promises but makes the displayed ETA look slower. Keep that knob outside the model so product can own it.
+- (MAE = mean absolute error in minutes; p90 abs err = the error size that 90% of predictions stay within.) Every number is judged **against a baseline**. The heuristic halves the naive error; the GBDT halves it again (on synthetic data — real gains are usually smaller).
+- An unbiased model (not systematically early or late) is late about **half the time** (49.6% kept with no buffer). The business metric depends on a **product decision** (the buffer), not only on model accuracy: +5 min keeps ~94% of promises but makes the displayed ETA look slower. Keep that knob outside the model so product can own it.
 
 ### Step 5 — Design the serving path
 Draw the architecture and trace one request. Whatever the shape (retrieval → ranking, retrieval → generation, agent loop), answer the same four questions:
@@ -319,7 +319,7 @@ Draw the architecture and trace one request. Whatever the shape (retrieval → r
 *Figure — Step 5 checklist: offline/online, caches, model choice, failure (course diagram)*
 
 1. **Offline or online?** What can be precomputed (batch) and what needs request-time data? (Chapter 16.5.)
-2. **Where are the caches?** What do they save in latency/cost, and what are the freshness, invalidation and **permission** rules so one user never sees another's cached result?
+2. **Where are the caches?** What do they save in latency/cost, and what are the freshness, invalidation (removing cache entries once the underlying data changes) and **permission** rules so one user never sees another's cached result?
 3. **Which requests can take a cheaper path** — a smaller model, cached answer, or rule — and which need the expensive one?
 4. **What if the model is slow, down, or rate-limited?** Timeouts, bounded retries (only when safe), a fallback (previous model, cached score, heuristic, unpersonalised list) or a clear failure. For batch jobs: deadlines and recovery.
 
@@ -338,26 +338,26 @@ flowchart LR
 ### Step 6 — Keep it working (evaluation, monitoring, iteration)
 Show the feedback process **in the diagram**, not just in words:
 
-1. **Log** inputs, outputs, features used and model version (with privacy controls and retention limits).
+1. **Log** inputs, outputs, features used and model version (with privacy controls and retention limits — how long data may be kept).
 2. **Capture outcomes**: clicks, ratings, escalations, confirmed fraud, actual delivery time.
 3. **Measure** the step-2 metrics on live outcomes and on human-reviewed samples.
 4. **Improve** data, features, retrieval, prompts or the model.
-5. **Release safely**: offline evaluation → **shadow deployment** (new version scores copied traffic, outputs not shown; disable side effects) and/or a **controlled experiment** (A/B test) → gradual ramp with explicit stop/rollback conditions.
+5. **Release safely**: offline evaluation → **shadow deployment** (new version scores copied traffic, outputs not shown; disable side effects) and/or a **controlled experiment** (A/B test) → gradual ramp with explicit stop/**rollback** (revert to the previous version) conditions.
 
 Offline vs online evaluation, in one table (details in Chapter 16.7 and 16.9):
 
 | | Offline evaluation | Online evaluation |
 |---|---|---|
 | Data | Held-out historical data (time-based split) | Live users |
-| Metrics | ML metrics: PR-AUC, NDCG, recall@k, MAE, calibration | Business metrics: CTR, watch time, revenue, resolution rate + guardrails |
-| Cost / risk | Cheap, no user risk | Uses real traffic, needs time and statistical power |
+| Metrics | ML metrics: PR-AUC (area under the precision–recall curve), NDCG, recall@k, MAE, calibration (predicted probabilities match real frequencies) | Business metrics: CTR, watch time, revenue, resolution rate + guardrails |
+| Cost / risk | Cheap, no user risk | Uses real traffic, needs time and statistical power (enough data to detect a real difference) |
 | Blind spots | Proxy labels, feedback loops, serving-time degradation | Slow, noisy, needs good experiment design |
 | Role | Filter candidates | Decide the launch |
 
 Monitoring in one line: system health (latency, errors) → input feature distributions → prediction distributions → outcome quality (as late as labels arrive). Retrain on a schedule justified by measured decay, or after an investigation — never promote a model automatically just because an alert fired.
 
 ### Step 7 — Failure modes and the bill
-**Failure list** — specific to your system: unsupported answers, drifting data, unsafe actions, feedback loops that reinforce bad behaviour (optimising only clicks → clickbait). For each, a control (thresholds, quality monitors, content checks, permission limits, a kill switch) and what the control *cannot* guarantee.
+**Failure list** — specific to your system: unsupported answers, drifting data, unsafe actions, feedback loops that reinforce bad behaviour (optimising only clicks → clickbait). For each, a control (thresholds, quality monitors, content checks, permission limits, a **kill switch** — a quick way to turn the feature off) and what the control *cannot* guarantee.
 
 **Cost list** — model cost ≈ requests × share hitting each model × calls per request × cost per call. Add retrieval, storage, retries and human escalation.
 
@@ -384,7 +384,7 @@ precompute 25M users x 500 recs = 12.5B rows; active-only (5M) = 2.5B rows
 ```
 The important habit is the **unit**: compare cost *per resolved issue* (AI cost + human cost for the unresolved share), not "one model call vs one human ticket". All prices are illustrative assumptions, not quotes from any provider.
 
-> Short on time? Squeeze steps 6–7 into two sentences: *"Every prediction gets matched to its eventual outcome; when quality moves I dig in, and any new version passes offline tests, then shadow or canary, before a staged ramp — with cost per request on the dashboard. The two risks I'd watch hardest are X and Y."*
+> Short on time? Squeeze steps 6–7 into two sentences: *"Every prediction gets matched to its eventual outcome; when quality moves I dig in, and any new version passes offline tests, then shadow or canary (a small slice of real traffic), before a staged ramp — with cost per request on the dashboard. The two risks I'd watch hardest are X and Y."*
 
 ### Trade-offs of the framework
 | Benefit | Cost |
@@ -475,12 +475,12 @@ Vague prompt → list options by family → choose on benefit, data, feasibility
 | Jumping to "I'd use a transformer" in minute 2 | Frame, define success and data first; baseline before deep models |
 | Optimising a proxy with no guardrail (clicks → clickbait) | Pair the objective with guardrail metrics (satisfaction, retention, policy violations) |
 | "We'll have labels" | Say where labels come from, how late, how noisy, who pays |
-| Random train/test split on time-dependent data | Time-based split; point-in-time-correct features (Rules of ML #33) |
-| Accuracy on imbalanced data | Precision/recall at a threshold, PR-AUC; threshold owned by product/risk |
+| Random train/test split on time-dependent data | Time-based split; point-in-time-correct features (computed only from data available at that moment) (Rules of ML #33) |
+| Accuracy on imbalanced data (one class is very rare) | Precision/recall at a threshold, PR-AUC; threshold owned by product/risk |
 | No fallback | Timeouts + fallback prediction chosen with product and risk owners |
 | Only the request path | Logging → outcome join → evaluation → gated retraining → staged rollout |
 | Training features computed differently from serving features | One feature definition, log serving features and train on them (Rules of ML #29, #32) |
-| "GPU cluster" for a small tabular model | Benchmark on CPU first |
+| "GPU cluster" for a small tabular model | Benchmark on CPU (ordinary processor) first |
 | Retraining automatically on every drift alert | Alert → investigate (often a broken pipeline) → validated retrain → gates |
 | Hand-waving cost | Requests × share × calls × price, compared per completed task |
 | Ignoring the interviewer's redirect | Adapt order and depth; the framework is a checklist, not a script |

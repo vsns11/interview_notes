@@ -1,6 +1,6 @@
 # Chapter 1 — What Machine Learning Is
 
-Machine learning (ML) is the craft of getting a computer to improve at a task by studying examples instead of following rules a person wrote by hand. This chapter builds the map you will use for the rest of the book: where ML sits inside "AI", the different ways a machine can learn, the vocabulary everyone uses, the steps of a real project, and the problems that sink most projects. It ends with a complete, runnable scikit-learn project.
+Machine learning (ML) is the craft of getting a computer to improve at a task by studying examples instead of following rules a person wrote by hand. This chapter builds the map you will use for the rest of the book: where ML sits inside "AI", the different ways a machine can learn, the vocabulary everyone uses, the steps of a real project, and the problems that sink most projects. It ends with a complete, runnable scikit-learn project (**scikit-learn** is the most widely used free Python library for classic machine learning; it bundles ready-made models, data-splitting tools and metrics behind one consistent interface).
 
 **What you'll learn**
 
@@ -31,7 +31,7 @@ All code is in [`code/`](code/). Every script runs in a few seconds on a laptop:
 |---|---|---|---|
 | **Artificial intelligence (AI)** | Any technique that makes a machine do something we would call "intelligent": reasoning, perceiving, planning, deciding. | The whole field. Includes hand-written rules and search, not only learning. | A chess engine searching moves; a rules-based tax calculator; a route planner |
 | **Machine learning (ML)** | AI systems that *learn their behaviour from data* rather than having every rule spelled out. | A subset of AI. | Spam filter, fraud detector, "customers also bought" |
-| **Deep learning (DL)** | ML using *neural networks* with many layers, where each layer transforms the output of the previous one. | A subset of ML. | Face unlock, speech recognition, machine translation |
+| **Deep learning (DL)** | ML using *neural networks* (models built from many small units that each compute a weighted sum and pass it on) with many layers, where each layer transforms the output of the previous one. | A subset of ML. | Face unlock, speech recognition, machine translation |
 | **Generative AI (GenAI)** | Models that *produce new content* (text, images, audio, video, code) that resembles their training data. | Mostly built with deep learning today. | Chat assistants, image generators (DALL·E, Midjourney), music tools |
 | **Agentic AI** | Systems that *plan and take multi-step actions* toward a goal, using tools and adapting as they go. | Usually a generative model wrapped in a loop of plan → act → observe. | A coding agent that edits files and runs tests; a warehouse robot choosing routes |
 
@@ -49,23 +49,23 @@ A useful way to read the tree: every deep learning model is an ML model, and eve
 
 ### Why it matters
 
-People (and job descriptions) mix these words up constantly. Knowing the boundaries lets you pick the right tool: a small tabular dataset of 10,000 loan applications calls for classic ML, not a large language model; generating product descriptions calls for GenAI; a simple VAT calculation needs neither.
+People (and job descriptions) mix these words up constantly. Knowing the boundaries lets you pick the right tool: a small tabular dataset (data laid out as rows and columns, like a spreadsheet) of 10,000 loan applications calls for classic ML, not a large language model (**LLM**: a very large neural network trained on huge amounts of text to predict and generate language); generating product descriptions calls for GenAI; a simple VAT calculation needs neither.
 
 ### How each branch works, briefly
 
 1. **Machine learning** — show the computer many examples (e.g. photos marked "cat" or "dog"). An algorithm finds patterns (shapes, textures, colours) that separate the groups, and uses them to label photos it has never seen. The "rules" are discovered, not typed in.
-2. **Deep learning** — the same idea, but the model is a stack of layers. In an image network, early layers respond to simple things such as edges; middle layers combine edges into textures and parts; late layers respond to whole objects or faces. Because the layers learn their own features, DL shines on raw, unstructured data (pixels, audio, text). The 2012 AlexNet result on the ImageNet competition is usually cited as the moment DL overtook older computer-vision methods.
-3. **Generative AI** — instead of outputting a label, the model learns the structure of its training material well enough to *sample* new material in the same style. A text model such as GPT learns to predict the next word (token); repeating that prediction produces paragraphs. Image generators learn to turn random noise into an image that matches a text prompt.
-4. **Agentic AI** — a model is given a goal and a set of tools (web search, a calendar API, a code runner). It decides on a step, calls a tool, reads the result, and decides the next step, repeating until done. The difference from a plain model is autonomy over *multiple* steps in a changing environment.
+2. **Deep learning** — the same idea, but the model is a stack of layers. In an image network, early layers respond to simple things such as edges; middle layers combine edges into textures and parts; late layers respond to whole objects or faces. Because the layers learn their own features, DL shines on raw, unstructured data (pixels, audio, text). The 2012 AlexNet result (AlexNet was a deep image-recognition network) on the ImageNet competition (a yearly contest built on a dataset of over a million labelled photos) is usually cited as the moment DL overtook older computer-vision methods.
+3. **Generative AI** — instead of outputting a label, the model learns the structure of its training material well enough to *sample* new material in the same style. A text model such as GPT learns to predict the next word (token: the unit a text model reads, usually a word or a piece of a word); repeating that prediction produces paragraphs. Image generators learn to turn random noise into an image that matches a text prompt.
+4. **Agentic AI** — a model is given a goal and a set of tools (web search, a calendar API, a code runner). An **API** (application programming interface) is a defined way for one program to ask another program to do something, such as "create a calendar event". It decides on a step, calls a tool, reads the result, and decides the next step, repeating until done. The difference from a plain model is autonomy over *multiple* steps in a changing environment.
 
 ### Trade-offs
 
 | | Classic ML | Deep learning | Generative AI | Agentic AI |
 |---|---|---|---|---|
-| Data needed | Hundreds to millions of rows | Usually large (or a pre-trained model) | Enormous for pre-training; small for adapting | Builds on a pre-trained model |
+| Data needed | Hundreds to millions of rows | Usually large (or a pre-trained model) | Enormous for pre-training (the first, general training run); small for adapting | Builds on a pre-trained model |
 | Best input type | Tables (spreadsheets, databases) | Images, audio, text | Text, images, audio | Tasks with tools and steps |
-| Interpretability | Often good | Low | Low | Low, and actions compound |
-| Compute cost | Low (CPU) | High (GPU) | Very high to train; high to run | High (many model calls) |
+| Interpretability (how easily a person can see why it decided) | Often good | Low | Low | Low, and actions compound |
+| Compute cost | Low (CPU, the computer's general-purpose processor) | High (GPU, a graphics chip that does many calculations in parallel) | Very high to train; high to run | High (many model calls) |
 | Main risk | Bad data | Needs lots of data and compute | Confident but wrong output ("hallucination"), copyright and authenticity questions | Mistakes chain across steps; safety of actions |
 
 ### When not to use it
@@ -76,8 +76,8 @@ People (and job descriptions) mix these words up constantly. Knowing the boundar
 
 ### Common mistakes
 
-- Saying "AI" when you mean a specific technique; say "a gradient-boosted classifier" or "a fine-tuned language model".
-- Assuming newer = better. On tabular business data, tree ensembles such as random forests and gradient boosting (Chapter 7) frequently beat deep networks.
+- Saying "AI" when you mean a specific technique; say "a gradient-boosted classifier" or "a fine-tuned language model". (A *classifier* is a model that predicts a category; *fine-tuning* means taking an already-trained model and training it a little more on your own, smaller dataset.)
+- Assuming newer = better. On tabular business data, tree ensembles (models that combine many decision trees, i.e. flowcharts of yes/no questions) such as random forests and gradient boosting (Chapter 7) frequently beat deep networks.
 - Believing a model "understands" or "thinks" like a person. It maps inputs to outputs using statistical patterns found in data.
 
 ### Real-world examples
@@ -93,8 +93,8 @@ People (and job descriptions) mix these words up constantly. Knowing the boundar
 **30-second answer:** "AI is the broad goal of making machines behave intelligently. Machine learning is the part of AI where behaviour is learned from data instead of hand-coded. Deep learning is ML with many-layer neural networks, which learn their own features from raw data like pixels and text. Generative AI uses such models to create new content, and agentic AI wraps them in a loop so they can plan and take actions with tools."
 
 - *Is a rules engine AI?* — Yes, classical AI includes rule-based expert systems; it is just not machine learning.
-- *Why did deep learning take off around 2012?* — Three things arrived together: large labelled datasets (ImageNet), cheap parallel compute (GPUs), and training tricks (ReLU activations, dropout, better initialisation).
-- *When would you choose classic ML over deep learning?* — Small or medium tabular data, a need for interpretability, tight latency or budget.
+- *Why did deep learning take off around 2012?* — Three things arrived together: large labelled datasets (ImageNet), cheap parallel compute (GPUs), and training tricks (ReLU activations, a simple function that keeps positive numbers and zeroes negative ones; dropout, randomly switching off units during training so the network cannot rely on any one of them; better initialisation, i.e. smarter starting values for the weights).
+- *When would you choose classic ML over deep learning?* — Small or medium tabular data, a need for interpretability, tight latency (the time one prediction takes, start to finish; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) or budget.
 
 ### Self-check
 
@@ -175,7 +175,7 @@ When the logic is known and must be exact (payroll, permissions), when there is 
 
 ### Common mistakes
 
-- Starting with ML before trying a simple rule or heuristic as a baseline.
+- Starting with ML before trying a simple rule or heuristic (a quick rule of thumb) as a baseline (a simple reference solution any real model must beat).
 - Forgetting that a learned model inherits every bias and gap in its examples.
 
 ### Self-check
@@ -220,9 +220,9 @@ flowchart LR
 For almost every model in this book, training is the same loop:
 
 1. Start with some values for the model's **parameters** (its adjustable numbers, e.g. the weights in ŷ = w·x + b).
-2. Predict for a batch of training examples.
-3. Compute the **loss**: a single number measuring how wrong the predictions are (e.g. mean squared error).
-4. Change the parameters in the direction that lowers the loss (Chapter 2 shows how, with gradient descent).
+2. Predict for a batch (a small group) of training examples.
+3. Compute the **loss**: a single number measuring how wrong the predictions are (e.g. mean squared error, the average of the squared differences between predictions and true values; worked numbers in §1.6).
+4. Change the parameters in the direction that lowers the loss (Chapter 2 shows how, with gradient descent: repeatedly taking a small step in whichever direction makes the loss go down fastest).
 5. Repeat until the loss stops improving.
 
 ### Data is king
@@ -230,7 +230,7 @@ For almost every model in this book, training is the same loop:
 A model can never be better than the examples it learns from.
 
 - **Garbage in, garbage out.** Mislabelled, outdated or one-sided data yields a model with the same flaws, often in ways that are hard to spot.
-- **Diversity matters.** Just as reading widely broadens a person's judgment, a model exposed to varied examples copes with more situations. The *Gender Shades* study (Buolamwini and Gebru, 2018) found that commercial face-analysis systems made far more errors on darker-skinned women than on lighter-skinned men, a gap traced largely to unbalanced training and benchmark data.
+- **Diversity matters.** Just as reading widely broadens a person's judgment, a model exposed to varied examples copes with more situations. The *Gender Shades* study (Buolamwini and Gebru, 2018) found that commercial face-analysis systems made far more errors on darker-skinned women than on lighter-skinned men, a gap traced largely to unbalanced training and benchmark data (a benchmark is a standard dataset everyone uses to test and compare models).
 - **High stakes.** A diagnostic model trained on patients from one population may misdiagnose patients from another.
 
 The goal of training is **generalisation**: performing well on new, real-world data, not just on the examples it studied. Good, diverse data is the single biggest lever for generalisation.
@@ -258,7 +258,7 @@ ML systems are grouped by *how much and what kind of answer* they get during tra
 | **Supervised** | Inputs **with** labels (the right answer) | Predict the label for new inputs | Linear/logistic regression, trees, random forests, gradient boosting, SVMs, neural nets | Emails marked spam / not spam → classify new emails |
 | **Unsupervised** | Inputs **without** labels | Find structure: groups, low-dimensional summaries, anomalies | k-means, DBSCAN, PCA, isolation forest | Group customers by behaviour; flag odd transactions |
 | **Semi-supervised** | A few labelled rows + many unlabelled rows | Use the unlabelled data to do better than the labelled part alone | Self-training, label propagation | Photo app clusters faces, you name one photo per person, it names the rest |
-| **Self-supervised** | Unlabelled data from which labels are *generated automatically* | Learn useful representations by predicting a hidden part of the data | Next-word prediction (GPT), masked-word prediction (BERT), contrastive learning | Language models trained to predict the next token on web text |
+| **Self-supervised** | Unlabelled data from which labels are *generated automatically* | Learn useful representations (internal numeric summaries of the input) by predicting a hidden part of the data | Next-word prediction (GPT), masked-word prediction (BERT), contrastive learning | Language models trained to predict the next token on web text |
 | **Reinforcement learning (RL)** | No fixed dataset; an *agent* acts in an *environment* and receives *rewards* | Learn a *policy* (what to do in each situation) that maximises total reward | Q-learning, policy gradients, PPO | DeepMind's AlphaGo; robots learning to walk; fine-tuning chatbots from human preferences (RLHF) |
 
 ```mermaid
@@ -270,6 +270,8 @@ flowchart TD
     Q2 -->|"No"| UNS["Unsupervised"]
     Q1 -->|"No data, but actions and rewards"| RL["Reinforcement learning"]
 ```
+
+> **Key terms — the algorithm names in the table above:** You do not need to know them yet; each gets its own section later. In one line each: *SVM* (support vector machine) draws the widest possible boundary between classes; *k-means* and *DBSCAN* group similar points into clusters; *PCA* (principal component analysis) squeezes many features into a few summary ones; an *isolation forest* flags points that are easy to separate from the rest as anomalies (unusual cases). *Self-training* and *label propagation* spread a few known labels to unlabelled rows; *BERT* is a language model trained to fill in hidden words; *contrastive learning* teaches a model that two views of the same thing should look alike. In RL, an *agent* is the learner, the *environment* is the world it acts in, and a *policy* is its rule for choosing actions; *Q-learning*, *policy gradients* and *PPO* are standard RL training methods, and *RLHF* (reinforcement learning from human feedback) uses human ratings of answers as the reward.
 
 ### Why it matters
 
@@ -305,11 +307,11 @@ Output:
 ```
 
 How to read it:
-- *Supervised:* near-perfect species prediction; regression error (45) well below the natural spread of the target (77).
-- *Unsupervised:* k-means recovered most of the hidden grouping (ARI = 1 would be perfect agreement, 0 = random) without ever seeing it.
+- *Supervised:* near-perfect species prediction; regression error (45, measured as **MAE**, mean absolute error: the average size of the mistakes) well below the natural spread of the target (77, its **standard deviation** or std: roughly how far a typical value sits from the average).
+- *Unsupervised:* k-means recovered most of the hidden grouping (ARI, the adjusted Rand index, scores how well two groupings agree: 1 would be perfect agreement, 0 = random) without ever seeing it.
 - *Semi-supervised:* with only 69 labelled digits, letting the model label confident unlabelled rows and retrain added about 1.5 points of accuracy. The gain varies with data; it is not guaranteed.
 - *Self-supervised:* no human wrote a label; the future of the series served as the target.
-- *Reinforcement:* the agent explored all three arms, discovered arm 3 pays about 80% of the time, and spent most pulls on it. The 10% of random pulls is the *exploration* cost.
+- *Reinforcement:* this is a *multi-armed bandit*, a toy problem named after a row of slot machines ("arms") with unknown payout rates. The *epsilon-greedy* agent usually pulls the arm that looks best but, with a small probability epsilon (here 10%), pulls a random one. It explored all three arms, discovered arm 3 pays about 80% of the time, and spent most pulls on it. The 10% of random pulls is the *exploration* cost.
 
 ### Trade-offs
 
@@ -317,8 +319,8 @@ How to read it:
 |---|---|---|---|
 | Supervised | High | Easy: compare to labels | Label errors and bias |
 | Unsupervised | None | Hard: no ground truth | Finds patterns that mean nothing |
-| Semi-supervised | Low | Needs a labelled test set | Wrong pseudo-labels reinforce themselves |
-| Self-supervised | None, but huge data and compute | Via downstream tasks | Cost; learns biases of web-scale data |
+| Semi-supervised | Low | Needs a labelled test set | Wrong pseudo-labels (labels the model gave itself) reinforce themselves |
+| Self-supervised | None, but huge data and compute | Via downstream tasks (the real tasks it is later adapted to) | Cost; learns biases of web-scale data |
 | Reinforcement | Need a reward and an environment | Total reward | Reward hacking; slow, unstable training |
 
 ### Common mistakes
@@ -354,7 +356,7 @@ Supervision type = what answers you have. Labels → supervised; none → unsupe
 
 The two main supervised tasks, split by the *type of the label*:
 
-- **Classification** predicts a **category** (a discrete class): spam/ham, digit 0–9, species. With two classes it is *binary*; with more it is *multiclass*; if each example can have several labels at once (a photo tagged "beach" and "dog") it is *multilabel*.
+- **Classification** predicts a **category** (a discrete class): spam/ham ("ham" is the usual nickname for legitimate, non-spam email), digit 0–9, species. With two classes it is *binary*; with more it is *multiclass*; if each example can have several labels at once (a photo tagged "beach" and "dog") it is *multilabel*.
 - **Regression** predicts a **number** on a continuous scale: price, temperature, days until churn.
 
 | | Classification | Regression |
@@ -364,13 +366,15 @@ The two main supervised tasks, split by the *type of the label*:
 | Example metrics | Accuracy, precision, recall, F1, ROC-AUC | MAE, RMSE, R² |
 | Example algorithms | Logistic regression, decision tree classifier, k-NN classifier | Linear regression, decision tree regressor, k-NN regressor |
 
-Watch the name: **logistic regression is a classifier**. It predicts the probability of a class, then thresholds it (usually at 0.5).
+> **Key terms — losses and metrics in this table:** A *loss* is what training minimises; a *metric* is what you report to people. *Log loss* (also called cross-entropy) punishes a classifier for being confidently wrong about the probability it gives; *hinge loss* (used by SVMs) punishes points that land on the wrong side of, or too close to, the boundary. *Accuracy* is the share of predictions that are right; *precision* is, of the items flagged positive, the share that really are; *recall* is, of the truly positive items, the share that were caught; *F1* is a single score that balances precision and recall; *ROC-AUC* measures how well the model ranks positives above negatives (1 = perfect, 0.5 = coin flip). For regression, *MSE* averages squared errors, *RMSE* is its square root (back in the target's units), and *R²* is the share of the target's variation the model explains (1 = perfect, 0 = no better than predicting the average). Chapter 6 covers all of them in depth.
+
+Watch the name: **logistic regression is a classifier**. It predicts the probability of a class, then thresholds it (usually at 0.5): a *threshold* is the cut-off above which the answer becomes "yes".
 
 ### Common mistakes
 
 - Encoding categories as numbers (red = 1, green = 2, blue = 3) and treating it as regression, which invents an order that does not exist.
 - Turning a regression problem into classes too early (e.g. price "high/low"), throwing away information.
-- Judging a classifier by accuracy on imbalanced data: if 99% of transactions are legitimate, "always legitimate" is 99% accurate and useless. Chapter 6 covers better metrics.
+- Judging a classifier by accuracy on imbalanced data (one class is far more common than the other): if 99% of transactions are legitimate, "always legitimate" is 99% accurate and useless. Chapter 6 covers better metrics.
 
 ### Self-check
 
@@ -394,12 +398,12 @@ Category → classification. Number → regression. The label type decides the l
 | **Feature vector** | All features of one example as a list of numbers | [120, 3, 1995] |
 | **Model** | A function with adjustable parts that maps features to a prediction | price = w₁·size + w₂·rooms + b |
 | **Parameters** | Numbers *learned* from data during training | w₁, w₂, b |
-| **Hyperparameters** | Settings *chosen by you before* training; they control the learning | Polynomial degree, regularisation strength C, learning rate, number of trees |
+| **Hyperparameters** | Settings *chosen by you before* training; they control the learning | Polynomial degree (highest power of x), regularisation strength C (how hard big weights are penalised), learning rate (size of each training step), number of trees |
 | **Loss (cost, objective) function** | A number measuring how wrong predictions are; training minimises it | Mean squared error |
 | **Training set** | Data the model learns parameters from | 60–80% of sales |
 | **Validation set** | Data used to compare models and tune hyperparameters | 10–20% |
 | **Test set** | Data used once at the end to estimate real-world performance | 10–20%, never touched before |
-| **Cross-validation** | Rotating the validation role through k chunks of the training data and averaging | 5-fold CV |
+| **Cross-validation** | Rotating the validation role through k chunks ("folds") of the training data and averaging | 5-fold CV |
 | **Prediction (ŷ, "y-hat")** | The model's output for an example | $412,000 |
 | **Generalisation** | Doing well on new data | Accurate price for next month's listings |
 | **Inference** | Using a trained model to predict | Pricing a newly listed house |
@@ -431,7 +435,7 @@ flowchart LR
 
 Why three sets? If you tune hyperparameters by watching test performance, you slowly fit the test set too, and your reported score becomes optimistic. The validation set absorbs that tuning; the test set stays honest.
 
-[`code/train_val_test.py`](code/train_val_test.py) makes a 60/20/20 split, picks the regularisation strength C by validation log loss, reports test accuracy once, and then simulates *drift* in production:
+[`code/train_val_test.py`](code/train_val_test.py) makes a 60/20/20 split, picks the regularisation strength C by validation log loss, reports test accuracy once, and then simulates *drift* (the live data slowly changing so it no longer looks like the training data) in production (the live system real users depend on):
 
 ```python
 X_tmp, X_test, y_tmp, y_test = train_test_split(X, y, test_size=0.2, random_state=SEED)
@@ -486,9 +490,9 @@ Batch learning is simple and reproducible but slow to react and expensive to ret
 2. When a mini-batch arrives, compute the loss on it and nudge the parameters (one step of gradient descent).
 3. Discard the batch (or keep it for audit), wait for the next.
 
-The **learning rate** controls how strongly each new batch moves the model. High → adapts quickly but forgets old patterns and reacts to noise. Low → stable but slow to adapt.
+The **learning rate** controls how strongly each new batch moves the model. High → adapts quickly but forgets old patterns and reacts to noise (random variation in the data that carries no real pattern). Low → stable but slow to adapt.
 
-[`code/batch_vs_online.py`](code/batch_vs_online.py) trains `SGDClassifier` (a linear classifier trained by stochastic gradient descent) both ways:
+[`code/batch_vs_online.py`](code/batch_vs_online.py) trains `SGDClassifier` (a linear classifier trained by stochastic gradient descent, i.e. gradient descent that updates after each small random batch instead of the whole dataset) both ways:
 
 ```python
 batch = SGDClassifier(average=True, random_state=SEED).fit(X[:16_000], y[:16_000])
@@ -507,7 +511,7 @@ online after  8,000 rows: test acc = 0.838
 online after 16,000 rows: test acc = 0.839
 ```
 
-The online model reaches almost the batch result while only ever holding 2,000 rows in memory. (`average=True` averages the weights over updates; without it, plain SGD's accuracy jumped around between 0.66 and 0.83 on this data, a real-world reminder that online learners are sensitive to their learning-rate settings.) In scikit-learn, estimators that support incremental learning expose `partial_fit`, e.g. `SGDClassifier`, `SGDRegressor`, `MultinomialNB`, `MiniBatchKMeans`.
+The online model reaches almost the batch result while only ever holding 2,000 rows in memory. (`average=True` averages the weights over updates; without it, plain SGD's accuracy jumped around between 0.66 and 0.83 on this data, a real-world reminder that online learners are sensitive to their learning-rate settings.) In scikit-learn, estimators (scikit-learn's word for any model or transformer object with a `fit` method) that support incremental learning expose `partial_fit`, e.g. `SGDClassifier`, `SGDRegressor`, `MultinomialNB`, `MiniBatchKMeans`.
 
 ### Trade-offs
 
@@ -517,11 +521,11 @@ The online model reaches almost the batch result while only ever holding 2,000 r
 | Memory / compute | Whole dataset per retrain | One chunk at a time |
 | Reproducibility | High | Lower: depends on data order |
 | Risk | Stale model | Bad data corrupts the live model quickly |
-| Monitoring needs | Standard | Must watch inputs and performance closely, with a rollback plan |
+| Monitoring needs | Standard | Must watch inputs and performance closely, with a rollback plan (a quick way back to the previous model) |
 
 ### When not to use online learning
 
-When data arrives slowly, when changes are rare (retraining weekly is enough), or when you cannot monitor inputs, since poisoned or buggy data flows straight into the live model. Microsoft's Tay chatbot (2016) was taken offline within a day after users deliberately fed it offensive content it then repeated, a well-known cautionary tale about learning from unfiltered live input.
+When data arrives slowly, when changes are rare (retraining weekly is enough), or when you cannot monitor inputs, since poisoned (deliberately corrupted) or buggy data flows straight into the live model. Microsoft's Tay chatbot (2016) was taken offline within a day after users deliberately fed it offensive content it then repeated, a well-known cautionary tale about learning from unfiltered live input.
 
 ### Self-check
 
@@ -563,7 +567,7 @@ prediction time for 10,000 queries: linear 0.22 ms vs k-NN 3.1 ms (exact times v
 ```
 
 - At x = 4 both agree (true value 3·4 + 2 = 14).
-- At x = 15 the linear model extrapolates correctly (3·15 + 2 = 47). k-NN can only average its nearest stored neighbours (all near x = 10), giving ≈ 32.
+- At x = 15 the linear model extrapolates (predicts outside the range it was trained on) correctly (3·15 + 2 = 47). k-NN can only average its nearest stored neighbours (all near x = 10), giving ≈ 32.
 - The linear model is a compressed summary (2 numbers) and predicts much faster; k-NN keeps all data and searches it at prediction time.
 
 ### Trade-offs
@@ -609,12 +613,12 @@ flowchart LR
 ### How it works
 
 1. **Frame the problem.** What decision will the prediction drive, and what is it worth? Supervised or not? Classification or regression? Batch or online? What metric reflects business value (e.g. recall on fraud, dollars of error on prices)? What does the current solution (a rule, a human) achieve? That is your **baseline**. Is ML needed at all?
-2. **Get and explore the data.** Collect it, check it is legal and ethical to use, look at distributions, missing values, outliers and correlations. **Set aside the test set now**, before exploring deeply, so your choices are not influenced by it.
-3. **Prepare data and engineer features.** Clean errors, handle missing values, encode categories, scale numbers, create informative features (e.g. "price per m²"). Put these steps in a pipeline so they are applied identically in training and production.
+2. **Get and explore the data.** Collect it, check it is legal and ethical to use, look at distributions (how each column's values are spread out), missing values, outliers (values far away from the rest) and correlations (how strongly two columns rise and fall together). **Set aside the test set now**, before exploring deeply, so your choices are not influenced by it.
+3. **Prepare data and engineer features.** Clean errors, handle missing values, encode categories (turn text categories into numbers), scale numbers (put features on comparable ranges), create informative features (e.g. "price per m²"). Put these steps in a pipeline (a chain of processing steps that always run in the same order) so they are applied identically in training and production.
 4. **Train candidate models.** Start simple (a linear model), then try a few families (trees, ensembles). Compare with cross-validation.
 5. **Evaluate and tune.** Tune hyperparameters on validation data, analyse errors, check fairness across groups, then measure the final choice *once* on the test set.
-6. **Deploy.** Package the whole pipeline (preprocessing + model), serve it through a batch job or a web API, and roll out gradually (shadow mode, A/B test).
-7. **Monitor and maintain.** Track input distributions, prediction distributions and real performance as labels arrive. Data changes over time (**data drift**: inputs change; **concept drift**: the input→label relationship changes). Retrain on fresh data, version models and data, and keep a rollback path.
+6. **Deploy.** Package the whole pipeline (preprocessing + model), serve it through a batch job (a scheduled program that scores many rows at once) or a web API (a service that answers prediction requests over the network), and roll out gradually (*shadow mode*: the new model runs alongside the old one and its answers are logged but not used; *A/B test*: a random share of users gets the new model and results are compared). See [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) for how such services are built.
+7. **Monitor and maintain.** Track input distributions, prediction distributions and real performance as labels arrive. Data changes over time (**data drift**: inputs change; **concept drift**: the input→label relationship changes). Retrain on fresh data, version models and data (keep numbered, retrievable copies of each), and keep a rollback path.
 
 ### Real-world examples
 
@@ -680,14 +684,14 @@ The relationship bends outside the range the model saw, and error triples.
 
 ### 3. Irrelevant features
 
-Garbage features add noise and invite spurious patterns. **Feature engineering** (selecting useful features, combining features, creating new ones from domain knowledge) is often where most gains come from.
+Garbage features add noise and invite spurious patterns (patterns that appear in the training data by coincidence and do not hold in general). **Feature engineering** (selecting useful features, combining features, creating new ones from domain knowledge) is often where most gains come from.
 
 ### 4. Overfitting
 
 **What it is.** The model learns the training data *too* well, including its noise and quirks, and fails on new data. Like a student who memorises past exam answers without understanding.
 **Signal:** training error low, validation error much higher.
 **Causes:** model too complex for the amount of data, too many features, too little data, noisy data.
-**Fixes:** simpler model, fewer features, **regularisation** (a penalty on large parameters), more data, less noise, early stopping, cross-validation to choose complexity.
+**Fixes:** simpler model, fewer features, **regularisation** (a penalty on large parameters), more data, less noise, early stopping (halting training once validation error stops improving), cross-validation to choose complexity.
 
 ### 5. Underfitting
 
@@ -718,7 +722,7 @@ Degree 1 is too rigid (both errors high). Degree 15 has the *lowest* training er
 **What it is.** Information that would not be available at prediction time sneaks into training or evaluation, making scores look far better than real performance. Two common forms:
 
 - **Target leakage:** a feature that is really a consequence of the label (e.g. "was prescribed antibiotics" when predicting "has infection"; "account closed date" when predicting churn).
-- **Train–test contamination:** a preprocessing step (scaling, feature selection, imputation) is fit on the *whole* dataset before splitting, so the model has glimpsed the test data. Also: random splits of time-series data, or the same patient appearing in both train and test.
+- **Train–test contamination:** a preprocessing step (scaling, feature selection, imputation, i.e. filling in missing values) is fit on the *whole* dataset before splitting, so the model has glimpsed the test data. Also: random splits of time-series data (measurements recorded in time order, such as daily sales), or the same patient appearing in both train and test.
 
 **Demo** — 100 rows of pure random noise with random labels (the honest answer is 50%):
 
@@ -747,7 +751,7 @@ Suspect leakage when a simple model scores near-perfectly, when one feature domi
 
 **30-second answer:** "The main risks are data problems — too little, noisy, non-representative or leaky data — and model problems — overfitting, where the model memorises noise and generalises poorly, and underfitting, where it's too simple. I diagnose by comparing training and validation error, guard against leakage with pipelines and proper splits, and check performance across subgroups."
 
-- *How do you detect overfitting?* — Low training error with much higher validation error; learning curves.
+- *How do you detect overfitting?* — Low training error with much higher validation error; learning curves (plots of training and validation error as the training set grows).
 - *Give a leakage example.* — Scaling or selecting features on the full dataset before cross-validation; or a feature recorded after the outcome.
 - *More data or a better model?* — If you are overfitting, more data helps; if underfitting, more data of the same kind barely helps and you need a better model or features.
 
@@ -807,7 +811,7 @@ What each part does:
 - `DummyClassifier` gives the score to beat. Any real model must clearly exceed it.
 - `StandardScaler` rescales each feature to mean 0, std 1; logistic regression trains better on scaled inputs. Being inside the pipeline, it is re-fit on each training fold, so no leakage.
 - `GridSearchCV` tries each C with 5-fold CV and refits the best on all training data. The `step__param` naming (`logisticregression__C`) addresses a parameter inside a pipeline step.
-- `joblib` saves the fitted pipeline (scaler + model) as one file; the Python docs and scikit-learn warn to load such files only from trusted sources, since unpickling can run code.
+- `joblib` saves the fitted pipeline (scaler + model) as one file; the Python docs and scikit-learn warn to load such files only from trusted sources, since unpickling (turning the saved bytes back into Python objects) can run code.
 
 Output:
 
@@ -838,8 +842,9 @@ Reading it:
 
 - Baseline 63.2% (always "benign") → model 97.4%. A real improvement.
 - CV score (98.0%) and test score (97.4%) are close, so there is no sign of overfitting or leakage.
-- The confusion matrix shows **2 malignant tumours predicted benign** (false negatives) — the costly error. Malignant recall is 40/42 = 0.952. In a real medical setting you might lower the decision threshold to trade some false alarms for fewer misses (Chapter 6).
-- `coef_` holds 30 learned weights (parameters); C = 0.1 is the chosen hyperparameter.
+- The confusion matrix (a table counting every combination of true class and predicted class) shows **2 malignant tumours predicted benign** (false negatives) — the costly error. Malignant recall is 40/42 = 0.952. In a real medical setting you might lower the decision threshold to trade some false alarms for fewer misses (Chapter 6).
+- `coef_` holds 30 learned weights (parameters) and `intercept` is the constant term b; C = 0.1 is the chosen hyperparameter.
+- In the report, *support* is the number of test examples of each class; *macro avg* averages the two classes equally, *weighted avg* weights each class by its support.
 - `P(benign) = 0.0` is rounded: the model is extremely confident about this particular sample.
 
 ### Common mistakes

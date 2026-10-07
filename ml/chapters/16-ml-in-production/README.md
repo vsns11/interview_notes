@@ -1,6 +1,6 @@
 # Chapter 16 — ML in Production: Pipelines, Serving, Evaluation, Monitoring and MLOps
 
-Fitting a model in a notebook is a small slice of the job. The rest is machinery: trustworthy labels, identical features for training and live traffic, deciding when predictions are computed, fast serving with a fallback, the metric that proves one model beats another, alarms for quiet decay, and safe releases. This chapter builds each piece for **predictive** models (scores, labels, numbers), then assembles them into a delivery-time (ETA) platform.
+Fitting a model in a **notebook** (an interactive coding document such as Jupyter) is a small slice of the job. The rest is machinery: trustworthy labels, identical features for training and live traffic, deciding when predictions are computed, fast serving with a fallback, the metric that proves one model beats another, alarms for quiet decay, and safe releases. This chapter builds each piece for **predictive** models (scores, labels, numbers), then assembles them into a delivery-time (ETA) platform.
 
 **What you'll learn**
 
@@ -11,9 +11,9 @@ Fitting a model in a notebook is a small slice of the job. The rest is machinery
 5. Batch, online and streaming inference; precompute-then-rerank.
 6. Serving: latency budgets, batching, caching, rollout, hardware, compression, fallbacks.
 7. Offline metrics for classification, ranking and regression; thresholds; calibration; baselines.
-8. Monitoring, drift (PSI, KS), retraining, feedback loops.
+8. Monitoring, drift (PSI, KS — two statistics for spotting changed data, §16.8), retraining, feedback loops.
 9. A/B tests: power, peeking, guardrails, interleaving, switchbacks, bandits.
-10. MLOps: tracking, registry, data validation, CI/CD/CT, shadow and canary.
+10. MLOps: tracking, registry, data validation, CI/CD/CT (continuous integration / delivery / training, §16.10), shadow and canary.
 11. Capstone: an ETA prediction platform.
 
 Embeddings and two-tower retrieval belong to [Chapter 13](../13-recommenders-and-embeddings/README.md). All code is in `code/`; outputs below are real.
@@ -30,7 +30,7 @@ Recommenders, fraud detectors and ETA predictors all decompose into five parts:
 | 1. **Training pipeline** | Builds a dataset, fits a model and scores it, on a schedule or when triggered |
 | 2. **Feature layer** | Code plus storage converting raw events into model inputs |
 | 3. **Inference path** | Everything that happens between a request and its score |
-| 4. **Serving platform** | The machines, routing and autoscaling behind live traffic |
+| 4. **Serving platform** | The machines, routing and autoscaling (adding or removing machines automatically as load changes) behind live traffic |
 | 5. **Monitoring loop** | Signals that reveal degradation and help you diagnose it |
 
 ![The five pieces](img/five_pieces.svg)
@@ -55,9 +55,9 @@ Steps 1–6 live inside a **latency budget** — the product decides how many mi
 ![Offline and online planes](img/offline_online_planes.svg)
 *Figure — Offline and online planes: model goes down, logs come up (course diagram)*
 
-- **Offline plane**: background jobs over history (training, batch inference) — throughput and completion deadlines.
+- **Offline plane**: background jobs over history (training, batch inference) — **throughput** (how much work gets done per unit of time; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) and completion deadlines.
 - **Online plane**: live requests under a response-time limit.
-- The **model artifact** crosses offline → online; **prediction logs + outcomes** cross back. Schemas, feature definitions and config are shared.
+- The **model artifact** (the saved, trained model file) crosses offline → online; **prediction logs + outcomes** cross back. **Schemas** (the agreed structure and data types of each record), feature definitions and config (settings) are shared.
 
 Four problems live at this boundary:
 
@@ -66,7 +66,7 @@ Four problems live at this boundary:
 | **Skew** | A feature is computed differently in training and serving | 16.2 |
 | **Staleness** | A feature is correct but old (hourly average when the kitchen got busy 10 min ago) | 16.4 |
 | **Drift** | Data or input→outcome relationships change; quality falls while the service is "up" | 16.8 |
-| **Cost** | Training cost (job size × frequency) and serving cost (traffic × hardware × utilisation) are separate and both need estimates | 16.5, 16.6 |
+| **Cost** | Training cost (job size × frequency) and serving cost (traffic × hardware × utilisation — how busy the hardware is kept) are separate and both need estimates | 16.5, 16.6 |
 
 Vocabulary: a **feature** is a model input derived from raw data (order events are raw; "orders this restaurant took in the past half hour" is a feature). A **label** is the outcome being predicted — delivery minutes, a click — and may be imperfect (a chargeback is not always fraud). A **training example** is one row of features plus its label.
 
@@ -88,25 +88,25 @@ Two systems with different jobs that share artifacts. **Training** consumes hist
 | | Training | Serving |
 |---|---|---|
 | Runs | Scheduled (nightly/weekly) or triggered | Continuously, per request |
-| Optimises for | Throughput over large datasets | Latency and availability |
-| Hardware | Big GPU or high-memory clusters; cheap spot machines work if the job checkpoints and resumes | Always-on CPUs or small GPUs, sized reliably for the SLO |
-| When it breaks | The new model is late and the previous one stays live (how urgent depends on how quickly it goes stale) | Users see errors and on-call is paged — a safe fallback is required |
+| Optimises for | Throughput over large datasets | Latency (time per request) and availability (share of time the service works) |
+| Hardware | Big GPU (graphics chips that do massive parallel maths) or high-memory clusters; cheap spot machines (spare cloud machines the provider can reclaim at short notice) work if the job checkpoints (periodically saves progress) and resumes | Always-on CPUs or small GPUs, sized reliably for the SLO (service-level objective: the promised latency/availability target) |
+| When it breaks | The new model is late and the previous one stays live (how urgent depends on how quickly it goes stale) | Users see errors and on-call is paged (the engineer on duty gets an urgent alert) — a safe fallback is required |
 | Data | Months/years of history | This request's inputs, now |
 
 Draw them as two separate groups from the start.
 
 ### How it works — the training pipeline
-A scheduled workflow (Airflow, Kubeflow Pipelines, Dagster, cloud equivalents) with four stages:
+A scheduled workflow (Airflow, Kubeflow Pipelines, Dagster, cloud equivalents — all tools that run multi-step jobs on a schedule) with four stages:
 
-1. **Data preparation** — read raw events from the warehouse or lake and assemble rows that pair feature values **as of the prediction moment** with the label that showed up later. Test this hard: one wrong join quietly poisons everything downstream.
+1. **Data preparation** — read raw events from the **warehouse** or **lake** (central analytics stores: a data warehouse holds cleaned tables, a data lake holds raw files) and assemble rows that pair feature values **as of the prediction moment** with the label that showed up later. Test this hard: one wrong **join** (combining rows from two tables that share a key, such as order id) quietly poisons everything downstream.
 2. **Training** — for tabular data a **GBDT** (gradient-boosted decision trees: many small trees, each fixing the previous ones' errors) is the strong default; a modest neural net is the other common choice. Too much data or time for one machine → distributed training: **data parallelism** (examples split across workers, each holding the full model) or **model parallelism** (the model itself split across devices).
-3. **Evaluation** — score the candidate on **held-out** data and compare with production on quality, latency, cost and safety. Equally good but cheaper is also a valid release.
-4. **Registration** — store the approved model in a **model registry** with version, metrics and **lineage** (which data and code produced it). Rollback needs compatible features, dependencies and config too — not just the old file.
+3. **Evaluation** — score the candidate on **held-out** data (kept aside, never trained on) and compare with production on quality, latency, cost and safety. Equally good but cheaper is also a valid release.
+4. **Registration** — store the approved model in a **model registry** with version, metrics and **lineage** (which data and code produced it). **Rollback** (returning to the previous version) needs compatible features, **dependencies** (the libraries the code relies on) and config too — not just the old file.
 
 Propose a retraining cadence with a reason ("daily — labels arrive within the hour, demand shifts weekly") and say you'll validate it against label availability, measured decay and compute cost.
 
 ### How it works — the serving path
-Request → features fetched/computed → model runs → prediction returned and logged. Budget the **entire** path; with small models, fetching features often takes longer than inference. Service hygiene still applies: **timeouts**, a **fallback** score (default or cached), horizontal scaling, versioned releases.
+Request → features fetched/computed → model runs → prediction returned and logged. Budget the **entire** path; with small models, fetching features often takes longer than inference. Service hygiene still applies: **timeouts**, a **fallback** score (default or cached), horizontal scaling (adding more machines rather than bigger ones), versioned releases.
 
 One product decision to state explicitly: does the model **fail closed** (block when unsure/unavailable — safer for high-risk payments) or **fail open** (allow — better customer experience)? Name it and why.
 
@@ -118,7 +118,7 @@ One product decision to state explicitly: does the model **fail closed** (block 
 
 | Source | Example | Fix |
 |---|---|---|
-| **Different code paths** | Spark/Python feature for training, rewritten in Java for serving, with a different null default, rounding or time zone | Shared, tested feature definitions; consistency tests comparing both paths |
+| **Different code paths** | Spark (a distributed data-processing engine)/Python feature for training, rewritten in Java for serving, with a different null default (value used when data is missing), rounding or time zone | Shared, tested feature definitions; consistency tests comparing both paths |
 | **Information leakage** | A "today's average delivery time for this restaurant" feature built from the full day's orders, so it already contains the order being predicted | **Point-in-time-correct joins**: each example sees only data that existed at its timestamp |
 | **Distribution shift** | Trained on last month, serving this month | Not a bug, same symptom — monitoring and retraining (16.8) |
 
@@ -157,7 +157,7 @@ LEAKY model, offline test (looks amazing)     3.60
 LEAKY model, fed real serving features        4.91
 PIT model, offline = what serving will see    4.67
 ```
-The leaky model wins offline (3.60) but, fed the values that exist at serving time, it's *worse* (4.91) than the point-in-time model (4.67), whose offline number honestly forecasts production. The honest feature is **missing** 15% of the time (first orders of the day), so the model must learn to handle that.
+(MAE = mean absolute error, in minutes.) The leaky model wins offline (3.60) but, fed the values that exist at serving time, it's *worse* (4.91) than the point-in-time model (4.67), whose offline number honestly forecasts production. The honest feature is **missing** 15% of the time (first orders of the day), so the model must learn to handle that.
 
 ### Trade-offs
 | Choice | Benefit | Cost |
@@ -172,9 +172,9 @@ The leaky model wins offline (3.60) but, fed the values that exist at serving ti
 - No fallback: the checkout hangs when the model service is slow.
 
 ### In the interview
-**30-second answer** ("walk me through the ML architecture"): *"Offline, a scheduled job assembles examples with features frozen at prediction time, fits a candidate, compares it with what's live, and registers it with lineage. Online, a stateless service computes features from the same definitions, calls the model within a time budget with timeout and fallback, and logs features, output and version. Artifacts travel to serving; logs and outcomes travel back."*
+**30-second answer** ("walk me through the ML architecture"): *"Offline, a scheduled job assembles examples with features frozen at prediction time, fits a candidate, compares it with what's live, and registers it with lineage. Online, a **stateless** service (one that keeps no memory between requests) computes features from the same definitions, calls the model within a time budget with timeout and fallback, and logs features, output and version. Artifacts travel to serving; logs and outcomes travel back."*
 
-- **"Why not train continuously?"** → Freshness value vs label delay, compute and evaluation burden; online learning needs guards (16.8).
+- **"Why not train continuously?"** → Freshness value vs label delay, compute and evaluation burden; online learning (updating the model continuously from live data) needs guards (16.8).
 - **"First model with no logs?"** → Historical data if any; otherwise a rule-based baseline that starts collecting data — with selection bias (you only see outcomes for what the rules allowed).
 
 ### Self-check
@@ -199,24 +199,24 @@ A supervised model is only as good as the pipeline that attaches an outcome to e
 | **Behavioural labels** | Clicks, skips, saves, watch time | Logging + processing | Often seconds | Indirect (click ≠ satisfaction); only covers what the system chose to show |
 | **Human annotation** | Relevance grades, moderation decisions | Roughly a few cents up to a few dollars each | Hours to days | Budget caps how much gets labelled; reviewers need quality control |
 
-Chip Huyen calls the prediction-to-label gap the **feedback loop length** — short for ETAs and clicks, long for fraud and churn. Label delay doesn't stall training; it means only "mature" examples (old enough to have a label) are used, and outcome monitoring lags by the same amount.
+Chip Huyen calls the prediction-to-label gap the **feedback loop length** — short for ETAs and clicks, long for fraud and churn (customers cancelling). Label delay doesn't stall training; it means only "mature" examples (old enough to have a label) are used, and outcome monitoring lags by the same amount.
 
 ### Human labelling is a system, not a task
 - **Versioned guidelines** — a label means what the guideline says; record its version in dataset lineage, because redefining "spam" breaks metric comparisons across that change.
-- **Inter-annotator agreement** — several reviewers label the same items (e.g. Cohen's κ for two raters). Low agreement usually signals an unclear guideline, hard items or missing context; high agreement ≠ correctness.
+- **Inter-annotator agreement** — several reviewers label the same items (e.g. Cohen's κ for two raters — an agreement score corrected for agreement by chance). Low agreement usually signals an unclear guideline, hard items or missing context; high agreement ≠ correctness.
 - **Gold questions** — items with known answers seeded into the queue track each reviewer's accuracy over time.
 - **Active learning** — spend labels where they're worth most: items the model is least sure about, disagreements, new product areas.
 - **Reuse existing queues** — fraud analysts already make decisions; record context and uncertainty, validate and version before training on them.
 - **Weak supervision** (e.g. Snorkel-style labelling functions — heuristics that vote) yields many noisy labels cheaply; audit them the same way.
 
 ### LLM-assisted labelling
-Given the written guideline, an LLM proposes labels fast. In production it's **tiered**, not a replacement: the LLM labels eligible items, humans check a random sample plus low-confidence or contested ones, and accuracy is measured against human-reviewed sets **per important subgroup**. The catch: LLM errors are **correlated** — one blind spot repeated a million times (dialects, specialist topics, adversarial content). Keep human audit slices, re-measure whenever prompt, model or policy changes, and check privacy rules before sending data to any model.
+Given the written guideline, an LLM (large language model) proposes labels fast. In production it's **tiered**, not a replacement: the LLM labels eligible items, humans check a random sample plus low-confidence or contested ones, and accuracy is measured against human-reviewed sets **per important subgroup**. The catch: LLM errors are **correlated** — one blind spot repeated a million times (dialects, specialist topics, adversarial content). Keep human audit slices, re-measure whenever prompt, model or policy changes, and check privacy rules before sending data to any model.
 
 ### Class imbalance
 Suppose 0.2% of transactions are fraud (1 in 500): always predicting "legit" scores 99.8% accuracy, and most compute goes on easy negatives.
 
 - **Downsample negatives**: keep every positive and a fraction *w* of negatives (say 10%). Data shrinks ~10×; positive share rises from 0.2% to ~2%.
-- **Scores are now inflated** (fraud looks ~10× more common). If scores are used as probabilities (dollar thresholds, auctions), **recalibrate**: the odds were multiplied by 1/w, so **p = w·q / (w·q + 1 − q)**, where q is the downsampled model's score — or fit Platt/isotonic calibration on held-out data at the real base rate. (Rules of ML **#30**: importance-weight sampled data, don't drop it arbitrarily.)
+- **Scores are now inflated** (fraud looks ~10× more common). If scores are used as probabilities (dollar thresholds, auctions), **recalibrate**: the **odds** (p / (1 − p)) were multiplied by 1/w, so **p = w·q / (w·q + 1 − q)**, where q is the downsampled model's score — or fit Platt/isotonic calibration (learning a mapping from scores to true probabilities: Platt fits an S-shaped sigmoid curve, isotonic fits a step-wise increasing function) on held-out data at the real **base rate** (the true share of positives). (Rules of ML **#30**: importance-weight sampled data, don't drop it arbitrarily.)
 - **Reweighting** is the alternative: keep all data but weight positives more in the **loss function** (the quantity training minimises). More compute, no resampling.
 - Evaluate with **precision and recall**, not accuracy (16.7).
 
@@ -249,7 +249,7 @@ isotonic on held-out         0.0021   0.624  0.001020   0.0061  0.00020
 ```
 ![Reliability diagram](img/reliability.png)
 
-Reading it: raw scores average 0.95% against a true 0.2% (≈5× too high); the formula and Platt restore ~0.2% and nearly halve log-loss. Monotonic fixes leave PR-AUC unchanged (ranking ≠ calibration); isotonic's small drop comes from ties in its step function. (`FrozenEstimator` replaced `cv="prefit"` in scikit-learn 1.6.) **ECE** (expected calibration error) = weighted average gap between mean score and observed rate per bin; **Brier** = mean squared error of probabilities.
+Reading it: raw scores average 0.95% against a true 0.2% (≈5× too high); the formula and Platt restore ~0.2% and nearly halve **log-loss** (the cross-entropy of the predicted probabilities; lower is better). **Monotonic** (order-preserving) fixes leave **PR-AUC** (area under the precision–recall curve, a ranking-quality score) unchanged (ranking ≠ calibration); isotonic's small drop comes from ties in its step function. (`FrozenEstimator` replaced `cv="prefit"` in scikit-learn 1.6.) **ECE** (expected calibration error) = weighted average gap between mean score and observed rate per bin; **Brier** = mean squared error of probabilities.
 
 ### Manufacturing negatives (retrieval)
 Logs show clicks, never the vast catalogue a user ignored, so retrieval models (two-tower, [Chapter 13](../13-recommenders-and-embeddings/README.md)) need manufactured negatives: **random** (easy, teaches little about close calls); **in-batch** (other users' positives in the batch — cheap, but popular items are over-represented, so apply a **popularity/sampling-bias correction** or the model learns to demote popular items); **hard** (shown-but-not-clicked, or near neighbours — sharpen the boundary, but some are false negatives). Mix them and tune the ratio.
@@ -267,7 +267,7 @@ Logs show clicks, never the vast catalogue a user ignored, so retrieval models (
   3. Near-duplicates across splits (same document twice; decide whether the same user may appear in both, based on what you're testing).
 
 ### Privacy, in one paragraph
-Minimise **PII** (personally identifiable information) at ingestion: collect only what's needed, restrict access, set retention. Hashed IDs are still linkable. Define how deletion requests reach raw data, derived datasets, embeddings and models (versioned data, deletion tracking, scheduled rebuilds — and involve privacy/legal). Fraud verdicts and moderation decisions are sensitive too.
+Minimise **PII** (personally identifiable information) at ingestion: collect only what's needed, restrict access, set retention. Hashed IDs (IDs scrambled by a one-way function) are still linkable. Define how deletion requests reach raw data, derived datasets, embeddings and models (versioned data, deletion tracking, scheduled rebuilds — and involve privacy/legal). Fraud verdicts and moderation decisions are sensitive too.
 
 ### In the interview
 **30-second answer** ("where does your training data come from?"): *"Outcomes, behaviour and human judgments, each with a cost and delay. I validate labels, join them to point-in-time features, split by time, downsample and recalibrate for imbalance, and audit LLM labels against human slices."*
@@ -277,7 +277,7 @@ Minimise **PII** (personally identifiable information) at ingestion: collect onl
 - **"Why not let an LLM label everything?"** → Its errors are correlated and invisible from inside; human audit slices catch them.
 
 ### Self-check
-1. Three label sources and their main weakness? → Natural (late), behavioural (biased proxy), human (costly, needs QA).
+1. Three label sources and their main weakness? → Natural (late), behavioural (biased proxy), human (costly, needs QA — quality assurance).
 2. After keeping 10% of negatives, a model outputs 0.05. Corrected probability? → 0.1·0.05 / (0.1·0.05 + 0.95) ≈ 0.0052.
 3. Why popularity-correct in-batch negatives? → Popular items appear as negatives too often, so the model learns to penalise popularity itself.
 4. Name two leakage patterns. → Windows that include the label time; label-adjacent fields.
@@ -308,16 +308,16 @@ A second checklist, by **signal source**, helps find gaps: the item's content, t
 | Kind of input | Usual encoding | Example |
 |---|---|---|
 | Huge ID vocabularies | Learned **embedding tables** ([Chapter 13](../13-recommenders-and-embeddings/README.md)); when the set of IDs is unbounded, the **hashing trick** maps each ID to one of a fixed number of buckets | user, item, merchant IDs |
-| Numbers | Bucketing, normalisation, and a log transform when a few values are enormous and most are small (**heavy tails**) | order counts, km, prices |
-| Short category lists | One-hot vectors or tiny embeddings | device type, country |
+| Numbers | Bucketing (grouping values into ranges), normalisation (rescaling to a standard range), and a log transform when a few values are enormous and most are small (**heavy tails**) | order counts, km, prices |
+| Short category lists | One-hot vectors (a 1 in the category's slot, 0 elsewhere) or tiny embeddings | device type, country |
 | Pairs that interact | Hand-built crosses, or a deep model that discovers them | user × category |
 
 Trees don't need scaling; linear models and neural nets do.
 
 ### Freshness: batch path + streaming path
 Short-window aggregates are worth having only while they're current: a half-hour order count refreshed once a night tells the model nothing. So the feature layer may have two arms:
-- **Batch path** — Spark/SQL jobs compute slow features for every entity (e.g. nightly); easy to backfill.
-- **Streaming path** — Flink or Spark Structured Streaming reading Kafka keeps windowed aggregates current within seconds; more operational work.
+- **Batch path** — Spark/SQL (the standard database query language) jobs compute slow features for every entity (e.g. nightly); easy to **backfill** (compute values for past dates).
+- **Streaming path** — Flink or Spark Structured Streaming (stream-processing engines) reading Kafka (a durable log of events that many consumers can read) keeps windowed aggregates (counts/averages over a sliding time window) current within seconds; more operational work.
 
 This is the **lambda architecture** (Nathan Marz); a streaming-only design is **kappa**. Run both arms only when freshness requires it. Rules of ML **#8: know the freshness requirements of your system**.
 
@@ -329,7 +329,7 @@ This is the **lambda architecture** (Nathan Marz); a streaming-only design is **
 | Side | Storage | Holds | Used for |
 |---|---|---|---|
 | **Offline store** | Warehouse / lake (Parquet, BigQuery, Snowflake…) | Timestamped history of feature values | Training sets via **point-in-time joins** — a row from 6:02 pm on 3 March gets the values as of then, not today's |
-| **Online store** | Low-latency key-value store (Redis, DynamoDB, Cassandra, Bigtable) | Just the **current** value of each feature for each entity | Serving: "40 features for restaurant 812, courier 3407, this route — in < 10 ms" |
+| **Online store** | Low-latency key-value store (a database that fetches a value by a single key, very fast: Redis, DynamoDB, Cassandra, Bigtable) | Just the **current** value of each feature for each entity | Serving: "40 features for restaurant 812, courier 3407, this route — in < 10 ms" |
 
 One set of definitions feeds both sides, and the store doubles as a **registry** so teams reuse a feature instead of re-deriving a slightly different one (which recreates skew). Still test transforms, timestamps, late data and empty values. Products: **Feast** (open source), **Tecton**, **Databricks**, **SageMaker** and **Vertex AI** feature stores; Uber's **Michelangelo** popularised the pattern.
 
@@ -400,12 +400,12 @@ Four feature groups; batch for slow, streaming for fresh, inline for request-onl
 Offline, an expensive model picks ~500 candidates per user; online, a small model reorders them using the moment (time of day, last click, stock). New items missing from the list need an online retrieval path. Failures degrade gracefully: yesterday's candidates if the nightly job fails, unreranked candidates if the reranker fails.
 
 ### Streaming inference
-Events trigger predictions: each uploaded video scored for policy violations, each payment scored in the pipeline. It's online inference behind a queue; handle queue delay, retries, **duplicate events** (idempotent scoring) and **backpressure**.
+Events trigger predictions: each uploaded video scored for policy violations, each payment scored in the pipeline. It's online inference behind a queue; handle queue delay, retries, **duplicate events** (idempotent scoring — processing the same event twice has the same effect as once) and **backpressure** (slowing producers down when consumers can't keep up); both ideas are covered in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
 
 ### Trade-offs / when not to use
 - Batch is wrong when inputs exist only at request time or staleness hurts (fraud, ETA).
 - Online is wasteful when predictions are stable and heavily reused.
-- Streaming is wrong when a caller is waiting synchronously for the answer.
+- Streaming is wrong when a caller is waiting **synchronously** (blocked until the answer comes back) for the answer.
 
 ### In the interview
 **30-second answer**: *"Does it need request-time inputs, how fresh must it be, how often is a stored prediction reused? Stable and reused → batch; request-dependent → online; event-driven async → streaming. For feeds, precompute candidates for active users and rerank online."*
@@ -426,7 +426,7 @@ Batch = lookup, stale, cheap per request; online = fresh, request context, pay a
 ## 16.6 Model serving basics
 
 ### What it is
-A typical predictive model server is **stateless**: on startup it reads the model into memory, then turns each feature vector into a score. It scales like any web tier — replicas behind a load balancer, autoscaling on CPU load or queue length, rolling deploys, health checks. The ML-specific parts: where the artifact comes from, the latency budget, safe rollout, and hardware.
+A typical predictive model server is **stateless**: on startup it reads the model into memory, then turns each feature vector into a score. It scales like any web tier — **replicas** (identical copies) behind a **load balancer** (which spreads requests across them; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), autoscaling on CPU load or queue length, **rolling deploys** (updating a few copies at a time), **health checks** (automatic pings confirming each copy works). The ML-specific parts: where the artifact comes from, the latency budget, safe rollout, and hardware.
 
 ### The latency budget, itemised (illustrative small-model numbers)
 
@@ -435,11 +435,11 @@ A typical predictive model server is **stateless**: on startup it reads the mode
 | Model inference | 1–10 ms | Trees and small tabular models are quick; deep nets need tuning |
 | Online-store lookup | 2–10 ms | Do it as a single batched read; frequently the slowest step |
 | Features computed inline | 0–15 ms | Each has its own allowance and a default if it runs over |
-| Routing, auth, parsing the request | 1–5 ms | The usual web-service overhead |
+| Routing, auth (checking who is calling), parsing the request | 1–5 ms | The usual web-service overhead |
 | Writing the log, sending the reply | 1–2 ms | Logging is asynchronous so it doesn't block |
 
 Profile the full path before optimising. Two standard tools:
-- **Batching** (dynamic/micro-batching) — group requests for a few ms to use hardware better, especially GPUs; trades a small wait for throughput, so test p99.
+- **Batching** (dynamic/micro-batching) — group requests for a few ms to use hardware better, especially GPUs; trades a small wait for throughput, so test **p99** (the latency that 99% of requests beat — the slow tail).
 - **Feature caching** — hold the vectors of the most-requested entities (busy restaurants, trending videos) in process memory, so the bulk of traffic never touches the online store.
 
 ### Shipping a new model safely
@@ -453,14 +453,14 @@ Profile the full path before optimising. Two standard tools:
 4. **Ramp up, with a pre-agreed abort rule** — e.g. "revert if session CTR falls 2% or p99 exceeds 150 ms". Rollback must restore a compatible model *and* features and config; rehearse it and know how long it takes.
 
 ### Hardware
-Tree models and small neural nets serve well on CPU — say *"I'd benchmark the GBDT on CPU replicas first"*, not "GPU cluster" by reflex; GPUs pay off for large neural models with batching. Runtimes (ONNX Runtime, NVIDIA Triton, TensorFlow Serving) merit a passing mention.
+Tree models and small neural nets serve well on CPU — say *"I'd benchmark the GBDT on CPU replicas first"*, not "GPU cluster" by reflex; GPUs pay off for large neural models with batching. Runtimes (software that executes a trained model efficiently: ONNX Runtime, NVIDIA Triton, TensorFlow Serving) merit a passing mention.
 
 ### Shrinking the model
 | Technique | Idea | Watch out |
 |---|---|---|
 | **Distillation** | A small *student* learns to mimic a large *teacher* | Measure the quality loss |
-| **Quantisation** | Fewer bits per weight/activation (int8 vs float32) | Needs runtime support; check accuracy |
-| **Pruning** | Drop weights that contribute little | Speedups need sparse-aware runtimes |
+| **Quantisation** | Fewer bits per weight/activation (int8 — 8-bit integers — vs float32, 32-bit decimals) | Needs runtime support; check accuracy |
+| **Pruning** | Drop weights that contribute little | Speedups need sparse-aware runtimes (able to skip the zeros) |
 
 Compare compression with simply changing hardware, counting engineering effort and quality loss. (Central for LLMs — see the AI Handbook.)
 
@@ -499,7 +499,7 @@ Offline metrics are the *first gate*: candidates are compared on held-out data b
 |---|---|---|
 | Rare-event classification (fraud, abuse) | P/R at the shipping threshold, PR-AUC next to the base rate | Thresholds are business policy; often two of them (approve / review / block) |
 | Retrieval → ranking | recall@k for candidate generation, NDCG@k or MRR for the ordering stage | Each funnel stage gets its own metric; click labels are position-biased |
-| Regression (ETA, demand) | MAE or RMSE plus p90 error | Break it down per cohort — new cities or segments hide inside a good average |
+| Regression (ETA, demand) | MAE or RMSE plus p90 error | Break it down per cohort (a group sharing a trait) — new cities or segments hide inside a good average |
 | Any score used as a number | Calibration (reliability diagram, ECE) | Recheck after downsampling/re-weighting (16.3) and after population shifts |
 
 ### Production checklist
@@ -536,7 +536,7 @@ naive baseline (predict the mean) MAE  9.46
 ```
 ![ROC vs PR curves](img/roc_vs_pr.png)
 
-What it shows in production terms: a 0.935 ROC-AUC would pass a dashboard review, but catching 73% of fraud means 5,670 false alarms for 106 catches — the analyst queue, not the AUC, is what the business feels. The two bands put 9% fraud in "block" and 1.9% in "review", so humans look at 2,457 cases instead of 80,000. The overall ETA error of 3.7 minutes hides 10.9 minutes in new cities.
+(In the table, TP = true positives — fraud caught; FP = false positives — good transactions flagged; FPR = false-positive rate.) What it shows in production terms: a 0.935 ROC-AUC would pass a dashboard review, but catching 73% of fraud means 5,670 false alarms for 106 catches — the analyst queue, not the AUC, is what the business feels. The two bands put 9% fraud in "block" and 1.9% in "review", so humans look at 2,457 cases instead of 80,000. The overall ETA error of 3.7 minutes hides 10.9 minutes in new cities.
 
 ### In the interview
 **30-second answer**: *"I pick the offline metric from the task (Chapter 6 details), but in production I report it at the shipping threshold with the workload it creates, sliced by cohort, against a naive baseline and the current model. The cost owner chooses the threshold. Offline wins only earn an A/B test."*
@@ -556,7 +556,7 @@ A deployed model loses quality as the world changes — fraudsters adapt, a pand
 
 | Drift type | What changes | Example | Also called (Huyen) |
 |---|---|---|---|
-| **Data drift** | Inputs P(X) | Orders shift from lunch to dinner | Covariate shift |
+| **Data drift** | Inputs P(X) (the distribution of inputs) | Orders shift from lunch to dinner | Covariate shift |
 | **Label / prior shift** | Outcomes P(Y) | Fraud rate doubles in a holiday | Label shift |
 | **Concept drift** | The relationship P(Y \| X) | Same features, different outcomes — new fraud tactics, a restaurant changes kitchens | Concept drift |
 
@@ -577,10 +577,10 @@ Monitoring must also tell drift from plain **bugs** (a broken upstream pipeline 
 Layers 2–3 exist because layer 4 is late; some attacks move neither inputs nor scores, so combine signals. Rules of ML **#9: detect problems before exporting models**; **#10: watch for silent failures** (e.g. a joined table that stopped updating). *Reliable Machine Learning* (Chen, Murphy et al., O'Reilly 2022) treats model quality as SLOs with incident playbooks, like service SLOs.
 
 ### Drift statistics
-- **PSI (Population Stability Index)**: bin the reference (training) distribution into quantiles; PSI = Σ (cur% − ref%) · ln(cur% / ref%). Credit-scoring convention: < 0.1 stable, 0.1–0.25 watch, > 0.25 investigate.
-- **Two-sample Kolmogorov–Smirnov (KS) test**: D = max gap between the two empirical CDFs, plus a p-value. With large samples trivial shifts become "significant" — look at D (effect size).
+- **PSI (Population Stability Index)**: bin the reference (training) distribution into **quantiles** (cut points that split the data into equal-sized groups); PSI = Σ (cur% − ref%) · ln(cur% / ref%). Credit-scoring convention: < 0.1 stable, 0.1–0.25 watch, > 0.25 investigate.
+- **Two-sample Kolmogorov–Smirnov (KS) test**: D = max gap between the two empirical **CDFs** (cumulative distribution functions: the share of values below each point), plus a **p-value** (how likely a gap this large would be if nothing had changed). With large samples trivial shifts become "significant" — look at D (**effect size**: how big the change actually is).
 - **Null rates and schema checks** — PSI on non-null values can't see a producer that started sending 30% nulls.
-- Categorical features: chi-square test or PSI over categories. Tools: Evidently, WhyLabs, NannyML, SageMaker Model Monitor, Vertex AI Model Monitoring, TFDV.
+- Categorical features: chi-square test (a standard test of whether category counts differ) or PSI over categories. Tools: Evidently, WhyLabs, NannyML, SageMaker Model Monitor, Vertex AI Model Monitoring, TFDV.
 
 ### Code — PSI and KS (`code/drift_psi_ks.py`)
 ```python
@@ -613,7 +613,7 @@ Retraining is one possible response — first fix broken data, policy or serving
 2. **Triggered** — monitor fires → investigation → if validated data exists, a candidate run. Never auto-promote because an alert fired.
 3. **Online / continual learning** — incremental updates (Huyen: **stateless retraining** from scratch vs **stateful training** from the last checkpoint). Suits fast-changing tasks; needs bounded updates, validation and rollback — a bad stream corrupts an online learner fast.
 
-Every candidate passes the same gates: offline vs production (overall **and per segment**) → shadow → canary, approved by a named owner or automated limits. The history window should cover seasonality yet drop stale patterns — treat it as a hyperparameter, weighting recent data in fast-drift domains.
+Every candidate passes the same gates: offline vs production (overall **and per segment**) → shadow → canary, approved by a named owner or automated limits. The history window should cover **seasonality** (patterns that repeat each week or year) yet drop stale patterns — treat it as a **hyperparameter** (a setting you choose rather than one the model learns), weighting recent data in fast-drift domains.
 
 ### Feedback loops that damage your data
 
@@ -623,7 +623,7 @@ Every candidate passes the same gates: offline vs production (overall **and per 
 The model shapes the data it later learns from — Huyen's **degenerate feedback loop**. A feed shows what it predicts you'll like, you can only click what was shown, and the retrained model learns "what we showed gets clicked", narrowing further (popularity bias, filter bubbles). In fraud, blocked transactions never produce an outcome (investigator evidence gives partial labels — record source and uncertainty).
 
 Mitigations:
-- **Controlled exploration** — in low-risk recommenders, show a small approved share of traffic randomised candidates and **log selection probabilities** to correct later (inverse propensity weighting); bandits formalise this.
+- **Controlled exploration** — in low-risk recommenders, show a small approved share of traffic randomised candidates and **log selection probabilities** to correct later (inverse propensity weighting); bandits (algorithms that balance trying new options with using the best known one, [Chapter 14](../14-reinforcement-learning/README.md)) formalise this.
 - For fraud, never let suspicious payments through merely to learn their outcome; rely on reviews the risk team has signed off, simulations, or small experiments under strict limits.
 - Positional features: log position at training, set it to a fixed value at serving (Rules of ML **#36**: avoid feedback loops with positional features).
 - Exploration improves coverage but doesn't remove all bias; measure its benefit and user cost.
@@ -661,13 +661,13 @@ Offline evaluation asks whether the new model predicts held-out labels better; p
 3. **Online gate** — A/B against production on the **business** metric (some products can't A/B safely or lack traffic).
 
 ### A/B mechanics
-1. **Randomise by unit** — usually users (hash user id + experiment name for sticky assignment); sessions, orgs, regions or time windows when users influence each other (**interference**) or effects carry over.
+1. **Randomise by unit** — usually users (hash user id + experiment name for sticky assignment — a **hash** turns input into a fixed, random-looking number, so the same user always lands in the same group); sessions, orgs, regions or time windows when users influence each other (**interference**) or effects carry over.
 2. **One primary metric, chosen in advance** — everything else is a guardrail or diagnostic.
 3. **Size the test for enough power** — fix the smallest lift worth detecting (**minimum detectable effect**, MDE), significance level α (false-positive rate, typically 0.05) and **power** (probability of detecting a true effect of that size, typically 0.8). Sample size per arm for two proportions:
    n = [z₁₋α/₂·√(2·p̄(1−p̄)) + z₁₋β·√(p₁(1−p₁) + p₂(1−p₂))]² / (p₂ − p₁)²
-   Rare events, small effects and noisy metrics need big samples.
-4. **Duration** — from sample size, outcome delay and business cycles (whole weeks); watch **novelty effects** and seasonality.
-5. **Don't peek** — stopping at the first daily p < 0.05 inflates false positives. Commit to an end date, or use a **sequential test** built for repeated checks (alpha-spending, always-valid methods). **CUPED** (pre-experiment behaviour as a covariate) reduces variance and so sample size.
+   (z₁₋α/₂ ≈ 1.96 and z₁₋β ≈ 0.84 are cut-offs from the standard normal distribution; p₁ and p₂ are the two arms' rates and p̄ their average.) Rare events, small effects and noisy metrics need big samples.
+4. **Duration** — from sample size, outcome delay and business cycles (whole weeks); watch **novelty effects** (users reacting to anything new at first) and seasonality.
+5. **Don't peek** — stopping at the first daily p < 0.05 inflates false positives. Commit to an end date, or use a **sequential test** built for repeated checks (alpha-spending, always-valid methods). **CUPED** (pre-experiment behaviour as a **covariate** — an extra variable used to explain away noise) reduces variance and so sample size.
 
 ### Code — sample size, z-test, peeking (`code/ab_test.py`)
 ```python
@@ -699,7 +699,7 @@ A/A tests, alpha 0.05: false-positive rate testing once at the end = 4.9%; stopp
 ```
 ![Peeking inflates false positives](img/peeking.png)
 
-Halving the detectable lift roughly **quadruples** the sample (n ∝ 1/δ²): a 1% relative CTR lift needs ~3M users per arm. The finished test is significant (CI excludes zero). Peeking 20 times turns a 5% false-positive rate into ~23%.
+Halving the detectable lift roughly **quadruples** the sample (n ∝ 1/δ²): a 1% relative CTR lift needs ~3M users per arm. The finished test is significant (the **CI** — 95% confidence interval, the range of plausible true differences — excludes zero). In an **A/A test** both groups get the identical version, so any "win" is a false positive; peeking 20 times turns a 5% false-positive rate into ~23%.
 
 ### Guardrails and the metric hierarchy
 
@@ -716,7 +716,7 @@ Fixing the hierarchy beforehand settles disagreements in advance. Also check **s
 | Variant | Use when | How |
 |---|---|---|
 | **Interleaving** | Ranking, low traffic | Merge two rankers' results into one list per user (e.g. team-draft); see whose items get clicked. Much more sensitive, but measures preference, not long-term business impact |
-| **Switchback** | Marketplaces with network effects (dispatch, surge pricing) | Flip the whole region between variants over time windows, because treating some riders affects the drivers everyone shares |
+| **Switchback** | Marketplaces with network effects (dispatch, surge pricing — raising prices when demand spikes) | Flip the whole region between variants over time windows, because treating some riders affects the drivers everyone shares |
 | **Multi-armed bandits** | Ongoing selection where you want reward during the test | Shift traffic toward the winning arm as evidence accrues (Thompson sampling, UCB); analysis differs from a fixed-split test |
 | **Holdback** | Measuring durable long-term effect | Keep a small slice on the old experience for months |
 
@@ -743,7 +743,7 @@ Offline filters, online decides: right unit, one primary metric, vetoing guardra
 ## 16.10 MLOps: the glue that makes it repeatable
 
 ### What it is
-**MLOps** applies DevOps practices — version control, automated testing, CI/CD, monitoring — to ML, where the "code" includes **data** and **models**. Google's MLOps maturity levels are a handy vocabulary:
+**MLOps** applies **DevOps** practices (automating how software is built, tested, released and run) — **version control** (tracking every change, e.g. with git), automated testing, **CI/CD** (continuous integration: automatically test every change; continuous delivery/deployment: automatically release it), monitoring — to ML, where the "code" includes **data** and **models**. Google's MLOps maturity levels are a handy vocabulary:
 
 | Level | What's automated | Typical symptom |
 |---|---|---|
@@ -755,12 +755,12 @@ Offline filters, online decides: right unit, one primary metric, vetoing guardra
 
 | Component | Job | Examples |
 |---|---|---|
-| **Experiment tracking** | Log each run's code version, params, data hash, metrics, artifacts — reproducible and comparable | MLflow Tracking, Weights & Biases, Neptune |
+| **Experiment tracking** | Log each run's code version, params, data hash (a fingerprint of the exact data used), metrics, artifacts — reproducible and comparable | MLflow Tracking, Weights & Biases, Neptune |
 | **Data & model versioning** | Snapshot datasets and link them to models (lineage) | DVC, lakeFS, Delta Lake time travel |
 | **Data validation** | Schema, ranges, null rates, distribution checks **before** training and at serving; fail the pipeline on bad data | TFDV, Great Expectations, Pandera |
 | **Model registry** | Versions, stages (candidate/staging/production/archived), metrics, approvals, rollback target | MLflow Model Registry, SageMaker, Vertex AI |
-| **Orchestration** | DAG of ingest → validate → features → train → evaluate → register | Airflow, Kubeflow Pipelines, Dagster, Metaflow, TFX |
-| **CI for ML** | Feature-code unit tests, training–serving consistency tests, a "trains and beats baseline" smoke test, validation gate | GitHub Actions + pytest, etc. |
+| **Orchestration** | DAG (directed acyclic graph: steps with dependencies and no loops) of ingest → validate → features → train → evaluate → register | Airflow, Kubeflow Pipelines, Dagster, Metaflow, TFX |
+| **CI for ML** | Feature-code unit tests (small automated checks of one function), training–serving consistency tests, a "trains and beats baseline" smoke test (a quick check that the basics work), validation gate | GitHub Actions + pytest, etc. |
 | **CD for ML** | Package model + serving code, deploy via shadow → canary → ramp, auto-rollback on guardrails | KServe, Seldon, BentoML, SageMaker endpoints |
 | **Monitoring** | 16.8's four layers, feedback into CT | Evidently, Arize, WhyLabs, Prometheus/Grafana |
 
@@ -830,7 +830,7 @@ Output:
    canary  50%: MAE 2.46 vs prod 2.92 -> continue ramp
    registry: [(1, 'ridge', 'archived'), (2, 'gbdt', 'production'), (3, 'gbdt_no_new_city', 'candidate')]
 ```
-What it shows: validation stops a km→m unit bug; v3 beats v1 on average but is blocked for regressing on new cities; the canary catches a **serving-side** bug (hour in UTC) invisible offline — 1% was too noisy, 5% caught it; comparing logged serving features with training finds the cause; after the fix v2 ramps and is promoted.
+What it shows: validation stops a km→m unit bug; v3 beats v1 on average but is blocked for regressing on new cities; the canary catches a **serving-side** bug (hour in UTC, the universal reference time zone, inside the serving **container** — the packaged, isolated runtime for the code) invisible offline — 1% was too noisy, 5% caught it; comparing logged serving features with training finds the cause; after the fix v2 ramps and is promoted.
 
 ### Common mistakes
 - Metrics tracked without the data version → unreproducible models.
@@ -920,7 +920,7 @@ Three points to say out loud:
 ### Follow-ups to drill
 - **p99 creeps past 100 ms, profiling blames feature reads** → one batched read, in-process cache for hot restaurants, defaults for the slowest aggregates, and drop features that cost more milliseconds than they add accuracy.
 - **Product wants ETAs on the restaurant list (100× checkout traffic)** → a hundredfold routing load breaks the latency and cost budgets. Serve browsing from batch estimates per zone and restaurant; keep the live path for checkout, where the figure becomes a commitment.
-- **New city, zero history** → distance baseline + priors from the most similar city; monitor it as its own segment; labels arrive within hours, so retrains fold it in within days.
+- **New city, zero history** → distance baseline + priors (starting estimates borrowed from elsewhere) from the most similar city; monitor it as its own segment; labels arrive within hours, so retrains fold it in within days.
 - **A storm doubles delivery times this evening** → input drift fires (weather), then prediction drift, then hourly MAE; training data may hold no storm this severe. Fastest lever: widen the buffer (product decision) while a triggered retrain absorbs tonight's labels.
 
 ### Same structure, different problem

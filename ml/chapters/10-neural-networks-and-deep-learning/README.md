@@ -2,7 +2,7 @@
 
 A **neural network** is a function built from many tiny, identical pieces — "neurons" — each of which does something almost trivially simple: multiply its inputs by some numbers, add them up, and bend the result. Stack thousands of these pieces in layers, tune their numbers on data with calculus, and you get systems that recognise faces, transcribe speech and write text. **Deep learning** is simply the practice of training neural networks with many layers.
 
-This chapter builds the idea from zero: one neuron, a network, how it learns (backpropagation, every number worked out), the engineering that makes deep networks train (optimizers, schedules, initialization, normalization, regularization), and the practical habits that save days of debugging — first in NumPy (no magic), then in PyTorch.
+This chapter builds the idea from zero: one neuron, a network, how it learns (backpropagation, every number worked out), the engineering that makes deep networks train (optimizers, schedules, initialization, normalization, regularization), and the practical habits that save days of debugging — first in NumPy (Python's core library for number arrays; no magic), then in PyTorch (the most popular deep-learning library).
 
 **What you'll learn**
 
@@ -16,7 +16,7 @@ This chapter builds the idea from zero: one neuron, a network, how it learns (ba
 8. Practical training and debugging: normalization, mini-batches, class imbalance, loss curves, overfitting one batch, the LR finder.
 9. PyTorch basics: tensors, autograd, `nn.Module`, `DataLoader`, the training loop.
 
-All code is in `code/`, runs on CPU in seconds (PyTorch 2.x, scikit-learn), and every output shown is real.
+All code is in `code/`, runs on CPU (an ordinary processor, no graphics card needed) in seconds (PyTorch 2.x, scikit-learn), and every output shown is real.
 
 ---
 
@@ -33,7 +33,7 @@ The output a feeds the next layer or is the final prediction.
 ![Biological neuron vs artificial neuron](img/neuron-inputs-weights.jpg)
 *Figure — Left: a biological neuron (dendrites collect signals, the axon sends one out). Right: the artificial version — inputs x₁…xₙ times weights, plus bias b (drawn as a constant input x₀ = 1), summed into z, then passed through activation f (course diagram).*
 
-Analogy: a **committee vote**. Members (inputs) speak; some get more say (weights); the chair has a standing lean (bias); a simple rule turns the tally into the announcement (activation). The biology is only inspiration — artificial neurons are just differentiable arithmetic.
+Analogy: a **committee vote**. Members (inputs) speak; some get more say (weights); the chair has a standing lean (bias); a simple rule turns the tally into the announcement (activation). The biology is only inspiration — artificial neurons are just differentiable arithmetic (smooth enough that slopes can be computed for every number).
 
 **Glossary for this chapter**
 
@@ -49,7 +49,7 @@ Analogy: a **committee vote**. Members (inputs) speak; some get more say (weight
 ### The perceptron (1958) and its limit
 Frank Rosenblatt's **perceptron** is one neuron with a **step** activation: output 1 if w·x + b > 0, else 0. Learning rule: when a prediction is wrong, nudge the weights towards the right answer, w ← w + η(y − ŷ)x and b ← b + η(y − ŷ), where η is the learning rate.
 
-A single neuron draws a **straight line** (in higher dimensions a flat **hyperplane**) through feature space: fine for AND, impossible for **XOR** ("exactly one input is 1"), whose classes no single line separates. Minsky and Papert's 1969 book *Perceptrons* made this limit famous.
+A single neuron draws a **straight line** (in higher dimensions a flat **hyperplane**) through feature space (the space in which each feature is one axis and each example is a point): fine for AND, impossible for **XOR** ("exactly one input is 1"), whose classes no single line separates. Minsky and Papert's 1969 book *Perceptrons* made this limit famous.
 
 ```python
 # code/perceptron.py (core)
@@ -98,7 +98,7 @@ Without an activation function, stacking layers is pointless: W₂(W₁x + b₁)
 ### Why depth matters (hidden layers and "deep" networks)
 Hidden layers turn raw inputs into progressively more **abstract representations**: in an image network, early layers respond to edges and colour blobs, middle layers to textures and parts (an eye, a wheel), late layers to whole objects. This **hierarchy of features** reuses lower-level pieces, so a deep network usually needs far fewer neurons than a wide shallow one for the same task.
 
-"Deep" just means many hidden layers. Depth costs computation, data and harder optimization (gradients must travel through every layer — §10.6). ReLU, careful initialization, normalization and residual connections (Chapter 11), together with GPUs and large datasets such as ImageNet, are what made deep networks trainable after about 2010.
+"Deep" just means many hidden layers. Depth costs computation, data and harder optimization (gradients, the slopes that tell each weight which way to move, must travel through every layer — §10.6). ReLU, careful initialization, normalization and residual connections (shortcuts that add a layer's input to its output; Chapter 11), together with GPUs (graphics chips that do thousands of calculations in parallel) and large datasets such as ImageNet (over a million labelled photos), are what made deep networks trainable after about 2010.
 
 ### Trade-offs
 
@@ -120,7 +120,7 @@ Hidden layers turn raw inputs into progressively more **abstract representations
 - Believing "more layers is always better" — deeper nets overfit and are harder to train without the tricks below.
 
 ### Real-world examples
-Google Photos search, Face ID and self-driving perception (deep CNNs and transformers, Chapters 11–12); speech recognition in voice assistants; recommenders at YouTube and Meta, which run MLPs on learned embeddings (e.g. Meta's open-source DLRM).
+Google Photos search, Face ID and self-driving perception (deep CNNs, convolutional networks for images, and transformers, attention-based networks for sequences; Chapters 11–12); speech recognition in voice assistants; recommenders at YouTube and Meta, which run MLPs on learned embeddings (vectors of numbers learned to represent each user or item) (e.g. Meta's open-source DLRM).
 
 ### In the interview
 **30-second answer:** "A neuron computes a weighted sum plus bias and applies a nonlinear activation. An MLP stacks layers; hidden layers learn intermediate features and depth composes simple features into complex ones. Without nonlinearities the stack collapses to one linear map. A single perceptron draws one hyperplane, so it can't learn XOR; one hidden layer can."
@@ -144,7 +144,7 @@ Neuron = weighted sum + bias + nonlinearity; MLP = layers of them. Hidden layers
 The **activation function** f is the nonlinearity applied to each pre-activation z. It governs how well gradients flow and, at the output layer, what values the network can produce.
 
 ![Activation functions and derivatives](img/activations.png)
-*Figure — Common activations (left) and their derivatives (right), computed with PyTorch autograd by `code/activations.py`. Note the sigmoid's derivative never exceeds 0.25 and both sigmoid and tanh flatten to 0 for large |z| ("saturation").*
+*Figure — Common activations (left) and their derivatives (right), computed with PyTorch autograd (its automatic derivative calculator, §10.4) by `code/activations.py`. Note the sigmoid's derivative never exceeds 0.25 and both sigmoid and tanh flatten to 0 for large |z| ("saturation").*
 
 ### The table
 
@@ -160,6 +160,8 @@ The **activation function** f is the nonlinearity applied to each pre-activation
 | **Softmax** | softmaxᵢ(z) = e^zᵢ / Σⱼ e^zⱼ | each (0,1), sum = 1 | — | Single-label multi-class output | Probability distribution | Output layer only |
 | **Identity (linear)** | z | (−∞, ∞) | 1 | Output for regression | Unbounded | — |
 
+> **Key terms — names in this table:** *RNNs* (recurrent neural networks) and *LSTMs* (a type of RNN with "gates" that decide what to remember) process sequences step by step (Chapter 12). *Transformers* are the attention-based networks behind *BERT* and *GPT*; an *LLM* (large language model) is a very large transformer trained on text; *EfficientNet* is a family of image networks. *Zero-centred* means outputs are spread around 0 rather than all positive. *Saturates* means the curve goes flat, so its slope (and the learning signal) is near 0. Φ, the standard normal *CDF* (cumulative distribution function), gives the probability that a bell-curve value is below z. *SwiGLU* is a gated variant of SiLU used in modern LLMs.
+
 Numbers worth remembering (from `code/activations.py`):
 ```
 sigmoid  f(-2,0,2)=[0.119 0.5   0.881]  f'=[0.105 0.25  0.105]
@@ -168,7 +170,7 @@ ReLU     f(-2,0,2)=[0. 0. 2.]  f'=[0. 0. 1.]
 softmax([2,1,0.1]) = [0.659 0.242 0.099]
 ```
 
-**Softmax worked example.** z = (2, 1, 0.1): e² = 7.389, e¹ = 2.718, e^0.1 = 1.105, sum 11.212 → (0.659, 0.242, 0.099). Adding a constant to every score changes nothing, so libraries subtract max(z) first to avoid overflow.
+**Softmax worked example.** z = (2, 1, 0.1): e² = 7.389, e¹ = 2.718, e^0.1 = 1.105, sum 11.212 → (0.659, 0.242, 0.099). Adding a constant to every score changes nothing, so libraries subtract max(z) first to avoid overflow (numbers too large for the computer to store).
 
 ### How to choose
 1. **Hidden layers:** **ReLU** (Leaky ReLU if many units die); **GELU/SiLU** in transformers; tanh/sigmoid only inside recurrent gates (Chapter 12).
@@ -181,7 +183,7 @@ softmax([2,1,0.1]) = [0.659 0.242 0.099]
 | Multi-class, one label | softmax (K units) | categorical cross-entropy |
 | Multi-label (several can be true) | sigmoid per label | binary cross-entropy per label |
 
-In PyTorch, the output layer usually emits **raw logits** and the loss applies the sigmoid/softmax internally (`BCEWithLogitsLoss`, `CrossEntropyLoss`) — this is more numerically stable.
+In PyTorch, the output layer usually emits **raw logits** and the loss applies the sigmoid/softmax internally (`BCEWithLogitsLoss`, `CrossEntropyLoss`) — this is more numerically stable (less prone to rounding errors and overflow).
 
 ### Common mistakes
 - Putting `softmax` in the model and then using `nn.CrossEntropyLoss` (which already applies log-softmax) — the network trains poorly.
@@ -225,7 +227,7 @@ The **forward pass** runs the network: a batch of inputs flows through the layer
 
 **Worked cross-entropy.** A 3-class model outputs probabilities (0.7, 0.2, 0.1) and the true class is 0: loss = −ln 0.7 = 0.357. If the true class were 2: −ln 0.1 = 2.303. Confident wrong answers are punished hardest. A model that guesses uniformly over K classes has loss ln K (ln 10 = 2.303 for digits) — a useful sanity check for the first training step.
 
-Why cross-entropy rather than MSE for classification? With sigmoid/softmax outputs its gradient at the logits is simply **p − y** (§10.4), large when the model is confidently wrong; MSE through a sigmoid is multiplied by σ′, tiny when the sigmoid saturates — learning stalls exactly when most needed. Cross-entropy is also the maximum-likelihood loss for a Bernoulli/categorical model.
+Why cross-entropy rather than MSE for classification? With sigmoid/softmax outputs its gradient at the logits is simply **p − y** (§10.4), large when the model is confidently wrong; MSE through a sigmoid is multiplied by σ′, tiny when the sigmoid saturates — learning stalls exactly when most needed. Cross-entropy is also the maximum-likelihood loss (the one you get by choosing parameters that make the observed labels most probable) for a Bernoulli (yes/no) or categorical (one-of-K) model.
 
 ### Common mistakes
 - Passing probabilities to `CrossEntropyLoss` or `BCEWithLogitsLoss` (they expect logits).
@@ -247,7 +249,7 @@ Forward pass = compute predictions layer by layer. Pick the loss by task: MSE/MA
 ### What it is
 **Backpropagation** ("backprop") is the algorithm that computes the **gradient** of the loss with respect to every weight — that is, for each parameter, "if I increase this a tiny bit, how much does the loss change?" It does so efficiently by applying the **chain rule** of calculus from the output backwards, reusing intermediate results, so the cost is only about 2–3× a forward pass regardless of how many parameters there are. It was popularised for neural networks by Rumelhart, Hinton and Williams in 1986.
 
-Backprop only computes gradients. **Gradient descent** then uses them: each parameter moves a small step in the direction that reduces the loss, θ ← θ − η·∂L/∂θ, where η (eta) is the **learning rate**.
+Backprop only computes gradients. **Gradient descent** then uses them: each parameter moves a small step in the direction that reduces the loss, θ ← θ − η·∂L/∂θ (∂L/∂θ is the *partial derivative*: the slope of the loss with respect to θ alone, holding everything else fixed), where η (eta) is the **learning rate**.
 
 ```mermaid
 flowchart LR
@@ -295,7 +297,7 @@ Network: 2 inputs → 2 hidden units (ReLU) → 1 output (sigmoid), binary cross
 | ∂L/∂W₁ | ∂L/∂z₁ (column) × xᵀ (row) — outer product | [[−0.3535, −0.707], [0.303, 0.606]] |
 | ∂L/∂b₁ | ∂L/∂z₁ | (−0.3535, 0.303) |
 
-Why ŷ − y? For BCE, ∂L/∂ŷ = −y/ŷ + (1−y)/(1−ŷ), and σ′(z) = ŷ(1 − ŷ). Multiply them and everything cancels to ŷ − y. (The same simplification holds for softmax + cross-entropy: ∂L/∂logits = p − one_hot(y).)
+Why ŷ − y? For BCE, ∂L/∂ŷ = −y/ŷ + (1−y)/(1−ŷ), and σ′(z) = ŷ(1 − ŷ). Multiply them and everything cancels to ŷ − y. (The same simplification holds for softmax + cross-entropy: ∂L/∂logits = p − one_hot(y), where one_hot(y) is a vector with 1 at the true class and 0 elsewhere.)
 
 **Reading the gradients.** ∂L/∂w₂ is negative, so gradient descent *increases* w₂, pushing ŷ towards the label 1. Hidden unit 2 has a negative outgoing weight (−0.6), so the network wants its activation *smaller*: its incoming weights get positive gradients and shrink.
 
@@ -320,7 +322,7 @@ after one SGD step (lr=0.1): y_hat 0.4950 -> 0.5756, loss 0.7032 -> 0.5523
 ```
 
 ### A 2-layer network from scratch in NumPy
-`code/numpy_mlp.py` implements the same ideas for a whole batch (rows = examples), with tanh hidden units and a sigmoid output, and trains it by full-batch gradient descent.
+`code/numpy_mlp.py` implements the same ideas for a whole batch (rows = examples), with tanh hidden units and a sigmoid output, and trains it by full-batch gradient descent (every update uses the whole training set). In the code, *fan_in* is the number of inputs feeding a layer (and *fan_out* the number of outputs).
 
 ```python
 class TwoLayerNet:
@@ -346,7 +348,7 @@ class TwoLayerNet:
             p -= lr * g
 ```
 
-`forward` stores X, H and P because backward needs them (why training uses more memory than inference). `backward` walks the chain rule in reverse; a weight matrix's gradient is always (layer input)ᵀ @ (gradient at the layer's output). The script also runs a **numerical gradient check** — nudge one weight by ±ε, measure the loss change — the standard test for a hand-written backward pass.
+`forward` stores X, H and P because backward needs them (why training uses more memory than inference, i.e. just using the trained model to predict). `backward` walks the chain rule in reverse; a weight matrix's gradient is always (layer input)ᵀ @ (gradient at the layer's output). The script also runs a **numerical gradient check** — nudge one weight by ±ε, measure the loss change — the standard test for a hand-written backward pass.
 
 Output:
 ```
@@ -359,7 +361,7 @@ gradient check  numerical: [-0.02769  -0.015654 -0.024803]  analytical: [-0.0276
 *Figure — Left: training loss falls smoothly. Right: the 16-hidden-unit network has learned a curved boundary no linear model could draw.*
 
 ### Computational graphs and autograd
-Frameworks record every tensor operation in a **computational graph**; `loss.backward()` walks it in reverse and accumulates gradients into each parameter's `.grad`. This is **reverse-mode automatic differentiation** — exact, and cheap when one scalar output (the loss) depends on many inputs (the parameters). Karpathy's *micrograd* builds such an engine in about 100 lines.
+Frameworks record every tensor (PyTorch's name for a multi-dimensional array) operation in a **computational graph**; `loss.backward()` walks it in reverse and accumulates gradients into each parameter's `.grad`. This is **reverse-mode automatic differentiation** — exact, and cheap when one scalar (single-number) output (the loss) depends on many inputs (the parameters). Karpathy's *micrograd* builds such an engine in about 100 lines.
 
 ### Common mistakes
 - Forgetting to zero gradients between steps in PyTorch — they **accumulate** by default.
@@ -397,10 +399,10 @@ Notation: g = gradient of the mini-batch loss, η = learning rate, θ = a parame
 | **SGD** (stochastic gradient descent) | θ ← θ − η g | Step downhill using a mini-batch estimate of the gradient | `SGD(lr=…)` — always set lr explicitly |
 | **SGD + momentum** | v ← μ v + g; θ ← θ − η v | Keep a running "velocity": consistent directions accelerate, zig-zags cancel | momentum μ typically 0.9 |
 | **Nesterov momentum** | gradient evaluated at the look-ahead point | Slightly better-behaved momentum | `nesterov=True` |
-| **AdaGrad** | s ← s + g²; θ ← θ − η g/(√s + ε) | Per-parameter step size, shrinks for frequently-updated params | Good for sparse features; step decays too much for deep nets |
-| **RMSProp** | s ← ρ s + (1−ρ) g²; θ ← θ − η g/(√s + ε) | Like AdaGrad but with a moving average, so steps don't vanish | lr 0.01, ρ (`alpha`) 0.99 |
+| **AdaGrad** | s ← s + g²; θ ← θ − η g/(√s + ε) | Per-parameter step size, shrinks for frequently-updated params | Good for sparse (mostly zero) features; step decays too much for deep nets |
+| **RMSProp** | s ← ρ s + (1−ρ) g²; θ ← θ − η g/(√s + ε) | Like AdaGrad but with a moving average (an average that gives recent values more weight), so steps don't vanish | lr 0.01, ρ (`alpha`) 0.99 |
 | **Adam** | m ← β₁m + (1−β₁)g; s ← β₂s + (1−β₂)g²; bias-correct: m̂ = m/(1−β₁ᵗ), ŝ = s/(1−β₂ᵗ); θ ← θ − η m̂/(√ŝ + ε) | Momentum + RMSProp + bias correction for the zero start | lr 1e-3, β = (0.9, 0.999), ε = 1e-8 |
-| **AdamW** | Adam, plus θ ← θ − η λ θ applied separately from the gradient | "Decoupled" weight decay — the correct way to do L2-style shrinkage with Adam | weight_decay 0.01 |
+| **AdamW** | Adam, plus θ ← θ − η λ θ applied separately from the gradient | "Decoupled" weight decay (shrinking every weight slightly toward 0 at each step; §10.7) — the correct way to do L2-style shrinkage with Adam | weight_decay 0.01 |
 
 Key ideas in plain words:
 - **Stochastic:** each mini-batch gives a noisy gradient estimate — cheap, and the noise can help escape sharp minima.
@@ -442,10 +444,10 @@ A **schedule** changes η during training: big steps early, small steps late to 
 | Schedule | Shape | PyTorch | Typical use |
 |---|---|---|---|
 | Constant | flat | — | Baselines, small problems with Adam |
-| Step decay | ×γ every k epochs | `StepLR`, `MultiStepLR` | Classic ResNet recipe (÷10 at epochs 30, 60, 90) |
+| Step decay | ×γ every k epochs | `StepLR`, `MultiStepLR` | Classic ResNet (a landmark deep image network, Chapter 11) recipe (÷10 at epochs 30, 60, 90) |
 | Exponential decay | ×γ every step/epoch | `ExponentialLR` | Simple smooth decay |
 | Reduce on plateau | drop when validation metric stalls | `ReduceLROnPlateau` | When you don't know the right epoch count |
-| Cosine annealing | half cosine from η_max to ~0 | `CosineAnnealingLR` | Modern default for vision and LLMs |
+| Cosine annealing | half cosine from η_max to ~0 | `CosineAnnealingLR` | Modern default for vision and LLMs (large language models) |
 | Linear warmup + decay | ramp from ~0 over the first steps, then cosine/linear decay | `LinearLR` + `SequentialLR` | Transformers (warmup avoids early instability with Adam) |
 | One-cycle | warm up to max, then anneal far below the start | `OneCycleLR` | Fast training (Leslie Smith's "super-convergence") |
 
@@ -480,13 +482,13 @@ OneCycleLR               lr at steps 0/10/50/99: 0.0040 0.0295 0.0794 0.00000
 ### Common mistakes
 - Expecting AdamW behaviour from `Adam(weight_decay=…)` — there the decay is added to the gradient (L2) and distorted by adaptive scaling; use `AdamW`.
 - Calling `scheduler.step()` before `optimizer.step()` (PyTorch warns; the first LR value is skipped).
-- Changing the batch size without revisiting the LR (heuristic for SGD: scale LR roughly linearly with batch size, plus warmup).
+- Changing the batch size without revisiting the LR (heuristic, i.e. rule of thumb, for SGD: scale LR roughly linearly with batch size, plus warmup).
 
 ### Real-world examples
 GPT-3 and LLaMA: Adam/AdamW with linear warmup and cosine decay. The original ResNet: SGD, momentum 0.9, LR ÷10 when error plateaued. fast.ai popularised one-cycle training and the LR finder.
 
 ### In the interview
-**30-second answer:** "SGD steps against the mini-batch gradient; momentum accumulates a velocity so consistent directions speed up and oscillations cancel; RMSProp divides each step by a running RMS of that parameter's gradients; Adam combines both with bias correction, and AdamW decouples weight decay. A schedule — typically warmup then cosine decay — gives big steps early and fine steps late."
+**30-second answer:** "SGD steps against the mini-batch gradient; momentum accumulates a velocity so consistent directions speed up and oscillations cancel; RMSProp divides each step by a running RMS (root mean square, a typical size) of that parameter's gradients; Adam combines both with bias correction, and AdamW decouples weight decay. A schedule — typically warmup then cosine decay — gives big steps early and fine steps late."
 
 - *Q: Why warmup with Adam?* A: Early second-moment estimates are poor and gradients large; a small initial LR prevents destructive first updates.
 - *Q: Why is Adam's bias correction needed?* A: m and s start at 0, so early averages are biased towards 0; dividing by 1 − βᵗ fixes this.
@@ -504,7 +506,7 @@ Learning rate first. Adam/AdamW (lr ≈ 3e-4 to 1e-3) is the safe default; SGD+m
 ## 10.6 Initialization and vanishing/exploding gradients
 
 ### The problem it solves
-The gradient reaching layer 1 is a **product** of one factor per layer above it. Factors typically below 1 shrink it exponentially with depth — **vanishing gradients** (early layers barely learn); factors above 1 grow it exponentially — **exploding gradients** (huge updates, NaN loss). Forward activations can likewise fade to 0 or blow up.
+The gradient reaching layer 1 is a **product** of one factor per layer above it. Factors typically below 1 shrink it exponentially with depth — **vanishing gradients** (early layers barely learn); factors above 1 grow it exponentially — **exploding gradients** (huge updates, NaN loss; NaN, "not a number", is what invalid arithmetic such as infinity minus infinity produces). Forward activations can likewise fade to 0 or blow up.
 
 Two sources:
 1. **Activation derivatives.** The sigmoid derivative is at most 0.25, so ten sigmoid layers scale the gradient by at most 0.25¹⁰ ≈ 9.5 × 10⁻⁷.
@@ -517,9 +519,9 @@ Goal: keep the **variance** of activations (forward) and gradients (backward) ro
 |---|---|---|---|
 | **Xavier / Glorot** (2010) | 2 / (fan_in + fan_out) (normal version) | tanh, sigmoid, linear | `nn.init.xavier_normal_` / `xavier_uniform_` |
 | **He / Kaiming** (2015) | 2 / fan_in | ReLU family (ReLU zeroes half the signal, so double the variance) | `nn.init.kaiming_normal_(w, nonlinearity="relu")` |
-| **LeCun** | 1 / fan_in | SELU, linear | `kaiming_normal_(w, nonlinearity="linear")` |
+| **LeCun** | 1 / fan_in | SELU (a self-normalising activation), linear | `kaiming_normal_(w, nonlinearity="linear")` |
 
-Biases usually start at 0. **Never give all weights the same value** (e.g. zeros): every neuron in a layer would compute the same thing and get the same gradient forever — the **symmetry** is never broken. PyTorch's `nn.Linear` default (Kaiming-uniform with a = √5, i.e. U(−1/√fan_in, 1/√fan_in)) is fine for small nets; explicit He init is common for deep ReLU nets.
+Biases usually start at 0. **Never give all weights the same value** (e.g. zeros): every neuron in a layer would compute the same thing and get the same gradient forever — the **symmetry** is never broken. PyTorch's `nn.Linear` default (Kaiming-uniform with a = √5, i.e. U(−1/√fan_in, 1/√fan_in), a uniform distribution where every value in that range is equally likely) is fine for small nets; explicit He init is common for deep ReLU nets.
 
 `code/init_and_gradients.py` pushes random data through a **20-layer, 256-wide MLP** and measures the spread of activations and the gradient reaching layer 1:
 
@@ -546,7 +548,7 @@ Reading it: too-small weights → signal and gradient vanish (10⁻¹⁸); too-l
 | Good initialization (He/Xavier) | Keeps variance ≈ constant across layers at the start |
 | Normalization layers (BatchNorm, LayerNorm — §10.7) | Re-centre and re-scale activations at every layer |
 | Residual (skip) connections (Chapter 11) | Give gradients an identity "highway": y = x + F(x) |
-| Gradient clipping | Caps the gradient norm (`clip_grad_norm_(params, 1.0)`); standard for RNNs and transformers |
+| Gradient clipping | Caps the gradient norm (its overall length) (`clip_grad_norm_(params, 1.0)`); standard for RNNs and transformers |
 | Gated units (LSTM/GRU — Chapter 12) | Additive memory paths through time |
 
 ### Common mistakes
@@ -573,7 +575,7 @@ Many multiplied factors → vanishing/exploding gradients. ReLU + He init (tanh 
 ## 10.7 Regularization: fighting overfitting
 
 ### The problem it solves
-A big network can **memorise** a small training set, noise included, and fail on new data — **overfitting** (Chapter 1): training loss keeps falling while validation loss rises. **Regularization** is any technique that improves generalisation, usually by limiting how freely the model fits the training data.
+A big network can **memorise** a small training set, noise included, and fail on new data — **overfitting** (Chapter 1): training loss keeps falling while validation loss rises. **Regularization** is any technique that improves generalisation (performance on new, unseen data), usually by limiting how freely the model fits the training data.
 
 `code/regularization.py` deliberately overfits a 3-hidden-layer, 256-unit MLP (~133k parameters) on only **80** noisy two-moons points (validated on 2,000 fresh ones), then tries each remedy.
 
@@ -604,7 +606,7 @@ Early stopping (patience 30) epochs= 48  train acc=0.887  val acc=0.872  val los
 Every method improves validation **loss** (less over-confidence), but accuracy gains are modest; early stopping, augmentation and BatchNorm help most here. Real projects combine several.
 
 ### Dropout
-During training, each unit's output is zeroed with probability p (0.5 for large dense layers, 0.1–0.3 elsewhere), independently on every forward pass, so a different random "thinned" network trains at each step. Units can't rely on specific partners, so they can't form fragile **co-adaptations** and learn redundant, robust features — roughly an ensemble of many sub-networks. PyTorch's `nn.Dropout(p)` is **inverted dropout**: survivors are multiplied by 1/(1 − p) during training so the expected value is unchanged, and in `model.eval()` dropout does nothing. Example: p = 0.5 and activations (2, 4, 6, 8) might become (0, 8, 12, 0).
+During training, each unit's output is zeroed with probability p (0.5 for large dense layers, 0.1–0.3 elsewhere), independently on every forward pass, so a different random "thinned" network trains at each step. Units can't rely on specific partners, so they can't form fragile **co-adaptations** and learn redundant, robust features — roughly an ensemble (a combination of many models) of many sub-networks. PyTorch's `nn.Dropout(p)` is **inverted dropout**: survivors are multiplied by 1/(1 − p) during training so the expected value is unchanged, and in `model.eval()` dropout does nothing. Example: p = 0.5 and activations (2, 4, 6, 8) might become (0, 8, 12, 0).
 
 ### Weight decay (L2 regularization)
 Adds a penalty λ·Σw² to the loss — for SGD, equivalent to shrinking every weight by the factor (1 − 2ηλ) each step, since the penalty's gradient is 2λw. Smaller weights give a smoother function less able to chase noise. With Adam use **AdamW** (decay applied directly, not through the adaptive scaling). Typical λ: 1e-4 to 1e-2 for SGD-style L2, 0.01–0.1 for AdamW; biases and normalization parameters are often excluded.
@@ -626,7 +628,7 @@ At training time it uses batch statistics and updates **running averages** of μ
 Evaluate validation loss every epoch, keep a copy of the best weights, stop after `patience` epochs without improvement and restore the best copy. Free and simple — the best single method in the demo. Because the validation set now drives a decision, report final numbers on a separate test set.
 
 ### Data augmentation
-Create extra training examples with label-preserving transformations: flips, crops, small rotations and colour jitter for images; time shifts and noise for audio; synonym swaps or back-translation for text. In the demo, small Gaussian noise on the 2-D inputs plays this role; Chapter 11 covers image augmentation.
+Create extra training examples with label-preserving transformations: flips, crops, small rotations and colour jitter for images; time shifts and noise for audio; synonym swaps or back-translation (translating to another language and back to get a reworded sentence) for text. In the demo, small Gaussian (bell-curve-shaped random) noise on the 2-D inputs plays this role; Chapter 11 covers image augmentation.
 
 ### Trade-offs
 
@@ -643,7 +645,7 @@ Create extra training examples with label-preserving transformations: flips, cro
 - Evaluating in `train()` mode; randomly augmenting validation/test data; early-stopping on training loss.
 
 ### Real-world examples
-AlexNet (2012): dropout 0.5 in its dense layers plus heavy augmentation. ResNets: BatchNorm after every convolution. Transformers: LayerNorm, dropout, AdamW weight decay.
+AlexNet (2012): dropout 0.5 in its dense layers plus heavy augmentation. ResNets: BatchNorm after every convolution (the sliding-filter operation at the heart of image networks, Chapter 11). Transformers: LayerNorm, dropout, AdamW weight decay.
 
 ### In the interview
 **30-second answer:** "Dropout randomly zeroes units so the net can't rely on co-adapted features; weight decay penalises large weights; BatchNorm normalises per mini-batch, allowing higher learning rates and adding mild noise; early stopping halts when validation loss stops improving; augmentation adds label-preserving variants. More data is the best regularizer."
@@ -693,7 +695,7 @@ When one class is rare (fraud, disease, defects), always predicting the majority
 |---|---|---|
 | **Oversampling** | Repeat minority examples or synthesise new ones (SMOTE interpolates between minority neighbours; augmentation for images); `WeightedRandomSampler` | Overfitting to repeats |
 | **Undersampling** | Randomly drop majority examples | Throws away information |
-| **Class weights** | Minority mistakes cost more: `CrossEntropyLoss(weight=…)`, `BCEWithLogitsLoss(pos_weight=…)` | Probabilities no longer calibrated |
+| **Class weights** | Minority mistakes cost more: `CrossEntropyLoss(weight=…)`, `BCEWithLogitsLoss(pos_weight=…)` | Probabilities no longer calibrated (no longer match real frequencies) |
 | **Threshold tuning / better metrics** | Evaluate with precision, recall, F1, PR-AUC (Chapter 6); tune the decision threshold | — |
 
 From `code/practical_tips.py` (95% / 5% synthetic data). The weight for class c is n / (k · n_c) — n examples, k classes, n_c examples of class c: here 2000/(2·112) ≈ 8.9 for the minority and 2000/(2·1888) ≈ 0.53 for the majority:
@@ -769,9 +771,9 @@ Train-set normalisation; batches of 32–256; weights/resampling plus proper met
 | `torch.Tensor` | N-dimensional array like NumPy's, but can live on a GPU and track gradients |
 | **autograd** | Records operations on tensors with `requires_grad=True`; `.backward()` fills `.grad` |
 | `nn.Module` | Base class for models/layers; registers parameters and sub-modules; you write `forward()` |
-| `nn.Linear`, `nn.Conv2d`, `nn.ReLU`, `nn.Dropout`… | Ready-made layers (`torch.nn.functional` has stateless versions) |
+| `nn.Linear`, `nn.Conv2d`, `nn.ReLU`, `nn.Dropout`… | Ready-made layers (`torch.nn.functional` has stateless versions, i.e. plain functions that hold no parameters) |
 | `torch.optim` | Optimizers (SGD, Adam, AdamW…) and `lr_scheduler` |
-| `Dataset` / `DataLoader` | Index into data; batch, shuffle and (optionally) load in parallel worker processes |
+| `Dataset` / `DataLoader` | Index into data; batch, shuffle and (optionally) load in parallel worker processes (separate helper programs running at the same time) |
 
 ### How it works — the training loop
 Five lines per mini-batch: **forward → loss → zero_grad → backward → step.**
@@ -826,18 +828,18 @@ reloaded model test acc: 0.9814814814814815
 
 Checks: y = x² + 3x at x = 2 gives dy/dx = 2·2 + 3 = 7, exactly what `.backward()` put in `x.grad`; parameters = 13·32 + 32 + 32·3 + 3 = 547. `model.train()`/`model.eval()` switch dropout and BatchNorm behaviour; `torch.no_grad()` saves memory and time when gradients aren't needed; `state_dict()` (an ordered dict of parameter and buffer tensors) is the recommended way to save and load.
 
-**GPU:** `device = "cuda" if torch.cuda.is_available() else "cpu"` (Apple Silicon: `"mps"`); move the model and every batch with `.to(device)`. Mixed precision (`torch.autocast`) and `torch.compile(model)` speed up real workloads.
+**GPU:** `device = "cuda" if torch.cuda.is_available() else "cpu"` (Apple Silicon: `"mps"`); move the model and every batch with `.to(device)`. Mixed precision (`torch.autocast`: using 16-bit numbers where it is safe, to save memory and time) and `torch.compile(model)` (turns the model into optimised compiled code) speed up real workloads.
 
 **Custom Dataset:** for data on disk, subclass `Dataset` with `__len__` and `__getitem__(i)` returning one (x, y) pair; `DataLoader(ds, batch_size=64, shuffle=True, num_workers=4)` batches, shuffles and loads in parallel.
 
 ### Common mistakes
 - Forgetting `optimizer.zero_grad()`, or `model.eval()` / `torch.no_grad()` at evaluation.
 - dtype mismatches: `CrossEntropyLoss` wants `long` class labels; `BCEWithLogitsLoss` wants float targets shaped like the logits.
-- Calling `.item()`/`.numpy()` every step on a GPU — it forces a synchronisation.
+- Calling `.item()`/`.numpy()` every step on a GPU — it forces a synchronisation (the CPU must stop and wait for the GPU to finish).
 - Not shuffling the training loader.
 
 ### Real-world examples
-PyTorch underlies Meta's production models, OpenAI's research code and most Hugging Face models. Wrappers — PyTorch Lightning, Hugging Face `Trainer`, fastai — hide the loop but run exactly these five steps.
+PyTorch underlies Meta's production models, OpenAI's research code and most Hugging Face (a popular hub and library of pre-trained models) models. Wrappers — PyTorch Lightning, Hugging Face `Trainer`, fastai — hide the loop but run exactly these five steps.
 
 ### In the interview
 **30-second answer:** "Subclass nn.Module and write forward; wrap a Dataset in a DataLoader for batching and shuffling; each step is forward, loss, zero_grad, backward, optimizer.step. Switch model.train()/eval() for dropout and BatchNorm, use torch.no_grad() for inference, and save the state_dict."

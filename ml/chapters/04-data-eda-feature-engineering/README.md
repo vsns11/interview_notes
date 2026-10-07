@@ -1,10 +1,10 @@
 # Chapter 4 — Data, EDA and Feature Engineering
 
-Models are only as good as the rows you feed them. In practice most of an ML project's time goes into the work in this chapter: finding labels, looking at the data, cleaning it, turning raw columns into numbers a model can use, splitting it so your scores are honest, and wrapping all of that into one reproducible pipeline. A mediocre model on well-prepared data usually beats a clever model on messy data.
+Models are only as good as the rows you feed them. In practice most of an ML project's time goes into the work in this chapter: finding labels, looking at the data, cleaning it, turning raw columns into numbers a model can use, splitting it so your scores are honest, and wrapping all of that into one reproducible pipeline (a fixed chain of processing steps that gives the same result every time it runs). A mediocre model on well-prepared data usually beats a clever model on messy data.
 
 **What you'll learn**
 
-1. Where labels come from (outcomes, implicit feedback, humans, weak supervision, LLMs) and how to measure their quality.
+1. Where labels come from (outcomes, implicit feedback, humans, weak supervision, LLMs, i.e. large language models such as the ones behind chat assistants) and how to measure their quality.
 2. Exploratory data analysis (EDA) with plots.
 3. Cleaning: duplicates, impossible values, outliers, missing values.
 4. Encoding categories: one-hot, ordinal, target encoding (and its leakage trap), hashing.
@@ -15,14 +15,14 @@ Models are only as good as the rows you feed them. In practice most of an ML pro
 9. Class imbalance: weights, resampling, SMOTE, thresholds, recalibration.
 10. An end-to-end scikit-learn `Pipeline` + `ColumnTransformer`.
 
-All code is in `code/` and runs with the shared environment (Python 3.14, scikit-learn 1.9, pandas 3.0) with fixed seeds; outputs are real (long ones trimmed with "..."). Most scripts use a synthetic "subscription churn" table from `code/make_data.py`: 3,000 customers plus 25 duplicate rows, a skewed `income`, a 60-level `city`, dates, short reviews, missing values and typos (ages of 999, incomes of 9,999,999). **Churn** means a customer cancelling; about 12% churn.
+All code is in `code/` and runs with the shared environment (Python 3.14, scikit-learn 1.9, pandas 3.0) with fixed seeds; outputs are real (long ones trimmed with "..."). Most scripts use a synthetic "subscription churn" table from `code/make_data.py`: 3,000 customers plus 25 duplicate rows, a skewed (lopsided: most values small, a long tail of large ones) `income`, a 60-level `city`, dates, short reviews, missing values and typos (ages of 999, incomes of 9,999,999). **Churn** means a customer cancelling; about 12% churn.
 
 ---
 
 ## 4.1 Where training data comes from
 
 ### What it is
-Supervised learning needs **labels**: the correct answer (the **target**, y) attached to each example's **features** (the inputs, X). A **label pipeline** is the process that produces those (features, label) pairs. Labels do not appear by magic; someone or something has to generate them, and each source has its own cost, delay and bias.
+Supervised learning needs **labels**: the correct answer (the **target**, y) attached to each example's **features** (the inputs, X). A **label pipeline** is the process that produces those (features, label) pairs. Labels do not appear by magic; someone or something has to generate them, and each source has its own cost, delay and bias (a systematic tilt in one direction, as opposed to random error).
 
 Analogy: a student learning from past exam papers. The papers are useless without the answer key — and if the answer key is late, expensive, or written by a sloppy marker, the student learns the wrong lessons.
 
@@ -47,7 +47,7 @@ The first design question for any predictive system is "where does y come from, 
 **Label delay.** Outcome labels arrive late — chargebacks can take ~6 weeks to settle — so you train only on examples old enough to have a "mature" label and use faster **proxy labels** (rule hits, analyst decisions) for recent data. How delayed labels are joined to features and monitored in a live system is covered in [Chapter 16, section 16.3](../16-ml-in-production/README.md).
 
 ### Weak supervision in one paragraph
-Instead of hand-labeling 100,000 items, experts write dozens of **labeling functions** — small heuristics that output a label or "abstain". A **label model** estimates each function's accuracy from where they agree and disagree, and combines their votes into a probabilistic label per item; a normal model trained on those labels usually generalises beyond the rules. This is the idea behind Stanford's **Snorkel** project.
+Instead of hand-labeling 100,000 items, experts write dozens of **labeling functions** — small heuristics (rules of thumb) that output a label or "abstain". A **label model** estimates each function's accuracy from where they agree and disagree, and combines their votes into a probabilistic label per item; a normal model trained on those labels usually generalises (works on new examples) beyond the rules. This is the idea behind Stanford's **Snorkel** project.
 
 ### Human labeling, and measuring agreement
 Treat annotation as a system: **versioned guidelines** (a label means what guideline v3 says, stored with the data), **gold questions** (items with known answers mixed into each queue to track reviewer accuracy), **active learning** (spend labels on items the model is least sure about) and reuse of decisions the business already makes (fraud analysts' verdicts). Chapter 16 (16.3) covers running this in production; the tool to master here is the agreement statistic.
@@ -67,18 +67,18 @@ An LLM can label at scale from the written guideline, but inside a hierarchy: hu
 *Figure — LLM-assisted labeling with human audit (course diagram)*
 
 ### Negatives for retrieval, and privacy
-- **Manufactured negatives.** Logs record clicks, never the millions of items a user would *not* have clicked, so retrieval models create **negative** examples themselves — random, **in-batch** (other users' positives in the same batch) and **hard** (shown but not clicked; some are **false negatives** the user would have liked). See [Chapter 13, section 13.7](../13-recommenders-and-embeddings/README.md).
-- **Privacy.** Training data is user data: collect only what the task needs, restrict access, set retention; a hashed ID is still linkable across tables. More in [Chapter 16, section 16.3](../16-ml-in-production/README.md).
+- **Manufactured negatives.** Logs record clicks, never the millions of items a user would *not* have clicked, so retrieval models (models that pull a shortlist of candidate items out of a huge catalogue) create **negative** examples themselves — random, **in-batch** (other users' positives in the same batch, the small group of examples processed together in one training step) and **hard** (shown but not clicked; some are **false negatives** the user would have liked). See [Chapter 13, section 13.7](../13-recommenders-and-embeddings/README.md).
+- **Privacy.** Training data is user data: collect only what the task needs, restrict access, set retention (how long data is kept before deletion); a hashed ID (an ID scrambled by a one-way formula) is still linkable across tables. More in [Chapter 16, section 16.3](../16-ml-in-production/README.md).
 
 ### Common mistakes
-- Assuming labels "exist" in the warehouse without asking who creates them, when, and how reliably.
-- Treating clicks as ground-truth relevance (they're biased toward what was shown and where).
+- Assuming labels "exist" in the warehouse (the company's central analytics database) without asking who creates them, when, and how reliably.
+- Treating clicks as ground-truth (the true, correct answer) relevance (they're biased toward what was shown and where).
 - Changing the labeling guideline without versioning it.
 - Reporting raw percent agreement instead of a chance-corrected κ.
 - Letting an LLM label everything with no human-audited slices.
 
 ### Real-world examples
-- **YouTube**'s 2016 recommendation paper (Covington et al.) trains its ranking model on implicit feedback — impressions that were clicked or not — and weights each clicked impression by its watch time, so a long watch counts more than a quick click.
+- **YouTube**'s 2016 recommendation paper (Covington et al.) trains its ranking model on implicit feedback — impressions (times a video was shown to a user) that were clicked or not — and weights each clicked impression by its watch time, so a long watch counts more than a quick click.
 - Content-moderation teams at large platforms run the "guidelines + reviewers + gold questions + agreement" loop above.
 - Card networks and payment companies use chargebacks (slow) and analyst decisions (fast) as fraud labels.
 
@@ -105,14 +105,14 @@ Labels come from outcomes (late), behaviour (fast but biased), people (costly), 
 **EDA** is looking at your data — with summary tables and plots — before modeling, to learn its shape, spot problems and form hypotheses. Think of it as a doctor's first examination before any treatment.
 
 ### Why it matters
-EDA finds problems that silently wreck models: impossible values, sentinel codes (like 9,999,999 meaning "unknown"), duplicates, skewed columns, leaky columns, and imbalance. It also tells you which transformations and models make sense.
+EDA finds problems that silently wreck models: impossible values, sentinel codes (like 9,999,999 meaning "unknown"), duplicates, skewed columns, leaky columns (columns that secretly contain the answer; see 4.8), and imbalance (one class far rarer than the other; see 4.9). It also tells you which transformations and models make sense.
 
 ### How it works — a checklist
 1. **Shape and types** — numeric / categorical / dates / text columns.
 2. **Missingness** — share missing per column; is it related to the target?
-3. **Distributions** — histograms (skew, outliers, spikes at round numbers); category counts (**cardinality** = number of distinct values; rare levels).
+3. **Distributions** — histograms (bar charts of how many values fall in each range: skew, outliers, spikes at round numbers); category counts (**cardinality** = number of distinct values; rare levels).
 4. **Target** — class balance, or the distribution for regression.
-5. **Relationships** — each feature vs the target (rate per bucket, box plots) and vs each other (correlation matrix).
+5. **Relationships** — each feature vs the target (rate per bucket, box plots, which show the median, quartiles and outliers) and vs each other (correlation matrix, a table of the correlation for every pair of columns).
 6. **Sanity checks** — duplicates, impossible ranges, IDs that predict the target (possible leakage).
 
 **Correlation, briefly.** **Pearson** correlation measures *linear* association (−1 to 1). **Spearman** correlation is Pearson on the *ranks*, so it captures any **monotonic** (always-increasing or always-decreasing) relationship and is robust to outliers and skew — a good EDA default. Neither captures a U shape (correlation ≈ 0), and correlation is not causation.
@@ -155,7 +155,7 @@ usage_hours       -0.08
 support_tickets    0.12
 ```
 
-How to read it: `age` has max 999 and a std of 37 years — typos. `income` has mean ≫ median (70.8k vs 49.1k): a long right tail plus a 9,999,999 sentinel. Churn is 11.7% (mildly imbalanced). Tenure (−) and support tickets (+) relate to churn, as we'd expect.
+How to read it: `age` has max 999 and a std (standard deviation: the typical distance of a value from the average) of 37 years — typos. `income` has mean ≫ median (70.8k vs 49.1k): a long right tail plus a 9,999,999 sentinel. Churn is 11.7% (mildly imbalanced). Tenure (−) and support tickets (+) relate to churn, as we'd expect.
 
 ![Income is right-skewed; log(1+income) is roughly bell-shaped; the age box plot exposes the 999 typos](img/eda_distributions.png)
 
@@ -189,11 +189,11 @@ Look before you model: types, missingness, distributions, target balance, featur
 Fixing or removing data problems so the model learns from reality, not from errors: **duplicates**, **impossible values**, **outliers**, and **missing values**.
 
 ### Why it matters
-Duplicates leak between train and test and overweight some examples; typos distort means and scales; many estimators (e.g. `LinearRegression`, `SVC`) reject NaNs outright.
+Duplicates leak between train and test and overweight some examples; typos distort means and scales; many estimators (scikit-learn's word for models; e.g. `LinearRegression`, `SVC`, a support vector classifier) reject NaNs ("not a number", the marker for a missing value) outright.
 
 ### How it works
 
-**1. Duplicates.** Remove exact duplicate rows (`df.drop_duplicates()`), then check the entity key (`customer_id`) is unique. Near-duplicates (same text with different whitespace, a resized image) need fuzzy matching.
+**1. Duplicates.** Remove exact duplicate rows (`df.drop_duplicates()`), then check the entity key (the column identifying each real-world thing, here `customer_id`) is unique. Near-duplicates (same text with different whitespace, a resized image) need fuzzy matching (matching that tolerates small differences).
 
 **2. Impossible values are errors, not outliers.** An age of 999 or an income of 9,999,999 is a data-entry error or a sentinel code. Convert them to missing (NaN) and handle them with the missing-value strategy.
 
@@ -201,14 +201,14 @@ Duplicates leak between train and test and overweight some examples; typos disto
 
 | Method | Rule | Good for | Caveat |
 |---|---|---|---|
-| **IQR fences** | Flag x < Q1 − 1.5·IQR or x > Q3 + 1.5·IQR (IQR = Q3 − Q1) | Any distribution, robust | Flags many points on skewed data |
-| **z-score** | Flag \|x − mean\| / std > 3 | Roughly normal data | Mean and std are themselves pulled by outliers |
+| **IQR fences** | Flag x < Q1 − 1.5·IQR or x > Q3 + 1.5·IQR (Q1, Q3 = 25th and 75th percentiles; IQR = Q3 − Q1) | Any distribution, robust | Flags many points on skewed data |
+| **z-score** | Flag \|x − mean\| / std > 3 | Roughly normal (bell-shaped) data | Mean and std are themselves pulled by outliers |
 | **Transform first** | Apply log, then z-score | Right-skewed positive data | — |
 | **Winsorize / clip** | Cap values at e.g. the 1st and 99th percentiles | Keeping rows while limiting influence | Choose caps on training data only |
-| **Model-based** | `IsolationForest`, `LocalOutlierFactor` | Multivariate outliers | More to tune |
+| **Model-based** | `IsolationForest`, `LocalOutlierFactor` | Multivariate outliers (odd only in combination) | More to tune |
 
 **4. Missing values.** First ask *why* they're missing:
-- **MCAR** (missing completely at random) — e.g. a sensor randomly drops readings. Any sensible imputation is fine.
+- **MCAR** (missing completely at random) — e.g. a sensor randomly drops readings. Any sensible imputation (filling in the missing values) is fine.
 - **MAR** (missing at random given other columns) — e.g. older customers skip the income field. Other columns can predict the missing value.
 - **MNAR** (missing not at random) — the value itself causes the missingness, e.g. high earners hide income. Missingness is itself a signal: add a **missing-indicator** column.
 
@@ -222,7 +222,7 @@ Strategies:
 | **Missing indicator** (`add_indicator=True`) | Extra 0/1 column "was missing" | Missingness may be informative (MNAR) |
 | KNN (`KNNImputer`) | Average of the k most similar rows | Other features predict this one; scale features first |
 | Iterative / MICE (`IterativeImputer`) | Models each column from the others, round-robin | MAR data with correlated columns (still experimental: first `from sklearn.experimental import enable_iterative_imputer`) |
-| Leave it to the model | `HistGradientBoosting*`, XGBoost, LightGBM handle NaN natively | Tree-boosting models |
+| Leave it to the model | `HistGradientBoosting*`, XGBoost, LightGBM (gradient-boosted tree libraries) handle NaN natively | Tree-boosting models |
 
 ```python
 # code/cleaning.py (key parts)
@@ -270,10 +270,10 @@ What this shows:
 - On a skewed column, the IQR rule flags 141 perfectly normal high earners and the raw z-score flags 50; after a log transform only 4 are extreme. **Skew is not the same as outliers.**
 - Dropping every row with any missing value would throw away 21% of the data.
 - **Fancy imputers are not automatically better.** Here income was generated independently of the other columns, so KNN and MICE have nothing to learn from (MICE collapses to the mean) and the median wins. The lesson is the *method*: hide known values and measure.
-- Churn is 15.2% when income is missing vs 11.4% when present — but missingness was random by construction, so the gap is chance (≈1.8 standard errors with 243 rows). Test "informative missingness" rather than assume it; an indicator column lets the model use it if it's real.
+- Churn is 15.2% when income is missing vs 11.4% when present — but missingness was random by construction, so the gap is chance (≈1.8 standard errors with 243 rows; a standard error is the typical size of chance wobble in an estimate). Test "informative missingness" rather than assume it; an indicator column lets the model use it if it's real.
 
 ### Trade-offs
-Simple imputation is fast, stable and easy to reproduce at serving time; model-based imputation can be more accurate but is slower and one more thing to monitor. Any imputation shrinks variance (every filled value is "typical").
+Simple imputation is fast, stable and easy to reproduce at serving time (when the deployed model answers live requests); model-based imputation can be more accurate but is slower and one more thing to monitor. Any imputation shrinks variance (the spread of the column), because every filled value is "typical".
 
 ### Common mistakes
 - Computing imputation statistics (mean, median, clip percentiles) on the whole dataset before splitting — leakage (4.8); fit on training data only.
@@ -308,23 +308,23 @@ Most models only accept numbers. **Encoding** turns categories like `"ios"` or `
 | **One-hot** (`OneHotEncoder`, `pd.get_dummies`) | One 0/1 column per category | `device=ios` → `[0,1,0,0]` | Nominal (unordered) categories with low–moderate cardinality | Width explodes with many levels |
 | **Ordinal** (`OrdinalEncoder`) | One integer column | `basic/standard/premium` → 0/1/2 | Categories with a real order; also fine for tree models | For linear models it imposes a false order and equal spacing on nominal data |
 | **Target encoding** (`TargetEncoder`) | Each category → (smoothed) mean of y for that category | `city_17` → 0.19 churn rate | High-cardinality categories (hundreds or thousands of levels) | **Target leakage** if computed on the same rows the model trains on |
-| **Hashing** (`FeatureHasher`) | Category → hash(value) mod m buckets | `city_17` → column 13 | Huge or unbounded ID spaces, streaming data | **Collisions**: unrelated values share a bucket; not reversible |
+| **Hashing** (`FeatureHasher`) | Category → hash(value) mod m buckets (remainder after dividing by m) | `city_17` → column 13 | Huge or unbounded ID spaces, streaming data (arriving continuously) | **Collisions**: unrelated values share a bucket; not reversible |
 
 Notes:
 - **Label encoding** is the name often used for "category → integer code". In scikit-learn, `LabelEncoder` is meant for the *target* y; use `OrdinalEncoder` for features.
-- **Dummy-variable trap**: with an intercept, the k one-hot columns always sum to 1, so they're perfectly collinear with the intercept and the coefficients aren't unique. Classical OLS (e.g. statsmodels) then needs `drop="first"`; scikit-learn's `LinearRegression` still fits (section 5.1), and regularised models and trees don't care.
-- **Embeddings**: in deep learning each ID gets a learned dense vector (e.g. 32 numbers) — the standard for user and item IDs ([Chapter 13](../13-recommenders-and-embeddings/README.md)).
+- **Dummy-variable trap**: with an intercept (the model's constant term), the k one-hot columns always sum to 1, so they're perfectly collinear (one is an exact combination of the others) with the intercept and the coefficients (the learned weights) aren't unique. Classical OLS (ordinary least squares, plain unpenalised linear regression; e.g. the statsmodels library) then needs `drop="first"`; scikit-learn's `LinearRegression` still fits (section 5.1), and regularised models and trees don't care.
+- **Embeddings**: in deep learning each ID gets a learned dense vector (a short list of real numbers, e.g. 32, almost all non-zero) — the standard for user and item IDs ([Chapter 13](../13-recommenders-and-embeddings/README.md)).
 - Unseen categories at prediction time: `OneHotEncoder(handle_unknown="ignore")` outputs all zeros; `TargetEncoder` uses the global mean.
 
 ### Target encoding and its leakage trap
 **Naive target encoding** replaces each category with its mean target on the training rows. For a category with 2–3 rows, that mean is basically *those rows' own labels* — the feature copies the answer, so the model shines on training data and fails on new data.
 
 **The fix** (what scikit-learn's `TargetEncoder` does):
-1. **Cross-fitting** — in `fit_transform`, split the training data into k folds; encode each fold using target means learned on the *other* folds, so no row sees its own label.
+1. **Cross-fitting** — in `fit_transform`, split the training data into k folds (equal-sized chunks); encode each fold using target means learned on the *other* folds, so no row sees its own label.
 2. **Smoothing / shrinkage** — blend each category's mean with the global mean, weighting by the category's size, so rare categories stay close to the global rate.
 3. At prediction time (`transform`), use encodings learned on the full training set.
 
-CatBoost solves the same problem differently with "ordered target statistics" (each row is encoded using only rows before it in a random permutation).
+CatBoost (a gradient-boosting library from Yandex) solves the same problem differently with "ordered target statistics" (each row is encoded using only rows before it in a random permutation, i.e. a random ordering).
 
 ```python
 # code/encoding.py (key parts)
@@ -367,11 +367,11 @@ Reading it: **AUC** (area under the ROC curve, Chapter 6) is 0.5 for random gues
 - Don't target-encode without cross-fitting, and never with statistics computed on validation/test rows.
 
 ### Real-world examples
-- Feature hashing ("the hashing trick") was popularised for large-scale spam filtering and ad click prediction, and is built into Vowpal Wabbit and scikit-learn's `FeatureHasher`/`HashingVectorizer`.
+- Feature hashing ("the hashing trick") was popularised for large-scale spam filtering and ad click prediction, and is built into Vowpal Wabbit (a fast open-source learning tool) and scikit-learn's `FeatureHasher`/`HashingVectorizer`.
 - CatBoost (Yandex) exists largely to handle categorical features safely with ordered target statistics.
 
 ### In the interview
-**30 seconds:** *"Low-cardinality nominal → one-hot. Ordered → ordinal. High-cardinality → target encoding (cross-fitted and smoothed), hashing if the ID space is unbounded, or embeddings in a neural model. Target encoding's risk is a row's own label leaking into its feature, so I encode out-of-fold."*
+**30 seconds:** *"Low-cardinality nominal → one-hot. Ordered → ordinal. High-cardinality → target encoding (cross-fitted and smoothed), hashing if the ID space is unbounded, or embeddings in a neural model. Target encoding's risk is a row's own label leaking into its feature, so I encode out-of-fold (using statistics from the other folds only)."*
 
 - *"Hashing vs target encoding?"* — Hashing needs no labels, no state and handles new values, but collides and isn't interpretable; target encoding is compact and informative but needs leakage protection and can go stale.
 - *"Why is ordinal encoding OK for trees?"* — Trees split on thresholds and can isolate any level with several splits; the false order just costs a few extra splits.
@@ -389,7 +389,7 @@ One-hot for small unordered sets, ordinal for ordered ones, target encoding (out
 ## 4.5 Feature scaling
 
 ### What it is
-**Scaling** puts numeric features on comparable ranges. Without it, a feature measured in thousands (income, proline) dominates one measured in fractions.
+**Scaling** puts numeric features on comparable ranges. Without it, a feature measured in thousands (income, proline, a chemical measurement in the wine dataset) dominates one measured in fractions.
 
 | Scaler | Formula | Result | Sensitive to outliers? |
 |---|---|---|---|
@@ -401,10 +401,10 @@ One-hot for small unordered sets, ordinal for ordered ones, target encoding (out
 Scaling changes the *units*, not the *shape* — a skewed feature stays skewed after `StandardScaler`. To change the shape, use a log or power transform.
 
 ### Why it matters — and which models care
-- **Distance-based models** (k-NN, k-means, RBF-kernel SVM): the widest feature dominates the distance.
-- **Gradient-descent models** (linear/logistic regression, neural nets) converge much faster on similar scales (section 5.4 shows why).
-- **Regularised models** (Ridge, Lasso, logistic regression's default L2) penalise coefficient size, which depends on units.
-- **PCA** finds directions of largest variance — unscaled, that's just the column with the biggest units.
+- **Distance-based models** (k-NN, which predicts from the nearest stored rows; k-means, which groups nearby rows; RBF-kernel SVM, a support vector machine that measures similarity with a bell-shaped function of distance): the widest feature dominates the distance.
+- **Gradient-descent models** (trained by repeatedly stepping downhill on the loss; linear/logistic regression, neural nets) converge (settle on their final weights) much faster on similar scales (section 5.4 shows why).
+- **Regularised models** (models with a penalty on large weights to curb overfitting: Ridge, Lasso, logistic regression's default L2) penalise coefficient size, which depends on units.
+- **PCA** (principal component analysis, which compresses many features into a few summary directions) finds directions of largest variance — unscaled, that's just the column with the biggest units.
 - **Trees don't care**: a split "income ≤ 50,000" works the same in dollars or thousands.
 
 ```python
@@ -472,7 +472,7 @@ Standardize for distance/gradient/penalty-based models, robust-scale with outlie
 
 **1. Interactions and polynomials.** If the target depends on a *product* (revenue = price × quantity), add that product. `PolynomialFeatures(degree=2)` adds all squares and pairwise products.
 
-**2. Binning (discretization).** Cut a numeric feature into intervals (equal-width, quantile or domain-chosen) and one-hot them (`KBinsDiscretizer`), so a linear model can fit non-monotonic shapes such as risk that's high for both young and old customers.
+**2. Binning (discretization).** Cut a numeric feature into intervals (equal-width, quantile, meaning each bin holds the same number of rows, or domain-chosen) and one-hot them (`KBinsDiscretizer`), so a linear model can fit non-monotonic shapes such as risk that's high for both young and old customers.
 
 **3. Log and power transforms for heavy tails.** A **heavy tail** means most values are small but a few are enormous (income, counts, prices). `log1p(x) = log(1 + x)` compresses the tail and handles zeros.
 
@@ -524,10 +524,10 @@ churn ~ TF-IDF(review) alone: AUC = 0.736
 - raw tf·idf: slow 3 × 1.511 = 4.533; will 1.916; cancel 1.916.
 - L2 norm = √(4.533² + 1.916² + 1.916²) = √27.89 = 5.281 → slow 0.858, will 0.363, cancel 0.363. ✓ matches the output.
 
-The interaction feature takes R² from 0.893 to 0.997 because the true relationship is a product. Binning takes AUC from 0.53 (a single slope can't draw a U) to 0.75.
+The interaction feature takes R² (the share of the target's variation the model explains; 1 is perfect) from 0.893 to 0.997 because the true relationship is a product. Binning takes AUC from 0.53 (a single slope can't draw a U) to 0.75.
 
 ### Feature groups in production systems
-When brainstorming features for a real product, think in four groups so you don't miss a whole family. For predicting a food-delivery ETA at checkout:
+When brainstorming features for a real product, think in four groups so you don't miss a whole family. For predicting a food-delivery ETA (estimated time of arrival) at checkout:
 
 - **Entity** — one participant on its own, changing rarely (the restaurant's typical kitchen time, the courier's vehicle).
 - **Behavioural aggregate** — a count or average over a recent window (orders received in the past 30 minutes); worthless unless fresh.
@@ -537,10 +537,10 @@ When brainstorming features for a real product, think in four groups so you don'
 ![Four feature groups and the compute path each needs](img/course_feature_groups.svg)
 *Figure — feature groups and their compute paths (course diagram)*
 
-One rule applies from day one: **point-in-time availability** — every feature must be computable *at prediction time* from data that existed then (section 4.8 shows what happens otherwise). How each group is computed and served (nightly batch vs streaming, the offline/online **feature store**, latency budgets and fallbacks for request-time features) is the subject of [Chapter 16, section 16.4](../16-ml-in-production/README.md).
+One rule applies from day one: **point-in-time availability** — every feature must be computable *at prediction time* from data that existed then (section 4.8 shows what happens otherwise). How each group is computed and served (nightly batch vs streaming, the offline/online **feature store** (a system that stores feature values and serves the same values to training and to live prediction), latency budgets (the maximum time a request may take; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) and fallbacks for request-time features) is the subject of [Chapter 16, section 16.4](../16-ml-in-production/README.md).
 
 ### Trade-offs
-More features can capture more signal but add overfitting risk, compute, latency and maintenance (each feature is a pipeline that can break); degree-2 polynomials on 100 features give 5,150 columns. Trees and neural nets learn interactions themselves, so explicit engineering matters most for linear models and for domain knowledge (ratios, time windows) no model can invent.
+More features can capture more signal but add overfitting (memorising training quirks instead of general patterns) risk, compute, latency and maintenance (each feature is a pipeline that can break); degree-2 polynomials on 100 features give 5,150 columns. Trees and neural nets learn interactions themselves, so explicit engineering matters most for linear models and for domain knowledge (ratios, time windows) no model can invent.
 
 ### Common mistakes
 - Features that use future information (a 30-day average that includes days *after* the prediction).
@@ -549,7 +549,7 @@ More features can capture more signal but add overfitting risk, compute, latency
 
 ### Real-world examples
 - **Uber** and **DoorDash** have publicly described ETA models that combine entity, real-time aggregate and context features.
-- Search engines long ranked with TF-IDF-style scores (BM25 is its refined descendant), still used as a first-stage retriever.
+- Search engines long ranked with TF-IDF-style scores (BM25 is its refined descendant), still used as a first-stage retriever (the quick step that picks a few hundred candidates before a slower, smarter ranker).
 - Google's **Wide & Deep** recommender (2016) used hand-crafted cross features in the "wide" linear part.
 
 ### In the interview
@@ -619,7 +619,7 @@ If the goal is "future behaviour of *known* users", the same user may appear in 
 |---|---|---|
 | Random | Simple, uses data efficiently | Optimistic when data has time order or repeated entities |
 | Stratified | Stable class ratios | Only for classification labels (or binned targets) |
-| Time-based | Matches deployment; exposes drift | Less training data for early folds; must respect label delay |
+| Time-based | Matches deployment; exposes drift (data changing over time) | Less training data for early folds; must respect label delay |
 | Group | Honest for new entities | Fewer effective samples; groups vary in size |
 
 Sizes: with millions of rows, 98/1/1 is fine (1% is still tens of thousands); with a few thousand, use cross-validation instead of a single validation set.
@@ -627,7 +627,7 @@ Sizes: with millions of rows, 98/1/1 is fine (1% is still tens of thousands); wi
 ### Common mistakes
 - Tuning on the test set ("peeking") — the test score is then biased upward.
 - Random splits on time-ordered data — the model trains on the future.
-- Splitting *after* oversampling or deduplication mistakes, so copies of the same row land in train and test.
+- Splitting *after* oversampling (duplicating rare-class rows, 4.9) or deduplication mistakes, so copies of the same row land in train and test.
 
 ### Self-check
 1. Why stratify? → Keep class proportions stable across splits, especially for rare classes.
@@ -642,7 +642,7 @@ Train to learn, validate to choose, test once to report. Stratify for classifica
 ## 4.8 Data leakage
 
 ### What it is
-**Data leakage** is when information that won't be available at prediction time sneaks into training or evaluation. The model looks brilliant offline and disappoints (or fails) in production. It's the single most common reason for "too good to be true" results.
+**Data leakage** is when information that won't be available at prediction time sneaks into training or evaluation. The model looks brilliant offline (when evaluated on historical data) and disappoints (or fails) in production (the live system). It's the single most common reason for "too good to be true" results.
 
 ### The main kinds — and how to prevent each
 
@@ -655,7 +655,7 @@ Train to learn, validate to choose, test once to report. Stratify for classifica
 | **Temporal leakage** — random split on time-ordered data | Training on next month to predict this month | Split by time |
 | **Leaky identifiers** | IDs assigned in an order that correlates with the outcome | Drop IDs; be suspicious of any feature with huge importance |
 
-A famous published case: in the KDD Cup 2008 breast-cancer challenge, patient ID numbers turned out to be predictive of the label because of how the data had been assembled — a leak, not medicine.
+A famous published case: in the KDD Cup 2008 breast-cancer challenge (KDD Cup is a long-running data-mining competition), patient ID numbers turned out to be predictive of the label because of how the data had been assembled — a leak, not medicine.
 
 ### Three runnable demonstrations
 
@@ -679,7 +679,7 @@ Output:
 ```
 
 - **(a)** On pure noise honest accuracy is ~0.5 (0.57 is chance on 100 rows). Selecting the 20 "best" features with *all* labels, then cross-validating, reports **90%** — selection already saw the validation labels. Selection inside the pipeline fixes it.
-- **(b)** The leaky feature lifts offline AUC from 0.75 to 0.975. In production the field is always empty at prediction time; the model relied on it, so at the offline-tuned threshold it catches **0%** of churners.
+- **(b)** The leaky feature lifts offline AUC from 0.75 to 0.975. In production the field is always empty at prediction time; the model relied on it, so at the offline-tuned threshold (the probability cut-off above which the model says "will churn") it catches **0%** of churners.
 - **(c)** When the world changes over time, a random split mixes future rows into training and reports 0.75; the honest forward-in-time estimate is 0.55.
 
 A general rule on top of the table: be suspicious of any score far above published baselines — investigate before celebrating.
@@ -687,7 +687,7 @@ A general rule on top of the table: be suspicious of any score far above publish
 ### In the interview
 **30 seconds:** *"Leakage is training on information you won't have at prediction time. I prevent it with point-in-time-correct features, time or entity splits that match deployment, all preprocessing inside the CV pipeline, deduplication across splits, and treating suspiciously strong features as bugs until proven otherwise."*
 
-- *"Your offline AUC is 0.99 on fraud. What do you check first?"* — Feature timestamps vs the label time (post-outcome fields, aggregates including the current event), split method, duplicates, and top feature importances.
+- *"Your offline AUC is 0.99 on fraud. What do you check first?"* — Feature timestamps vs the label time (post-outcome fields, aggregates including the current event), split method, duplicates, and top feature importances (scores of how much the model relies on each feature).
 - *"Is fitting a StandardScaler on all data really a problem?"* — Usually a small bias, but it's the same mistake that becomes huge with target encoding or feature selection, so never do it.
 
 ### Self-check
@@ -706,7 +706,7 @@ If the model couldn't know it at prediction time, it mustn't see it in training.
 **Class imbalance** means one class is much rarer than the other — fraud (e.g. 0.2% of transactions, about 1 in 500), disease, churn, ad clicks. The rare class is usually the one you care about.
 
 ### Why it matters
-**Accuracy lies**: if 99.8% of transactions are legitimate, always saying "legitimate" is 99.8% accurate and catches no fraud. **Learning is harder**: the loss is dominated by negatives, so models tend to predict low probabilities for everything. And millions of easy negatives **waste compute**.
+**Accuracy lies**: if 99.8% of transactions are legitimate, always saying "legitimate" is 99.8% accurate and catches no fraud. **Learning is harder**: the loss (the error score training minimises) is dominated by negatives, so models tend to predict low probabilities for everything. And millions of easy negatives **waste compute**.
 
 ### How it works — the toolbox
 
@@ -720,13 +720,15 @@ If the model couldn't know it at prediction time, it mustn't see it in training.
 | **SMOTE** | Create *synthetic* minority points between a minority point and one of its k nearest minority neighbours | Inflated; can blur class boundaries |
 | **Recalibration** | Map scores back to real-world probabilities | Fixes the above |
 
+> **Key terms — imbalance metrics:** *Precision* is the share of rows flagged positive that really are positive; *recall* is the share of real positives the model catches; *F1* combines the two into one score that is high only when both are. *ROC-AUC* measures how well the model ranks positives above negatives (0.5 = random, 1 = perfect); *PR-AUC* summarises the precision–recall trade-off across all thresholds and, unlike ROC-AUC, is very sensitive to how rare the positives are, which makes it the more honest ranking metric for rare classes. Chapter 6 covers them in depth.
+
 **SMOTE** (Synthetic Minority Over-sampling Technique, Chawla et al., 2002): for a minority point a, pick one of its k nearest minority neighbours b, and create a + u·(b − a) with u random in [0, 1]. It's in the `imbalanced-learn` library (`imblearn.over_sampling.SMOTE`); here it's written from scratch.
 
 **Recalibrating after negative downsampling.** If you keep a fraction w of negatives, every negative now counts w times as often, so the model's **odds** p/(1 − p) are inflated by 1/w. Multiply the odds back by w and convert to a probability:
 
 odds_true = w · p/(1 − p)  →  p_true = odds_true / (1 + odds_true) = p·w / (p·w + (1 − p))
 
-*Worked example:* w = 0.1, model outputs p = 0.5 on the downsampled data → p_true = 0.05 / (0.05 + 0.5) = **0.091**. (Keeping 1 in 10 negatives on a 0.2% base rate raises the positive share to about 2%.) General recalibration methods (Platt scaling, isotonic regression) are in Chapter 6.
+*Worked example:* w = 0.1, model outputs p = 0.5 on the downsampled data → p_true = 0.05 / (0.05 + 0.5) = **0.091**. (Keeping 1 in 10 negatives on a 0.2% base rate raises the positive share to about 2%.) General recalibration methods (Platt scaling, isotonic regression: two standard ways of mapping raw scores to honest probabilities) are in Chapter 6.
 
 **Resample only the training data**, and only *after* splitting — never the validation or test sets, which must reflect the real population.
 
@@ -765,15 +767,15 @@ plain model, threshold  0.1: precision 0.426  recall 0.496
 
 What to take from this:
 - The do-nothing baseline has **97.8% accuracy** and zero recall — accuracy is the wrong metric.
-- **Ranking metrics barely change** (ROC-AUC ≈ 0.90–0.92, PR-AUC ≈ 0.37–0.41). Resampling and weighting mostly *move the operating point* at threshold 0.5 — which threshold moving on the plain model does for free.
+- **Ranking metrics barely change** (ROC-AUC ≈ 0.90–0.92, PR-AUC ≈ 0.37–0.41). Resampling and weighting mostly *move the operating point* (the precision/recall balance you get at a given threshold) at threshold 0.5 — which threshold moving on the plain model does for free.
 - Every rebalancing method inflates the mean predicted probability (0.07–0.12 vs a true 0.022); the prior correction brings the downsampled model back to 0.021 with ranking untouched.
 - SMOTE isn't magic: the most recall, the worst precision, slightly lower PR-AUC.
 
 ### Trade-offs
-Downsampling is the fastest (a real win at billions of rows) but discards data; class weights keep all data at more compute; oversampling/SMOTE enlarge the training set and risk overfitting copies or inventing unrealistic points (SMOTE works poorly with categorical or high-dimensional features); threshold moving is free and keeps calibrated probabilities but doesn't help the model *learn* the minority better. All but threshold moving need recalibration if scores are used as probabilities.
+Downsampling is the fastest (a real win at billions of rows) but discards data; class weights keep all data at more compute; oversampling/SMOTE enlarge the training set and risk overfitting copies or inventing unrealistic points (SMOTE works poorly with categorical or high-dimensional, i.e. very many, features); threshold moving is free and keeps calibrated probabilities (where a predicted 0.3 really means about a 30% chance) but doesn't help the model *learn* the minority better. All but threshold moving need recalibration if scores are used as probabilities.
 
 ### When not to use it
-If the model is only used for ranking (top-k alerts) or you'll choose the threshold on a precision–recall curve anyway, rebalancing is often unnecessary. Strong models like gradient boosting on moderately imbalanced data (say 5–20% positives) usually do fine without it — just use the right metric.
+If the model is only used for ranking (top-k alerts) or you'll choose the threshold on a precision–recall curve anyway, rebalancing is often unnecessary. Strong models like gradient boosting (an ensemble of decision trees, each built to fix the errors of the ones before) on moderately imbalanced data (say 5–20% positives) usually do fine without it — just use the right metric.
 
 ### Common mistakes
 - Oversampling **before** splitting — copies of the same positive end up in train and test.
@@ -826,7 +828,7 @@ flowchart LR
 1. **No leakage** — in cross-validation every learned step (imputer medians, scaler means, TF-IDF vocabulary, target encodings) is re-fitted on each training fold only.
 2. **No training–serving skew** (production features differing from training features) — the same code transforms data at training and prediction time.
 3. **Tuning across steps** — `GridSearchCV` tunes preprocessing and model together via `step__param` names.
-4. **One artifact to ship** — `joblib.dump(pipe, "model.joblib")`.
+4. **One artifact to ship** (a single saved file to deploy) — `joblib.dump(pipe, "model.joblib")`.
 
 ```python
 # code/pipeline_end_to_end.py (key parts)
@@ -879,12 +881,12 @@ raw new row with unseen city + missing device -> p(churn) = 0.368
 How to read it:
 - The model recovers the real drivers: tenure and usage lower churn; tickets and negative review words raise it; age and income (pure noise here) get ≈ 0. The `city` coefficient looks huge only because a target-encoded value is a probability (0 to ~0.3), not a standardized number — compare coefficients only on the same scale.
 - PR-AUC 0.41 vs 0.117 for a no-skill model: a large lift. Always report a baseline next to the model.
-- The best `C` (inverse regularisation strength) is 10, with CV scores nearly flat for C ≥ 10 (0.414 at both 10 and 100). Had the winner sat at the grid's edge with scores still rising, the right move would be to extend the grid (Chapter 6).
+- The best `C` (inverse regularisation strength: a smaller C means a stronger penalty on large weights) is 10, with CV scores nearly flat for C ≥ 10 (0.414 at both 10 and 100). Had the winner sat at the grid's edge with scores still rising, the right move would be to extend the grid (Chapter 6).
 - A raw row with a never-seen city and a missing device still gets a sensible prediction.
 
 **Useful API details**
 - `remainder="drop"` is the default (`"passthrough"` keeps untouched columns). Pass a list `["plan"]` for 2-D transformers, a single string `"review"` for text vectorizers that expect 1-D input.
-- `pipe.named_steps["pre"].get_feature_names_out()` names every output column (custom `FunctionTransformer`s need `feature_names_out`); `set_output(transform="pandas")` returns DataFrames (not with sparse TF-IDF output).
+- `pipe.named_steps["pre"].get_feature_names_out()` names every output column (custom `FunctionTransformer`s need `feature_names_out`); `set_output(transform="pandas")` returns DataFrames (not with sparse TF-IDF output; *sparse* means only the non-zero entries are stored).
 - Custom functions in a pipeline must be importable (module-level) for `joblib` to save/load it.
 
 ### Common mistakes

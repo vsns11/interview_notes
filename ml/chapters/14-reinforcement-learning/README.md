@@ -1,6 +1,6 @@
 # Chapter 14 — Reinforcement Learning
 
-Supervised learning learns from an answer key; unsupervised learning finds structure without one. **Reinforcement learning (RL)** is the third way: an agent learns *what to do* by acting in a world, seeing what happens, and collecting rewards — no answer key, just a score that arrives, often late. It is how AlphaGo learned to beat a world champion at Go, how robots learn to walk in simulation, how some recommenders decide what to try next, and how chat models such as ChatGPT and Claude were tuned to be more helpful (RLHF).
+Supervised learning learns from an answer key; unsupervised learning finds structure without one. **Reinforcement learning (RL)** is the third way: an agent learns *what to do* by acting in a world, seeing what happens, and collecting rewards — no answer key, just a score that arrives, often late. It is how AlphaGo learned to beat a world champion at Go, how robots learn to walk in simulation, how some recommenders decide what to try next, and how chat models such as ChatGPT and Claude were tuned to be more helpful (RLHF — reinforcement learning from human feedback, §14.10).
 
 **What you'll learn**
 
@@ -8,15 +8,15 @@ Supervised learning learns from an answer key; unsupervised learning finds struc
 2. Markov decision processes, the return and the discount factor — with worked numbers on a treasure-hunt grid.
 3. Value functions V and Q, and the Bellman equations.
 4. Exploration vs exploitation: multi-armed bandits with ε-greedy, UCB and Thompson sampling (implemented).
-5. Dynamic programming when the rules are known: policy evaluation, policy iteration, value iteration (implemented on a gridworld and a FrozenLake-style lake).
+5. Dynamic programming when the rules are known: policy evaluation, policy iteration, value iteration (implemented on a **gridworld** — a toy world made of grid cells — and a FrozenLake-style lake).
 6. Learning from experience: Monte Carlo vs temporal-difference (TD) learning.
-7. Q-learning and SARSA from scratch in numpy — no Gym needed — and why they behave differently near a cliff.
-8. Deep RL: DQN with a replay buffer and a target network (implemented in PyTorch).
+7. Q-learning and SARSA from scratch in numpy — no Gym (the standard library of RL test environments, now maintained as Gymnasium) needed — and why they behave differently near a cliff.
+8. Deep RL: DQN with a replay buffer and a target network (implemented in PyTorch, the Python deep-learning library).
 9. Policy gradients: REINFORCE, baselines and actor-critic (implemented), plus PPO in one paragraph.
 10. RLHF — the bridge from RL to large language models.
 11. Real-world uses (AlphaGo, robotics, recommender bandits, ads) and pitfalls (reward hacking, sample inefficiency).
 
-All code lives in `code/` and uses only numpy, matplotlib and PyTorch. `code/gridworld.py` is a tiny environment written for this chapter (FrozenLake-style lake, treasure grid, cliff walk); its action numbering (0 = left, 1 = down, 2 = right, 3 = up) matches the popular Gymnasium library so you can move to it later. Outputs below are real.
+All code lives in `code/` and uses only numpy (array maths), matplotlib (plotting) and PyTorch. `code/gridworld.py` is a tiny environment written for this chapter (FrozenLake-style lake, treasure grid, cliff walk); its action numbering (0 = left, 1 = down, 2 = right, 3 = up) matches the popular Gymnasium library so you can move to it later. Outputs below are real.
 
 ---
 
@@ -64,15 +64,15 @@ Everyday framings of the same loop:
 | Feedback | "The right answer was X" | None | "That was worth +3" — how good, not what was right |
 | Timing | Immediate, per example | — | Often **delayed** (the win comes 40 moves later) |
 | Data distribution | Fixed dataset | Fixed dataset | **Depends on the policy** — change behaviour, change the data |
-| Key challenge | Generalisation | Finding structure | Exploration and **credit assignment** (which earlier action earned the reward?) |
+| Key challenge | Generalisation (doing well on new, unseen inputs) | Finding structure | Exploration and **credit assignment** (which earlier action earned the reward?) |
 
 ### Why it matters
 RL fits problems that are **sequential decisions under uncertainty**, where actions change what happens next: games, robot control, resource allocation (cooling, bidding, inventory), dialogue, and sequential recommendation. It can discover strategies humans never wrote down (AlphaGo's famous "move 37").
 
 ### When not to use it
-- If you have labelled examples of the right action, supervised learning (behaviour cloning) is simpler and far more data-efficient.
+- If you have labelled examples of the right action, supervised learning (behaviour cloning — training a model to copy the expert's actions) is simpler and far more data-efficient.
 - If each decision does not affect future states, a **contextual bandit** (§14.4) is enough.
-- If you cannot simulate the environment and real trials are expensive or dangerous (medicine, finance), pure online RL is risky; look at offline RL or stay supervised.
+- If you cannot simulate the environment and real trials are expensive or dangerous (medicine, finance), pure **online RL** (learning by acting in the live environment) is risky; look at **offline RL** (learning only from previously logged data) or stay supervised.
 
 ### TL;DR
 RL = an agent learns a policy by trial and error, choosing actions in states to maximise long-run reward. Unlike supervised learning, feedback is a score (not the right answer), often delayed, and the agent's own behaviour decides what data it sees.
@@ -82,7 +82,7 @@ RL = an agent learns a policy by trial and error, choosing actions in states to 
 ## 14.2 Markov decision processes, returns and discounting
 
 ### What it is
-A **Markov decision process (MDP)** is the mathematical model of an RL problem: a tuple (S, A, P, R, γ).
+A **Markov decision process (MDP)** is the mathematical model of an RL problem: a **tuple** (an ordered group of items) (S, A, P, R, γ).
 - **S**: the set of states. **A**: the set of actions.
 - **P(s′ | s, a)**: the **transition probability** of landing in s′ after doing a in s. (Deterministic worlds put probability 1 on one outcome; a slippery lake spreads it.)
 - **R(s, a, s′)**: the reward for that transition.
@@ -160,11 +160,11 @@ An MDP = states, actions, transition probabilities, rewards, discount γ. The re
 
 ### What it is
 - A **policy** π tells the agent what to do. **Deterministic**: π(s) = a. **Stochastic**: π(a | s) = probability of choosing a in s.
-- The **state-value function** Vπ(s) = expected return starting in s and then following π. "How good is it to be here, if I keep behaving like this?"
+- The **state-value function** Vπ(s) = **expected** return (the average return over all the randomness in actions and outcomes) starting in s and then following π. "How good is it to be here, if I keep behaving like this?"
 - The **action-value function** Qπ(s, a) = expected return if you take action a in s, then follow π. "How good is doing *this* here?"
-- The **optimal** functions V*(s) and Q*(s, a) are the best achievable by any policy. Once you know Q*, acting optimally is trivial: **π*(s) = argmaxₐ Q*(s, a)** (be *greedy* with respect to Q*).
+- The **optimal** functions V*(s) and Q*(s, a) are the best achievable by any policy. Once you know Q*, acting optimally is trivial: **π*(s) = argmaxₐ Q*(s, a)** (argmax = the action with the largest value; be *greedy* with respect to Q*).
 
-Why Q is so useful: choosing the best action from V requires knowing the transition model (to look one step ahead), but choosing from Q does not — just compare numbers. That is why model-free methods (Q-learning, DQN) learn Q.
+Why Q is so useful: choosing the best action from V requires knowing the transition model (to look one step ahead), but choosing from Q does not — just compare numbers. That is why **model-free** methods (which learn without knowing P and R; Q-learning, DQN) learn Q.
 
 ### The Bellman equations
 Plug the identity Gₜ = rₜ₊₁ + γGₜ₊₁ into the definitions:
@@ -201,16 +201,16 @@ The **exploration–exploitation dilemma**: should you **exploit** the best opti
 
 The simplest setting that isolates it is the **multi-armed bandit**: k slot machines ("one-armed bandits"), each paying off with an unknown probability. There is only one state — no consequences beyond the immediate reward — so it is RL with the sequential part removed. Real versions: which of 10 ad banners, headlines or thumbnails to show; which new item to give traffic to.
 
-**Regret** = reward you could have collected by always pulling the best arm, minus what you actually got. Good strategies make regret grow slowly (logarithmically in time).
+**Regret** = reward you could have collected by always pulling the best arm, minus what you actually got. Good strategies make regret grow slowly (logarithmically in time — doubling the time adds only a fixed amount of regret).
 
 ### The strategies
 1. **Greedy**: try each arm once, then always pull the arm with the highest average so far. Can get stuck on an arm that got lucky early.
 2. **ε-greedy**: with probability ε (e.g. 0.1) pull a random arm, otherwise the best-looking one. Simple and robust, but keeps exploring uselessly at rate ε forever (decay ε over time to fix).
 3. **UCB (Upper Confidence Bound)** — *optimism in the face of uncertainty*: pick argmaxₐ [ Q(a) + c·√(ln t / Nₐ) ], where Nₐ = pulls of arm a so far. Rarely tried arms get a big bonus; the bonus shrinks as evidence accumulates. UCB1 uses c = √2 (from theory, for rewards in [0, 1]).
-4. **Thompson sampling** — *probability matching*: keep a belief distribution over each arm's payoff (for 0/1 rewards, a Beta(wins + 1, losses + 1) distribution), draw one sample per arm, pull the arm whose sample is highest. Arms that *might* be best get tried in proportion to that chance.
+4. **Thompson sampling** — *probability matching*: keep a belief distribution over each arm's payoff (for 0/1 rewards, a Beta(wins + 1, losses + 1) distribution — a curve over the possible payoff rates between 0 and 1, which narrows as wins and losses accumulate), draw one sample per arm, pull the arm whose sample is highest. Arms that *might* be best get tried in proportion to that chance.
 
 ### Code — `code/bandits.py`
-10 arms with conversion rates drawn from 5–35%, 3,000 pulls, averaged over 200 random problems.
+10 arms with **conversion rates** (the chance that showing an option leads to the desired action, e.g. a click or purchase) drawn from 5–35%, 3,000 pulls, averaged over 200 random problems.
 
 ```python
 if policy == "eps-greedy":
@@ -251,9 +251,9 @@ Add **context** (user features, time, device): choose the arm based on context, 
 - Declaring a winner from a handful of pulls (the greedy trap).
 
 ### In the interview
-**30-second answer:** "Exploration vs exploitation is the trade-off between using the best-known option and gathering information about others. Bandits isolate it. ε-greedy explores randomly at a fixed rate; UCB adds an optimism bonus that shrinks with the number of tries; Thompson sampling samples from a posterior over each arm's reward and acts greedily on the sample. In production I'd use a contextual bandit, often Thompson or LinUCB, for things like headline or thumbnail selection."
+**30-second answer:** "Exploration vs exploitation is the trade-off between using the best-known option and gathering information about others. Bandits isolate it. ε-greedy explores randomly at a fixed rate; UCB adds an optimism bonus that shrinks with the number of tries; Thompson sampling samples from a **posterior** (the updated belief after seeing the data) over each arm's reward and acts greedily on the sample. In production I'd use a contextual bandit, often Thompson or LinUCB, for things like headline or thumbnail selection."
 
-- *Bandit vs A/B test?* A/B splits traffic evenly until the end; a bandit shifts traffic toward winners during the test, reducing regret — at the cost of less clean statistics.
+- *Bandit vs A/B test (a randomised experiment that splits users between two versions)?* A/B splits traffic evenly until the end; a bandit shifts traffic toward winners during the test, reducing regret — at the cost of less clean statistics.
 - *Why does Thompson work?* An arm is chosen with the probability that it is the best, given the evidence.
 
 ### Self-check
@@ -351,7 +351,7 @@ Reading it:
 - Value iteration needed 324 sweeps on the lake (γ = 0.99, slow propagation) but only 9 on the deterministic grid; policy iteration needed just 7 improvement rounds.
 
 ### Trade-offs / when not to use it
-DP needs the **full model** and sweeps **every state** each iteration — fine for thousands of states, impossible for Go (≈10¹⁷⁰ positions) or for continuous states. It is the foundation that model-free methods approximate from samples.
+DP needs the **full model** and sweeps **every state** each iteration — fine for thousands of states, impossible for Go (≈10¹⁷⁰ positions) or for **continuous** states (real-valued, like a position or speed, rather than a finite list). It is the foundation that model-free methods approximate from samples.
 
 ### Self-check
 1. Value iteration vs policy iteration? → VI applies the max-backup repeatedly and reads off the policy at the end; PI fully evaluates a policy, improves it greedily, and repeats until the policy stops changing.
@@ -373,8 +373,8 @@ Usually we **don't** know P and R — we can only act and observe. **Model-free*
 | Update target | Actual return Gₜ observed at the end of the episode | rₜ₊₁ + γV(sₜ₊₁) — one real reward + current estimate of the rest |
 | Update rule | V(s) ← V(s) + α[Gₜ − V(s)] | V(s) ← V(s) + α[rₜ₊₁ + γV(sₜ₊₁) − V(s)] |
 | When it can update | After the episode ends | After every step (works for never-ending tasks) |
-| Bias | Unbiased (real return) | Biased (uses its own estimate — **bootstrapping**) |
-| Variance | High (return depends on many random steps) | Low (one random step) |
+| Bias (systematic error) | Unbiased (real return; correct on average) | Biased (uses its own estimate — **bootstrapping**) |
+| Variance (how much estimates scatter) | High (return depends on many random steps) | Low (one random step) |
 | Usually | Slower, simpler | Faster learning in practice |
 
 The quantity δ = rₜ₊₁ + γV(sₜ₊₁) − V(sₜ) is the **TD error**: "how much better or worse did this step go than I expected?" It is one of the central quantities in RL (and has a well-known parallel in dopamine signalling in the brain, per Schultz, Dayan & Montague, 1997). α is the **step size** (learning rate).
@@ -406,9 +406,9 @@ TD estimate after 300 episodes: [0.22 0.41 0.51 0.67 0.84]  true: [0.17 0.33 0.5
 
 ![MC vs TD](img/mc_vs_td.png)
 
-TD learns faster than MC here, as in Sutton & Barto's version of this experiment. Note the step-size trade-off: a larger α learns faster early but leaves more noise at the end (TD α = 0.1 plateaus above α = 0.05). With a constant α the estimates keep jittering around the truth rather than converging exactly.
+TD learns faster than MC here (lower **RMS error** — root-mean-square distance from the true values), as in Sutton & Barto's version of this experiment. Note the step-size trade-off: a larger α learns faster early but leaves more noise at the end (TD α = 0.1 plateaus above α = 0.05). With a constant α the estimates keep jittering around the truth rather than converging exactly.
 
-**n-step returns and TD(λ)** blend the two: use n real rewards before bootstrapping (n = 1 is TD, n = ∞ is MC), or average the n-step targets for all n with weights (1 − λ)λⁿ⁻¹ (λ = 0 gives TD(0), λ = 1 gives MC). Modern deep RL (e.g. GAE in PPO) uses this idea.
+**n-step returns and TD(λ)** blend the two: use n real rewards before bootstrapping (n = 1 is TD, n = ∞ is MC), or average the n-step targets for all n with weights (1 − λ)λⁿ⁻¹ (λ = 0 gives TD(0), λ = 1 gives MC). Modern deep RL (e.g. GAE — generalised advantage estimation — in PPO) uses this idea.
 
 ### Self-check
 1. TD(0) step: V(s) = 0.5, reward 0, V(s′) = 0.6, γ = 1, α = 0.1. New V(s)? → δ = 0 + 0.6 − 0.5 = 0.1, so V(s) = 0.5 + 0.1·0.1 = **0.51**.
@@ -442,7 +442,7 @@ Q(s, a) ← Q(s, a) + α [ r + γ · Q(s′, a′) − Q(s, a) ], where a′ is 
 6. s ← s′; repeat until the episode ends.
 7. Decay ε over episodes so the agent gradually shifts from exploring to exploiting.
 
-Under standard conditions (every state–action pair visited infinitely often, step sizes decaying appropriately) tabular Q-learning converges to Q*.
+Under standard conditions (every state–action pair visited infinitely often, step sizes decaying appropriately) tabular Q-learning (Q stored as a table, one entry per state–action pair) **converges** to (settles on) Q*.
 
 ### Code — `code/q_learning_sarsa.py`
 ```python
@@ -511,11 +511,11 @@ Reading it:
 | Target | max over next actions | the actually chosen next action |
 | During training | Riskier (optimistic about its own future) | Safer |
 | Learns from others' data / replay | Yes (basis of DQN) | Not directly |
-| Known issue | Maximisation bias (fixed by Double Q-learning) | Converges to optimal only as ε → 0 |
+| Known issue | Maximisation bias (overestimating from a max over noisy values; fixed by Double Q-learning) | Converges to optimal only as ε → 0 |
 
 ### Common mistakes
 - Bootstrapping from a terminal state (must use 0 after the episode ends — the `(not done)` factor). Also, a **time-limit** truncation is not a real terminal state; ideally keep bootstrapping there.
-- Never decaying ε, or decaying it so fast the agent never finds the goal (sparse rewards!).
+- Never decaying ε, or decaying it so fast the agent never finds the goal (sparse rewards — rewards that arrive only rarely!).
 - Breaking ties by always taking action 0 when Q is all zeros — the agent walks into a wall forever. Break ties randomly.
 - Tabular methods on large state spaces — the table never fills in; use function approximation (next section).
 
@@ -540,10 +540,10 @@ Q-learning: off-policy, target r + γ·max Q(s′) → learns the optimal policy
 ### What it is
 A Q-table needs one entry per state–action pair. Atari screens, robot joint angles or board positions have far too many states. **Function approximation** replaces the table with a model Q(s, a; θ) — typically a neural network that takes the state and outputs one Q-value per action. That network generalises: similar states get similar values.
 
-**DQN (Deep Q-Network)** — DeepMind, Mnih et al., *Nature* 2015 — learned to play 49 Atari 2600 games from raw pixels and score, with a single architecture and hyperparameter set, reaching human-level performance on many of them. Naively combining Q-learning with a neural network is unstable; DQN made it work with two tricks:
+**DQN (Deep Q-Network)** — DeepMind, Mnih et al., *Nature* 2015 — learned to play 49 Atari 2600 games from raw pixels and score, with a single architecture and **hyperparameter** set (settings chosen before training, such as the learning rate), reaching human-level performance on many of them. Naively combining Q-learning with a neural network is unstable; DQN made it work with two tricks:
 
-1. **Experience replay**: store transitions (s, a, r, s′, done) in a large buffer; train on **random mini-batches** from it. This breaks the strong correlation between consecutive steps (which violates the i.i.d. assumption of SGD) and reuses each experience many times.
-2. **Target network**: compute the TD target r + γ·maxₐ′ Q(s′, a′; θ⁻) with a **frozen copy** θ⁻ of the network, copied from the online network only every C steps. Otherwise every update moves the target it is chasing ("a dog chasing its tail").
+1. **Experience replay**: store transitions (s, a, r, s′, done) in a large buffer; train on **random mini-batches** (small random groups of stored examples) from it. This breaks the strong correlation between consecutive steps (which violates the **i.i.d.** assumption — independent and identically distributed examples — of **SGD**, stochastic gradient descent, the standard way to train neural networks) and reuses each experience many times.
+2. **Target network**: compute the TD target r + γ·maxₐ′ Q(s′, a′; θ⁻) with a **frozen copy** θ⁻ of the network, copied from the **online network** (the one being trained) only every C steps. Otherwise every update moves the target it is chasing ("a dog chasing its tail").
 
 Plus: ε-greedy exploration, the Huber loss (less sensitive to large errors), frame stacking for motion.
 
@@ -558,10 +558,10 @@ flowchart LR
     T --> L
 ```
 
-The **deadly triad** (Sutton & Barto): function approximation + bootstrapping + off-policy learning can diverge. DQN's tricks are mitigations, not guarantees.
+The **deadly triad** (Sutton & Barto): function approximation + bootstrapping + off-policy learning can **diverge** (the values blow up instead of settling). DQN's tricks are mitigations, not guarantees.
 
 ### Code — `code/dqn.py` (DQN on the treasure grid)
-The state is one-hot encoded (25 inputs); a 64-unit MLP outputs 4 Q-values.
+The state is **one-hot** encoded (a vector of 25 zeros with a single 1 marking the agent's cell); a 64-unit **MLP** (multi-layer perceptron, a small fully connected network) outputs 4 Q-values.
 
 ```python
 buffer = deque(maxlen=5000)                                  # experience replay memory
@@ -599,10 +599,10 @@ vvvvv
 
 ### Beyond DQN (one line each)
 - **Double DQN**: select the next action with the online net, evaluate it with the target net → less overestimation.
-- **Dueling DQN**: separate streams for V(s) and the advantage A(s, a).
+- **Dueling DQN**: separate streams for V(s) and the **advantage** A(s, a) (how much better action a is than average in state s).
 - **Prioritised replay**: sample transitions with large TD error more often.
 - **Rainbow** (2017): combines these and more.
-- DQN handles **discrete** actions only; continuous control (robot torques) uses actor-critic methods such as DDPG, TD3 and SAC.
+- DQN handles **discrete** actions only; continuous control (robot **torques** — the turning forces applied at joints) uses actor-critic methods such as DDPG, TD3 and SAC.
 
 ### In the interview
 **30-second answer:** "DQN replaces the Q-table with a neural network trained toward the Q-learning target r + γ·max Q(s′, ·). Two tricks make it stable: an experience-replay buffer sampled at random, which breaks correlations and reuses data, and a target network, a frozen copy that is refreshed only every C steps so the target stops moving. It works for discrete actions; continuous control uses actor-critic methods such as SAC or TD3."
@@ -623,15 +623,17 @@ Deep RL replaces the Q-table with a neural network. DQN stabilises Q-learning wi
 ## 14.9 Policy gradients, REINFORCE and actor-critic
 
 ### What it is
-Value-based methods learn Q and derive a policy from it. **Policy-gradient** methods learn the policy **directly**: a parameterised π(a | s; θ) (e.g. a softmax over action scores, or a neural net outputting a Gaussian over torques), improved by gradient ascent on expected return J(θ).
+Value-based methods learn Q and derive a policy from it. **Policy-gradient** methods learn the policy **directly**: a parameterised π(a | s; θ) (e.g. a **softmax** — which turns scores into probabilities summing to 1 — over action scores, or a neural net outputting a **Gaussian**, bell-curve, distribution over torques), improved by **gradient ascent** (repeatedly nudging θ in the direction that increases J) on expected return J(θ).
 
 Why bother?
 - Works naturally with **continuous** and huge action spaces (no max over actions needed).
-- Can learn **stochastic** policies (useful in games like rock-paper-scissors and under partial observability).
+- Can learn **stochastic** policies (useful in games like rock-paper-scissors and under **partial observability**, where the agent can't see the full state).
 - Small parameter changes → smooth policy changes (more stable than a greedy argmax that can flip).
 
 ### The policy-gradient theorem, intuitively
 ∇θ J(θ) = E[ ∇θ log π(a | s; θ) · (return that followed) ]
+
+(∇θ means "the gradient with respect to θ" — the direction that increases a quantity fastest; E[·] means the average over many episodes.)
 
 Read it as: *make actions that led to high returns more likely, and actions that led to low returns less likely, in proportion to how good the outcome was.* ∇ log π(a|s) is the direction in parameter space that raises the probability of the action taken. For a softmax policy with scores θ[s, ·], that gradient is simply (one-hot(a) − π(·|s)).
 
@@ -713,12 +715,12 @@ Policy gradients push up the log-probability of actions in proportion to how goo
 ## 14.10 RLHF — the bridge to large language models
 
 ### What it is
-**Reinforcement Learning from Human Feedback (RLHF)** tunes a pretrained language model so that its responses match what people prefer (helpful, honest, harmless). The "environment" is a prompt; the "action" is the generated response (a sequence of token choices); the "reward" comes from a model trained on human preferences.
+**Reinforcement Learning from Human Feedback (RLHF)** tunes a pretrained language model so that its responses match what people prefer (helpful, honest, harmless). The "environment" is a prompt; the "action" is the generated response (a sequence of **token** choices — tokens are the word pieces a language model reads and writes); the "reward" comes from a model trained on human preferences.
 
 ### How it works (the InstructGPT recipe, Ouyang et al., 2022)
-1. **Supervised fine-tuning (SFT)**: fine-tune the pretrained model on human-written example answers.
+1. **Supervised fine-tuning (SFT)**: fine-tune (continue training) the pretrained model on human-written example answers.
 2. **Reward model (RM)**: show people two (or more) responses to the same prompt and ask which is better. Train a model to give higher scores to preferred responses (a pairwise loss: maximise log σ(score_preferred − score_rejected)). Comparisons are easier and more consistent for people than absolute scores.
-3. **RL fine-tuning with PPO**: generate responses, score them with the RM, and update the policy (the LLM) to increase reward, **minus a KL penalty** that keeps it close to the SFT model. Without that penalty the policy drifts into gibberish or reward-model exploits — a textbook case of reward hacking (§14.12).
+3. **RL fine-tuning with PPO**: generate responses, score them with the RM, and update the policy (the LLM, large language model) to increase reward, **minus a KL penalty** that keeps it close to the SFT model (KL divergence measures how different two probability distributions are). Without that penalty the policy drifts into gibberish or reward-model exploits — a textbook case of reward hacking (§14.12).
 
 ```mermaid
 flowchart LR
@@ -740,7 +742,7 @@ The model's outputs change what data it learns from (on-policy sampling), the re
 ### Self-check
 1. Why ask people to compare two answers rather than score one? → Comparisons are easier and more consistent than absolute scores.
 2. What does DPO remove from the pipeline? → The separate reward model and the RL loop.
-3. What is a "verifiable reward"? → An automatic check, such as a passing unit test or a correct final answer.
+3. What is a "verifiable reward"? → An automatic check, such as a passing unit test (a small automated check that code gives the expected result) or a correct final answer.
 
 ### TL;DR
 RLHF = SFT → reward model from human preference comparisons → PPO against the reward model with a KL leash to the SFT model. DPO removes the RL loop; RLAIF replaces human labels with AI feedback; verifiable-reward RL powers reasoning models. The AI book's [large language models chapter](../../../ai/chapters/04-large-language-models/README.md) places RLHF in the full LLM training pipeline.
@@ -751,10 +753,10 @@ RLHF = SFT → reward model from human preference comparisons → PPO against th
 
 | Domain | Example (publicly described) | What kind of RL |
 |---|---|---|
-| **Games** | **AlphaGo** (DeepMind) beat Lee Sedol 4–1 in March 2016. Policy and value networks, first trained on human expert games, then improved by self-play RL, combined with Monte Carlo tree search. **AlphaGo Zero** (2017) learned from self-play alone; **AlphaZero** (2018) mastered chess, shogi and Go with one algorithm; **MuZero** (Nature, 2020) matched this without being told the rules, by learning its own model of the game's dynamics. Also: DQN on Atari (2015), OpenAI Five (Dota 2, 2019), AlphaStar (StarCraft II, 2019) | Self-play, deep RL + planning |
-| **Robotics** | OpenAI's Dactyl hand manipulated a Rubik's Cube to a solved state (2019) with a policy trained entirely in simulation, using automatic **domain randomisation** (randomising physics and visuals so the policy copes with the real hand). The RL policy did the finger control; the sequence of face turns came from a standard cube-solving algorithm (Kociemba's). Legged-robot locomotion is now commonly trained in simulation (sim-to-real) | Deep RL (PPO/SAC) in simulation |
+| **Games** | **AlphaGo** (DeepMind) beat Lee Sedol 4–1 in March 2016. Policy and value networks, first trained on human expert games, then improved by **self-play** RL (playing against copies of itself), combined with **Monte Carlo tree search** (planning by simulating many possible future move sequences). **AlphaGo Zero** (2017) learned from self-play alone; **AlphaZero** (2018) mastered chess, shogi and Go with one algorithm; **MuZero** (Nature, 2020) matched this without being told the rules, by learning its own model of the game's dynamics. Also: DQN on Atari (2015), OpenAI Five (Dota 2, 2019), AlphaStar (StarCraft II, 2019) | Self-play, deep RL + planning |
+| **Robotics** | OpenAI's Dactyl hand manipulated a Rubik's Cube to a solved state (2019) with a policy trained entirely in simulation, using automatic **domain randomisation** (randomising physics and visuals so the policy copes with the real hand). The RL policy did the finger control; the sequence of face turns came from a standard cube-solving algorithm (Kociemba's). Legged-robot locomotion is now commonly trained in simulation (sim-to-real: train in a simulator, then run on the real robot) | Deep RL (PPO/SAC) in simulation |
 | **Recommenders** ([Chapter 13](../13-recommenders-and-embeddings/README.md)) | Yahoo! front-page news with LinUCB (2010); Netflix artwork personalisation with contextual bandits; Spotify homepage shelves with bandits; research on RL for long-term engagement (e.g. Google's REINFORCE-based YouTube recommender, Chen et al., 2019) | Contextual bandits (most common), off-policy RL |
-| **Ads & pricing** | Ad selection/creative testing with bandits; real-time bidding and **budget pacing** formulated as sequential decisions (several published industrial papers) | Bandits, constrained RL |
+| **Ads & pricing** | Ad selection/creative testing with bandits; **real-time bidding** (an auction for each ad slot, run in milliseconds as a page loads) and **budget pacing** (spreading ad spend sensibly over the day) formulated as sequential decisions (several published industrial papers) | Bandits, constrained RL |
 | **Operations** | DeepMind reported (2016) that neural-network recommendations cut the energy used for cooling in a Google data centre by up to 40%; a 2018 follow-up let the system control cooling directly | Control / RL-style optimisation |
 | **LLMs** | RLHF / RLAIF for ChatGPT, Claude and others; verifiable-reward RL for reasoning models | PPO, DPO, GRPO |
 
@@ -783,27 +785,27 @@ bonus tile worth +0: first 12 moves RDDRDDRR     reward +4 reached treasure: Tru
 
 The optimal policy for the buggy reward steps onto the bonus and then **walks into the wall forever** (U, U, U…): bumping the edge keeps it on the tile, collecting +3 every step — worth 3/(1 − 0.9) = 30, far more than the treasure. It is not a bug in the learner; it's a bug in the reward. Real cases: a boat-racing agent (OpenAI's CoastRunners example, 2016) that circled to hit respawning targets instead of finishing the race; chat models learning that longer or more flattering answers get higher reward-model scores.
 
-**Defences:** reward the outcome, not a proxy (only once, and not re-collectable); penalise unwanted side effects; constrain the policy (e.g. RLHF's KL penalty); watch the agent's actual behaviour, not only the reward curve; red-team the reward.
+**Defences:** reward the outcome, not a **proxy** (a stand-in measure that is easier to count) (only once, and not re-collectable); penalise unwanted side effects; constrain the policy (e.g. RLHF's KL penalty); watch the agent's actual behaviour, not only the reward curve; **red-team** the reward (deliberately try to find ways to game it).
 
 ### Other pitfalls
 
 | Pitfall | What it means | Mitigations |
 |---|---|---|
-| **Sample inefficiency** | Q-learning needed thousands of episodes for a 16-cell lake; deep RL on Atari used hundreds of millions of frames in some variants | Simulators, model-based RL, replay, offline data, imitation learning to start |
-| **Sparse rewards** | The only reward is at the far goal; random exploration never finds it | Reward shaping (carefully — see hacking), curriculum, curiosity bonuses, demonstrations |
+| **Sample inefficiency** | Q-learning needed thousands of episodes for a 16-cell lake; deep RL on Atari used hundreds of millions of frames in some variants | Simulators, model-based RL (learn a model of the environment and plan with it), replay, offline data, imitation learning (learn from expert demonstrations) to start |
+| **Sparse rewards** | The only reward is at the far goal; random exploration never finds it | Reward shaping (adding intermediate rewards — carefully, see hacking), curriculum (easy tasks first), curiosity bonuses (reward for visiting new states), demonstrations |
 | **Credit assignment** | Which of 200 moves earned the win? | Discounting, TD learning, advantage estimation (GAE) |
-| **Instability & seed sensitivity** | Results swing between runs (see plain REINFORCE's std of 21) | Report many seeds with confidence intervals; target nets, clipping (PPO), normalisation |
-| **Sim-to-real gap** | Policies overfit simulator quirks | Domain randomisation, system identification, fine-tune on real data |
+| **Instability & seed sensitivity** | Results swing between runs (see plain REINFORCE's std of 21) | Report many seeds (random starting points) with confidence intervals (ranges likely to contain the true value); target nets, clipping (PPO), normalisation |
+| **Sim-to-real gap** | Policies overfit simulator quirks | Domain randomisation, system identification (measuring the real system's physics), fine-tune on real data |
 | **Safe exploration** | Random actions can break robots or lose money | Constrained RL, safety layers, offline RL, human oversight |
 | **Distribution shift (offline RL)** | Learning only from logs: the policy wants actions the logs never tried | Conservative methods (CQL, IQL), stay close to the data policy |
-| **Non-stationarity** | The world (users, markets, opponents) changes | Continual learning, sliding windows, monitoring |
-| **Evaluation is hard** | You can't A/B test every idea; off-policy evaluation is noisy | IPS/doubly robust estimators, shadow mode, staged rollouts |
+| **Non-stationarity** | The world (users, markets, opponents) changes | Continual learning (keep updating on new data), sliding windows, monitoring |
+| **Evaluation is hard** | You can't A/B test every idea; off-policy evaluation is noisy | IPS (inverse propensity scoring: reweight logged data by how likely the old policy was to act that way)/doubly robust estimators, shadow mode (run the new policy silently alongside the old one), staged rollouts (release to a growing share of users) |
 
 ### In the interview
-**30-second answer** ("When would you use RL, and what goes wrong?"): "I'd use RL when decisions are sequential and change future states, and when I can simulate or safely experiment — otherwise supervised learning or a contextual bandit is simpler. Typical problems are reward hacking, sample inefficiency, sparse rewards, instability across seeds and the sim-to-real gap. I'd start with a bandit or offline evaluation, carefully design and audit the reward, and roll out in stages with guardrails."
+**30-second answer** ("When would you use RL, and what goes wrong?"): "I'd use RL when decisions are sequential and change future states, and when I can simulate or safely experiment — otherwise supervised learning or a contextual bandit is simpler. Typical problems are reward hacking, sample inefficiency, sparse rewards, instability across seeds and the sim-to-real gap. I'd start with a bandit or offline evaluation, carefully design and audit the reward, and roll out in stages with **guardrails** (limits and metrics that must not be breached)."
 
-- *Bandit or full RL for a recommender?* A contextual bandit if you optimise the immediate response; full RL only if you can model long-term effects (retention) and evaluate off-policy credibly.
-- *How to evaluate an RL policy before launch?* Simulation; off-policy evaluation (IPS, doubly robust) on logged data with known propensities; shadow mode; small canary traffic.
+- *Bandit or full RL for a recommender?* A contextual bandit if you optimise the immediate response; full RL only if you can model long-term effects (retention — users continuing to come back) and evaluate off-policy credibly.
+- *How to evaluate an RL policy before launch?* Simulation; off-policy evaluation (IPS, doubly robust) on logged data with known propensities (the probability the logging policy chose each action); shadow mode; small **canary** traffic (a tiny share of real users who get the new version first).
 
 ### Self-check
 1. Why did the bonus-tile agent never reach the treasure? → Repeatedly re-collectable reward worth 30 in discounted value beats a one-off +10.
