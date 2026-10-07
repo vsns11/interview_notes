@@ -1,6 +1,6 @@
 # Chapter 9 — CSS Grid
 
-Flexbox ([Chapter 8](../08-flexbox/README.md)) arranges items along **one** axis and lets their content decide the sizes. **CSS Grid** is the other half of modern layout: you define **rows and columns at the same time**, then place items into the cells — or let the browser place them for you. It is the right tool for page structure, card galleries, dashboards, forms with aligned labels, and any design that a designer drew on a grid. Grid has worked in every major browser since 2017 (Baseline widely available); `subgrid`, added later, is Baseline since September 2023.
+Flexbox ([Chapter 8](../08-flexbox/README.md)) arranges items along **one** axis and lets their content decide the sizes. **CSS Grid** is the other half of modern layout: you define **rows and columns at the same time**, then place items into the cells — or let the browser place them for you. It is the right tool for page structure, card galleries, dashboards (screens of charts and key numbers), forms with aligned labels, and any design that a designer drew on a grid. Grid has worked in every major browser since 2017 (Baseline widely available — Baseline is the label for features that work in all major browsers); `subgrid`, added later, is Baseline since September 2023.
 
 **What you'll learn**
 
@@ -8,16 +8,16 @@ Flexbox ([Chapter 8](../08-flexbox/README.md)) arranges items along **one** axis
 |---|---|---|
 | 9.1 | Grid vocabulary | name lines, tracks, cells, areas and gaps, and turn a container into a grid |
 | 9.2 | Defining tracks | size tracks with px, %, `fr`, `auto`, `min-content`, `max-content`, `fit-content()`, `minmax()` — and do the `fr` maths by hand |
-| 9.3 | `repeat()`, `auto-fill` vs `auto-fit` | build a responsive grid with no media queries and predict its column count |
+| 9.3 | `repeat()`, `auto-fill` vs `auto-fit` | build a responsive grid (one that adapts to the screen width) with no media queries (CSS rules that apply only at certain screen sizes, Chapter 10) and predict its column count |
 | 9.4 | Placing items | use line numbers, `span`, negative lines, named lines, `grid-template-areas` and overlap |
 | 9.5 | The implicit grid and auto-placement | control extra rows/columns, `grid-auto-flow` and `dense` |
 | 9.6 | Alignment | align items in cells and the whole grid in its container |
 | 9.7 | Subgrid | line up content across sibling cards |
 | 9.8 | Grid vs Flexbox | choose the right tool (and combine them) |
-| 9.9 | Patterns | holy grail layout, responsive card grid, overlays |
+| 9.9 | Patterns | holy grail layout (the classic header + three columns + footer page), responsive card grid, overlays (one element laid over another) |
 | 9.10 | Debugging, pitfalls and interview prep | find and fix the common grid bugs |
 
-As in Chapters 7 and 8, every example is a page in [`code/`](code/) with a screenshot in [`img/`](img/): grid containers have a **dashed purple border**, items a **solid blue outline**, **red badges** mark numbered grid lines and **red numbers** are track sizes the page read back from the browser. The `.mjs` scripts read `getComputedStyle(grid).gridTemplateColumns`, which returns the **resolved** track sizes in pixels — the browser's own answer — and compare it with the hand calculation.
+As in Chapters 7 and 8, every example is a page in [`code/`](code/) with a screenshot in [`img/`](img/): grid containers have a **dashed purple border**, items a **solid blue outline**, **red badges** mark numbered grid lines and **red numbers** are track sizes the page read back from the browser. The `.mjs` scripts read `getComputedStyle(grid).gridTemplateColumns` (`getComputedStyle` is the JavaScript function that returns an element's final styles), which returns the **resolved** track sizes (the final numbers after the browser has done the maths) in pixels — the browser's own answer — and compare it with the hand calculation.
 
 ---
 
@@ -39,7 +39,7 @@ As in Chapters 7 and 8, every example is a page in [`code/`](code/) with a scree
 Analogy: a spreadsheet. The column and row dividers are the lines, a column is a track, a cell is a cell, and a merged range of cells is a grid area. Unlike a spreadsheet, you size the columns with maths (`fr`, `minmax`) and one item may span several cells.
 
 ### Grid behaviours to know up front
-- As with flex items, grid items are blockified, `float` is ignored, margins don't collapse, and `z-index` works without `position` ([Chapter 7](../07-box-model-and-layout-basics/README.md)).
+- As with flex items, grid items are blockified (treated as block boxes, so even a `<span>` accepts width and height), `float` is ignored, margins don't collapse, and `z-index` works without `position` ([Chapter 7](../07-box-model-and-layout-basics/README.md)).
 - Grid is **layout-in**: tracks are defined by the container and items fall into them. Flexbox is **content-out**: the items' sizes drive the layout. That difference drives the choice in 9.8.
 
 ### Self-check
@@ -57,7 +57,7 @@ Analogy: a spreadsheet. The column and row dividers are the lines, a column is a
 |---|---|
 | `200px`, `10rem`, `30%` | Fixed size (percent of the container's size) |
 | **`fr`** | A **fraction of the leftover space** after fixed tracks and gaps are taken out |
-| `auto` | As a maximum: content size, but stretches to fill leftover space when there are no `fr` tracks (with `align/justify-content: normal`). As a minimum: the item's automatic minimum size |
+| `auto` | As a maximum: content size, but stretches to fill leftover space when there are no `fr` tracks (with `align/justify-content: normal`). As a minimum: the item's automatic minimum size (usually its min-content size, so content is not crushed) |
 | `min-content` | As narrow as the content can get (longest word) |
 | `max-content` | As wide as the content wants, no wrapping |
 | `fit-content(150px)` | `max-content`, but capped at 150px (and at least `min-content`) |
@@ -102,7 +102,7 @@ The tiny differences are Chrome's 1/64-pixel layout units, exactly as in the fle
 Fix: `minmax(0, 1fr)` (t4) lets the track shrink below its content — the columns become exactly 346px each, and you handle the overflowing content with `overflow`, `overflow-wrap: anywhere` or `min-width: 0` on the item. Rule of thumb: for columns that **must** be equal (a dashboard, a code-and-preview split), write `repeat(3, minmax(0, 1fr))`.
 
 ### Common mistakes
-- Using `%` tracks together with `gap` and getting a horizontal scrollbar.
+- Using `%` tracks together with `gap` and getting a horizontal scrollbar (the page becomes wider than the screen and scrolls sideways).
 - Expecting `1fr 1fr` to be equal whatever the content (see above).
 - Forgetting that rows default to `auto` — a row only gets taller than its content if you give it a size or the container a height with `fr` rows.
 
@@ -170,7 +170,7 @@ If the container gets narrower than the minimum (a 120px track on a 100px-wide p
 ### Self-check
 1. Container 1000px, gap 20px, `repeat(auto-fill, minmax(200px, 1fr))`. How many columns and how wide? → floor(1020 / 220) = 4 columns of (1000 − 60) / 4 = **235px**.
 2. Same, 2 items, `auto-fit`. Width of each? → Two tracks remain, (1000 − 20) / 2 = **490px**.
-3. Can `auto-fill` be combined with a plain `1fr` (`repeat(auto-fill, 1fr)`)? → No — auto-repeat needs a definite size (a fixed length or a `minmax` with a fixed minimum) to know how many fit.
+3. Can `auto-fill` be combined with a plain `1fr` (`repeat(auto-fill, 1fr)`)? → No — auto-repeat needs a definite size (one known before layout, not dependent on leftover space) (a fixed length or a `minmax` with a fixed minimum) to know how many fit.
 
 ---
 
@@ -241,13 +241,13 @@ Rules:
 - A name repeated in adjacent cells makes one area; each area must be a **rectangle** (no L-shapes).
 - A `.` (or several dots, `...`) marks an empty cell.
 - Named areas automatically create named lines `header-start`/`header-end`, so `grid-column: header` also works.
-- Rearranging the layout at a breakpoint is just rewriting the strings (9.9).
+- Rearranging the layout at a breakpoint (a screen width at which a media query switches the layout) is just rewriting the strings (9.9).
 
 ### Overlap
-Two items may occupy the same cells. Later items paint on top; `z-index` changes that (it works on grid items without `position`). Demo C puts an image and a caption in `grid-area: 1 / 1` and aligns the caption to the bottom-left with `align-self: end; justify-self: start` — a hero banner with no `position: absolute`, so the container still grows with its content.
+Two items may occupy the same cells. Later items paint on top; `z-index` changes that (it works on grid items without `position`). Demo C puts an image and a caption in `grid-area: 1 / 1` and aligns the caption to the bottom-left with `align-self: end; justify-self: start` — a hero banner (the large image-and-headline block at the top of a page) with no `position: absolute`, so the container still grows with its content.
 
 ### Accessibility note
-As with flexbox `order`, visual placement doesn't change DOM order: keyboard and screen-reader users follow the source ([§8.2](../08-flexbox/README.md)). Keep source order logical; don't use placement to reorder meaningful content.
+As with flexbox `order`, visual placement doesn't change DOM order (the order of elements in the HTML): keyboard and screen-reader (software that reads the page aloud) users follow the source ([§8.2](../08-flexbox/README.md)). Keep source order logical; don't use placement to reorder meaningful content.
 
 ### Self-check
 1. Make an item span the full width regardless of column count. → `grid-column: 1 / -1`.
@@ -312,13 +312,13 @@ Read it like this:
 
 ## 9.6 Alignment
 
-Grid uses the same Box Alignment properties as flexbox, but here **both axes have a `justify-*` and an `align-*`**, because items sit in two-dimensional cells:
+Grid uses the same Box Alignment properties (the shared CSS alignment module, [§8.5](../08-flexbox/README.md)) as flexbox, but here **both axes have a `justify-*` and an `align-*`**, because items sit in two-dimensional cells:
 - **inline axis** (row direction, left→right in English) → `justify-*`
 - **block axis** (column direction, top→bottom) → `align-*`
 
 | Property | On | Aligns | Default |
 |---|---|---|---|
-| `justify-items` / `align-items` | container | every item **inside its cell** | `stretch` (unless the item has a set size or an aspect ratio, e.g. images → `start`) |
+| `justify-items` / `align-items` | container | every item **inside its cell** | `stretch` (unless the item has a set size or an aspect ratio — a fixed width-to-height shape — e.g. images → `start`) |
 | `justify-self` / `align-self` | item | one item inside its cell | inherits from `*-items` |
 | `justify-content` / `align-content` | container | the **whole grid of tracks** inside the container, when the tracks are smaller than it | `normal` (tracks packed at the start; `auto` tracks stretch to fill) |
 | `place-items`, `place-self`, `place-content` | — | shorthands: `align` value first, then `justify` | — |
@@ -346,7 +346,7 @@ Key points:
 A grid item that is itself a grid has its *own* independent tracks. Three pricing cards side by side each lay out title, text and button, but card 2's longer title pushes its text lower — the rows don't line up across cards. Before subgrid, fixes involved fixed heights or JavaScript.
 
 ### What it is
-`grid-template-rows: subgrid` (or `grid-template-columns: subgrid`) on a grid item that spans several tracks of its parent tells it: **don't create your own tracks on this axis — reuse the parent's tracks I'm sitting on**. The children of the card then take part in the parent's row sizing, so the tallest title in *any* card sets the title row height for *all* cards. Subgrid is defined in CSS Grid Level 2 and has been **Baseline since September 2023** (Firefox 71, Safari 16, Chrome/Edge 117); by 2026 it is "widely available".
+`grid-template-rows: subgrid` (or `grid-template-columns: subgrid`) on a grid item that spans several tracks of its parent tells it: **don't create your own tracks on this axis — reuse the parent's tracks I'm sitting on**. The children of the card then take part in the parent's row sizing, so the tallest title in *any* card sets the title row height for *all* cards. Subgrid is defined in CSS Grid Level 2 (the second version of the Grid specification) and has been **Baseline since September 2023** (Firefox 71, Safari 16, Chrome/Edge 117); by 2026 it is "widely available".
 
 ![Left: three cards laid out independently — the paragraph in the card with a long title starts lower than the others. Right: the same cards with grid-template-rows subgrid — titles, paragraphs and buttons each share one row across all cards](img/06_subgrid.png)
 
@@ -373,7 +373,7 @@ Without subgrid the links happen to align (each card's middle row is `1fr` and t
 - A subgrid inherits the parent's gaps but may override them (`row-gap: 6px` above).
 - You can subgrid one axis and define your own tracks on the other.
 - Line names from the parent are available inside the subgrid.
-- Typical uses: card rows, forms where labels and inputs in separate `<fieldset>`s must align, a list whose items have several aligned columns (a `<ul>` of rows with `grid-template-columns: subgrid`).
+- Typical uses: card rows, forms where labels and inputs in separate `<fieldset>`s (HTML groups of related form controls, [Chapter 5](../05-tables-and-forms/README.md)) must align, a list whose items have several aligned columns (a `<ul>` of rows with `grid-template-columns: subgrid`).
 
 ### Self-check
 1. What must a subgrid item do besides `grid-template-rows: subgrid`? → Span the parent's rows it wants to use.
@@ -470,17 +470,17 @@ At 900px the container is 876px: 876 − 150 − 170 − 2 × 8 = 540 for `main`
 | Full-bleed article | Named lines `[full-start] 1fr [content-start] minmax(0, 60rem) [content-end] 1fr [full-end]` (9.4) |
 | Form with aligned labels | `grid-template-columns: max-content 1fr` on the form, one label + input per row |
 | Sidebar that collapses | `grid-template-columns: fit-content(250px) minmax(0, 1fr)` |
-| 12-column design system grid | `repeat(12, minmax(0, 1fr))` + `grid-column: span 4` on items |
+| 12-column design system grid (the column grid a team's shared design rules are built on) | `repeat(12, minmax(0, 1fr))` + `grid-column: span 4` on items |
 
 ### Masonry: not yet
-Pinterest-style "masonry" (items packed into columns of uneven height) is being standardised in CSS Grid Level 3 under the name **`display: grid-lanes`**. As of 2026 it has shipped in Safari (26.4) and is behind flags in Chrome and Firefox — not Baseline. Use CSS multi-column (`columns: 3`) or a JavaScript library, and wrap any experiment in `@supports (display: grid-lanes)`.
+Pinterest-style "masonry" (items packed into columns of uneven height) is being standardised in CSS Grid Level 3 under the name **`display: grid-lanes`**. As of 2026 it has shipped in Safari (26.4) and is behind flags (hidden experimental settings users must switch on) in Chrome and Firefox — not Baseline. Use CSS multi-column (`columns: 3`, newspaper-style columns) or a JavaScript library, and wrap any experiment in `@supports (display: grid-lanes)` (a feature query: the rules inside apply only if the browser supports that feature).
 
 ---
 
 ## 9.10 Debugging, pitfalls and interview prep
 
 ### Debugging
-All major browsers show a **grid badge** beside grid containers in the Elements/Inspector panel. Toggling it overlays line numbers (positive and negative), track sizes, gaps and area names — the same information our red badges draw. Firefox's grid inspector pioneered this and is still the most detailed.
+All major browsers show a **grid badge** beside grid containers in the Elements/Inspector panel of DevTools (the built-in developer tools, F12). Toggling it overlays line numbers (positive and negative), track sizes, gaps and area names — the same information our red badges draw. Firefox's grid inspector pioneered this and is still the most detailed.
 
 ### Pitfalls at a glance
 
@@ -491,7 +491,7 @@ All major browsers show a **grid badge** beside grid containers in the Elements/
 | Single auto-fill column overflows narrow screens | Minimum larger than the container | `minmax(min(200px, 100%), 1fr)` |
 | Item lands in an unexpected extra row/column | Placed beyond the explicit grid → implicit tracks; or a typo in an area name (unknown names create implicit lines) | Check line numbers in DevTools; spell area names consistently |
 | `grid-template-areas` ignored | Strings have different cell counts or a non-rectangular area — the whole declaration is invalid | Fix the ASCII art |
-| An image doesn't fill its cell | Items with an aspect ratio (images, video) treat the default alignment as `start`, not `stretch` — checked in Chrome: a 100×50 image in a 200×300 cell stays 100×50 | `width: 100%; height: 100%; object-fit: cover` ([Chapter 11](../11-typography-color-and-visual-effects/README.md)) |
+| An image doesn't fill its cell | Items with an aspect ratio (images, video) treat the default alignment as `start`, not `stretch` — checked in Chrome: a 100×50 image in a 200×300 cell stays 100×50 | `width: 100%; height: 100%; object-fit: cover` (scale the image to fill the box, cropping the overflow; [Chapter 11](../11-typography-color-and-visual-effects/README.md)) |
 | `justify-content` does nothing | `fr` tracks leave no free space | Use fixed tracks, or align items instead |
 | Tab order jumps around | `dense`, placement or `order` moved items visually | Keep DOM order = visual order |
 

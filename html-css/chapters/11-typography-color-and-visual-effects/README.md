@@ -1,22 +1,22 @@
 # Chapter 11 — Typography, Colour and Visual Effects
 
-Layout decides *where* boxes go; this chapter is about how they *look*. Most of a web page is text, so typography — the choice of fonts, sizes, line spacing and line length — does more for readability than any other styling. Then come colour and contrast (which decide whether some readers can read at all), and the decorative toolkit: backgrounds and gradients, borders and rounded corners, shadows, filters, blend modes and image fitting. Each has a performance or accessibility side that is easy to miss.
+Layout decides *where* boxes go; this chapter is about how they *look*. Most of a web page is text, so typography — the choice of fonts, sizes, line spacing and line length — does more for readability than any other styling. Then come colour and contrast (which decide whether some readers can read at all), and the decorative toolkit: backgrounds and gradients (smooth transitions between colours), borders and rounded corners, shadows, filters (photo-style effects such as blur), blend modes (rules for mixing an element's colours with what is behind it) and image fitting. Each has a performance or accessibility side that is easy to miss.
 
 **What you'll learn**
 
 | # | Topic | You will be able to… |
 |---|---|---|
-| 11.1 | Fonts | write font stacks, load web fonts with `@font-face`, and use a variable font |
-| 11.2 | Loading fonts well | choose a `font-display` value, preload, subset and self-host fonts |
-| 11.3 | Text properties | set size, line-height, spacing, decoration, wrapping, truncation and numerals |
-| 11.4 | Colour and contrast | compute a WCAG contrast ratio and derive palettes with `color-mix()` and relative colours |
+| 11.1 | Fonts | write font stacks (ordered lists of fonts to try), load web fonts (font files downloaded with the page) with `@font-face`, and use a variable font |
+| 11.2 | Loading fonts well | choose a `font-display` value, preload (fetch early), subset (strip unused characters) and self-host (serve from your own server) fonts |
+| 11.3 | Text properties | set size, line-height, spacing, decoration, wrapping, truncation (cutting text off with "…") and numerals |
+| 11.4 | Colour and contrast | compute a WCAG (Web Content Accessibility Guidelines) contrast ratio and derive palettes with `color-mix()` and relative colours |
 | 11.5 | Backgrounds and gradients | layer images and linear/radial/conic gradients, and size/position them |
 | 11.6 | Borders, radius and outlines | draw any border, rounded or elliptical corner, and a proper outline |
-| 11.7 | Shadows | build elevation with `box-shadow`, use `text-shadow` and `drop-shadow()` |
-| 11.8 | Filters, blend modes, clipping and masks | apply `filter`, `backdrop-filter`, `mix-blend-mode`, `clip-path` and `mask` |
+| 11.7 | Shadows | build elevation (the look of a surface floating above the page) with `box-shadow`, use `text-shadow` and `drop-shadow()` |
+| 11.8 | Filters, blend modes, clipping (cutting an element to a shape) and masks (fading parts of it out) | apply `filter`, `backdrop-filter`, `mix-blend-mode`, `clip-path` and `mask` |
 | 11.9 | `object-fit` and `object-position` | fit images and video into any box without distortion |
 
-As in Chapters 7–10, every example is a page in [`code/`](code/), its screenshot in [`img/`](img/) is made by [`code/make_figures.mjs`](code/make_figures.mjs), and the `NN_*.mjs` scripts use [`code/measure.mjs`](code/measure.mjs) (a copy of [Chapter 10's helper](../10-responsive-design/README.md)) to read back what Chrome computed — font load status, contrast ratios, even individual **pixel colours** from a screenshot, to check the maths of gradients and blend modes. The one web font used, **Inter**, is in [`code/media/`](code/media/) with its SIL Open Font License.
+As in Chapters 7–10, every example is a page in [`code/`](code/), its screenshot in [`img/`](img/) is made by [`code/make_figures.mjs`](code/make_figures.mjs), and the `NN_*.mjs` scripts use [`code/measure.mjs`](code/measure.mjs) (a copy of [Chapter 10's helper](../10-responsive-design/README.md)) to read back what Chrome computed — font load status, contrast ratios, even individual **pixel colours** from a screenshot, to check the maths of gradients and blend modes. The one web font used, **Inter**, is in [`code/media/`](code/media/) with its SIL Open Font License (a free licence that allows using and redistributing the font).
 
 ---
 
@@ -49,7 +49,7 @@ h1 { font: italic 700 2rem/1.2 Georgia, serif; }
 | `cursive`, `fantasy` | script / decorative | varies wildly — avoid for body text |
 | `ui-serif`, `ui-sans-serif`, `ui-monospace`, `ui-rounded` | the OS's UI variants | only some platforms (Apple mainly) |
 
-A **system font stack** (`system-ui, …, sans-serif`) costs zero downloads and looks native — GitHub and many design systems use one. Family names with spaces should be quoted; generic names must *not* be quoted (`"serif"` means a font literally named "serif").
+A **system font stack** (`system-ui, …, sans-serif`) costs zero downloads and looks native (like the operating system's own apps) — GitHub and many design systems (a team's shared set of styles and components) use one. Family names with spaces should be quoted; generic names must *not* be quoted (`"serif"` means a font literally named "serif").
 
 ![Row 1: six samples in serif, sans-serif, monospace, system-ui, cursive and a Georgia stack. Row 2: the letters Aa in Inter at weights 100, 250, 400, 550, 700, 900 and wght 650, from hairline to very heavy. Row 3: Georgia's true italic, Inter slanted by the browser, and the same text upright because font-synthesis is none](img/01_fonts.png)
 
@@ -70,14 +70,14 @@ A **system font stack** (`system-ui, …, sans-serif`) costs zero downloads and 
 How it works:
 1. `@font-face` only *declares* a font; nothing downloads yet.
 2. When the browser lays out text that needs that family (with a matching weight/style), it **downloads the file** — lazily.
-3. For each weight/style request, the browser picks the `@font-face` rule whose descriptors (`font-weight`, `font-style`, `font-stretch`) match best. With static fonts you write one rule per file (Regular 400, Bold 700, Italic…) all sharing one `font-family` name.
+3. For each weight/style request, the browser picks the `@font-face` rule whose descriptors (the property-like settings inside `@font-face`: `font-weight`, `font-style`, `font-stretch`) match best. With static fonts (ordinary fonts with one fixed weight and style per file) you write one rule per file (Regular 400, Bold 700, Italic…) all sharing one `font-family` name.
 4. If no face matches a requested bold or italic, the browser **synthesizes** one: it smears the glyphs for bold and slants them for italic. `font-synthesis: none` turns this off (see the last sample in Figure 11.1 — it stays upright instead of faking italic).
 
 ### Font formats
 
 | Format | Use |
 |---|---|
-| **WOFF2** | The only one you need today: compressed with Brotli, supported by every current browser |
+| **WOFF2** | The only one you need today: compressed with Brotli (a modern compression method), supported by every current browser |
 | WOFF | Older compressed format; only for very old browsers |
 | TTF / OTF | Desktop formats; larger; avoid on the web |
 | EOT, SVG fonts | Obsolete |
@@ -91,9 +91,9 @@ A **variable font** stores one or more **axes** of variation in a single file, s
 | `wdth` | width | `font-stretch: 85%` |
 | `ital` | italic on/off | `font-style: italic` |
 | `slnt` | slant angle | `font-style: oblique 10deg` |
-| `opsz` | optical size (shapes tuned for small vs large text) | `font-optical-sizing: auto` (default) |
+| `opsz` | optical size (letter shapes tuned for small vs large text) | `font-optical-sizing: auto` (default) |
 
-`font-variation-settings: "wght" 650, "GRAD" 50` sets axes directly — needed for **custom axes** (uppercase tags such as `GRAD`, grade) but it overrides the higher-level properties and isn't inherited in a composable way, so use the normal properties where one exists. Variable fonts are Baseline widely available (2018).
+`font-variation-settings: "wght" 650, "GRAD" 50` sets axes directly — needed for **custom axes** (uppercase tags such as `GRAD`, grade) but it overrides the higher-level properties and isn't inherited in a composable way (a child setting one axis wipes out the axes its parent set), so use the normal properties where one exists. Variable fonts are Baseline widely available (supported in all major browsers; since 2018).
 
 [`code/01_fonts.mjs`](code/01_fonts.mjs) confirms the one file serves the whole range and really changes the outlines:
 
@@ -116,7 +116,7 @@ font-synthesis on the last sample: none
 
 ### Common mistakes
 - No generic family at the end — if the web font fails, you get the browser default (often Times).
-- Asking for `font-weight: 600` when only 400 and 700 files exist — the browser picks 700 (the nearest heavier face); `font-weight: bold` on a family with no bold face → faux bold.
+- Asking for `font-weight: 600` when only 400 and 700 files exist — the browser picks 700 (the nearest heavier face); `font-weight: bold` on a family with no bold face → faux bold (fake bold, made by the browser thickening the regular letters).
 - Loading five weights "just in case". Check which weights the design actually uses.
 - Quoting generic names: `font-family: "sans-serif"` is a (missing) font called sans-serif.
 
@@ -133,7 +133,7 @@ font-synthesis on the last sample: none
 A web font is a separate download that usually starts **late** — only after HTML and CSS are parsed and the browser knows the text needs it. Meanwhile the browser must decide what to show. Two historical failure modes:
 
 - **FOIT** (Flash Of Invisible Text): text is hidden until the font arrives. On a slow network, readers stare at blank space.
-- **FOUT** (Flash Of Unstyled Text): text shows in a fallback font, then **swaps** — the reflow may shift content (hurting **CLS**, Cumulative Layout Shift, a Core Web Vital — [Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md)).
+- **FOUT** (Flash Of Unstyled Text): text shows in a fallback font, then **swaps** — the reflow (re-calculation of layout) may shift content (hurting **CLS**, Cumulative Layout Shift, a Core Web Vital — one of Google's headline page-experience metrics — [Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md)).
 
 ### `font-display`
 The `font-display` descriptor chooses the trade-off by setting two periods (CSS Fonts Level 4; Baseline widely available):
@@ -145,12 +145,12 @@ The `font-display` descriptor chooses the trade-off by setting two periods (CSS 
 | Value | Block period | Swap period | Use for |
 |---|---|---|---|
 | `auto` | browser decides (usually like `block`) | | — |
-| `block` | short (spec suggests 3 s) | infinite | icon fonts, where fallback glyphs would be wrong |
+| `block` | short (spec suggests 3 s) | infinite | icon fonts (fonts whose characters are pictures), where fallback glyphs would be wrong |
 | `swap` | extremely short (≈0–100 ms) | infinite | brand/heading fonts that must appear |
 | `fallback` | extremely short | short (≈3 s) | body text: use the font only if it comes quickly |
-| `optional` | extremely short (≈100 ms) | **none** | body text where stability matters most; the font is used from cache on later pages |
+| `optional` | extremely short (≈100 ms) | **none** | body text where stability matters most; the font is used from cache (the browser's store of already-downloaded files) on later pages |
 
-[`code/02_font_display.html`](code/02_font_display.html) declares the same font three times with `block`, `swap` and `optional` (a Georgia fallback so you can *see* which is in use). [`code/02_font_display.mjs`](code/02_font_display.mjs) intercepts the network and delays every font download by 1.5 seconds (timings are machine-dependent):
+[`code/02_font_display.html`](code/02_font_display.html) declares the same font three times with `block`, `swap` and `optional` (a Georgia fallback so you can *see* which is in use). [`code/02_font_display.mjs`](code/02_font_display.mjs) intercepts the network (catches each request before it goes out) and delays every font download by 1.5 seconds (timings are machine-dependent):
 
 ```
 t≈301ms  F-block=loading  F-swap=loading  F-optional=loading
@@ -170,15 +170,15 @@ t≈3503ms  F-block=loaded  F-swap=loaded  F-optional=loaded
 
 | Technique | How | Why |
 |---|---|---|
-| **Preload** the critical font | `<link rel="preload" href="/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>` | Starts the download while HTML is parsed instead of after CSS. Font requests are always CORS-mode, so `crossorigin` is required even for same-origin files — without it the preload is wasted. Preload only 1–2 fonts. |
-| **Self-host** | Serve the files from your own domain | No extra DNS/TLS connection; no third-party privacy question (in January 2022 the Munich Regional Court — LG München I, case 3 O 17493/20 — held that loading Google-hosted fonts sent visitors' IP addresses to Google without consent, breaching the GDPR, and awarded the visitor €100) |
+| **Preload** the critical font | `<link rel="preload" href="/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>` | Starts the download while HTML is parsed instead of after CSS. Font requests are always CORS-mode (CORS, Cross-Origin Resource Sharing, is the set of rules for loading resources across sites), so `crossorigin` is required even for same-origin files — without it the preload is wasted. Preload only 1–2 fonts. |
+| **Self-host** | Serve the files from your own domain | No extra DNS/TLS connection (no extra address lookup and secure handshake with another server; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)); no third-party (another company's server) privacy question (in January 2022 the Munich Regional Court — LG München I, case 3 O 17493/20 — held that loading Google-hosted fonts sent visitors' IP addresses (the numeric network address of their device) to Google without consent, breaching the GDPR (the EU's data-protection law), and awarded the visitor €100) |
 | **Subset** | Keep only the characters you need; declare `unicode-range: U+0000-00FF, …` | The Inter file here is only the Latin subset (48 KB). Browsers download a `unicode-range` face only if the page uses one of those characters. |
-| **Match the fallback's metrics** | `@font-face { font-family: "Inter Fallback"; src: local("Arial"); size-adjust: 107%; }` | The swap then barely moves text, reducing CLS. `size-adjust` works in all current browsers (Safari since 17); `ascent-override`/`descent-override` are not yet supported in Safari. |
+| **Match the fallback's metrics** (its letter sizes and line spacing) | `@font-face { font-family: "Inter Fallback"; src: local("Arial"); size-adjust: 107%; }` | The swap then barely moves text, reducing CLS. `size-adjust` works in all current browsers (Safari since 17); `ascent-override`/`descent-override` are not yet supported in Safari. |
 | **Fewer files** | One variable font instead of 4–6 static ones | Fewer requests |
-| **Cache** | Long `Cache-Control` max-age with hashed file names | Later pages are instant |
+| **Cache** | Long `Cache-Control` max-age (an HTTP header saying how long the browser may reuse the file) with hashed file names (names containing a fingerprint of the content, so a new version gets a new name) | Later pages are instant |
 
 ### From JavaScript
-The **CSS Font Loading API** (`document.fonts`) exposes each face (`status: "unloaded" | "loading" | "loaded" | "error"`), `document.fonts.load('700 1em Inter')` to start a load, and `document.fonts.ready` (a promise) — which the chapter scripts await before measuring.
+The **CSS Font Loading API** (`document.fonts`; an API is a set of functions a program offers to other code) exposes each face (`status: "unloaded" | "loading" | "loaded" | "error"`), `document.fonts.load('700 1em Inter')` to start a load, and `document.fonts.ready` (a promise — a JavaScript object representing a result that arrives later) — which the chapter scripts await before measuring.
 
 ### In the interview
 **30-second answer:** "Web fonts load late, so text either goes invisible (FOIT) or shows a fallback then swaps (FOUT) and can shift layout. I choose `font-display`: `swap` for brand text, `optional` or `fallback` for body text, `block` only for icon fonts. I self-host WOFF2, subset with `unicode-range`, preload the one or two critical files with `crossorigin`, use a variable font instead of many weights, and tune the fallback with `size-adjust` to reduce CLS."
@@ -204,14 +204,14 @@ Follow-ups:
 | `line-height` | `1.5` | **Unitless** (see below). Body 1.4–1.6, headings 1.1–1.25 |
 | `letter-spacing` | `0.08em` | Small positive values for ALL-CAPS labels; slightly negative for large headings |
 | `word-spacing` | `0.1em` | Rarely needed |
-| `text-align` | `start` \| `end` \| `center` \| `justify` | `start`/`end` follow writing direction; avoid `justify` without hyphenation (rivers of space) |
-| `text-transform` | `uppercase` \| `capitalize` | Keep real capitals in the HTML if they matter; screen readers read the source text |
+| `text-align` | `start` \| `end` \| `center` \| `justify` | `start`/`end` follow writing direction; avoid `justify` without hyphenation (rivers of space: gaps lining up down the paragraph) |
+| `text-transform` | `uppercase` \| `capitalize` | Keep real capitals in the HTML if they matter; screen readers (software that reads pages aloud) read the source text |
 | `text-indent` | `2em` | First-line indent (books) |
 | `text-decoration` | `underline wavy red` | Longhands: `-line`, `-style` (solid/double/dotted/dashed/wavy), `-color`, `-thickness` |
-| `text-underline-offset` | `0.2em` | Moves the underline away from descenders |
+| `text-underline-offset` | `0.2em` | Moves the underline away from descenders (the tails of g, p, y) |
 | `white-space` | `nowrap` \| `pre` \| `pre-wrap` | Controls collapsing of spaces and wrapping |
 | `overflow-wrap` | `anywhere` \| `break-word` | Break a long word/URL only if it would overflow ([§10.10](../10-responsive-design/README.md)) |
-| `word-break` | `break-all` | Break between any letters — harsh; mainly for CJK or code |
+| `word-break` | `break-all` | Break between any letters — harsh; mainly for CJK (Chinese, Japanese, Korean) or code |
 | `hyphens` | `auto` | Dictionary hyphenation; needs a `lang` attribute; Baseline since 2023 |
 | `text-wrap` | `balance` \| `pretty` | Better line breaking (below) |
 | `font-variant-numeric` | `tabular-nums` | Equal-width digits for tables and prices |
@@ -239,7 +239,7 @@ A unitless value is inherited as a **factor** and re-multiplied by each element'
 Comfortable reading needs roughly **45–75 characters per line** (a classic typographic rule of thumb). `max-inline-size: 65ch` (the `ch` unit ≈ the width of "0") keeps paragraphs in that range at any screen size.
 
 ### Better line breaking: `text-wrap`
-- `text-wrap: balance` makes all lines of a short block about equally long — no single orphaned word under a long headline. Browsers only balance short blocks (a handful of lines) because it is expensive. **Baseline since May 2024.**
+- `text-wrap: balance` makes all lines of a short block about equally long — no single orphaned word (a lone word left on the last line) under a long headline. Browsers only balance short blocks (a handful of lines) because it is expensive. **Baseline since May 2024.**
 - `text-wrap: pretty` uses a slower algorithm for paragraphs that mainly avoids a very short last line. Supported in Chrome and Safari 26 but not Firefox — **not Baseline**; harmless to add as an enhancement.
 
 ### Truncation
@@ -250,7 +250,7 @@ Comfortable reading needs roughly **45–75 characters per line** (a classic typ
 /* N lines with "…" — the prefixed syntax is the one that works in every browser */
 .desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 ```
-The unprefixed `line-clamp` property is specified but not yet implemented by browsers; the `-webkit-` version above is interoperable. Truncation hides content from sighted users only — make sure the full text is reachable (a details page, or a `title`/tooltip is **not** enough for touch and keyboard users).
+The unprefixed `line-clamp` property is specified but not yet implemented by browsers; the `-webkit-` (vendor-prefixed — originally one engine's own extension) version above is interoperable (works the same in every browser). Truncation hides content from sighted users only — make sure the full text is reachable (a details page, or a `title`/tooltip is **not** enough for touch and keyboard users).
 
 A common trap, visible while building Figure 11.3: in a `1fr` grid column, a `nowrap` line makes the **column** grow to fit the text, so no ellipsis appears. The fix is `minmax(0, 1fr)` ([§9.10](../09-grid/README.md)) or `min-width: 0` on the flex/grid item.
 
@@ -273,7 +273,7 @@ A common trap, visible while building Figure 11.3: in a `1fr` grid column, a `no
 [Chapter 6 §6.8](../06-css-fundamentals/README.md) introduced colour notations (hex, `rgb()`, `hsl()`, `oklch()`, alpha, `currentColor`). This section is about choosing colours people can read, and deriving palettes from one brand colour.
 
 ### Contrast ratio — what it is
-WCAG defines **contrast ratio** between two colours as `(L1 + 0.05) / (L2 + 0.05)`, where L1 is the **relative luminance** of the lighter colour and L2 of the darker. It runs from **1:1** (same colour) to **21:1** (black on white).
+WCAG defines **contrast ratio** between two colours as `(L1 + 0.05) / (L2 + 0.05)`, where L1 is the **relative luminance** (how bright a colour looks, from 0 for black to 1 for white) of the lighter colour and L2 of the darker. It runs from **1:1** (same colour) to **21:1** (black on white).
 
 ### How it is computed
 [`code/contrast.mjs`](code/contrast.mjs):
@@ -295,7 +295,7 @@ export const ratio = (a, b) => { const [hi, lo] = [luminance(a), luminance(b)].s
 |---|---|---|
 | 1.4.3 Contrast (normal text) | AA | **4.5:1** |
 | 1.4.3 Large text (≥ 24px, or ≥ 18.66px bold) | AA | **3:1** |
-| 1.4.6 Enhanced contrast | AAA | 7:1 (large: 4.5:1) |
+| 1.4.6 Enhanced contrast | AAA (the highest, strictest WCAG level) | 7:1 (large: 4.5:1) |
 | 1.4.11 Non-text contrast (icons, input borders, focus rings, chart lines) | AA | **3:1** against adjacent colours |
 
 Logos and purely decorative or disabled elements are exempt. See [Chapter 3 §3.9](../03-semantic-html-and-accessibility/README.md) for the rest of WCAG.
@@ -320,14 +320,14 @@ brand on oklch(from brand 95% 0.03 h)        -> oklch(0.55 0.2 260) on oklch(0.9
 - **#767676** is the lightest grey that passes AA on white; one step lighter (#777777) fails.
 - White on a typical "blue-500" button (#3b82f6) is only 3.68:1 — fine for large bold text, **not** for normal-size labels. Many design systems use a darker shade for button backgrounds for this reason.
 - Yellow text on white is nearly invisible (1.44:1).
-- The last row: the complementary colour has the **same** OKLCH lightness (55%) as the brand, yet black on it gives 4.25:1 while white on the brand gives 5.02:1. OKLCH lightness is perceptual but it is *not* the WCAG luminance; always check the actual pair.
+- The last row: the complementary colour (the one opposite on the colour wheel) has the **same** OKLCH lightness (55%) as the brand, yet black on it gives 4.25:1 while white on the brand gives 5.02:1. OKLCH lightness is perceptual but it is *not* the WCAG luminance; always check the actual pair.
 
 ![Swatches with their computed contrast: black on white 21:1 AAA, grey 4.54:1 AA, white on blue button 3.68:1 large/UI only, yellow 1.44:1 FAIL; and four colours derived from a brand blue: brand 5.02:1, darker color-mix 10.04:1, pale tint 4.32:1, orange complement 4.25:1](img/04_contrast.png)
 
 *Figure 11.4 — Contrast computed inside the page from the browser's own colours.*
 
 ### Deriving colours: `color-mix()` and relative colour syntax
-Instead of hard-coding every shade, derive them from one token:
+Instead of hard-coding every shade, derive them from one token (a named design value stored in a custom property):
 
 ```css
 :root { --brand: oklch(55% 0.2 260); }
@@ -342,13 +342,13 @@ Instead of hard-coding every shade, derive them from one token:
 
 ### Other colour tools
 - `currentColor` — the element's `color` value; great for icons and borders that follow text colour.
-- `accent-color: #1d4ed8` — tints checkboxes, radios, range sliders and progress bars. Not yet Baseline (Chrome for Android lacks it), but it degrades gracefully.
+- `accent-color: #1d4ed8` — tints checkboxes, radios, range sliders and progress bars. Not yet Baseline (Chrome for Android lacks it), but it degrades gracefully (browsers without it simply show the default colour).
 - `color-scheme` and `light-dark()` — [§10.5](../10-responsive-design/README.md).
 
 ### Accessibility beyond ratios
 - **Never use colour alone** to carry meaning (WCAG 1.4.1): add an icon, text or pattern to "red = error", and underline links in text.
-- About 1 in 12 men has some form of colour-vision deficiency; red/green pairs are the classic problem. DevTools (Rendering → Emulate vision deficiencies) simulates them.
-- **APCA**, a newer perceptual contrast method, is being explored for the future WCAG 3; it is not a requirement today. WCAG 2.2's ratio is what audits and laws reference.
+- About 1 in 12 men has some form of colour-vision deficiency (colour blindness); red/green pairs are the classic problem. DevTools (Rendering → Emulate vision deficiencies) simulates them.
+- **APCA** (Accessible Perceptual Contrast Algorithm), a newer perceptual contrast method, is being explored for the future WCAG 3; it is not a requirement today. WCAG 2.2's ratio is what audits and laws reference.
 
 ### In the interview
 **30-second answer:** "WCAG contrast is (L1 + 0.05)/(L2 + 0.05) using relative luminance; AA needs 4.5:1 for body text, 3:1 for large text and for UI components like input borders and focus rings. I check real pairs with DevTools or a script — lightness in HSL or even OKLCH doesn't guarantee it — and I never rely on colour alone. For palettes I define a brand token in OKLCH and derive shades with `color-mix()` or relative colour syntax."
@@ -373,11 +373,11 @@ Instead of hard-coding every shade, derive them from one token:
 | `background-size` | `auto` \| `cover` \| `contain` \| `200px 100px` | `cover` fills and crops; `contain` fits entirely |
 | `background-origin` | `padding-box` \| `border-box` \| `content-box` | Box that positions the image |
 | `background-clip` | `border-box` \| `padding-box` \| `content-box` \| `text` | Box where painting stops |
-| `background-attachment` | `scroll` \| `fixed` \| `local` | `fixed` is ignored on iOS and is not Baseline; it also costs repaint performance |
+| `background-attachment` | `scroll` \| `fixed` \| `local` | `fixed` is ignored on iOS and is not Baseline; it also costs repaint performance (the browser must redraw on every scroll) |
 | `background` | shorthand | `url(a.jpg) center / cover no-repeat, #e0f2fe` — `size` goes after `position` with a `/` |
 
 ### Gradients
-A **gradient** is an image generated by the browser — no download, crisp at any size, animatable only indirectly.
+A **gradient** is an image generated by the browser — no download, crisp at any size, animatable (able to be smoothly animated) only indirectly.
 
 | Function | Shape | Example |
 |---|---|---|
@@ -393,7 +393,7 @@ A **gradient** is an image generated by the browser — no download, crisp at an
 *Figure 11.5 — [`code/05_backgrounds.html`](code/05_backgrounds.html).*
 
 ### Interpolation colour space
-By default gradients blend in **sRGB**, which makes complementary colours pass through a muddy grey. Since June 2024 (Baseline) you can pick the space: `linear-gradient(in oklch to right, blue, yellow)`. [`code/05_backgrounds.mjs`](code/05_backgrounds.mjs) screenshots the page and reads the pixel in the middle:
+By default gradients blend in **sRGB** (the standard colour space of ordinary screens), which makes complementary colours pass through a muddy grey. Since June 2024 (Baseline) you can pick the space: `linear-gradient(in oklch to right, blue, yellow)`. [`code/05_backgrounds.mjs`](code/05_backgrounds.mjs) screenshots the page and reads the pixel in the middle:
 
 ```
 .srgb   at  50%: rgb(128, 128, 127)
@@ -421,7 +421,7 @@ Text over photos needs contrast. Put a gradient layer **above** the image:
 .gradient-text { background: linear-gradient(90deg, #2563eb, #db2777);
                  -webkit-background-clip: text; background-clip: text; color: transparent; }
 ```
-Write both lines: web-features still lists unprefixed `background-clip: text` as not Baseline. Check contrast at the gradient's lightest point, and keep a solid `color` fallback in forced-colours mode.
+Write both lines: web-features (the open dataset behind Baseline labels) still lists unprefixed `background-clip: text` as not Baseline. Check contrast at the gradient's lightest point, and keep a solid `color` fallback in forced-colours mode (an operating-system high-contrast setting that replaces page colours with the user's own).
 
 ### Common mistakes
 - Putting the gradient layer **after** the image — it ends up underneath and invisible.
@@ -452,7 +452,7 @@ Rounds the corners of the **border box** (and clips the background with it):
 | `999px` | a **pill**: a very large radius is reduced to fit, so the ends are exact semicircles at any height |
 | `50% / 30%` | **elliptical** corners: horizontal radii / vertical radii |
 
-Percentages are relative to the box's own width (horizontal radius) and height (vertical radius). When adjacent radii would overlap, the browser scales all radii down proportionally. (The `corner-shape` property for squircles and bevels is Chromium-only in 2026.)
+Percentages are relative to the box's own width (horizontal radius) and height (vertical radius). When adjacent radii would overlap, the browser scales all radii down proportionally. (The `corner-shape` property for squircles (smooth square–circle hybrids) and bevels (cut-off corners) is Chromium-only — only in browsers built on Google's engine — in 2026.)
 
 ![Fourteen samples: mixed dashed/double/solid borders, 12px rounded box, blue pill button, green circle, purple ellipse, a box with two opposite rounded corners, a box with an orange outline 4px outside its grey border, a box with a light blue box-shadow ring, two card elevations, an inset shadow, white text with blue and blurred text-shadows, and a star image with a square box-shadow vs a star-shaped drop-shadow](img/06_borders_shadows.png)
 
@@ -503,7 +503,7 @@ box-shadow: [inset] <offset-x> <offset-y> [<blur>] [<spread>] <colour>, … ;
 | `inset` | Draws inside the box (pressed/sunken look) |
 | multiple, comma-separated | First one on top; layer a tight dark shadow and a large soft one for realistic depth |
 
-**Elevation** systems (Material Design, most component libraries) express how "high" a surface floats with a set of increasingly large, soft, offset shadows:
+**Elevation** systems (Material Design — Google's design system — and most component libraries) express how "high" a surface floats with a set of increasingly large, soft, offset shadows:
 
 ```css
 .elev1 { box-shadow: 0 1px 2px rgb(0 0 0 / .12), 0 1px 3px rgb(0 0 0 / .08); }
@@ -516,10 +516,10 @@ The negative spread keeps the large soft shadow from peeking out at the sides. S
 `text-shadow: <x> <y> [<blur>] <colour>, …` — no spread, no inset. Use for legibility on busy images (a soft dark halo) or for display effects; keep body text shadow-free.
 
 ### `filter: drop-shadow()`
-`box-shadow` follows the **box** (a rectangle, or its rounded corners). `filter: drop-shadow(x y blur colour)` follows the element's actual **alpha shape** — the star in Figure 11.6 gets a star-shaped shadow. It has no spread or inset, and costs more to render.
+`box-shadow` follows the **box** (a rectangle, or its rounded corners). `filter: drop-shadow(x y blur colour)` follows the element's actual **alpha shape** (the outline of its non-transparent pixels) — the star in Figure 11.6 gets a star-shaped shadow. It has no spread or inset, and costs more to render.
 
 ### Performance
-Large blurred shadows are expensive to paint; **animating** `box-shadow` repaints every frame. To animate elevation, put the bigger shadow on a pseudo-element and animate its `opacity` instead ([Chapter 12](../12-transitions-transforms-and-animation/README.md)).
+Large blurred shadows are expensive to paint; **animating** `box-shadow` repaints every frame. To animate elevation, put the bigger shadow on a pseudo-element (a CSS-generated box such as `::after`) and animate its `opacity` instead ([Chapter 12](../12-transitions-transforms-and-animation/README.md)).
 
 ### Self-check
 1. What does a negative spread do? → Shrinks the shadow before blur, so it doesn't extend beyond the box's sides.
@@ -538,7 +538,7 @@ Applies image-processing functions to an element **and everything inside it**, i
 
 | Function | Example | Effect |
 |---|---|---|
-| `blur()` | `blur(3px)` | Gaussian blur |
+| `blur()` | `blur(3px)` | Gaussian blur (a smooth, even blur) |
 | `brightness()` | `brightness(1.4)` | < 1 darker, > 1 brighter |
 | `contrast()` | `contrast(1.8)` | |
 | `grayscale()` | `grayscale(1)` | 0–1 (or %) |
@@ -557,8 +557,8 @@ Filters whatever is **behind** the element (the element must be at least partly 
 
 ### Blend modes
 - `mix-blend-mode` — how the element's pixels combine with the content **behind** it.
-- `background-blend-mode` — how an element's **own background layers** (images, gradients, colour) combine with each other; used for duotone images.
-- `isolation: isolate` — creates a new stacking context so blending stays inside a group ([§7.8](../07-box-model-and-layout-basics/README.md)).
+- `background-blend-mode` — how an element's **own background layers** (images, gradients, colour) combine with each other; used for duotone images (pictures recoloured in two tones).
+- `isolation: isolate` — creates a new stacking context (a group of elements layered as one unit) so blending stays inside a group ([§7.8](../07-box-model-and-layout-basics/README.md)).
 
 Main modes, per colour channel with values 0–1 (a = top, b = backdrop): `multiply` = a·b (always darker; white disappears), `screen` = 1 − (1−a)(1−b) (always lighter; black disappears), `overlay`, `darken`/`lighten`, `difference` = |a − b|, `luminosity`/`color`/`hue`/`saturation` (mix HSL-like components). [`code/07_filters_blend.mjs`](code/07_filters_blend.mjs) blends #ef4444 over a sky blue and compares the screenshot pixel with the formula:
 
@@ -573,7 +573,7 @@ difference by hand rgb(139, 82, 167)  browser rgb(139, 82, 167)
 - `mask-image` uses an image's **alpha** (or luminance) as a soft mask: `mask-image: linear-gradient(to right, #000 40%, transparent)` fades an element out. Unprefixed masks are Baseline since December 2023.
 
 ### Side effects to remember
-A `filter`, `backdrop-filter`, `mix-blend-mode`, `clip-path`, `mask` or `opacity < 1` **creates a stacking context** ([§7.8](../07-box-model-and-layout-basics/README.md)); a non-`none` `filter` or `backdrop-filter` also becomes the **containing block for `position: fixed` descendants** — a "fixed" header inside a filtered parent scrolls with it. Filters and backdrop filters are GPU work; large blurred areas on low-end phones can drop frames.
+A `filter`, `backdrop-filter`, `mix-blend-mode`, `clip-path`, `mask` or `opacity < 1` **creates a stacking context** ([§7.8](../07-box-model-and-layout-basics/README.md)); a non-`none` `filter` or `backdrop-filter` also becomes the **containing block for `position: fixed` descendants** — a "fixed" header inside a filtered parent scrolls with it. Filters and backdrop filters are GPU (graphics chip) work; large blurred areas on low-end phones can drop frames (skip screen updates, so animation stutters).
 
 ### Self-check
 1. Which blend mode makes white disappear? → `multiply`.
@@ -585,12 +585,12 @@ A `filter`, `backdrop-filter`, `mix-blend-mode`, `clip-path`, `mask` or `opacity
 ## 11.9 `object-fit` and `object-position`
 
 ### What it is
-For **replaced elements** — `<img>`, `<video>`, `<canvas>`, `<iframe>` content — `object-fit` decides how the content fills the element's box when their aspect ratios differ. It's the `background-size` of images. Baseline widely available (2020).
+For **replaced elements** (elements whose content comes from an external file or source, not from CSS) — `<img>`, `<video>`, `<canvas>`, `<iframe>` content — `object-fit` decides how the content fills the element's box when their aspect ratios differ. It's the `background-size` of images. Baseline widely available (2020).
 
 | Value | Scale factor | Result |
 |---|---|---|
 | `fill` (default) | separate x and y | Stretched to the box — **distorted** |
-| `contain` | min(box/content) per axis | Whole image visible, **letterboxed** |
+| `contain` | min(box/content) per axis | Whole image visible, **letterboxed** (empty bars fill the leftover space) |
 | `cover` | max(box/content) per axis | Box completely filled, overflow **cropped** |
 | `none` | 1 | Natural size, centred, cropped |
 | `scale-down` | the smaller of `none` and `contain` | Never enlarges |
@@ -621,7 +621,7 @@ A percentage position means "align that percentage point of the image with the s
 - **Product photos** that must not be cropped: `object-fit: contain` with a neutral background.
 - **Hero video**: `<video autoplay muted loop playsinline>` with `object-fit: cover` to fill a full-width banner.
 - **Grid cells**: images inside grid cells don't stretch by default ([§9.10](../09-grid/README.md)); `width: 100%; height: 100%; object-fit: cover` fills them.
-- When cropping could cut off the subject (faces), set `object-position` per image, e.g. with an inline `style="object-position: 30% 20%"` from a CMS focal point.
+- When cropping could cut off the subject (faces), set `object-position` per image, e.g. with an inline `style="object-position: 30% 20%"` from a CMS (content management system — the app editors use to manage site content) focal point (the spot an editor marked as most important).
 
 ### Common mistakes
 - Setting only `width` on an `<img>` and expecting `object-fit` to do anything — the box must have both dimensions (via `height` or `aspect-ratio`) that differ from the image's ratio.

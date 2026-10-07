@@ -1,23 +1,23 @@
 # Chapter 10 — Responsive Design
 
-People open the same page on a 360px-wide phone, a tablet turned sideways, a 1440px laptop and a 2560px monitor — and some of them have set a larger default font, zoomed to 200%, switched their system to dark mode or asked it to reduce motion. **Responsive design** is the practice of building *one* page that works well in all of those situations, instead of a separate "mobile site". Chapters 7–9 gave you the layout tools (flow, flexbox, grid); this chapter is about making those layouts **adapt**.
+People open the same page on a 360px-wide phone, a tablet turned sideways, a 1440px laptop and a 2560px monitor — and some of them have set a larger default font, zoomed to 200%, switched their system to dark mode (light text on a dark background) or asked it to reduce motion (fewer animations, which can cause dizziness or nausea for some people). **Responsive design** is the practice of building *one* page that works well in all of those situations, instead of a separate "mobile site". Chapters 7–9 gave you the layout tools (flow, flexbox, grid); this chapter is about making those layouts **adapt**.
 
 **What you'll learn**
 
 | # | Topic | You will be able to… |
 |---|---|---|
-| 10.1 | What responsive design is | name its three ingredients and explain mobile-first |
+| 10.1 | What responsive design is | name its three ingredients and explain mobile-first (design for phones first, then add for bigger screens) |
 | 10.2 | The viewport meta tag and viewport units | explain why phones need it, and choose between `vh`, `svh`, `lvh`, `dvh` |
 | 10.3 | Media queries | write queries with types, features, range syntax and logic, and use them from JavaScript |
-| 10.4 | Mobile-first in practice | build a page that goes from 1 to 3 columns with two breakpoints |
+| 10.4 | Mobile-first in practice | build a page that goes from 1 to 3 columns with two breakpoints (screen widths at which the layout changes) |
 | 10.5 | User-preference queries | support dark mode, higher contrast and reduced motion |
 | 10.6 | Container queries | make a component adapt to the space *it* is given, not the screen |
 | 10.7 | Fluid typography with `clamp()` | derive a fluid font-size formula and keep it accessible |
 | 10.8 | Responsive images recap | pick the right image with `srcset`/`sizes`/`<picture>` and `image-set()` |
 | 10.9 | Intrinsic layouts | build layouts that adapt with no breakpoints at all |
-| 10.10 | Testing responsive design | test with DevTools, real devices, zoom — and automate an overflow check |
+| 10.10 | Testing responsive design | test with DevTools (the browser's built-in developer tools), real devices, zoom — and automate an overflow check |
 
-Every example is a page in [`code/`](code/). The screenshots in [`img/`](img/) were taken in headless Chrome by [`code/make_figures.mjs`](code/make_figures.mjs), and the `NN_*.mjs` scripts print what the browser actually computed (which queries match, resolved grid columns, font sizes). They use the helper [`code/measure.mjs`](code/measure.mjs) — the same idea as in [Chapters 7–9](../09-grid/README.md), extended with **viewport width**, **phone emulation** and **OS-preference emulation** (dark mode, contrast). Many screenshots are "contact sheets": the *same* page at several widths, side by side, with the width in red above each one.
+Every example is a page in [`code/`](code/). The screenshots in [`img/`](img/) were taken in headless Chrome (Chrome driven by a script, with no window) by [`code/make_figures.mjs`](code/make_figures.mjs), and the `NN_*.mjs` scripts print what the browser actually computed (which queries match, resolved grid columns, font sizes). They use the helper [`code/measure.mjs`](code/measure.mjs) — the same idea as in [Chapters 7–9](../09-grid/README.md), extended with **viewport width**, **phone emulation** (making desktop Chrome behave like a phone) and **OS-preference emulation** (pretending the operating system has settings such as dark mode or high contrast). Many screenshots are "contact sheets": the *same* page at several widths, side by side, with the width in red above each one.
 
 ---
 
@@ -35,9 +35,9 @@ A **responsive** page rearranges and resizes itself to fit the **viewport** (the
 Analogy: water takes the shape of whatever glass you pour it into. A fixed-width page is an ice cube — it fits only one glass.
 
 ### Why it matters
-- Most web traffic worldwide is from phones; a page that needs sideways scrolling or pinch-zoom on a phone loses readers.
+- Most web traffic worldwide is from phones; a page that needs sideways scrolling or pinch-zoom (spreading two fingers to enlarge) on a phone loses readers.
 - Search engines index the mobile version of a page first ("mobile-first indexing" at Google), so a broken mobile layout hurts discovery ([Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md)).
-- Accessibility law and WCAG 2.2 require content to **reflow** at 320 CSS pixels wide and survive 200% text zoom ([§10.10](#1010-testing-responsive-design), [Chapter 3](../03-semantic-html-and-accessibility/README.md)).
+- Accessibility law and WCAG 2.2 (the Web Content Accessibility Guidelines) require content to **reflow** (rewrap into a narrow column without sideways scrolling) at 320 CSS pixels wide and survive 200% text zoom ([§10.10](#1010-testing-responsive-design), [Chapter 3](../03-semantic-html-and-accessibility/README.md)).
 
 ### Mobile-first vs desktop-first
 
@@ -45,7 +45,7 @@ Analogy: water takes the shape of whatever glass you pour it into. A fixed-width
 |---|---|---|
 | Base CSS (no query) | The phone layout | The desktop layout |
 | Queries use | `min-width` / `width >=` — *add* features as space grows | `max-width` / `width <` — *undo* features as space shrinks |
-| Small devices download/parse | only the rules they need, plus harmless overrides | desktop rules, then overrides to undo them |
+| Small devices download/parse (read and process) | only the rules they need, plus harmless overrides | desktop rules, then overrides to undo them |
 | Design pressure | Forces you to decide what matters most first | Tends to cram a big design into a small screen |
 
 Mobile-first is the common default today because the single-column phone layout is the simplest — normal flow already stacks things — and every larger layout is an *enhancement*. That is **progressive enhancement**: start with something that works everywhere, then add.
@@ -73,7 +73,7 @@ When the iPhone launched (2007), almost every site was designed for ~1000px-wide
 A **CSS pixel** is not a hardware pixel. A phone with a **device pixel ratio** (DPR) of 3 draws each CSS pixel with 3×3 physical pixels; `width=device-width` means "as many CSS pixels as the screen is wide", e.g. 390 on a typical modern phone.
 
 ### Proof
-[`code/01_no_viewport.html`](code/01_no_viewport.html) and [`code/01_viewport.html`](code/01_viewport.html) are the same page except for the tag. [`code/01_viewport.mjs`](code/01_viewport.mjs) opens both on an emulated 400px phone (Puppeteer's `isMobile: true` makes Chrome honour the meta tag like a real phone):
+[`code/01_no_viewport.html`](code/01_no_viewport.html) and [`code/01_viewport.html`](code/01_viewport.html) are the same page except for the tag. [`code/01_viewport.mjs`](code/01_viewport.mjs) opens both on an emulated 400px phone (Puppeteer — a Node.js library that controls Chrome — has an `isMobile: true` option that makes Chrome honour the meta tag like a real phone):
 
 ```
 01_no_viewport.html  layout 980px, visible 980px, scale 0.408, font-size 16px
@@ -93,7 +93,7 @@ Without the tag, the page is laid out at 980px and scaled by 400 / 980 ≈ 0.408
 | `width` | `device-width` | Layout viewport = screen width in CSS px. A number (`width=600`) is possible but rarely right. |
 | `initial-scale` | `1` | Start at 100% zoom. Also stops iOS from changing zoom on rotation. |
 | `maximum-scale`, `user-scalable=no` | **don't** | Blocking zoom fails WCAG 1.4.4 (Resize text). iOS Safari has ignored `user-scalable=no` since iOS 10 for this reason. |
-| `viewport-fit` | `cover` | For notched phones; then use `env(safe-area-inset-*)` padding. |
+| `viewport-fit` | `cover` | For notched phones (screens with a camera cut-out); then use `env(safe-area-inset-*)` padding (values the browser supplies for the unsafe edges). |
 
 ### Viewport units
 `vw` and `vh` are 1% of the viewport's width and height ([Chapter 6](../06-css-fundamentals/README.md) introduced the units). On phones the viewport height **changes** as the address bar slides in and out, so CSS Values 4 added three variants (Baseline since December 2022):
@@ -102,10 +102,10 @@ Without the tag, the page is laid out at 980px and scaled by 400 / 980 ≈ 0.408
 |---|---|---|
 | `svh` / `svw` (small) | the viewport with browser toolbars **shown** | never too tall; may leave a gap when toolbars hide |
 | `lvh` / `lvw` (large) | the viewport with toolbars **hidden** | may be hidden behind toolbars at first |
-| `dvh` / `dvw` (dynamic) | the viewport **right now** | follows the toolbars; can cause relayout while scrolling |
+| `dvh` / `dvw` (dynamic) | the viewport **right now** | follows the toolbars; can cause relayout (the browser recalculating the layout) while scrolling |
 | `vh` / `vw` (classic) | in practice the **large** viewport on mobile | why `height: 100vh` "overflows" on phones |
 
-Rules of thumb: `min-height: 100svh` or `100dvh` for full-screen heroes and the sticky footer of [§8.7](../08-flexbox/README.md); `vw` for fluid type (10.7), but never alone — it ignores zoom settings. On desktop all four heights are equal. Also available: `vi`/`vb` (inline/block direction) and `vmin`/`vmax`.
+Rules of thumb: `min-height: 100svh` or `100dvh` for full-screen heroes (the large banner section at the top of a page) and the sticky footer of [§8.7](../08-flexbox/README.md); `vw` for fluid type (10.7), but never alone — it ignores zoom settings. On desktop all four heights are equal. Also available: `vi`/`vb` (inline/block direction) and `vmin`/`vmax`.
 
 ### Common mistakes
 - Forgetting the tag: every phone breakpoint silently fails.
@@ -128,21 +128,21 @@ A **media query** is a condition about the device or environment. Rules inside `
 @media screen and (width >= 40em) { .cards { grid-template-columns: repeat(2, 1fr); } }
 ```
 
-Media queries don't add specificity; inside them normal cascade rules apply ([Chapter 6](../06-css-fundamentals/README.md)) — which is why mobile-first queries are written **after** the base rules they override.
+Media queries don't add specificity (the score that decides which competing CSS rule wins); inside them normal cascade (CSS's conflict-resolution) rules apply ([Chapter 6](../06-css-fundamentals/README.md)) — which is why mobile-first queries are written **after** the base rules they override.
 
 ### Where you can use them
 
 | Place | Example |
 |---|---|
-| CSS at-rule | `@media (width >= 40em) { … }` |
-| `<link>` | `<link rel="stylesheet" href="print.css" media="print">` — still downloaded, but not render-blocking when it doesn't match |
+| CSS at-rule (a CSS statement starting with `@`) | `@media (width >= 40em) { … }` |
+| `<link>` | `<link rel="stylesheet" href="print.css" media="print">` — still downloaded, but not render-blocking (it doesn't delay the first paint) when it doesn't match |
 | `@import` | `@import url(wide.css) (width >= 64em);` |
 | `<source>` in `<picture>` | `<source media="(width >= 800px)" srcset="wide.jpg">` ([Chapter 4](../04-images-media-and-embeds/README.md)) |
 | JavaScript | `matchMedia('(width >= 64em)')` |
 
 ### Anatomy
 
-1. **Media type** (optional): `all` (default), `screen`, `print`. Other types (`tv`, `handheld`…) are deprecated.
+1. **Media type** (optional): `all` (default), `screen`, `print`. Other types (`tv`, `handheld`…) are deprecated (officially retired; don't use them).
 2. **Media features** in parentheses: `(width >= 40em)`, `(orientation: landscape)`, `(hover: hover)`.
 3. **Logic**: `and`; a comma means **or**; `not` negates a whole query (or a condition in Level 4 syntax: `not (hover: hover)`); `only` is a legacy guard for very old browsers — harmless, no longer needed.
 
@@ -154,9 +154,9 @@ Media queries don't add specificity; inside them normal cascade rules apply ([Ch
 | `height` | `(height < 500px)` | Short landscape phones: shrink sticky headers |
 | `orientation` | `portrait` \| `landscape` | Rarely needed — width usually says more |
 | `aspect-ratio` | `(aspect-ratio >= 16/9)` | Full-screen media layouts |
-| `hover` / `any-hover` | `hover` \| `none` | Only show hover-reveal UI when the *primary* (or *any*) pointer can hover |
-| `pointer` / `any-pointer` | `fine` \| `coarse` \| `none` | Larger tap targets for touch (`coarse`) |
-| `resolution` | `(resolution >= 2x)` | High-DPR assets (prefer `srcset`/`image-set()`) |
+| `hover` / `any-hover` | `hover` \| `none` | Only show hover-reveal UI when the *primary* (or *any*) pointer (mouse, finger, pen) can hover |
+| `pointer` / `any-pointer` | `fine` \| `coarse` \| `none` | Larger tap targets (the area you can touch to activate something) for touch (`coarse`) |
+| `resolution` | `(resolution >= 2x)` | High-DPR (device pixel ratio, explained in §10.2) assets (prefer `srcset`/`image-set()`) |
 | `prefers-color-scheme` | `light` \| `dark` | Dark mode (10.5) |
 | `prefers-reduced-motion` | `reduce` \| `no-preference` | Tone down animation (10.5, [Chapter 12](../12-transitions-transforms-and-animation/README.md)) |
 | `prefers-contrast` | `more` \| `less` \| `custom` \| `no-preference` | Stronger borders/colours |
@@ -179,11 +179,11 @@ In media queries, `em` and `rem` are always relative to the **browser's default 
 
 ### Choosing breakpoints
 - Let the **content** decide: widen the window until the layout looks wrong, and add a breakpoint *there*. Device-based lists go stale.
-- For reference, popular frameworks use: Tailwind `sm 640 · md 768 · lg 1024 · xl 1280 · 2xl 1536`, Bootstrap 5 `576 · 768 · 992 · 1200 · 1400`.
+- For reference, popular frameworks (ready-made CSS libraries) use: Tailwind `sm 640 · md 768 · lg 1024 · xl 1280 · 2xl 1536`, Bootstrap 5 `576 · 768 · 992 · 1200 · 1400`.
 - Fewer is better: two or three layout breakpoints, plus intrinsic techniques (10.9) and container queries (10.6) for components.
 
 ### Media queries in JavaScript
-`window.matchMedia(query)` returns a `MediaQueryList` with `.matches` and a `change` event — useful for behaviour that CSS can't express (swap a component, pause a carousel). Don't listen to `resize` and compare `innerWidth` yourself; `change` fires only when the answer flips.
+`window.matchMedia(query)` returns a `MediaQueryList` (an object describing that query) with `.matches` and a `change` event (a notification your code can listen for) — useful for behaviour that CSS can't express (swap a component, pause a carousel — a rotating slideshow of items). Don't listen to `resize` and compare `innerWidth` yourself; `change` fires only when the answer flips.
 
 ```js
 const desktop = matchMedia('(width >= 64em)');
@@ -208,7 +208,7 @@ The last line of 10.4's output shows this firing: resizing 400 → 900 → 1100 
 ## 10.4 Mobile-first in practice
 
 ### The page
-[`code/02_mobile_first.html`](code/02_mobile_first.html) is a small travel page. The base styles (no query) are the phone layout; two `min-width`-style queries add columns. The red badge at the top shows which rule set is active (it is a `::after` whose `content` each query overrides).
+[`code/02_mobile_first.html`](code/02_mobile_first.html) is a small travel page. The base styles (no query) are the phone layout; two `min-width`-style queries add columns. The red badge at the top shows which rule set is active (it is a `::after` pseudo-element — a CSS-generated box — whose `content` each query overrides).
 
 ```css
 /* Base = phone: single column; normal flow + grid gap does the stacking */
@@ -243,13 +243,13 @@ Check by hand at 1200px: `.layout` is `max-width: 1200px` minus 2 × 14px paddin
 ### Why it works
 - **Normal flow** is already mobile-first: block elements stack. The base CSS mostly styles, it barely lays out.
 - Each query **adds** a layout; nothing has to be "undone".
-- The **DOM order** (header, cards, aside) is the reading order at every width, so keyboard and screen-reader users get the same sequence ([Chapter 3](../03-semantic-html-and-accessibility/README.md)). Reordering visually with `order` or grid placement at a breakpoint breaks that — avoid it for meaningful content.
+- The **DOM order** (header, cards, aside — the order in the HTML) is the reading order at every width, so keyboard and screen-reader (software that reads pages aloud) users get the same sequence ([Chapter 3](../03-semantic-html-and-accessibility/README.md)). Reordering visually with `order` or grid placement at a breakpoint breaks that — avoid it for meaningful content.
 
 ### Responsive navigation (common pattern)
-At phone width a long nav usually becomes a **menu button** that shows/hides the list. Accessible recipe: a real `<button aria-expanded="false" aria-controls="menu">` that toggles the list (a few lines of JS), or the Popover API (`popover` attribute, Baseline since January 2025) for a no-JS disclosure. The flex-wrap nav in the demo is the simplest option when there are only a few links.
+At phone width a long nav usually becomes a **menu button** that shows/hides the list. Accessible recipe: a real `<button aria-expanded="false" aria-controls="menu">` (ARIA attributes that tell screen readers whether the menu is open and which element it controls) that toggles the list (a few lines of JS), or the Popover API (`popover` attribute, Baseline since January 2025) for a no-JS disclosure (show/hide widget). The flex-wrap nav in the demo is the simplest option when there are only a few links.
 
 ### Responsive tables
-Wide data tables can't reflow into one column without losing their meaning. Wrap them in a scroll container: `<div class="table-wrap" tabindex="0" role="region" aria-label="Prices">` with `.table-wrap { overflow-x: auto; }` — WCAG allows two-dimensional scrolling for data tables ([Chapter 5](../05-tables-and-forms/README.md)).
+Wide data tables can't reflow into one column without losing their meaning. Wrap them in a scroll container (a box that scrolls its own content): `<div class="table-wrap" tabindex="0" role="region" aria-label="Prices">` with `.table-wrap { overflow-x: auto; }` — WCAG allows two-dimensional scrolling for data tables ([Chapter 5](../05-tables-and-forms/README.md)).
 
 ### Self-check
 1. At 800px, which of the two queries match? → Only `(width >= 40em)`.
@@ -272,10 +272,10 @@ Operating systems let people choose a dark theme, reduce motion, or increase con
 | `prefers-reduced-data` | not supported anywhere yet | — |
 
 ### Dark mode — the essentials
-1. **Declare support**: `<meta name="color-scheme" content="light dark">` in the head and/or `:root { color-scheme: light dark; }`. The browser then themes its **own** UI — default page background, form controls, scrollbars — and avoids a white flash in dark mode. (`color-scheme`: Baseline 2022.)
-2. **Colour tokens** as custom properties ([§6.9](../06-css-fundamentals/README.md)), light values first.
+1. **Declare support**: `<meta name="color-scheme" content="light dark">` in the head and/or `:root { color-scheme: light dark; }`. The browser then themes its **own** UI (user interface) — default page background, form controls, scrollbars — and avoids a white flash in dark mode. (`color-scheme`: Baseline 2022.)
+2. **Colour tokens** (named colour values such as `--bg`) as custom properties (CSS variables, [§6.9](../06-css-fundamentals/README.md)), light values first.
 3. **Override the tokens** inside `@media (prefers-color-scheme: dark)`. Components only ever use the tokens.
-4. For one-off values, `light-dark(lightValue, darkValue)` picks based on the element's **used colour scheme** — no media query. It needs `color-scheme: light dark` to be set, and it is Baseline since May 2024 (newly available).
+4. For one-off values, `light-dark(lightValue, darkValue)` picks based on the element's **used colour scheme** (light or dark, as finally decided by `color-scheme` and the user's setting) — no media query. It needs `color-scheme: light dark` to be set, and it is Baseline since May 2024 (newly available).
 
 ```css
 :root { color-scheme: light dark;
@@ -309,8 +309,8 @@ A practical note from making these figures: headless Chrome follows the **comput
 Many sites add a theme toggle that sets `data-theme="dark"` on `<html>` and stores the choice. Then tokens are defined for `[data-theme="dark"]` too, and the media query applies only when no choice was made (`:root:not([data-theme="light"])`). That architecture — plus `color-scheme` per theme — is covered in [Chapter 13](../13-modern-css-and-architecture/README.md).
 
 ### Designing a dark theme well
-- Don't invert: use dark greys/navies (pure `#000` with pure white text causes halation for many readers), lighten accent colours, and re-check contrast ≥ 4.5:1 ([Chapter 11](../11-typography-color-and-visual-effects/README.md)).
-- Shadows barely show on dark backgrounds — express elevation with slightly lighter surfaces.
+- Don't invert: use dark greys/navies (pure `#000` with pure white text causes halation — a glowing, blurry halo around letters — for many readers), lighten accent colours, and re-check contrast ≥ 4.5:1 ([Chapter 11](../11-typography-color-and-visual-effects/README.md)).
+- Shadows barely show on dark backgrounds — express elevation (how "raised" a surface looks) with slightly lighter surfaces.
 - Images: dim very bright photos slightly (`filter: brightness(.9)`) or supply dark versions with `<picture><source media="(prefers-color-scheme: dark)" …>`.
 
 ### Reduced motion in one rule
@@ -332,10 +332,10 @@ This blunt reset is common; [§12.9](../12-transitions-transforms-and-animation/
 ## 10.6 Container queries
 
 ### What it is
-A **container query** (`@container`) styles an element based on the size of an **ancestor container** instead of the viewport. It is Baseline since February 2023 and **widely available** since August 2025 (Chrome 105, Firefox 110, Safari 16).
+A **container query** (`@container`) styles an element based on the size of an **ancestor container** (an element somewhere above it in the HTML tree) instead of the viewport. It is Baseline since February 2023 and **widely available** since August 2025 (Chrome 105, Firefox 110, Safari 16).
 
 ### The problem it solves
-Components are reused in different places: a product card sits in a wide main column, a narrow sidebar and a two-up grid — all on the same screen. A media query only knows the *viewport* width, so it can't tell those three cards apart. You used to add modifier classes (`.card--compact`) by hand. With container queries the card adapts to the space **it is given**, wherever it is placed.
+Components are reused in different places: a product card sits in a wide main column, a narrow sidebar and a two-up grid — all on the same screen. A media query only knows the *viewport* width, so it can't tell those three cards apart. You used to add modifier classes (extra classes that switch a component's variant, e.g. `.card--compact`) by hand. With container queries the card adapts to the space **it is given**, wherever it is placed.
 
 Analogy: media queries ask "how big is the room?"; container queries ask "how big is the box I'm sitting in?"
 
@@ -343,7 +343,7 @@ Analogy: media queries ask "how big is the room?"; container queries ask "how bi
 1. Mark an ancestor as a **size container**: `container-type: inline-size` (width only — the usual choice) or `size` (both axes, but then the container can't get its height from its content, so you must give it one). The shorthand `container: name / type` also sets an optional **name**.
 2. Write rules inside `@container [name] (condition) { … }`. They apply to **descendants** of the matching container.
 3. The browser finds, for each element, the **nearest ancestor** container (with that name, if given) and evaluates the condition against **its** content-box size.
-4. A container can't style *itself* with its own query — that would be circular. This is why the demo puts the container on a wrapper (`.card-slot`) and styles the `.product` inside.
+4. A container can't style *itself* with its own query — that would be circular (its size would depend on styles that depend on its size). This is why the demo puts the container on a wrapper (`.card-slot`) and styles the `.product` inside.
 
 ```css
 .card-slot { container: card / inline-size; }       /* name "card", measured inline */
@@ -388,10 +388,10 @@ Inside a container you can size things relative to it:
 If no suitable container exists, they fall back to the **small viewport** units (`svw`/`svh`…). Check the heading sizes: `clamp(15px, 3cqi + 8px, 24px)` in a 366px container = 3 × 3.66 + 8 = **18.98px** ✓; in a 220px container = 14.6px → clamped up to **15px** ✓; in 744px = 30.3px → capped at **24px** ✓.
 
 ### Style queries
-`@container style(--featured: yes)` tests a **custom property's value** on the container instead of its size. Every element is a style container by default, so no `container-type` is needed. In the demo, `.featured { --featured: yes; }` turns the "Rain jacket" card yellow with a star — a design-token switch without a modifier class on the component. Status: **Baseline since May 2026** (newly available: Chrome 111, Safari 18, Firefox 151), and only for **custom properties**; querying ordinary properties (e.g. `style(display: flex)`) is not supported. Treat it as an enhancement for a while.
+`@container style(--featured: yes)` tests a **custom property's value** on the container instead of its size. Every element is a style container by default, so no `container-type` is needed. In the demo, `.featured { --featured: yes; }` turns the "Rain jacket" card yellow with a star — a design-token (named design value) switch without a modifier class on the component. Status: **Baseline since May 2026** (newly available: Chrome 111, Safari 18, Firefox 151), and only for **custom properties**; querying ordinary properties (e.g. `style(display: flex)`) is not supported. Treat it as an enhancement for a while.
 
 ### Other container queries (not Baseline)
-`scroll-state()` queries — "is this sticky header stuck?", "is this carousel item snapped?" — are Chromium-only (Chrome 133+). Leave them out of anything that must work everywhere.
+`scroll-state()` queries — "is this sticky header stuck?", "is this carousel item snapped?" — are Chromium-only (only browsers built on Google's engine, Chrome 133+). Leave them out of anything that must work everywhere.
 
 ### Container queries vs media queries
 
@@ -405,9 +405,9 @@ They work together: media queries shape the page, container queries let each pie
 
 ### Common mistakes
 - Putting `container-type` on the element you want to restyle — it can only restyle its **descendants**.
-- `container-type: size` on an element without an explicit height: it collapses to 0 height, because size containment ignores its content.
-- Forgetting that `inline-size` containment means the container's **width** can't depend on its children — a `container-type: inline-size` element inside a shrink-to-fit parent (a flex item with `flex: none`, an inline-block, a float) may collapse. Give it a width from outside (grid track, block flow, `flex: 1`).
-- Naming: an unnamed `@container (width > 400px)` matches the **nearest** size container of any name, which might not be the one you meant. Name containers in design systems.
+- `container-type: size` on an element without an explicit height: it collapses to 0 height, because size containment (the browser treating the box as if it were empty when sizing it) ignores its content.
+- Forgetting that `inline-size` containment means the container's **width** can't depend on its children — a `container-type: inline-size` element inside a shrink-to-fit parent (one whose width comes from its content: a flex item with `flex: none`, an inline-block, a float) may collapse. Give it a width from outside (grid track, block flow, `flex: 1`).
+- Naming: an unnamed `@container (width > 400px)` matches the **nearest** size container of any name, which might not be the one you meant. Name containers in design systems (a team's shared library of components).
 
 ### Fallback for older browsers
 ```css
@@ -478,12 +478,12 @@ The 0.01px differences come from rounding the CSS coefficients to three decimals
 The last two output lines emulate a user who changed the browser's **default font size** to 20px. The `rem + vw` formula grows to 25.45px (0.818 × 20 + 9.09). A pure `vw` size stays at **16px** — it ignores the user's setting, and it also doesn't grow with **page zoom** in the way users expect. WCAG 2.2 SC 1.4.4 (Resize text) requires text to scale to 200%; keep a `rem` term in the preferred value, keep `MIN` and `MAX` in `rem`, and keep the ratio MAX/MIN at or below about 2.5 so that zooming still enlarges text meaningfully.
 
 ### Type scales
-Designers usually pick a **modular scale** — each step = previous × ratio (e.g. 1.2 "minor third" on small screens, 1.333 "perfect fourth" on large). Fluid type interpolates **each step** between its small-screen and large-screen size, which is what `--step-0 … --step-5` token sets from generators such as Utopia do. The same interpolation works for spacing (`--space`), making padding and gaps breathe with the screen.
+Designers usually pick a **modular scale** (a set of font sizes related by one multiplier) — each step = previous × ratio (e.g. 1.2 "minor third" on small screens, 1.333 "perfect fourth" on large). Fluid type interpolates (fills in the in-between values along a straight line for) **each step** between its small-screen and large-screen size, which is what `--step-0 … --step-5` token sets from generators such as Utopia (a free online fluid-type calculator) do. The same interpolation works for spacing (`--space`), making padding and gaps breathe with the screen.
 
 ### Common mistakes
 - `font-size: 4vw` alone — unreadable on phones, huge on monitors, ignores user settings.
 - Mixing units in the wrong places: `clamp(16px, …, 24px)` ignores the user's default for the limits; prefer `rem`.
-- Forgetting `line-height`: large headings need a smaller unitless line-height (1.1–1.2), body text ~1.5 ([Chapter 11](../11-typography-color-and-visual-effects/README.md)).
+- Forgetting `line-height`: large headings need a smaller unitless line-height (a plain number such as 1.2, meaning 1.2 × the font size) (1.1–1.2), body text ~1.5 ([Chapter 11](../11-typography-color-and-visual-effects/README.md)).
 
 ### Self-check
 1. Derive the preferred value for 18px at 400px → 22px at 1400px. → Slope 4/1000 = 0.4vw; intercept 18 − 1.6 = 16.4px = 1.025rem → `clamp(1.125rem, 1.025rem + 0.4vw, 1.375rem)`.
@@ -497,7 +497,7 @@ Designers usually pick a **modular scale** — each step = previous × ratio (e.
 
 | Need | Tool |
 |---|---|
-| Image never overflows its container | `img { max-width: 100%; height: auto; }` + `width`/`height` attributes (reserves space → no layout shift) |
+| Image never overflows its container | `img { max-width: 100%; height: auto; }` + `width`/`height` attributes (reserves space → no layout shift, i.e. content doesn't jump when the image arrives) |
 | Same picture, different file sizes; browser picks by layout width and DPR | `<img srcset="a-400.jpg 400w, a-800.jpg 800w" sizes="(width >= 64em) 33vw, 100vw">` |
 | Same size on screen, sharper on high-DPR screens | `srcset="logo.png 1x, logo@2x.png 2x"` |
 | Different crop at different widths (**art direction**) | `<picture><source media="(width >= 800px)" srcset="wide.jpg"><img src="square.jpg" alt="…"></picture>` |
@@ -531,7 +531,7 @@ Only **one** file is downloaded per screen — the whole point. A background ima
 ## 10.9 Intrinsic layouts — responsive without breakpoints
 
 ### What it is
-**Intrinsic design** (a term from Jen Simmons) means letting the layout algorithms respond to the available space themselves, using `min()`, `max()`, `clamp()`, `flex-wrap`, `auto-fit` and `minmax()`. Fewer breakpoints means fewer "in-between" widths where things look odd, and components that work in any container.
+**Intrinsic design** (a term from Jen Simmons, a CSS designer and advocate) means letting the layout algorithms (the browser's built-in sizing rules) respond to the available space themselves, using `min()`, `max()`, `clamp()`, `flex-wrap`, `auto-fit` and `minmax()`. Fewer breakpoints means fewer "in-between" widths where things look odd, and components that work in any container.
 
 ### Three patterns
 [`code/07_intrinsic.html`](code/07_intrinsic.html) — no `@media` anywhere:
@@ -592,8 +592,8 @@ When the design genuinely needs a different structure (e.g. a sidebar that becom
 
 ### Tools
 - **DevTools device mode**: Chrome/Edge (Ctrl/Cmd+Shift+M), Firefox Responsive Design Mode (Ctrl/Cmd+Shift+M), Safari Responsive Design Mode (Develop menu). Drag the width handle slowly — you'll spot the widths where things break. Chrome's Rendering panel emulates `prefers-color-scheme`, `prefers-reduced-motion`, `forced-colors` and more; Elements shows a `container` badge and lets you inspect container queries.
-- **Real devices**: emulators don't reproduce touch precision, the dynamic toolbar (`dvh`), the on-screen keyboard or real CPU speed. Test at least one Android phone and one iPhone; remote debugging (Chrome `chrome://inspect`, Safari Web Inspector) attaches DevTools to them.
-- **Automated screenshots and checks** in CI with Puppeteer or Playwright, like this chapter's scripts.
+- **Real devices**: emulators (software imitations of a device) don't reproduce touch precision, the dynamic toolbar (`dvh`), the on-screen keyboard or real CPU (processor) speed. Test at least one Android phone and one iPhone; remote debugging (inspecting a page running on a phone from your computer — Chrome `chrome://inspect`, Safari Web Inspector) attaches DevTools to them.
+- **Automated screenshots and checks** in CI (continuous integration — automatic checks run on every code change) with Puppeteer or Playwright (browser-automation libraries), like this chapter's scripts.
 
 ### An automated overflow test
 [`code/08_overflow_check.mjs`](code/08_overflow_check.mjs) opens pages at 320/768/1280px and reports horizontal overflow and the elements sticking out:

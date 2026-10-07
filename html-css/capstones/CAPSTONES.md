@@ -6167,3 +6167,505 @@ Deriving everything from a few inputs is elegant but limits brand expression. So
 
 ### TL;DR
 Derive each brand's palette and tokens from a few typed inputs with `oklch()` and relative colours, declare derived tokens on every theme scope so subtrees can be re-themed, use style queries (with fallbacks) for structural theme flags, and verify contrast with a script.
+
+## Appendix: Concepts you need
+
+Every technical term, acronym, tool and technique named in the 40 project briefs above is listed here alphabetically, with a short plain-English definition and the projects that use it. Networking and server ideas that the briefs only touch on (HTTP, caching, CDNs, sessions, rate limiting) are explained in depth in [System Design Fundamentals](../../system-design-patterns/modules/00-system-design-fundamentals/README.md). Where this book teaches a concept, a chapter link points you to it.
+
+### A
+
+- **A/B testing** — Showing two versions of a page to different visitors and measuring which one performs better. Used in project 11.
+- **A4 and US Letter** — The two common paper sizes: A4 (210 × 297 mm) is used in most of the world, US Letter (8.5 × 11 in) in North America. Used in projects 2, 6, 17. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **`<abbr>`** — Element that marks an abbreviation such as "VG"; its `title` attribute can hold the full form. Used in project 6. ([Ch 2](../chapters/02-html-structure-and-text/README.md))
+- **Absolute positioning** — `position: absolute` takes an element out of normal flow and places it relative to its nearest positioned ancestor. Used in project 18. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **`accent-color`** — CSS property that recolours the highlight of native checkboxes, radios, range sliders and progress bars without rebuilding them. Used in project 25. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Accessibility (a11y)** — Designing pages so everyone can use them, including people who rely on keyboards, screen readers, magnification or reduced motion. Used in projects 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18, 20, 21, 24, 25, 26, 28, 29, 32, 33, 35, 36, 37, 38, 39. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Accessibility audit** — A structured check of a page against accessibility criteria (usually WCAG), recording pass or fail with evidence for each. Used in projects 1, 10, 13, 16, 22, 24, 26, 28, 32, 36. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Accessibility tree** — The browser's parallel version of the DOM that lists each element's role, name and state for assistive technology. Used in projects 1, 9, 13, 14, 21, 35. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Accessible Authentication (WCAG 3.3.8)** — WCAG 2.2 criterion: logging in must not depend on a memory or puzzle test (such as many CAPTCHAs) unless an alternative is offered. Used in projects 3, 28. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Accessible name** — The text a screen reader announces for an element, coming from its label, its content, `alt` or `aria-label`. Used in projects 3, 8, 9, 13, 28, 32. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Accordion** — A stack of headings that each expand to show or hide a panel of content beneath them. Used in projects 14, 28. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Alias (token reference)** — A design token whose value points at another token (for example `{color.blue.600}`) instead of holding a raw value. Used in project 19. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **`align-items`** — Flexbox and grid property that aligns items on the cross axis: `stretch` (default), `start`, `center`, `baseline` and so on. Used in projects 4, 6. ([Ch 8](../chapters/08-flexbox/README.md))
+- **Alt text (`alt`)** — The text alternative for an image, read by screen readers and shown if the image fails; `alt=""` marks a purely decorative image. Used in projects 1, 4, 7, 15, 18, 22, 28, 33, 37, 38, 39. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Anchor link (URL fragment)** — A link to a spot inside a page, written `#id`; the part after `#` in a URL is called the fragment. Used in projects 5, 6, 9, 12, 14, 28. ([Ch 2](../chapters/02-html-structure-and-text/README.md))
+- **Anchor positioning** — Newer CSS that places a floating element next to another element (its anchor) using `anchor-name`, `position-anchor`, `position-area` and fallback positions; not yet fully Baseline. Used in projects 24, 32. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **`animation-range`** — Says which part of a scroll or view timeline an animation runs over, for example `entry 0% cover 40%`. Used in project 29. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **`animation-timeline`** — Links an animation's progress to a timeline other than time, such as `scroll()` or `view()`. Used in project 29. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **Anti-aliasing** — Smoothing of edges by blending pixels; tiny differences in it between machines make screenshot tests flaky. Used in project 39.
+- **APG (ARIA Authoring Practices Guide)** — W3C guide describing how common widgets (tabs, menus, carousels) should behave with the keyboard and which ARIA roles they need. Used in projects 14, 28. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **API (application programming interface)** — A set of functions or attributes one piece of software offers to another; browser APIs such as the Popover API add capabilities to HTML, CSS or JS. Used in projects 3, 9, 19, 24, 26, 29, 32.
+- **`appearance`** — `appearance: none` removes the browser's built-in drawing of a form control so you can style it while it stays the real control; `base-select` unlocks a fully stylable `<select>`. Used in projects 25, 32.
+- **Applicant tracking system (ATS)** — Recruitment software that extracts text from CVs; it can misread columns or text in images. Used in project 17.
+- **ARIA** — Accessible Rich Internet Applications: attributes (`role`, `aria-*`) that tell assistive technology what an element is and what state it is in, when HTML alone can't. Used in projects 3, 4, 5, 8, 9, 12, 14, 20, 21, 24, 26, 28, 29, 32, 35, 38. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`aria-current`** — Marks the current item in a set, such as the current page in navigation (`page`) or the current step in a process (`step`). Used in projects 9, 12, 21. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`aria-describedby`** — Points from a control to the id of extra text (a hint or error) that a screen reader reads after the control's name. Used in projects 3, 21, 38. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **`aria-expanded`** — Tells assistive technology whether the element a button controls is currently open or closed. Used in projects 14, 32. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`aria-hidden`** — `aria-hidden="true"` hides an element from assistive technology while leaving it visible on screen; used for decorative icons and duplicates. Used in projects 4, 20. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`aria-invalid`** — Marks a form field whose value failed validation, so screen readers announce it as invalid. Used in project 38. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **`aria-label` / `aria-labelledby`** — Give an element an accessible name: `aria-label` holds the text directly, `aria-labelledby` points at the id of visible text. Used in projects 3, 4, 5, 8, 9, 12, 24, 29, 32, 35. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`aria-live`** — Marks a region whose changes screen readers should announce automatically, such as a character counter or status message. Used in project 3. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`aria-sort`** — Tells assistive technology that a table column is sorted, and in which direction. Used in project 35. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Art direction** — Serving a different crop or composition of an image for different layouts, using `<picture>` with `media` conditions. Used in project 22. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **`<article>`** — Element for a self-contained piece of content that would still make sense on its own, such as a post, a card or a review. Used in projects 1, 2, 4, 5, 17, 18, 20, 27, 28, 33. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`aspect-ratio`** — CSS property (and the ratio implied by an image's `width`/`height`) that fixes a box's width-to-height ratio so space is reserved before content loads. Used in projects 1, 7, 20, 22. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **Assistive technology** — Software or hardware that helps disabled people use computers, such as screen readers, magnifiers, switch devices and voice control. Used in projects 1, 2, 3, 4, 6, 8, 18, 24, 29, 31, 38. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`async` / `defer` scripts** — Script attributes that download a script without blocking the HTML parser; `defer` runs scripts in order after parsing, `async` runs each as soon as it arrives. Used in projects 7, 16. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **At-rule** — A CSS statement that starts with `@`, such as `@media`, `@layer`, `@page` or `@container`. Used in project 17. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **`attr()`** — CSS function that reads an attribute's value, used with `content` to print a link's `href` after the link text. Used in projects 2, 17. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Auto margins (flexbox)** — An `auto` margin on a flex item absorbs all free space on that side, pushing the item away, for example a button to the bottom of a card. Used in projects 4, 5. ([Ch 8](../chapters/08-flexbox/README.md))
+- **`auto-fill` / `auto-fit`** — Values for `repeat()` in grid that create as many columns as fit; `auto-fit` then collapses empty columns so items stretch. Used in projects 7, 11, 13, 22. ([Ch 9](../chapters/09-grid/README.md))
+- **Autofill and `autocomplete`** — The `autocomplete` attribute names what a field holds (`email`, `postal-code`, `cc-number`) so the browser can fill it from saved data. Used in projects 3, 21, 25, 28. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Automatic minimum size (`min-width: auto`)** — Flex and grid items default to a minimum width equal to their content, so a long code line can widen a column; `min-width: 0` or `minmax(0, 1fr)` fixes it. Used in projects 5, 12, 13. ([Ch 8](../chapters/08-flexbox/README.md))
+- **AVIF** — A modern image format that usually gives the smallest photo files; served with a WebP or JPEG fallback for older browsers. Used in projects 1, 7, 10, 11, 22, 30. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **axe-core / axe DevTools** — Deque's open-source engine of automated accessibility rules, available as a browser extension and as a library for tests. Used in projects 3, 26, 28, 39.
+
+### B
+
+- **`::backdrop`** — Pseudo-element drawn behind a modal dialog or popover, usually used to dim the page. Used in project 24. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **`background-attachment: local`** — Makes a background scroll with an element's content; combined with fixed ones it creates scroll shadows. Used in project 35. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Baseline (browser support)** — A label (from the web-features project, shown on MDN) for features that work in current Chrome, Edge, Firefox and Safari; *widely available* means that has been true for 30 months. Used in projects 3, 4, 5, 7, 9, 11, 13, 14, 16, 17, 18, 20, 22, 23, 24, 25, 26, 27, 29, 30, 31, 32, 34, 36, 40. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **Baseline (visual test)** — In screenshot testing, the stored, approved image that new screenshots are compared against. Used in projects 30, 34, 39.
+- **Baseline alignment** — Aligning items on the line their text sits on, so text in neighbouring boxes lines up even if the boxes differ in size. Used in project 6. ([Ch 8](../chapters/08-flexbox/README.md))
+- **`<bdi>` and the bidi algorithm** — The Unicode Bidirectional Algorithm orders mixed left-to-right and right-to-left text; `<bdi>` isolates a run (such as a username) so it can't scramble the text around it. Used in project 31. ([Ch 2](../chapters/02-html-structure-and-text/README.md))
+- **BEM** — Block, Element, Modifier: a class-naming convention (`.card`, `.card__title`, `.card--featured`) that keeps every selector to one class. Used in projects 10, 26, 34. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Blink / Gecko / WebKit** — The rendering engines inside browsers: Blink powers Chrome and Edge, Gecko powers Firefox, WebKit powers Safari. Used in projects 25, 39. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **Block and inline axis** — The inline axis is the direction text runs in a line; the block axis is the direction lines and blocks stack. Logical properties are named after them. Used in projects 2, 4, 5, 6, 12, 24, 27, 31, 32. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **`<blockquote>` and `<cite>`** — `<blockquote>` holds a quotation taken from elsewhere; `<cite>` marks the title of the work it came from. Used in projects 5, 11, 20, 23. ([Ch 2](../chapters/02-html-structure-and-text/README.md))
+- **Bookmarklet** — A small piece of JavaScript saved as a browser bookmark; clicking it runs on the current page, for example to apply WCAG text spacing. Used in projects 28, 36.
+- **`border-collapse`** — Table property: `collapse` merges neighbouring cell borders into one, `separate` keeps a border on each cell (needed for sticky cells). Used in projects 8, 35. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Box model and `box-sizing`** — Every box is content, padding, border and margin; `box-sizing: border-box` makes `width` include padding and border. Used in projects 1, 4, 5, 6, 8, 9, 12, 13, 17, 24, 26, 32, 34, 35. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **`box-shadow`** — Draws one or more shadows around a box; changing it forces a repaint and it disappears in forced-colors mode. Used in projects 18, 25, 31, 35, 36. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Breadcrumb** — A trail of links showing where a page sits in the site (Home › Guides › Summer); it can also be described in structured data. Used in projects 26, 28, 33. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **`break-inside` / `break-after`** — Fragmentation properties that ask the browser not to split an element across pages or columns, or not to break right after a heading. Used in projects 2, 6, 17. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Breakpoint** — A width at which a layout changes, usually written as a media or container query. Used in projects 7, 9, 11, 12, 13, 20, 22, 23, 27. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Browser engine** — The part of a browser that parses, styles, lays out and paints pages; differences between engines are why you test in several browsers. Used in projects 2, 14, 15, 17, 25, 29, 39. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **Build step / build tool** — A program that transforms source files before they are served, for example generating HTML, bundling CSS or resizing images. Used in projects 1, 7, 10, 12, 15, 19, 22, 33, 37, 40. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Bulletproof button** — In email, a button made from a padded, coloured link (and table cell) instead of an image, so it works when images are blocked. Used in project 15.
+- **Bundle / bundler** — A bundler combines many source files into a few optimised output files; the output is the bundle. Used in projects 26, 30, 39. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+
+### C
+
+- **Cache** — A stored copy of a response that the browser or a server reuses instead of downloading again; long cache lifetimes need hashed file names. Used in projects 1, 10, 22, 23, 30, 38. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **`calc()`** — CSS function that does arithmetic with mixed units, such as `calc(100dvh - var(--topbar-h))`. Used in projects 11, 12, 16, 31, 37, 40. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Call to action (CTA)** — The main button or link a page wants visitors to use, such as "Sign up" or "Buy now". Used in projects 4, 10, 11, 15.
+- **Canonical URL** — `<link rel="canonical">` names the preferred URL when the same content is reachable at several addresses; a hint to search engines, not a command. Used in project 33. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **CAPTCHA** — A challenge meant to tell humans from bots; many are inaccessible, so cheaper defences like honeypot fields come first. Used in project 3.
+- **`<caption>`** — The title of a table; it becomes the table's accessible name, announced when a screen reader enters the table. Used in projects 4, 8, 35, 37. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Carousel** — A strip of items shown one or a few at a time, moved by swiping, scrolling or buttons. Used in projects 11, 27, 28.
+- **Cascade** — The browser's algorithm for choosing one value per property when rules conflict: origin and importance, context, inline style, layers, specificity, then source order. Used in projects 10, 16, 26, 34, 37. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Cascade layers (`@layer`)** — Named, ordered groups of CSS rules; a later layer beats an earlier one regardless of specificity, and unlayered styles beat all layers. Used in projects 10, 26, 34. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **`ch` unit** — A length equal to the width of the "0" character in the current font, handy for line lengths such as `65ch`. Used in projects 1, 5, 6, 12, 21, 23. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Checkbox and radio button** — Form controls for on/off choices (checkbox) and one-of-many choices within a named group (radio). Used in projects 2, 3, 4, 6, 8, 9, 13, 16, 18, 21, 25, 26, 28, 35, 36, 37, 38. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **`:checked`** — Pseudo-class matching a selected checkbox or radio; with `:has()` it lets CSS react to form state without JavaScript. Used in projects 2, 4, 13, 16, 18, 21, 25. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Chromium** — The open-source browser project behind Chrome, Edge and Opera; "Chromium-only" means other engines don't support a feature yet. Used in projects 13, 14, 17, 22, 24, 25, 27, 30, 32, 36, 39. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **CI (continuous integration)** — A service that automatically runs builds and tests on every change, typically on every pull request, and can fail the change. Used in projects 12, 19, 26, 28, 30, 33, 34, 36, 39.
+- **`clamp()`** — `clamp(min, preferred, max)` returns the preferred value but never less than min or more than max; used for fluid type and spacing. Used in projects 11, 23, 27. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Client-side vs server-side** — Client-side code runs in the user's browser; server-side code runs on the web server before the response is sent. Validation and security belong on the server. Used in projects 3, 8, 21, 28, 33, 38.
+- **`clip-path`** — Clips an element to a shape such as `polygon()` or `circle()`; used to draw shapes and chart slices in CSS. Used in projects 25, 29, 37. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **CLS (Cumulative Layout Shift)** — Core Web Vital for visual stability: how much visible content jumps unexpectedly while the page is used; good is 0.1 or less. Used in projects 1, 7, 11, 18, 20, 22, 23, 30, 40. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **CMS (content management system)** — Software such as WordPress that lets non-developers edit site content, which templates then turn into pages. Used in projects 6, 34.
+- **Code review** — Teammates reading a change before it is merged, to catch mistakes and keep conventions. Used in projects 19, 34, 39.
+- **`<colgroup>` and `<col>`** — Elements that define groups of table columns, for styling columns and for headers with `scope="colgroup"`. Used in project 35. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **`color-mix()`** — CSS function that blends two colours by a percentage in a chosen colour space, used for hover shades and tints. Used in projects 16, 37, 40. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **`color-scheme`** — Declares which colour schemes (light, dark) a page supports, so the browser themes form controls and scrollbars and `light-dark()` picks a branch. Used in projects 1, 15, 16, 36. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Colour-vision deficiency** — Reduced ability to tell certain colours apart (often red and green); one reason colour must never be the only cue. Used in project 37. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **`colspan`** — Makes a table cell span several columns, such as a keynote row covering all rooms. Used in projects 8, 35. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Component** — A reusable piece of interface (button, card, dialog) with its own markup and styles. Used in projects 1, 3, 9, 10, 11, 14, 16, 19, 20, 24, 25, 26, 27, 28, 32, 34, 36, 39, 40. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Component token** — A design token for one component's setting, such as `button.padding-inline`, usually pointing at a semantic token. Used in projects 19, 26. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Compositing (compositor)** — The final rendering step that stacks painted layers into the screen image, often on the GPU; `transform` and `opacity` can be animated there without layout or paint. Used in projects 18, 29. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **Conditional comments (`<!--[if mso]>`)** — HTML comments that only Microsoft Outlook's Word-based engine reads, used to give it special markup such as fixed-width "ghost" tables. Used in project 15.
+- **`conic-gradient()`** — A gradient that sweeps around a centre point, like a pie; used for progress rings. Used in project 37. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Constraint Validation API** — The browser's built-in form checking driven by attributes like `required`, `type`, `minlength` and `pattern`, plus the JS methods behind it. Used in project 3. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Container query** — A rule that applies based on the size (or style) of an ancestor container rather than the viewport, so a component adapts to the slot it is placed in. Used in projects 12, 13, 20, 27, 37, 40. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Container query units (`cqi`)** — Units relative to the query container: `1cqi` is 1 % of its inline size. Used in project 27. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Container style query** — `@container style(--flag: value)` applies rules when an ancestor container has a given custom-property value. Used in projects 27, 40. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **`container-type` / `container-name`** — `container-type: inline-size` makes an element a size container; `container-name` lets a query target a particular one. Used in project 27. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Containment** — Telling the browser that an element's size or layout doesn't depend on its contents; containers need it, which is why a container's width must come from outside. Used in projects 26, 27. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **`content-visibility`** — `content-visibility: auto` lets the browser skip rendering off-screen content until it is needed; it also animates `<details>` opening. Used in projects 7, 14, 30, 35. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Contrast ratio** — How different two colours are in luminance, from 1:1 to 21:1; WCAG AA needs 4.5:1 for normal text and 3:1 for large text and UI parts. Used in projects 1, 3, 4, 8, 9, 10, 15, 16, 17, 19, 25, 28, 36, 37, 40. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Cookie** — A small piece of data the browser stores for a site and sends back with each request, for example a session id. Used in project 38.
+- **Core Web Vitals** — Google's three user-experience metrics: LCP (loading), INP (responsiveness) and CLS (visual stability), judged at the 75th percentile of real visits. Used in projects 11, 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **CORS and `crossorigin`** — Cross-Origin Resource Sharing is the browser's permission system for fetching from other origins; fonts always use it, so font preloads need `crossorigin`. Used in project 23. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Coverage (DevTools)** — A DevTools panel that shows which CSS and JS lines were used on the pages and states you visited. Used in projects 10, 34.
+- **CPU and network throttling** — DevTools settings that simulate a slower processor or connection so you can see how a page behaves on modest devices. Used in projects 7, 16, 18, 22, 23, 29, 30, 38. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **Critical CSS** — The CSS needed to draw the first screen, often inlined in `<head>` so the page can paint before the full stylesheet arrives. Used in projects 23, 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **CrUX (Chrome UX Report)** — Google's public dataset of real Chrome users' performance (field data), used for Core Web Vitals. Used in project 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **CSS art** — Illustrations drawn only with HTML elements and CSS (gradients, borders, `clip-path`, shadows). Used in project 29.
+- **CSS Grid** — Two-dimensional layout system: you define rows and columns (tracks) and place items into them. Used in projects 2, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 17, 18, 20, 21, 22, 25, 26, 27, 31, 32, 34, 35, 37. ([Ch 9](../chapters/09-grid/README.md))
+- **CUBE CSS** — Composition, Utility, Block, Exception: a CSS methodology that leans on the cascade and global styles. Used in project 34. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **`currentColor`** — Keyword meaning "the current text colour"; SVG icons filled with it follow themes and forced colours. Used in projects 16, 25, 36. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **`currentSrc`** — Property of an `<img>` that holds the URL of the file the browser actually chose from `srcset` or `<picture>`. Used in projects 7, 22. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **Custom properties (CSS variables)** — Author-defined properties such as `--color-brand`, read with `var()`; they inherit, can change per element and exist at runtime. Used in projects 3, 4, 10, 11, 12, 16, 19, 23, 26, 27, 31, 32, 36, 37, 39, 40. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **CV (résumé)** — A document summarising a person's work history and skills, sent to employers. Used in projects 1, 17.
+
+### D
+
+- **Dark mode** — A colour scheme with light text on dark backgrounds, chosen by the operating system setting or a site switch. Used in projects 5, 11, 13, 15, 16, 19, 25, 39, 40. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **`data-*` attributes** — Custom HTML attributes (`data-theme="dark"`) that hold state or settings for CSS selectors and scripts. Used in projects 16, 26, 40. ([Ch 2](../chapters/02-html-structure-and-text/README.md))
+- **`<data>`** — Element pairing human-readable text with a machine-readable `value`, such as a price. Used in project 6. ([Ch 2](../chapters/02-html-structure-and-text/README.md))
+- **Database** — An organised store of data that a server reads and writes, such as orders, recipes or sessions. Used in project 2.
+- **Deprecated** — Still works but is scheduled for removal or replacement; new code shouldn't use it. Used in project 19.
+- **Description list (`<dl>`)** — A list of term (`<dt>`) and value (`<dd>`) pairs, such as prep time and cook time. Used in projects 2, 4, 6, 10, 38. ([Ch 2](../chapters/02-html-structure-and-text/README.md))
+- **Design system** — A team's shared set of tokens, components, guidelines and docs that keeps products consistent. Used in projects 3, 9, 16, 19, 25, 27, 38. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Design token** — A named design decision (a colour, spacing step or duration) stored once and reused, usually as a CSS custom property. Used in projects 1, 4, 10, 11, 13, 16, 19, 21, 23, 25, 26, 27, 34, 36, 37, 39, 40. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **`::details-content`** — Pseudo-element wrapping everything in a `<details>` except its summary, so it can be styled and animated. Used in projects 9, 14. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **`<details>` and `<summary>`** — A native disclosure widget: clicking the `<summary>` shows or hides the rest, with keyboard support and announced state built in. Used in projects 9, 11, 12, 14, 28. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Determinism and flaky tests** — A deterministic test gives the same result every run; a flaky test fails and passes without any code change, which makes people ignore it. Used in projects 30, 34, 39.
+- **Device pixel ratio (DPR)** — How many physical screen pixels make one CSS pixel; a 3× phone needs three times the image width to look sharp. Used in projects 7, 22. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **DevTools** — The developer tools built into browsers (Elements, Network, Performance, Lighthouse, accessibility tree, emulation). Used in projects 1, 3, 7, 10, 11, 13, 14, 16, 18, 19, 22, 23, 25, 26, 27, 28, 29, 30, 31, 34, 36, 37, 40. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **`<dialog>` and `showModal()`** — A native dialog element; opened with `showModal()` it sits in the top layer, makes the rest of the page inert and closes with Escape. Used in projects 7, 22, 24, 32. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Diff** — The difference between two versions (of code, CSS output or screenshots), shown so a person can review it. Used in projects 19, 34, 39.
+- **`:dir()`** — Pseudo-class matching elements by their computed direction, used to flip directional icons in right-to-left pages. Used in project 31. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **`dir` attribute (LTR / RTL)** — Sets text direction: `ltr` (left to right), `rtl` (right to left, as in Arabic and Hebrew) or `auto` (decide from the content). Used in projects 15, 24, 31. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Disclosure** — A button that shows or hides a related section; simpler than an ARIA menu and navigated with ordinary Tab. Used in projects 9, 12, 13, 14, 26, 32. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`display: contents`** — Removes an element's own box so its children join the parent's layout; it has a history of dropping semantics, so test it. Used in projects 13, 14. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **`display`** — Sets how a box takes part in layout (`block`, `inline`, `flex`, `grid`); `display: none` removes it from layout and from the accessibility tree. Used in projects 2, 4, 6, 7, 8, 9, 13, 14, 15, 20, 21, 24, 35. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **DOM (Document Object Model)** — The browser's live tree of the page's elements, built from the HTML and read by CSS, scripts and assistive technology. Used in projects 7, 13, 14, 20, 29, 35, 37. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **DOM order vs visual order** — Keyboard focus and screen readers follow the HTML order, so CSS that moves things visually (grid placement, `order`, `dense`) can confuse users. Used in projects 6, 7, 9, 10, 13, 20. ([Ch 9](../chapters/09-grid/README.md))
+- **DTCG format** — The W3C Design Tokens Community Group's JSON format for tokens, using properties like `$value` and `$type`. Used in project 19.
+- **`dvh` unit** — 1 % of the dynamic viewport height, which changes as mobile browser toolbars appear and disappear (unlike `vh`). Used in projects 12, 13. ([Ch 10](../chapters/10-responsive-design/README.md))
+
+### E
+
+- **Easing** — The speed curve of an animation; ease-out (fast then slow) suits things entering, ease-in suits things leaving. Used in project 18. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **Eleventy** — A JavaScript static-site generator that turns templates and Markdown into plain HTML with no client-side JS by default. Used in project 33.
+- **`em` and `rem` units** — `rem` is relative to the root font size and follows the user's browser setting; `em` is relative to the element's own font size. Used in projects 5, 11, 17, 19, 27, 28, 36. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Email client** — The program that displays email (Gmail, Outlook, Apple Mail); each supports a different, older subset of HTML and CSS. Used in project 15.
+- **Embed** — Content from another site placed in your page, such as a map, video or chat widget, usually in an `<iframe>`. Used in projects 2, 5, 7, 11, 15, 16, 22, 28, 30. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **Endpoint** — The URL on a server that receives a request, such as the address a form posts to. Used in project 3.
+- **Error summary** — A box at the top of a form page that lists every error as a link to its field, shown after a failed submission. Used in projects 3, 21, 38. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Escaping** — Rewriting special characters so they are treated as text, for example `<` in JSON-LD so a title can't end the `<script>` block. Used in projects 2, 33.
+- **European Accessibility Act** — EU law that, since June 2025, requires many products and services, including e-commerce, to be accessible. Used in project 28.
+- **Event handler / listener** — JavaScript code that runs when something happens, such as a click; many projects here avoid needing one. Used in projects 3, 14, 24, 36.
+- **Exclusive accordion** — Several `<details>` sharing a `name` attribute, so opening one closes the others, with no JavaScript. Used in project 14. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+
+### F
+
+- **Fallback** — What users get when a newer feature isn't supported or a resource fails, such as a class-based style or a JPEG image. Used in projects 3, 4, 7, 13, 14, 15, 22, 23, 24, 25, 27, 32, 40.
+- **Feature query (`@supports`)** — `@supports (property: value)` applies rules only in browsers that understand that declaration, the usual wrapper for non-Baseline features. Used in projects 5, 11, 20, 29, 32. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **`fetchpriority`** — Attribute hinting how important a resource is; `fetchpriority="high"` on the hero image helps LCP. Used in projects 11, 22, 30. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **Field data vs lab data** — Field data comes from real users' visits (CrUX, the `web-vitals` library); lab data comes from a controlled, simulated run (Lighthouse). Used in projects 11, 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **`<fieldset>` and `<legend>`** — `<fieldset>` groups related form controls and its `<legend>` names the group, read before each option. Used in projects 3, 4, 18, 21, 28, 36, 37, 38. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **`<figure>` and `<figcaption>`** — `<figure>` wraps self-contained media such as an image or code sample, and `<figcaption>` is its caption. Used in projects 2, 5, 7, 11, 12, 20, 22, 35. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **`::file-selector-button`** — Pseudo-element for the button part of a file input, so it can be styled. Used in project 25. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Find-in-page** — The browser's search within a page; browsers that support it open a closed `<details>` when the match is inside. Used in project 14.
+- **`flex` shorthand (grow, shrink, basis)** — `flex-grow` shares free space, `flex-shrink` absorbs overflow, `flex-basis` is the starting size; `flex: 1` lets an item take leftover space. Used in projects 1, 4, 6, 9, 11. ([Ch 8](../chapters/08-flexbox/README.md))
+- **Flexbox** — One-dimensional layout along a row or column; items can grow, shrink, wrap and align. Used in projects 1, 4, 5, 6, 9, 10, 11, 12, 15, 20, 27, 31, 34, 37. ([Ch 8](../chapters/08-flexbox/README.md))
+- **Float** — An older layout method that pushes a box to one side and lets text wrap around it; replaced by flexbox and grid for page layout. Used in projects 7, 20, 34. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **Focus indicator (focus ring)** — The visible outline showing which element has keyboard focus; never remove it without a clear replacement. Used in projects 1, 3, 7, 11, 16, 25, 28, 35, 36, 39. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Focus order** — The sequence in which Tab moves through interactive elements, which follows the DOM order. Used in projects 12, 13, 14, 18, 24, 28, 32, 39. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`:focus-visible`** — Pseudo-class matching focus when the browser thinks an indicator should show (mainly keyboard use), not on every mouse click. Used in projects 1, 9, 18, 25, 32, 36. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`:focus-within`** — Pseudo-class matching an element that contains the focused element, so a whole card can react to keyboard focus. Used in projects 7, 18. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **FOIT and FOUT** — Flash of invisible text (hidden while a web font loads) and flash of unstyled text (fallback font first, then a visible swap). Used in project 23. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **`font-display`** — Controls what shows while a web font loads: `swap` (fallback now, swap later), `optional`, `block` or `fallback`. Used in projects 5, 11, 23. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **`@font-face`** — Rule that declares a web font: its family name, file URLs, weight range and loading behaviour. Used in projects 23, 31. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **`font-variant-numeric: tabular-nums`** — Makes every digit the same width so numbers line up in columns. Used in project 35. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Forced colors mode** — A Windows accessibility mode where the browser replaces your colours with a small user-chosen palette and removes shadows and gradient backgrounds. Used in projects 9, 16, 25, 28, 36, 39, 40. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **`forced-color-adjust`** — `forced-color-adjust: none` opts an element out of forced colours; a last resort for things like colour swatches. Used in projects 25, 36. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **`fr` unit** — Grid unit meaning a share of the free space in the container; `1fr` still has a content-based minimum unless written `minmax(0, 1fr)`. Used in projects 5, 7, 11, 12, 13, 14, 20, 27. ([Ch 9](../chapters/09-grid/README.md))
+- **Framework** — A ready-made library that shapes how you build (a CSS framework, a static-site generator, a server framework). Used in projects 1, 10, 15, 26, 30, 33, 37, 38.
+- **Front matter** — A block of metadata (title, date, tags) at the top of a Markdown file, read by the site generator. Used in project 33.
+- **Full-bleed / breakout layout** — Content sits in a centred column while chosen elements (images, banners) stretch to the viewport edges, often using named grid lines. Used in project 20. ([Ch 9](../chapters/09-grid/README.md))
+
+### G
+
+- **`gap`** — Space between flex or grid items (and between rows and columns), without margins on the items. Used in projects 4, 7, 9, 20. ([Ch 8](../chapters/08-flexbox/README.md))
+- **GOV.UK Design System** — The UK government's public design system of tested, accessible components and patterns, such as error summaries and question pages. Used in projects 3, 9, 25, 38.
+- **GPU (graphics processing unit)** — The chip specialised in drawing pixels; compositing often runs there, which is why `transform` and `opacity` animate smoothly. Used in project 18. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **Gradient** — A CSS image that blends colours: `linear-gradient()`, `radial-gradient()`, `conic-gradient()` and repeating versions. Used in projects 25, 29, 31, 35, 36, 37. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **`grid-auto-flow: dense`** — Makes grid auto-placement fill earlier holes with later items, so visual order can differ from DOM order. Used in projects 7, 13, 23. ([Ch 9](../chapters/09-grid/README.md))
+- **`grid-template-areas`** — Names regions of a grid with strings that look like a map of the layout; children are placed with `grid-area`. Used in projects 13, 27. ([Ch 9](../chapters/09-grid/README.md))
+
+### H
+
+- **Halation** — The glowing, smeared look of bright text on a pure black background, which is why dark themes use dark greys. Used in project 16.
+- **Hamburger menu** — A button with a three-line icon that opens navigation on small screens; it still needs a text name such as "Menu". Used in project 9.
+- **`:has()`** — The relational pseudo-class: `A:has(B)` matches A when B matches inside or after it, letting CSS style a parent from a child's state. Used in projects 2, 4, 6, 8, 13, 14, 16, 18, 21, 24, 28, 35, 36, 37. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Hash / hashed file names** — A short code computed from a file's contents and added to its name (`app.3f9a1c.css`), so a changed file gets a new name and can be cached for a long time. Used in project 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Heading outline** — The table of contents formed by `<h1>`–`<h6>`; screen-reader users navigate by it, so levels shouldn't skip. Used in projects 1, 2, 5, 6, 12, 28. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Headless browser** — A real browser run by a script with no visible window, used for automated tests and screenshots. Used in projects 26, 27, 38, 39, 40.
+- **Hero** — The large banner area at the top of a page, often with a big image and headline; its image is frequently the LCP element. Used in projects 2, 7, 10, 11, 15, 22, 27, 30, 40.
+- **Hex colour** — A colour written as hexadecimal digits, such as `#2563eb` (red, green and blue pairs). Used in projects 10, 16, 19. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **`hidden` attribute** — HTML attribute that hides an element like `display: none`; `hidden="until-found"` lets find-in-page reveal it. Used in projects 9, 14. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Honeypot field** — A form field hidden from humans; bots tend to fill it, so submissions that do are rejected as spam. Used in project 3.
+- **Hosted payment fields** — Card fields supplied by a payment provider in an iframe, so card data never touches your server and PCI (card-security standard) obligations stay small. Used in project 21.
+- **Hover and `@media (hover: none)`** — `:hover` matches under a mouse pointer; `@media (hover: none)` detects devices that can't hover, such as phones, so controls aren't hidden there. Used in projects 18, 26, 32. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **`hreflang`** — Attribute on alternate-language links telling search engines which URL serves which language. Used in projects 31, 33. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **HTML validator (Nu HTML Checker)** — The W3C's checker that reports invalid HTML, such as mismatched `colspan` counts or a button inside a link. Used in projects 1, 2, 5, 8, 9, 10, 17, 21, 28, 33, 35. ([Ch 2](../chapters/02-html-structure-and-text/README.md))
+- **HTTP and status codes** — HTTP is the request/response protocol of the web; each response has a status code such as 200 (OK), 301 (moved permanently), 303 (see other) or 404 (not found). Used in projects 10, 30, 33, 38. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **`hyphens: auto`** — Lets the browser break long words with hyphens using a dictionary for the element's `lang`. Used in projects 5, 31. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+
+### I
+
+- **i18n (internationalisation)** — Preparing a site for many languages and regions: translations, text direction, fonts, number and date formats. Used in project 31.
+- **`<iframe>`** — Element that embeds another web page inside yours, such as a map, video or payment field. Used in project 21. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **Image CDN** — A content delivery network (servers around the world holding copies of files) that also resizes and re-encodes images on request. Used in projects 7, 22, 23. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **Implicit grid** — Rows or columns the grid creates automatically for items placed outside the tracks you defined. Used in projects 13, 20. ([Ch 9](../chapters/09-grid/README.md))
+- **`@import`** — Loads another stylesheet from CSS; `@import url(x.css) layer(name)` puts it into a cascade layer. It must come before other rules. Used in projects 26, 30, 34. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Incremental migration** — Changing a system in small, deployable steps rather than one big rewrite. Used in projects 33, 34.
+- **`:indeterminate`** — Pseudo-class for a checkbox in the mixed state, set from JavaScript, as in a "select all" box when only some items are checked. Used in project 25. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **`inert`** — An inert part of the page can't be focused, clicked or found by assistive technology; a modal dialog makes the rest of the page inert. Used in projects 24, 32. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Information architecture** — How a site's content is organised, grouped and labelled, which decides its navigation. Used in project 9.
+- **Inheritance** — Some CSS properties (colour, font, custom properties) pass their computed value from parent to child automatically. Used in projects 5, 10, 19, 20, 25, 27, 37, 40. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Inline styles and inline scripts** — CSS or JS written directly in the HTML (`style="…"`, `<script>` in the page) instead of a separate file; inline custom properties can carry data. Used in projects 10, 15, 16, 26, 30, 36, 37. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **`inline-block`** — A box that sits in a line like text but accepts width, height and padding like a block. Used in project 15. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **`inline-size` / `block-size`** — Logical names for width and height that follow writing direction (`max-inline-size`, `min-block-size` and so on). Used in projects 1, 5, 6, 8, 12, 13, 14, 27, 31, 35, 36, 37, 39. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **INP (Interaction to Next Paint)** — Core Web Vital for responsiveness: the delay from a click, tap or key press until the next frame is painted; good is 200 ms or less. Used in project 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Input types** — The `type` attribute of `<input>` (`email`, `number`, `search`, `range`, …) sets validation, keyboard and built-in UI. Used in projects 2, 3, 9, 21, 22, 25, 28. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **`inputmode`** — Chooses the on-screen keyboard (such as `numeric`) without changing validation; better than `type="number"` for card numbers and postcodes. Used in project 21. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **`inset` and inset properties** — Shorthand for `top/right/bottom/left` and their logical forms (`inset-block-start`, `inset-inline-end`), used with positioning. Used in projects 2, 4, 8, 12, 31, 32. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **`interpolate-size`** — `interpolate-size: allow-keywords` lets sizes transition to and from `auto`; Chromium only, so treat it as an enhancement. Used in project 14. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **Intrinsic layout** — Layouts that adapt to their content and container (with `minmax()`, `clamp()`, `flex-wrap`) instead of a list of fixed breakpoints. Used in projects 11, 22. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Invalid at computed-value time** — When a `var()` can't be resolved to a valid value, the declaration falls back to the inherited or initial value instead of an earlier declaration. Used in projects 19, 40. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Invoker Commands API** — Button attributes `commandfor` (target id) and `command` (such as `show-modal`, `close`) that open and close dialogs and popovers with no JavaScript. Used in project 24.
+- **ISO 8601** — The international standard for writing dates, times and durations in machine-readable form, such as `2026-10-14` or `PT20M` (20 minutes). Used in project 2. ([Ch 2](../chapters/02-html-structure-and-text/README.md))
+- **ITCSS** — Inverted Triangle CSS: ordering stylesheets from generic, low-specificity rules to specific, high-specificity ones; cascade layers can enforce it. Used in projects 10, 34. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+
+### J
+
+- **Jank** — Visible stutter when the browser misses frames, usually because each frame does too much layout, paint or JavaScript. Used in projects 18, 29. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **JavaScript (JS)** — The programming language of the browser; these briefs keep it optional, used only for small enhancements. Used in projects 2, 3, 4, 7, 8, 9, 11, 12, 13, 14, 16, 18, 19, 20, 21, 24, 25, 28, 29, 30, 32, 33, 35, 36, 37, 38, 39, 40.
+- **JSON** — JavaScript Object Notation: a plain-text data format of `{ "key": value }` objects and lists. Used in projects 2, 6, 10, 17, 19, 28, 30, 33, 37, 40.
+- **JSON-LD** — Structured data written as JSON inside `<script type="application/ld+json">`, using the schema.org vocabulary; browsers don't execute it. Used in projects 2, 6, 10, 17, 28, 33. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+
+### K
+
+- **Keyboard accessibility** — Everything must work with the keyboard alone: Tab to move, Enter or Space to activate, arrow keys within groups, Escape to close. Used in projects 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 18, 21, 24, 25, 26, 28, 32, 35, 38, 39. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`@keyframes`** — Defines the named steps of a CSS animation, which `animation` properties then play. Used in projects 18, 29. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **KPI** — Key performance indicator: a headline number on a dashboard, such as sales today. Used in project 13.
+
+### L
+
+- **`<label>`** — Element that names a form control; clicking it focuses the control, and it gives the control its accessible name. Used in projects 2, 3, 4, 5, 8, 9, 11, 12, 13, 14, 15, 20, 21, 23, 25, 28, 29, 31, 32, 37, 40. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Landmark** — A page region (banner, navigation, main, search, contentinfo) that screen-reader users can list and jump to; created by `<header>`, `<nav>`, `<main>` and friends. Used in projects 1, 5, 9, 10, 12, 13, 28, 33. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`:lang()`** — Pseudo-class matching elements by language, used to adjust fonts and line height per language. Used in project 31. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **`lang` attribute** — Declares the language of the page or a passage, used by screen readers, hyphenation, fonts and translation tools. Used in projects 5, 15, 31, 33. ([Ch 2](../chapters/02-html-structure-and-text/README.md))
+- **Layout (rendering step)** — The rendering step that computes every box's size and position; animating layout properties redoes it on every frame. Used in projects 18, 29. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **Lazy loading** — `loading="lazy"` delays fetching an image or iframe until it is near the viewport; never use it on the LCP image. Used in projects 7, 11, 18, 22, 30. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **LCP (Largest Contentful Paint)** — Core Web Vital for loading: when the largest visible image or text block is painted; good is 2.5 s or less. Used in projects 1, 7, 11, 18, 22, 23, 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **LCP sub-parts** — LCP time split into time to first byte, resource load delay, resource load duration and element render delay. Used in projects 11, 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Legacy code** — Old code still in use, often without tests or documentation, that is risky to change. Used in projects 17, 34, 39.
+- **Light dismiss** — Closing an overlay by clicking outside it or pressing Escape, built into `popover="auto"`. Used in projects 9, 24, 32. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **`light-dark()`** — CSS colour function returning its first value in a light colour scheme and its second in a dark one. Used in projects 16, 36, 40. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Lightbox** — An overlay that shows a large version of an image over the dimmed page. Used in projects 7, 22, 24.
+- **Lighthouse and Lighthouse CI** — Google's lab auditing tool for performance, accessibility, SEO and best practices; Lighthouse CI runs it on every change and can fail the build. Used in projects 1, 2, 7, 10, 11, 22, 23, 28, 30, 33, 39. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Lightning CSS** — A fast CSS compiler that bundles, minifies, adds prefixes and lowers new syntax for older browsers. Used in project 26. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Link checker** — A tool that crawls a site and reports links that lead nowhere (404s) or to missing fragments. Used in projects 10, 12, 33.
+- **Lint / linter** — A tool that checks source code for errors and banned patterns without running it; Stylelint is the CSS linter. Used in projects 19, 31, 34, 39.
+- **`localStorage`** — A small key-value store the browser keeps per site, which survives reloads; used to remember a theme choice. Used in projects 16, 22. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Logical properties** — CSS properties named by writing direction (`margin-inline-start`, `padding-block`, `inset-inline-end`) so one stylesheet works for LTR, RTL and vertical text. Used in projects 5, 24, 31, 39. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Long task** — Any piece of main-thread work longer than 50 ms; it delays response to input and hurts INP. Used in project 29. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+
+### M
+
+- **`mailto:` links** — A link that opens the visitor's email program with the address filled in. Used in projects 1, 17. ([Ch 2](../chapters/02-html-structure-and-text/README.md))
+- **Main thread** — The browser's single line of work that runs JavaScript, style and layout; when it is busy, the page can't respond. Used in project 29. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **Margin collapsing** — Adjacent vertical margins of blocks merge into the larger one instead of adding up. Used in project 5. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **Markdown** — A plain-text format for writing content (`# Heading`, `*emphasis*`) that tools convert to HTML. Used in projects 2, 12, 33.
+- **Masonry (`grid-lanes`)** — A layout that packs items of different heights tightly in columns; native CSS masonry (`display: grid-lanes`) isn't Baseline yet. Used in project 7. ([Ch 9](../chapters/09-grid/README.md))
+- **Measure** — Typographers' word for line length; about 45–75 characters per line reads comfortably. Used in projects 1, 5, 20, 23. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Media query** — `@media (condition)` applies rules based on the viewport, device or user preferences. Used in projects 1, 2, 7, 8, 9, 10, 11, 13, 15, 16, 17, 18, 25, 27, 36. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Meta description and `<title>`** — The `<title>` shows in tabs and as the search-result headline; the meta description is often used as the snippet under it. Used in projects 1, 6, 9, 10, 13, 32, 33, 38. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Microformats (h-card)** — Agreed class names (`h-card`, `p-name`) that let tools read data such as contact details from ordinary HTML. Used in project 1.
+- **Minify** — Removing spaces, comments and other unneeded characters to make files smaller. Used in projects 30, 34. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **`minmax()`** — Grid function giving a track a minimum and maximum size; `minmax(0, 1fr)` lets a track shrink below its content. Used in projects 5, 7, 11, 12, 13, 20. ([Ch 9](../chapters/09-grid/README.md))
+- **MJML** — An open-source markup language that compiles to email-safe, table-based HTML. Used in project 15.
+- **Mobile-first** — Writing base styles for the smallest screen and adding layout for wider screens with `min-width` queries. Used in projects 1, 11, 38. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Modal vs non-modal** — A modal overlay blocks the rest of the page until it is dealt with; a non-modal one (popover, menu) doesn't. Used in projects 24, 32. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Modular type scale** — A set of font sizes related by a fixed ratio, often made fluid with `clamp()`. Used in projects 19, 23, 27, 34. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Multi-column layout (`columns`)** — `columns` flows content into newspaper-style columns; good for print, awkward on screens. Used in projects 6, 20. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+
+### N
+
+- **Named grid lines** — Grid lines given names such as `[content-start]`, so items can be placed with `grid-column: content`. Used in projects 12, 20. ([Ch 9](../chapters/09-grid/README.md))
+- **Nesting (CSS)** — Writing rules inside other rules (`.card { &:hover {} }`); now native CSS, previously a preprocessor feature. Used in projects 10, 18, 20, 34. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Network panel** — The DevTools panel listing every request with its size, timing, status and which file the browser chose. Used in projects 1, 7, 10, 22. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **Node.js** — A program that runs JavaScript outside the browser; used here for build scripts, generators and test tools. Used in projects 19, 22, 33, 38, 39.
+- **`noindex`** — A robots directive (`<meta name="robots" content="noindex">`) that keeps a page out of search results. Used in project 33. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Normalisation (data)** — Dividing values by the maximum so they fit a 0–1 range that CSS can turn into lengths. Used in project 37.
+- **NVDA and VoiceOver** — Widely used screen readers: NVDA is free for Windows, VoiceOver is built into Apple devices. Used in projects 3, 4, 28, 31, 35. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+
+### O
+
+- **`object-fit` / `object-position`** — Control how an image fills its box: `cover` crops to fill, and `object-position` chooses which part stays visible. Used in projects 7, 18, 20, 22, 29. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **OKLCH (`oklch()`)** — A colour notation of lightness, chroma (colourfulness) and hue in which equal steps look about equally different, useful for deriving palettes. Used in projects 16, 19, 40. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Open Graph** — `og:` meta tags (title, description, image) that social apps read to build link-preview cards. Used in projects 1, 33. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Open source** — Software whose source code is public and free to use under a licence. Used in projects 12, 15, 17, 19, 26, 34, 37, 39.
+- **`orphans` / `widows`** — Minimum number of a paragraph's lines left at the bottom of a page (orphans) or carried to the top of the next (widows). Used in project 17. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **`outline`** — A line drawn outside an element's border that takes no space; the standard focus indicator, and it survives forced-colors mode. Used in projects 1, 25, 36, 39. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **`overflow`** — What happens to content too big for its box (`visible`, `hidden`, `auto`, `clip`); anything but `visible` creates a scroll container. Used in projects 1, 2, 4, 5, 7, 8, 9, 11, 12, 13, 14, 18, 20, 24, 27, 31, 32, 35, 36. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **`overlay` property** — Keeps a closing dialog or popover in the top layer until its exit animation ends; Chromium only. Used in project 24. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+
+### P
+
+- **`@page` and paged media** — CSS for printed pages: `@page` sets size and margins, and paged-media rules control page breaks. Used in projects 2, 8, 17. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Pagination** — Splitting a long list across numbered pages instead of one huge page. Used in projects 7, 26, 33, 35.
+- **Paint (and paint flashing)** — The rendering step that draws pixels for each box; DevTools' paint flashing highlights areas being repainted. Used in projects 7, 8, 11, 16, 18, 30. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **Parallax** — Layers moving at different speeds as you scroll to fake depth; can make people with vestibular disorders unwell. Used in projects 20, 29, 36. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **Parser (HTML parser)** — The part of the browser that reads HTML text and builds the DOM; blocking scripts pause it. Used in projects 1, 2, 16, 22, 23, 28, 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **PDF** — Portable Document Format, a fixed-layout file for printing and sharing; browsers can save any page as PDF through the print dialog. Used in projects 6, 17.
+- **Percentile (p75)** — The value that a given share of measurements beat or match; Core Web Vitals use the 75th percentile of real visits. Used in projects 11, 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Performance budget** — Agreed limits on page weight, request count or timing metrics that fail a build when exceeded. Used in projects 1, 11, 17, 30, 34, 39. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Performance panel** — The DevTools panel that records what the browser does over time: scripting, style, layout, paint and compositing per frame. Used in projects 11, 18, 23, 29, 30. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **`<picture>` and `<source>`** — `<picture>` lets you offer alternative images with `<source>` elements chosen by format (`type`) or layout (`media`), with an `<img>` as the fallback. Used in projects 11, 16, 22. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **Placeholder** — Grey hint text inside an empty field; it disappears as you type, so it must never replace a label. Used in projects 3, 13, 22, 25. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Playwright** — A test tool that drives Chromium, Firefox and WebKit from scripts, with built-in screenshot comparison. Used in projects 34, 39.
+- **Polyfill** — Code that imitates a missing browser feature using older features, such as Paged.js for print features. Used in project 17.
+- **Popover API** — The `popover` attribute and `popovertarget` buttons: non-modal overlays in the top layer; `auto` popovers close on outside click, `manual` ones stay open. Used in projects 9, 24, 32. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **`position: sticky`** — A box acts as normal until scrolling reaches its inset (`top: 0`), then sticks within its scroll container. Used in projects 2, 4, 6, 8, 9, 12, 21, 27, 28, 35. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **POST, GET and PRG** — GET requests fetch a page (data in the URL); POST sends form data in the request body. POST/redirect/GET answers a successful POST with a redirect so refresh never resubmits. Used in projects 3, 21, 38. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **POUR** — WCAG's four principles: content must be Perceivable, Operable, Understandable and Robust. Used in project 28. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`prefers-color-scheme`** — Media feature reporting whether the user has asked the OS for a light or dark theme. Used in projects 1, 15, 16, 36. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **`prefers-contrast`** — Media feature reporting that the user wants more (or less) contrast. Used in projects 16, 36. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **`prefers-reduced-motion`** — Media feature reporting that the user wants non-essential movement minimised, for example because motion makes them unwell. Used in projects 4, 6, 11, 14, 18, 20, 23, 24, 28, 29, 34, 36, 37. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **`prefers-reduced-transparency`** — Media feature (Chromium only) reporting that the user wants solid surfaces instead of see-through ones. Used in project 36. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Preheader** — Hidden text at the top of an email that inboxes show as a preview after the subject line. Used in project 15.
+- **Preload** — `<link rel="preload">` starts downloading a critical file (a font, the hero image) early, before the browser would otherwise find it. Used in projects 11, 22, 23, 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Preload scanner** — A look-ahead parser that finds images and other resources in the HTML and starts fetching them before layout exists. Used in project 22. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Preprocessor (Sass)** — A language that compiles to CSS and adds variables, mixins and loops; Sass is the most used. Its variables disappear at build time. Used in projects 10, 19, 34. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Primitive token** — The raw tier of design tokens, such as `color.blue.600`; components shouldn't use them directly. Used in projects 10, 11, 15, 19, 26, 34. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Print stylesheet (`@media print`)** — Rules that apply only when printing or in print preview, used to hide navigation, set black on white and control page breaks. Used in projects 2, 6, 8, 10, 12, 17, 35, 37. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **`print-color-adjust`** — `print-color-adjust: exact` asks the browser to print an element's background colours, which are normally skipped to save ink. Used in project 17. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Progressive enhancement** — Build the core experience from the most robust layer (HTML, links, forms), then add CSS and JS improvements that can fail without breaking it. Used in projects 3, 5, 7, 12, 14, 15, 20, 21, 25, 27, 29, 30, 32, 38. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **Pseudo-class** — A selector for a state or position, written with one colon: `:hover`, `:checked`, `:has()`, `:user-invalid`. Used in projects 3, 10, 17, 25, 26, 31. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Pseudo-element** — A selector for a part of an element, written with two colons: `::before`, `::after`, `::marker`, `::backdrop`. Used in projects 2, 9, 10, 14, 17, 18, 24, 25, 29, 37. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Pseudo-localisation** — Automatically lengthening strings and adding accents to stress-test layouts before real translations exist. Used in project 31.
+- **Pull request** — A proposed code change that teammates review and CI checks before it is merged. Used in projects 30, 39, 40.
+- **Pull-quote** — A sentence from an article repeated large in the layout for emphasis; a duplicate for screen readers. Used in project 20.
+
+### R
+
+- **Range input** — `<input type="range">`, a slider for choosing a number; its thumb and track need engine-specific pseudo-elements to style. Used in projects 25, 40. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Range syntax (queries)** — Writing query conditions with comparison operators, such as `(width >= 48rem)` or `(inline-size > 25rem)`. Used in project 27. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Rate limiting** — Capping how many requests one client can make in a time window, a server-side defence against spam and abuse. Used in project 3.
+- **`reading-flow`** — A newer property that makes focus order follow a flex or grid container's visual order; Chromium only, not Baseline. Used in project 13. ([Ch 8](../chapters/08-flexbox/README.md))
+- **Redirect (301, 303)** — A response telling the browser to go to another URL: 301 means moved permanently, 303 See Other means fetch the new URL with GET. Used in projects 21, 33, 38. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Reflow (WCAG 1.4.10)** — Content must work at 320 CSS px wide (400 % zoom) without two-direction scrolling, except content like data tables that needs it. Used in projects 1, 4, 6, 8, 9, 23, 28, 35, 36. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Registered custom property (`@property`)** — `@property` gives a custom property a type, an initial value and an inheritance setting, so it can be validated and animated. Used in projects 16, 19, 27, 37, 40. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **`rel` attribute** — Describes how a linked resource relates to the page: `stylesheet`, `preload`, `canonical`, `alternate`, `prev`, `next`. Used in projects 12, 23, 31, 33. ([Ch 2](../chapters/02-html-structure-and-text/README.md))
+- **Relative colour syntax** — Derives a new colour from an existing one, such as `oklch(from var(--c) calc(l - 0.08) c h)` for a darker hover shade. Used in projects 16, 40. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Relative vs root-relative URL** — A relative URL (`css/a.css`) resolves from the current page's folder; a root-relative one (`/css/a.css`) from the site root. Used in projects 1, 10. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **Render-blocking** — A resource the browser must load before it paints anything, such as stylesheets in `<head>` and synchronous scripts. Used in projects 16, 23, 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Rendering pipeline** — The browser's steps for each frame: style, layout, paint, composite. Used in projects 18, 30. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **Reset (CSS reset)** — A small stylesheet that removes or evens out browser default styles (margins, `box-sizing`, form fonts) so you start from a predictable base. Used in projects 1, 10, 26, 27, 34. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Resolution switching** — Offering the same image at several widths with `srcset` and `sizes` so the browser downloads the smallest suitable file. Used in project 22. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **Responsive design** — Pages that adapt to any screen size, zoom level and user setting. Used in projects 1, 4, 5, 6, 7, 9, 11, 12, 13, 15, 16, 17, 18, 20, 22, 23, 27, 28, 29, 30, 35, 36, 37, 40. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **`revert-layer`** — Value that rolls a property back to what earlier cascade layers would give it. Used in project 26. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Rich results** — Search listings enhanced by structured data (recipe cards, ratings, breadcrumbs); structured data makes a page eligible, not guaranteed. Used in projects 2, 33. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Rich Results Test / Schema Markup Validator** — Google's and schema.org's online tools for checking structured data. Used in projects 2, 33. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **`robots.txt`** — A file at the site root telling crawlers which URLs not to fetch; it controls crawling, not indexing. Used in project 33. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **`role` attribute** — ARIA attribute that says what an element is: `presentation`, `region`, `img`, `switch`, `alert`, `menu` and so on. Prefer native elements first. Used in projects 3, 4, 8, 9, 14, 15, 25, 29, 32, 35, 38. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **RSS / Atom feed** — A machine-readable list of a site's latest posts that feed readers subscribe to. Used in project 33.
+
+### S
+
+- **SaaS** — Software as a service: software rented and used through the browser rather than installed. Used in project 40.
+- **schema.org** — The shared vocabulary of types (Recipe, Product, BlogPosting, BreadcrumbList) and properties that structured data uses. Used in projects 2, 6, 33. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **`@scope`** — Limits rules to a subtree, optionally with a lower boundary, so component styles don't leak. Used in project 26. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Screen reader** — Software that reads the page aloud (or to a braille display) and lets blind and low-vision users navigate by headings, landmarks and controls. Used in projects 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 18, 20, 21, 24, 25, 26, 27, 28, 29, 31, 32, 35, 37, 38, 39. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Scroll container** — An element whose `overflow` is not `visible`; it scrolls its own content, and sticky elements stick within it. Used in projects 2, 4, 5, 8, 11, 12, 13, 29, 35. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **Scroll shadows** — Shading at the edge of a scroll area that appears only when more content is hidden that way. Used in project 35.
+- **Scroll snap** — `scroll-snap-type` and `scroll-snap-align` make a scroll area settle on item boundaries, like a swipeable carousel. Used in projects 11, 29. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **`scroll-behavior: smooth`** — Makes in-page jumps scroll smoothly; wrap it in a reduced-motion check. Used in project 6. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **Scroll-driven animation** — A CSS animation whose progress follows scrolling (`scroll()` timeline) or an element moving through the viewport (`view()` timeline); not Baseline yet. Used in projects 5, 11, 12, 20, 29. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **`scroll-margin` / `scroll-padding`** — Offsets that stop anchor jumps and focus scrolling from hiding content under a sticky header or bar. Used in projects 6, 9, 12, 28, 39. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **`<search>`** — Landmark element wrapping a site's search or filter form. Used in project 9. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Selector** — The part of a CSS rule that chooses which elements it applies to; one invalid selector in a list drops the whole rule. Used in projects 1, 4, 5, 9, 10, 15, 16, 18, 25, 26, 31, 34, 39, 40. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Semantic HTML** — Choosing elements for their meaning (`<nav>`, `<button>`, `<table>`) rather than their look, which gives browsers and assistive technology structure for free. Used in projects 1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 13, 14, 15, 16, 17, 19, 20, 21, 24, 25, 26, 28, 32, 33, 35, 36, 37, 38, 39, 40. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Semantic token** — A design token named by role (`--color-text-muted`) that points at a primitive; themes change semantic tokens only. Used in projects 16, 19, 40. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **SEO (search engine optimisation)** — Making pages easy for search engines to crawl, understand and show well, mostly through good HTML and content. Used in projects 1, 2, 10, 11, 22, 23, 30, 31, 33, 39. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Session** — Server-side storage of one user's progress (such as form answers), found again on each request via a cookie. Used in projects 21, 38.
+- **Shorthand property** — One property that sets several at once, such as `inset`, `flex`, `container` or `animation`. Used in projects 27, 29. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **Sitemap (`sitemap.xml`)** — An XML file listing a site's indexable URLs with last-modified dates, to help search engines find pages. Used in project 33. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Skip link** — The first focusable link on a page, jumping past repeated navigation to the main content; visible when focused. Used in projects 2, 9. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Snapshot test** — A test that saves an output (generated CSS, a screenshot) and fails when a later run differs. Used in projects 19, 26.
+- **Soft 404** — An error page served with status 200 instead of 404, which search engines may index as real content. Used in project 10.
+- **Specificity** — The weight of a selector, counted as (IDs, classes/attributes/pseudo-classes, elements); higher wins when rules conflict in the same layer. Used in projects 10, 18, 26, 34, 39. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **Speculation rules** — A Chromium feature that prefetches or prerenders likely next pages for near-instant navigation. Used in project 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **`srcset` and `sizes`** — `srcset` lists candidate image files with their widths; `sizes` tells the browser how wide the image will display, so it picks the smallest adequate file. Used in projects 7, 10, 11, 16, 22, 30. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **SSO (single sign-on)** — Logging in once with one account (often a company's) to use several services. Used in project 4.
+- **Stacking context** — A group of elements layered together; `z-index` only compares elements within the same stacking context. Used in projects 4, 8, 9, 18, 24, 32, 35. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **`@starting-style`** — Defines the "before" styles for an element's first render, so it can transition in (and out of `display: none`) without JavaScript. Used in projects 18, 24, 32, 37. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **Static host / static site** — A site made of plain files served as they are, with no server code; fast, cheap and secure. Used in projects 1, 10, 29, 33.
+- **Static-site generator (SSG)** — A tool that builds plain HTML pages from content files and templates at build time, such as Eleventy. Used in projects 1, 10, 12, 33.
+- **Strangler pattern** — Replacing an old system gradually by growing the new one around it and retiring old parts piece by piece. Used in project 34.
+- **Structured data** — Machine-readable facts about a page (usually JSON-LD with schema.org) that search engines use for rich results. Used in projects 2, 6, 8, 28, 33. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Style Dictionary** — An open-source build tool that turns token files into CSS variables and other platforms' formats. Used in project 19.
+- **Stylelint** — The standard CSS linter; rules such as `selector-max-id` or `declaration-no-important` block bad patterns. Used in projects 19, 31, 34, 39.
+- **Subgrid** — `grid-template-rows: subgrid` (or columns) makes a nested grid reuse its parent's tracks so content aligns across siblings. Used in project 20. ([Ch 9](../chapters/09-grid/README.md))
+- **Subsetting and `unicode-range`** — Shipping only the characters a font needs, and declaring per-script files with `unicode-range` so they download only when used. Used in projects 15, 23, 28, 30, 31. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **SVG** — Scalable Vector Graphics: images made of shapes in XML that stay sharp at any size and can be styled with CSS. Used in projects 9, 16, 36, 37. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **Switch (`role="switch"`)** — An on/off control; a checkbox with `role="switch"` is announced as "switch, on/off". Used in project 25. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Switcher primitive** — A flex layout trick that puts items side by side when the container is wide and stacks them when it is narrow, with no media query. Used in project 11.
+- **System colour keywords** — Keywords such as `Canvas`, `CanvasText`, `ButtonText` and `Highlight` that map to the user's chosen colours in forced-colors mode. Used in projects 25, 36. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **System font stack** — A `font-family` list that uses the operating system's own fonts: no download, instant text. Used in projects 1, 5, 17, 23, 25. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+
+### T
+
+- **`tabindex`** — `tabindex="0"` makes an element reachable with Tab, for example a scrollable region; positive values are an anti-pattern. Used in projects 3, 4, 5, 8, 11, 12, 35. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Table semantics** — `<table>` with `<caption>`, `<th scope>`, `<thead>` and `<tbody>` so each cell is announced with its row and column headers. Used in projects 4, 6, 8, 10, 13, 15, 28, 35, 37. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Tabs (ARIA tabs pattern)** — A tab list where one tab stop and arrow keys switch panels, announced as "tab 2 of 4"; real tabs need ARIA roles and JavaScript. Used in projects 14, 26. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Target size (WCAG 2.5.8)** — Clickable targets must be at least 24 × 24 CSS px, or have enough space around them. Used in projects 3, 9, 25, 28, 39. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`:target`** — Pseudo-class matching the element whose id is in the URL fragment, for highlighting the heading or footnote you jumped to. Used in projects 5, 7, 12, 14. ([Ch 6](../chapters/06-css-fundamentals/README.md))
+- **TBT (Total Blocking Time)** — A lab metric adding up how long the main thread was blocked by long tasks; a stand-in for INP in tests. Used in project 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **Template / partial** — A page skeleton filled with data by a generator or server; a partial is a reusable template piece, such as the `<head>`. Used in projects 1, 2, 5, 6, 10, 12, 13, 15, 33, 34, 35, 37.
+- **Text spacing (WCAG 1.4.12)** — Content must survive users increasing line height, paragraph, letter and word spacing, so avoid fixed heights on text. Used in projects 28, 36. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **`text-wrap: balance` / `pretty`** — `balance` evens line lengths in short text like headings; `pretty` avoids a lone word on the last line of paragraphs. Used in projects 5, 20. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Third-party script** — Code from another company (analytics, chat, ads, widgets) loaded into your page; a common source of slowness and failures. Used in projects 3, 16, 23, 26, 28, 30, 31, 38. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **`<time datetime>`** — Element that pairs human-readable dates, times or durations with a machine-readable `datetime` value. Used in projects 2, 5, 8, 17, 33. ([Ch 2](../chapters/02-html-structure-and-text/README.md))
+- **Toast** — A brief notification that pops up and usually disappears on its own. Used in projects 24, 26.
+- **Tooltip and toggletip** — A tooltip shows short help on hover or focus; a toggletip shows it when a small button is clicked, which also works on touch. Used in projects 4, 13, 24, 32, 37.
+- **Top layer** — A special layer drawn above the whole page, used by modal dialogs and popovers, so `z-index` and ancestor clipping no longer matter. Used in projects 24, 32. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **`transform`, `translate`, `scale`** — Move, rotate or resize an element's painted image without changing layout; cheap to animate. Used in projects 18, 29, 31. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **Transition** — Animates a property smoothly from its old value to its new one when it changes, such as on hover. Used in projects 4, 14, 16, 18, 19, 24, 29, 32, 34, 36, 37, 39, 40. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **`transition-behavior: allow-discrete`** — Lets discrete properties such as `display` and `overlay` take part in transitions, so elements can animate out before disappearing. Used in projects 14, 24, 32. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **TTFB (time to first byte)** — The time from the request until the first byte of the response arrives; the first part of LCP. Used in projects 11, 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **TypeScript** — JavaScript with type annotations, checked before it runs. Used in project 19.
+
+### U
+
+- **UI (user interface)** — The parts of software people see and interact with. Used in projects 16, 23, 24, 25, 28, 32, 36.
+- **Unicode** — The standard numbering every character in every script; fonts and the bidi algorithm work in terms of it. Used in projects 23, 31. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Unlayered styles** — CSS not inside any `@layer`; for normal declarations it beats all layered rules. Used in project 26. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **URL** — A web address: scheme, host, path, query and fragment (`https://example.com/a?b=1#c`). Used in projects 2, 3, 5, 9, 10, 11, 12, 14, 15, 17, 22, 23, 31, 33, 38. ([Ch 1](../chapters/01-how-the-web-works/README.md))
+- **`:user-invalid`** — Pseudo-class matching an invalid field only after the user has interacted with it or tried to submit, unlike `:invalid`. Used in projects 3, 21, 25. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Utility classes** — Small single-purpose classes (`.visually-hidden`, `.mt-0`) placed in a high layer so they beat component styles. Used in projects 9, 10, 26, 34, 39. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+
+### V
+
+- **Validation (form)** — Checking that entered values meet rules; the browser can check on the client, but the server must always check again. Used in projects 1, 2, 3, 5, 8, 9, 10, 17, 21, 24, 28, 33, 35, 38, 40. ([Ch 5](../chapters/05-tables-and-forms/README.md))
+- **Variable font** — One font file with continuous axes such as weight, width and optical size, replacing several static files. Used in projects 5, 23, 30. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **Vendor prefix / vendor pseudo-elements** — Engine-specific names such as `::-webkit-slider-thumb` and `::-moz-range-thumb`; also "vendor CSS" means third-party stylesheets. Used in projects 14, 19, 25, 26, 28. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **Vestibular disorder** — An inner-ear balance condition; on-screen movement can trigger dizziness or nausea, which is why reduced motion matters. Used in projects 18, 36. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **View transition** — The browser snapshots the old and new state of the page and animates between them; matching `view-transition-name`s morph. Used in projects 18, 29. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **Viewport** — The visible area of the browser window that the page is laid out in. Used in projects 1, 2, 4, 5, 7, 8, 11, 12, 13, 20, 22, 27, 28, 30, 32, 35, 39. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Viewport meta tag** — `<meta name="viewport" content="width=device-width, initial-scale=1">` stops phones laying the page out at a fake 980 px width. Used in project 1. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Viewport units (`vw`, `vh`)** — `1vw` is 1 % of the viewport width; font sizes in `vw` alone ignore zoom and user font settings. Used in projects 7, 11, 22. ([Ch 10](../chapters/10-responsive-design/README.md))
+- **Visual regression testing** — Taking screenshots of pages and comparing them with approved baselines to catch unintended visual changes. Used in projects 26, 34, 39, 40.
+- **Visually hidden** — A CSS pattern (clip to 1 px, `overflow: hidden`) that hides text from the eye but keeps it for screen readers. Used in projects 3, 4, 9, 10, 13, 26, 28. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+
+### W
+
+- **WCAG** — Web Content Accessibility Guidelines, the international standard; success criteria have levels A, AA (the usual legal target) and AAA. Used in projects 1, 3, 4, 5, 8, 9, 11, 12, 13, 17, 24, 25, 28, 32, 35, 36, 37, 38, 40. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **WCAG 1.4.11 Non-text Contrast** — UI components, focus indicators and meaningful graphics need at least 3:1 contrast against adjacent colours. Used in projects 25, 28, 37. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **WCAG 1.4.13 Content on Hover or Focus** — Content that appears on hover or focus must be dismissible, hoverable and persistent. Used in project 32. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **WCAG 1.4.4 Resize Text** — Text must scale to 200 % without losing content or function. Used in projects 5, 11. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **WCAG 2.4.11 Focus Not Obscured** — A focused element must not be entirely hidden by things like sticky headers or bars. Used in projects 9, 12, 28. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **WCAG 3.3.7 Redundant Entry** — Don't make users type the same information twice in one process. Used in projects 28, 38. ([Ch 3](../chapters/03-semantic-html-and-accessibility/README.md))
+- **Web font** — A font downloaded with the page via `@font-face`; it costs bytes and can delay or shift text. Used in projects 1, 5, 11, 15, 17, 23, 30. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **WebP** — An image format usually smaller than JPEG or PNG at similar quality. Used in projects 1, 7, 10, 11, 22, 30. ([Ch 4](../chapters/04-images-media-and-embeds/README.md))
+- **WebPageTest and PageSpeed Insights** — Online performance testers: WebPageTest gives detailed filmstrips and waterfalls, PageSpeed Insights combines Lighthouse with CrUX field data. Used in projects 11, 30. ([Ch 14](../chapters/14-performance-seo-interview-and-cheatsheet/README.md))
+- **`:where()`** — Matches like a selector list but adds zero specificity, so defaults wrapped in it are trivially overridable. Used in projects 10, 26. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+- **`will-change`** — A hint that an element will animate so the browser can prepare a layer; it costs memory, so use it sparingly. Used in project 18. ([Ch 12](../chapters/12-transitions-transforms-and-animation/README.md))
+- **WOFF2** — The best-compressed web font file format. Used in project 23. ([Ch 11](../chapters/11-typography-color-and-visual-effects/README.md))
+- **`writing-mode`** — Sets whether text runs horizontally or vertically (`vertical-rl` for Japanese); logical properties follow it. Used in project 31. ([Ch 13](../chapters/13-modern-css-and-architecture/README.md))
+
+### X
+
+- **XML** — A tag-based text format for data; sitemaps are written in it. Used in project 33.
+
+### Z
+
+- **`z-index`** — Sets the stacking order of positioned elements within their stacking context. Used in projects 4, 8, 18, 24, 32. ([Ch 7](../chapters/07-box-model-and-layout-basics/README.md))
+- **Zoom (200 % / 400 %)** — Browser page zoom; WCAG expects text to work at 200 % and layouts to reflow at 400 % (about 320 CSS px wide). Used in projects 1, 2, 3, 5, 6, 9, 11, 12, 13, 18, 22, 23, 25, 27, 28, 32, 35, 36, 37. ([Ch 10](../chapters/10-responsive-design/README.md))

@@ -1,8 +1,8 @@
 # Chapter 4 — Images, Media and Embeds
 
-Text alone rarely makes a website. Product photos, logos, charts, podcasts, tutorial videos, maps and payment widgets are all "media": content that is not plain text and usually lives in its own file. HTML has a small set of elements for them — `<img>`, `<picture>`, `<figure>`, `<audio>`, `<video>`, `<track>`, `<iframe>`, `<svg>` and `<canvas>` — and each comes with rules about accessibility, performance and security that beginners often miss.
+Text alone rarely makes a website. Product photos, logos, charts, podcasts, tutorial videos, maps and payment widgets (small self-contained interactive components, often supplied by another company) are all "media": content that is not plain text and usually lives in its own file. HTML has a small set of elements for them — `<img>`, `<picture>`, `<figure>`, `<audio>`, `<video>`, `<track>`, `<iframe>` (a window showing another web page), `<svg>` (vector drawings) and `<canvas>` (a drawing surface for JavaScript) — and each comes with rules about accessibility, performance and security that beginners often miss.
 
-Media is also where most of a page's weight is. Images alone are typically the largest share of the bytes on a page, and the biggest image above the fold is very often the element that decides how fast the page *feels* (the **Largest Contentful Paint**, LCP — covered in [Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md)). So this chapter is as much about "which file does the browser download, and when" as about markup.
+Media is also where most of a page's weight (total download size) is. Images alone are typically the largest share of the bytes on a page, and the biggest image above the fold (visible without scrolling) is very often the element that decides how fast the page *feels* (the **Largest Contentful Paint**, LCP — covered in [Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md)). So this chapter is as much about "which file does the browser download, and when" as about markup.
 
 **What you'll learn**
 
@@ -16,7 +16,7 @@ Media is also where most of a page's weight is. Images alone are typically the l
 8. SVG basics: coordinates, `viewBox`, shapes, paths, icons with `currentColor`.
 9. `<canvas>`: drawing with JavaScript, and when to prefer SVG.
 
-**How the examples work.** Every example is a real file in [`code/`](code/). No example touches the network: all pictures, the audio beep and the video clip were generated locally by [`code/make_assets.py`](code/make_assets.py) (Python + Pillow) and [`code/make_video.mjs`](code/make_video.mjs) (headless Chrome records an animated canvas). Screenshots in `img/` were taken with headless Chrome at a 900 CSS-pixel-wide window and a device pixel ratio of 2 (a "Retina"-style screen). The two Node scripts (`format_sizes.mjs`, `srcset_pick.mjs`) print the outputs shown below.
+**How the examples work.** Every example is a real file in [`code/`](code/). No example touches the network: all pictures, the audio beep and the video clip were generated locally by [`code/make_assets.py`](code/make_assets.py) (Python + Pillow, a Python image-processing library) and [`code/make_video.mjs`](code/make_video.mjs) (headless Chrome records an animated canvas). Screenshots in `img/` were taken with headless Chrome (Chrome run by a script, without a window) at a 900 CSS-pixel-wide window and a device pixel ratio of 2 (a "Retina"-style screen — Apple's name for high-density displays with two or more physical dots per CSS pixel; both terms are defined properly in §4.3). The two Node scripts (`format_sizes.mjs`, `srcset_pick.mjs`) print the outputs shown below.
 
 ---
 
@@ -28,8 +28,8 @@ Media is also where most of a page's weight is. Images alone are typically the l
 Analogy: `<img>` is a picture frame nailed into the text. The HTML decides where the frame goes and what the caption card says (`alt`); the file decides what is inside.
 
 ### Why it matters
-- Images carry meaning (a chart, a product, a diagram). People who cannot see them — screen-reader users, people on slow connections where images fail, search engines — only get the `alt` text.
-- Images without known dimensions make the page jump while it loads (**layout shift**), which annoys users and hurts the Core Web Vital CLS.
+- Images carry meaning (a chart, a product, a diagram). People who cannot see them — screen-reader users (blind users whose software reads the page aloud), people on slow connections where images fail, search engines — only get the `alt` text.
+- Images without known dimensions make the page jump while it loads (**layout shift**), which annoys users and hurts the Core Web Vital CLS (Core Web Vitals are Google's three headline page-experience measurements; CLS, Cumulative Layout Shift, scores how much content jumps around).
 
 ### How it works
 The essential attributes:
@@ -38,15 +38,15 @@ The essential attributes:
 |---|---|---|
 | `src` | yes | URL of the image file (relative like `media/a.jpg` or absolute like `https://…`). |
 | `alt` | yes, in practice | Text alternative. Shown when the image fails, read by screen readers, indexed by search engines. `alt=""` marks the image as decorative. |
-| `width`, `height` | strongly recommended | The image's intrinsic size in CSS pixels, **without units** (`width="800"`). Lets the browser reserve space before the file arrives. |
+| `width`, `height` | strongly recommended | The image's intrinsic size (its natural size) in CSS pixels, **without units** (`width="800"`). Lets the browser reserve space before the file arrives. |
 | `srcset`, `sizes` | optional | Candidate files for different screens (4.3). |
 | `loading`, `decoding`, `fetchpriority` | optional | Loading hints (4.4). |
 
 Steps the browser follows:
 
-1. The HTML parser meets `<img>` and (unless it is lazy) starts downloading `src` right away — even before CSS is ready. A separate "preload scanner" finds images early.
-2. From `width`/`height` the browser computes an **aspect ratio** (its built-in stylesheet effectively applies `aspect-ratio: auto <width> / <height>`), so it can reserve a box of the right shape even if CSS makes the image fluid.
-3. When the bytes arrive, the image is decoded and painted into the reserved box.
+1. The HTML parser meets `<img>` and (unless it is lazy) starts downloading `src` right away — even before CSS is ready. A separate "preload scanner" (a fast look-ahead pass over the raw HTML) finds images early.
+2. From `width`/`height` the browser computes an **aspect ratio** (width divided by height — the image's shape; its built-in stylesheet effectively applies `aspect-ratio: auto <width> / <height>`), so it can reserve a box of the right shape even if CSS makes the image fluid (resizing with its container).
+3. When the bytes arrive, the image is decoded (unpacked from its compressed file format into raw pixels) and painted into the reserved box.
 4. If the file fails, the browser shows a broken-image indicator plus the `alt` text.
 
 The standard CSS to make images shrink with their container but never stretch:
@@ -96,7 +96,7 @@ Missing `alt` is different from empty `alt`. With no `alt`, many screen readers 
 ### In the interview
 **30-second answer:** "`<img>` is a void, replaced element. `src` and `alt` are required in practice; `alt` should convey the image's purpose, and be empty for decorative images. Always set `width` and `height` so the browser knows the aspect ratio and reserves space, preventing layout shift, and use `max-width: 100%; height: auto` in CSS for fluid images."
 
-- *Q: What's the difference between `alt=""` and no alt?* A: Empty alt says "decorative, skip it"; missing alt is an error, and assistive tech may read the URL instead.
+- *Q: What's the difference between `alt=""` and no alt?* A: Empty alt says "decorative, skip it"; missing alt is an error, and assistive tech (screen readers and similar tools) may read the URL instead.
 - *Q: Do width/height attributes stop an image being responsive?* A: No. CSS `max-width:100%; height:auto` overrides the displayed size; the attributes still supply the aspect ratio.
 - *Q: CSS background image or `<img>`?* A: `<img>` for content (it has alt, is indexable, can be responsive with srcset); CSS backgrounds for decoration.
 
@@ -124,11 +124,11 @@ Two more terms:
 | Format | Type | Compression | Transparency | Animation | Best for | Browser support |
 |---|---|---|---|---|---|---|
 | **JPEG** (`.jpg`) | raster | lossy | no | no | photos, when you need one universal format | everywhere |
-| **PNG** | raster | lossless | yes (alpha) | no (APNG exists) | screenshots, UI, logos with transparency, sharp text | everywhere |
+| **PNG** | raster | lossless | yes (alpha channel: per-pixel see-through level) | no (APNG, animated PNG, exists) | screenshots, UI, logos with transparency, sharp text | everywhere |
 | **GIF** | raster | lossless, 256 colours max | 1-bit (on/off) | yes | legacy animations — prefer video or WebP/AVIF | everywhere |
 | **WebP** | raster | lossy or lossless | yes | yes | general replacement for JPEG/PNG | all modern browsers (Safari since 2020) |
-| **AVIF** | raster | lossy or lossless | yes | yes | smallest files for photos; HDR/wide colour | Baseline 2024 (widely available since July 2026) |
-| **SVG** | vector | text (XML) | yes | yes (CSS/SMIL) | icons, logos, illustrations, simple charts | everywhere |
+| **AVIF** | raster | lossy or lossless | yes | yes | smallest files for photos; HDR (high dynamic range: brighter highlights)/wide colour | Baseline 2024 (widely available since July 2026) |
+| **SVG** | vector | text (XML, a tag-based data format like HTML) | yes | yes (CSS/SMIL, SVG's own animation tags) | icons, logos, illustrations, simple charts | everywhere |
 
 "Baseline" is the web.dev/MDN label for features that work in the current versions of Chrome, Edge, Firefox and Safari.
 
@@ -168,15 +168,15 @@ photo-800  (photo-like grain)
 *Figure 4.2 — Visually identical at this size; the byte counts are not.*
 
 What the numbers teach:
-1. **The content decides the winner.** For a flat graphic, lossless PNG (8.8 KB) beats lossy JPEG (19.1 KB) — JPEG wastes bytes on its block artefacts around sharp edges. For a photo, PNG is 5× bigger than JPEG.
+1. **The content decides the winner.** For a flat graphic, lossless PNG (8.8 KB) beats lossy JPEG (19.1 KB) — JPEG wastes bytes on its block artefacts (smudgy blocky noise — JPEG compresses in 8×8-pixel blocks) around sharp edges. For a photo, PNG is 5× bigger than JPEG.
 2. **AVIF was smallest in both cases**, WebP was roughly equal to or better than the older format. Exact savings vary per image and per quality setting, so measure your own images.
 3. For vector-like artwork, SVG is often smaller still and perfectly sharp at any size (4.8).
 
 ### How to choose (quick rules)
 1. Icon, logo, illustration with flat colours → **SVG**.
-2. Photo → **AVIF** (or WebP) with a **JPEG** fallback through `<picture>` (4.3).
+2. Photo → **AVIF** (or WebP) with a **JPEG** fallback (a second choice used when the first is not supported) through `<picture>` (4.3).
 3. Screenshot or graphic needing transparency / exact pixels → **PNG** or lossless WebP.
-4. Short animation → a muted, looping `<video>` (MP4/WebM) is usually far smaller than a GIF.
+4. Short animation → a muted, looping `<video>` (MP4/WebM, the common video file types) is usually far smaller than a GIF.
 
 ### Common mistakes
 - Saving a photo as PNG "for quality" — huge files with no visible benefit.
@@ -185,7 +185,7 @@ What the numbers teach:
 - Re-compressing an already-compressed JPEG many times (quality degrades each time).
 
 ### Real-world examples
-Image CDNs (Cloudinary, imgix, Cloudflare Images, Next.js `<Image>`) inspect the browser's `Accept` request header and serve AVIF or WebP automatically when supported, falling back to JPEG.
+Image CDNs (content delivery networks — services that store copies of your files on servers around the world and can convert images on the fly; e.g. Cloudinary, imgix, Cloudflare Images, Next.js `<Image>`; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) inspect the browser's `Accept` request header (where the browser lists the file types it understands) and serve AVIF or WebP automatically when supported, falling back to JPEG.
 
 ### Self-check
 1. Which formats support transparency? → PNG, GIF (1-bit), WebP, AVIF, SVG — not JPEG.
@@ -200,7 +200,7 @@ SVG for vectors, AVIF/WebP with JPEG fallback for photos, PNG for pixel-exact gr
 ## 4.3 Responsive images — `srcset`, `sizes` and `<picture>`
 
 ### The problem it solves
-A phone at 360 CSS px wide does not need the 1600-px hero image a large desktop monitor needs. But a phone with a device pixel ratio (DPR) of 3 — three physical pixels per CSS pixel — *does* need more pixels than its CSS width suggests to look sharp. One `src` can't be right for everyone. Two separate problems:
+A phone at 360 CSS px wide does not need the 1600-px hero image (the big banner image at the top of a page) a large desktop monitor needs. But a phone with a device pixel ratio (DPR) of 3 — three physical pixels per CSS pixel — *does* need more pixels than its CSS width suggests to look sharp. One `src` can't be right for everyone. Two separate problems:
 
 1. **Resolution switching** — same picture, different sizes. The browser should download the smallest file that still looks sharp. (`srcset` + `sizes` on `<img>`.)
 2. **Art direction** — a *different crop or picture* for different layouts (e.g. a wide landscape on desktop, a tight square crop on phones). You decide, not the browser. (`<picture>` + `<source media>`.)
@@ -231,10 +231,10 @@ For an image whose **display size changes with the layout**, describe each file'
 ```
 
 The browser's algorithm, step by step:
-1. **Evaluate `sizes`** left to right. Each entry is `(media condition) length`; the first matching condition wins; the last entry (no condition) is the default. Result: the **slot width** in CSS px. (`vw` = 1% of the viewport width.)
+1. **Evaluate `sizes`** left to right. Each entry is `(media condition) length` — a media condition is a test about the screen, such as `(max-width: 600px)` = "the viewport is at most 600 px wide"; the first matching condition wins; the last entry (no condition) is the default. Result: the **slot width** in CSS px. (`vw` = 1% of the viewport width; the **viewport** is the visible area of the browser window.)
 2. **Why does it need `sizes` at all?** The browser picks the image while it is still downloading the HTML, *before* CSS is loaded, so it cannot know the layout. `sizes` is your promise about the layout. Without `sizes`, a `w`-descriptor `srcset` assumes `100vw`.
 3. **Compute each candidate's density**: file width ÷ slot width. `800w` in a 400-px slot = 2x.
-4. **Pick** a candidate whose density is at least the screen's DPR — typically the smallest one that is sharp enough. The spec deliberately lets browsers deviate (for example, reusing a larger file already in cache, or saving data on a slow connection).
+4. **Pick** a candidate whose density is at least the screen's DPR — typically the smallest one that is sharp enough. The spec deliberately lets browsers deviate (for example, reusing a larger file already in cache — the browser's local store of previously downloaded files — or saving data on a slow connection).
 
 A small Node program that models this rule for three viewports and three DPRs:
 
@@ -346,15 +346,15 @@ Three attributes that change *when* and *how urgently* an image is fetched or de
 |---|---|---|
 | `loading` | `eager` (default), `lazy` | `lazy` defers fetching until the image is near the viewport. Also works on `<iframe>`. |
 | `fetchpriority` | `high`, `low`, `auto` (default) | Raises or lowers the download priority relative to other images. Baseline since Oct 2024. |
-| `decoding` | `sync`, `async`, `auto` (default) | Whether decoding the image may be done off the main rendering step. Rarely needed. |
+| `decoding` | `sync`, `async`, `auto` (default) | Whether decoding the image may be done off the main rendering step (in the background, not holding up drawing the rest of the page). Rarely needed. |
 
 Native lazy loading for images and iframes has been Baseline since December 2023 (Firefox 121 was the last engine to add it for iframes; images worked everywhere earlier), so JavaScript lazy-loading libraries are no longer needed for the basic case.
 
 ### How it works
 1. The browser checks each `loading="lazy"` element's distance to the viewport. Browsers use a generous margin (on the order of a screen or more), so images normally arrive before the user scrolls to them.
 2. Lazy images do **not** delay the window `load` event, because they may never be fetched.
-3. Lazy loading only happens when scripting is enabled (a privacy measure: otherwise scroll position could be tracked through image requests).
-4. `fetchpriority="high"` moves the image up the download queue — useful for the one image that is the page's LCP element.
+3. Lazy loading only happens when scripting (JavaScript) is enabled (a privacy measure: otherwise a site could see how far you scrolled from which images you request, even with JavaScript switched off).
+4. `fetchpriority="high"` moves the image up the download queue (the waiting list of files to fetch) — useful for the one image that is the page's LCP element.
 
 ```html
 <!-- code/04_lazy_loading.html (excerpt) -->
@@ -395,7 +395,7 @@ Native lazy loading for images and iframes has been Baseline since December 2023
 ## 4.5 `<figure>` and `<figcaption>`
 
 ### What it is
-`<figure>` groups **self-contained content that is referenced from the main text** — an image, a diagram, a code listing, a quotation, a table — and `<figcaption>` (first or last child) gives it a caption. The caption becomes the figure's accessible name.
+`<figure>` groups **self-contained content that is referenced from the main text** — an image, a diagram, a code listing, a quotation, a table — and `<figcaption>` (first or last child) gives it a caption. The caption becomes the figure's accessible name (the label screen readers announce for it).
 
 Test for "self-contained": could you move it to an appendix or the side of the page, with the text saying "see Figure 3", without breaking the flow? Then it's a figure.
 
@@ -424,23 +424,23 @@ They do different jobs. The **alt** *replaces* the image for people who can't se
 ## 4.6 Audio and video — `<audio>`, `<video>`, `<source>`, `<track>`
 
 ### What it is
-`<audio>` and `<video>` play media natively in the browser — no plugins. Both are **media elements** with the same JavaScript API (`play()`, `pause()`, `currentTime`, `volume`, events like `play`, `ended`, `timeupdate`).
+`<audio>` and `<video>` play media natively in the browser — no plugins (separately installed add-ons such as the old Flash player). Both are **media elements** with the same JavaScript API (the set of functions and properties scripts use to control them: `play()`, `pause()`, `currentTime`, `volume`, events like `play`, `ended`, `timeupdate`).
 
 ### How it works
-1. The browser reads the `<source>` children **in order** and picks the first whose `type` (MIME type, optionally with codecs) it can play. (Safari 17.4+ may pick the best supported one instead of the first.) Or use a single `src` attribute on the element.
+1. The browser reads the `<source>` children **in order** and picks the first whose `type` (MIME type — a label such as `video/webm` naming the file format — optionally with codecs, the compression methods used inside the file) it can play. (Safari 17.4+ may pick the best supported one instead of the first.) Or use a single `src` attribute on the element.
 2. Content inside the element other than `<source>`/`<track>` (for example a download link) is **fallback** for browsers that don't support the element at all — not for unsupported formats.
 3. `<track>` elements attach timed text files in **WebVTT** format (`.vtt`) — captions, subtitles, descriptions, chapters.
-4. Without `controls`, the element shows no UI; you would have to build your own buttons with the JS API.
+4. Without `controls`, the element shows no UI (user interface — buttons, sliders); you would have to build your own buttons with the JS API.
 
 Key attributes:
 
 | Attribute | Element | Meaning |
 |---|---|---|
-| `controls` | both | Show the browser's built-in play/pause/volume/seek UI. |
+| `controls` | both | Show the browser's built-in play/pause/volume/seek (jump to a time) UI. |
 | `autoplay` | both | Try to start immediately. Browsers block autoplay **with sound**; muted autoplay is generally allowed. |
 | `muted` | both | Start muted (needed for autoplay to be allowed). |
 | `loop` | both | Restart at the end. |
-| `preload` | both | Hint: `none` (fetch nothing until play), `metadata` (duration/dimensions only), `auto` (may download all). |
+| `preload` | both | Hint: `none` (fetch nothing until play), `metadata` (data about the file: duration/dimensions only), `auto` (may download all). |
 | `poster` | video | Image shown before playback starts. |
 | `playsinline` | video | On iPhone, play inside the page instead of going full-screen. |
 | `width`/`height` | video | Reserve space (like `<img>`). |
@@ -475,7 +475,7 @@ The sun rises on the left.
 </video>
 ```
 
-The second video in the demo is seeked to 2.0 s by script and shows the matching cue. One practical gotcha surfaced here: browsers refuse to load `<track>` files when the page is opened from `file://` (text tracks must be same-origin or served with CORS), so the demo adds the same cues with the TextTrack API — `video.addTextTrack('captions', 'English', 'en').addCue(new VTTCue(1.4, 3.0, '…'))`. Served over `http://`, the `<track>` element works as written.
+The second video in the demo is seeked to 2.0 s by script and shows the matching cue. One practical gotcha surfaced here: browsers refuse to load `<track>` files when the page is opened from `file://` (text tracks must be same-origin or served with CORS — a set of HTTP headers by which a server allows other origins to read its files), so the demo adds the same cues (individual timed caption lines) with the TextTrack API — `video.addTextTrack('captions', 'English', 'en').addCue(new VTTCue(1.4, 3.0, '…'))`. Served over `http://`, the `<track>` element works as written.
 
 ![Screenshot: an audio player; a video showing its poster frame; a second video paused at 0:02 showing the caption "[soft wind] It drifts to the right."](img/05_audio_video.png)
 
@@ -483,12 +483,14 @@ The second video in the demo is seeked to 2.0 s by script and shows the matching
 
 ### Formats in practice
 
+A **container** is the file wrapper (MP4, WebM) that holds the separately compressed video and audio streams, each squeezed with its own codec (short for coder–decoder).
+
 | Container | Typical codecs | Support |
 |---|---|---|
 | MP4 | H.264 video + AAC audio | every browser — the safest single choice |
 | WebM | VP9 or AV1 video + Opus audio | Chrome, Edge, Firefox, Safari (14.1+ on macOS, 17.4+ on iOS) |
 | MP4 | AV1 or HEVC (H.265) | varies by browser and hardware — always provide a fallback |
-| MP3 / AAC / Opus / WAV | audio | MP3 and AAC everywhere; WAV is uncompressed (large) |
+| MP3 / AAC / Opus / WAV | audio | MP3 and AAC everywhere; WAV is uncompressed (raw, not shrunk — large) |
 
 List the smallest well-supported format first and MP4/H.264 last as the universal fallback. Declare `type` so the browser can skip formats without downloading them.
 
@@ -496,7 +498,7 @@ List the smallest well-supported format first and MP4/H.264 last as the universa
 - Captions for every video with speech (WCAG 2.2 success criterion 1.2.2); a transcript for audio-only content (1.2.1).
 - Don't autoplay with sound; if something moves for more than 5 seconds, users must be able to pause it (2.2.2).
 - Give `<video>` a `poster` and dimensions so the page doesn't jump.
-- For big sites, video is usually served by a streaming service using **adaptive bitrate** (HLS or DASH, which switch quality with bandwidth) via Media Source Extensions — `<video src="file.mp4">` downloads one fixed-quality file.
+- For big sites, video is usually served by a streaming service using **adaptive bitrate** (HLS or DASH, which switch quality with bandwidth — how much data per second your connection can carry) via Media Source Extensions (a browser API that lets JavaScript feed video data into `<video>` piece by piece) — `<video src="file.mp4">` downloads one fixed-quality file.
 
 ### Common mistakes
 - `autoplay` without `muted` and wondering why it doesn't play.
@@ -511,7 +513,7 @@ Social feeds replace GIFs with `<video autoplay muted loop playsinline>` because
 **30-second answer:** "`<video>`/`<audio>` with `controls`, multiple `<source>` elements with `type` so the browser picks a format it can play, and `<track kind="captions">` with a WebVTT file for accessibility. Autoplay only works muted; add `playsinline` for iOS. For large video, use adaptive streaming (HLS/DASH) instead of one big file."
 
 - *Q: Captions vs subtitles?* A: Captions include non-speech sounds for deaf/hard-of-hearing users; subtitles translate dialogue.
-- *Q: Why does my `autoplay` video not start?* A: Browser autoplay policies block audible autoplay; add `muted` (and `playsinline` on iOS).
+- *Q: Why does my `autoplay` video not start?* A: Browser autoplay policies (built-in rules about when media may start on its own) block audible autoplay; add `muted` (and `playsinline` on iOS).
 
 ### Self-check
 1. Which attribute shows an image before playback? → `poster`.
@@ -526,9 +528,9 @@ Native media elements + `controls` + ordered `<source type>` list + `<track>` ca
 ## 4.7 Embedding other pages — `<iframe>`
 
 ### What it is
-An `<iframe>` (inline frame) displays **another complete HTML document** inside a rectangle of your page. The embedded page has its own DOM, its own CSS and JavaScript, and — if it comes from another origin — the browser's **same-origin policy** keeps it and your page from reading each other. (An **origin** is scheme + host + port, e.g. `https://example.com:443`.)
+An `<iframe>` (inline frame) displays **another complete HTML document** inside a rectangle of your page. The embedded page has its own DOM, its own CSS and JavaScript, and — if it comes from another origin — the browser's **same-origin policy** (the core browser security rule that pages from different origins cannot read each other's data) keeps it and your page from reading each other. (An **origin** is scheme + host + port, e.g. `https://example.com:443`.)
 
-Typical uses: YouTube/Vimeo players, maps, payment fields (Stripe, Adyen host card inputs in iframes so card numbers never touch your page), social posts, ads, code playgrounds.
+Typical uses: YouTube/Vimeo players, maps, payment fields (Stripe, Adyen host card inputs in iframes so card numbers never touch your page), social posts, ads, code playgrounds (online editors that run code you type).
 
 ### Why it matters
 You are putting someone else's code inside your page. Iframes are also the tool attackers use for **clickjacking** — loading *your* site invisibly inside theirs and tricking users into clicking. Both directions need security controls.
@@ -543,10 +545,10 @@ You are putting someone else's code inside your page. Iframes are also the tool 
 | `width`, `height` | Size (default 300×150). |
 | `loading="lazy"` | Defer loading off-screen frames — a big win for heavy embeds like videos and maps. |
 | `sandbox` | Apply extra restrictions (below). |
-| `allow` | Permissions policy: which powerful features the frame may use, e.g. `allow="fullscreen; camera; geolocation"`. |
-| `referrerpolicy` | How much of your URL to send as the `Referer` header, e.g. `no-referrer`. |
+| `allow` | Permissions policy (a list of browser features a page is allowed to use): which powerful features the frame may use, e.g. `allow="fullscreen; camera; geolocation"`. |
+| `referrerpolicy` | How much of your URL to send as the `Referer` header (the request header that tells a server which page the visitor came from), e.g. `no-referrer`. |
 
-**`sandbox`.** An empty `sandbox` attribute turns *everything* off: no scripts, no forms, no pop-ups, no top-level navigation, and the content is treated as a unique **opaque origin** (so it can't read cookies/storage of its real origin). You then add back only what the embed needs, with tokens such as `allow-scripts`, `allow-forms`, `allow-popups`, `allow-same-origin`, `allow-modals`, `allow-downloads`, `allow-top-navigation-by-user-activation`.
+**`sandbox`.** An empty `sandbox` attribute turns *everything* off: no scripts, no forms, no pop-ups, no top-level navigation (changing the address of the whole browser tab), and the content is treated as a unique **opaque origin** (so it can't read cookies/storage of its real origin — cookies are small pieces of data a site keeps in your browser). You then add back only what the embed needs, with tokens such as `allow-scripts`, `allow-forms`, `allow-popups`, `allow-same-origin`, `allow-modals`, `allow-downloads`, `allow-top-navigation-by-user-activation`.
 
 > Warning: `allow-scripts` together with `allow-same-origin` on a document from **your own origin** lets its script reach into the parent and remove the sandbox attribute — the sandbox becomes meaningless. Use that combination only for content from a different origin.
 
@@ -572,26 +574,26 @@ The demo loads the same small document (via `srcdoc`) into three frames. Its scr
 *Figure 4.7 — `srcdoc` content shares the parent's origin, so without a sandbox it can read the parent. `sandbox` blocks scripts entirely; `allow-scripts` lets them run but, without `allow-same-origin`, in an opaque origin — so touching the parent throws `SecurityError`.*
 
 ### The other direction: stopping others from framing *you*
-Your server decides whether other sites may embed your pages, using HTTP response headers:
+Your server decides whether other sites may embed your pages, using HTTP response headers (labelled extra information sent along with a page):
 - `Content-Security-Policy: frame-ancestors 'self'` (modern; can list allowed sites), or
 - the older `X-Frame-Options: DENY` / `SAMEORIGIN`.
 
 Banks and login pages send these to prevent clickjacking. That is also why embedding some sites in an iframe simply shows an error.
 
 ### `<embed>` and `<object>`
-Older elements for plugin content (Flash, Java applets — both gone). Today they are mostly used for PDFs, and even then an `<iframe>` or a plain link is usually better. Don't use them for new work.
+Older elements for plugin content (Flash, Java applets — both gone). Today they are mostly used for PDFs (fixed-layout document files), and even then an `<iframe>` or a plain link is usually better. Don't use them for new work.
 
 ### Common mistakes
 - No `title` on the iframe.
-- Heavy third-party embeds (video, maps, chat widgets) loaded eagerly — each can pull in megabytes of scripts. Use `loading="lazy"` or a "click to load" placeholder ("facade").
+- Heavy third-party (provided by another company) embeds (video, maps, chat widgets) loaded eagerly — each can pull in megabytes of scripts. Use `loading="lazy"` or a "click to load" placeholder ("facade").
 - `sandbox="allow-scripts allow-same-origin"` on same-origin, untrusted content.
 - Using iframes for your own page layout (a 1990s pattern) — breaks URLs, history, accessibility.
 
 ### In the interview
-**30-second answer:** "An iframe embeds another document with its own browsing context; cross-origin frames are isolated by the same-origin policy. I always add a `title`, lazy-load off-screen embeds, and restrict untrusted content with `sandbox`, adding only the tokens needed, and `allow` for permissions. To stop my site being framed — clickjacking — I send `Content-Security-Policy: frame-ancestors`."
+**30-second answer:** "An iframe embeds another document with its own browsing context (its own separate window environment: document, history, scripts); cross-origin frames are isolated by the same-origin policy. I always add a `title`, lazy-load off-screen embeds, and restrict untrusted content with `sandbox`, adding only the tokens needed, and `allow` for permissions. To stop my site being framed — clickjacking — I send `Content-Security-Policy: frame-ancestors`."
 
 - *Q: What does an empty `sandbox` do?* A: Blocks scripts, forms, pop-ups, top navigation, plugins and gives an opaque origin.
-- *Q: Why do payment providers use iframes?* A: The card field lives on their origin, so the merchant's page (and any malicious script on it) cannot read the card number, which also reduces the merchant's PCI compliance scope.
+- *Q: Why do payment providers use iframes?* A: The card field lives on their origin, so the merchant's page (and any malicious script on it) cannot read the card number, which also reduces the merchant's PCI compliance scope (PCI DSS is the card industry's security standard; the less card data you touch, the fewer of its rules apply to you).
 
 ### Self-check
 1. Which attribute is needed for screen readers? → `title`.
@@ -606,12 +608,12 @@ Older elements for plugin content (Flash, Java applets — both gone). Today the
 ## 4.8 SVG basics
 
 ### What it is
-**SVG (Scalable Vector Graphics)** is an XML language for 2-D vector drawings. Because it describes shapes, not pixels, it stays razor-sharp at any zoom and is usually tiny for icons and logos. SVG can be written **inline** in HTML (then it is part of the DOM — CSS and JS can style and animate each shape), referenced as a file with `<img src="x.svg">`, or used in CSS (`background-image: url(x.svg)`).
+**SVG (Scalable Vector Graphics)** is an XML language (XML is a general tag-based text format; HTML's stricter cousin) for 2-D vector drawings. Because it describes shapes, not pixels, it stays razor-sharp at any zoom and is usually tiny for icons and logos. SVG can be written **inline** in HTML (then it is part of the DOM — CSS and JS can style and animate each shape), referenced as a file with `<img src="x.svg">`, or used in CSS (`background-image: url(x.svg)`).
 
 ### How it works
 1. **Coordinate system.** `viewBox="minX minY width height"` defines the drawing's internal coordinates. `viewBox="0 0 200 120"` means x runs 0→200 and y runs 0→120, **y pointing down**. The `width`/`height` attributes (or CSS) set the displayed size; the viewBox is scaled to fit (preserving aspect ratio by default).
 2. **Shapes.** `<rect x y width height rx>`, `<circle cx cy r>`, `<ellipse>`, `<line x1 y1 x2 y2>`, `<polyline>`/`<polygon points="x,y x,y …">`, `<text>`.
-3. **Paths.** `<path d="…">` is the general shape: `M x y` move to, `L` line to, `H`/`V` horizontal/vertical line, `C` cubic Bézier curve, `Q` quadratic curve, `T` smooth continuation of a quadratic, `A` arc, `Z` close. Upper-case = absolute coordinates, lower-case = relative.
+3. **Paths.** `<path d="…">` is the general shape: `M x y` move to, `L` line to, `H`/`V` horizontal/vertical line, `C` cubic Bézier curve (a smooth curve shaped by two invisible "pull" points), `Q` quadratic curve (the same idea with one pull point), `T` smooth continuation of a quadratic, `A` arc, `Z` close. Upper-case = absolute coordinates, lower-case = relative.
 4. **Painting.** `fill` (inside colour), `stroke` (outline colour), `stroke-width`. These are also CSS properties, so they can live in a stylesheet.
 5. **Reuse.** Define an icon once with `<symbol id="…" viewBox="…">`, then place copies with `<use href="#id"/>`.
 6. **`currentColor`.** `fill="currentColor"` or `stroke="currentColor"` makes the icon take the text colour of its context, so one icon works on a green button and a red one.
@@ -657,8 +659,8 @@ Older elements for plugin content (Flash, Java applets — both gone). Today the
 ### Common mistakes
 - Forgetting `viewBox` → the drawing doesn't scale; it gets cropped.
 - Icons inside buttons without hiding them (`aria-hidden="true"`) *and* without text → buttons with no accessible name.
-- Inlining user-uploaded SVG — it can contain `<script>` (an XSS risk). Serve user SVGs through `<img>` or sanitise them.
-- Exported SVGs from design tools full of editor metadata; run them through an optimiser such as SVGO.
+- Inlining user-uploaded SVG — it can contain `<script>` (an XSS — cross-site scripting — risk: an attacker's code running in your page). Serve user SVGs through `<img>` or sanitise them (strip out anything dangerous with a cleaning library).
+- Exported SVGs from design tools full of editor metadata (extra information the tool stores for itself); run them through an optimiser such as SVGO (a tool that removes unneeded data from SVG files).
 
 ### Self-check
 1. What does `viewBox="0 0 24 24"` mean? → The drawing uses a 24×24 coordinate space, scaled to whatever display size is set.
@@ -673,15 +675,15 @@ SVG = sharp, small, styleable vectors; always set `viewBox`; `symbol` + `use` + 
 ## 4.9 `<canvas>` — an introduction
 
 ### What it is
-`<canvas>` is a blank bitmap that JavaScript paints into, pixel by pixel, through a drawing API — the 2D context (`getContext('2d')`) or WebGL/WebGPU for 3-D. Once drawn, the canvas remembers only **pixels**, not shapes: there's no DOM element for "bar 3", so to change something you redraw.
+`<canvas>` is a blank bitmap (a grid of pixels) that JavaScript paints into, pixel by pixel, through a drawing API — the 2D context (`getContext('2d')`) or WebGL/WebGPU (APIs for GPU-accelerated graphics) for 3-D. Once drawn, the canvas remembers only **pixels**, not shapes: there's no DOM element for "bar 3", so to change something you redraw.
 
 Analogy: SVG is a stack of cut-out paper shapes you can move individually; canvas is a painting — to move the sun you paint over the whole thing again.
 
 ### How it works
-1. The `width`/`height` **attributes** set the size of the drawing buffer in pixels (default 300×150). CSS width/height only stretch that buffer on screen, which blurs it.
+1. The `width`/`height` **attributes** set the size of the drawing buffer (the block of memory holding the canvas's pixels) in pixels (default 300×150). CSS width/height only stretch that buffer on screen, which blurs it.
 2. On high-DPR screens, make the buffer `devicePixelRatio` times bigger, keep the CSS size, and `ctx.scale(dpr, dpr)` so you can keep drawing in CSS-pixel coordinates.
 3. Draw with methods like `fillRect`, `strokeRect`, `beginPath/moveTo/lineTo/arc/fill/stroke`, `fillText`, `drawImage`, after setting properties like `fillStyle`, `strokeStyle`, `font`, `textAlign`.
-4. For animation, clear and redraw inside `requestAnimationFrame` (that's how `make_video.mjs` drew the clip for 4.6).
+4. For animation, clear and redraw inside `requestAnimationFrame` (a browser function that calls your code once just before each screen refresh) (that's how `make_video.mjs` drew the clip for 4.6).
 
 ```html
 <!-- code/08_canvas.html (excerpt) -->
@@ -719,12 +721,12 @@ Analogy: SVG is a stack of cut-out paper shapes you can move individually; canva
 
 | | SVG | Canvas |
 |---|---|---|
-| Model | retained: each shape is a DOM node | immediate: only pixels remain |
+| Model | retained (the browser keeps every shape): each shape is a DOM node | immediate (draw and forget): only pixels remain |
 | Scales without blur | yes | no — redraw at the new size |
-| Events per shape (click a bar) | yes, native | you do hit-testing yourself |
+| Events per shape (click a bar) | yes, native | you do hit-testing (working out which shape is under the pointer) yourself |
 | Accessibility | text and titles are real content | none built in — add fallback text / `aria-label` / a data table |
 | Performance sweet spot | up to a few thousand elements | many thousands of objects, pixel effects, games, real-time charts |
-| Examples | icons, logos, charts in D3 | games, image editors, Figma-style editors, big-data plots |
+| Examples | icons, logos, charts in D3 (a JavaScript charting library) | games, image editors, Figma-style editors (Figma is a browser-based design tool), big-data plots |
 
 ### Common mistakes
 - Sizing the canvas with CSS only → blurry, stretched drawing.
@@ -770,7 +772,7 @@ flowchart TD
 3. **When is `alt=""` correct?** For decorative images and images whose information is already in adjacent text.
 4. **How would you embed an untrusted HTML snippet?** In an iframe with `sandbox` (no `allow-same-origin`), possibly via `srcdoc`, or sanitise it.
 5. **SVG vs PNG for a logo?** SVG: sharp at any size, usually smaller, styleable; PNG only if the artwork is too complex for vectors.
-6. **Canvas vs SVG for a chart?** SVG for typical dashboards (accessible, interactive per element); canvas for tens of thousands of points or real-time updates.
+6. **Canvas vs SVG for a chart?** SVG for typical dashboards (pages of charts and key numbers) (accessible, interactive per element); canvas for tens of thousands of points or real-time updates.
 
 ---
 

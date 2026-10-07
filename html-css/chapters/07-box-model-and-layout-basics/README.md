@@ -1,6 +1,6 @@
 # Chapter 7 — The Box Model and Layout Basics
 
-[Chapter 6](../06-css-fundamentals/README.md) taught you how the browser decides *which* declarations apply to an element. This chapter is about *where the element ends up*. Everything on a web page is a rectangle — a **box** — and layout is the job of sizing those boxes and placing them. Before Flexbox ([Chapter 8](../08-flexbox/README.md)) and Grid ([Chapter 9](../09-grid/README.md)) make sense, you need the rules they build on: how a box's size is calculated, how boxes flow down the page by default, how you pull a box out of that flow with `position`, what happens when content does not fit, and who is painted on top of whom.
+[Chapter 6](../06-css-fundamentals/README.md) taught you how the browser decides *which* declarations apply to an element. This chapter is about *where the element ends up*. Everything on a web page is a rectangle — a **box** — and layout is the job of sizing those boxes and placing them. Before Flexbox ([Chapter 8](../08-flexbox/README.md), for laying items out in a row or column) and Grid ([Chapter 9](../09-grid/README.md), for rows *and* columns at once) make sense, you need the rules they build on: how a box's size is calculated, how boxes flow down the page by default, how you pull a box out of that flow with `position`, what happens when content does not fit, and who is painted on top of whom.
 
 **What you'll learn**
 
@@ -10,15 +10,15 @@
 | 7.2 | `box-sizing` | explain why almost every project starts with `border-box` |
 | 7.3 | Margin collapsing | predict the gap between two blocks and stop margins leaking out of a parent |
 | 7.4 | `display` | choose between block, inline, inline-block, none, flow-root and contents |
-| 7.5 | Normal flow and formatting contexts | describe how boxes are laid out when you do nothing, and what a BFC is |
+| 7.5 | Normal flow and formatting contexts | describe how boxes are laid out when you do nothing, and what a BFC (block formatting context) is |
 | 7.6 | Positioning | use relative, absolute, fixed and sticky and know each one's reference box |
-| 7.7 | Overflow | pick between visible, hidden, clip, scroll and auto; truncate text with an ellipsis |
-| 7.8 | `z-index` and stacking contexts | explain why `z-index: 9999` sometimes "doesn't work" |
-| 7.9 | Floats (legacy) | wrap text around an image, contain floats, and read old float layouts |
+| 7.7 | Overflow | pick between visible, hidden, clip, scroll and auto; truncate text with an ellipsis (the "…" that shows text was cut off) |
+| 7.8 | `z-index` and stacking contexts | explain why `z-index: 9999` (the property that decides which overlapping box is in front) sometimes "doesn't work" |
+| 7.9 | Floats (legacy — old, kept for compatibility) | wrap text around an image, contain floats, and read old float layouts |
 
-Every example is a small page in [`code/`](code/) with a screenshot in [`img/`](img/). The outlines and labels you see are drawn by the example CSS so the boxes are visible. The `.mjs` scripts open the same pages in real headless Chrome (via `puppeteer-core`, the same pattern as [Chapter 1](../01-how-the-web-works/README.md)'s network script) and print the sizes the browser actually computed with `getBoundingClientRect()` — so every number in this chapter is measured, not guessed. Run one with `node code/02_margin_collapse.mjs`.
+Every example is a small page in [`code/`](code/) with a screenshot in [`img/`](img/). The outlines and labels you see are drawn by the example CSS so the boxes are visible. The `.mjs` scripts open the same pages in real headless Chrome (Chrome without a window, driven by a script via `puppeteer-core`, a Node.js library for controlling Chrome; the same pattern as [Chapter 1](../01-how-the-web-works/README.md)'s network script) and print the sizes the browser actually computed with `getBoundingClientRect()` (a DOM method that returns an element's on-screen position and size) — so every number in this chapter is measured, not guessed. Run one with `node code/02_margin_collapse.mjs`.
 
-> **Tip — outlines are your layout debugger.** An `outline` is drawn *around* a box but takes up no space, so adding `outline: 1px solid red` never changes the layout you are inspecting (a `border` would). Many developers keep a snippet like `* { outline: 1px solid rgb(255 0 0 / .3) }` handy for exactly this.
+> **Tip — outlines are your layout debugger.** An `outline` is drawn *around* a box but takes up no space, so adding `outline: 1px solid red` never changes the layout you are inspecting (a `border` would). Many developers keep a snippet (a short reusable piece of code) like `* { outline: 1px solid rgb(255 0 0 / .3) }` handy for exactly this.
 
 ---
 
@@ -40,7 +40,7 @@ Analogy: a framed photo on a wall. The photo is the content, the white mat aroun
 
 ![DevTools-style box model diagram: orange margin, yellow border, green padding and blue content; below, two boxes with the same width, padding and border — the content-box one is 252px wide, the border-box one is 200px](img/01_box_model.png)
 
-*Figure 7.1 — [`code/01_box_model.html`](code/01_box_model.html). The top diagram uses the same colours as the Chrome/Edge DevTools box-model panel (Elements → Computed). The blue content and green padding come from two background layers clipped to `content-box` and `padding-box`.*
+*Figure 7.1 — [`code/01_box_model.html`](code/01_box_model.html). The top diagram uses the same colours as the Chrome/Edge DevTools (the browser's built-in developer tools, F12) box-model panel (Elements → Computed). The blue content and green padding come from two background layers clipped to `content-box` and `padding-box`.*
 
 ### How the size is calculated
 With the default `box-sizing: content-box`, `width` and `height` set the **content box only**. The space the element occupies is:
@@ -62,14 +62,14 @@ So `width: 200px; padding: 20px; border: 6px solid` gives 200 + 2×20 + 2×6 = *
 | `margin: 10px 20px 30px` | 10 | 20 | 30 | 20 |
 | `margin: 10px 20px 30px 40px` | 10 | 20 | 30 | 40 |
 
-`border: 2px solid #333` sets width, style and colour of all four sides; the style is required — `border: 2px #333` draws nothing because the default style is `none`. Modern code often uses **logical properties** such as `margin-block` (top + bottom in horizontal text) and `padding-inline` (left + right), which follow the writing direction; they are covered in [Chapter 13](../13-modern-css-and-architecture/README.md).
+`border: 2px solid #333` sets width, style and colour of all four sides; the style is required — `border: 2px #333` draws nothing because the default style is `none`. Modern code often uses **logical properties** such as `margin-block` (top + bottom in horizontal text) and `padding-inline` (left + right), which follow the writing direction (left-to-right, right-to-left or vertical, depending on the language); they are covered in [Chapter 13](../13-modern-css-and-architecture/README.md).
 
 ### Sizing rules worth knowing
-- **`width: auto`** (the default) on a block box means "fill the containing block's width, minus my margins, borders and padding". It is *not* the same as `width: 100%`, which ignores margins and can overflow.
+- **`width: auto`** (the default) on a block box means "fill the containing block's width, minus my margins, borders and padding". The **containing block** is the rectangle a box is sized and positioned against — for ordinary boxes, the parent's content box (§7.6 gives the full rules). It is *not* the same as `width: 100%`, which ignores margins and can overflow.
 - **`height: auto`** means "as tall as my content". A percentage height (`height: 50%`) only works if the parent has a definite height; otherwise it behaves like `auto`.
 - **Percentages for padding and margin — even top and bottom — refer to the containing block's *width*.** That is why the old `padding-top: 56.25%` trick made 16:9 boxes (today, use `aspect-ratio: 16 / 9`).
 - **`min-width` / `max-width`** clamp the box: `max-width: 65ch` keeps text readable; `min-height: 100vh` makes a full-screen section that can still grow. If they conflict, `min-*` wins.
-- **Intrinsic sizes**: `width: min-content` (as narrow as the longest word allows), `max-content` (as wide as the content wants with no wrapping), and `fit-content` (max-content, but never wider than the available space). You will meet these again as flex and grid track sizes.
+- **Intrinsic sizes**: `width: min-content` (as narrow as the longest word allows), `max-content` (as wide as the content wants with no wrapping), and `fit-content` (max-content, but never wider than the available space). You will meet these again as flex and grid track sizes (a *track* is one row or column of a grid).
 - **Margins can be negative** (pull a box or its neighbours closer); **padding cannot**.
 - **`margin: auto`** on a block with a set width splits the leftover horizontal space equally — the classic `margin: 0 auto` horizontal centring.
 
@@ -78,8 +78,8 @@ So `width: 200px; padding: 20px; border: 6px solid` gives 200 + 2×20 + 2×6 = *
 | | Takes space? | Per side? | Follows `border-radius`? | Typical use |
 |---|---|---|---|---|
 | `border` | Yes | Yes | Yes | Visible frames, dividers |
-| `outline` | No (drawn outside the border box) | No | Yes in current browsers | Focus rings ([Chapter 3](../03-semantic-html-and-accessibility/README.md)), debugging |
-| `box-shadow` | No | No (but can be offset) | Yes | Elevation, fake borders that don't shift layout |
+| `outline` | No (drawn outside the border box) | No | Yes in current browsers | Focus rings (the outline showing which element has keyboard focus, [Chapter 3](../03-semantic-html-and-accessibility/README.md)), debugging |
+| `box-shadow` | No | No (but can be offset) | Yes | Elevation (making a card look raised off the page), fake borders that don't shift layout |
 
 ### Common mistakes
 - Setting `width: 100%` *and* padding on a content-box element → it overflows its parent by the padding + border.
@@ -126,18 +126,18 @@ border-box   width property 200px  content 148px  on screen (border box) 200px
 
 | API | Returns |
 |---|---|
-| `el.getBoundingClientRect()` | The border box's position and size on screen (includes transforms, fractional pixels) |
+| `el.getBoundingClientRect()` | The border box's position and size on screen (includes transforms — CSS moves, rotations and scaling — and fractional pixels such as 12.5) |
 | `el.offsetWidth` / `offsetHeight` | Border box size, rounded to an integer, ignores transforms |
-| `el.clientWidth` / `clientHeight` | Padding box size minus any scrollbar |
+| `el.clientWidth` / `clientHeight` | Padding box size minus any scrollbar (the bar you drag to scroll) |
 
 ### The universal reset
-Almost every modern stylesheet (and every CSS reset — [Chapter 13](../13-modern-css-and-architecture/README.md)) starts with:
+Almost every modern stylesheet (and every CSS reset — a starter stylesheet that removes or evens out browser defaults, [Chapter 13](../13-modern-css-and-architecture/README.md)) starts with:
 
 ```css
 *, *::before, *::after { box-sizing: border-box; }
 ```
 
-`box-sizing` is not inherited, so the rule targets every element and pseudo-element directly. A variant sets `html { box-sizing: border-box }` and `*, *::before, *::after { box-sizing: inherit }` so a third-party widget can opt back into content-box for its whole subtree.
+`box-sizing` is not inherited, so the rule targets every element and pseudo-element directly. A variant sets `html { box-sizing: border-box }` and `*, *::before, *::after { box-sizing: inherit }` so a third-party widget (a ready-made component from another vendor) can opt back into content-box for its whole subtree (the element and everything inside it).
 
 Browsers' default styles already give many form controls border-box sizing (in Chrome, `<input>`, `<select>`, `<button>` and `<textarea>` all compute to `border-box`), and browsers differ on some of them — one more reason to set it for everything yourself, so a `div` and an `input` with the same `width` line up.
 
@@ -152,7 +152,7 @@ There is essentially no downside to border-box. The one thing to remember: if pa
 
 ### Self-check
 1. Border-box, `width: 250px; padding: 25px; border: 5px`. Content width? → 250 − 50 − 10 = **190px**.
-2. Why include `*::before, *::after` in the reset? → Pseudo-elements are boxes too and `*` alone does not match them.
+2. Why include `*::before, *::after` in the reset? → Pseudo-elements (CSS-generated boxes, [Chapter 6](../06-css-fundamentals/README.md)) are boxes too and `*` alone does not match them.
 
 ---
 
@@ -168,8 +168,8 @@ It is the rule behind the most common "why is there a gap there?" and "why did m
 
 ### How it works — the three situations
 
-1. **Adjacent siblings**: the bottom margin of one block and the top margin of the next collapse.
-2. **Parent and first/last child**: if a parent has no border, padding, inline content or clearance separating it from its first child, the child's top margin collapses *through* the parent — it appears **outside** the parent. Same for the last child's bottom margin (when the parent's height is `auto`).
+1. **Adjacent siblings** (elements with the same parent, one right after the other): the bottom margin of one block and the top margin of the next collapse.
+2. **Parent and first/last child**: if a parent has no border, padding, inline content or clearance (extra space added by `clear` below a float, §7.9) separating it from its first child, the child's top margin collapses *through* the parent — it appears **outside** the parent. Same for the last child's bottom margin (when the parent's height is `auto`).
 3. **Empty blocks**: a block with no content, padding, border or height has its own top and bottom margins collapse together.
 
 **The arithmetic**
@@ -206,7 +206,7 @@ F flex column 30 / 20        -> 50px
 ### What stops margins collapsing
 - Anything **between** them: padding or border on the parent (even `padding-top: 1px`), inline content, or a `clear`ed float.
 - The parent starting a new **block formatting context** (7.5): `display: flow-root`, `overflow` other than `visible`/`clip`, `display: inline-block`, floats, absolute positioning.
-- **Flex and grid layouts**: margins of flex and grid items never collapse (case F). This is one reason many teams lay out vertical stacks with `display: flex; flex-direction: column; gap: …` or `display: grid; gap: …` — `gap` is predictable and never collapses.
+- **Flex and grid layouts**: margins of flex and grid items (the direct children of a flex or grid container) never collapse (case F). This is one reason many teams lay out vertical stacks with `display: flex; flex-direction: column; gap: …` or `display: grid; gap: …` — `gap` is predictable and never collapses.
 - Floated and absolutely positioned boxes never collapse with anything.
 
 ### Common mistakes
@@ -215,7 +215,7 @@ F flex column 30 / 20        -> 50px
 - Trying to "fix" collapsing with `overflow: hidden` — it works (new BFC) but also clips shadows and focus rings. Prefer `flow-root`.
 
 ### Real-world examples
-Many design systems (and the "Every Layout" *Stack* idea) avoid the whole topic by setting margins in **one direction only** — for example `.stack > * + * { margin-block-start: 1rem }` — or by using `gap`.
+Many design systems (a team's shared library of components and style rules — and the "Every Layout" book's *Stack* idea) avoid the whole topic by setting margins in **one direction only** — for example `.stack > * + * { margin-block-start: 1rem }` — or by using `gap`.
 
 ### In the interview
 **30-second answer:** "Vertical margins between blocks in normal flow collapse to the larger one — 30 and 20 give 30, not 50. It happens between siblings, between a parent and its first or last child when nothing separates them, and on empty blocks. Negative margins are added to the largest positive one. It doesn't happen in flex or grid, for floats or absolutely positioned boxes, or when padding, a border or a new block formatting context like `display: flow-root` separates the margins."
@@ -253,15 +253,15 @@ Every familiar keyword is a combination. Since 2023 all major browsers (Baseline
 | `table`, `table-row`, `table-cell` | — | — | table layout (what `<table>` uses) |
 
 Two keywords generate **no box of their own**:
-- `display: none` — the element and its whole subtree produce no boxes: no space, not painted, not in the accessibility tree, not focusable. (Compare `visibility: hidden` and `opacity: 0`, which keep the space — measured in [Chapter 1, §1.7](../01-how-the-web-works/README.md).)
-- `display: contents` — the element's own box disappears but its **children** are laid out as if they were children of the grandparent. Handy for making a wrapper `<div>` or `<ul>`'s items take part in a parent's flex or grid layout. Caution: browsers historically dropped the element's semantics from the accessibility tree (a `<ul>` with `display: contents` stopped being announced as a list); most engines have fixed the common cases, but test with a screen reader and avoid it on buttons and other interactive elements.
+- `display: none` — the element and its whole subtree produce no boxes: no space, not painted, not in the accessibility tree (the version of the page screen readers read), not focusable. (Compare `visibility: hidden` and `opacity: 0`, which keep the space — measured in [Chapter 1, §1.7](../01-how-the-web-works/README.md).)
+- `display: contents` — the element's own box disappears but its **children** are laid out as if they were children of the grandparent. Handy for making a wrapper `<div>` or `<ul>`'s items take part in a parent's flex or grid layout. Caution: browsers historically dropped the element's semantics (its meaning, such as "this is a list") from the accessibility tree (a `<ul>` with `display: contents` stopped being announced as a list); most engines have fixed the common cases, but test with a screen reader and avoid it on buttons and other interactive elements.
 
 ### Block vs inline vs inline-block
 
 | Behaviour | `block` | `inline` | `inline-block` |
 |---|---|---|---|
 | Starts on a new line | Yes | No | No |
-| Default width | Fills the container | Its content | Its content (shrink-to-fit) |
+| Default width | Fills the container | Its content | Its content (shrink-to-fit: as narrow as its content allows) |
 | `width` / `height` | Respected | **Ignored** | Respected |
 | Horizontal padding/border/margin | Push neighbours | Push neighbours | Push neighbours |
 | Vertical padding/border | Push neighbours | **Painted but don't move lines** (overlap) | Push neighbours |
@@ -281,10 +281,10 @@ none          rendered   0 x  0  height of its <p>: 22
 
 *Output of [`code/03_display.mjs`](code/03_display.mjs).* The inline span ignores `width: 180px` (its 176px is just text + padding) and its paragraph is only two ordinary lines tall (45px) despite the 10px vertical padding. The inline-block keeps its 200×60 border box and the line grows to fit it.
 
-Which elements are block or inline by default is only a **user-agent stylesheet default** — HTML itself defines content models, not layout (see [Chapter 2](../02-html-structure-and-text/README.md)). A `<span>` with `display: block` is still phrasing content for validity purposes.
+Which elements are block or inline by default is only a **user-agent stylesheet default** (the browser's own built-in CSS) — HTML itself defines content models (rules for what may go inside what), not layout (see [Chapter 2](../02-html-structure-and-text/README.md)). A `<span>` with `display: block` is still phrasing content (text-level content) for validity purposes.
 
 ### Replaced elements
-`<img>`, `<video>`, `<iframe>`, `<input>` are **replaced elements**: their content comes from outside CSS, they have an **intrinsic size**, and they are inline-level by default yet accept `width` and `height`. The classic surprise: an `<img>` inside a `div` leaves a few pixels of gap underneath, because as an inline box it sits on the text **baseline** and leaves room for letter descenders. Fix with `img { display: block }` (common in resets) or `vertical-align: middle`.
+`<img>`, `<video>`, `<iframe>`, `<input>` are **replaced elements**: their content comes from outside CSS, they have an **intrinsic size**, and they are inline-level by default yet accept `width` and `height`. The classic surprise: an `<img>` inside a `div` leaves a few pixels of gap underneath, because as an inline box it sits on the text **baseline** (the invisible line letters sit on) and leaves room for letter descenders (the tails of g, p, y that hang below it). Fix with `img { display: block }` (common in resets) or `vertical-align: middle`.
 
 ### Common mistakes
 - Setting `width` on an `<a>` or `<span>` and seeing no change → make it `inline-block` or `block`.
@@ -305,18 +305,18 @@ Which elements are block or inline by default is only a **user-agent stylesheet 
 **Normal flow** is the layout you get when you write no layout CSS at all. Its rules are few:
 
 1. **Block-level boxes** stack one after another in the **block direction** (top to bottom in English), each starting on a new line and, if `width: auto`, filling the container's width.
-2. **Inline-level boxes** (text, `span`, `a`, images) sit side by side in the **inline direction** (left to right in English) and wrap into **line boxes** when a line is full.
+2. **Inline-level boxes** (text, `span`, `a`, images) sit side by side in the **inline direction** (left to right in English) and wrap into **line boxes** (one invisible box per line of text) when a line is full.
 3. Vertical margins between blocks collapse (7.3).
 4. A block's height grows to fit its content.
 
-"Block direction" and "inline direction" are used instead of "vertical" and "horizontal" because they rotate with the writing mode: in vertical Japanese text, blocks stack right-to-left and lines run top to bottom. This is why modern properties are named `margin-block`, `inline-size` and so on.
+"Block direction" and "inline direction" are used instead of "vertical" and "horizontal" because they rotate with the writing mode (the CSS setting for text direction, horizontal or vertical): in vertical Japanese text, blocks stack right-to-left and lines run top to bottom. This is why modern properties are named `margin-block`, `inline-size` and so on.
 
 ### Formatting contexts
 A **formatting context** is a region in which one set of layout rules applies to the children. The ones you will meet:
 
 | Context | Created by | Children laid out by |
 |---|---|---|
-| **Block formatting context (BFC)** | root `<html>`, `display: flow-root`, `inline-block`, floats, `position: absolute/fixed`, `overflow` other than `visible`/`clip`, table cells, flex/grid items, `contain: layout/paint`, multi-column containers | block and inline flow |
+| **Block formatting context (BFC)** | root `<html>`, `display: flow-root`, `inline-block`, floats, `position: absolute/fixed`, `overflow` other than `visible`/`clip`, table cells, flex/grid items, `contain: layout/paint` (a performance hint isolating an element's layout/painting), multi-column containers (text flowing into newspaper-style columns) | block and inline flow |
 | **Inline formatting context (IFC)** | a block that contains only inline-level content | line boxes |
 | **Flex formatting context** | `display: flex / inline-flex` | flexbox ([Ch. 8](../08-flexbox/README.md)) |
 | **Grid formatting context** | `display: grid / inline-grid` | grid ([Ch. 9](../09-grid/README.md)) |
@@ -326,7 +326,7 @@ A new **BFC** is a sealed room. Inside it:
 - it **contains its floats** — its height includes them (7.9),
 - it does not overlap floats outside it; it sits beside them instead.
 
-`display: flow-root` exists *only* to create a BFC with no side effects, which is why it replaced the old `overflow: hidden` and "clearfix" hacks. It is supported in every current browser.
+`display: flow-root` exists *only* to create a BFC with no side effects, which is why it replaced the old `overflow: hidden` and "clearfix" hacks (workarounds, shown in §7.9). It is supported in every current browser.
 
 ### Centring in normal flow
 
@@ -353,9 +353,9 @@ The `position` property lets you move a box away from where normal flow would pu
 |---|---|---|---|---|
 | `static` (default) | Yes | — insets ignored | Yes | Everything |
 | `relative` | **Yes** — the original space is kept | Its own normal position | Yes | Small nudges; anchor for absolute children |
-| `absolute` | **No** | Nearest **positioned** ancestor's padding box (else the initial containing block) | Yes, with that ancestor | Badges, dropdowns, overlays inside a card |
-| `fixed` | No | The **viewport** | **No** — stays put | Sticky headers of old, cookie bars, chat buttons |
-| `sticky` | Yes | Its nearest **scrolling ancestor** (scrollport) | Scrolls until the threshold, then sticks | Table headers, section headings, sidebars |
+| `absolute` | **No** | Nearest **positioned** ancestor's (an element above it in the tree whose `position` is not `static`) padding box (else the initial containing block) | Yes, with that ancestor | Badges, dropdowns, overlays (boxes laid on top of other content) inside a card |
+| `fixed` | No | The **viewport** (the visible browser area) | **No** — stays put | Sticky headers of old, cookie bars, chat buttons |
+| `sticky` | Yes | Its nearest **scrolling ancestor** (scrollport — the visible window of a scrollable box) | Scrolls until the threshold, then sticks | Table headers, section headings, sidebars |
 
 A **positioned element** is any element whose `position` is not `static`. The rectangle an element's offsets and percentages refer to is its **containing block**.
 
@@ -397,20 +397,20 @@ fixed    : before scroll right/bottom gap = 12/12px, after scrolling 500px = 12/
 4. Setting both `left` and `right` (or `inset: 0`) stretches it; `inset: 0; margin: auto` plus a width and height centres it.
 
 **`fixed`**
-Like absolute, but the containing block is the **viewport**, so it stays in place while the page scrolls. The trap: if any ancestor has a `transform`, `filter`, `perspective`, `backdrop-filter`, `contain: paint` or `will-change: transform`, that ancestor becomes the containing block instead, and your "fixed" modal scrolls away with it. That is one reason modals are often rendered at the end of `<body>` (React "portals") — or, better, with the native `<dialog>` element, which uses the **top layer** and escapes all of this.
+Like absolute, but the containing block is the **viewport**, so it stays in place while the page scrolls. The trap: if any ancestor has a `transform`, `filter`, `perspective`, `backdrop-filter`, `contain: paint` or `will-change: transform`, that ancestor becomes the containing block instead, and your "fixed" modal scrolls away with it. That is one reason modals (dialogs that block the page behind them) are often rendered at the end of `<body>` (React "portals", which render a component somewhere else in the DOM) — or, better, with the native `<dialog>` element, which uses the **top layer** (a special layer the browser paints above the whole page) and escapes all of this.
 
 **`sticky`**
 1. The box behaves as `relative` (in flow) until its scroll container scrolls it to the threshold you gave, e.g. `top: 0`.
 2. Then it sticks at that offset — but **never leaves its parent**: when the parent's bottom edge scrolls up, the sticky box is pushed away with it. That is how "each section heading sticks until the next section" works.
 3. It needs at least one inset (`top`, `bottom`…). Without one it never sticks.
-4. It sticks to the nearest ancestor that is a **scroll container** (`overflow: auto/scroll/hidden`). If some wrapper has `overflow: hidden` without being the thing that actually scrolls, the sticky element sticks to that wrapper and appears not to work. (`overflow: clip` does not create a scroll container, so it is safe.)
+4. It sticks to the nearest ancestor that is a **scroll container** (a box that can scroll its content: `overflow: auto/scroll/hidden`). If some wrapper has `overflow: hidden` without being the thing that actually scrolls, the sticky element sticks to that wrapper and appears not to work. (`overflow: clip` does not create a scroll container, so it is safe.)
 
 ### Trade-offs
 
 | Approach | Good for | Beware |
 |---|---|---|
 | Absolute positioning for layout | Overlays, badges, decorative bits | Content can overlap and text can be cut off when it grows or when users zoom; not for main page layout |
-| Fixed headers/footers | Always-available controls | Covers content (use `scroll-padding-top` so anchor links don't hide under a fixed header); eats space on small screens |
+| Fixed headers/footers | Always-available controls | Covers content (use `scroll-padding-top` so anchor links — links to an `#id` on the same page — don't hide under a fixed header); eats space on small screens |
 | Sticky | Headers that should stay visible while scrolling | Silent failures from ancestor `overflow` or a parent that is exactly as tall as the sticky element |
 
 ### Common mistakes
@@ -441,14 +441,14 @@ Like absolute, but the containing block is the **viewport**, so it stays in plac
 | Value | Overflowing content | Scrollbars | Scrollable by script? | Creates a BFC / scroll container? |
 |---|---|---|---|---|
 | `visible` (default) | Spills out and paints over what follows | No | No | No |
-| `hidden` | Clipped at the padding box | No | **Yes** (`el.scrollTop = …`, focus, anchor links) | Yes / yes |
+| `hidden` | Clipped (cut off, not drawn) at the padding box | No | **Yes** (`el.scrollTop = …`, focus, anchor links) | Yes / yes |
 | `clip` | Clipped | No | **No** | No / no |
 | `scroll` | Clipped | **Always**, even if not needed | Yes | Yes / yes |
 | `auto` | Clipped | Only when needed | Yes | Yes / yes |
 
 ![Five 130×90 boxes with the same seven lines of text: visible lets text spill below; hidden and clip cut it off; scroll shows scrollbars in both directions; auto shows only a vertical scrollbar. Below, a one-line title ending in an ellipsis](img/05_overflow.png)
 
-*Figure 7.5 — [`code/05_overflow.html`](code/05_overflow.html). The scrollbars are coloured with `::-webkit-scrollbar` so they show up in the screenshot; macOS normally uses overlay scrollbars that only appear while scrolling.*
+*Figure 7.5 — [`code/05_overflow.html`](code/05_overflow.html). The scrollbars are coloured with `::-webkit-scrollbar` so they show up in the screenshot; macOS normally uses overlay scrollbars (thin bars drawn over the content) that only appear while scrolling.*
 
 [`code/05_overflow.mjs`](code/05_overflow.mjs) sets `scrollTop = 20` on each box and reads it back:
 
@@ -460,23 +460,23 @@ scroll   clientHeight 88  scrollHeight 135  scrollTop after setting 20 -> 20
 auto     clientHeight 98  scrollHeight 135  scrollTop after setting 20 -> 20
 ```
 
-Three things to read from this: `hidden` boxes *can* still be scrolled programmatically (a keyboard user tabbing to a link inside will scroll it too), `clip` cannot; `overflow: scroll` spent 10px of height on a horizontal scrollbar it didn't need (clientHeight 88); and the scroll containers count their bottom padding in the scrollable area (135 vs 131). `overflow: clip` reached Baseline in 2022.
+Three things to read from this: `hidden` boxes *can* still be scrolled programmatically (by code) (a keyboard user tabbing to a link inside will scroll it too), `clip` cannot; `overflow: scroll` spent 10px of height on a horizontal scrollbar it didn't need (clientHeight 88); and the scroll containers count their bottom padding in the scrollable area (135 vs 131). `overflow: clip` reached Baseline in 2022.
 
 ### Useful companions
 - **Single-line truncation** — all three are required:
   ```css
   .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   ```
-- **Multi-line truncation**: `display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;` — prefixed, but works in all current browsers.
+- **Multi-line truncation**: `display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;` — prefixed (the `-webkit-` vendor prefix marks a property that started as one browser's own extension), but works in all current browsers.
 - **Long words and URLs** breaking out of narrow columns: `overflow-wrap: anywhere` (or `break-word`).
 - **Mixing axes**: if one axis is `visible` and the other isn't, `visible` computes to `auto` — you cannot clip only vertically while letting content spill horizontally (use `clip` for that).
 - **`scrollbar-gutter: stable`** reserves space for a scrollbar so content doesn't jump when one appears.
-- **`overscroll-behavior: contain`** stops scrolling inside a modal or chat panel from "chaining" to the page behind it.
+- **`overscroll-behavior: contain`** stops scrolling inside a modal or chat panel from "chaining" to the page behind it (carrying on and scrolling the page once the panel reaches its end).
 
 ### Common mistakes
 - Using `overflow: hidden` to fix a float or margin problem and later finding focus outlines and box-shadows clipped.
 - Putting `overflow: hidden` on `body`/`html` to lock scrolling and breaking `position: sticky` below it.
-- Truncating text that the user needs to read with no way to see the rest (add a tooltip or an expand control, and keep the full text in the DOM for screen readers).
+- Truncating text that the user needs to read with no way to see the rest (add a tooltip — a label that pops up on hover — or an expand control, and keep the full text in the DOM for screen readers).
 
 ### Self-check
 1. Which value clips without making the element scrollable? → `clip`.
@@ -542,7 +542,7 @@ demo 3  inside the yellow child, isolation: isolate -> u2
 - `isolation: isolate`
 - `will-change` naming any property above
 - `contain: layout`, `paint`, `strict` or `content`; `container-type: size` or `inline-size`
-- Elements in the **top layer** — an open modal `<dialog>`, a shown popover, a fullscreen element — are painted above *everything*, whatever the z-indexes
+- Elements in the **top layer** — an open modal `<dialog>`, a shown popover (a small floating panel created with the `popover` attribute), a fullscreen element — are painted above *everything*, whatever the z-indexes
 
 ### Why it matters
 "I set `z-index: 99999` and the dropdown is still behind the header" is almost always a stacking-context problem: an ancestor of the dropdown (perhaps with `transform` for an animation, or `opacity: .99`) created a context whose own level is below the header's.
@@ -551,7 +551,7 @@ demo 3  inside the yellow child, isolation: isolate -> u2
 1. Walk up from the element that is "behind" and look for any ancestor in the list above (DevTools → Layers panel in Chrome/Edge, or the 3D view in Edge, visualises contexts).
 2. Compare the z-indexes of the **two ancestors that are siblings in the same context**, not the elements themselves.
 3. Fix by raising the ancestor's z-index, removing the property that created the unwanted context, or moving the overlay elsewhere in the DOM (or into the top layer with `<dialog>` / the `popover` attribute).
-4. Prevent it: keep a small **z-index scale** as custom properties (`--z-dropdown: 100; --z-sticky: 200; --z-modal: 300;`) and use `isolation: isolate` on components so their internal z-indexes cannot leak out.
+4. Prevent it: keep a small **z-index scale** as custom properties (CSS variables, [Chapter 6](../06-css-fundamentals/README.md)) (`--z-dropdown: 100; --z-sticky: 200; --z-modal: 300;`) and use `isolation: isolate` on components so their internal z-indexes cannot leak out.
 
 ### In the interview
 **30-second answer:** "`z-index` only orders elements within the same stacking context, and only works on positioned or flex/grid items. Things like a z-index on a positioned element, opacity below 1, transforms, filters and `isolation: isolate` create a new context, and everything inside is flattened into it — so a child with `z-index: 999` can't escape a parent with `z-index: 1` that sits below a sibling with `z-index: 2`. To debug I find the ancestors that are siblings in a common context and compare those."
@@ -594,7 +594,7 @@ w4  display: flow-root  parent height 118.84375px
 *Output of [`code/07_floats.mjs`](code/07_floats.mjs).* `w2` is only as tall as one line of text plus its padding and border; `w3`, with identical content, contains the floats: 80 + 4 (float margin) + 2×6 (padding) + 2×2 (border) = **100px**.
 
 ### The clearfix (read it, don't write it)
-Before `flow-root`, the standard way to contain floats was this pseudo-element hack; you will still see it in legacy code and Bootstrap 3–era CSS:
+Before `flow-root`, the standard way to contain floats was this pseudo-element hack; you will still see it in legacy code and Bootstrap 3–era CSS (Bootstrap is a popular CSS framework; version 3 dates from 2013):
 
 ```css
 .clearfix::after { content: ""; display: table; clear: both; }
@@ -604,7 +604,7 @@ Before `flow-root`, the standard way to contain floats was this pseudo-element h
 
 | Need | Use |
 |---|---|
-| Wrap paragraph text around an image or pull quote | **`float`** (optionally `shape-outside: circle(50%)` to wrap around a shape) |
+| Wrap paragraph text around an image or pull quote (a quotation repeated in large type) | **`float`** (optionally `shape-outside: circle(50%)` to wrap around a shape) |
 | Columns, rows of cards, nav bars, sidebars | Flexbox or grid |
 | Push one item to the right in a row | Flexbox `margin-left: auto` ([Chapter 8](../08-flexbox/README.md)) |
 

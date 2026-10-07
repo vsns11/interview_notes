@@ -1,6 +1,6 @@
 # Chapter 12 — Transitions, Transforms and Animation
 
-Motion, used well, explains what just happened: a menu slides out of the button that opened it, a card grows into the detail view, a spinner says "working". Used badly it distracts, makes some people physically ill, and makes pages janky. CSS gives you three tools — **transforms** (move, rotate, scale an element without touching layout), **transitions** (animate a change from one state to another) and **keyframe animations** (a timeline of states) — plus newer ones for entering/leaving elements, whole-page **view transitions** and **scroll-driven** animation. This chapter explains each, shows how the browser computes every in-between frame, and ends with performance and accessibility rules.
+Motion, used well, explains what just happened: a menu slides out of the button that opened it, a card grows into the detail view, a spinner says "working". Used badly it distracts, makes some people physically ill, and makes pages janky (**jank** is visible stutter: the browser misses frames, so motion jumps instead of flowing). CSS gives you three tools — **transforms** (move, rotate, scale an element without touching layout), **transitions** (animate a change from one state to another) and **keyframe animations** (a timeline of states) — plus newer ones for entering/leaving elements, whole-page **view transitions** and **scroll-driven** animation. This chapter explains each, shows how the browser computes every in-between frame, and ends with performance and **accessibility** (making pages usable by people with disabilities, including those who use keyboards, screen readers or motion settings) rules.
 
 **What you'll learn**
 
@@ -15,10 +15,10 @@ Motion, used well, explains what just happened: a menu slides out of the button 
 | 12.7 | Performance | explain why `transform`/`opacity` are cheap and `left`/`width` are not — with measurements |
 | 12.8 | Enter and exit animations | animate from `display: none` with `@starting-style` and `allow-discrete` |
 | 12.9 | Reduced motion and accessibility | honour `prefers-reduced-motion` and the WCAG motion rules |
-| 12.10 | View transitions | morph between two states of the DOM (and between pages) |
+| 12.10 | View transitions | morph between two states of the DOM (the page's live tree of elements) (and between pages) |
 | 12.11 | Scroll-driven animations | link an animation to scroll position — and know it isn't Baseline |
 
-**How the figures and numbers were made.** Every example is a page in [`code/`](code/). Animations are hard to show on paper, so [`code/make_figures.mjs`](code/make_figures.mjs) makes **filmstrips**: it pauses every animation on the page with the Web Animations API (CSS transitions and animations are exposed as `CSSTransition` / `CSSAnimation` objects in `document.getAnimations()`), sets their `currentTime` to an exact moment, and screenshots — so each frame shows exactly t = 0, 200, 400 … ms, with no timing luck. The same trick, in [`code/anim.mjs`](code/anim.mjs), lets the `NN_*.mjs` scripts read **computed values mid-animation** and compare them with the maths. Screenshots and measurements use [`code/measure.mjs`](code/measure.mjs), a copy of [Chapter 10's helper](../10-responsive-design/README.md).
+**How the figures and numbers were made.** Every example is a page in [`code/`](code/). Animations are hard to show on paper, so [`code/make_figures.mjs`](code/make_figures.mjs) makes **filmstrips**: it pauses every animation on the page with the Web Animations API (an **API**, application programming interface, is a set of functions one program offers to another; this one lets JavaScript control animations) (CSS transitions and animations are exposed as `CSSTransition` / `CSSAnimation` objects in `document.getAnimations()`), sets their `currentTime` to an exact moment, and screenshots — so each frame shows exactly t = 0, 200, 400 … ms, with no timing luck. The same trick, in [`code/anim.mjs`](code/anim.mjs), lets the `NN_*.mjs` scripts (`.mjs` = a JavaScript module file, run here with Node.js, which drives a **headless** Chrome — a real browser with no visible window — through the Puppeteer library) read **computed values mid-animation** (the final, resolved value the browser actually uses for a property) and compare them with the maths. Screenshots and measurements use [`code/measure.mjs`](code/measure.mjs), a copy of [Chapter 10's helper](../10-responsive-design/README.md).
 
 ```js
 // code/anim.mjs — freeze every animation at the same moment
@@ -33,7 +33,7 @@ export const seek = (page, ms) => page.evaluate(ms => {
 ## 12.1 Transitions
 
 ### What it is
-A **transition** tells the browser: "when this property's value changes, don't jump — move smoothly from the old value to the new one over this time". Something else changes the value (a `:hover` or `:focus-visible` rule, a class added by JavaScript, a media query); the transition only animates the change.
+A **transition** tells the browser: "when this property's value changes, don't jump — move smoothly from the old value to the new one over this time". Something else changes the value (a `:hover` or `:focus-visible` rule — pseudo-classes that match while the pointer is over the element or it has keyboard focus — a class added by JavaScript, a media query, i.e. an `@media` rule that applies only under conditions like screen width); the transition only animates the change.
 
 ```css
 .button {
@@ -45,8 +45,8 @@ A **transition** tells the browser: "when this property's value changes, don't j
 
 ### How it works
 1. The browser computes the element's style before and after the change.
-2. For each property listed in `transition-property` whose value changed **and can be interpolated**, it creates a transition from the old to the new value.
-3. On each frame it computes *progress* = timing-function(elapsed / duration) and sets the property to old + (new − old) × progress.
+2. For each property listed in `transition-property` whose value changed **and can be interpolated** (the browser can compute sensible in-between values, as with 10px → 20px), it creates a transition from the old to the new value.
+3. On each **frame** (one redraw of the screen, typically 60 per second) it computes *progress* = timing-function(elapsed / duration) and sets the property to old + (new − old) × progress.
 4. If the value changes again mid-way (mouse leaves early), the running transition is replaced by one starting from the **current** value. Reversing a half-finished transition is also **shortened** proportionally, so un-hovering after 50ms doesn't take the full duration.
 
 ### The properties
@@ -63,16 +63,18 @@ A **transition** tells the browser: "when this property's value changes, don't j
 ### What can be animated
 - **Interpolable** values: lengths, percentages, numbers, colours, transforms, shadows, gradients' colour stops (not the whole gradient in most browsers), `grid-template-columns` track sizes (Baseline since 2022), `clip-path` shapes with the same number of points…
 - **Discrete** properties (`display`, `visibility`, `font-family`, `position`…) can't be in-betweened. Normally they just flip; with `transition-behavior: allow-discrete` they flip at 50% of the time — except `display`/`content-visibility`, which stay visible for the whole transition (12.8).
-- **`auto`** is not interpolable: `height: 0 → auto` jumps. Chromium's new `interpolate-size: allow-keywords` / `calc-size()` fix this but are **not Baseline**; portable alternatives are animating `grid-template-rows: 0fr → 1fr` on a wrapper, or measuring the height in JS.
+- **`auto`** is not interpolable: `height: 0 → auto` jumps. Chromium's (Chromium is the open-source browser engine behind Chrome, Edge and Opera) new `interpolate-size: allow-keywords` / `calc-size()` fix this but are **not Baseline**; portable alternatives are animating `grid-template-rows: 0fr → 1fr` on a wrapper, or measuring the height in JS (JavaScript).
+
+> **Key term — Baseline:** a label used by MDN and web.dev for web features that work in the current versions of all the major browsers (Chrome, Edge, Firefox and Safari, desktop and mobile). *Newly available* means the last of those browsers has just shipped it; *widely available* means it has been everywhere for 30 months, so most users' browsers have it. "Not Baseline" means at least one major browser is missing it, so you need a fallback.
 
 ### Events
-`transitionrun`, `transitionstart` (after the delay), `transitionend` (once **per property**), `transitioncancel` (interrupted). Filter by `event.propertyName` so a `transitionend` of `background-color` doesn't close your menu early.
+These are **events** — named notifications the browser sends that JavaScript can listen for with `addEventListener`. `transitionrun`, `transitionstart` (after the delay), `transitionend` (once **per property**), `transitioncancel` (interrupted). Filter by `event.propertyName` so a `transitionend` of `background-color` doesn't close your menu early.
 
 ### Common mistakes
 - Putting `transition` only in the `:hover` rule — then there is a transition *into* hover but the change back is instant. Put it on the base rule.
 - `transition: all 300ms` on elements whose layout properties change — animates widths and paddings you never meant to (and expensively, 12.7).
 - Expecting a transition when the element is **added** to the page or goes from `display: none` — there is no "before" style, so nothing animates. That's what `@starting-style` solves (12.8).
-- Durations too long: UI feedback feels right around **100–300ms**; larger movements up to ~500ms.
+- Durations too long: UI (user interface) feedback feels right around **100–300ms**; larger movements up to ~500ms.
 
 ### Self-check
 1. Where should `transition` be declared for hover-in and hover-out to animate? → On the base (non-hover) rule.
@@ -94,7 +96,7 @@ A **timing function** (or *easing*) maps **time progress** (0 → 1) to **output
 | `ease-out` | fast start, slow end | things **entering** or responding to input (feels snappy) |
 | `ease-in-out` | slow–fast–slow | moving between two on-screen positions |
 | `cubic-bezier(x1, y1, x2, y2)` | any smooth curve; y may go outside 0–1 for overshoot | brand motion, "back" effects |
-| `steps(n, jump-start \| jump-end \| jump-none \| jump-both)` | n discrete jumps | sprite sheets, typewriter, ticking clocks |
+| `steps(n, jump-start \| jump-end \| jump-none \| jump-both)` | n discrete jumps | sprite sheets (one image holding every frame), typewriter, ticking clocks |
 | `linear(0, 0.36 30%, 1 45%, …)` | straight lines through points you list | bounces and springs approximated with many points (Baseline since December 2023) |
 
 The keywords are shortcuts: `ease` = `cubic-bezier(.25, .1, .25, 1)`, `ease-in` = `(.42, 0, 1, 1)`, `ease-out` = `(0, 0, .58, 1)`, `ease-in-out` = `(.42, 0, .58, 1)`; `step-start` = `steps(1, jump-start)`, `step-end` = `steps(1, jump-end)`.
@@ -106,7 +108,7 @@ The keywords are shortcuts: `ease` = `cubic-bezier(.25, .1, .25, 1)`, `ease-in` 
 ### How a cubic Bézier is computed
 A `cubic-bezier(x1, y1, x2, y2)` is a curve from (0, 0) to (1, 1) with two control points. Both coordinates are functions of a curve parameter *s*:
 `x(s) = 3·x1·s·(1−s)² + 3·x2·s²·(1−s) + s³` and the same for `y` with `y1`, `y2`.
-To evaluate the easing at time *t*, the browser must **solve x(s) = t** for *s* (x must stay within 0–1 so there is one answer), then return y(s). [`code/01_timing.mjs`](code/01_timing.mjs) does exactly that with bisection and compares with the browser.
+To evaluate the easing at time *t*, the browser must **solve x(s) = t** for *s* (x must stay within 0–1 so there is one answer), then return y(s). [`code/01_timing.mjs`](code/01_timing.mjs) does exactly that with **bisection** (guess the middle of the range, keep whichever half contains the answer, repeat until close enough) and compares with the browser.
 
 ### The proof: a race
 [`code/01_timing.html`](code/01_timing.html) transitions eight balls by 160px over 1000ms, each with a different timing function:
@@ -146,7 +148,7 @@ Our straight-from-the-formula numbers match Chrome to three decimals. Things to 
 - Leaving: `ease-in`, and shorter than the entrance.
 - On-screen moves: `ease-in-out`.
 - Continuous rotation: `linear`.
-- Design systems define a few named easing/duration tokens (`--ease-out`, `--dur-fast: 150ms`) and use only those.
+- Design systems (a team's shared set of reusable styles and components) define a few named easing/duration **tokens** (design decisions stored as named variables) (`--ease-out`, `--dur-fast: 150ms`) and use only those.
 
 ### Self-check
 1. Which keyword makes an element start fast and land gently? → `ease-out`.
@@ -158,7 +160,7 @@ Our straight-from-the-formula numbers match Chrome to three decimals. Things to 
 ## 12.3 2D transforms
 
 ### What it is
-The `transform` property changes where an element is **painted** — moved, rotated, scaled, skewed — **without changing its layout box**. Neighbours don't move; the space it occupied in the flow stays reserved. That's what makes transforms ideal for animation.
+The `transform` property changes where an element is **painted** (drawn as pixels) — moved, rotated, scaled, skewed — **without changing its layout box** (the rectangle of space the element occupies when the page is arranged). Neighbours don't move; the space it occupied in the flow stays reserved. That's what makes transforms ideal for animation.
 
 | Function | Example | Effect |
 |---|---|---|
@@ -166,7 +168,7 @@ The `transform` property changes where an element is **painted** — moved, rota
 | `rotate(angle)` | `rotate(30deg)`, `0.25turn` | Clockwise rotation |
 | `scale(sx, sy)` | `scale(1.4, 0.6)` | Resize (1 = unchanged; negative flips) |
 | `skew(ax, ay)` / `skewX()` | `skewX(-20deg)` | Slant |
-| `matrix(a, b, c, d, e, f)` | — | The general form everything above reduces to |
+| `matrix(a, b, c, d, e, f)` | — | The general form everything above reduces to (six numbers encoding the whole transform) |
 
 `transform-origin` (default `50% 50%` — the centre) is the fixed point for rotate, scale and skew.
 
@@ -179,7 +181,7 @@ The `transform` property changes where an element is **painted** — moved, rota
 - Read **right to left** as operations on the element: F = first rotate, then move right 60px.
 - Or read **left to right** as moving the **coordinate system**: G = rotate the axes 45°, then move 60px along the *rotated* x-axis — diagonally.
 
-[`code/03_transforms.mjs`](code/03_transforms.mjs) prints the layout box (unchanged for all of them), the painted bounding box and the resolved matrix:
+[`code/03_transforms.mjs`](code/03_transforms.mjs) prints the layout box (unchanged for all of them), the painted **bounding box** (the smallest upright rectangle that encloses the drawn shape) and the resolved matrix:
 
 ```
 A t1: layout 50,30 90x50 | painted bbox 90,50 90x50 | transform matrix(1, 0, 0, 1, 40, 20)
@@ -193,16 +195,16 @@ H t8: layout 50,30 90x50 | painted bbox 55.1,22 119.8x85.9 | transform none
 H individual properties: translate 20px 10px, rotate 15deg, scale 1.2 (transform stays none)
 ```
 
-Check B by hand: a 90×50 box rotated 30° has a bounding box 90·cos30° + 50·sin30° = 77.9 + 25 = **102.9** wide and 90·sin30° + 50·cos30° = 45 + 43.3 = **88.3** tall ✓. In a `matrix(a, b, c, d, e, f)`, (a, b, c, d) = (cos θ, sin θ, −sin θ, cos θ) for a rotation, and (e, f) is the translation: G's is 60·cos45° = **42.43** in both x and y — the 60px move along the rotated axis ✓. B and E share a matrix; only `transform-origin` differs.
+Check B by hand (cos and sin are the trigonometry functions that give the horizontal and vertical share of a length tilted by an angle): a 90×50 box rotated 30° has a bounding box 90·cos30° + 50·sin30° = 77.9 + 25 = **102.9** wide and 90·sin30° + 50·cos30° = 45 + 43.3 = **88.3** tall ✓. In a `matrix(a, b, c, d, e, f)`, (a, b, c, d) = (cos θ, sin θ, −sin θ, cos θ) for a rotation, and (e, f) is the translation: G's is 60·cos45° = **42.43** in both x and y — the 60px move along the rotated axis ✓. B and E share a matrix; only `transform-origin` differs.
 
 ### Individual transform properties
 `translate`, `rotate` and `scale` are also **separate properties** (Baseline since 2022, widely available). They are applied in a fixed order — translate, then rotate, then scale, then `transform` — so the order-of-functions surprise can't happen, and each can be transitioned or animated **independently** (a hover `scale` doesn't clobber an animation's `translate`). They don't show up in `transform`, as H's `transform none` shows. This chapter's pages use them wherever possible.
 
 ### Side effects
-- A transform other than `none` creates a **stacking context** and becomes the **containing block** for `position: fixed` and `absolute` descendants ([§7.6, §7.8](../07-box-model-and-layout-basics/README.md)).
-- Transforms don't apply to non-replaced **inline** boxes (a plain `<span>`); make it `inline-block`.
-- Scaling text up can look blurry mid-animation on some GPUs; prefer animating to a crisp final state.
-- `getBoundingClientRect()` returns the **painted** box (transform included); `offsetWidth`/`offsetLeft` the layout box.
+- A transform other than `none` creates a **stacking context** (a self-contained group whose children are layered by `z-index` only among themselves) and becomes the **containing block** (the box that positioned descendants measure their offsets from) for `position: fixed` and `absolute` descendants ([§7.6, §7.8](../07-box-model-and-layout-basics/README.md)).
+- Transforms don't apply to non-replaced **inline** boxes (a plain `<span>`; "non-replaced" means its content is the page's own text, unlike an `<img>` whose content comes from an external file); make it `inline-block`.
+- Scaling text up can look blurry mid-animation on some GPUs (graphics processing units — the chip specialised in drawing pixels); prefer animating to a crisp final state.
+- `getBoundingClientRect()` (a JavaScript method that reports an element's on-screen rectangle) returns the **painted** box (transform included); `offsetWidth`/`offsetLeft` the layout box.
 
 ### Self-check
 1. Does `translate: 0 -4px` on hover move the elements below? → No — transforms don't affect layout.
@@ -218,7 +220,7 @@ Check B by hand: a 90×50 box rotated 30° has a bounding box 90·cos30° + 50·
 
 | Property | On | Meaning |
 |---|---|---|
-| `perspective: 600px` | the **parent** (scene) | Distance from the viewer to the z = 0 plane; smaller = stronger distortion. All children share one vanishing point. |
+| `perspective: 600px` | the **parent** (scene) | Distance from the viewer to the z = 0 plane; smaller = stronger distortion. All children share one vanishing point (the spot where receding lines meet). |
 | `perspective()` function | the element's own `transform` | Per-element perspective (each has its own vanishing point) |
 | `perspective-origin` | the parent | Where the viewer's eye is (default centre) |
 | `transform-style: preserve-3d` | a parent whose children should stay in 3D | Otherwise children are flattened into its plane |
@@ -307,7 +309,7 @@ Reading it:
 | `backwards` | **first keyframe** (red) | own style |
 | `both` | first keyframe | last keyframe |
 
-- At 750ms, all four show **#796538**, the halfway mix of #dc2626 and #16a34a: (220 + 22)/2 = 121 = 0x79, (38 + 163)/2 ≈ 101 = 0x65, (38 + 74)/2 = 56 = 0x38. Legacy `rgb`/hex colours are interpolated in sRGB.
+- At 750ms, all four show **#796538**, the halfway mix of #dc2626 and #16a34a: (220 + 22)/2 = 121 = 0x79, (38 + 163)/2 ≈ 101 = 0x65, (38 + 74)/2 = 56 = 0x38. Legacy `rgb`/hex colours are interpolated in sRGB (the standard colour space of the web). **Hex** is short for hexadecimal, base-16 counting with digits 0–9 and a–f, where `0x79` means 7 × 16 + 9 = 121.
 
 ![Five frames at 0, 250, 499, 750 and 1000 ms: the bounce ball moves up and down; the spinner arc is at 12, 3, 6, 9 and 12 o'clock; the slide ball moves across; the four fill-mode bars show grey, grey, red, red during the delay, a brownish midpoint for all at 750 ms, and grey, green, grey, green after the end](img/05_keyframes_frames.png)
 
@@ -334,7 +336,7 @@ Reading it:
 ## 12.6 The Web Animations API (WAAPI)
 
 ### What it is
-The **Web Animations API** is the JavaScript interface to the same animation engine that runs CSS transitions and animations (Baseline widely available since 2020–2023). `element.animate(keyframes, options)` creates an animation; every animation, CSS or JS, is an `Animation` object you can pause, seek, speed up, reverse and await.
+The **Web Animations API** is the JavaScript interface to the same animation engine that runs CSS transitions and animations (Baseline widely available since 2020–2023). `element.animate(keyframes, options)` creates an animation; every animation, CSS or JS, is an `Animation` object you can pause, seek, speed up, reverse and await (a **Promise** is a JavaScript object standing for a result that arrives later; `await` pauses the code until it does).
 
 ```js
 const anim = box.animate(
@@ -364,7 +366,7 @@ ease-out(0.5) = 0.685 → 200 × 0.685 = 136.9px and opacity 1 − 0.5 × 0.685 
 - Sequencing with promises (`await a.finished; b.play()`), scrubbing with a slider, syncing with media.
 - Testing and screenshots — exactly how this chapter's figures were made.
 
-Prefer CSS for simple, declarative states; WAAPI over hand-written `requestAnimationFrame` loops, because WAAPI animations of `transform`/`opacity` can run on the compositor (12.7) and are cancellable and inspectable in DevTools' Animations panel.
+Prefer CSS for simple, **declarative** (you describe the result, not the steps) states; WAAPI over hand-written `requestAnimationFrame` loops (`requestAnimationFrame` runs your function just before the next frame is drawn), because WAAPI animations of `transform`/`opacity` can run on the compositor (the browser part that assembles finished layers into the final image, 12.7) and are cancellable and inspectable in DevTools' (the developer tools built into the browser, opened with F12) Animations panel.
 
 `anim.commitStyles()` writes the current animated values into the element's `style` attribute — useful before `cancel()` if you want to keep the end state without `fill: forwards` (fills keep an animation alive forever).
 
@@ -375,16 +377,18 @@ Prefer CSS for simple, declarative states; WAAPI over hand-written `requestAnima
 ### How the browser renders a frame
 Recall the pipeline from [Chapter 1](../01-how-the-web-works/README.md): **style → layout → paint → composite**. Each animation frame redoes the pipeline from the first stage the changed property affects:
 
+> **Key term — the rendering pipeline:** **style** works out which CSS rules apply to each element; **layout** computes every box's size and position; **paint** draws the boxes' pixels (text, colours, shadows) into layers; **composite** stacks those layers into the final screen image, often on the GPU. Most of this runs on the **main thread** — the single line of work that also runs your JavaScript — so expensive layout competes with your code, while compositing can happen on a separate **compositor thread** (a thread is an independent sequence of work the computer runs alongside others).
+
 | Property changed | Needs | Examples | Cost |
 |---|---|---|---|
 | Geometry | style → **layout** → paint → composite | `width`, `height`, `top`/`left`, `margin`, `padding`, `font-size` | Highest: the element *and possibly everything around it* is re-laid out |
 | Appearance | style → **paint** → composite | `color`, `background`, `box-shadow`, `border-radius`, `outline` | Medium: pixels re-drawn |
 | **Compositor-only** | (style) → **composite** | `transform` (and `translate`/`rotate`/`scale`), `opacity`, often `filter` | Lowest: the GPU moves/fades an already painted layer; the main thread can even be busy |
 
-At 60 frames per second a frame has about **16.7ms**; on a 120 Hz screen, 8.3ms. Layout of a big page can take several ms by itself, so layout animations drop frames ("jank").
+At 60 frames per second (fps) a frame has about **16.7ms**; on a 120 Hz screen (one that refreshes 120 times a second), 8.3ms. Layout of a big page can take several ms by itself, so layout animations drop frames ("jank").
 
 ### Measured
-[`code/06_performance.mjs`](code/06_performance.mjs) runs four 1-second animations of the same box in [`code/06_performance.html`](code/06_performance.html) and reads Chrome's internal counters (`page.metrics()`):
+[`code/06_performance.mjs`](code/06_performance.mjs) runs four 1-second animations of the same box in [`code/06_performance.html`](code/06_performance.html) and reads Chrome's internal counters (`page.metrics()`; a "style recalc" is one run of the style stage):
 
 ```
 move-left       layouts  60   style recalcs  61   layout time 1.8ms
@@ -399,8 +403,8 @@ Animating `left` or `width` ran layout on **every frame** (about 60 in one secon
 - **Move with `translate`, not `top`/`left`; resize with `scale`, not `width`/`height`; fade with `opacity`.**
 - **Expensive paints**: animate the `opacity` of a pseudo-element that already has the big shadow, instead of animating `box-shadow`.
 - **FLIP** (First, Last, Invert, Play) for layout changes: measure the element's **F**irst position, apply the layout change, measure the **L**ast position, **I**nvert with a transform so it *looks* like it hasn't moved, then **P**lay a transform animation back to none. The layout happens once; the motion is a cheap transform. View transitions (12.10) automate this idea.
-- **`will-change: transform`** hints that an element will animate, so the browser can promote it to its own layer ahead of time. Use it sparingly and temporarily (add before, remove after): every layer costs GPU memory, and `will-change` also creates a stacking context.
-- **`contain: layout paint`** / `content-visibility` limit how far layout and paint spread ([Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md)).
+- **`will-change: transform`** hints that an element will animate, so the browser can promote it to its own **layer** (a separately painted image the compositor can move or fade without repainting) ahead of time. Use it sparingly and temporarily (add before, remove after): every layer costs GPU memory, and `will-change` also creates a stacking context.
+- **`contain: layout paint`** (promises the browser that the element's insides don't affect the outside) / `content-visibility` (lets the browser skip rendering off-screen content) limit how far layout and paint spread ([Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md)).
 - **Measure**: DevTools Performance panel (look for purple Layout and green Paint blocks per frame), "Paint flashing" and "Layer borders" in the Rendering panel, and the Animations panel to slow animations down.
 
 ### In the interview
@@ -421,13 +425,13 @@ Follow-ups:
 ## 12.8 Enter and exit animations: `@starting-style` and `allow-discrete`
 
 ### The problem it solves
-Dialogs, popovers, toasts and menus usually go from `display: none` to visible. That breaks transitions twice:
+Dialogs, popovers (small panels that float above the page, opened with the `popover` attribute), toasts (brief pop-up notifications that disappear on their own) and menus usually go from `display: none` to visible. That breaks transitions twice:
 1. **Entering**: an element that wasn't rendered has no "before" style, so there's nothing to transition *from* — it just appears.
 2. **Exiting**: `display` flips to `none` immediately, so the fade-out never gets to be seen.
 
 ### The tools
 - **`@starting-style { … }`** defines the style to transition **from** when an element is first rendered (or goes from `display: none` to shown). Baseline since August 2024.
-- **`transition-behavior: allow-discrete`** (or the keyword in the shorthand) lets discrete properties take part in a transition. For `display`, the browser keeps the element displayed for the whole exit transition and flips to `none` at the end. `transition-behavior` is Baseline since August 2024, but actually transitioning **`display`** is supported in Chrome and Safari, not yet Firefox, and the **`overlay`** property (keeps a closing popover/dialog in the top layer) is Chromium-only. The good news: where unsupported, the element simply closes without the exit fade — safe progressive enhancement.
+- **`transition-behavior: allow-discrete`** (or the keyword in the shorthand) lets discrete properties take part in a transition. For `display`, the browser keeps the element displayed for the whole exit transition and flips to `none` at the end. `transition-behavior` is Baseline since August 2024, but actually transitioning **`display`** is supported in Chrome and Safari, not yet Firefox, and the **`overlay`** property (keeps a closing popover/dialog in the **top layer** — a special layer the browser draws above everything else on the page) is Chromium-only. The good news: where unsupported, the element simply closes without the exit fade — safe **progressive enhancement** (build something that works everywhere, then add extras that only capable browsers use).
 
 ```css
 #a { opacity: 0; translate: 0 -16px;                           /* closed look = exit end state */
@@ -453,7 +457,7 @@ B never animates: no transition runs on open (no starting style) and it is `disp
 *Figure 12.6 — A (blue) animates in; B (red) just appears.*
 
 ### Where you'll use it
-`<dialog>` (`[open]` and `::backdrop`), `[popover]` (`:popover-open`), elements added with JavaScript (toasts, list items), `<details>` content, and anything toggled with `display` or the `hidden` attribute. For `<dialog>` also transition `::backdrop` the same way.
+`<dialog>` (`[open]` and `::backdrop`), `[popover]` (`:popover-open`), elements added with JavaScript (toasts, list items), `<details>` content, and anything toggled with `display` or the `hidden` attribute. For `<dialog>` also transition `::backdrop` (the full-screen layer drawn behind a modal dialog) the same way.
 
 ### Self-check
 1. Why doesn't a plain transition play when an element goes from `display: none` to `block`? → There's no previous rendered style to transition from; `@starting-style` provides one.
@@ -464,13 +468,15 @@ B never animates: no transition runs on open (no starting style) and it is `disp
 ## 12.9 Reduced motion and accessibility
 
 ### Why it matters
-For people with **vestibular disorders** (inner-ear balance problems), large movement on screen — parallax, zooming, spinning, sliding panels — can trigger dizziness, nausea and headaches. Others find motion distracting (ADHD, cognitive disabilities). Every major OS has a setting: macOS/iOS "Reduce motion", Windows "Animation effects" off, Android "Remove animations". Browsers expose it as `prefers-reduced-motion: reduce` (Baseline widely available).
+For people with **vestibular disorders** (inner-ear balance problems), large movement on screen — parallax, zooming, spinning, sliding panels — can trigger dizziness, nausea and headaches. Others find motion distracting (ADHD — attention-deficit/hyperactivity disorder — and cognitive disabilities). Every major OS (operating system) has a setting: macOS/iOS "Reduce motion", Windows "Animation effects" off, Android "Remove animations". Browsers expose it as `prefers-reduced-motion: reduce` (Baseline widely available).
 
 ### The WCAG rules
 
+**WCAG** (Web Content Accessibility Guidelines) is the international accessibility standard. Each rule (a "success criterion") has a level: **A** is the minimum, **AA** the usual legal and contractual target, **AAA** the strictest.
+
 | Criterion | Level | Requirement |
 |---|---|---|
-| 2.2.2 Pause, Stop, Hide | A | Moving, blinking or scrolling content that starts automatically, lasts **more than 5 seconds** and is shown with other content must be pausable/stoppable (carousels, marquees, animated backgrounds) |
+| 2.2.2 Pause, Stop, Hide | A | Moving, blinking or scrolling content that starts automatically, lasts **more than 5 seconds** and is shown with other content must be pausable/stoppable (carousels — rotating slide panels — marquees, animated backgrounds) |
 | 2.3.1 Three Flashes or Below Threshold | A | Nothing flashes more than **3 times per second** (seizure risk) |
 | 2.3.3 Animation from Interactions | AAA | Motion triggered by interaction can be disabled unless essential |
 
@@ -498,9 +504,9 @@ prefers-reduced-motion: no-preference -> card animation: slide-in spinner: spin 
 prefers-reduced-motion: reduce        -> card animation: none     spinner: pulse 2s   scroll-behavior: auto   running animations: 1
 ```
 
-**Reduced motion ≠ no motion.** Fades, colour changes and small scale changes are usually fine; it's large translation, zoom, rotation, parallax and scroll-jacking that cause harm. The blunt global reset in [§10.5](../10-responsive-design/README.md) (durations → 0.01ms) is a reasonable safety net — `0.01ms` rather than `0` so `animationend`/`transitionend` still fire for code that waits for them — but designing each animation's reduced version is better.
+**Reduced motion ≠ no motion.** Fades, colour changes and small scale changes are usually fine; it's large translation, zoom, rotation, **parallax** (layers moving at different speeds as you scroll, faking depth) and **scroll-jacking** (a page overriding the normal speed or direction of scrolling) that cause harm. The blunt global reset in [§10.5](../10-responsive-design/README.md) (durations → 0.01ms) is a reasonable safety net — `0.01ms` rather than `0` so `animationend`/`transitionend` still fire for code that waits for them — but designing each animation's reduced version is better.
 
-In JavaScript: `matchMedia('(prefers-reduced-motion: reduce)').matches` before starting WAAPI animations, smooth `scrollIntoView`, or auto-playing video.
+In JavaScript: `matchMedia('(prefers-reduced-motion: reduce)').matches` (`matchMedia` tests a media query from script) before starting WAAPI animations, smooth `scrollIntoView`, or auto-playing video.
 
 ### Other rules of thumb
 - Autoplaying carousels need a visible pause button (2.2.2) — and usually shouldn't autoplay at all.
@@ -517,7 +523,7 @@ In JavaScript: `matchMedia('(prefers-reduced-motion: reduce)').matches` before s
 ## 12.10 View transitions
 
 ### What it is
-A **view transition** animates between two **states of the page** — before and after a DOM update, or (cross-document) between two pages. You don't write the in-between frames: the browser takes a **snapshot** of the old state, lets you update the DOM, snapshots the new state, and animates from one to the other — cross-fading the page and **morphing** any element you've given a `view-transition-name`. It is FLIP (12.7) done for you.
+A **view transition** animates between two **states of the page** — before and after a DOM update, or (cross-document) between two pages. You don't write the in-between frames: the browser takes a **snapshot** (a picture) of the old state, lets you update the DOM, snapshots the new state, and animates from one to the other — cross-fading the page and **morphing** any element you've given a `view-transition-name`. It is FLIP (12.7) done for you.
 
 ### Support (verified September 2026)
 
@@ -526,12 +532,12 @@ A **view transition** animates between two **states of the page** — before and
 | Same-document: `document.startViewTransition()`, `view-transition-name`, the `::view-transition-*` pseudo-elements | **Baseline newly available since October 2025** (Chrome 111, Safari 18, Firefox 144) |
 | `view-transition-class` (style many groups with one selector) | Baseline since October 2025 |
 | View transition **types** (`startViewTransition({ update, types: ['forward'] })`, `:active-view-transition-type()`) | Baseline since January 2026 |
-| **Cross-document** (MPA) view transitions: `@view-transition { navigation: auto; }` | **Not Baseline**: Chrome 126+, Safari 18.2+, not Firefox yet |
+| **Cross-document** (MPA — multi-page application, a site where each link loads a new HTML page) view transitions: `@view-transition { navigation: auto; }` | **Not Baseline**: Chrome 126+, Safari 18.2+, not Firefox yet |
 
 ### How it works (same-document)
 1. You call `document.startViewTransition(updateCallback)`.
 2. The browser captures the **old** state: a screenshot of the page (`root`) and one of each element with a `view-transition-name` (names must be unique on the page).
-3. It runs your callback (which may be async) to change the DOM, then captures the **new** state.
+3. It runs your callback (the function you passed in; it may be **async**, meaning it can wait for things like network requests before finishing) to change the DOM, then captures the **new** state.
 4. It builds a pseudo-element tree over the page:
    ```
    ::view-transition
@@ -588,7 +594,7 @@ The `-ua-…` names are Chrome's built-in keyframes. The group of "Two" morphs f
 **Aspect-ratio tip:** by default the old and new snapshots keep their own aspect ratios at the group's width; when a tall box turns into a short row they overflow and look smeared mid-way. `height: 100%` on `::view-transition-old/new` makes both stretch to the group, which is what Figure 12.7 uses.
 
 ### Cross-document view transitions
-For multi-page sites, both pages opt in with `@view-transition { navigation: auto; }` and share `view-transition-name`s; a same-origin navigation then animates without any JavaScript. Chrome and Safari only in 2026 — browsers without support just navigate normally, so it is safe to add.
+For multi-page sites, both pages opt in with `@view-transition { navigation: auto; }` and share `view-transition-name`s; a **same-origin** navigation (to a page with the same scheme, host and port, e.g. both on `https://example.com`) then animates without any JavaScript. Chrome and Safari only in 2026 — browsers without support just navigate normally, so it is safe to add.
 
 ### Pitfalls
 - Duplicate `view-transition-name`s on the page abort the transition.
@@ -606,9 +612,9 @@ For multi-page sites, both pages opt in with `@view-transition { navigation: aut
 ## 12.11 Scroll-driven animations
 
 ### What it is
-A **scroll-driven animation** replaces the time-based timeline with a **scroll timeline**: the animation's progress follows how far a container has scrolled (`scroll()`) or how far an element has travelled through the viewport (`view()`). Reading-progress bars, reveal-on-scroll effects and parallax without JavaScript scroll listeners — and they can run off the main thread.
+A **scroll-driven animation** replaces the time-based timeline with a **scroll timeline**: the animation's progress follows how far a container has scrolled (`scroll()`) or how far an element has travelled through the **viewport** (the visible area of the browser window) (`view()`). Reading-progress bars, reveal-on-scroll effects and parallax without JavaScript scroll listeners (functions that run on every scroll event) — and they can run off the main thread.
 
-**Support: not Baseline.** Chrome 115+ and Safari 26+ support it; Firefox has it only behind a flag (September 2026). Always wrap it in `@supports (animation-timeline: scroll())` and make sure the page works without it.
+**Support: not Baseline.** Chrome 115+ and Safari 26+ support it; Firefox has it only behind a flag (a hidden experimental setting users must switch on) (September 2026). Always wrap it in `@supports (animation-timeline: scroll())` (a **feature query**: the rules inside apply only if the browser understands that declaration) and make sure the page works without it.
 
 ```css
 /* Reading progress bar */
@@ -623,7 +629,7 @@ A **scroll-driven animation** replaces the time-based timeline with a **scroll t
 | Piece | Meaning |
 |---|---|
 | `scroll(<scroller> <axis>)` | Anonymous scroll timeline: `nearest` (default), `root` or `self`; axis `block` (default), `inline`, `x`, `y` |
-| `view(<axis> <inset>)` | Timeline of the element's own visibility in its scrollport |
+| `view(<axis> <inset>)` | Timeline of the element's own visibility in its scrollport (the visible window of a scrolling box) |
 | `animation-range` | Which part of the timeline maps to 0–100%: `entry`, `exit`, `contain`, `cover` + percentages |
 | `scroll-timeline-name` / `view-timeline-name` | Named timelines, usable by other elements (with `timeline-scope`) |
 | Duration | Ignored/`auto` — scroll distance replaces time; use `linear` easing so progress tracks scroll 1:1 |

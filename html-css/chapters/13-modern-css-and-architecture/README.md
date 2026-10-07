@@ -1,6 +1,6 @@
 # Chapter 13 — Modern CSS and Architecture
 
-Until about 2022, writing CSS for a big site meant reaching for tools: Sass for nesting and variables, strict naming conventions so styles didn't collide, and JavaScript for anything like "style the parent when a child is checked". Browsers have since caught up. Nesting, the `:has()` "parent" selector, cascade layers, `@scope`, logical properties and `light-dark()` are all built in, and together they change how you organise stylesheets. This chapter covers each new feature, then the bigger question every team faces: **how do you structure CSS so that it stays maintainable as a project grows?** We compare the four main answers (BEM naming, utility-first with Tailwind CSS, CSS Modules and CSS-in-JS), look at Sass and resets, and finish with a complete theming system.
+Until about 2022, writing CSS for a big site meant reaching for tools: Sass (a language that adds extra features to CSS and is compiled — translated by a program — into plain CSS) for nesting and variables, strict naming conventions so styles didn't collide, and JavaScript for anything like "style the parent when a child is checked". Browsers have since caught up. Nesting, the `:has()` "parent" selector, cascade layers, `@scope`, logical properties and `light-dark()` are all built in, and together they change how you organise stylesheets (the files of CSS rules for a site). This chapter covers each new feature, then the bigger question every team faces: **how do you structure CSS so that it stays maintainable as a project grows?** We compare the four main answers (BEM naming, utility-first with Tailwind CSS, CSS Modules and CSS-in-JS), look at Sass and resets, and finish with a complete theming system.
 
 **What you'll learn**
 
@@ -21,9 +21,9 @@ Until about 2022, writing CSS for a big site meant reaching for tools: Sass for 
 | 13.13 | Resets and normalize | explain what a reset does, line by line, and why it belongs in a low layer |
 | 13.14 | Theming and dark mode | build light/dark/brand themes from design tokens and `light-dark()` with a no-flash toggle |
 
-**How the numbers and figures were made.** Every example is a page in [`code/`](code/). Each `NN_*.mjs` script opens its page in real headless Chrome 154 (through [`code/measure.mjs`](code/measure.mjs), a copy of [Chapter 10's helper](../10-responsive-design/README.md)) and prints what the browser computed — `getComputedStyle()`, bounding boxes, and the CSSOM (the browser's object model of the stylesheet). The Tailwind example is a real Tailwind CSS v4.3 build, and the CSS Modules example is compiled by Lightning CSS, the same compiler many bundlers use. [`code/make_figures.mjs`](code/make_figures.mjs) takes the screenshots. Support data comes from the **web-features** dataset (the source of MDN's and caniuse's "Baseline" badges), checked in September 2026.
+**How the numbers and figures were made.** Every example is a page in [`code/`](code/). Each `NN_*.mjs` script (a JavaScript module run with Node.js) opens its page in real **headless** Chrome 154 (a full browser running without a visible window, controlled by a script) (through [`code/measure.mjs`](code/measure.mjs), a copy of [Chapter 10's helper](../10-responsive-design/README.md)) and prints what the browser computed — `getComputedStyle()` (the JavaScript call that returns an element's final, resolved CSS values), bounding boxes (the rectangle an element occupies on screen), and the CSSOM (the browser's object model of the stylesheet). The Tailwind example is a real Tailwind CSS v4.3 build, and the CSS Modules example is compiled by Lightning CSS (a fast CSS compiler, 13.12), the same compiler many **bundlers** use (a bundler is a build tool that gathers a project's many source files and outputs a few optimised files for the browser). [`code/make_figures.mjs`](code/make_figures.mjs) takes the screenshots. Support data comes from the **web-features** dataset (the source of MDN's — Mozilla's web developer documentation — and caniuse's — a site of browser-support tables — "Baseline" badges), checked in September 2026.
 
-> **Baseline, briefly** ([Chapter 10](../10-responsive-design/README.md) has more). A feature is **Baseline "newly available"** once it works in the current Chrome, Edge, Firefox and Safari (desktop and mobile), and **"widely available"** 30 months after that. Newly available features are safe for most audiences; for older devices, check your own analytics or provide a fallback.
+> **Baseline, briefly** ([Chapter 10](../10-responsive-design/README.md) has more). A feature is **Baseline "newly available"** once it works in the current Chrome, Edge, Firefox and Safari (desktop and mobile), and **"widely available"** 30 months after that. Newly available features are safe for most audiences; for older devices, check your own analytics (the statistics your site collects about its visitors, including their browsers) or provide a fallback (an alternative that still works when the feature is missing).
 
 ---
 
@@ -33,15 +33,17 @@ Until about 2022, writing CSS for a big site meant reaching for tools: Sass for 
 **Nesting** lets you write a rule inside another rule, so the inner selector is relative to the outer one. It's like writing a street address as "Paris → Rue de Rivoli → No. 10" instead of repeating "Paris" on every line. Sass has offered this since 2006; browsers now do it natively: **Baseline newly available since December 2023** (Chrome 120, Firefox 117, Safari 17.2) and **widely available since June 2026**.
 
 ### Why it matters
-Without nesting you repeat the parent selector for every child, hover state and media query, and related rules drift apart in the file. Nesting keeps one component's styles in one block. Because it's native, there's no build step and DevTools shows the nested rule as you wrote it.
+Without nesting you repeat the parent selector for every child, hover state and media query, and related rules drift apart in the file. Nesting keeps one component's styles in one block. Because it's native (built into the browser), there's no **build step** (a program that transforms your source files before they are served) and DevTools (the browser's built-in developer tools) shows the nested rule as you wrote it.
 
 ### How it works
 1. Inside a style rule, you can write declarations **and** further rules.
 2. A nested selector with no `&` is treated as a **descendant** of the parent: `.title {}` inside `.card {}` means `.card .title`.
 3. `&` (the **nesting selector**) stands for the parent's matched elements. Its position decides the relationship: `&:hover` (same element, no space), `& > p` (child), `.dark-page &` (the parent is *inside* `.dark-page`).
-4. A nested selector may start with a combinator: `> p` means `& > p`.
-5. Conditional at-rules (`@media`, `@supports`, `@container`, `@layer`, `@scope`) can be nested too; their declarations apply to the parent selector.
+4. A nested selector may start with a **combinator** (the symbol that relates two selectors: a space for descendant, `>` for child, `+` for next sibling, `~` for any later sibling): `> p` means `& > p`.
+5. Conditional **at-rules** (CSS statements that start with `@`; these ones apply their contents only under a condition) (`@media`, `@supports`, `@container`, `@layer`, `@scope`) can be nested too; their declarations apply to the parent selector.
 6. `&` behaves like **`:is(<parent selector list>)`**. That has one important consequence for specificity (see below).
+
+> **Key term — specificity:** the score the browser uses to decide which of two conflicting rules wins. It is written as three numbers (A,B,C): A counts ID selectors (`#main`), B counts classes, attributes and pseudo-classes (`.card`, `[type]`, `:hover`), C counts element names and pseudo-elements (`p`, `::before`). Compare A first, then B, then C — so (1,0,0) beats (0,3,0). If the scores tie, the rule that comes later in the file wins.
 
 [`code/01_nesting.html`](code/01_nesting.html):
 
@@ -66,7 +68,7 @@ Without nesting you repeat the parent selector for every child, hover state and 
 .sidebar .link.plain { color: green; }              /* (0,3,0) -- still loses!               */
 ```
 
-[`code/01_nesting.mjs`](code/01_nesting.mjs) walks the CSSOM (the browser's parsed stylesheet) and reads computed styles at two viewport widths.
+[`code/01_nesting.mjs`](code/01_nesting.mjs) walks the CSSOM (the browser's parsed stylesheet) and reads computed styles at two **viewport** (the visible area of the browser window) widths.
 
 Output:
 ```
@@ -96,7 +98,7 @@ viewport 700px: .card padding 24px, border rgb(245, 158, 11), background rgb(15,
 What the output proves:
 - The browser stores `.title` as `& .title` and `> p` as `& > p`: an implicit `&` plus a space (descendant) is added in front.
 - The nested `@media` holds a `CSSNestedDeclarations` object — the bare `padding: 24px` is treated as if it were inside `& { … }`. Padding is 16px at 500px and 24px at 700px.
-- **`&__body` was thrown away.** In Sass, `&__body` glues text together to make `.card__body`. Native CSS works on selectors, not strings, so this never produces `.card__body`; Chrome discards the rule, and the element stays black. This is the #1 surprise when moving BEM-style Sass to native nesting.
+- **`&__body` was thrown away.** In Sass, `&__body` glues text together to make `.card__body`. Native CSS works on selectors, not strings, so this never produces `.card__body`; Chrome discards the rule, and the element stays black. This is the #1 surprise when moving BEM-style (BEM is a class-naming convention, 13.7) Sass to native nesting.
 - The sidebar link is **crimson**, although `.sidebar .link.plain` (0,3,0) looks more specific. The nested rule is really `:is(#main, .sidebar) .link`, and `:is()` takes the specificity of its most specific argument — `#main` — giving (1,1,0), even though the element matched via `.sidebar`.
 
 ### Compiling nesting away for old browsers
@@ -124,7 +126,7 @@ Output:
 }
 ```
 
-The compiler writes `:is(#main, .sidebar) .link` — the same meaning the browser gives native nesting (Sass would instead write `#main .link, .sidebar .link`, two selectors with *different* specificities). It also rewrote the range media query `(width >= 600px)` into the older `min-width` form.
+The compiler writes `:is(#main, .sidebar) .link` — the same meaning the browser gives native nesting (Sass would instead write `#main .link, .sidebar .link`, two selectors with *different* specificities). It also rewrote the range media query (an `@media` condition written with comparison operators like `>=`) `(width >= 600px)` into the older `min-width` form.
 
 ### Common mistakes
 - Porting Sass `&__title` or `&-large` and wondering why nothing applies.
@@ -202,7 +204,7 @@ Notice what Chrome kept: `:is(.promo)` — it silently removed `:unknown-thing` 
 
 ### Common mistakes
 - Using `:is()` in a library's defaults: an argument like `#app` makes every selector inside it hard to override. Use `:where()`.
-- Expecting pseudo-elements inside: `:is(::before)` never matches — pseudo-elements aren't allowed in these lists.
+- Expecting pseudo-elements (parts of an element that CSS can style as if they were separate, like `::before` and `::after`) inside: `:is(::before)` never matches — pseudo-elements aren't allowed in these lists.
 
 ### Self-check
 1. Specificity of `:where(#a) .b`? → (0,1,0).
@@ -214,7 +216,7 @@ Notice what Chrome kept: `:is(.promo)` — it silently removed `:unknown-thing` 
 ## 13.3 `:has()` — the relational ("parent") selector
 
 ### What it is
-`A:has(B)` matches an element **A** if selector **B**, evaluated *relative to A*, matches something. With a descendant (`:has(img)`), it's the long-awaited **parent selector**; with `+` or `~` (`h3:has(+ .subtitle)`) it's a **previous-sibling** selector. Baseline newly available since **December 2023** (Firefox 121 was last), widely available since June 2026. [Chapter 6](../06-css-fundamentals/README.md#63-pseudo-classes-and-pseudo-elements) showed the basic syntax.
+`A:has(B)` matches an element **A** if selector **B**, evaluated *relative to A*, matches something. With a descendant (`:has(img)`), it's the long-awaited **parent selector**; with `+` or `~` (`h3:has(+ .subtitle)`) it's a **previous-sibling** selector (siblings are elements that share the same parent). Baseline newly available since **December 2023** (Firefox 121 was last), widely available since June 2026. [Chapter 6](../06-css-fundamentals/README.md#63-pseudo-classes-and-pseudo-elements) showed the basic syntax.
 
 ### The problem it solves
 CSS selectors used to look only **down and forward** in the document: you could style a child based on its parent, never the reverse. "Give the card a grid layout if it contains an image", "highlight the label whose radio is checked" or "lock page scrolling while a dialog is open" all needed JavaScript that added classes. `:has()` does them in CSS, and they stay in sync automatically.
@@ -222,7 +224,7 @@ CSS selectors used to look only **down and forward** in the document: you could 
 ### How it works
 1. The argument is a **relative selector list**: each item implicitly starts at the `:has()` element (default combinator = descendant).
 2. Specificity = the most specific argument, like `:is()`.
-3. The browser re-evaluates it whenever the DOM or state changes (checking a box, typing into an input, opening a dialog).
+3. The browser re-evaluates it whenever the DOM (Document Object Model — the browser's live tree of the page's elements, which scripts can change) or state changes (checking a box, typing into an input, opening a dialog).
 4. Restrictions: `:has()` can't be nested inside another `:has()`, and pseudo-elements can't be arguments.
 
 [`code/03_has.html`](code/03_has.html) shows six patterns:
@@ -262,7 +264,7 @@ p:has(::before)  -> SyntaxError
 li:has(+ li)  -> valid
 ```
 
-Every style followed the state change instantly, and the two forbidden forms are rejected by the selector parser.
+Every style followed the state change instantly, and the two forbidden forms are rejected by the selector parser (the part of the browser that reads selector text and turns it into a structure it can match).
 
 ### Trade-offs and performance
 `:has()` asks the browser to look "up" the tree when something changes, which is more work than ordinary selectors. Engines optimise the common cases, and in normal use it is fine. Two habits keep it cheap:
@@ -274,7 +276,7 @@ Every style followed the state change instantly, and the two forbidden forms are
 - To style a form field with an error **the moment the page loads**: `:invalid` matches before the user has typed. Prefer `:user-invalid` (matches only after interaction) — `.field:has(:user-invalid)` ([Chapter 5](../05-tables-and-forms/README.md#57-accessible-error-messages)).
 
 ### Real-world examples
-Selected table rows (`tr:has(input:checked)`), error-highlighting form groups, quantity queries, modal scroll locking, and dimming siblings of a hovered item: `.list:has(.item:hover) .item:not(:hover) { opacity: .6 }`.
+Selected table rows (`tr:has(input:checked)`), error-highlighting form groups, quantity queries (styles that change with how many children an element has), modal (a dialog that blocks the rest of the page until closed) scroll locking, and dimming siblings of a hovered item: `.list:has(.item:hover) .item:not(:hover) { opacity: .6 }`.
 
 ### In the interview
 **30-second answer:** "`:has()` matches an element if the relative selector inside it matches — so `.card:has(img)` styles cards that contain an image. It works as a parent selector and, with `+`/`~`, a previous-sibling selector, and it reacts to state like `:checked` or `:invalid`. It's Baseline since late 2023. I anchor it to specific elements for performance and never use it for behaviour."
@@ -295,12 +297,12 @@ Selected table rows (`tr:has(input:checked)`), error-highlighting form groups, q
 A **cascade layer** is a named bucket of rules. You declare the order of the buckets once, and a rule in a later layer beats a rule in an earlier layer **no matter how specific either selector is**. Think of layers as floors of a building: anything on the 5th floor is above anything on the 2nd, however tall the furniture on the 2nd floor. Baseline since March 2022 and widely available since September 2024. [Chapter 6](../06-css-fundamentals/README.md#65-the-cascade-and-origins) placed layers in the cascade; this section is about using them to structure a project.
 
 ### The problem it solves
-**Specificity wars.** A third-party library ships `#app .btn.btn-primary`; to override it you write something even more specific, or `!important`, and the next person escalates again. Layers let you say, once, "vendor CSS is below my components, and utilities are above both".
+**Specificity wars.** A third-party library (code written by someone outside your team) ships `#app .btn.btn-primary`; to override it you write something even more specific, or `!important` (a flag on a declaration that makes it beat normal declarations), and the next person escalates again. Layers let you say, once, "vendor CSS is below my components, and utilities are above both".
 
 ### How it works
 1. `@layer reset, vendor, base, components, utilities;` declares the order: **first = weakest**. Put this statement first, so the order doesn't depend on which file loads first.
 2. Add rules with `@layer name { … }` (as many blocks as you like; they merge), or import a whole file into a layer: `@import url(x.css) layer(vendor);`.
-3. When two declarations conflict, the cascade compares **origin & importance → context → style attribute → layer → specificity → order**. The layer is compared **before** specificity.
+3. When two declarations conflict, the cascade (the browser's algorithm for choosing a winner) compares **origin & importance → context → style attribute → layer → specificity → order**. Origin is who wrote the CSS (browser defaults, the user, or the page author); context is whether the rule comes from inside a shadow DOM (13.5); the style attribute is CSS written directly on an element (`style="…"`). The layer is compared **before** specificity.
 4. **Unlayered** styles form an implicit final layer: they beat every named layer.
 5. **`!important` reverses the order**: an `!important` declaration in an *earlier* layer beats one in a later layer, and layered `!important` beats unlayered `!important`. This lets a reset lock something down.
 6. **`revert-layer`** as a value means "ignore this layer's value; use what the earlier layers produce".
@@ -353,21 +355,21 @@ Read it line by line: a one-class selector in `components` beat an ID selector i
 | Layer | Holds | Why here |
 |---|---|---|
 | `reset` | the reset (13.13) | weakest: everything may override it |
-| `tokens` | custom properties (13.14) | declarations only, rarely conflicts |
+| `tokens` | custom properties (CSS variables like `--brand`, 13.14) | declarations only, rarely conflicts |
 | `vendor` | third-party CSS via `@import … layer(vendor)` | your own base styles should beat it |
 | `base` | element defaults (`body`, `a`, `h1`) | |
 | `layout` | page grids, containers | |
 | `components` | cards, buttons, dialogs | |
-| `utilities` | single-purpose classes (`.visually-hidden`, `.text-center`) | must beat components |
+| `utilities` | single-purpose classes (`.visually-hidden` — hidden on screen but still read by screen readers — `.text-center`) | must beat components |
 | `overrides` | temporary fixes | explicit, easy to find and delete |
 
 Tailwind CSS v4 itself emits `@layer theme, base, components, utilities;` (13.8), so its utilities slot neatly into this scheme.
 
 ### Common mistakes
-- **Leaving your own CSS unlayered while the framework is layered**: unlayered beats all layers, which may be what you want — or may make your stray rules impossible to override with utilities.
+- **Leaving your own CSS unlayered while the framework (a ready-made library that shapes how you build, such as Tailwind) is layered**: unlayered beats all layers, which may be what you want — or may make your stray rules impossible to override with utilities.
 - **Order by accident**: the first time a layer name appears fixes its position. Without the up-front statement, a file loaded early can create layers in the wrong order.
 - Expecting `!important` in a later layer to win — it's the reverse.
-- `@import … layer()` must come before all other rules except `@charset` and `@layer` statements, or the import is ignored.
+- `@import … layer()` must come before all other rules except `@charset` (declares the file's text encoding) and `@layer` statements, or the import is ignored.
 
 ### In the interview
 **30-second answer:** "Cascade layers let me order groups of rules explicitly. The cascade compares layers before specificity, so a simple class in a later layer beats an ID selector in an earlier one. I declare the order once — reset, vendor, base, components, utilities — and import third-party CSS into a low layer. Unlayered styles beat all layers, and `!important` inverts the order."
@@ -390,7 +392,7 @@ Tailwind CSS v4 itself emits `@layer theme, base, components, utilities;` (13.8)
 **Status (September 2026): Baseline newly available since March 2026.** Chromium shipped `@scope` first (Chrome 118, 2023); web-features counts it as complete from Firefox 146 and Safari 26.4, the versions that finished the cross-browser set. Treat it as safe for current browsers; older browsers simply ignore the whole `@scope` block, so give unscoped fallbacks for anything essential.
 
 ### The problem it solves
-- **Leaking into content**: a `.card img { border: … }` rule also hits images in user-generated content inside the card. BEM avoids this with long class names on every element; `@scope … to (.content)` does it with a boundary.
+- **Leaking into content**: a `.card img { border: … }` rule also hits images in user-generated content (text and images posted by site users, such as comments or rich-text articles) inside the card. BEM avoids this with long class names on every element; `@scope … to (.content)` does it with a boundary.
 - **Proximity**: with nested themes (`.light` inside `.dark` inside `.light`), `.dark a` and `.light a` have the same specificity, so whichever comes later in the file wins — wrong for the innermost box. With `@scope`, when specificity is equal, the rule whose root is **nearest** (fewest steps up the tree) wins.
 
 ### How it works
@@ -399,7 +401,7 @@ Tailwind CSS v4 itself emits `@layer theme, base, components, utilities;` (13.8)
 3. Apply the rules to elements between. Selectors inside are matched relative to the root; bare selectors like `img` act as descendants of `:scope`.
 4. Specificity: the root selector adds **nothing** (unlike nesting); `:scope` adds (0,1,0) like a pseudo-class.
 5. **Scoping proximity** is a new cascade step *after* specificity and *before* order of appearance.
-6. `@scope { … }` **without a prelude** inside a `<style>` element scopes to that `<style>`'s parent element — handy for component-local styles in HTML.
+6. `@scope { … }` **without a prelude** (the part between `@scope` and `{`, which names the root and limit) inside a `<style>` element scopes to that `<style>`'s parent element — handy for component-local styles in HTML.
 
 [`code/05_scope.html`](code/05_scope.html):
 
@@ -453,10 +455,10 @@ The hole works (the content's `img` and `p` are untouched), and the innermost **
 | Keep a component's styles from matching outside it | `@scope (.card)`, BEM names, CSS Modules |
 | Stop styles at a nested region (slots, user content) | `@scope … to (…)` — only this does it natively |
 | Nearest theme wins | `@scope` proximity (or custom properties, which inherit from the nearest ancestor anyway — 13.14) |
-| Full isolation both ways (page CSS can't get in) | Shadow DOM (web components) |
+| Full isolation both ways (page CSS can't get in) | Shadow DOM (a hidden, separately styled DOM tree attached to an element) (web components — custom HTML elements you define with JavaScript) |
 
 ### Common mistakes
-- Expecting `@scope` to block **inheritance**: inherited properties (colour, font) still flow into the "hole"; only *selector matching* stops.
+- Expecting `@scope` to block **inheritance** (some properties, such as `color` and `font`, pass their value from a parent element down to its children automatically): inherited properties (colour, font) still flow into the "hole"; only *selector matching* stops.
 - Thinking the root adds specificity (`@scope (#main)` adds nothing to the rules inside).
 
 ### Self-check
@@ -472,7 +474,7 @@ The hole works (the content's `img` and `p` are untouched), and the innermost **
 **Logical properties** describe boxes in terms of the **flow of text** instead of physical sides. The **inline** axis is the direction text runs in a line (left→right in English, right→left in Arabic, top→bottom in vertical Japanese). The **block** axis is the direction lines/paragraphs stack. `start`/`end` are the beginning and end of each axis. So `margin-inline-start` is the margin **before the text starts** — the left in English, the right in Arabic. Baseline widely available (since 2021).
 
 ### Why it matters
-A site translated into Arabic, Hebrew, Persian or Urdu is displayed right-to-left (`dir="rtl"`). With physical properties (`padding-left`, `border-left`, `left: 0`) every side needs flipping in a separate RTL stylesheet. With logical properties **one stylesheet works for both**, and also for vertical writing modes.
+A site translated into Arabic, Hebrew, Persian or Urdu is displayed right-to-left (`dir="rtl"`; RTL for short, the opposite of LTR, left-to-right). With physical properties (`padding-left`, `border-left`, `left: 0`) every side needs flipping in a separate RTL stylesheet. With logical properties **one stylesheet works for both**, and also for vertical writing modes (the `writing-mode` property, used for text that runs top to bottom).
 
 ### The mapping
 
@@ -489,7 +491,7 @@ A site translated into Arabic, Hebrew, Persian or Urdu is displayed right-to-lef
 | `float: left` | `float: inline-start` |
 | `overflow-x` / `overflow-y` | `overflow-inline` / `overflow-block` (newer — check support for your targets before relying on them) |
 
-Units have logical versions too: `vi`/`vb` (viewport inline/block) and `cqi`/`cqb` for containers ([Chapter 10](../10-responsive-design/README.md#106-container-queries)).
+Units have logical versions too: `vi`/`vb` (viewport inline/block) and `cqi`/`cqb` for containers (elements marked as containers for container queries, which let children adapt to the container's size rather than the window's) ([Chapter 10](../10-responsive-design/README.md#106-container-queries)).
 
 ### Proof
 [`code/06_logical.html`](code/06_logical.html) uses one rule set for three containers — `dir="ltr"`, `dir="rtl"` and `writing-mode: vertical-rl`:
@@ -543,15 +545,15 @@ CSS was designed for documents, and three of its core ideas hurt at application 
 
 | Problem | What happens | Symptom |
 |---|---|---|
-| **Global namespace** | Every selector can match anything on any page | Changing `.title` breaks a page you've never seen |
+| **Global namespace** (one shared pool of names) | Every selector can match anything on any page | Changing `.title` breaks a page you've never seen |
 | **Specificity & order dependence** | Winners depend on selector weight and file order | Escalation: `!important`, `#id` hacks |
-| **No dead-code detection** | You can't tell if a rule is still used | Stylesheets only ever grow ("append-only CSS") |
+| **No dead-code detection** (dead code = code nothing uses any more) | You can't tell if a rule is still used | Stylesheets only ever grow ("append-only CSS") |
 | **Implicit coupling** | Styles depend on DOM structure (`.nav ul li a`) | Moving markup breaks styles |
 
 Every CSS architecture is a different answer to these. There are two families: **conventions** (rules humans follow, e.g. BEM, OOCSS, SMACSS, ITCSS, CUBE CSS) and **tooling** (build steps that enforce it: CSS Modules, CSS-in-JS, utility generators). Native features (layers, `@scope`, nesting) now help both.
 
 ### BEM — Block, Element, Modifier
-**BEM** (from Yandex, ~2009) is a naming convention that gives every styled thing a unique, flat class:
+**BEM** (from Yandex, a Russian search company, ~2009) is a naming convention that gives every styled thing a unique, flat class:
 - **Block** — a standalone component: `.card`
 - **Element** — a part that only makes sense inside its block: `.card__title` (double underscore)
 - **Modifier** — a variant or state: `.card--featured`, `.card__button--disabled` (double hyphen)
@@ -583,7 +585,7 @@ Every CSS architecture is a different answer to these. There are two families: *
 - **CUBE CSS**: Composition, Utility, Block, Exception — lean on the cascade for most styling, add blocks only where needed, exceptions via data attributes.
 
 ### Trade-offs
-BEM needs discipline and code review (nothing enforces the names), class names get long, and there's still one global namespace — two teams can both invent `.card`. That last problem is what tooling (13.9, 13.10) and `@scope` solve.
+BEM needs discipline and code review (teammates reading each change before it is merged) (nothing enforces the names), class names get long, and there's still one global namespace — two teams can both invent `.card`. That last problem is what tooling (13.9, 13.10) and `@scope` solve.
 
 ### Self-check
 1. Name for a "large" variant of a `.btn`'s `icon` element? → `.btn__icon--large`.
@@ -594,7 +596,7 @@ BEM needs discipline and code review (nothing enforces the names), class names g
 ## 13.8 Utility-first CSS and Tailwind CSS v4
 
 ### What it is
-**Utility-first** CSS provides many tiny single-purpose classes — `flex`, `p-4`, `text-slate-600`, `rounded-lg` — and you compose them **in the HTML** instead of writing new CSS for each component. **Tailwind CSS** is the dominant utility framework; **v4** (released January 2025; 4.3.3 used here) moved configuration into CSS and builds on modern features — cascade layers, `@property`, `color-mix()` and custom properties for every design token.
+**Utility-first** CSS provides many tiny single-purpose classes — `flex`, `p-4`, `text-slate-600`, `rounded-lg` — and you compose them **in the HTML** instead of writing new CSS for each component. **Tailwind CSS** is the dominant utility framework; **v4** (released January 2025; 4.3.3 used here) moved configuration into CSS and builds on modern features — cascade layers, `@property` (registers a custom property with a type so the browser can animate and validate it), `color-mix()` (blends two colours) and custom properties for every **design token** (a named design decision — a brand colour, a spacing step, a radius — stored as a variable so it is defined once and reused everywhere).
 
 ### Why teams choose it
 - **CSS stops growing**: a new component reuses existing utilities, so the stylesheet size tracks the number of *distinct* utilities, not the number of components.
@@ -605,7 +607,7 @@ BEM needs discipline and code review (nothing enforces the names), class names g
 ### How a v4 build works
 1. Your CSS entry file imports Tailwind and optionally defines design tokens in an `@theme` block.
 2. The build scans source files for strings that look like class names (it doesn't run your code — class names must appear **complete** in the source).
-3. For each recognised class it emits a rule into `@layer utilities`, plus the theme variables those rules use, the Preflight reset in `@layer base`, and `@property` registrations some utilities need.
+3. For each recognised class it emits a rule into `@layer utilities`, plus the theme variables those rules use, the Preflight reset (Tailwind's own reset, 13.13) in `@layer base`, and `@property` registrations some utilities need.
 
 [`code/08_tailwind.css`](code/08_tailwind.css) and part of [`code/08_tailwind.html`](code/08_tailwind.html):
 
@@ -626,7 +628,7 @@ BEM needs discipline and code review (nothing enforces the names), class names g
 </article>
 ```
 
-(By default v4 detects sources automatically, skipping `.gitignore`d files; `source(none)` + `@source` just makes this example deterministic.) [`code/08_tailwind_build.mjs`](code/08_tailwind_build.mjs) runs the real CLI and inspects the output:
+(By default v4 detects sources automatically, skipping `.gitignore`d files — files listed in Git's ignore list, so not part of the project's version history; `source(none)` + `@source` just makes this example **deterministic**, giving the same output on every run.) [`code/08_tailwind_build.mjs`](code/08_tailwind_build.mjs) runs the real CLI (command-line interface — the program you run from a terminal) and inspects the output:
 
 Output:
 ```
@@ -651,11 +653,11 @@ theme variables emitted: --color-amber-50 --color-amber-500 --color-amber-600 --
 ```
 
 What to notice:
-- **Only what you use**: 28 classes in → 28 rules out, and only the 10 colour variables those classes reference (Tailwind's palette has hundreds). The whole stylesheet, including the reset, is about 6.5 KB before compression.
+- **Only what you use**: 28 classes in → 28 rules out, and only the 10 colour variables those classes reference (Tailwind's palette has hundreds). The whole stylesheet, including the reset, is about 6.5 KB before compression ("minified" in the output means whitespace and comments removed; compression such as gzip or Brotli then shrinks the file further for download).
 - **Layers**: `@layer theme, base, components, utilities;` — utilities are the strongest layer, so a utility always beats a component class written in `components`, with no specificity games. Your own unlayered CSS beats all of them (13.4).
 - **Spacing is a formula**: `p-3.5` = `calc(var(--spacing) * 3.5)` with `--spacing: 0.25rem` → 14px. Change one variable to rescale the whole UI.
 - **Arbitrary values** in square brackets (`w-[170px]`) escape the scale when needed.
-- **Variants**: `hover:` wraps the rule in `@media (hover: hover)` (in the full output) so touch devices don't get "sticky hover"; `md:` becomes `@media (width >= 48rem)`.
+- **Variants** (prefixes that apply a utility only in a certain state or screen size): `hover:` wraps the rule in `@media (hover: hover)` (in the full output) so touch devices don't get "sticky hover" (a hover style that stays stuck after a tap); `md:` becomes `@media (width >= 48rem)`.
 
 ![Four identical pairs of product cards — Trail shoes $89 with a blue button and a highlighted Rain jacket $129 with an orange button — labelled BEM, Tailwind CSS v4, CSS Modules and runtime CSS-in-JS](img/07_architecture.png)
 
@@ -665,13 +667,13 @@ What to notice:
 | Pro | Con |
 |---|---|
 | Tiny, bounded CSS; no dead code | Long `class` attributes; HTML harder to scan |
-| No naming, no specificity fights | Repetition across markup unless you extract **components** (React/Vue components, or partials) |
+| No naming, no specificity fights | Repetition across markup unless you extract **components** (React/Vue — JavaScript UI libraries — components, or partials: reusable template snippets) |
 | Design constraints built in | Learning the vocabulary; team must accept styling in markup |
-| Easy to delete / refactor locally | Class names must be static strings (`bg-${color}-500` built at runtime won't be found) |
+| Easy to delete / refactor (restructure without changing behaviour) locally | Class names must be static strings (`bg-${color}-500` built at runtime — while the page runs — won't be found) |
 
 ### Common mistakes
 - **Building class names dynamically** (`'text-' + color`): the scanner can't see them, so no CSS is generated. Map to full names: `{ red: 'text-red-600', blue: 'text-blue-600' }[color]`.
-- Recreating BEM with `@apply` everywhere — you lose the benefits of both. Use it sparingly.
+- Recreating BEM with `@apply` (a Tailwind directive that copies utilities into your own CSS rule) everywhere — you lose the benefits of both. Use it sparingly.
 - Forgetting accessibility: utilities don't add `:focus-visible` styles for you (`focus-visible:ring-2` does).
 
 ### In the interview
@@ -687,12 +689,12 @@ What to notice:
 ## 13.9 CSS Modules
 
 ### What it is
-A **CSS Module** is an ordinary CSS file (named `*.module.css` by convention) whose class names are **local by default**: the build step swaps every class for a generated, collision-free name and gives JavaScript an object that maps your short names to the generated ones. You write `.title`; the page gets `.title_14He7q`; your component writes `className={styles.title}`. Supported out of the box by Vite, Next.js, webpack's css-loader, Parcel and others.
+A **CSS Module** is an ordinary CSS file (named `*.module.css` by convention) whose class names are **local by default**: the build step swaps every class for a generated, collision-free name and gives JavaScript an object that maps your short names to the generated ones. You write `.title`; the page gets `.title_14He7q`; your component writes `className={styles.title}`. Supported out of the box by Vite, Next.js, webpack's css-loader, Parcel and others (popular build tools and frameworks for JavaScript apps).
 
 ### How it works
 1. You import the file from a component: `import styles from './Card.module.css'`.
-2. At build time the compiler parses the CSS and renames every class and `@keyframes` name using a pattern (file name, class name, hash).
-3. It emits the renamed CSS into the bundle and returns the **name map** as the module's default export.
+2. At build time the compiler parses the CSS and renames every class and `@keyframes` name using a pattern (file name, class name, hash — a short code computed from the file's contents, so different files get different codes).
+3. It emits the renamed CSS into the bundle (the combined output file) and returns the **name map** as the module's default export (the main value other files receive when they `import` it).
 4. `composes: other` adds another class's generated name to the export, so the element gets both classes.
 5. `:global(...)` opts a selector out of renaming.
 
@@ -741,9 +743,9 @@ The same `.title` in another module file gets a different hash, so the two can n
 ### Trade-offs
 | Pro | Con |
 |---|---|
-| Real CSS (all features, DevTools, caching as a static file) | Needs a build tool and JS imports |
-| Zero runtime cost | Styling by props means toggling classes (`clsx(styles.btn, big && styles.big)`) |
-| Scoping enforced by the tool, not discipline | Generated names are unreadable in production (fine in dev with a readable pattern) |
+| Real CSS (all features, DevTools, caching — the browser keeps a downloaded copy for reuse — as a static file) | Needs a build tool and JS imports |
+| Zero runtime cost | Styling by props (the inputs a component receives) means toggling classes (`clsx(styles.btn, big && styles.big)`) |
+| Scoping enforced by the tool, not discipline | Generated names are unreadable in production (the live site real users see) (fine in dev with a readable pattern) |
 | Unused module files can be detected (no import → dead) | Unused classes *within* a file aren't removed automatically |
 
 > **Don't confuse with "CSS module scripts"**: `import sheet from './x.css' with { type: 'css' }` gives you a `CSSStyleSheet` object (for shadow DOM). That's a different, newer browser feature — **not Baseline** (no Safari as of September 2026).
@@ -758,8 +760,8 @@ The same `.title` in another module file gets a different hash, so the two can n
 
 ### What it is
 **CSS-in-JS** means writing styles in JavaScript, next to the component, often computed from props. Two kinds exist:
-- **Runtime** libraries (styled-components, Emotion): in the browser, while rendering, they serialise the style object, hash it into a class name, and inject a rule into a `<style>` element.
-- **Zero-runtime / compile-time** libraries (vanilla-extract, Linaria, Panda CSS, StyleX): you write styles in JS/TS, but a build step extracts them to static CSS files, like CSS Modules.
+- **Runtime** libraries (styled-components, Emotion): in the browser, while rendering, they **serialise** the style object (turn it into a string), hash it into a class name, and inject a rule into a `<style>` element.
+- **Zero-runtime / compile-time** libraries (vanilla-extract, Linaria, Panda CSS, StyleX): you write styles in JS/TS (TypeScript — JavaScript with type annotations), but a build step extracts them to static CSS files, like CSS Modules.
 
 ### How runtime CSS-in-JS works — built in 25 lines
 [`code/10_mini_css_in_js.js`](code/10_mini_css_in_js.js) is a toy version of the mechanism (not a real library):
@@ -777,7 +779,7 @@ function css(styles) {
 el.className = css({ border: featured ? '2px solid #f59e0b' : '1px solid #cbd5e1', /* … */ });
 ```
 
-[`code/10_css_in_js.mjs`](code/10_css_in_js.mjs) renders two cards in jsdom (the fourth panel of Figure 13.4 is the same code in Chrome, [`code/10_css_in_js.html`](code/10_css_in_js.html)):
+[`code/10_css_in_js.mjs`](code/10_css_in_js.mjs) renders two cards in jsdom (a JavaScript imitation of a browser's DOM that runs inside Node.js) (the fourth panel of Figure 13.4 is the same code in Chrome, [`code/10_css_in_js.html`](code/10_css_in_js.html)):
 
 Output:
 ```
@@ -797,7 +799,7 @@ with width: var(--pct) instead: 1 class (css-1gyb3r) + style="--pct: 42%"
 ```
 
 What it shows:
-- Identical styles share a class (`css-1qt5iag` for both titles) — the cache deduplicates.
+- Identical styles share a class (`css-1qt5iag` for both titles) — the cache (a lookup table of results already computed) deduplicates.
 - Different props produce **different classes** (the two card backgrounds and buttons).
 - **The cost**: a style that depends on a continuously changing value (a progress bar) creates a new rule for every value — 101 rules — and the work of serialising, hashing and inserting happens **during rendering, on the main thread**. The fix every CSS-in-JS guide recommends is exactly the native one: one static rule with a custom property (`width: var(--pct)`) set inline.
 
@@ -809,7 +811,9 @@ What it shows:
 | Scoped automatically; dead styles die with the component | Server rendering needs extra setup to collect styles; a poor fit for **React Server Components** (runtime libraries have traditionally needed client components) |
 | TypeScript types for style props (zero-runtime libs) | CSS can't be cached separately from JS (runtime libs) |
 
-The ecosystem has moved towards zero-runtime tools, CSS Modules and Tailwind. In March 2025 the styled-components maintainer announced **maintenance mode** and said he would not recommend it for new projects, citing its poor fit with React Server Components. The library is still maintained, though: v6.4 (April 2026) added RSC-friendly theming through CSS custom properties and faster re-renders — so existing projects are safe, but the general advice for new work stands.
+> **Key terms — INP, LCP, server rendering, React Server Components:** **LCP** (Largest Contentful Paint) and **INP** (Interaction to Next Paint) are two of Google's Core Web Vitals: how fast the main content appears, and how quickly the page reacts to clicks and key presses. **Server rendering** (SSR) means the server builds the page's HTML before sending it, instead of JavaScript building it in the browser. **React Server Components** (RSC) are React components that run only on the server and send no JavaScript to the browser; *client components* are the ones that also run in the browser.
+
+The ecosystem has moved towards zero-runtime tools, CSS Modules and Tailwind. In March 2025 the styled-components maintainer announced **maintenance mode** (bug fixes only, no major new features) and said he would not recommend it for new projects, citing its poor fit with React Server Components. The library is still maintained, though: v6.4 (April 2026) added RSC-friendly theming through CSS custom properties and faster re-renders — so existing projects are safe, but the general advice for new work stands.
 
 ### Self-check
 1. Why can runtime CSS-in-JS hurt responsiveness? → Styles are serialised/hashed/inserted on the main thread during render, and inserting rules triggers style recalculation.
@@ -826,14 +830,14 @@ The ecosystem has moved towards zero-runtime tools, CSS Modules and Tailwind. In
 | Runtime cost | None | None | None | **Yes** | None |
 | Dynamic styles | Classes / custom props | Classes / custom props | Classes / custom props | Props → styles | Variants / custom props |
 | Dead-code removal | Manual | Automatic | Per file | Automatic | Automatic |
-| CSS size growth | Grows with features | Plateaus | Grows with features | Grows with features | Grows / atomic (StyleX) plateaus |
+| CSS size growth | Grows with features | Plateaus | Grows with features | Grows with features | Grows / atomic (one class per declaration) (StyleX) plateaus |
 | Works without a JS framework | Yes | Yes | Needs a bundler | No | Needs a bundler |
-| Good fit | Content sites, CMS themes, small teams | Product UIs, design systems with fixed scale | React/Vue apps wanting "just CSS" | Legacy apps already using it | TS-heavy apps wanting typed styles |
+| Good fit | Content sites, CMS (content management system, e.g. WordPress) themes, small teams | Product UIs, design systems with fixed scale | React/Vue apps wanting "just CSS" | Legacy apps already using it | TS-heavy apps wanting typed styles |
 
 Practical defaults in 2026:
 1. **A content site / no framework** → plain CSS with layers, nesting, a BEM-like naming scheme or `@scope`, and tokens.
-2. **A React/Vue/Svelte app** → Tailwind *or* CSS Modules (Svelte and Vue also scope `<style>` blocks per component natively) + design tokens as custom properties.
-3. **Whatever you choose**: keep a reset and tokens in low layers, make dynamic values custom properties, and don't mix three approaches in one codebase.
+2. **A React/Vue/Svelte (another component framework) app** → Tailwind *or* CSS Modules (Svelte and Vue also scope `<style>` blocks per component natively) + design tokens as custom properties.
+3. **Whatever you choose**: keep a reset and tokens in low layers, make dynamic values custom properties, and don't mix three approaches in one codebase (all the source code of a project).
 
 ### In the interview
 **30-second answer:** "CSS's global namespace and specificity cause most maintenance pain. BEM solves it by convention with flat single-class names; CSS Modules by renaming classes at build time; utility-first by generating single-purpose classes so you rarely write new CSS; CSS-in-JS by generating classes from JS. I'd pick CSS Modules or Tailwind for a component app, plain CSS with layers and BEM or `@scope` for a content site, and avoid runtime CSS-in-JS in new projects because of its render-time cost and poor fit with server components."
@@ -845,10 +849,10 @@ Practical defaults in 2026:
 ## 13.12 Preprocessors (Sass) and PostCSS
 
 ### What it is
-A **preprocessor** is a language that compiles to CSS. **Sass** (with its SCSS syntax, a superset of CSS) is by far the most used; Less and Stylus are older alternatives. **PostCSS** is different: a tool that parses CSS into a tree and runs plugins on it (Autoprefixer adds vendor prefixes; others lower new syntax). **Lightning CSS** is a fast all-in-one CSS compiler (lowering, prefixing, minifying, CSS Modules) written in Rust — used in 13.1 and 13.9.
+A **preprocessor** is a language that compiles to CSS. **Sass** (with its SCSS syntax, a superset of CSS — every valid CSS file is also valid SCSS) is by far the most used; Less and Stylus are older alternatives. **PostCSS** is different: a tool that parses CSS into a tree and runs plugins (small add-on programs) on it (Autoprefixer adds **vendor prefixes** — browser-specific spellings such as `-webkit-` that older browsers needed; others lower new syntax). **Lightning CSS** is a fast all-in-one CSS compiler (lowering, prefixing, minifying — stripping spaces and comments to shrink the file — CSS Modules) written in Rust (a fast systems programming language) — used in 13.1 and 13.9.
 
 ### What Sass adds
-[`code/11_sass_example.scss`](code/11_sass_example.scss) — **(Sass — not run: Sass isn't installed in this book's toolchain)**:
+[`code/11_sass_example.scss`](code/11_sass_example.scss) — **(Sass — not run: Sass isn't installed in this book's toolchain — the set of tools used to build and test it)**:
 
 ```scss
 @use "sass:color";
@@ -871,10 +875,10 @@ $sizes: (sm: 12px, md: 16px, lg: 20px);
 @each $name, $size in $sizes { .text-#{$name} { font-size: $size; } }   // generates 3 classes
 ```
 
-Modern Sass notes: use the module system (`@use`/`@forward`) — `@import` is **deprecated** since Dart Sass 1.80 (October 2024) and will be removed in Dart Sass 3.0; global functions like `darken()` are deprecated in favour of `color.adjust()`/`color.scale()`; **Dart Sass** is the only maintained implementation (LibSass and node-sass are deprecated).
+Modern Sass notes: use the module system (`@use`/`@forward`, which loads each file once and keeps its names private unless shared) — `@import` is **deprecated** (still works but is scheduled for removal; don't use it in new code) since Dart Sass 1.80 (October 2024) and will be removed in Dart Sass 3.0; global functions like `darken()` are deprecated in favour of `color.adjust()`/`color.scale()`; **Dart Sass** is the only maintained implementation (LibSass and node-sass are deprecated).
 
 ### What native CSS now covers
-[`code/11_native.html`](code/11_native.html) rewrites the Sass ideas in plain CSS, and [`code/11_native.mjs`](code/11_native.mjs) checks Chrome's results:
+[`code/11_native.html`](code/11_native.html) rewrites the Sass ideas in plain CSS, and [`code/11_native.mjs`](code/11_native.mjs) checks Chrome's results. (`oklch(L C H)` writes a colour as lightness, chroma — how vivid — and hue angle, in a colour space designed so equal number steps look like equal visual steps.)
 
 ```css
 :root { --brand: #2563eb; --radius: 8px; }
@@ -904,8 +908,8 @@ hover: color-mix(in oklch, brand, black 15%) -> oklch(0.464211 0.182915 262.885)
 | `$variables` | Custom properties `--x` — **live**, inherit, can change per element and at runtime (the green button above) | Widely available |
 | Nesting | Native nesting (13.1) — no `&__` joining | Widely available |
 | `math.div`, arithmetic | `calc()`, `min()`, `max()`, `clamp()`, `round()`, `mod()` | `calc` etc. widely; `round()/mod()/rem()` newly available (2024) |
-| `darken()` / `color.adjust` | `color-mix()` (widely) and relative colour syntax `oklch(from …)` (newly available, Sept 2024) | ✓ |
-| Partials / `@use` | `@import` (blocks parallel loading — avoid in production) or bundler concatenation; `@import … layer()` | ✓ |
+| `darken()` / `color.adjust` | `color-mix()` (widely) and relative colour syntax (derive a new colour from an existing one) `oklch(from …)` (newly available, Sept 2024) | ✓ |
+| Partials / `@use` | `@import` (blocks parallel loading — the browser can't fetch the imported file until it has read the first — avoid in production) or bundler concatenation (joining files into one); `@import … layer()` | ✓ |
 | `@mixin` | CSS `@mixin`/`@apply` spec is still being designed | No browser |
 | `@function` | Custom functions `@function --name()` | **Chromium only** (139+) |
 | `@if` / `if()` | `if()` function | **Chromium only** (137+) |
@@ -967,10 +971,10 @@ p scrollWidth (overflow?)                606px of 384px             400px of 400
 Each row is one fix: margins gone; `box-sizing` makes a `width: 200px` box actually 200px ([Chapter 7](../07-box-model-and-layout-basics/README.md#72-box-sizing)); the 800px image no longer overflows a 400px screen; the button now uses the page font (here the default Times, since this demo sets no font — normally your `body` font); the list with `role="list"` lost its bullets; and the long URL wraps instead of overflowing (606px of content in a 384px box before). Heading sizes are untouched — this reset only removes *surprises*.
 
 Why some lines are written that way:
-- **`role="list"`**: Safari's VoiceOver stops announcing a list as a list when `list-style: none` is applied; adding `role="list"` restores it, and the reset only strips bullets from lists that carry it.
+- **`role="list"`**: Safari's VoiceOver (Apple's built-in **screen reader** — software that reads the page aloud for blind and low-vision users) stops announcing a list as a list when `list-style: none` is applied; adding `role="list"` restores it, and the reset only strips bullets from lists that carry it.
 - **`:where()`** keeps that rule at low specificity (13.2); the **layer** keeps *all* of it below your styles (13.4).
-- **`text-wrap: pretty`** is not Baseline (no Firefox as of September 2026) — harmless where unsupported. `text-size-adjust` is also non-standard/partial, hence both spellings.
-- **Never** put `outline: none` / `*:focus { outline: 0 }` in a reset — it removes the keyboard focus indicator ([Chapter 3](../03-semantic-html-and-accessibility/README.md#37-keyboard-and-focus)).
+- **`text-wrap: pretty`** is not Baseline (no Firefox as of September 2026) — harmless where unsupported. `text-size-adjust` is also non-standard/partial, hence both spellings (the `-webkit-` vendor-prefixed one and the standard one).
+- **Never** put `outline: none` / `*:focus { outline: 0 }` in a reset — it removes the keyboard focus indicator (the outline that shows which element keyboard input will go to) ([Chapter 3](../03-semantic-html-and-accessibility/README.md#37-keyboard-and-focus)).
 
 ### Self-check
 1. Why wrap a reset in `@layer reset`? → So every later style overrides it without specificity fights.
@@ -981,7 +985,7 @@ Why some lines are written that way:
 ## 13.14 Theming and dark mode with custom properties
 
 ### What it is
-A **theme** is a set of values (colours, radii, fonts, spacing) applied consistently across components. The modern way to build one is with **design tokens** stored as **custom properties**, organised in three tiers, plus `color-scheme` and `light-dark()` for dark mode. [Chapter 10](../10-responsive-design/README.md#105-user-preference-media-queries) introduced `prefers-color-scheme` and the basic dark-mode steps; [Chapter 6](../06-css-fundamentals/README.md#69-custom-properties-css-variables) explained custom properties. This section puts them together into an architecture.
+A **theme** is a set of values (colours, radii, fonts, spacing) applied consistently across components. The modern way to build one is with **design tokens** stored as **custom properties**, organised in three tiers, plus `color-scheme` (tells the browser which light/dark modes the page supports) and `light-dark()` (picks one of two values depending on the active mode) for dark mode. [Chapter 10](../10-responsive-design/README.md#105-user-preference-media-queries) introduced `prefers-color-scheme` and the basic dark-mode steps; [Chapter 6](../06-css-fundamentals/README.md#69-custom-properties-css-variables) explained custom properties. This section puts them together into an architecture.
 
 ### The three tiers of tokens
 | Tier | Example | Who uses it |
@@ -993,11 +997,11 @@ A **theme** is a set of values (colours, radii, fonts, spacing) applied consiste
 Components never mention a raw colour. To add dark mode or a new brand you change **only semantic tokens**.
 
 ### How it works
-1. `color-scheme: light dark` on `:root` tells the browser the page supports both. The browser then themes its own UI (form controls, scrollbars, default background) and **`light-dark(a, b)` picks `a` or `b` based on the element's used colour scheme**. `light-dark()` is Baseline newly available since May 2024 (colours only; image values are newer still).
+1. `color-scheme: light dark` on `:root` (the document's root element, `<html>`) tells the browser the page supports both. The browser then themes its own UI (form controls, scrollbars, default background) and **`light-dark(a, b)` picks `a` or `b` based on the element's used colour scheme**. `light-dark()` is Baseline newly available since May 2024 (colours only; image values are newer still).
 2. Each semantic token gets a light and dark value with `light-dark()` — no duplicated `@media` block.
 3. A user choice **overrides** the OS preference by pinning `color-scheme`: `:root[data-theme="dark"] { color-scheme: dark }`. Because `light-dark()` follows `color-scheme`, every token switches automatically.
-4. A tiny **blocking script in `<head>`** reads the saved choice from `localStorage` and sets `data-theme` *before the first paint*, so there's no flash of the wrong theme (a small, justified exception to "don't block rendering", [Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md#142-render-blocking-resources)).
-5. Other axes (brand, density, high contrast) are more attribute-scoped token overrides: `[data-brand="green"] { --color-accent: … }`. Custom properties inherit, so an override on any element re-themes its whole subtree.
+4. A tiny **blocking script in `<head>`** (one the browser must run before it continues rendering) reads the saved choice from `localStorage` (a small key–value store the browser keeps per site, which survives reloads) and sets `data-theme` (a custom `data-*` attribute) *before the first paint* (the first moment anything is drawn on screen), so there's no flash of the wrong theme (a small, justified exception to "don't block rendering", [Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md#142-render-blocking-resources)).
+5. Other axes (brand, density, high contrast — a mode with stronger colour differences for low-vision users) are more attribute-scoped token overrides: `[data-brand="green"] { --color-accent: … }`. Custom properties inherit, so an override on any element re-themes its whole subtree.
 
 [`code/13_theming.html`](code/13_theming.html) (key parts):
 
@@ -1059,14 +1063,14 @@ All six combinations are right: "system" follows the OS, an explicit choice wins
 ### Going further
 - **Typed tokens with `@property`** (Baseline newly available since July 2024): registering `@property --accent { syntax: '<color>'; inherits: true; initial-value: #2563eb; }` lets the browser *interpolate* the token (animate theme changes) and rejects invalid values.
 - **Fallback for browsers without `light-dark()`**: define tokens in `:root` for light and override them inside `@media (prefers-color-scheme: dark)` and `[data-theme=dark]` — the Chapter 10 pattern.
-- **Contrast**: check every token pair (text on bg, text on surface, accent on surface) at ≥ 4.5:1 in *both* themes ([Chapter 11](../11-typography-color-and-visual-effects/README.md#114-colour-and-contrast)).
+- **Contrast**: check every token pair (text on bg, text on surface, accent on surface) at ≥ 4.5:1 (the contrast ratio — how much lighter one colour is than the other, from 1:1 for identical up to 21:1 for black on white — that WCAG requires for normal text) in *both* themes ([Chapter 11](../11-typography-color-and-visual-effects/README.md#114-colour-and-contrast)).
 - **`contrast-color()`** (returns black or white for readable text on a given background) became Baseline in April 2026 — useful for user-chosen brand colours.
 
 ### Common mistakes
 - Using `light-dark()` without `color-scheme` set → it always picks the light value.
 - Components using primitive tokens (`var(--blue-600)`) directly — then dark mode needs component changes.
-- Setting the theme in a `useEffect`/`DOMContentLoaded` handler → the page paints light, then flashes dark.
-- Storing the theme only in a cookie read by JavaScript after load — same flash.
+- Setting the theme in a `useEffect` (a React hook that runs after the component has rendered)/`DOMContentLoaded` (the event fired once the HTML has been parsed) handler → the page paints light, then flashes dark.
+- Storing the theme only in a cookie (a small piece of data the browser stores and sends to the server with each request) read by JavaScript after load — same flash.
 
 ### In the interview
 **30-second answer:** "I define primitive tokens, then semantic tokens like `--color-surface` that components use. For dark mode I set `color-scheme: light dark` and give each semantic token a `light-dark()` pair; a user override just pins `color-scheme` on the root via a `data-theme` attribute, saved in localStorage and applied by a tiny inline script in the head to avoid a flash. Extra themes are scoped token overrides, which work because custom properties inherit."

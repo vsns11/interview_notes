@@ -1,6 +1,6 @@
 # Chapter 6 — CSS Fundamentals
 
-HTML says *what* things are; **CSS (Cascading Style Sheets)** says how they look: colours, fonts, spacing, layout, animation. This chapter covers the machinery every later CSS chapter relies on — how rules are written and attached, how selectors pick elements, and above all how the browser decides which of several competing rules wins. Most "CSS is broken" moments are really misunderstandings of three ideas: **specificity**, **the cascade** and **inheritance**. After this chapter you should be able to predict the winner of any rule conflict on paper — and prove it with the scripts here.
+HTML says *what* things are; **CSS (Cascading Style Sheets)** says how they look: colours, fonts, spacing, layout, animation. This chapter covers the machinery every later CSS chapter relies on — how rules are written and attached, how selectors (patterns that say which elements a rule applies to) pick elements, and above all how the browser decides which of several competing rules wins. Most "CSS is broken" moments are really misunderstandings of three ideas: **specificity**, **the cascade** and **inheritance**. After this chapter you should be able to predict the winner of any rule conflict on paper — and prove it with the scripts here.
 
 **What you'll learn**
 
@@ -14,7 +14,7 @@ HTML says *what* things are; **CSS (Cascading Style Sheets)** says how they look
 8. Colours: named, hex, `rgb()`, `hsl()`, `oklch()`, alpha, `currentColor`, `color-mix()`.
 9. Custom properties (CSS variables).
 
-All examples are in [`code/`](code/). The HTML pages were screenshotted in headless Chrome (900 CSS px wide); several print the values the browser actually computed (via `getComputedStyle`) right on the page. `specificity.mjs` and `cascade.mjs` are plain Node programs.
+All examples are in [`code/`](code/). The HTML pages were screenshotted in headless Chrome (Chrome run by a script, with no window; 900 CSS px wide); several print the values the browser actually computed (via `getComputedStyle`, the JavaScript function that returns an element's final style values) right on the page. `specificity.mjs` and `cascade.mjs` are plain Node programs (JavaScript run outside the browser with Node.js).
 
 ---
 
@@ -31,21 +31,21 @@ A stylesheet is a list of **rules**. Each rule has a **selector** (which element
 
 Other syntax pieces:
 - **Comments** are `/* … */` (there are no `//` comments in CSS).
-- **At-rules** start with `@`: `@media` (conditions), `@import` (load another sheet), `@font-face`, `@keyframes`, `@layer`, `@supports`, `@container`.
-- CSS is forgiving: an **invalid declaration is ignored** (not the whole rule), and an unknown selector in a list invalidates the whole rule — the basis of progressive enhancement (older browsers skip what they don't understand).
+- **At-rules** start with `@`: `@media` (conditions), `@import` (load another sheet), `@font-face` (load a font file), `@keyframes` (define an animation), `@layer`, `@supports` ("only if the browser supports this feature"), `@container` (conditions on a parent's size).
+- CSS is forgiving: an **invalid declaration is ignored** (not the whole rule), and an unknown selector in a list invalidates the whole rule — the basis of progressive enhancement (building a page that works everywhere and adding extras that only newer browsers use; older browsers skip what they don't understand).
 - Property names and keywords are case-insensitive; class names, IDs and attribute values follow the document's case rules (case-sensitive in HTML).
 
 ### Three ways to add CSS
 
 | Method | How | Use for | Drawbacks |
 |---|---|---|---|
-| **External** | `<link rel="stylesheet" href="styles.css">` in `<head>` | real sites | one extra request (but cached and shared by every page) |
-| **Internal** | `<style>…</style>` in `<head>` | single pages, demos, critical above-the-fold CSS | not cached separately, repeated per page |
-| **Inline** | `style="color: red"` on an element | one-off values set by JavaScript, emails | beats selectors (hard to override), no media queries or pseudo-classes, clutters HTML |
+| **External** | `<link rel="stylesheet" href="styles.css">` in `<head>` | real sites | one extra request (but cached — kept by the browser for reuse — and shared by every page) |
+| **Internal** | `<style>…</style>` in `<head>` | single pages, demos, critical above-the-fold CSS (styles for what is visible before scrolling) | not cached separately, repeated per page |
+| **Inline** | `style="color: red"` on an element | one-off values set by JavaScript, emails | beats selectors (hard to override), no media queries (screen-size conditions, Chapter 10) or pseudo-classes (§6.3), clutters HTML |
 
-`@import url(other.css);` inside a stylesheet also works, but it makes the browser discover the second file only after downloading the first — a slow chain. Prefer several `<link>`s or a build tool that bundles files.
+`@import url(other.css);` inside a stylesheet also works, but it makes the browser discover the second file only after downloading the first — a slow chain. Prefer several `<link>`s or a build tool (a program that processes your source files before publishing) that bundles files (joins them into one).
 
-Stylesheets in `<head>` are **render-blocking**: the browser won't paint until it has them, which prevents a flash of unstyled content but means large CSS files delay the first paint ([Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md)).
+Stylesheets in `<head>` are **render-blocking**: the browser won't paint (draw the page) until it has them, which prevents a flash of unstyled content (the page briefly showing as plain unstyled HTML) but means large CSS files delay the first paint ([Chapter 14](../14-performance-seo-interview-and-cheatsheet/README.md)).
 
 ```html
 <!-- code/01_adding_css.html (excerpt) -->
@@ -75,7 +75,7 @@ Rule = selector + `{ property: value; }`. Use external stylesheets; inline style
 ## 6.2 Selectors
 
 ### What it is
-A **selector** is a pattern that matches elements in the DOM. The browser tests each rule's selector against elements to decide where declarations apply.
+A **selector** is a pattern that matches elements in the DOM (the browser's tree of page elements, [Chapter 1](../01-how-the-web-works/README.md)). The browser tests each rule's selector against elements to decide where declarations apply.
 
 ### Basic selectors
 
@@ -111,7 +111,7 @@ Add ` i` before `]` to compare case-insensitively: `a[href$=".pdf" i]` also matc
 | Next sibling `+` | `h2 + p` | the `p` **immediately** after an `h2` (same parent) |
 | Subsequent siblings `~` | `h2 ~ p` | **every** `p` after an `h2` (same parent) |
 
-Selectors are matched **right to left** by browsers: for `nav a`, the engine finds every `a` and then checks for a `nav` ancestor. That's why the rightmost part (the **key selector**) matters most for performance — though for normal pages selector speed is rarely a real problem.
+Selectors are matched **right to left** by browsers: for `nav a`, the engine finds every `a` and then checks for a `nav` ancestor (an element anywhere above it in the tree: parent, grandparent…). That's why the rightmost part (the **key selector**) matters most for performance — though for normal pages selector speed is rarely a real problem.
 
 The demo page applies one yellow highlight to whatever each selector matches:
 
@@ -147,11 +147,11 @@ The old single-colon forms `:before`, `:after`, `:first-line`, `:first-letter` s
 
 | Family | Pseudo-classes | Notes |
 |---|---|---|
-| User action | `:hover`, `:active`, `:focus`, `:focus-visible`, `:focus-within` | `:focus-visible` matches only when the browser thinks a focus ring is needed (keyboard use), so you can remove rings for mouse clicks without hurting keyboard users. Link order rule: `:link`, `:visited`, `:hover`, `:active` ("LVHA"). |
+| User action | `:hover`, `:active`, `:focus`, `:focus-visible`, `:focus-within` | `:focus-visible` matches only when the browser thinks a focus ring (the outline showing which element has keyboard focus) is needed (keyboard use), so you can remove rings for mouse clicks without hurting keyboard users. Link order rule: `:link`, `:visited`, `:hover`, `:active` ("LVHA"). |
 | Links | `:link`, `:visited`, `:any-link`, `:target` | `:visited` is restricted to a few colour properties for privacy. `:target` = the element whose id is in the URL `#fragment`. |
 | Structural | `:first-child`, `:last-child`, `:only-child`, `:nth-child(An+B)`, `:nth-last-child()`, `:first-of-type`, `:nth-of-type()`, `:only-of-type`, `:empty`, `:root` | `An+B`: `odd` = `2n+1`, `even` = `2n`, `3n` = every third, `-n+3` = first three. `:nth-child(2 of .item)` counts only elements matching `.item`. |
 | Form state | `:checked`, `:disabled`, `:enabled`, `:required`, `:optional`, `:valid`, `:invalid`, `:user-valid`, `:user-invalid`, `:in-range`, `:out-of-range`, `:placeholder-shown`, `:read-only`, `:default`, `:indeterminate` | See [Chapter 5](../05-tables-and-forms/README.md). |
-| Logical | `:not(list)`, `:is(list)`, `:where(list)`, `:has(relative list)` | `:is()` and `:where()` shorten long lists (`:is(h1,h2,h3) a`); they differ only in specificity (6.4). `:has()` matches an element **based on what it contains or what follows it** — the long-awaited "parent selector" (Baseline since December 2023, widely available since June 2026). |
+| Logical | `:not(list)`, `:is(list)`, `:where(list)`, `:has(relative list)` | `:is()` and `:where()` shorten long lists (`:is(h1,h2,h3) a`); they differ only in specificity (6.4). `:has()` matches an element **based on what it contains or what follows it** — the long-awaited "parent selector" (Baseline — supported in all major browsers — since December 2023, widely available since June 2026). |
 | Other | `:lang(en)`, `:dir(rtl)`, `:defined`, `:fullscreen`, `:modal`, `:popover-open` | |
 
 `:nth-child` vs `:nth-of-type`: `li:nth-child(2)` means "an `li` that is the 2nd child of its parent" (fails if the 2nd child is not an `li`), while `span:nth-of-type(2)` means "the 2nd `span` among its siblings", ignoring other element types.
@@ -160,16 +160,16 @@ The old single-colon forms `:before`, `:after`, `:first-line`, `:first-letter` s
 
 | Pseudo-element | Selects / creates |
 |---|---|
-| `::before`, `::after` | a generated child box at the start/end of the element's content. **Only exists if `content` is set** (`content: ""` for a purely decorative box). Replaced elements such as `<img>` and most `<input>` types don't render them. |
-| `::first-letter` | the first letter of a block (drop caps) |
+| `::before`, `::after` | a generated child box at the start/end of the element's content. **Only exists if `content` is set** (`content: ""` for a purely decorative box). Replaced elements (elements whose content comes from outside the CSS, such as an image file) such as `<img>` and most `<input>` types don't render them. |
+| `::first-letter` | the first letter of a block (drop caps — a large first letter spanning several lines) |
 | `::first-line` | the first **rendered** line — changes as the width changes |
 | `::marker` | a list item's bullet or number |
 | `::placeholder` | an input's placeholder text |
 | `::selection` | text the user has highlighted |
 | `::file-selector-button` | the button of `<input type="file">` |
-| `::backdrop` | the layer behind a modal `<dialog>` or full-screen element |
+| `::backdrop` | the layer behind a modal (page-blocking) `<dialog>` or full-screen element |
 
-Content added with `::before`/`::after` is visual decoration: screen readers may or may not read it and users can't select it, so never put essential information there.
+Content added with `::before`/`::after` (called *generated content*) is visual decoration: screen readers (software that reads pages aloud) may or may not read it and users can't select it, so never put essential information there.
 
 ```css
 /* code/03_pseudo.html (excerpt) */
@@ -219,7 +219,7 @@ input.ph::placeholder { color: #9b59b6; font-style: italic; }
 ## 6.4 Specificity
 
 ### What it is
-When several rules set the **same property on the same element**, and they come from the same origin and layer, the browser compares their selectors' **specificity** — a measure of how *targeted* each selector is. The more specific selector wins, regardless of source order. Only when specificity ties does the later rule win.
+When several rules set the **same property on the same element**, and they come from the same origin and layer (both explained in §6.5), the browser compares their selectors' **specificity** — a measure of how *targeted* each selector is. The more specific selector wins, regardless of source order. Only when specificity ties does the later rule win.
 
 Analogy: specificity is like a three-digit score read left to right, but with **no carrying**: a thousand points in the second digit can never add up to one point in the first.
 
@@ -235,7 +235,7 @@ Count the parts of a selector into three columns:
 
 Special rules:
 1. `:is(…)`, `:not(…)` and `:has(…)` add the specificity of their **most specific argument** — even if a less specific argument is the one that matched.
-2. `:where(…)` always adds **zero** — perfect for low-priority defaults in libraries and resets.
+2. `:where(…)` always adds **zero** — perfect for low-priority defaults in libraries (reusable code written by others) and resets (stylesheets that wipe out browsers' default styles).
 3. `:nth-child(An+B of S)` counts as one pseudo-class **plus** the most specific selector in `S`.
 4. Compare A first; only if equal compare B; only if equal compare C. **No carrying:** `(0,11,0)` loses to `(1,0,0)`.
 5. Inline `style=""` isn't scored with selectors — it beats any selector (6.5). `!important` beats both (6.5).
@@ -264,7 +264,7 @@ Work each selector left to right, putting every simple selector into its column:
 | `html body div#app main.content article.post > p:first-child::first-letter` | `#app` | `.content` `.post` `:first-child` | `html` `body` `div` `main` `article` `p` `::first-letter` | (1,3,7) |
 
 ### The calculator
-`specificity_lib.mjs` implements these rules in about 70 lines (a scanner that walks the selector character by character, recursing into `:is()`/`:not()`/`:has()`), and `specificity.mjs` prints the scores and **checks each against the hand-computed value from the table above**:
+`specificity_lib.mjs` implements these rules in about 70 lines (a scanner that walks the selector character by character, recursing into — calling itself again on the inside of — `:is()`/`:not()`/`:has()`), and `specificity.mjs` prints the scores and **checks each against the hand-computed value from the table above**:
 
 ```js
 // code/specificity_lib.mjs (core loop, abridged)
@@ -340,8 +340,8 @@ Each box in `04_specificity.html` has competing rules; a script prints the colou
 
 ### Trade-offs — keeping specificity low
 High specificity forces ever-higher specificity to override it: a "specificity war" ending in `!important` everywhere. Strategies:
-- Style with **single classes** (`.card-title`), as in BEM or utility CSS ([Chapter 13](../13-modern-css-and-architecture/README.md)).
-- Avoid IDs in selectors (use them for anchors and JS hooks).
+- Style with **single classes** (`.card-title`), as in BEM (a class-naming convention: `block__element--modifier`) or utility CSS (many tiny one-purpose classes such as `.mt-4`; [Chapter 13](../13-modern-css-and-architecture/README.md)).
+- Avoid IDs in selectors (use them for anchors — link targets — and JS hooks — handles scripts use to find an element).
 - Wrap defaults in `:where()` so anything can override them.
 - Use **cascade layers** (`@layer`) to order whole groups of rules regardless of specificity (6.5).
 
@@ -365,10 +365,10 @@ High specificity forces ever-higher specificity to override it: a "specificity w
 ## 6.5 The cascade and origins
 
 ### What it is
-The **cascade** is the algorithm that picks one value when several declarations try to set the same property on the same element. Specificity is only one of its steps. Following CSS Cascading and Inheritance Level 5, declarations are compared by these criteria **in order**, stopping at the first difference:
+The **cascade** is the algorithm (a fixed step-by-step procedure) that picks one value when several declarations try to set the same property on the same element. Specificity is only one of its steps. Following CSS Cascading and Inheritance Level 5, declarations are compared by these criteria **in order**, stopping at the first difference:
 
 1. **Origin and importance** — where the declaration came from, and whether it's `!important`.
-2. **Context** — shadow DOM encapsulation (beyond this chapter).
+2. **Context** — shadow DOM encapsulation (a way for a component to keep a private DOM and styles sealed off from the page; beyond this chapter).
 3. **Element-attached styles** — a `style=""` attribute beats rules from stylesheets.
 4. **Cascade layers** — which `@layer` the rule is in.
 5. **Specificity** (6.4).
@@ -376,14 +376,14 @@ The **cascade** is the algorithm that picks one value when several declarations 
 
 ### Origins
 - **User-agent** styles — the browser's built-in stylesheet (why `<h1>` is big and bold and `<a>` is blue).
-- **User** styles — set by the person using the browser (accessibility settings, extensions).
+- **User** styles — set by the person using the browser (accessibility settings, extensions — add-ons installed in the browser).
 - **Author** styles — yours.
 
 Precedence, strongest first:
 
 | Rank | Declarations |
 |---|---|
-| 1 | CSS transitions (while running) |
+| 1 | CSS transitions (smooth changes between two values, Chapter 12) (while running) |
 | 2 | `!important` user-agent |
 | 3 | `!important` user |
 | 4 | `!important` author |
@@ -463,17 +463,17 @@ F. ...but with !important the layer order flips: the earliest layer wins:
 Case E is confirmed in the browser in Figure 6.5 below (first box: navy).
 
 ### `!important` — when (not) to use it
-`!important` jumps a declaration into a higher band of the cascade. Legitimate uses: utility classes that must always apply (`.hidden { display: none !important }`), overriding third-party inline styles you can't edit, user stylesheets. Everywhere else it's a sign of a specificity problem, and the only way to beat it is *another* `!important`.
+`!important` jumps a declaration into a higher band of the cascade. Legitimate uses: utility classes that must always apply (`.hidden { display: none !important }`), overriding third-party (written by another company) inline styles you can't edit, user stylesheets. Everywhere else it's a sign of a specificity problem, and the only way to beat it is *another* `!important`.
 
 ### Common mistakes
 - Believing "the last rule always wins" — only among equal origin, layer and specificity.
 - Fighting a library's styles with ever-longer selectors instead of putting the library in a lower `@layer`.
-- Forgetting that the browser's own stylesheet exists (margins on `body`, `h1`, `ul`…) — hence resets/normalize ([Chapter 13](../13-modern-css-and-architecture/README.md)).
+- Forgetting that the browser's own stylesheet exists (margins on `body`, `h1`, `ul`…) — hence resets/normalize (normalize.css: a stylesheet that makes browser defaults consistent instead of removing them; [Chapter 13](../13-modern-css-and-architecture/README.md)).
 
 ### In the interview
 **30-second answer:** "The cascade picks a winner by comparing origin and importance first — user-agent, user, author, with `!important` reversing that order — then inline style attributes, then cascade layers (later layers win, unlayered beats layered, reversed for `!important`), then specificity, then source order. So specificity only matters between rules in the same origin and layer."
 
-- *Q: Why can't my `#id` rule beat a Bootstrap class?* A: It can unless the class uses `!important`; a common real cause is load order or a layer.
+- *Q: Why can't my `#id` rule beat a Bootstrap (a popular ready-made CSS library) class?* A: It can unless the class uses `!important`; a common real cause is load order or a layer.
 - *Q: Where would you put a third-party CSS library?* A: `@import url(lib.css) layer(vendor);` or wrap it in an early layer so your unlayered or later-layer rules win without specificity tricks.
 
 ### TL;DR
@@ -484,7 +484,7 @@ Origin & importance → inline → layer → specificity → order. `!important`
 ## 6.6 Inheritance
 
 ### What it is
-Some properties pass their value from parent to child automatically — **inherited properties**. Most **text** properties inherit (`color`, `font-*`, `line-height`, `letter-spacing`, `text-align`, `visibility`, `cursor`, `list-style`); most **box** properties don't (`margin`, `padding`, `border`, `background`, `width`, `display`, `position`). Each property's definition in the spec (and on MDN) says "Inherited: yes/no".
+Some properties pass their value from parent to child automatically — **inherited properties**. Most **text** properties inherit (`color`, `font-*`, `line-height`, `letter-spacing`, `text-align`, `visibility`, `cursor`, `list-style`); most **box** properties don't (`margin`, `padding`, `border`, `background`, `width`, `display`, `position`). Each property's definition in the spec (and on MDN, Mozilla's web reference site) says "Inherited: yes/no".
 
 Inheritance only applies when **no declaration** for that property matched the element — any matching rule, however weak, beats an inherited value. That's why `a { color: blue }` from the browser's own stylesheet beats `body { color: red }` for links.
 
@@ -494,7 +494,7 @@ Analogy: inherited properties are the family's language — children speak it un
 
 | Keyword | Meaning |
 |---|---|
-| `inherit` | Use the parent's computed value — even for a normally non-inherited property. |
+| `inherit` | Use the parent's computed value (the final value after the cascade, with units resolved) — even for a normally non-inherited property. |
 | `initial` | Use the property's **initial value from the spec** (e.g. `display: initial` is `inline`, `color: initial` is `canvastext` — usually black). |
 | `unset` | Acts as `inherit` for inherited properties and `initial` for the rest — "as if no rule matched". |
 | `revert` | Roll back to what the **previous origin** would give — for author styles, usually the browser's default (`display: revert` on a `<div>` gives `block`, not `inline`). |
@@ -536,16 +536,16 @@ CSS lengths are **absolute** (fixed size) or **relative** (depend on something e
 
 | Unit | Relative to | Typical use |
 |---|---|---|
-| `px` | the CSS pixel (1/96 inch at arm's length; not a device pixel) | borders, shadows, small fixed details |
+| `px` | the CSS pixel (1/96 inch at arm's length; not a device pixel — one physical dot on the screen) | borders, shadows, small fixed details |
 | `em` | the element's own `font-size` — **except in `font-size` itself, where it's the parent's** | padding/margins that scale with the text, e.g. buttons |
 | `rem` | the root (`<html>`) font-size — 16px by default | font sizes and spacing across the site |
-| `%` | depends on the property: `width`, `padding`, `margin` (**including top/bottom**) → containing block's **width**; `height` → containing block's height; `font-size` → parent font-size | fluid widths |
-| `vw` / `vh` | 1% of the viewport width / height | full-screen sections, fluid type |
-| `svh` / `lvh` / `dvh` | small / large / dynamic viewport height (accounts for mobile browser toolbars; Baseline 2022) | `min-height: 100dvh` hero sections |
+| `%` | depends on the property: `width`, `padding`, `margin` (**including top/bottom**) → containing block's (usually the parent's content box, Chapter 7) **width**; `height` → containing block's height; `font-size` → parent font-size | fluid widths |
+| `vw` / `vh` | 1% of the viewport (the visible browser area) width / height | full-screen sections, fluid type (text that grows with the screen) |
+| `svh` / `lvh` / `dvh` | small / large / dynamic viewport height (accounts for mobile browser toolbars; Baseline 2022) | `min-height: 100dvh` hero sections (the big banner at the top of a page) |
 | `vmin` / `vmax` | the smaller / larger of `vw`, `vh` | square elements that fit any orientation |
-| `ch` | width of the "0" glyph of the current font | text measure (`max-width: 65ch`), input widths |
-| `ex`, `lh`, `rlh`, `cqw`… | x-height, line height, container query width… | specialised |
-| `cm`, `mm`, `in`, `pt`, `pc` | physical units (1in = 96px) | print stylesheets |
+| `ch` | width of the "0" glyph (the drawn shape of a character) of the current font | text measure (line length), e.g. `max-width: 65ch`; input widths |
+| `ex`, `lh`, `rlh`, `cqw`… | x-height (height of a lowercase "x"), line height, container query width (Chapter 10)… | specialised |
+| `cm`, `mm`, `in`, `pt`, `pc` | physical units (1in = 96px) | print stylesheets (CSS used when the page is printed) |
 
 ```css
 /* code/06_units.html (excerpt) */
@@ -572,7 +572,7 @@ Worked arithmetic from the figure:
 5. **ch:** 40 × the width of "0" in 14px system-ui ≈ **352.7px**.
 
 ### Why `rem` for font sizes
-If a user sets their browser's default font size to 20px for readability, everything in `rem` (and `em`) scales with it; sizes in `px` ignore the setting. This only works if you **don't set the root font-size in `px`** (the demo does, just to make the arithmetic exact) — leave it alone or use a percentage. The common practice: `rem` for type and spacing, `em` for component-internal spacing that should track its own text, `px` for hairlines, `%`/`fr`/`vw` for layout.
+If a user sets their browser's default font size to 20px for readability, everything in `rem` (and `em`) scales with it; sizes in `px` ignore the setting. This only works if you **don't set the root font-size in `px`** (the demo does, just to make the arithmetic exact) — leave it alone or use a percentage. The common practice: `rem` for type and spacing, `em` for component-internal spacing that should track its own text, `px` for hairlines (very thin lines, e.g. 1px borders), `%`/`fr` (a grid fraction unit, Chapter 9)/`vw` for layout.
 
 ### Common mistakes
 - Nested `em` font sizes snowballing (or shrinking) unexpectedly.
@@ -597,16 +597,16 @@ If a user sets their browser's default font size to 20px for readability, everyt
 ## 6.8 Colours
 
 ### What it is
-A **colour value** in CSS can be written in several notations; most of them describe the same **sRGB** colours, and newer ones (`oklch()`, `oklab()`, `color()`) reach wider-gamut colours on modern displays.
+A **colour value** in CSS can be written in several notations; most of them describe the same **sRGB** colours (the standard colour range of ordinary screens), and newer ones (`oklch()`, `oklab()`, `color()`) reach wider-gamut colours (a *gamut* is the set of colours a screen can show; wide-gamut screens show more vivid ones) on modern displays.
 
 | Notation | Example | Notes |
 |---|---|---|
 | Named | `rebeccapurple`, `tomato` | ~150 names; plus `transparent` and `currentColor` |
-| Hex | `#663399`, short `#639`, with alpha `#66339980`, `#6398` | two hex digits per channel (00–ff); 4th pair = alpha |
+| Hex | `#663399`, short `#639`, with alpha `#66339980`, `#6398` | two hex (base-16) digits per channel (red, green, blue: 00–ff); 4th pair = alpha (opacity) |
 | `rgb()` | `rgb(102 51 153)`, `rgb(102 51 153 / 50%)` | modern space-separated syntax with `/ alpha`; legacy `rgba(102, 51, 153, 0.5)` still works (`rgba` is now an alias of `rgb`) |
-| `hsl()` | `hsl(270 50% 40%)` | hue angle (0 red, 120 green, 240 blue), saturation, lightness — easy to tweak by hand |
+| `hsl()` | `hsl(270 50% 40%)` | hue angle (position on the colour wheel: 0 red, 120 green, 240 blue), saturation (how vivid vs grey), lightness — easy to tweak by hand |
 | `oklch()` | `oklch(44% 0.16 303)` | **L**ightness (0–100%), **C**hroma (colourfulness, ~0–0.4), **H**ue angle. Perceptually uniform: equal L *looks* equally light across hues. Baseline since 2023. |
-| `color-mix()` | `color-mix(in oklch, #663399 50%, white)` | mixes two colours in a chosen colour space. Baseline since 2023. |
+| `color-mix()` | `color-mix(in oklch, #663399 50%, white)` | mixes two colours in a chosen colour space (the mathematical model used to describe colours, which changes how the blend looks). Baseline since 2023. |
 | `currentColor` | `border: 2px solid currentColor` | the element's current `color` value — keeps borders, SVG icons and text in sync |
 
 ```html
@@ -630,11 +630,11 @@ A **colour value** in CSS can be written in several notations; most of them desc
 *Figure 6.7 — The HSL row claims one lightness (50%) but yellow looks far brighter than blue; the OKLCH row really is evenly light. Mixing red and blue in sRGB gives a darker purple than mixing in OKLCH.*
 
 ### Why OKLCH matters
-Design systems generate palettes ("brand-100 … brand-900") by changing lightness. In HSL, the same lightness step gives visibly uneven results across hues, so text contrast becomes unpredictable. In OKLCH, lightness is perceptual, so a palette built by varying L behaves consistently — and adjusting one number to lighten or darken a colour is easy to reason about. Contrast requirements (WCAG) are covered in [Chapter 11](../11-typography-color-and-visual-effects/README.md).
+Design systems (a team's shared set of colours, components and rules) generate palettes ("brand-100 … brand-900") by changing lightness. In HSL, the same lightness step gives visibly uneven results across hues, so text contrast becomes unpredictable. In OKLCH, lightness is perceptual, so a palette built by varying L behaves consistently — and adjusting one number to lighten or darken a colour is easy to reason about. Contrast requirements (WCAG, the Web Content Accessibility Guidelines) are covered in [Chapter 11](../11-typography-color-and-visual-effects/README.md).
 
 ### Common mistakes
 - Mixing old and new syntax: `rgb(102, 51, 153 / 50%)` is invalid (commas *or* spaces with `/`, not both).
-- Using opacity (`opacity: 0.5`) when you meant a translucent background — `opacity` fades the element's text and children too; use an alpha colour instead.
+- Using opacity (`opacity: 0.5`) when you meant a translucent (partly see-through) background — `opacity` fades the element's text and children too; use an alpha colour instead.
 - Hard-coding the same colour in dozens of places instead of a custom property (6.9).
 
 ### Self-check
@@ -650,13 +650,13 @@ Hex/`rgb()`/`hsl()` for everyday sRGB; `oklch()` for predictable palettes; `/ al
 ## 6.9 Custom properties (CSS variables)
 
 ### What it is
-A **custom property** is a property you name yourself, starting with two dashes (`--brand: #5b4bc4;`), whose value you read with `var(--brand)`. Unlike preprocessor variables (Sass `$brand`), custom properties are **live**: they follow the cascade and inheritance, can be changed per element, per media query or by JavaScript at runtime, and every use updates instantly.
+A **custom property** is a property you name yourself, starting with two dashes (`--brand: #5b4bc4;`), whose value you read with `var(--brand)`. Unlike preprocessor variables (a preprocessor such as Sass is a tool that compiles an extended CSS-like language into plain CSS before publishing; Sass writes variables as `$brand`), custom properties are **live**: they follow the cascade and inheritance, can be changed per element, per media query or by JavaScript at runtime (while the page is running in the browser), and every use updates instantly.
 
 ### How it works
 1. **Declare** on a selector — commonly `:root` (the `<html>` element) so the value is inherited everywhere.
 2. **Use** with `var(--name)` or `var(--name, fallback)`; the fallback applies if the property isn't defined.
-3. Custom properties **inherit** by default, so redefining one on an element changes it for that element and all its descendants — the basis of theming and component variants.
-4. They're case-sensitive (`--Brand` ≠ `--brand`) and can hold any token sequence; the value is only checked when substituted.
+3. Custom properties **inherit** by default, so redefining one on an element changes it for that element and all its descendants — the basis of theming (switching a whole set of colours, e.g. light/dark) and component variants.
+4. They're case-sensitive (`--Brand` ≠ `--brand`) and can hold any token sequence (any run of CSS words, numbers and symbols); the value is only checked when substituted (pasted into the property that uses it).
 5. If the substituted value is invalid for the property (e.g. `color: var(--space)` where `--space: 12px`), the declaration becomes **invalid at computed-value time**: the property behaves as `unset` — it does **not** fall back to an earlier `color` declaration.
 6. JavaScript reads them with `getComputedStyle(el).getPropertyValue('--x')` and writes them with `el.style.setProperty('--x', value)`.
 7. Combine with `calc()`: `padding: calc(var(--space) * 2)`.
@@ -688,11 +688,11 @@ getComputedStyle(document.documentElement).getPropertyValue('--radius'); // read
 
 | | Custom properties | Preprocessor variables (Sass) |
 |---|---|---|
-| When resolved | at runtime in the browser | at build time — gone from the output CSS |
+| When resolved | at runtime in the browser | at build time (when the preprocessor runs, before publishing) — gone from the output CSS |
 | Cascade/inheritance, per-element values | yes | no |
 | Change from JS / media queries | yes | no |
 | Use in selectors or media query conditions | no | yes |
-| Type checking | none by default; `@property` can register a type and initial value (Baseline 2024), which also makes them animatable | compile errors |
+| Type checking (verifying a value is the right kind, e.g. a colour) | none by default; `@property` can register a type and initial value (Baseline 2024), which also makes them animatable | compile errors (errors reported by the build tool) |
 
 ### Common mistakes
 - Forgetting the `--` or the `var()`: `color: --brand` does nothing.
@@ -701,9 +701,9 @@ getComputedStyle(document.documentElement).getPropertyValue('--radius'); // read
 - Using a variable inside a media query condition (`@media (min-width: var(--bp))`) — not allowed.
 
 ### In the interview
-**30-second answer:** "Custom properties are author-defined properties like `--brand` used with `var(--brand, fallback)`. They cascade and inherit, so I define tokens on `:root`, override them on a theme attribute or component class, and change them from JS with `setProperty`. Unlike Sass variables they exist at runtime. An invalid substitution makes the declaration behave like `unset`."
+**30-second answer:** "Custom properties are author-defined properties like `--brand` used with `var(--brand, fallback)`. They cascade and inherit, so I define tokens (named design values such as brand colour or spacing) on `:root`, override them on a theme attribute or component class, and change them from JS with `setProperty`. Unlike Sass variables they exist at runtime. An invalid substitution makes the declaration behave like `unset`."
 
-- *Q: How do you implement dark mode with them?* A: Define colour tokens on `:root`, redefine them under `@media (prefers-color-scheme: dark)` or `[data-theme="dark"]`, and use only the tokens in components (see [Chapter 13](../13-modern-css-and-architecture/README.md)).
+- *Q: How do you implement dark mode with them?* A: Define colour tokens on `:root`, redefine them under `@media (prefers-color-scheme: dark)` (a media query that matches when the user's system is set to dark mode) or `[data-theme="dark"]`, and use only the tokens in components (see [Chapter 13](../13-modern-css-and-architecture/README.md)).
 
 ### Self-check
 1. `var(--gap, 1rem)` when `--gap` is defined as `2rem`? → `2rem`.

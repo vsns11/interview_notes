@@ -1,8 +1,8 @@
 # Chapter 5 — Tables and Forms
 
-Tables and forms are the two parts of HTML where *structure* matters most. A table is not a grid of boxes — it is a set of relationships ("this 135 is North's revenue in Q2") that screen readers announce cell by cell. A form is not a set of text boxes — it is a contract with a server about which named values get sent, how, and when, plus a built-in validation engine that most developers under-use.
+Tables and forms are the two parts of HTML where *structure* matters most. A table is not a grid of boxes — it is a set of relationships ("this 135 is North's revenue in Q2") that screen readers (software that reads the page aloud for blind users) announce cell by cell. A form is not a set of text boxes — it is a contract with a server (the remote program that receives the data) about which named values get sent, how, and when, plus a built-in validation engine (the browser's own checker that rejects bad input before it is sent) that most developers under-use.
 
-Get these right and you get keyboard support, autofill, mobile keyboards, validation messages and accessibility almost for free. Get them wrong (a `<div>` "button", an input without a label, an error shown only in red) and no amount of JavaScript fully repairs it.
+Get these right and you get keyboard support, autofill (the browser filling in saved details such as your address), mobile keyboards, validation messages and accessibility almost for free. Get them wrong (a `<div>` "button", an input without a label, an error shown only in red) and no amount of JavaScript fully repairs it.
 
 **What you'll learn**
 
@@ -10,11 +10,11 @@ Get these right and you get keyboard support, autofill, mobile keyboards, valida
 2. How a form works end to end: `action`, `method`, `name`, encoding, what gets sent (and what doesn't).
 3. Labels, and every `<input>` type with its mobile keyboard.
 4. `<select>`, `<datalist>`, `<textarea>`, `<fieldset>`/`<legend>`, `<button>`, `<output>`, `<progress>`, `<meter>`.
-5. Built-in validation attributes, the `:user-invalid` pseudo-class and the Constraint Validation API.
+5. Built-in validation attributes, the `:user-invalid` pseudo-class (a CSS selector that matches an element in a particular state) and the Constraint Validation API (the JavaScript functions and properties for checking fields).
 6. `autocomplete` and `inputmode`.
 7. Accessible error messages: the pattern used by government and banking sites.
 
-Every example is a file in [`code/`](code/). HTML files were screenshotted with headless Chrome (900 CSS px wide); the Node scripts (`table_headers.mjs`, `form_data.mjs`, `constraint_api.mjs`) run under jsdom — a JavaScript implementation of the DOM — and print the outputs shown.
+Every example is a file in [`code/`](code/). HTML files were screenshotted with headless Chrome (Chrome driven by a script, with no window; 900 CSS px wide); the Node scripts (`table_headers.mjs`, `form_data.mjs`, `constraint_api.mjs`) run under jsdom — a JavaScript implementation of the DOM — and print the outputs shown.
 
 ---
 
@@ -27,14 +27,14 @@ Analogy: reading a timetable, your eyes go up to the column heading and left to 
 
 ### Why it matters
 - A screen reader user moving into the cell "135" hears "Q2, North, 135". Without header markup they just hear "135".
-- Proper structure lets the browser repeat `<thead>` on every printed page and lets CSS style header rows and columns with plain selectors.
+- Proper structure lets the browser repeat `<thead>` on every printed page and lets CSS style header rows and columns with plain selectors (the part of a CSS rule that picks which elements it applies to, [Chapter 6](../06-css-fundamentals/README.md)).
 
 ### How it works — the elements
 
 | Element | Role |
 |---|---|
 | `<table>` | The table. |
-| `<caption>` | The table's title — its accessible name. First child of `<table>`. |
+| `<caption>` | The table's title — its accessible name (the label assistive technology announces). First child of `<table>`. |
 | `<colgroup>` / `<col>` | Describe columns; only a few CSS properties apply to them (`background`, `border`, `width`, `visibility: collapse`). |
 | `<thead>` | Header row(s). |
 | `<tbody>` | Body rows. You may have several to group rows. Browsers insert one automatically if you omit it. |
@@ -103,7 +103,7 @@ The second table in the same file has two header levels:
 *Figure 5.1 — Two data tables. The highlighted column comes from a single `<col class="highlight">`.*
 
 ### What assistive technology computes
-`table_headers.mjs` rebuilds each table's grid (accounting for `rowspan`/`colspan`) and, for every data cell, collects the `<th>` cells whose `scope` points at it — a simplified form of the HTML standard's "assigning header cells" algorithm:
+`table_headers.mjs` rebuilds each table's grid (accounting for `rowspan`/`colspan`) and, for every data cell, collects the `<th>` cells whose `scope` points at it — a simplified form of the HTML standard's "assigning header cells" algorithm (a precise step-by-step procedure):
 
 ```js
 // code/table_headers.mjs (key part)
@@ -155,7 +155,7 @@ Wide tables overflow small screens. The safe fix keeps the table a table and scr
 Changing `display` on the table elements themselves (for example `display: block` on `<table>` to stack cells) has historically made some browsers drop the table semantics — test with a screen reader if you do it.
 
 ### When not to use it
-**Never for page layout.** Layout tables were common before CSS; today use CSS Grid or Flexbox ([Chapter 8](../08-flexbox/README.md), [Chapter 9](../09-grid/README.md)). If you inherit one, `role="presentation"` on the `<table>` tells assistive technology to ignore its table semantics.
+**Never for page layout.** Layout tables were common before CSS; today use CSS Grid or Flexbox (the two modern CSS layout systems) ([Chapter 8](../08-flexbox/README.md), [Chapter 9](../09-grid/README.md)). If you inherit one, `role="presentation"` on the `<table>` tells assistive technology (screen readers and similar tools) to ignore its table semantics (its meaning as a table).
 
 ### Common mistakes
 - Using `<td><b>…</b></td>` for headers instead of `<th>`.
@@ -185,21 +185,21 @@ Changing `display` on the table elements themselves (for example `display: block
 ## 5.2 How a form works — `action`, `method`, `name`
 
 ### What it is
-A `<form>` collects user input and **submits** it: it builds a list of name/value pairs from its controls and sends it as an HTTP request. Controls are `<input>`, `<select>`, `<textarea>`, `<button>` (and `<output>`, which is never submitted).
+A `<form>` collects user input and **submits** it: it builds a list of name/value pairs from its controls (the interactive fields and buttons) and sends it as an HTTP request (a message from browser to server; see [Chapter 1](../01-how-the-web-works/README.md)). Controls are `<input>`, `<select>`, `<textarea>`, `<button>` (and `<output>`, which is never submitted).
 
 ### How it works — submission step by step
 1. The user presses a submit button, or presses **Enter** in a text field (called *implicit submission*).
 2. The browser runs **constraint validation** (5.5). If any control is invalid, it stops, shows a message and focuses the first invalid control.
-3. A `submit` event fires on the form. JavaScript can call `event.preventDefault()` to handle it itself (e.g. with `fetch`).
+3. A `submit` event (a notification that scripts can listen for) fires on the form. JavaScript can call `event.preventDefault()` (cancel the browser's normal action) to handle it itself (e.g. with `fetch`, JavaScript's function for sending HTTP requests).
 4. The browser builds the **form data set** from *successful controls*:
    - the control has a **`name`** (no name → not sent);
    - it is not **disabled** (disabled → not sent; `readonly` → sent);
    - checkboxes and radios only if **checked** (value defaults to `"on"` if you omit `value`);
    - `<select multiple>` sends one pair per selected option;
    - only the submit button actually used is included (if it has a name).
-5. It encodes the data using `enctype` and sends it to `action` using `method`:
-   - `method="get"` (default): data goes in the URL query string: `/signup?name=Ada+Lovelace&email=ada%40example.com`. Bookmarkable and cacheable — right for searches and filters, wrong for passwords or anything that changes data.
-   - `method="post"`: data goes in the request body. Use for anything that creates or changes something, or is private.
+5. It encodes the data (converts it into a text format safe to send — e.g. a space becomes `+` and `@` becomes `%40`) using `enctype` and sends it to `action` using `method`:
+   - `method="get"` (default): data goes in the URL query string: `/signup?name=Ada+Lovelace&email=ada%40example.com`. Bookmarkable and cacheable (the browser or a server in between may store and reuse the response) — right for searches and filters, wrong for passwords or anything that changes data.
+   - `method="post"`: data goes in the request body (the part of the HTTP message after the headers, not shown in the URL). Use for anything that creates or changes something, or is private.
    - `method="dialog"`: inside a `<dialog>`, closes it instead of sending anything.
 6. `enctype` (POST only): `application/x-www-form-urlencoded` (default, like a query string), `multipart/form-data` (**required for file uploads**), or `text/plain` (debugging only).
 7. The browser navigates to the server's response (unless JavaScript prevented it).
@@ -216,7 +216,7 @@ Every control needs a **label** — the text that names it. A `<label>` is conne
 <label>Email <input type="email" name="email"></label>   <!-- implicit: wrap the input -->
 ```
 
-What a real `<label>` gives you: the control's accessible name (screen readers read it on focus), a bigger click target (clicking the text focuses the input or toggles the checkbox), and voice-control users can say "click Email". A `placeholder` is **not** a label: it disappears when typing starts, usually has poor contrast, and isn't reliably announced.
+What a real `<label>` gives you: the control's accessible name (screen readers read it on focus — when the control becomes the one receiving keyboard input), a bigger click target (clicking the text focuses the input or toggles the checkbox), and voice-control users can say "click Email". A `placeholder` is **not** a label: it disappears when typing starts, usually has poor contrast (too little difference between text and background colour), and isn't reliably announced.
 
 ### Buttons
 `<button>` has three types, and **the default inside a form is `submit`**:
@@ -301,9 +301,9 @@ GET URL:
 (`http://localhost` is jsdom's pretend page address.) The unchecked checkbox, disabled field and unnamed input are simply absent. The server-side consequence: **"checkbox missing" means "unchecked"** — code that expects `terms=no` will never see it.
 
 ### Security notes
-- Client-side anything (validation, `readonly`, hidden fields, `disabled`) is **not security** — anyone can edit the request. The server must validate everything again.
-- Never send passwords or personal data with GET — the URL lands in history, logs and `Referer` headers.
-- POST forms that change data need CSRF protection on the server (tokens or `SameSite` cookies; see the [JavaScript book](../../../javascript/chapters/14-browser-apis-and-security/README.md)).
+- Client-side (running in the user's browser) anything (validation, `readonly`, hidden fields, `disabled`) is **not security** — anyone can edit the request. Server-side code runs on your own machine, which users cannot tamper with. The server must validate everything again.
+- Never send passwords or personal data with GET — the URL lands in history, logs (servers' records of every request) and `Referer` headers (which tell the next site what page you came from).
+- POST forms that change data need CSRF protection on the server (CSRF, cross-site request forgery, is when another site secretly makes your browser submit a form to a site you are logged in to; defences are secret per-form tokens or `SameSite` cookies, which the browser will not send on requests started by other sites; see the [JavaScript book](../../../javascript/chapters/14-browser-apis-and-security/README.md)).
 
 ### In the interview
 **30-second answer:** "A form submits its *successful controls* — named, enabled, and for checkboxes/radios, checked — to `action` using `method`. GET puts data in the URL (searches, filters); POST puts it in the body (changes, private data); file uploads need `multipart/form-data`. Every control needs a `<label>`, and buttons default to `type=submit`, so non-submit buttons need `type=button`. Server-side validation is mandatory."
@@ -335,11 +335,11 @@ Named + enabled + checked → sent. GET for reading, POST for changing, multipar
 |---|---|---|---|
 | `text` | any single-line text | — | normal |
 | `email` | email address | `typeMismatch` if not `x@y` shaped; `multiple` allows a comma list | `@` key visible |
-| `password` | secrets | — | masked; password managers engage |
+| `password` | secrets | — | masked (shown as dots); password managers (apps that store and fill passwords) engage |
 | `tel` | phone numbers | **none** (formats vary worldwide) | phone keypad |
 | `url` | web addresses | `typeMismatch` without a scheme like `https:` | `/` and `.com` keys |
 | `search` | search boxes | — | "search" enter key; may show a clear button |
-| `number` | real quantities (count, age) | `min`, `max`, `step`, `badInput` | numeric keypad, spin buttons |
+| `number` | real quantities (count, age) | `min`, `max`, `step`, `badInput` | numeric keypad, spin buttons (small up/down arrows) |
 | `range` | imprecise values (volume) | always has a value within range | slider |
 | `color` | colour pick | value always `#rrggbb` | colour picker |
 | `date`, `time`, `datetime-local` | dates/times | `min`, `max`, `step` | native pickers; value format `YYYY-MM-DD`, `HH:MM`, `YYYY-MM-DDTHH:MM` |
@@ -352,10 +352,10 @@ Named + enabled + checked → sent. GET for reading, POST for changing, multipar
 
 Rules of thumb:
 - **`type="number"` only for numbers you'd do maths on.** A credit-card number, postcode or ID is a *string of digits*: use `type="text" inputmode="numeric"` (and maybe `pattern="[0-9]*"`). `number` drops leading zeros, accepts `e`, and scroll-wheels can change the value.
-- The **display** format of a date follows the user's locale (`09/28/2026` for a US locale), but the **value** is always ISO `2026-09-28`.
+- The **display** format of a date follows the user's locale (their language-and-region setting — `09/28/2026` for a US locale), but the **value** is always ISO `2026-09-28` (the international standard date format, year-month-day).
 
 ### `inputmode` and `enterkeyhint`
-`inputmode` chooses the virtual keyboard **without** changing validation: `text`, `numeric`, `decimal`, `tel`, `email`, `url`, `search`, `none`. `enterkeyhint` labels the Enter key: `enter`, `done`, `go`, `next`, `previous`, `search`, `send`.
+`inputmode` chooses the virtual keyboard (the on-screen keyboard of a phone or tablet) **without** changing validation: `text`, `numeric`, `decimal`, `tel`, `email`, `url`, `search`, `none`. `enterkeyhint` labels the Enter key: `enter`, `done`, `go`, `next`, `previous`, `search`, `send`.
 
 ### Other common input attributes
 `placeholder` (a hint, not a label), `value` (initial value), `required`, `readonly`, `disabled`, `autofocus` (use sparingly — it can disorient screen-reader users), `size`, `list` (points at a `<datalist>`), `multiple`, `accept`, `spellcheck`, `autocapitalize`.
@@ -408,19 +408,19 @@ Line two keeps its line break.</textarea>
 
 | Element | What it is | Key details |
 |---|---|---|
-| `<select>` | dropdown of fixed options | Each `<option>` has a `value` (sent) and text (shown). A first option with `value=""` + `required` forces a real choice. `<optgroup label>` groups options. |
+| `<select>` | dropdown (a list that opens when clicked) of fixed options | Each `<option>` has a `value` (sent) and text (shown). A first option with `value=""` + `required` forces a real choice. `<optgroup label>` groups options. |
 | `<select multiple>` | list box, several choices | Hard to use (Ctrl/Cmd-click); for more than a few options, a group of checkboxes is usually friendlier. |
 | `<datalist>` | **suggestions** for an `<input list>` | The user may still type anything; it's autocomplete, not a restriction. |
 | `<textarea>` | multi-line text | Initial value is its **content** (not a `value` attribute); `rows`/`cols`; `maxlength`; line breaks are preserved. CSS `resize` controls the drag handle. |
 | `<fieldset>` + `<legend>` | groups related controls | Screen readers announce the legend with each control ("Delivery speed, Standard, radio button"). Use it for every radio group and checkbox group (the ARIA alternative is `role="radiogroup"`/`"group"` with `aria-labelledby`). `disabled` on the fieldset disables everything inside. |
-| `<output>` | result of a calculation | `for` lists the ids of inputs it depends on; has an implicit live region, so updates can be announced. Not submitted. |
-| `<progress>` | completion of a task | `value`/`max`; omit `value` for an indeterminate ("busy") bar. |
+| `<output>` | result of a calculation | `for` lists the ids of inputs it depends on; has an implicit live region (screen readers read changes aloud automatically), so updates can be announced. Not submitted. |
+| `<progress>` | completion of a task | `value`/`max`; omit `value` for an indeterminate ("busy", no known percentage) bar. |
 | `<meter>` | a measurement within a known range | `min`, `max`, `low`, `high`, `optimum` decide the colour (good/average/bad). For disk usage, ratings, password strength. Not for task progress. |
 
 ### Common mistakes
 - Radio buttons without a `<fieldset>`/`<legend>` → the question ("Delivery speed") is never announced.
 - Radios in one group with different `name`s → they don't exclude each other.
-- `<select>` for 2–3 options (radios show all choices at once and need one click fewer) or for 200 countries without type-ahead support (a combobox may be better).
+- `<select>` for 2–3 options (radios show all choices at once and need one click fewer) or for 200 countries without type-ahead support (jumping to an option by typing its first letters; a combobox — a text box combined with a filtered suggestion list — may be better).
 - Using `<progress>` for a static measurement (use `<meter>`).
 
 ### Self-check
@@ -444,7 +444,7 @@ Browsers can validate forms without any JavaScript. You declare **constraints** 
 |---|---|---|---|
 | `required` | most inputs, select, textarea | empty / unchecked / nothing selected | `valueMissing` |
 | `type="email"`, `type="url"` | input | value not shaped like an email/URL | `typeMismatch` |
-| `pattern="regex"` | text-like inputs | value doesn't match the **whole** regex (it's implicitly anchored with `^…$`) | `patternMismatch` |
+| `pattern="regex"` | text-like inputs | value doesn't match the **whole** regex (regular expression — a mini-language for text patterns; it's implicitly anchored with `^…$`, i.e. must match from start to end) | `patternMismatch` |
 | `minlength` / `maxlength` | text-like, textarea | shorter / longer — **only checked after the user edits the value** | `tooShort` / `tooLong` |
 | `min` / `max` | number, range, date/time | below / above | `rangeUnderflow` / `rangeOverflow` |
 | `step` | number, range, date/time | not a multiple of `step` from the base (`min`, else the initial `value`, else 0) | `stepMismatch` |
@@ -466,9 +466,9 @@ input:user-valid   { border-color: #1e8449; }
 ### The JavaScript API
 Each control has:
 - `validity` — a `ValidityState` object with the flags above and `valid`.
-- `validationMessage` — the browser's localised message (empty when valid).
+- `validationMessage` — the browser's localised (translated into the user's language) message (empty when valid).
 - `willValidate` — whether it takes part in validation at all.
-- `checkValidity()` — returns true/false; fires an `invalid` event on failure.
+- `checkValidity()` — returns true/false (a **boolean**); fires an `invalid` event on failure.
 - `reportValidity()` — same, plus shows the browser's message bubble.
 - `setCustomValidity(msg)` — add your own rule; **you must clear it with `''`** when the value becomes valid, or the field stays invalid forever.
 
@@ -551,7 +551,7 @@ Three details worth remembering from that output:
 | Shows all errors at once | no — one at a time | yes (error summary) |
 | Accessibility | acceptable; bubbles vanish quickly | best, if done as in 5.7 |
 
-Most production design systems use `novalidate` and custom messages, **but still use the constraint attributes and API underneath** (`checkValidity()` still works with `novalidate`).
+Most production design systems (a company's shared library of UI components, styles and rules) use `novalidate` and custom messages, **but still use the constraint attributes and API underneath** (`checkValidity()` still works with `novalidate`).
 
 ### Common mistakes
 - Forgetting to reset `setCustomValidity('')` → the field can never become valid.
@@ -560,7 +560,7 @@ Most production design systems use `novalidate` and custom messages, **but still
 - Styling `:invalid` so forms load already red.
 
 ### In the interview
-**30-second answer:** "HTML has declarative constraints — `required`, `type`, `pattern`, `min/max/step`, `minlength/maxlength` — which the browser checks on submit and exposes through `element.validity` flags, `validationMessage`, `checkValidity()`/`reportValidity()` and `setCustomValidity()` for custom rules. Style with `:user-invalid` so errors only show after interaction. Client-side validation is UX; the server must re-validate."
+**30-second answer:** "HTML has declarative constraints — `required`, `type`, `pattern`, `min/max/step`, `minlength/maxlength` — which the browser checks on submit and exposes through `element.validity` flags, `validationMessage`, `checkValidity()`/`reportValidity()` and `setCustomValidity()` for custom rules. Style with `:user-invalid` so errors only show after interaction. Client-side validation is UX (user experience — it makes the form nicer to use); the server must re-validate."
 
 - *Q: `checkValidity` vs `reportValidity`?* A: Both return a boolean and fire `invalid`; `reportValidity` also displays the message to the user.
 - *Q: How do you validate "confirm password"?* A: On input, `setCustomValidity(match ? '' : 'Passwords do not match.')`.
@@ -578,7 +578,7 @@ Declare constraints in HTML, read them with `validity`, add rules with `setCusto
 ## 5.6 `autocomplete` — help the browser fill the form
 
 ### What it is
-The `autocomplete` attribute tells the browser and password managers **what a field means**, using standard tokens, so they can fill it correctly. It's also a WCAG 2.2 requirement: success criterion 1.3.5 *Identify Input Purpose* (level AA) asks for it on fields collecting information about the user.
+The `autocomplete` attribute tells the browser and password managers **what a field means**, using standard tokens, so they can fill it correctly. It's also a WCAG 2.2 (Web Content Accessibility Guidelines, [Chapter 3](../03-semantic-html-and-accessibility/README.md)) requirement: success criterion 1.3.5 *Identify Input Purpose* (level AA) asks for it on fields collecting information about the user.
 
 | Field | Token |
 |---|---|
@@ -587,9 +587,9 @@ The `autocomplete` attribute tells the browser and password managers **what a fi
 | Username | `username` |
 | Login password | `current-password` |
 | Sign-up / change password | `new-password` (triggers strong-password suggestions) |
-| SMS one-time code | `one-time-code` |
+| SMS (text message) one-time code | `one-time-code` |
 | Address | `street-address`, `address-line1`, `address-level2` (city), `postal-code`, `country` / `country-name` |
-| Card | `cc-name`, `cc-number`, `cc-exp`, `cc-csc` |
+| Card | `cc-name`, `cc-number`, `cc-exp`, `cc-csc` (expiry date and the 3–4 digit security code) |
 | Birthday | `bday` |
 | Turn off (for things like a search of other people's names) | `off` |
 
@@ -611,10 +611,10 @@ Give every personal-data field its `autocomplete` token; `new-password` vs `curr
 ## 5.7 Accessible error messages
 
 ### The problem it solves
-Built-in bubbles appear one at a time and disappear; colour alone ("the red one is wrong") fails colour-blind users; an error message far from its field is not announced when the field is focused. WCAG requires errors to be **identified in text** (3.3.1), fields to have **labels or instructions** (3.3.2), and fixes to be **suggested** when known (3.3.3).
+Built-in bubbles appear one at a time and disappear; colour alone ("the red one is wrong") fails colour-blind users (people who cannot tell certain colours, often red and green, apart); an error message far from its field is not announced when the field is focused. WCAG requires errors to be **identified in text** (3.3.1), fields to have **labels or instructions** (3.3.2), and fixes to be **suggested** when known (3.3.3).
 
 ### How it works — the pattern
-Popularised by design systems such as the UK's GOV.UK Design System:
+Popularised by design systems such as the UK's GOV.UK Design System (the UK government's shared web components and patterns):
 
 1. Add `novalidate` to the form so you control the messages; still use constraint attributes and `checkValidity()`.
 2. On submit, check every field. For each failing one:
@@ -681,10 +681,10 @@ Popularised by design systems such as the UK's GOV.UK Design System:
 ### Good error messages
 - Say what's wrong **and how to fix it**: "Postcode must be 5 digits", not "Invalid input".
 - Use the field's label words; no codes, no blame ("You entered an invalid…").
-- Validate on submit (and optionally on `blur` / after first submit on `input`), not on every keystroke while the user is still typing.
+- Validate on submit (and optionally on `blur` — the event fired when a field loses focus — or, after the first submit, on `input`, fired on every change), not on every keystroke while the user is still typing.
 
 ### Common mistakes
-- Error text not programmatically associated (no `aria-describedby`).
+- Error text not programmatically associated (linked in the markup so software knows they belong together; no `aria-describedby`).
 - Only a red border.
 - Clearing the whole form on error.
 - Disabling the submit button until the form is valid — users can't discover *why* it's disabled. Let them submit and explain.
@@ -705,7 +705,7 @@ Specific text messages next to fields (`aria-describedby`), `aria-invalid`, a fo
 ## Chapter interview round-up
 
 1. **How do you make a data table accessible?** `<caption>`, `<th>` with `scope`, `thead/tbody/tfoot`, `headers` for irregular tables, scroll container for small screens.
-2. **GET vs POST for forms?** GET = idempotent reads, data in URL; POST = changes/private data in body; files need `multipart/form-data`.
+2. **GET vs POST for forms?** GET = idempotent (repeating it has the same effect as doing it once — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) reads, data in URL; POST = changes/private data in body; files need `multipart/form-data`.
 3. **What isn't submitted?** Unnamed, disabled, unchecked controls, unselected options, buttons other than the one used, `<output>`.
 4. **Why a `<label>` rather than a placeholder?** Accessible name, larger click area, persists while typing.
 5. **How does built-in validation work and how do you customise it?** Constraint attributes → `validity` flags; `setCustomValidity`; `:user-invalid`; `novalidate` + custom UI for full control.

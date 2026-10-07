@@ -1,6 +1,6 @@
 # Chapter 14 — Performance, SEO, Interview Prep and Cheat Sheets
 
-A page can be semantic, accessible and beautifully laid out and still fail its users if it takes four seconds to show the main image, jumps around while loading, or freezes for half a second after every click. It can also fail its *owners* if search engines can't understand it. This last chapter covers both: **web performance** (the critical rendering path, render-blocking resources and Google's Core Web Vitals, measured on real pages in headless Chrome) and **SEO basics** (the HTML that helps search engines). It then turns the whole book into interview and revision material: 47 interview questions with answers linked back to the chapters, one-page cheat sheets, and a glossary of more than 200 terms.
+A page can be semantic, accessible and beautifully laid out and still fail its users if it takes four seconds to show the main image, jumps around while loading, or freezes for half a second after every click. It can also fail its *owners* if search engines can't understand it (and so don't show it in results). This last chapter covers both: **web performance** (the critical rendering path, render-blocking resources and Google's Core Web Vitals, measured on real pages in **headless** Chrome — a real browser run by a script, with no visible window) and **SEO basics** (the HTML that helps search engines). It then turns the whole book into interview and revision material: 47 interview questions with answers linked back to the chapters, one-page cheat sheets, and a glossary of more than 200 terms.
 
 **What you'll learn**
 
@@ -15,18 +15,18 @@ A page can be semantic, accessible and beautifully laid out and still fail its u
 | 14.7 | Cheat sheets | look up selectors, specificity, box model, flexbox, grid, units and responsive patterns |
 | 14.8 | Glossary | find any term from the book and the chapter that explains it |
 
-**How the numbers were made.** Performance only means something on a slow network, so [`code/serve.mjs`](code/serve.mjs) builds a **fake network** without starting a server: headless Chrome requests `http://site.test/<file>`, Puppeteer intercepts every request and answers from the `code/` folder after an artificial delay (for example "the stylesheet takes 800 ms"). Absolute timings are machine-dependent, but they repeat to within a few milliseconds from run to run. The metrics are read with the browser's own performance APIs (`PerformanceObserver`), the same APIs the `web-vitals` library and real-user monitoring tools use. Thresholds were checked on web.dev and SEO rules on Google Search Central in September 2026.
+**How the numbers were made.** Performance only means something on a slow network, so [`code/serve.mjs`](code/serve.mjs) builds a **fake network** without starting a server (the program that normally answers the browser's requests for files): headless Chrome requests `http://site.test/<file>`, Puppeteer (a Node.js library for controlling Chrome from a script) intercepts every request and answers from the `code/` folder after an artificial delay (for example "the stylesheet takes 800 ms"). Absolute timings are machine-dependent, but they repeat to within a few milliseconds from run to run. The metrics are read with the browser's own performance APIs (an **API** is a set of functions a program can call; `PerformanceObserver` is the one that delivers timing records), the same APIs the `web-vitals` library and **real-user monitoring** (RUM: collecting timings from actual visitors' browsers) tools use. Thresholds were checked on web.dev (Google's web-development guidance site) and SEO rules on Google Search Central (Google's official documentation for site owners) in September 2026.
 
 ---
 
 ## 14.1 The critical rendering path
 
 ### What it is
-The **critical rendering path** (CRP) is the minimum sequence of work the browser must finish before it can draw the first pixels of a page: download and parse the HTML into the **DOM**, download and parse the CSS into the **CSSOM**, combine them into the **render tree**, compute **layout**, **paint** and **composite**. [Chapter 1](../01-how-the-web-works/README.md#17-the-browser-rendering-pipeline) walked through each step; here we care about **what makes it slow**.
+The **critical rendering path** (CRP) is the minimum sequence of work the browser must finish before it can draw the first pixels of a page: download and parse (read the text and build a data structure from it) the HTML into the **DOM** (Document Object Model — the tree of elements), download and parse the CSS into the **CSSOM** (CSS Object Model — the browser's structured copy of all the style rules), combine them into the **render tree** (only the elements that will be shown, each with its final styles), compute **layout** (each box's size and position), **paint** (draw the pixels) and **composite** (stack the painted layers into the final image). [Chapter 1](../01-how-the-web-works/README.md#17-the-browser-rendering-pipeline) walked through each step; here we care about **what makes it slow**.
 
-A resource is **critical** if the first render has to wait for it. By default:
+A **resource** is any file the page needs (stylesheet, script, image, font). A resource is **critical** if the first render has to wait for it. By default:
 - **CSS is render-blocking.** The browser won't paint until every stylesheet in `<head>` has loaded and been parsed; otherwise you'd see unstyled content that then jumps (a **FOUC**, flash of unstyled content).
-- **Classic `<script>` without `async`/`defer` is parser-blocking.** The HTML parser stops, downloads the script, *waits for any pending stylesheets* (the script might read styles), runs it, and only then continues. Nothing below the script is in the DOM yet.
+- **Classic `<script>` without `async`/`defer` is parser-blocking** (`async` and `defer` are attributes that let a script download in the background; 14.2). The HTML parser (the part of the browser that reads the HTML and builds the DOM) stops, downloads the script, *waits for any pending stylesheets* (the script might read styles), runs it, and only then continues. Nothing below the script is in the DOM yet.
 - **Images, fonts, `async`/`defer` scripts are not render-blocking** — but they can still delay the metrics users feel (the main image, text appearing).
 
 ### How it works — the timeline and its metrics
@@ -49,7 +49,7 @@ sequenceDiagram
   Note over R: LCP - largest element painted
 ```
 
-| Metric | Measures | Good (75th percentile of real visits) |
+| Metric | Measures | Good (75th percentile — the value that 75% of real visits beat or match) |
 |---|---|---|
 | **TTFB** (Time To First Byte) | Server + network until the first HTML byte | ≤ 0.8 s |
 | **FCP** (First Contentful Paint) | First text/image painted | ≤ 1.8 s |
@@ -57,12 +57,12 @@ sequenceDiagram
 | **INP**, **CLS** | Responsiveness and visual stability (Core Web Vitals) | ≤ 200 ms, ≤ 0.1 |
 
 ### The three levers
-1. **Fewer critical resources** — inline small critical CSS, `defer` scripts, don't load what the first screen doesn't need.
-2. **Fewer critical bytes** — minify and compress (gzip/Brotli/zstd), remove unused CSS/JS.
-3. **Shorter critical path length** (round trips) — make critical resources discoverable in the HTML, preconnect to other origins, avoid chains (CSS that `@import`s CSS, JS that injects the main image).
+1. **Fewer critical resources** — inline (paste directly into the HTML instead of linking a separate file) small critical CSS, `defer` scripts, don't load what the first screen doesn't need.
+2. **Fewer critical bytes** — minify (strip spaces, comments and long names) and compress (gzip/Brotli/zstd — compression formats the server applies and the browser undoes), remove unused CSS/JS.
+3. **Shorter critical path length** (round trips — each time the browser must send a request and wait for the answer before it can ask for the next file) — make critical resources discoverable in the HTML, preconnect to other **origins** (an origin is a scheme + host + port, such as `https://cdn.example.com`), avoid chains (CSS that `@import`s CSS, JS that injects the main image).
 
 ### Self-check
-1. Why is CSS render-blocking? → Painting before styles arrive would show unstyled content and then reflow it.
+1. Why is CSS render-blocking? → Painting before styles arrive would show unstyled content and then reflow it (redo layout, moving everything).
 2. Why does a synchronous script also wait for CSS? → It might read computed styles, so the browser must apply pending stylesheets first.
 3. What's the difference between render-blocking and parser-blocking? → Render-blocking delays painting; parser-blocking stops the HTML parser from building the rest of the DOM.
 
@@ -104,19 +104,21 @@ Output:
 
 What the numbers teach:
 1. **Blocking**: nothing appears for ~850 ms. The script finished downloading at 632 ms but **ran at 833 ms** — it waited for the stylesheet.
-2. **Only `defer`**: FCP didn't improve at all, because the stylesheet was the bottleneck. Fixing the wrong resource buys nothing — always find the *critical* one first. (`defer` still helps: the parser was never stopped.)
-3. **Optimized**: first paint at **40 ms**, ~20× sooner. The full stylesheet still arrived at 830 ms and applied itself; the page was usable long before. Note also that `load` fired at 631 ms without waiting for the preloaded stylesheet.
+2. **Only `defer`**: FCP didn't improve at all, because the stylesheet was the bottleneck (the slowest step, which limits everything behind it). Fixing the wrong resource buys nothing — always find the *critical* one first. (`defer` still helps: the parser was never stopped.)
+3. **Optimized**: first paint at **40 ms**, ~20× sooner. The full stylesheet still arrived at 830 ms and applied itself; the page was usable long before. Note also that `load` fired at 631 ms without waiting for the preloaded stylesheet. (`DOMContentLoaded` is the event fired when the HTML has been fully parsed and deferred scripts have run; `load` fires when the page and its blocking resources have finished loading.)
 
 ### The toolbox
 
 | Resource | Default | Better |
 |---|---|---|
 | Stylesheet | Render-blocking | Keep small; inline critical CSS (≈ first screen, a few KB); load the rest non-blocking; `media="print"` or a non-matching `media` makes a stylesheet non-blocking; split per page |
-| Classic script in `<head>` | Parser-blocking | `defer` (runs in order after parsing, before `DOMContentLoaded`) or `async` (runs as soon as downloaded, any order — for independent scripts like analytics); `type="module"` is deferred by default |
-| Web font | Text invisible until loaded (up to ~3 s) | `font-display: swap` or `optional`, `<link rel="preload" as="font" type="font/woff2" crossorigin>`, subset, self-host ([Chapter 11](../11-typography-color-and-visual-effects/README.md#112-loading-fonts-well-font-display-preload-subsetting)) |
-| Main image | Discovered when the parser reaches it | In the HTML, `fetchpriority="high"`, never `loading="lazy"` above the fold ([Chapter 4](../04-images-media-and-embeds/README.md#44-loading-hints--loading-decoding-fetchpriority)) |
+| Classic script in `<head>` | Parser-blocking | `defer` (runs in order after parsing, before `DOMContentLoaded`) or `async` (runs as soon as downloaded, any order — for independent scripts like analytics, i.e. visitor-tracking); `type="module"` (a JavaScript module script) is deferred by default |
+| Web font | Text invisible until loaded (up to ~3 s) | `font-display: swap` or `optional`, `<link rel="preload" as="font" type="font/woff2" crossorigin>`, subset (keep only the characters you use), self-host (serve the font from your own site) ([Chapter 11](../11-typography-color-and-visual-effects/README.md#112-loading-fonts-well-font-display-preload-subsetting)) |
+| Main image | Discovered when the parser reaches it | In the HTML, `fetchpriority="high"`, never `loading="lazy"` above the fold (the part of the page visible without scrolling) ([Chapter 4](../04-images-media-and-embeds/README.md#44-loading-hints--loading-decoding-fetchpriority)) |
 | Other origins (CDN, fonts) | DNS + TCP + TLS on first use | `<link rel="preconnect" href="https://cdn.example">` for the 1–3 most important |
-| `@import` in CSS | Serial chain: CSS → discover → fetch CSS | `<link>` both files, or bundle |
+| `@import` in CSS | Serial chain: CSS → discover → fetch CSS | `<link>` both files, or bundle (combine into one file at build time) |
+
+> **Key terms — CDN, DNS, TCP, TLS:** a **CDN** (content delivery network) is a set of servers around the world that keep copies of your files close to users. Before the first request to a new host, the browser must do a **DNS** lookup (turn the host name into an IP address), open a **TCP** connection (a reliable channel between the two computers) and do a **TLS** handshake (agree on encryption for HTTPS) — each costs at least one round trip, which is what `preconnect` gets out of the way early. See [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) for these in depth.
 
 ```html
 <!-- defer vs async -->
@@ -125,13 +127,13 @@ What the numbers teach:
 <script type="module" src="main.js"></script>  <!-- deferred by default -->
 ```
 
-**Related HTML features:** `rel="preload"` (Baseline widely available) fetches a resource you know you'll need early; `rel="modulepreload"` does the same for ES modules; `fetchpriority` (Baseline since October 2024) nudges priority; the `blocking="render"` attribute (make something *deliberately* render-blocking) is **not Baseline** (no Firefox); `<script type="speculationrules">` for prerendering the next page is **Chromium-only**. HTTP **103 Early Hints** lets a server send `Link: rel=preload` headers before the HTML is ready.
+**Related HTML features:** `rel="preload"` (Baseline widely available) fetches a resource you know you'll need early; `rel="modulepreload"` does the same for ES modules (JavaScript files that use `import`/`export`); `fetchpriority` (Baseline since October 2024) nudges priority; the `blocking="render"` attribute (make something *deliberately* render-blocking) is **not Baseline** (no Firefox); `<script type="speculationrules">` for prerendering (loading and rendering a page in the background before the user clicks) the next page is **Chromium-only** (Chromium is the open-source engine behind Chrome and Edge). HTTP **103 Early Hints** lets a server send `Link: rel=preload` headers (extra lines of information sent before a response's body) before the HTML is ready.
 
 ### Common mistakes
 - Preloading everything → preloads compete with truly critical requests. Preload only late-discovered critical resources (a font referenced from CSS, a hero image set in CSS or JS).
 - Forgetting `crossorigin` on font preloads → the font is downloaded twice.
 - Moving scripts to the end of `<body>` *and* adding `defer` — fine, but `defer` in `<head>` is better: the download starts earlier.
-- Inlining **all** CSS: it can't be cached across pages and bloats every HTML response.
+- Inlining **all** CSS: it can't be cached (kept by the browser and reused without downloading again) across pages and bloats every HTML response.
 
 ### In the interview
 **30-second answer:** "CSS in the head is render-blocking and classic scripts are parser-blocking; a script also waits for pending CSS. So I keep critical CSS small or inline it, load the rest without blocking, `defer` scripts (or `async` for independent ones), make the LCP image discoverable in the HTML with `fetchpriority=high`, preconnect to key origins, and avoid request chains like CSS `@import`."
@@ -149,7 +151,7 @@ What the numbers teach:
 ## 14.3 Core Web Vitals: LCP, INP, CLS
 
 ### What it is
-**Core Web Vitals** are three metrics chosen by Google to capture the user experience of loading, interactivity and visual stability. They are measured on **real visits** ("field data"), and a page passes when the **75th percentile** of visits (mobile and desktop separately) is "good".
+**Core Web Vitals** are three metrics chosen by Google to capture the user experience of loading, interactivity and visual stability. They are measured on **real visits** ("field data", as opposed to "lab data" from test runs), and a page passes when the **75th percentile** of visits (mobile and desktop separately) is "good".
 
 | Metric | Question it answers | Good | Needs improvement | Poor |
 |---|---|---|---|---|
@@ -161,13 +163,13 @@ INP **replaced First Input Delay (FID)** as a Core Web Vital in **March 2024**. 
 
 ### How each is computed
 **LCP**
-1. Candidates are: `<img>`, `<image>` inside SVG, `<video>` (poster or first frame), elements with a CSS `background-image: url()`, and block-level elements containing text.
+1. Candidates are: `<img>`, `<image>` inside SVG (Scalable Vector Graphics, an image format made of shapes), `<video>` (poster — the still image shown before playback — or first frame), elements with a CSS `background-image: url()`, and block-level elements containing text.
 2. Each time a larger candidate is painted, the browser emits a new `largest-contentful-paint` entry. The **last** entry before the user first interacts (click, tap, key press, scroll) is the LCP.
 3. Its time breaks into four parts: **TTFB** → **resource load delay** (until the image request starts) → **resource load duration** → **element render delay**.
 
 **INP**
-1. For each discrete **interaction** (a click/tap = pointerdown + pointerup + click; a key press = keydown + keyup; hover and scroll don't count), the latency = **input delay** (main thread busy before handlers can run) + **processing time** (your handlers) + **presentation delay** (style, layout, paint until the next frame).
-2. The page's INP is the **worst** interaction latency — or, on pages with many interactions, a high percentile (one outlier is ignored per 50 interactions).
+1. For each discrete **interaction** (a click/tap = pointerdown + pointerup + click; a key press = keydown + keyup — these are the browser's event names; hover and scroll don't count), the **latency** (time from the input to the visible response) = **input delay** (the main thread — the single line of work that runs JavaScript, style and layout — is busy before **handlers**, the functions you attached to the event, can run) + **processing time** (your handlers) + **presentation delay** (style, layout, paint until the next frame).
+2. The page's INP is the **worst** interaction latency — or, on pages with many interactions, a high percentile (one outlier — an unusually extreme value — is ignored per 50 interactions).
 3. The Event Timing API reports it, rounded to 8 ms; entries shorter than `durationThreshold` (default 104 ms, minimum 16 ms) are not reported.
 
 **CLS**
@@ -183,7 +185,7 @@ Two versions of a product-guide page on a simulated phone (412×800) and slow ne
 | Script | Sync in `<head>` | `defer` |
 | Hero image | Injected by JS after `DOMContentLoaded`, `loading="lazy"`, no `width`/`height` | In the HTML, `width="800" height="533"`, `fetchpriority="high"` |
 | Promo banner (appears after 1 s) | Inserted above the content into an empty `<div>` | Inserted into a slot with `min-height` reserved |
-| Click handler | 300 ms of synchronous work, then updates the UI | Updates the UI first, yields, then does the 300 ms in 50 ms chunks |
+| Click handler | 300 ms of synchronous (runs start to finish without pausing) work, then updates the UI | Updates the UI first, yields (pauses its own work so the browser can paint and handle other input), then does the 300 ms in 50 ms chunks |
 
 The key part of the fix for INP:
 
@@ -230,19 +232,19 @@ Output:
 *Figure 14.1 — [`code/make_figures.mjs`](code/make_figures.mjs): screenshots requested at ~0.4, 1, 2 and 3 s; labels show when Chrome delivered each frame (the bad page can't be captured before its first paint at ~880 ms).*
 
 Reading the results:
-- **LCP 2648 → 1844 ms.** In the bad page the image request couldn't start until the blocking script (800 ms) had run and injected it: a **resource load delay** of ~850 ms before an 1800 ms download. In the fixed page the preload scanner (the browser's look-ahead parser) finds the `<img>` in the HTML at once, so LCP ≈ the download time. The remaining 1.8 s is **resource load duration** — the next fix is a smaller image (`srcset`, AVIF/WebP — [Chapter 4](../04-images-media-and-embeds/README.md#43-responsive-images--srcset-sizes-and-picture)).
+- **LCP 2648 → 1844 ms.** In the bad page the image request couldn't start until the blocking script (800 ms) had run and injected it: a **resource load delay** of ~850 ms before an 1800 ms download. In the fixed page the preload scanner (the browser's look-ahead parser) finds the `<img>` in the HTML at once, so LCP ≈ the download time. The remaining 1.8 s is **resource load duration** — the next fix is a smaller image (`srcset` — a list of image sizes for the browser to choose from — and AVIF/WebP, modern compressed image formats — [Chapter 4](../04-images-media-and-embeds/README.md#43-responsive-images--srcset-sizes-and-picture)).
 - **CLS 0.195 → 0.** Two shifts 0.8 s apart fell in one session window (0.069 + 0.126). Reserving space — `width`/`height` attributes give the image an `aspect-ratio`, `min-height` holds the banner's slot — removes both.
 - **INP 304 ms → under 16 ms.** All three events of the click (pointerdown, pointerup, click) belong to one interaction; the 300 ms loop delayed the next paint for all of them. After the fix the feedback paints immediately; the same total work still runs, but in chunks between frames.
 
-> **Two measurement gotchas.** (1) An early version of the fixed page still shifted by 15.7 px because its `height` attribute said 500 for an 800×**533** image — wrong dimensions are almost as bad as none. (2) Headless Chrome reported no Event Timing entries for a button outside its real (smaller) window, so [`code/serve.mjs`](code/serve.mjs) launches it with `--window-size=1200,1400`. Lab tooling has quirks — cross-check with field data.
+> **Two measurement gotchas.** (1) An early version of the fixed page still shifted by 15.7 px because its `height` attribute said 500 for an 800×**533** image — wrong dimensions are almost as bad as none. (2) Headless Chrome reported no Event Timing entries for a button outside its real (smaller) window, so [`code/serve.mjs`](code/serve.mjs) launches it with `--window-size=1200,1400`. Lab tooling (tests run in a controlled setup rather than on real visitors) has quirks — cross-check with field data.
 
 ### Field data vs lab data
 
 | | Field (real users, "RUM") | Lab (synthetic) |
 |---|---|---|
-| Sources | Chrome UX Report (CrUX, 28-day rolling, public), Search Console's Core Web Vitals report, your own RUM with the `web-vitals` library | Lighthouse, PageSpeed Insights' lab section, WebPageTest, DevTools Performance panel, scripts like this chapter's |
+| Sources | Chrome UX Report (CrUX, 28-day rolling, public), Search Console's (Google's free dashboard for site owners) Core Web Vitals report, your own RUM with the `web-vitals` library | Lighthouse (an auditing tool built into Chrome DevTools), PageSpeed Insights' lab section, WebPageTest, DevTools Performance panel, scripts like this chapter's |
 | Strength | What users actually experience; what Google uses | Repeatable, debuggable, before release |
-| INP | Measured | Needs a scripted interaction; Lighthouse's navigation mode reports **Total Blocking Time (TBT)** as a proxy |
+| INP | Measured | Needs a scripted interaction; Lighthouse's navigation mode reports **Total Blocking Time (TBT)** as a proxy (a stand-in measure) |
 
 **Browser support of the APIs** (web-features, September 2026): the LCP and Event Timing APIs are **Baseline newly available since December 2025** (Safari 26.2 added them). The **Layout Instability API** behind CLS is still **Chromium-only**, so CLS field data comes from Chrome users. The metrics apply to every browser's users; only measurement coverage differs.
 
@@ -264,32 +266,32 @@ Reading the results:
 
 ### LCP checklist
 1. **Find the LCP element** (DevTools Performance panel or `largest-contentful-paint` entries) and its four sub-parts.
-2. **TTFB**: caching (CDN, HTTP cache headers), avoid redirects, server-side rendering or static generation for content pages.
+2. **TTFB**: caching (CDN, HTTP cache headers — instructions telling browsers and CDNs how long they may reuse a response), avoid redirects (responses that send the browser to another URL, costing an extra round trip), server-side rendering (the server builds the full HTML) or static generation (HTML built once at deploy time) for content pages.
 3. **Load delay**: put the image in the HTML (not CSS/JS); `fetchpriority="high"`; never lazy-load it; preload if it must be referenced from CSS.
 4. **Load duration**: right-sized responsive images (`srcset`/`sizes`), modern formats (AVIF/WebP), a CDN.
-5. **Render delay**: remove render-blocking CSS/JS (14.2); avoid hiding content until JS runs (A/B testing snippets, client-only rendering).
+5. **Render delay**: remove render-blocking CSS/JS (14.2); avoid hiding content until JS runs (A/B testing snippets — scripts that show different versions to different visitors — and client-only rendering, where JavaScript builds the page in the browser).
 
 ### INP checklist
-1. **Input delay**: break up **long tasks** (> 50 ms) during load; defer third-party scripts; don't run heavy work on a timer that collides with input.
-2. **Processing**: do only the visible update in the handler; `await scheduler.yield()` (or `setTimeout`) before the rest; debounce input handlers; move heavy work to a Web Worker.
+1. **Input delay**: break up **long tasks** (> 50 ms of uninterrupted main-thread work) during load; defer third-party scripts (code from other companies, such as ads, chat widgets and analytics); don't run heavy work on a timer that collides with input.
+2. **Processing**: do only the visible update in the handler; `await scheduler.yield()` (or `setTimeout`) before the rest; debounce input handlers (wait until the user pauses before reacting, instead of on every keystroke); move heavy work to a Web Worker (a background thread that runs JavaScript off the main thread).
 3. **Presentation**: keep the DOM small; avoid layout thrashing (reading layout after writing styles in a loop); use `content-visibility: auto` for long off-screen sections (Baseline since September 2025); prefer CSS animations on `transform`/`opacity` ([Chapter 12](../12-transitions-transforms-and-animation/README.md#127-performance-animate-transform-and-opacity)).
 
 ### CLS checklist
 1. Always set **`width` and `height`** on images and videos (or CSS `aspect-ratio`) — correct values.
-2. **Reserve space** for ads, embeds, banners and late-loading components (`min-height`, skeletons), or put them in an overlay (`position: fixed`) that doesn't push content.
+2. **Reserve space** for ads, embeds (content from another site, such as a video player or map), banners and late-loading components (`min-height`, skeletons — grey placeholder shapes shown while content loads), or put them in an overlay (`position: fixed`) that doesn't push content.
 3. Never insert content **above** existing content unless the user asked for it.
 4. Fonts: `font-display: optional`, or tune the fallback with `size-adjust`/`ascent-override` so the swap doesn't reflow text.
 5. Animate with `transform`, not `top`/`height` (transforms don't cause layout shifts).
-6. Keep pages eligible for the **back/forward cache** (bfcache) — instant, shift-free back navigations (avoid `unload` handlers and `Cache-Control: no-store` where possible).
+6. Keep pages eligible for the **back/forward cache** (bfcache) — instant, shift-free back navigations (avoid `unload` handlers and `Cache-Control: no-store` — a header forbidding any caching — where possible).
 
 ### Other performance basics
 | Area | Practice |
 |---|---|
-| Transfer | Compression (Brotli/gzip/zstd), HTTP/2 or HTTP/3, long cache lifetimes for fingerprinted files (`app.3f9a1c.css`, `Cache-Control: max-age=31536000, immutable`) — [Chapter 1](../01-how-the-web-works/README.md#15-http-basics--requests-and-responses) |
+| Transfer | Compression (Brotli/gzip/zstd), HTTP/2 or HTTP/3 (newer protocol versions that send many files over one connection), long cache lifetimes for fingerprinted files (a content hash in the file name, so a changed file gets a new name) (`app.3f9a1c.css`, `Cache-Control: max-age=31536000, immutable`) — [Chapter 1](../01-how-the-web-works/README.md#15-http-basics--requests-and-responses) |
 | Images | Formats and responsive images ([Chapter 4](../04-images-media-and-embeds/README.md#42-image-formats--jpeg-png-gif-webp-avif-svg)); `loading="lazy"` below the fold |
 | CSS | Remove unused CSS; avoid huge selectors on huge DOMs; `contain`/`content-visibility` for independent regions |
-| JavaScript | Ship less; code-split per route; `defer`; audit third parties |
-| Budgets | Set performance budgets (e.g. LCP < 2.5 s on a mid-range phone, JS < 200 KB compressed) and check them in CI with Lighthouse CI |
+| JavaScript | Ship less; code-split (break the bundle into pieces loaded on demand) per route (per page/URL of the app); `defer`; audit third parties |
+| Budgets | Set performance budgets (e.g. LCP < 2.5 s on a mid-range phone, JS < 200 KB compressed) and check them in CI (continuous integration — automated checks that run on every code change) with Lighthouse CI |
 
 ### Self-check
 1. Name the four LCP sub-parts. → TTFB, resource load delay, resource load duration, element render delay.
@@ -301,33 +303,33 @@ Reading the results:
 ## 14.5 SEO basics
 
 ### What it is
-**Search engine optimization (SEO)** is making pages easy for search engines to **crawl** (fetch), **render** (Google runs JavaScript in an up-to-date Chromium), **index** (store and understand) and **rank**, and making the result attractive to click. Content quality and relevance matter most; HTML can't make a thin page rank. But broken HTML *can* keep a good page out of the index. This section covers the HTML side, following Google Search Central.
+**Search engine optimization (SEO)** is making pages easy for search engines to **crawl** (fetch), **render** (Google runs JavaScript in an up-to-date Chromium), **index** (store and understand) and **rank**, and making the result attractive to click. Content quality and relevance matter most; HTML can't make a thin page (one with little useful content) rank. But broken HTML *can* keep a good page out of the index. This section covers the HTML side, following Google Search Central.
 
 ### The essentials, in the order a crawler meets them
 
 | Item | HTML | Notes |
 |---|---|---|
-| Crawl permission | `robots.txt` at the site root | Blocks **crawling**, not indexing. A blocked URL can still be indexed from links; to keep a page out, allow crawling and use `noindex` |
-| Index permission | `<meta name="robots" content="noindex">` (or `X-Robots-Tag` header) | The classic accident: a staging `noindex` shipped to production |
+| Crawl permission | `robots.txt` (a plain-text file of rules for crawlers — the bots search engines use to fetch pages) at the site root | Blocks **crawling**, not indexing. A blocked URL can still be indexed from links; to keep a page out, allow crawling and use `noindex` |
+| Index permission | `<meta name="robots" content="noindex">` (or `X-Robots-Tag` header) | The classic accident: a staging (private test copy of the site) `noindex` shipped to production (the live site) |
 | Title | `<title>Specific page title \| Brand</title>` | Shown as the result's headline (Google may rewrite it). Unique per page; no hard length limit, but long titles are truncated by width — roughly 50–60 characters display fully |
-| Description | `<meta name="description" content="…">` | Often used for the snippet; not a ranking signal; unique, specific; truncated around 150–160 characters |
-| Canonical | `<link rel="canonical" href="https://…">` | Tells Google the preferred URL among duplicates (tracking parameters, `http`/`https`, `www`). A strong **hint**, not a directive. Absolute URLs recommended |
+| Description | `<meta name="description" content="…">` | Often used for the snippet (the short text under a search result's title); not a ranking signal (a factor that affects position in results); unique, specific; truncated around 150–160 characters |
+| Canonical | `<link rel="canonical" href="https://…">` | Tells Google the preferred URL among duplicates (tracking parameters — like `?utm_source=` — `http`/`https`, `www`). A strong **hint**, not a directive (an order the search engine must obey). Absolute URLs recommended |
 | Language | `<html lang="en">`; `<link rel="alternate" hreflang="de" href="…">` | `hreflang` links translated versions (include a self-reference and optionally `x-default`) |
-| Mobile | `<meta name="viewport" content="width=device-width, initial-scale=1">` | Google indexes the **mobile** version of pages (mobile-first indexing) |
+| Mobile | `<meta name="viewport" content="width=device-width, initial-scale=1">` | Google indexes the **mobile** version of pages (mobile-first indexing: the phone version is what gets judged) |
 | Keywords meta | `<meta name="keywords">` | **Ignored** by Google Search |
 | Social previews | `og:title`, `og:image`, … (Open Graph) | For link previews on social apps; not a Google ranking signal |
-| Sitemap | `sitemap.xml`, listed in robots.txt / Search Console | Helps discovery of new or deep pages |
+| Sitemap | `sitemap.xml` (an XML — tag-based data format — list of the site's URLs), listed in robots.txt / Search Console | Helps discovery of new or deep pages |
 
 ### Semantic HTML is SEO
-Search engines read structure the same way assistive technology does ([Chapter 3](../03-semantic-html-and-accessibility/README.md#31-why-semantics-and-accessibility)):
+Search engines read structure the same way assistive technology (software and devices disabled people use to access computers, such as screen readers) does ([Chapter 3](../03-semantic-html-and-accessibility/README.md#31-why-semantics-and-accessibility)):
 - **Headings** describe the outline; one clear `<h1>` is a helpful convention (Google says multiple `<h1>`s are not a problem), and levels shouldn't skip.
-- **Links** must be real `<a href>` elements (Google follows `href`, not `onclick`) with **descriptive text** — "Ridge loop route and map", not "click here".
+- **Links** must be real `<a href>` elements (Google follows `href`, not `onclick` — a JavaScript click handler) with **descriptive text** — "Ridge loop route and map", not "click here".
 - **Images**: `alt` text describes the image for image search and accessibility; use descriptive file names.
-- **Landmarks and `<article>`/`<time>`** help identify the main content and dates.
+- **Landmarks** (page regions like `<header>`, `<nav>`, `<main>` that tools can jump between) **and `<article>`/`<time>`** help identify the main content and dates.
 - Content should be in the HTML or reliably rendered; content that needs a click to load may never be seen.
 
 ### Structured data (JSON-LD)
-**Structured data** describes the page's content with the **schema.org** vocabulary in a machine-readable form, so search engines can show **rich results** (breadcrumbs, product price and rating, recipe cards, article dates). Google supports JSON-LD, Microdata and RDFa, and **recommends JSON-LD**: a `<script type="application/ld+json">` block, separate from the visible markup.
+**Structured data** describes the page's content with the **schema.org** vocabulary (a shared list of types like Article, Product and Person, and their properties) in a machine-readable form, so search engines can show **rich results** (breadcrumbs — the "Home › Guides › Summer" trail — product price and rating, recipe cards, article dates). Google supports JSON-LD (JSON for Linked Data; **JSON** is a text format of `{ "key": value }` objects and lists), Microdata and RDFa (two older formats written as HTML attributes), and **recommends JSON-LD**: a `<script type="application/ld+json">` block, separate from the visible markup.
 
 ```html
 <script type="application/ld+json">
@@ -343,10 +345,10 @@ Search engines read structure the same way assistive technology does ([Chapter 3
 </script>
 ```
 
-Rules: the data must describe what's **visible** on the page; include each rich-result type's **required** properties (Article has none required; the ones above are Google's recommended set); valid JSON (no trailing commas, double quotes). Structured data makes a page *eligible* for rich results; it **doesn't guarantee** them and isn't a direct ranking boost. Google also restricts or retires rich-result types over time (FAQ and HowTo results were cut back in 2023), so check the current Search Gallery. Test with Google's **Rich Results Test** and the **Schema Markup Validator**.
+Rules: the data must describe what's **visible** on the page; include each rich-result type's **required** properties (Article has none required; the ones above are Google's recommended set); valid JSON (no trailing commas — a comma after the last item — and double quotes). Structured data makes a page *eligible* for rich results; it **doesn't guarantee** them and isn't a direct ranking boost. Google also restricts or retires rich-result types over time (FAQ and HowTo results were cut back in 2023), so check the current Search Gallery. Test with Google's **Rich Results Test** and the **Schema Markup Validator**.
 
 ### The experiment
-[`code/03_seo_audit.mjs`](code/03_seo_audit.mjs) is a small on-page checker built on jsdom (it parses HTML like a crawler's first pass). It audits [`code/03_seo_bad.html`](code/03_seo_bad.html) — `div` soup with an accidental `noindex`, a relative canonical, two `<h1>`s, no `alt`, "Click here" and a JSON-LD block with a trailing comma — and [`code/03_seo_good.html`](code/03_seo_good.html):
+[`code/03_seo_audit.mjs`](code/03_seo_audit.mjs) is a small on-page checker built on jsdom (a JavaScript imitation of a browser DOM that runs in Node.js; it parses HTML like a crawler's first pass). It audits [`code/03_seo_bad.html`](code/03_seo_bad.html) — `div` soup (markup made of meaningless `<div>`s instead of semantic elements) with an accidental `noindex`, a relative canonical, two `<h1>`s, no `alt`, "Click here" and a JSON-LD block with a trailing comma — and [`code/03_seo_good.html`](code/03_seo_good.html):
 
 Output:
 ```
@@ -384,7 +386,7 @@ Output:
 The single most damaging line in the bad page is `noindex`: every other fix is wasted while it's there. The trailing comma in JSON-LD is the second classic: the whole block is ignored silently.
 
 ### Performance and SEO
-Core Web Vitals are part of Google's page-experience signals: good vitals help, but relevance dominates — a fast page with poor content won't outrank a slower, better answer. Treat performance as a user-experience goal, and SEO as a side benefit.
+Core Web Vitals are part of Google's page-experience signals (ranking factors about how pleasant a page is to use): good vitals help, but relevance dominates — a fast page with poor content won't outrank a slower, better answer. Treat performance as a user-experience goal, and SEO as a side benefit.
 
 ### Common mistakes
 - Client-only rendering of content pages with empty initial HTML (rendering may be delayed; other crawlers and social previews may not run JS at all). Prefer server rendering or static generation.
@@ -404,21 +406,21 @@ Core Web Vitals are part of Google's page-experience signals: good vitals help, 
 
 ## 14.6 Interview questions
 
-Forty-seven questions that come up in front-end interviews, with short answers and links to the full explanation. Cover the answer, say yours out loud, then check.
+Forty-seven questions that come up in front-end (the part of a website that runs in the browser) interviews, with short answers and links to the full explanation. Cover the answer, say yours out loud, then check.
 
 ### HTML and accessibility
-1. **What does `<!doctype html>` do?** → Puts the browser in standards mode (without it: quirks mode with legacy layout rules). [§2.2](../02-html-structure-and-text/README.md#22-document-structure-and-the-doctype)
+1. **What does `<!doctype html>` do?** → Puts the browser in standards mode (without it: quirks mode with legacy — old, kept-for-compatibility — layout rules). [§2.2](../02-html-structure-and-text/README.md#22-document-structure-and-the-doctype)
 2. **Why is `<meta charset="utf-8">` first in `<head>`?** → It must be within the first 1024 bytes so the parser decodes the rest correctly. [§2.3](../02-html-structure-and-text/README.md#23-the-head-metadata-that-matters)
 3. **Block vs inline elements?** → Block boxes start on a new line and take the available width; inline boxes flow within text. It's CSS `display`, not the element "type". [§7.4](../07-box-model-and-layout-basics/README.md#74-display)
-4. **`<section>` vs `<article>` vs `<div>`?** → `<article>` is self-contained (could be syndicated); `<section>` is a thematic group with a heading; `<div>` has no meaning. [§3.2](../03-semantic-html-and-accessibility/README.md#32-landmarks)
-5. **What are landmarks and why do they matter?** → `header`, `nav`, `main`, `aside`, `footer` (and `form`/`section` with a name) map to ARIA landmark roles that screen-reader users jump between. [§3.2](../03-semantic-html-and-accessibility/README.md#32-landmarks)
+4. **`<section>` vs `<article>` vs `<div>`?** → `<article>` is self-contained (could be syndicated — republished elsewhere on its own, like in a feed); `<section>` is a thematic group with a heading; `<div>` has no meaning. [§3.2](../03-semantic-html-and-accessibility/README.md#32-landmarks)
+5. **What are landmarks and why do they matter?** → `header`, `nav`, `main`, `aside`, `footer` (and `form`/`section` with a name) map to ARIA (Accessible Rich Internet Applications — attributes that tell assistive technology what an element is and its state) landmark roles that screen-reader users jump between. [§3.2](../03-semantic-html-and-accessibility/README.md#32-landmarks)
 6. **What is the first rule of ARIA?** → Don't use ARIA if a native element does the job; no ARIA is better than bad ARIA. [§3.6](../03-semantic-html-and-accessibility/README.md#36-aria)
 7. **How do you write good alt text?** → Describe the image's purpose in context; `alt=""` for decorative images; never omit `alt`. [§3.5](../03-semantic-html-and-accessibility/README.md#35-alt-text)
 8. **`<button>` vs `<a>`?** → Links navigate (have `href`); buttons perform actions. Both are keyboard-accessible natively; a `div` with `onclick` is not. [§3.7](../03-semantic-html-and-accessibility/README.md#37-keyboard-and-focus)
 9. **How do you label a form field accessibly?** → `<label for="id">` (or wrap the input); group radios with `fieldset`/`legend`; link errors with `aria-describedby`. [§3.8](../03-semantic-html-and-accessibility/README.md#38-accessible-forms), [§5.7](../05-tables-and-forms/README.md#57-accessible-error-messages)
-10. **GET vs POST forms?** → GET puts fields in the URL (bookmarkable, for searches); POST sends them in the body (for changes, sensitive data). [§5.2](../05-tables-and-forms/README.md#52-how-a-form-works--action-method-name)
+10. **GET vs POST forms?** → GET puts fields in the URL (bookmarkable, for searches); POST sends them in the body — the data part of the HTTP request, after the headers — (for changes, sensitive data). [§5.2](../05-tables-and-forms/README.md#52-how-a-form-works--action-method-name)
 11. **How do `srcset` and `sizes` work?** → `srcset` lists candidate files with widths; `sizes` tells the browser how wide the image will display; it picks the smallest adequate file for the screen's density. [§4.3](../04-images-media-and-embeds/README.md#43-responsive-images--srcset-sizes-and-picture)
-12. **When do you use `<picture>`?** → Art direction (different crops per breakpoint) or format fallbacks (AVIF → WebP → JPEG). [§4.3](../04-images-media-and-embeds/README.md#43-responsive-images--srcset-sizes-and-picture)
+12. **When do you use `<picture>`?** → Art direction (different crops per breakpoint — a screen width at which the layout changes) or format fallbacks (AVIF → WebP → JPEG). [§4.3](../04-images-media-and-embeds/README.md#43-responsive-images--srcset-sizes-and-picture)
 13. **What does WCAG AA require for text contrast?** → 4.5:1 for normal text, 3:1 for large text and UI components. [§3.9](../03-semantic-html-and-accessibility/README.md#39-wcag-22)
 
 ### CSS fundamentals
@@ -434,7 +436,7 @@ Forty-seven questions that come up in front-end interviews, with short answers a
 
 ### Box model and layout
 23. **Explain the box model and `box-sizing`.** → Content + padding + border + margin; `content-box` sizes the content only, `border-box` includes padding and border. [§7.1](../07-box-model-and-layout-basics/README.md#71-the-box-model), [§7.2](../07-box-model-and-layout-basics/README.md#72-box-sizing)
-24. **What is margin collapsing?** → Adjacent vertical margins of blocks in normal flow combine into the larger one; not in flex/grid containers or across a BFC boundary. [§7.3](../07-box-model-and-layout-basics/README.md#73-margin-collapsing)
+24. **What is margin collapsing?** → Adjacent vertical margins of blocks in normal flow combine into the larger one; not in flex/grid containers or across a BFC (block formatting context, see Q27) boundary. [§7.3](../07-box-model-and-layout-basics/README.md#73-margin-collapsing)
 25. **Explain `position` values.** → `static` (normal), `relative` (offset, keeps its space), `absolute` (out of flow, relative to the nearest positioned ancestor), `fixed` (viewport), `sticky` (relative until a threshold, then sticks within its container). [§7.6](../07-box-model-and-layout-basics/README.md#76-positioning)
 26. **Why doesn't my `z-index` work?** → It only applies to positioned (or flex/grid) items, and it's compared within the same stacking context; a parent with `opacity < 1`, `transform` etc. creates a new one. [§7.8](../07-box-model-and-layout-basics/README.md#78-z-index-and-stacking-contexts)
 27. **What is a block formatting context (BFC)?** → An independent layout region: contains floats, prevents margin collapse with children; created by `display: flow-root`, flex/grid items, `overflow` other than `visible`/`clip`, etc. [§7.5](../07-box-model-and-layout-basics/README.md#75-normal-flow-and-formatting-contexts)
@@ -459,7 +461,7 @@ Forty-seven questions that come up in front-end interviews, with short answers a
 42. **How do you implement dark mode with a user toggle?** → Semantic tokens with `light-dark()`, `color-scheme: light dark`, a `data-theme` override that pins `color-scheme`, saved in localStorage and applied before first paint. [§13.14](../13-modern-css-and-architecture/README.md#1314-theming-and-dark-mode-with-custom-properties)
 43. **What happens when you type a URL and press Enter?** → DNS, TCP/TLS, HTTP request/response, parsing, DOM/CSSOM, render tree, layout, paint, composite. [§1.6](../01-how-the-web-works/README.md#16-what-happens-when-you-type-a-url-and-press-enter)
 44. **What are render-blocking resources?** → Stylesheets (block paint) and synchronous scripts (block parsing); fix with critical CSS, `defer`/`async`. [§14.2](#142-render-blocking-resources)
-45. **What are the Core Web Vitals and their thresholds?** → LCP ≤ 2.5 s, INP ≤ 200 ms, CLS ≤ 0.1 at p75. [§14.3](#143-core-web-vitals-lcp-inp-cls)
+45. **What are the Core Web Vitals and their thresholds?** → LCP ≤ 2.5 s, INP ≤ 200 ms, CLS ≤ 0.1 at p75 (the 75th percentile). [§14.3](#143-core-web-vitals-lcp-inp-cls)
 46. **How do you prevent layout shift from images?** → `width`/`height` attributes (correct ratio) or `aspect-ratio`. [§14.4](#144-fixing-each-metric-and-the-other-basics)
 47. **What HTML matters for SEO?** → Title, description, canonical, lang, viewport, no stray `noindex`, headings, real links, alt, JSON-LD. [§14.5](#145-seo-basics)
 
@@ -492,8 +494,8 @@ Details: [§6.2](../06-css-fundamentals/README.md#62-selectors), [§6.3](../06-c
 
 ### Specificity and the cascade
 - Score = (A = IDs, B = classes + attributes + pseudo-classes, C = types + pseudo-elements); compare A, then B, then C. `*` and combinators add nothing.
-- The cascade, strongest criterion first: **origin & `!important`** (transition > `!important` UA > `!important` user > `!important` author > animation > author > user > UA) → **context** (shadow DOM) → **inline `style`** → **layers** (later wins; unlayered last; reversed for `!important`) → **specificity** → **scope proximity** (`@scope`) → **order of appearance**.
-- Keywords: `inherit` (parent's value), `initial` (spec default), `unset` (inherit if inherited property, else initial), `revert` (browser/user value), `revert-layer` (previous layers' value).
+- The cascade, strongest criterion first (UA = user agent, i.e. the browser's own default styles): **origin & `!important`** (transition > `!important` UA > `!important` user > `!important` author > animation > author > user > UA) → **context** (shadow DOM) → **inline `style`** → **layers** (later wins; unlayered last; reversed for `!important`) → **specificity** → **scope proximity** (`@scope`) → **order of appearance**.
+- Keywords: `inherit` (parent's value), `initial` (spec default — the value the CSS specification defines), `unset` (inherit if inherited property, else initial), `revert` (browser/user value), `revert-layer` (previous layers' value).
 
 Worked examples: `#nav .item a` = (1,1,1); `ul li:nth-child(2)` = (0,1,2); `a:not(.btn, #x)` = (1,0,1); `:where(#x) .y` = (0,1,0). [§6.4](../06-css-fundamentals/README.md#64-specificity)
 
