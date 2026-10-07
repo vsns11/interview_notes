@@ -1,6 +1,6 @@
 # Chapter 6 — Strings and Regular Expressions
 
-Text is everywhere: user names, URLs, log lines, CSV files, chat messages, HTML. This chapter covers how JavaScript represents text (**strings**), the methods you use every day to search, cut, change and compare it, the Unicode details that trip up even experienced developers (why `'😀'.length` is 2), and **regular expressions** — a compact pattern language for finding and transforming text.
+Text is everywhere: user names, URLs (web addresses), log lines (one-line records a program writes about what it did), CSV files (comma-separated values: spreadsheet-like data as plain text), chat messages, HTML. This chapter covers how JavaScript represents text (**strings**), the methods you use every day to search, cut, change and compare it, the Unicode details that trip up even experienced developers (why `'😀'.length` is 2), and **regular expressions** — a compact pattern language for finding and transforming text.
 
 **What you'll learn**
 
@@ -17,7 +17,7 @@ Text is everywhere: user names, URLs, log lines, CSV files, chat messages, HTML.
 
 **Before you start.** You need variables and types ([Chapter 2](../02-variables-types-and-operators/README.md)) and functions/arrow functions ([Chapter 4](../04-functions-scope-and-closures/README.md)). Array methods such as `map` and `join` appear in examples; they are explained fully in [Chapter 7](../07-arrays/README.md).
 
-All code is in [`code/`](code/); files are ES modules (strict mode) and outputs are real, from Node 24.
+All code is in [`code/`](code/); files are ES modules (files using `import`/`export`, which always run in strict mode — the stricter variant of JavaScript from [Chapter 1](../01-introduction-and-setup/README.md)) and outputs are real, from Node 24.
 
 ---
 
@@ -29,7 +29,7 @@ A **string** is an ordered, **immutable** sequence of characters used to represe
 More precisely, a JavaScript string is a sequence of **UTF-16 code units** (16-bit numbers). For everyday English text one code unit = one character; section 6.5 explains when that stops being true.
 
 ### Why it matters
-Most data that enters a program arrives as text — form fields, query strings, JSON, files — and must be cleaned, validated, split and reformatted. String handling bugs (trailing spaces, case differences, emoji breaking a length limit) are among the most common bugs in web apps.
+Most data that enters a program arrives as text — form fields, query strings (the `?key=value&…` part of a URL), JSON, files — and must be cleaned, validated, split and reformatted. String handling bugs (trailing spaces, case differences, emoji breaking a length limit) are among the most common bugs in web apps.
 
 ---
 
@@ -39,11 +39,11 @@ Most data that enters a program arrives as text — form fields, query strings, 
 
 | Delimiter | Example | Interpolation `${}` | Real line breaks allowed | Typical use |
 |---|---|---|---|---|
-| Single quotes `'…'` | `'It works'` | No | No | Plain strings (common style default, e.g. Airbnb/StandardJS) |
+| Single quotes `'…'` | `'It works'` | No | No | Plain strings (common style default in style guides — shared formatting rulebooks — e.g. Airbnb/StandardJS) |
 | Double quotes `"…"` | `"It works"` | No | No | Plain strings (Prettier's default); identical behaviour to single quotes |
 | Backticks `` `…` `` | `` `Hi ${name}` `` | **Yes** | **Yes** | Anything built from values, multi-line text, tagged templates |
 
-Single and double quotes are exactly equivalent; pick one and stay consistent (a formatter such as Prettier will enforce it — see [Chapter 10](../10-modules-and-tooling/README.md)).
+Single and double quotes are exactly equivalent; pick one and stay consistent (a formatter — a tool that rewrites code layout automatically — such as Prettier will enforce it — see [Chapter 10](../10-modules-and-tooling/README.md)).
 
 ### Quotes inside strings
 To put a quote character inside a string, either surround the string with a *different* kind of quote or **escape** the inner quote with a backslash.
@@ -67,16 +67,16 @@ A backslash `\` inside a string starts an **escape sequence**: two or more chara
 |---|---|---|
 | `\'` `\"` `` \` `` | The quote character itself | Needed only when it matches the delimiter |
 | `\\` | One backslash | Windows paths: `'C:\\temp'` |
-| `\n` | Line feed (new line) | The normal line break on Linux/macOS and in most text protocols |
+| `\n` | Line feed (new line) | The normal line break on Linux/macOS and in most text protocols (agreed formats for messages between programs, like HTTP) |
 | `\r` | Carriage return | Windows line endings are `\r\n` |
 | `\t` | Horizontal tab | |
-| `\b` | Backspace (U+0008) | Rare. Careful: inside a **regex**, `\b` means "word boundary" |
+| `\b` | Backspace (U+0008) | Rare. Careful: inside a **regex** (regular expression, section 6.7), `\b` means "word boundary" |
 | `\f` | Form feed (U+000C) | Rare (old printers) |
 | `\v` | Vertical tab (U+000B) | Rare; supported by all modern engines |
-| `\0` | Null character (U+0000) | Must not be followed by a digit (`'\01'` is a legacy octal escape — a `SyntaxError` in strict mode) |
-| `\xHH` | Character with hex code HH (2 digits) | `'\x41'` is `'A'` |
+| `\0` | Null character (U+0000) | Must not be followed by a digit (`'\01'` is a legacy octal — base-8 — escape, a `SyntaxError` in strict mode) |
+| `\xHH` | Character with hex (hexadecimal, base-16: digits 0–9 then A–F) code HH (2 digits) | `'\x41'` is `'A'` |
 | `\uXXXX` | UTF-16 code unit with hex code XXXX (4 digits) | `'\u00e9'` is `'é'` |
-| `\u{X…}` | Any Unicode code point (1–6 hex digits), ES2015 | `'\u{1F600}'` is `'😀'` |
+| `\u{X…}` | Any Unicode code point (the number Unicode gives a character, section 6.5; 1–6 hex digits), ES2015 | `'\u{1F600}'` is `'😀'` |
 | `\` + line break | Line continuation (no character added) | Old way to split a long literal across lines |
 
 ```js
@@ -126,13 +126,13 @@ Dear user,
 ```
 
 - `$${…}`: the first `$` is a literal dollar sign; `${` starts interpolation.
-- Any expression is allowed inside `${}`: arithmetic, method calls, ternaries, even nested templates.
+- Any expression is allowed inside `${}`: arithmetic, method calls, ternaries (`cond ? a : b`), even nested templates.
 - In a multi-line template, **indentation is part of the string** — the two spaces before "your" are kept.
 
 Before ES2015, multi-line text needed `\n` escapes and `+` concatenation: `'This is line 1\n' + 'This is line 2'`. Templates made that obsolete.
 
 ### Tagged templates and `String.raw`
-A **tag** is a function called with (a) an array of the literal text pieces and (b) the interpolated values as further arguments. Libraries use tags to escape HTML, build SQL safely, or define CSS (styled-components' `` styled.div`…` ``, GraphQL's `` gql`…` ``, lit-html's `` html`…` ``).
+A **tag** is a function called with (a) an array of the literal text pieces and (b) the interpolated values as further arguments. Libraries use tags to escape HTML, build SQL (the language for querying databases) safely, or define CSS (styled-components' `` styled.div`…` ``, GraphQL's `` gql`…` `` (GraphQL is a query language for APIs), lit-html's `` html`…` ``).
 
 ```js
 function highlight(strings, ...values) {
@@ -154,7 +154,7 @@ C:\new\table | 10 12
 ### Common mistakes
 - Using `'${name}'` (normal quotes) and wondering why nothing is substituted — only backticks interpolate.
 - Building HTML with templates from user input without escaping → **XSS** (cross-site scripting). Escape or use `textContent` ([Chapter 14](../14-browser-apis-and-security/README.md)).
-- Building SQL by interpolation → SQL injection. Use parameterised queries.
+- Building SQL by interpolation → SQL injection (an attacker's input gets run as part of your database command). Use parameterised queries (the database receives the command and the values separately, so values are never treated as code).
 
 ---
 
@@ -236,10 +236,10 @@ HELLO methods work on primitives via temporary wrapper objects
 | `typeof` | `'string'` | `'object'` |
 | Equality | By value — two equal primitives are `===` | By reference — two wrappers are never `===`, even with the same text |
 | Truthiness | `''` is falsy | Every object is truthy — `new String('')` is truthy! |
-| Cost | Cheap; engines optimise heavily | Extra allocation |
+| Cost | Cheap; engines optimise heavily | Extra allocation (reserving memory for a new object) |
 | Methods | Available through **auto-boxing** | Available directly |
 
-**Auto-boxing**: when you call `'Hello'.toUpperCase()`, the engine behaves as if it briefly wrapped the primitive in a `String` object to find the method on `String.prototype`, then throws the wrapper away. That is why primitives "have methods" without being objects. `String(123)` **without** `new` is a conversion function and returns a primitive.
+**Auto-boxing**: when you call `'Hello'.toUpperCase()`, the engine behaves as if it briefly wrapped the primitive in a `String` object to find the method on `String.prototype` (the shared object where all strings' methods live — prototypes are explained in [Chapter 9](../09-this-prototypes-and-classes/README.md)), then throws the wrapper away. That is why primitives "have methods" without being objects. `String(123)` **without** `new` is a conversion function and returns a primitive.
 
 ### Comparing strings
 
@@ -253,7 +253,7 @@ Output:
 true true -1 [ 'e', 'z', 'é' ] [ 'e', 'é', 'z' ]
 ```
 
-`<`, `>` and the default `sort()` compare **code unit by code unit**. All uppercase letters come before all lowercase ones (`'Z'` is 90, `'a'` is 97), and accented letters sort after `z`. For human ordering use **`localeCompare`** or an `Intl.Collator` (section 6.6).
+`<`, `>` and the default `sort()` compare **code unit by code unit**. All uppercase letters come before all lowercase ones (`'Z'` is 90, `'a'` is 97), and accented letters sort after `z`. For human ordering use **`localeCompare`** or an `Intl.Collator` (section 6.6; `Intl` is the built-in internationalisation namespace for language-aware formatting and sorting).
 
 ### Self-check
 1. `'abc'[-1]` vs `'abc'.at(-1)`? → `undefined` vs `'c'`.
@@ -276,7 +276,7 @@ Why is the length of `'😀'` 2? Why can reversing a string produce garbage? Why
 | **Code point** | One Unicode character number (U+0000 … U+10FFFF) | `'😀'` = U+1F600 | `codePointAt`, `String.fromCodePoint`, `for…of`, `[...str]` |
 | **Grapheme cluster** | What a person sees as one character | `'👩‍👩‍👧'` = 5 code points, 1 grapheme | `Intl.Segmenter` |
 
-Code points up to U+FFFF (the **Basic Multilingual Plane**, which covers most living scripts) fit in one code unit. Code points above it — most emoji, rare CJK characters, musical and math symbols — are stored as a **surrogate pair**: two code units in the ranges D800–DBFF ("high") then DC00–DFFF ("low"). A lone half of a pair is a **lone surrogate**, and a string containing one is **not well-formed**.
+Code points up to U+FFFF (the **Basic Multilingual Plane**, which covers most living scripts) fit in one code unit. Code points above it — most emoji, rare CJK (Chinese, Japanese, Korean) characters, musical and math symbols — are stored as a **surrogate pair**: two code units in the ranges D800–DBFF ("high") then DC00–DFFF ("low"). A lone half of a pair is a **lone surrogate**, and a string containing one is **not well-formed**.
 
 From [`code/03_unicode.mjs`](code/03_unicode.mjs):
 
@@ -365,8 +365,8 @@ café length 4 utf8 bytes 5
 😀 length 2 utf8 bytes 4
 ```
 
-- `isWellFormed()` / `toWellFormed()` (ES2024) detect and repair lone surrogates (replacing each with U+FFFD, the "replacement character" �). APIs that must encode text — `encodeURIComponent`, `TextEncoder`, `fetch` bodies — either throw or silently substitute on broken strings.
-- Files, network payloads and database columns are usually measured in **UTF-8 bytes**, not in `length`. Use `new TextEncoder().encode(s).length` (browser) or `Buffer.byteLength(s)` (Node) when a byte limit matters.
+- `isWellFormed()` / `toWellFormed()` (ES2024) detect and repair lone surrogates (replacing each with U+FFFD, the "replacement character" �). APIs that must encode text — `encodeURIComponent` (converts text into the `%XX` form safe inside a URL), `TextEncoder`, `fetch` bodies — either throw or silently substitute on broken strings.
+- Files, network payloads (the data carried in a message) and database columns are usually measured in **UTF-8 bytes**, not in `length`. (A **byte** is 8 bits; **UTF-8** is the most common text encoding on the web, using 1–4 bytes per character.) Use `new TextEncoder().encode(s).length` (browser) or `Buffer.byteLength(s)` (Node) when a byte limit matters.
 
 ### In the interview
 **30-second answer:** "JS strings are UTF-16 code units. `length` and indexing count units, so characters beyond U+FFFF like most emoji count as 2. `for…of` and spread iterate code points; `Intl.Segmenter` gives user-perceived characters. Normalize with `normalize('NFC')` before comparing text."
@@ -398,12 +398,12 @@ Every string method **returns a new value** and leaves the original untouched. T
 | | `includes(sub, from?)` | boolean | ES2015 |
 | | `startsWith(sub, pos?)` / `endsWith(sub, len?)` | boolean | ES2015 |
 | | `search(regex)` | index of first regex match or -1 | |
-| | `match(regex)` / `matchAll(regex)` | match info / iterator | section 6.8 |
+| | `match(regex)` / `matchAll(regex)` | match info / iterator (an object that hands out results one at a time, [Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) | section 6.8 |
 | **Extract** | `slice(start, end?)` | substring; **negative** indexes count from end | the one to use |
 | | `substring(start, end?)` | substring; negatives become 0; swaps args if start > end | older |
-| | `substr(start, length?)` | substring by **length** | legacy (Annex B, "normative optional") — avoid |
+| | `substr(start, length?)` | substring by **length** | legacy (Annex B, the spec's appendix of old web-compatibility features, "normative optional") — avoid |
 | **Case** | `toUpperCase()` / `toLowerCase()` | new string | locale-independent Unicode rules |
-| | `toLocaleUpperCase(loc?)` / `toLocaleLowerCase(loc?)` | new string | locale-specific rules (Turkish dotted İ) |
+| | `toLocaleUpperCase(loc?)` / `toLocaleLowerCase(loc?)` | new string | locale-specific rules (a locale is a language + region setting such as `tr-TR`; e.g. Turkish dotted İ) |
 | **Whitespace** | `trim()` / `trimStart()` / `trimEnd()` | new string | removes spaces, tabs, newlines and other Unicode whitespace |
 | **Padding** | `padStart(len, fill?)` / `padEnd(len, fill?)` | new string of at least `len` | ES2017 |
 | **Build** | `repeat(n)` | `n` copies joined | |
@@ -521,7 +521,7 @@ Output:
 [ 'file1', 'file10', 'file2' ] [ 'file1', 'file2', 'file10' ]
 ```
 
-`localeCompare` returns a negative number, 0, or a positive number — exactly what `sort` expects from a comparator. Order depends on the **language**: in German `ä` sorts with `a` (before `z`); in Swedish it's a separate letter after `z`. `sensitivity: 'base'` ignores accents and case. `numeric: true` gives **natural sort** (`file2` before `file10`). When sorting many strings, create one `Intl.Collator` and reuse its `compare` — it is much faster than calling `localeCompare` repeatedly.
+`localeCompare` returns a negative number, 0, or a positive number — exactly what `sort` expects from a comparator (a function that says which of two items comes first). Order depends on the **language**: in German `ä` sorts with `a` (before `z`); in Swedish it's a separate letter after `z`. `sensitivity: 'base'` ignores accents and case. `numeric: true` gives **natural sort** (`file2` before `file10`). When sorting many strings, create one `Intl.Collator` and reuse its `compare` — it is much faster than calling `localeCompare` repeatedly.
 
 ### Converting strings to numbers
 
@@ -538,7 +538,7 @@ boxed boxed string
 NaN 42 3.14 0 7
 ```
 
-`Number(str)` is strict — the whole string (ignoring surrounding whitespace) must be numeric, and `''` becomes `0`. `parseInt`/`parseFloat` read as many digits as they can and stop. Always pass the radix to `parseInt` (`parseInt(s, 10)`).
+`Number(str)` is strict — the whole string (ignoring surrounding whitespace) must be numeric, and `''` becomes `0`. `parseInt`/`parseFloat` read as many digits as they can and stop. Always pass the radix (the number base, e.g. 10 for decimal) to `parseInt` (`parseInt(s, 10)`).
 
 ### Two real tasks
 
@@ -559,10 +559,10 @@ creme-brulee-10-tips-tricks
 The Quick Brown Fox
 ```
 
-`slugify` builds URL slugs the way blogs and CMSs do: trim, lowercase, decompose accented letters and delete the combining marks (range U+0300–U+036F), turn every run of non-alphanumerics into `-`, then strip leading/trailing dashes.
+`slugify` builds URL slugs (the readable last part of a web address, like `my-first-post`) the way blogs and CMSs (content management systems such as WordPress) do: trim, lowercase, decompose accented letters and delete the combining marks (range U+0300–U+036F), turn every run of non-alphanumerics into `-`, then strip leading/trailing dashes.
 
 ### Performance note
-Because strings are immutable, `s += piece` in a loop *conceptually* creates a new string each time. Modern engines optimise this with internal "rope" structures, so it's fine for normal sizes; for building very large output, collecting pieces in an array and calling `join('')` once is a safe, predictable alternative.
+Because strings are immutable, `s += piece` in a loop *conceptually* creates a new string each time. Modern engines optimise this with internal "rope" structures (a tree of string pieces that is only joined into one string when needed), so it's fine for normal sizes; for building very large output, collecting pieces in an array and calling `join('')` once is a safe, predictable alternative.
 
 ### Common mistakes
 - `replace('a', 'b')` expecting every `a` to change.
@@ -574,7 +574,7 @@ Because strings are immutable, `s += piece` in a loop *conceptually* creates a n
 ### In the interview
 **30-second answer:** "Strings are immutable primitives; methods return new strings. I use `slice` for extraction (supports negatives), `includes`/`startsWith` for tests, `split`/`join` to convert to arrays, `replaceAll` or a `/g` regex to replace everywhere, `padStart` for formatting, and `localeCompare`/`Intl.Collator` for human sorting."
 
-- *Check whether a string is a palindrome.* `const t = s.toLowerCase().replace(/[^a-z0-9]/g, ''); t === [...t].reverse().join('')`.
+- *Check whether a string is a palindrome* (reads the same backwards, like "level"). `const t = s.toLowerCase().replace(/[^a-z0-9]/g, ''); t === [...t].reverse().join('')`.
 - *Count occurrences of a substring.* `s.split(sub).length - 1`, or `s.match(/sub/g)?.length ?? 0` (escape the pattern if it comes from input — `RegExp.escape`, section 6.9).
 - *Difference between `slice` and `substring`?* Negative indexes and argument swapping.
 
@@ -591,13 +591,13 @@ Because strings are immutable, `s += piece` in a loop *conceptually* creates a n
 ### What it is
 A **regular expression** (regex, regexp) is a small pattern that describes a set of strings — "five digits", "a word followed by `@`", "anything between `<` and `>`". JavaScript regexes are `RegExp` objects. You write them in two ways:
 
-- **Literal** `/pattern/flags` — compiled once when the script loads; use when the pattern is fixed.
+- **Literal** `/pattern/flags` — compiled (turned into the engine's internal matching program) once when the script loads; use when the pattern is fixed.
 - **Constructor** `new RegExp('pattern', 'flags')` — built from a string at run time; use when the pattern depends on data. Backslashes must be doubled inside the string: `new RegExp('\\d+')`.
 
 Think of a regex as a tiny program that the regex engine runs against your text, trying positions from left to right until the pattern fits.
 
 ### Why it matters
-Validating form input, extracting fields from logs, search-and-replace across files, routing URLs (`/users/:id` becomes a regex inside routers), syntax highlighting, tokenizers — all use regexes. They are also easy to get wrong, so knowing the core syntax well pays off.
+Validating form input, extracting fields from logs, search-and-replace across files, routing URLs (`/users/:id` becomes a regex inside routers — the code that decides which handler serves which address), syntax highlighting, tokenizers (programs that chop text into meaningful pieces such as words, numbers and symbols) — all use regexes. They are also easy to get wrong, so knowing the core syntax well pays off.
 
 ### Syntax cheat sheet
 
@@ -628,7 +628,7 @@ Validating form input, extracting fields from logs, search-and-replace across fi
 
 | Flag | Name | Effect |
 |---|---|---|
-| `g` | global | Find **all** matches (affects `match`, `replace`, `matchAll`; makes `test`/`exec` stateful) |
+| `g` | global | Find **all** matches (affects `match`, `replace`, `matchAll`; makes `test`/`exec` stateful — they remember something between calls) |
 | `i` | ignoreCase | Case-insensitive |
 | `m` | multiline | `^` and `$` match at each line start/end |
 | `s` | dotAll (ES2018) | `.` also matches newlines |
@@ -745,7 +745,7 @@ false true
 - Without `m`, `^`/`$` refer to the whole input, so a multi-line text matches nothing; with `m` they work per line.
 - `.` doesn't match `\n` unless you add the `s` flag.
 
-(Parsing real HTML with regexes is fragile — use `DOMParser` in the browser or a parser library. The example only illustrates greediness.)
+(Parsing real HTML with regexes is fragile — use `DOMParser` in the browser or a parser library; a **parser** reads text in a known format and builds a structured representation of it. The example only illustrates greediness.)
 
 ### Lookaround and backreferences
 
@@ -846,7 +846,7 @@ true false
 | Duplicate named groups | **ES2025** | The same group name may appear in different `|` alternatives |
 | Pattern modifiers `(?i:…)` | **ES2025** | Turn `i`, `m` or `s` on/off for part of a pattern |
 
-All of these run in Node 24 and current evergreen browsers. Without `RegExp.escape`, the user's `.` and `*` were treated as regex operators and matched the wrong text — an injection bug, and with patterns like `(a+)+` a potential **ReDoS** (regular-expression denial of service: a pattern that takes exponential time on certain inputs and freezes the thread).
+All of these run in Node 24 and current evergreen browsers (browsers that update themselves automatically). Without `RegExp.escape`, the user's `.` and `*` were treated as regex operators and matched the wrong text — an injection bug, and with patterns like `(a+)+` a potential **ReDoS** (regular-expression denial of service: a pattern that takes exponential time on certain inputs and freezes the thread).
 
 ### Practical recipes
 
@@ -881,8 +881,8 @@ a@b.co:true no-at.com:false x@y:false sp ace@a.io:false
 Hi Ana, your code is X9. {unknown}
 ```
 
-1. **Log parsing**: `gm` flags + named groups + `matchAll` turn each line into an object. Real log pipelines (Logstash "grok" patterns, Fluent Bit parsers) are built on exactly this idea.
-2. **Email**: a *pragmatic* check ("something@something.tld", no spaces). Fully validating RFC 5322 addresses with a regex is impractical; the only real test is sending a confirmation email. HTML's `<input type="email">` uses a similar simplified rule.
+1. **Log parsing**: `gm` flags + named groups + `matchAll` turn each line into an object. Real log pipelines (systems that collect, parse and ship logs from many servers — e.g. Logstash "grok" patterns, Fluent Bit parsers) are built on exactly this idea.
+2. **Email**: a *pragmatic* check ("something@something.tld", no spaces; the TLD — top-level domain — is the last part like `.com`). Fully validating RFC 5322 (the official email-format standard) addresses with a regex is impractical; the only real test is sending a confirmation email. HTML's `<input type="email">` uses a similar simplified rule.
 3. **Thousands separators**: the lookahead `(?=(\d{3})+(?!\d))` finds positions followed by groups of three digits — a neat trick, but `toLocaleString` / `Intl.NumberFormat` is correct for every locale.
 4. **Templating**: a replacer function looks each `{key}` up and leaves unknown keys untouched.
 
@@ -896,7 +896,7 @@ Hi Ana, your code is X9. {unknown}
 | Human-language text (words, characters) | `Intl.Segmenter`, `\p{…}` with `u`/`v` |
 
 ### When not to use it
-Avoid giant "do everything" regexes nobody can read; split the job into steps or write a small parser. Never run a user-supplied pattern without a timeout (or a linear-time engine such as RE2) — catastrophic backtracking can hang a Node server, which is how several real outages (for example Cloudflare's July 2019 outage) happened.
+Avoid giant "do everything" regexes nobody can read; split the job into steps or write a small parser. Never run a user-supplied pattern without a timeout — a limit after which the work is abandoned — (or a linear-time engine such as RE2, whose running time only grows in proportion to the input) — catastrophic backtracking (the engine trying an explosive number of ways to match, see the interview section below) can hang a Node server, which is how several real outages (for example Cloudflare's July 2019 outage) happened.
 
 ### Common mistakes
 - Forgetting anchors in validation (`/\d{5}/.test('abc123456')` is `true`).
@@ -907,7 +907,7 @@ Avoid giant "do everything" regexes nobody can read; split the job into steps or
 - Expecting `\w` to match `é` or `ñ` — it is ASCII-only; use `\p{L}` with `u`.
 
 ### Real-world examples
-- **Routers**: Express and many front-end routers compile `/users/:id` into a regex with a capture group.
+- **Routers**: Express (the most popular Node web-server framework) and many front-end routers compile `/users/:id` into a regex with a capture group.
 - **Linters and formatters** use regexes for simple rules; editors use the `d` flag's indices for highlighting.
 - **Form validation** with the HTML `pattern` attribute is a regex (evaluated with the `v` flag in modern browsers).
 - **Log processing** and **search tools** (ripgrep, VS Code search) are built on regex engines.

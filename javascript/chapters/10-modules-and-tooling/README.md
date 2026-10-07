@@ -1,6 +1,6 @@
 # Chapter 10 — Modules and Tooling
 
-A real JavaScript program is hundreds of files and thousands of third-party packages. **Modules** let each file keep its own private scope and share only what it chooses to export. **Tooling** — npm, bundlers, transpilers, linters and formatters — turns those files and packages into something a browser or server can run, and keeps the code consistent. This chapter covers the language feature first (ES modules), then how Node runs both module systems, then the everyday tool chain.
+A real JavaScript program is hundreds of files and thousands of third-party packages (bundles of reusable code written by other people and downloaded into your project). **Modules** let each file keep its own private scope and share only what it chooses to export. **Tooling** — npm, bundlers, transpilers, linters and formatters, each explained in its own section below — turns those files and packages into something a browser or server can run, and keeps the code consistent. This chapter covers the language feature first (ES modules), then how Node runs both module systems, then the everyday tool chain.
 
 **What you'll learn**
 
@@ -15,7 +15,7 @@ A real JavaScript program is hundreds of files and thousands of third-party pack
 9. Bundlers (Vite, esbuild, webpack, Rollup/Rolldown): tree shaking, code splitting, source maps, dev servers.
 10. Transpilers and polyfills; linters and formatters (ESLint, Prettier).
 
-**Before you start.** You should know functions and closures ([Chapter 4](../04-functions-scope-and-closures/README.md)) — the pre-module "module pattern" is a closure. Promises and `await` are covered properly in [Chapter 12](../12-asynchronous-javascript/README.md); here we only need that `await` pauses until a promise settles.
+**Before you start.** You should know functions and closures ([Chapter 4](../04-functions-scope-and-closures/README.md)) — the pre-module "module pattern" is a closure (a function that keeps access to the variables around where it was created). Promises and `await` are covered properly in [Chapter 12](../12-asynchronous-javascript/README.md); here we only need that `await` pauses until a promise (an object standing for a result that arrives later) settles (finishes with a value or an error).
 
 All runnable code is in [`code/`](code/) — a small multi-file ES module project. Files whose first line is `// tools_run: skip` are helper modules imported by the numbered programs. Outputs are real (Node 24). **Commands for npm, bundlers and linters are shown as not-run snippets** (they need the network or a full project); their output is described, not pasted.
 
@@ -33,18 +33,18 @@ Early web pages loaded several `<script>` files that all shared **one global sco
 
 - **Name collisions** — two libraries both defining `$` or `init` silently overwrote each other.
 - **Hidden dependencies** — `app.js` only worked if `utils.js` had been loaded first; script order in HTML was the dependency system.
-- **No encapsulation** — anything could change anything.
+- **No encapsulation** (keeping a piece of code's internals hidden behind a small public surface) — anything could change anything.
 
 ### How the solutions evolved
 | Era | Approach | How it works | Still seen? |
 |---|---|---|---|
-| ~2000s | Global scripts + namespaces | `var MyApp = MyApp \|\| {}; MyApp.utils = …` | Legacy pages |
+| ~2000s | Global scripts + namespaces (one global object holding everything, to reduce name clashes) | `var MyApp = MyApp \|\| {}; MyApp.utils = …` | Legacy pages |
 | ~2008+ | **IIFE / module pattern** | A function called immediately; a closure hides private state and returns a public object ([Chapter 4](../04-functions-scope-and-closures/README.md)) | Output of old bundlers |
-| 2009 | **CommonJS** (Node) | `require()` / `module.exports`, synchronous, one file = one module | Very common in Node packages |
-| 2011 | AMD (RequireJS), later UMD | Asynchronous `define()` for browsers; UMD wraps a file to work as AMD, CommonJS or a global | Old libraries |
+| 2009 | **CommonJS** (Node) | `require()` / `module.exports`, synchronous (each file is fully loaded before the next line runs), one file = one module | Very common in Node packages |
+| 2011 | AMD (RequireJS), later UMD | Asynchronous (loads in the background and calls back when ready) `define()` for browsers; UMD wraps a file to work as AMD, CommonJS or a global | Old libraries |
 | **ES2015** | **ES modules (ESM)** | `import` / `export` built into the language; static; async-friendly | **The standard** — browsers and Node |
 
-**ESM** is the only one that is part of the language itself, works natively in browsers and Node, and can be statically analyzed by tools. Use it for new code.
+**ESM** is the only one that is part of the language itself, works natively in browsers and Node, and can be statically analyzed (understood by reading the code, without running it) by tools. Use it for new code.
 
 ### TL;DR
 Modules give each file a private scope and explicit imports/exports. ES modules (ES2015) are the standard; CommonJS remains common in Node.
@@ -133,30 +133,30 @@ polyfill: true
 | `import { a as z } from './m.mjs'` | named export, renamed locally |
 | `import * as ns from './m.mjs'` | a **namespace object** with every named export as a property (the default is `ns.default`) |
 | `import x, { a } from './m.mjs'` | default + named together |
-| `import './m.mjs'` | runs the module for its side effects (polyfills, CSS in bundlers, registering elements) |
+| `import './m.mjs'` | runs the module for its side effects (things it does on load besides exporting — e.g. polyfills, which add missing built-in features; CSS in bundlers; registering elements) |
 
 Notice the output order: `side_effect.mjs` and `math.mjs` printed **before** any line of the importing file ran, even though `math.mjs` is imported by three statements. Imports are processed before the module body, and every module is evaluated exactly once.
 
 A **module specifier** is the string after `from`:
 - **Relative** — `'./math.mjs'`, `'../lib/x.js'`. In browsers and Node ESM you must include the file extension; there's no automatic `.js` guessing (CommonJS and bundlers do guess).
-- **Absolute URL** — `'https://cdn.example.com/lib.js'` (browsers).
-- **Bare** — `'react'`, `'lodash-es'`: a package name. Node resolves it in `node_modules`; browsers need an import map or a bundler (§10.7).
+- **Absolute URL** — `'https://cdn.example.com/lib.js'` (browsers; a CDN is a network of servers that delivers files from close to the user — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
+- **Bare** — `'react'`, `'lodash-es'`: a package name. Node resolves it in `node_modules` (the folder where installed packages live); browsers need an import map or a bundler (§10.7).
 - **Built-in** — `'node:fs'`, `'node:path'` in Node. The `node:` prefix makes it unambiguous that this is a core module.
 
 ### Default vs named exports
 | | Named exports | Default export |
 |---|---|---|
 | Importer's name | Must match (rename with `as`) | Anything — and different files may call it different things |
-| Refactoring / IDE auto-import | Rename-safe, auto-import finds it | Weaker: the name isn't tied to the export |
-| Tree shaking (§10.11) | Fine-grained | Works, but a default *object* of many functions is all-or-nothing |
+| Refactoring (restructuring code without changing behaviour) / IDE (code editor such as VS Code) auto-import | Rename-safe, auto-import finds it | Weaker: the name isn't tied to the export |
+| Tree shaking (removing unused code from the final build, §10.11) | Fine-grained | Works, but a default *object* of many functions is all-or-nothing |
 | Typical use | Utility modules, libraries | One main thing per file: a React component, a class, a config |
 
-Many teams prefer named exports for consistency (the `eslint-plugin-import` package even has an `import/no-default-export` rule to enforce it); frameworks such as Next.js require default exports for page files. Either is fine — be consistent within a project.
+Many teams prefer named exports for consistency (the `eslint-plugin-import` package even has an `import/no-default-export` rule to enforce it); frameworks such as Next.js (a popular React framework for full websites) require default exports for page files. Either is fine — be consistent within a project.
 
 ### Common mistakes
 - `import { default } from …` — `default` is a reserved word; write `import x from …` or `import { default as x } from …`.
 - Forgetting the extension (`'./math'`) in native ESM → `ERR_MODULE_NOT_FOUND` in Node.
-- Big barrels in application code: importing one function from `index.js` can make tools and test runners load every re-exported module. Import from the specific file in hot paths.
+- Big barrels in application code: importing one function from `index.js` can make tools and test runners (programs that find and run your automated tests) load every re-exported module. Import from the specific file in hot paths (code that runs very often or on startup).
 - Mixing up `export default const x = 1` (syntax error — `export default` takes an expression, or a function/class declaration) with `export const x = 1`.
 
 ### Self-check
@@ -197,7 +197,7 @@ Consequences you can observe:
 | Property | Meaning |
 |---|---|
 | **Hoisting** | Imports are resolved before the body runs, wherever the `import` line appears in the file. |
-| **Singletons** | Each module is evaluated once per program (per realm); every importer shares the same instance and state. |
+| **Singletons** | Each module is evaluated once per program (per realm — one separate global environment, such as a browser tab or iframe); every importer shares the same instance and state. |
 | **Live bindings** | An import is a live, **read-only** view of the exporter's variable. If the exporter changes it, importers see the change. |
 | **Strict mode** | Module code is always strict (no `'use strict'` needed). |
 | **Own scope** | Top-level `const`/`let`/`function` are module-scoped, not globals. `this` at top level is `undefined`. |
@@ -317,7 +317,7 @@ Parse the graph → link bindings → evaluate once, dependencies first. Imports
 
 ### Why it matters
 - **Lazy loading / code splitting** — load a heavy chart library only when the user opens the chart tab. Bundlers turn each `import()` into a separate file (**chunk**) downloaded on demand (§10.11).
-- **Conditional loading** — pick a module by platform, feature flag or locale (`import(\`./locales/${lang}.mjs\`)`).
+- **Conditional loading** — pick a module by platform, feature flag (a switch that turns a feature on or off) or locale (language + region setting) (`import(\`./locales/${lang}.mjs\`)`).
 - **From CommonJS** — the only way for a CommonJS file to load an ES module that uses top-level `await`.
 
 [`code/03_dynamic_import.mjs`](code/03_dynamic_import.mjs):
@@ -413,8 +413,8 @@ awaited at top level: [ 10, 20, 30 ]
 The `import` line is written *after* the first `console.log`, yet the dependency ran completely first — imports are hoisted, and the importer waited for `slow_config`'s `await`.
 
 ### Why it matters / real-world examples
-- Loading configuration, a WebAssembly module, or opening a database connection before exporting it.
-- Scripts and CLIs: no more wrapping everything in `(async () => { … })()`.
+- Loading configuration, a WebAssembly module (fast compiled code, often from C or Rust, that browsers and Node can run), or opening a database connection before exporting it.
+- Scripts and CLIs (command-line programs): no more wrapping everything in `(async () => { … })()`.
 - Fallbacks: `let lib; try { lib = await import('fast-lib'); } catch { lib = await import('./slow-fallback.mjs'); }`.
 
 ### When not to use it
@@ -429,7 +429,7 @@ Top-level `await` works in ES modules only; importers wait for it. Great for ent
 ## 10.6 `import.meta` and JSON modules
 
 ### What it is
-- **`import.meta`** is an object holding metadata about the *current* module, filled in by the host (browser or Node). The standard part is `import.meta.url` (the module's full URL) and `import.meta.resolve(specifier)` (turn a specifier into a URL relative to this module).
+- **`import.meta`** is an object holding metadata (data about the module itself, rather than its contents) about the *current* module, filled in by the host (browser or Node). The standard part is `import.meta.url` (the module's full URL) and `import.meta.resolve(specifier)` (turn a specifier into a URL relative to this module).
 - **Import attributes** (ES2025) add a `with { … }` clause to an import that tells the host how to interpret the file. The first standardized use is **JSON modules**: `import data from './data.json' with { type: 'json' }`. The attribute is required so a server can't trick a page into *executing* a file it expected to be data.
 
 [`code/05_import_meta_and_json.mjs`](code/05_import_meta_and_json.mjs) (with [`code/data.json`](code/data.json)):
@@ -461,7 +461,7 @@ is main? : true
 | Property | Where | Replaces |
 |---|---|---|
 | `import.meta.url` | browsers + Node | — |
-| `import.meta.resolve()` | browsers + Node (20.6+ unflagged) | `require.resolve` |
+| `import.meta.resolve()` | browsers + Node (20.6+ unflagged — usable without a special command-line switch) | `require.resolve` |
 | `import.meta.filename` / `.dirname` | Node 20.11+ | CommonJS `__filename` / `__dirname` |
 | `import.meta.main` | Node 24.2+ (early development) | `require.main === module` |
 
@@ -494,11 +494,11 @@ Before import attributes existed, there was an earlier `assert { type: 'json' }`
 | Top-level `this` | `window` | `undefined` |
 | Loading | blocks HTML parsing unless `defer`/`async` | **deferred by default** (runs after parsing, in order); `async` also allowed |
 | Executes | every time it's included | once per URL |
-| Cross-origin | loads without CORS | must be served with CORS headers |
-| `file://` pages | work | blocked by browsers — use a local dev server |
+| Cross-origin (from a different domain) | loads without CORS | must be served with CORS (Cross-Origin Resource Sharing: headers in which a server says which other sites may use its files) headers |
+| `file://` pages | work | blocked by browsers — use a local dev server (a small web server on your own machine for development) |
 | `import` / `export` / top-level `await` | ✗ | ✓ |
 
-`<script nomodule>` runs only in browsers that *don't* understand modules; it was used to ship a fallback bundle to old browsers and is rarely needed today — all evergreen browsers have supported modules since about 2018.
+`<script nomodule>` runs only in browsers that *don't* understand modules; it was used to ship a fallback bundle to old browsers and is rarely needed today — all evergreen browsers (browsers that update themselves automatically) have supported modules since about 2018.
 
 ### Bare specifiers and import maps
 Browsers can't resolve `import { h } from 'preact'` on their own — there is no `node_modules` on the web. An **import map** (supported in all major browsers since 2023) tells the browser what bare names mean:
@@ -518,7 +518,7 @@ Browsers can't resolve `import { h } from 'preact'` on their own — there is no
 </script>
 ```
 
-(HTML — not run.) Import maps are useful for small apps and prototypes without a build step. Larger apps still use a bundler (§10.11) for tree shaking, minification and fewer network requests. The browser side of the platform (fetching, `<script>` loading, CORS) is covered in [Chapter 14](../14-browser-apis-and-security/README.md).
+(HTML — not run.) Import maps are useful for small apps and prototypes without a build step (an automated pass that processes source files before release). Larger apps still use a bundler (§10.11) for tree shaking, minification (shrinking code by removing spaces and shortening names) and fewer network requests. The browser side of the platform (fetching, `<script>` loading, CORS) is covered in [Chapter 14](../14-browser-apis-and-security/README.md).
 
 ### TL;DR
 `<script type="module">` = module scope, strict, deferred, once per URL, CORS required, no `file://`. Import maps let browsers resolve bare package names.
@@ -652,11 +652,11 @@ A package's `package.json` can declare exactly which files outsiders may import 
 ## 10.9 npm and `package.json`
 
 ### What it is
-- **npm** is three things: the **registry** (npmjs.com, millions of public packages), the **CLI** (`npm`, installed with Node) and the company that runs them.
+- **npm** is three things: the **registry** (npmjs.com, millions of public packages), the **CLI** (command-line interface — the `npm` command, installed with Node) and the company that runs them.
 - A **package** is a folder with a `package.json` file. A package you depend on is a **dependency**; the dependencies of your dependencies are **transitive dependencies**.
 - **`package.json`** is the manifest of your project: its name, version, module type, scripts and dependencies.
 
-Alternatives with the same registry and a compatible `package.json`: **pnpm** (content-addressed store, strict `node_modules`, saves disk space), **Yarn**, and **Bun** (a runtime with a built-in package manager). Pick one per project and commit its lockfile.
+Alternatives with the same registry and a compatible `package.json`: **pnpm** (content-addressed store (each file stored once, named by its contents), strict `node_modules`, saves disk space), **Yarn**, and **Bun** (a runtime with a built-in package manager). Pick one per project and commit its lockfile (the file recording exact installed versions, §10.10).
 
 ### A typical `package.json`
 ```json
@@ -696,7 +696,7 @@ Alternatives with the same registry and a compatible `package.json`: **pnpm** (c
 | `scripts` | Named commands: `npm run <name>`; `npm test` and `npm start` are shortcuts. |
 | `dependencies` | Needed at runtime (installed for anyone who installs your package). |
 | `devDependencies` | Needed only to develop/build/test (linters, bundlers, test runners). |
-| `peerDependencies` | "I work with *your* copy of X" — plugins declare the host they plug into (e.g., a React component library declares `react`). npm 7+ installs them automatically. |
+| `peerDependencies` | "I work with *your* copy of X" — plugins (add-ons that extend another tool) declare the host they plug into (e.g., a React component library declares `react`). npm 7+ installs them automatically. |
 | `optionalDependencies` | Install failures are tolerated. |
 | `engines` | Supported Node versions (advisory unless enforced). |
 | `bin` | Command-line executables the package provides. |
@@ -722,7 +722,7 @@ node --run test                 # Node 22+: run a script without npm's startup c
 node --watch server.mjs         # restart on file change (stable since Node 22)
 ```
 
-How scripts find tools: `npm run` (and `node --run`) put `./node_modules/.bin` on the `PATH`, so a script can say `eslint .` without a global install. `npm run build` also runs `prebuild` and `postbuild` scripts if they exist; `node --run` deliberately skips those pre/post hooks and package-manager-specific environment variables in exchange for speed.
+How scripts find tools: `npm run` (and `node --run`) put `./node_modules/.bin` on the `PATH` (the list of folders your shell searches for commands), so a script can say `eslint .` without a global install. `npm run build` also runs `prebuild` and `postbuild` scripts if they exist; `node --run` deliberately skips those pre/post hooks and package-manager-specific environment variables in exchange for speed.
 
 ### How `node_modules` resolution works
 For a bare specifier like `import 'date-fns'` in `/app/src/utils/x.mjs`, Node looks for `node_modules/date-fns` in `/app/src/utils`, then `/app/src`, then `/app`, then `/`, stopping at the first match, then reads that package's `package.json` (`exports`, else `main`). npm **hoists** (flattens) most transitive dependencies to the top-level `node_modules` to share them; if two packages need incompatible versions, one gets a nested copy.
@@ -747,7 +747,7 @@ A consequence called **phantom dependencies**: your code can import a package yo
 
 | Bump | When | Example | Should upgrading break you? |
 |---|---|---|---|
-| MAJOR | incompatible API change | 3.4.1 → 4.0.0 | May — read the changelog |
+| MAJOR | incompatible API (the functions and options a package exposes) change | 3.4.1 → 4.0.0 | May — read the changelog (the list of changes in each release) |
 | MINOR | new feature, backward compatible | 3.4.1 → 3.5.0 | No |
 | PATCH | backward-compatible bug fix | 3.4.1 → 3.4.2 | No |
 | Pre-release | unstable preview | 4.0.0-beta.2 | Anything goes |
@@ -806,20 +806,20 @@ Output:
 ```
 
 ### Lockfiles
-A range like `^4.1.0` means two developers installing a month apart could get 4.1.0 and 4.3.2 — and every transitive dependency could differ too. A **lockfile** (`package-lock.json` for npm, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`) records the **exact** version, download URL and integrity hash of *every* package in the tree.
+A range like `^4.1.0` means two developers installing a month apart could get 4.1.0 and 4.3.2 — and every transitive dependency could differ too. A **lockfile** (`package-lock.json` for npm, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`) records the **exact** version, download URL and integrity hash (a fingerprint of the file's contents, used to detect tampering) of *every* package in the tree.
 
 | | `npm install` | `npm ci` |
 |---|---|---|
 | Reads | `package.json` + lockfile | lockfile (must match `package.json`, else error) |
 | May change the lockfile | yes | never |
 | Existing `node_modules` | reused/updated | deleted first |
-| Use for | development, adding packages | CI servers, deploy builds, reproducible installs |
+| Use for | development, adding packages | CI servers (continuous integration — machines that automatically build and test every change), deploy builds, reproducible installs |
 
-Rules: **commit the lockfile**, use `npm ci` in automated builds, and upgrade deliberately (`npm outdated` → `npm update` or `npm install pkg@latest` → run tests). Tools like Dependabot and Renovate open pull requests for updates.
+Rules: **commit the lockfile**, use `npm ci` in automated builds, and upgrade deliberately (`npm outdated` → `npm update` or `npm install pkg@latest` → run tests). Tools like Dependabot and Renovate open pull requests (proposed code changes for review, on sites like GitHub) for updates.
 
 ### Real-world examples — why this matters
 - **left-pad (2016)**: an 11-line package was unpublished and thousands of builds broke; npm then restricted unpublishing.
-- **Supply-chain attacks**: compromised maintainers have published malicious patch versions of popular packages (for example `event-stream` in 2018, and several hijacked packages in 2025). Caret ranges + no lockfile = you install the bad version automatically. Lockfiles, `npm ci`, `npm audit`, and reviewing new dependencies reduce the risk.
+- **Supply-chain attacks** (attacks that sneak malicious code into something you depend on, rather than attacking you directly): compromised maintainers have published malicious patch versions of popular packages (for example `event-stream` in 2018, and several hijacked packages in 2025). Caret ranges + no lockfile = you install the bad version automatically. Lockfiles, `npm ci`, `npm audit`, and reviewing new dependencies reduce the risk.
 
 ### In the interview
 **30-second answer:** "Semver is MAJOR.MINOR.PATCH — breaking, feature, fix. `^` allows everything that doesn't change the left-most non-zero number, `~` allows patch updates. Ranges keep you flexible, but the lockfile pins the exact tree so everyone and CI install the same thing — and `npm ci` installs exactly from it."
@@ -852,7 +852,7 @@ Native ESM works in browsers, but shipping a large app as hundreds of unoptimize
 | **Tree shaking** | Removes exports nobody imports (dead-code elimination). Depends on ESM's static structure; packages mark safe-to-drop files with `"sideEffects": false`. |
 | **Code splitting** | Each dynamic `import()` becomes a separate **chunk** loaded on demand; shared code goes into common chunks. |
 | **Minification** | Removes whitespace/comments, shortens local names — smaller downloads. |
-| **Transforms** | TypeScript, JSX, modern syntax → target syntax (via a transpiler, §10.12); CSS modules; asset hashing (`app.3f9a1c.js`) for long-term caching. |
+| **Transforms** | TypeScript, JSX, modern syntax → target syntax (via a transpiler, §10.12); CSS modules; asset hashing (`app.3f9a1c.js`) for long-term caching (letting browsers keep files for a long time, because a changed file gets a new name — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)). |
 | **Source maps** | `.map` files that map minified output back to your original source, so DevTools and error stacks show real file names and line numbers ([Chapter 11](../11-errors-and-debugging/README.md)). |
 | **Dev server + HMR** | Serves the app locally and, with **Hot Module Replacement**, swaps changed modules in the running page without a full reload. |
 
@@ -871,7 +871,7 @@ flowchart LR
 |---|---|---|
 | **Vite** | Dev server that serves native ESM on demand (very fast start) + production build. Vite 8 (March 2026) uses **Rolldown**, a Rust bundler, for builds; earlier versions used esbuild + Rollup. | Default choice for new front-end apps (React, Vue, Svelte templates) |
 | **esbuild** | Extremely fast bundler/transpiler written in Go; minimal plugin API. | Libraries, scripts, tools built on top of it (this book's runner uses it) |
-| **webpack** (v5) | The long-time standard; hugely configurable, loaders and plugins for everything. | Existing large apps, custom pipelines, Module Federation |
+| **webpack** (v5) | The long-time standard; hugely configurable, loaders and plugins for everything. | Existing large apps, custom pipelines, Module Federation (loading parts of an app from separately deployed builds at runtime) |
 | **Rollup / Rolldown** | Rollup pioneered ESM tree shaking; Rolldown is its Rust-based successor with a largely compatible plugin API. | Building libraries with clean ESM output |
 | **Turbopack** | Rust bundler from Vercel; the default in Next.js since version 16. | Next.js apps |
 | **Parcel** | Zero-configuration bundler. | Quick projects |
@@ -901,11 +901,11 @@ npx esbuild src/main.js --bundle --minify --sourcemap --format=esm --outdir=dist
 | esbuild directly | Blazing fast, simple | Fewer features (no HMR dev server of its own, limited code-splitting options) |
 
 ### When not to use a bundler
-Node servers and CLIs usually run source files directly (Node understands ESM, and strips TypeScript types natively since 23.6/22.18). Bundle server code only for special cases (serverless cold starts, single-file distribution).
+Node servers and CLIs usually run source files directly (Node understands ESM, and strips TypeScript types natively since 23.6/22.18). Bundle server code only for special cases (serverless cold starts (the delay when a serverless platform starts a fresh copy of your function), single-file distribution).
 
 ### Common mistakes
 - Importing a whole library (`import _ from 'lodash'`) when you use one function — prefer ESM packages and named imports (`import { debounce } from 'lodash-es'`) so tree shaking works.
-- Deploying without source maps (unreadable production errors) — or publishing them publicly when the source is secret (upload them to your error tracker instead).
+- Deploying without source maps (unreadable production errors) — or publishing them publicly when the source is secret (upload them to your error tracker, a service such as Sentry that collects crashes from users, instead).
 - Assuming dev behaviour equals production — always run `build` + `preview` before shipping.
 
 ### TL;DR
@@ -933,7 +933,7 @@ const city = user?.address?.city ?? 'n/a';
 (Illustrative, not run — exact output varies by tool.)
 
 ### How targets are chosen
-Tools read a **browserslist** query (in `package.json` or `.browserslistrc`), for example `"> 0.5%, last 2 versions, not dead"` or `"baseline widely available"`, and only transform what those browsers don't support. Vite's default build target is a set of modern "baseline widely available" browsers, so very little is transpiled. Targeting only evergreen browsers keeps bundles smaller and faster.
+Tools read a **browserslist** query (in `package.json` or `.browserslistrc`), for example `"> 0.5%, last 2 versions, not dead"` or `"baseline widely available"` (features that have worked in all major browsers for at least about two and a half years), and only transform what those browsers don't support. Vite's default build target is a set of modern "baseline widely available" browsers, so very little is transpiled. Targeting only evergreen browsers keeps bundles smaller and faster.
 
 ### TypeScript note
 TypeScript is covered in [Chapter 16](../16-testing-and-typescript/README.md). Most bundlers (esbuild, Vite, SWC) **strip types without checking them** for speed; run `tsc --noEmit` separately (in CI or your editor) to actually type-check.
@@ -1006,7 +1006,7 @@ A minimal Prettier config, `.prettierrc.json`: `{ "singleQuote": true, "semi": t
 
 ### Wiring it into the workflow
 1. **Editor** — ESLint and Prettier extensions show problems as you type and format on save.
-2. **Pre-commit hook** — tools like husky + lint-staged run the linter/formatter on staged files before each commit.
+2. **Pre-commit hook** — tools like husky + lint-staged run the linter/formatter on staged files (the changes you've marked with `git add` for the next commit) before each commit.
 3. **CI** — `npm run lint` and `prettier --check` fail the build if anything slipped through.
 
 ### Common mistakes

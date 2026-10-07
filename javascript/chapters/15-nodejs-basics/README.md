@@ -1,6 +1,6 @@
 # Chapter 15 — Node.js Basics
 
-Until now most of this book has treated JavaScript as a language, with the browser as its natural home. **Node.js** takes the same language out of the browser and puts it on servers, laptops and build machines — every `npm install`, every bundler run, every `node --test` in this book already used it. This chapter explains what Node adds on top of the language and how to use its core modules to do real work: files, paths, configuration, events, streams, HTTP, and child processes.
+Until now most of this book has treated JavaScript as a language, with the browser as its natural home. **Node.js** takes the same language out of the browser and puts it on servers, laptops and build machines — every `npm install` (npm is Node's package manager, the tool that downloads libraries), every bundler run (a bundler merges many source files into a few for the browser), every `node --test` in this book already used it. This chapter explains what Node adds on top of the language and how to use its core modules (the modules built into Node itself) to do real work: files, paths, configuration, events, streams, HTTP, and child processes.
 
 **What you'll learn**
 
@@ -14,7 +14,7 @@ Until now most of this book has treated JavaScript as a language, with the brows
 8. Streams: readable, writable, transform, `pipeline`, backpressure.
 9. Building an HTTP server with `node:http` and calling it from the same script.
 10. Child processes and npm scripts (`node --run`).
-11. Node vs Deno vs Bun, and the everyday command-line flags.
+11. Node vs Deno vs Bun, and the everyday command-line flags (options such as `--watch` typed after a command).
 
 **Before you start.** You should know promises and `async`/`await` ([Chapter 12](../12-asynchronous-javascript/README.md)) — almost every Node API in this chapter is used with `await`. Node's event-loop phases, `process.nextTick` and `setImmediate` are already explained in [§12.4](../12-asynchronous-javascript/README.md#124-nodes-event-loop-nexttick-setimmediate-and-phases); module systems (ESM vs CommonJS, `package.json`, npm) in [Chapter 10](../10-modules-and-tooling/README.md); the Node inspector in [§11.9](../11-errors-and-debugging/README.md#119-debugging-with-devtools-and-the-node-inspector). This chapter links to them rather than repeating them.
 
@@ -30,7 +30,7 @@ All runnable code is in [`code/`](code/). Every program was run with **Node 24.1
 | Part | What it does | Written in |
 |---|---|---|
 | **V8** | Google's JavaScript engine (the same one in Chrome) — parses, compiles and runs your JS ([§1.3](../01-introduction-and-setup/README.md#13-javascript-engines--how-your-code-actually-runs)). | C++ |
-| **libuv** | A C library that gives Node its **event loop**, asynchronous file and network I/O, timers, a **thread pool**, and child processes — on Linux, macOS and Windows alike. | C |
+| **libuv** | A C library that gives Node its **event loop**, asynchronous file and network I/O (input/output), timers, a **thread pool** (a fixed set of helper threads for work that would otherwise block), and child processes (other programs started from Node) — on Linux, macOS and Windows alike. | C |
 | **Core modules + bindings** | The JavaScript APIs you import (`node:fs`, `node:http`, `node:stream` …) and the C++ glue ("bindings") that connects them to V8 and libuv. | JS + C++ |
 
 Analogy: V8 is the engine of a car; libuv is the gearbox and wheels that connect the engine to the road (the operating system); core modules are the dashboard controls you actually touch.
@@ -45,24 +45,24 @@ flowchart TB
 ```
 
 ### Why it matters
-- **One language on both sides** — front-end and back-end share code, types and validation.
-- **Great at I/O-heavy work** — one process juggles thousands of connections because it never waits idly for a disk or socket; it registers a callback and moves on ([Chapter 12](../12-asynchronous-javascript/README.md)).
-- **It runs the JavaScript tool chain** — npm, Vite, ESLint, Prettier and the JavaScript-based TypeScript 5.x compiler all run on Node, even for front-end projects.
+- **One language on both sides** — front-end (code running in the browser) and back-end (code running on the server) share code, types and validation.
+- **Great at I/O-heavy work** — one process juggles thousands of connections because it never waits idly for a disk or socket (a program's end of a network connection); it registers a callback and moves on ([Chapter 12](../12-asynchronous-javascript/README.md)).
+- **It runs the JavaScript tool chain** — npm, Vite (a build tool and dev server), ESLint (a linter that flags likely bugs), Prettier (a code formatter) and the JavaScript-based TypeScript 5.x compiler (TypeScript adds checked types to JavaScript) all run on Node, even for front-end projects.
 
 ### Node vs the browser
-Both run the same language (ECMAScript), but the **host APIs** differ:
+Both run the same language (ECMAScript, the official name of the JavaScript standard), but the **host APIs** (the extra objects and functions the environment provides) differ:
 
 | | Browser | Node.js |
 |---|---|---|
 | Global object | `window` (also `globalThis`) | `global` (also `globalThis`) |
 | DOM (`document`, elements) | Yes | No (use jsdom for tests, [Chapter 13](../13-dom-and-events/README.md)) |
-| File system, processes, raw sockets | No (sandboxed) | Yes (`node:fs`, `node:child_process`, `node:net`) |
+| File system, processes, raw sockets | No (sandboxed — locked inside a restricted environment) | Yes (`node:fs`, `node:child_process`, `node:net`) |
 | Security model | Sandbox + same-origin policy | Full access of the user who started it (optional permission model, §15.12) |
-| Modules | ES modules | ES modules **and** CommonJS |
+| Modules | ES modules (`import`/`export`) | ES modules **and** CommonJS (Node's original `require` system) |
 | Shared web APIs | `fetch`, `URL`, `AbortController`, `TextEncoder`, `structuredClone`, `crypto.subtle`, `Blob`, `WebSocket`, timers | The same — Node implements them too |
 | You control the version? | No — the user's browser decides | Yes — you choose the Node version |
 
-The last row matters: in Node you can use every feature your version supports without transpiling.
+The last row matters: in Node you can use every feature your version supports without transpiling (converting new syntax into older syntax that more environments understand).
 
 [`code/01_node_runtime.mjs`](code/01_node_runtime.mjs) checks these differences:
 
@@ -100,17 +100,17 @@ built-in count >50: true
 Note `typeof __dirname` is `undefined`: that variable exists only in CommonJS files. ES modules use **`import.meta.dirname`** and **`import.meta.filename`** (Node 20.11+) instead ([§10.6](../10-modules-and-tooling/README.md#106-importmeta-and-json-modules)).
 
 ### Versions and releases
-- Up to Node 26, a new **major version** ships every six months (April and October). **Even-numbered** majors become **LTS** (Long-Term Support) in October of their release year, with about 30 months of fixes; odd-numbered majors are short-lived "Current" releases.
+- Up to Node 26, a new **major version** (the first number of a version like `24.11.1`; a change there may break existing code) ships every six months (April and October). **Even-numbered** majors become **LTS** (Long-Term Support) in October of their release year, with about 30 months of fixes; odd-numbered majors are short-lived "Current" releases.
 - **From Node 27 (2027)** the project moves to **one major per year** (April), and **every** major becomes LTS each October — no more odd/even split.
-- **Node 24** was released in May 2025, became LTS in October 2025 and is supported until April 2028 (V8 13.6, npm 11). Production apps should run an **Active or Maintenance LTS** version.
+- **Node 24** was released in May 2025, became LTS in October 2025 and is supported until April 2028 (V8 13.6, npm 11). Production apps (the live systems real users depend on) should run an **Active or Maintenance LTS** version.
 
 Check yours with `node --version` (`node -v`). Tools such as **nvm**, **fnm** or **Volta** let you install several versions and switch per project (an `.nvmrc` file pins one).
 
 ### Real-world examples
-Netflix, PayPal, LinkedIn and Walmart have written publicly about moving web servers or API layers to Node. Typical uses: REST/GraphQL APIs, backend-for-frontend servers, server-side rendering for React (Next.js, [React Handbook ch13](../../../react/chapters/13-server-rendering-and-frameworks/README.md)), real-time apps (chat, WebSockets), CLIs, and build tooling.
+Netflix, PayPal, LinkedIn and Walmart have written publicly about moving web servers or API layers to Node. Typical uses: REST/GraphQL APIs (two common styles of web API: REST uses URLs plus HTTP methods, GraphQL uses one endpoint with a query language), backend-for-frontend servers (a server shaped around one specific UI), server-side rendering (building the HTML on the server) for React (Next.js, [React Handbook ch13](../../../react/chapters/13-server-rendering-and-frameworks/README.md)), real-time apps (chat, WebSockets — persistent two-way connections), CLIs (command-line interface programs), and build tooling.
 
 ### When not to use it
-Long CPU-bound computations (video encoding, heavy numeric work, ML training) are a poor fit for the main thread — Node shines when the work is *waiting* on I/O, not *computing*. Use worker threads (§15.2), a native module, or a language built for it (Go, Rust, Java, Python with NumPy).
+Long CPU-bound computations (limited by processor speed rather than by waiting — video encoding, heavy numeric work, ML (machine learning) training) are a poor fit for the main thread — Node shines when the work is *waiting* on I/O, not *computing*. Use worker threads (§15.2), a native module (an add-on compiled from C/C++ or Rust), or a language built for it (Go, Rust, Java, Python with NumPy).
 
 ### TL;DR
 Node = V8 (runs JS) + libuv (event loop, async I/O, thread pool) + core modules. Same language as the browser, different host APIs: no DOM, but files, processes and sockets. Run an LTS version in production (Node 24 today; Node 26 becomes LTS in October 2026).
@@ -124,8 +124,8 @@ Your JavaScript runs on **one main thread**. Node's **event loop** (from libuv) 
 
 What this chapter adds is **how the I/O actually gets done** while your thread is free:
 
-1. **Network I/O** (TCP, HTTP, pipes) uses the operating system's own asynchronous notification mechanism — **epoll** on Linux, **kqueue** on macOS/BSD, **IOCP** on Windows. No extra threads are needed: the OS tells libuv "this socket has data", and libuv queues your callback.
-2. **Work the OS cannot do asynchronously** goes to the **libuv thread pool**: most `fs` operations, `dns.lookup()`, CPU-heavy `crypto` functions (`pbkdf2`, `scrypt`, `randomBytes`), and `zlib` compression. The pool has **4 threads by default**; set the environment variable `UV_THREADPOOL_SIZE` (up to 1024) *before* Node starts to change it.
+1. **Network I/O** (TCP — the protocol under most internet connections — HTTP, and pipes, channels that connect one process's output to another's input) uses the operating system's own asynchronous notification mechanism — **epoll** on Linux, **kqueue** on macOS/BSD, **IOCP** on Windows. No extra threads are needed: the OS tells libuv "this socket has data", and libuv queues your callback.
+2. **Work the OS cannot do asynchronously** goes to the **libuv thread pool**: most `fs` operations, `dns.lookup()` (turning a host name into an IP address), CPU-heavy `crypto` functions (`pbkdf2`, `scrypt` — deliberately slow password-hashing functions — and `randomBytes`), and `zlib` compression. The pool has **4 threads by default**; set the environment variable (a named setting the OS hands to a program, §15.6) `UV_THREADPOOL_SIZE` (up to 1024) *before* Node starts to change it.
 3. When a pool thread finishes, it puts the result on the event loop's queue; your callback (or the promise continuation) then runs on the **main thread**.
 
 ```mermaid
@@ -146,15 +146,15 @@ sequenceDiagram
 ```
 
 ### Why it matters — blocking the loop
-Because every callback shares one thread, **one slow synchronous piece of code delays everything**: other HTTP requests, timers, health checks. A 200 ms `JSON.parse` of a huge payload means every other user waits 200 ms. Typical culprits:
+Because every callback shares one thread, **one slow synchronous piece of code delays everything**: other HTTP requests, timers, health checks (regular "are you alive?" requests from a monitor or load balancer). A 200 ms `JSON.parse` of a huge payload means every other user waits 200 ms. Typical culprits:
 
 - `*Sync` APIs (`readFileSync`, `execSync`) inside request handlers;
 - huge `JSON.parse` / `JSON.stringify`;
-- regular expressions with catastrophic backtracking ("ReDoS");
+- regular expressions with catastrophic backtracking — patterns that take exponentially long on certain inputs ("ReDoS", regular-expression denial of service);
 - tight loops over large arrays; synchronous crypto (`pbkdf2Sync`).
 
 ### Worker threads
-**`node:worker_threads`** runs JavaScript on additional threads, each with its own V8 instance and event loop. They communicate by **message passing** (`postMessage`, copied with the structured-clone algorithm) or by sharing a `SharedArrayBuffer`. Use them for **CPU-bound** work; they do not help with I/O, which is already asynchronous.
+**`node:worker_threads`** runs JavaScript on additional threads, each with its own V8 instance and event loop. They communicate by **message passing** (`postMessage`, copied with the structured-clone algorithm) or by sharing a `SharedArrayBuffer` (a block of memory several threads can read and write). Use them for **CPU-bound** work; they do not help with I/O, which is already asynchronous.
 
 [`code/02_blocking_and_workers.mjs`](code/02_blocking_and_workers.mjs):
 
@@ -207,7 +207,7 @@ main thread kept ticking meanwhile: true
 | Async I/O (default) | Thousands of concurrent I/O operations on one thread | — | Almost all server work |
 | `worker_threads` | Extra JS threads in the same process | Only `SharedArrayBuffer` | CPU-heavy tasks (image resize, parsing, hashing) |
 | `child_process` (§15.11) | Separate OS processes, any program | No | Running other programs, isolation |
-| `cluster` / multiple processes | Several Node processes sharing one port | No | Using all CPU cores for an HTTP server (often done by a process manager, container orchestrator or load balancer instead) |
+| `cluster` / multiple processes | Several Node processes sharing one port | No | Using all CPU cores (a core is one independent processor inside the chip) for an HTTP server (often done by a process manager, container orchestrator such as Kubernetes, or load balancer — a component that spreads requests across servers — instead; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) |
 
 ### Common mistakes
 - Reading "single-threaded" as "one thing at a time": JS runs on one thread, but I/O proceeds in parallel in the OS and the thread pool.
@@ -218,13 +218,13 @@ main thread kept ticking meanwhile: true
 ### In the interview
 **Q: Is Node single-threaded?** "Your JavaScript runs on a single main thread with an event loop. Network I/O is handled asynchronously by the OS (epoll/kqueue/IOCP), and file system, DNS lookup, some crypto and zlib work runs on libuv's thread pool (4 threads by default). CPU-heavy JS can be moved to worker threads."
 
-- *How would you find what blocks the event loop?* Measure event-loop delay (`perf_hooks.monitorEventLoopDelay()`), then profile with `node --cpu-prof` or the inspector ([§11.9](../11-errors-and-debugging/README.md#119-debugging-with-devtools-and-the-node-inspector)) to see which function holds the thread.
+- *How would you find what blocks the event loop?* Measure event-loop delay (`perf_hooks.monitorEventLoopDelay()`), then profile (record where the time goes) with `node --cpu-prof` or the inspector ([§11.9](../11-errors-and-debugging/README.md#119-debugging-with-devtools-and-the-node-inspector)) to see which function holds the thread.
 - *Why can `readFile` be slow under load when CPU is idle?* The thread pool may be saturated; raise `UV_THREADPOOL_SIZE` or reduce concurrent blocking work.
-- *Worker thread vs child process?* Worker: same process, cheaper, can share memory, JS only. Child: separate process, any executable, full isolation, more overhead.
+- *Worker thread vs child process?* Worker: same process, cheaper, can share memory, JS only. Child: separate process, any executable (any runnable program), full isolation, more overhead.
 
 ### Self-check
 1. Which of these use the thread pool: `fs.readFile`, an HTTP request, `crypto.pbkdf2`, `setTimeout`? → `fs.readFile` and `crypto.pbkdf2`. HTTP uses OS async I/O; timers are managed by the loop itself.
-2. A handler runs a 300 ms synchronous loop. What happens to a second request that arrives meanwhile? → It waits until the loop finishes; its latency grows by up to 300 ms.
+2. A handler runs a 300 ms synchronous loop. What happens to a second request that arrives meanwhile? → It waits until the loop finishes; its latency (time from request to response) grows by up to 300 ms.
 3. How do you give a worker its input? → `workerData` at creation or `postMessage` later.
 
 ### TL;DR
@@ -239,7 +239,7 @@ Everything about module syntax and loading is in [Chapter 10](../10-modules-and-
 | Question | Answer |
 |---|---|
 | Is my `.js` file ESM or CommonJS? | `.mjs` → ESM, `.cjs` → CommonJS; `.js` follows the nearest `package.json` `"type"` (`"module"` → ESM). Without a `"type"`, Node detects ESM syntax automatically (Node 22.7+). [§10.8](../10-modules-and-tooling/README.md#108-commonjs-vs-es-modules-in-node) |
-| How do I import a built-in? | Prefer the **`node:` prefix**: `import { readFile } from 'node:fs/promises'`. It is unambiguous (no npm package can shadow it) and required for some newer modules such as `node:test` and `node:sqlite`. |
+| How do I import a built-in? | Prefer the **`node:` prefix**: `import { readFile } from 'node:fs/promises'`. It is unambiguous (no npm package can shadow it — take its place by having the same name) and required for some newer modules such as `node:test` and `node:sqlite`. |
 | Where is `__dirname`? | CommonJS only. In ESM use `import.meta.dirname` / `import.meta.filename`. |
 | Can ESM use a CommonJS package? | Yes: `import pkg from 'cjs-pkg'` (default import = `module.exports`). |
 | Can CommonJS `require()` an ES module? | Yes in Node 22.12+ / 20.19+, unless the module uses top-level `await`. |
@@ -267,13 +267,13 @@ Most core modules offer several API styles. Pick the promise one in new code:
 ### How it works — the core operations
 | Task | Function | Notes |
 |---|---|---|
-| Read a whole file | `readFile(path, 'utf8')` | Without an encoding you get a `Buffer` (raw bytes, §15.7) |
+| Read a whole file | `readFile(path, 'utf8')` | Without an encoding (the rule for turning bytes into text, e.g. UTF-8) you get a `Buffer` (raw bytes, §15.7) |
 | Write (create/replace) | `writeFile(path, data)` | `{ flag: 'wx' }` = fail if the file exists |
 | Append | `appendFile(path, data)` | Creates the file if missing |
 | Create folders | `mkdir(path, { recursive: true })` | Like `mkdir -p`; no error if it exists |
 | List a folder | `readdir(path, { withFileTypes: true })` | `Dirent` objects with `isFile()`/`isDirectory()`; `{ recursive: true }` walks subfolders (Node 20.1+) |
-| Match patterns | `glob('**/*.txt', { cwd })` | Async iterator (Node 22+) |
-| Metadata | `stat(path)` | size, `mtime`, `isFile()`, `isDirectory()` |
+| Match patterns | `glob('**/*.txt', { cwd })` (glob = wildcard file pattern; cwd = the folder to search from) | Async iterator (Node 22+) |
+| Metadata | `stat(path)` | size, `mtime` (last-modified time), `isFile()`, `isDirectory()` |
 | Copy / move | `copyFile(a, b)`, `rename(a, b)`, `cp(a, b, { recursive: true })` | `rename` across disks may fail — copy then delete |
 | Delete | `rm(path, { recursive: true, force: true })` | Like `rm -rf`; `unlink` for a single file |
 | Temp folder | `mkdtemp(join(tmpdir(), 'prefix-'))` | Unique name each call |
@@ -345,14 +345,14 @@ What to notice:
 
 ### Common mistakes
 - **Check-then-act races.** `if (await exists(f)) await readFile(f)` can fail anyway — the file may vanish between the two calls (a "TOCTOU" bug: time of check vs time of use). Just try the operation and handle `ENOENT`; use flag `'wx'` for "create only if new".
-- **Relative paths resolve against `process.cwd()`**, the folder you launched Node from, *not* the folder of the source file. Build paths from `import.meta.dirname` when you mean "next to this file".
+- **Relative paths** (paths not starting from the root, like `data/x.json`) **resolve against `process.cwd()`**, the folder you launched Node from, *not* the folder of the source file. Build paths from `import.meta.dirname` when you mean "next to this file".
 - **Reading huge files whole.** `readFile` loads everything into memory; a 5 GB log will crash or stall. Use streams (§15.9).
 - **`*Sync` calls in servers** (§15.2).
-- **Forgetting that writes are not atomic.** A crash in the middle of `writeFile` can leave a half-written file. For important files, write to a temp file in the same folder and then `rename` it over the original (rename is atomic on the same file system).
-- **Not closing `FileHandle`s** — leaks file descriptors until `EMFILE`.
+- **Forgetting that writes are not atomic** (atomic = happens completely or not at all). A crash in the middle of `writeFile` can leave a half-written file. For important files, write to a temp file in the same folder and then `rename` it over the original (rename is atomic on the same file system).
+- **Not closing `FileHandle`s** — leaks file descriptors (the OS's numbered handles for open files and sockets) until `EMFILE`.
 
 ### Real-world examples
-Static-site generators read Markdown and write HTML; bundlers write `dist/`; loggers append to files; scaffolding CLIs copy template folders with `cp(..., { recursive: true })`.
+Static-site generators read Markdown (a lightweight text format) and write HTML; bundlers write `dist/` (the conventional output folder); loggers append to files; scaffolding CLIs (tools that generate a starter project) copy template folders with `cp(..., { recursive: true })`.
 
 ### TL;DR
 Use `node:fs/promises` with `await`. Pass `'utf8'` to get strings. Handle errors by `err.code`. Build paths from `import.meta.dirname`, not the cwd. Don't check-then-act; don't `readFile` huge files; clean up in `finally`.
@@ -448,10 +448,10 @@ Never concatenate paths by hand: `path.join` to combine, `path.resolve` for abso
 ## 15.6 `process`: arguments, environment and exit codes
 
 ### What it is
-**`process`** is a global object describing the running Node program: its command-line arguments (`argv`), environment variables (`env`), working directory (`cwd()`), standard streams (`stdin`, `stdout`, `stderr`), process id, exit code, and lifecycle events.
+**`process`** is a global object describing the running Node program: its command-line arguments (`argv`), environment variables (`env`), working directory (`cwd()`), standard streams (`stdin`, `stdout`, `stderr` — the default input, output and error channels every program gets), process id (the number the OS uses to identify it), exit code, and lifecycle events.
 
 ### Command-line arguments
-`process.argv` is an array: `[pathToNode, pathToScript, ...yourArgs]`, so user arguments start at index 2. For anything beyond one or two positional values use the built-in **`util.parseArgs`** (stable since Node 20) instead of hand-parsing:
+`process.argv` is an array: `[pathToNode, pathToScript, ...yourArgs]`, so user arguments start at index 2. For anything beyond one or two positional values (arguments without a `--name` in front) use the built-in **`util.parseArgs`** (stable since Node 20) instead of hand-parsing:
 
 ```js
 import { parseArgs } from 'node:util';
@@ -469,12 +469,12 @@ const { values, positionals } = parseArgs({
 Unknown flags throw an error by default (`strict: true`), which is what a CLI usually wants. For big CLIs with sub-commands and help text, libraries such as Commander or yargs add more.
 
 ### Environment variables
-**Environment variables** are key–value strings the operating system passes to every process (`PATH`, `HOME`, and your own like `DATABASE_URL`). They are the standard way to configure one codebase differently per environment (development, test, production) and to inject secrets without committing them — the "config in the environment" rule of the Twelve-Factor App methodology.
+**Environment variables** are key–value strings the operating system passes to every process (`PATH`, `HOME`, and your own like `DATABASE_URL`). They are the standard way to configure one codebase differently per environment (development, test, production) and to inject secrets without committing them (saving them into Git, the version-control system) — the "config in the environment" rule of the Twelve-Factor App methodology (a widely cited checklist for building cloud services).
 
 Key facts:
-1. `process.env.X` is **always a string or `undefined`**. Assigning a number stores its string form. `"false"` and `"0"` are *truthy* strings — compare explicitly.
+1. `process.env.X` is **always a string or `undefined`**. Assigning a number stores its string form. `"false"` and `"0"` are *truthy* strings (treated as true by `if`) — compare explicitly.
 2. **`.env` files**: Node 20.6+ can load them itself — `node --env-file=.env app.mjs` (stable in Node 24.10+; `--env-file-if-exists` for optional files), or `process.loadEnvFile(path)` at runtime. Variables already set in the real environment win over the file. The older `dotenv` npm package does the same job.
-3. **Never commit `.env` files with secrets**; commit a `.env.example` with dummy values and add `.env` to `.gitignore`.
+3. **Never commit `.env` files with secrets**; commit a `.env.example` with dummy values and add `.env` to `.gitignore` (the file listing what Git must not track).
 4. **`NODE_ENV=production`** is a convention many libraries read to switch off dev-only checks. It is not special to Node itself.
 5. Read and **validate** configuration once at startup and fail fast with a clear message; don't sprinkle `process.env` reads all over the code.
 
@@ -522,10 +522,10 @@ exit event, code 0
 (`[Object: null prototype]` means `parseArgs` returns an object created with `Object.create(null)`, so a flag named `--constructor` can't collide with inherited properties.)
 
 ### Exit codes, signals and graceful shutdown
-- A process ends when the event loop has nothing left to do. **Exit code 0** means success; anything else means failure — shells, CI systems and `npm test` rely on it.
+- A process ends when the event loop has nothing left to do. **Exit code 0** means success; anything else means failure — shells (command-line interpreters such as bash), CI systems (continuous integration: servers that build and test every change automatically) and `npm test` rely on it.
 - Prefer **`process.exitCode = 1`** and let Node finish naturally. **`process.exit(1)`** stops immediately and can cut off pending asynchronous work such as writes to a pipe.
 - An uncaught exception or unhandled promise rejection ends the process with code 1 (Node 15+ for rejections).
-- Signals: **Ctrl+C** sends `SIGINT`; container orchestrators and process managers send **`SIGTERM`** before killing a process. Handle them to shut down cleanly:
+- Signals (short notifications the operating system sends to a process): **Ctrl+C** sends `SIGINT`; container orchestrators and process managers send **`SIGTERM`** before killing a process. Handle them to shut down cleanly:
 
 ```js
 // Not run - pattern for a long-running server (see server in §15.10)
@@ -548,7 +548,7 @@ process.once('SIGTERM', async () => {
 | `process.versions` | Versions of Node, V8, libuv, OpenSSL … |
 | `process.stdin/stdout/stderr` | Standard streams (streams, §15.9); `console.log` writes to `stdout`, `console.error` to `stderr` |
 | `process.hrtime.bigint()` | Nanosecond timer for measuring durations (`performance.now()` also works) |
-| `process.memoryUsage()` | Heap and RSS numbers for diagnosing leaks |
+| `process.memoryUsage()` | Heap (memory holding JS objects) and RSS (all memory the process holds) numbers for diagnosing leaks |
 | `process.on('uncaughtException' / 'unhandledRejection')` | Last-resort logging — log and exit; don't try to continue ([Chapter 11](../11-errors-and-debugging/README.md)) |
 
 ### Common mistakes
@@ -565,9 +565,9 @@ process.once('SIGTERM', async () => {
 ## 15.7 `Buffer`: raw bytes
 
 ### What it is
-A **`Buffer`** is a fixed-size chunk of raw bytes. It is Node's subclass of the standard `Uint8Array`, with extra helpers for encodings. You meet Buffers whenever data is not (yet) text: file contents read without an encoding, network packets, stream chunks, images, hashes.
+A **`Buffer`** is a fixed-size chunk of raw bytes. It is Node's subclass of the standard `Uint8Array` (a typed array whose items are bytes, 0–255), with extra helpers for encodings. You meet Buffers whenever data is not (yet) text: file contents read without an encoding, network packets, stream chunks, images, hashes.
 
-An **encoding** is the rule for turning text into bytes and back: `utf8` (default, variable length: 1–4 bytes per character), `base64`, `hex`, `latin1`, `utf16le`.
+An **encoding** is the rule for turning text into bytes and back: `utf8` (default, variable length: 1–4 bytes per character), `base64` (bytes written using 64 safe text characters), `hex` (two characters 0–9/a–f per byte), `latin1`, `utf16le`.
 
 [`code/10_buffers.mjs`](code/10_buffers.mjs):
 
@@ -607,7 +607,7 @@ alloc(4) is zero-filled      : <Buffer 00 00 00 00>
 What to notice: `é` takes 2 bytes and the emoji 4, so 8 string units become 11 bytes (string length vs code points is explained in [§6.3](../06-strings-and-regular-expressions/README.md)). Cutting in the middle of `é` produced `�` — which is exactly why stream code must not decode each chunk separately (use `setEncoding('utf8')`, `TextDecoder` with `{ stream: true }`, or collect bytes and `Buffer.concat` first).
 
 ### Common mistakes
-- Using `str.length` as the byte size for `Content-Length` — use `Buffer.byteLength(str)`.
+- Using `str.length` as the byte size for `Content-Length` (the HTTP header giving the body's size in bytes) — use `Buffer.byteLength(str)`.
 - `Buffer.allocUnsafe(n)` returns memory that may contain old data; use `Buffer.alloc` unless you will overwrite every byte immediately.
 - Forgetting `subarray` (and the older `slice`) share memory with the original.
 - Treating base64 as encryption — it is only an encoding, anyone can decode it.
@@ -705,13 +705,13 @@ What to notice:
 ### Trade-offs
 | Pattern | Good for | Weak at |
 |---|---|---|
-| EventEmitter | Many events over time, many listeners, decoupling | Error handling is manual; control flow is harder to follow |
+| EventEmitter | Many events over time, many listeners, decoupling (parts don't need to know about each other) | Error handling is manual; control flow is harder to follow |
 | Promise | One result, once | Repeated events |
-| Async iterator (`events.on`, streams) | A sequence you process in order with `for await` | Fan-out to many consumers |
+| Async iterator (`events.on`, streams) | A sequence you process in order with `for await` | Fan-out (delivering the same data to many consumers) |
 | Callback | Legacy APIs | Composition |
 
 ### When not to use it
-For a single "done or failed" result, return a promise. An app-wide emitter becomes a hidden global dependency; across processes or machines use a message broker (Kafka, RabbitMQ, Redis streams).
+For a single "done or failed" result, return a promise. An app-wide emitter becomes a hidden global dependency; across processes or machines use a message broker (a server that stores and passes messages between programs: Kafka, RabbitMQ, Redis streams).
 
 ### Common mistakes
 - `off('x', () => …)` with a new arrow function — it's a different reference, nothing is removed.
@@ -750,11 +750,11 @@ Node has four stream types (all EventEmitters):
 | **Transform** | Duplex whose output is computed from input | `zlib.createGzip()`, `crypto` hashes/ciphers, your own parsers |
 
 ### Why it matters
-**Memory** (a 10 GB file needs only a few KB of buffer, not 10 GB), **time to first byte** (send a response before all of it exists), and **composition** of small stages (read → decompress → parse → write), like Unix pipes.
+**Memory** (a 10 GB file needs only a few KB of buffer, not 10 GB), **time to first byte** (how soon the receiver gets anything — send a response before all of it exists), and **composition** of small stages (read → decompress → parse → write), like Unix pipes (`cmd1 | cmd2` in a shell).
 
 ### How it works
 1. A Readable produces chunks into an internal buffer; a consumer takes them (`for await`, `'data'` events, or piping).
-2. A Writable accepts chunks with `write(chunk)`. Each has an internal buffer limited by **`highWaterMark`** (64 KiB for byte streams since Node 22 — it was 16 KiB before — and 16 objects in object mode).
+2. A Writable accepts chunks with `write(chunk)`. Each has an internal buffer limited by **`highWaterMark`** (64 KiB — 1 KiB = 1024 bytes — for byte streams since Node 22 — it was 16 KiB before — and 16 objects in object mode).
 3. **Backpressure**: when the Writable's buffer passes `highWaterMark`, `write()` returns **`false`** — "slow down". The producer should stop and wait for the **`'drain'`** event. Ignoring this makes memory grow without limit when the source is faster than the destination (e.g. reading a fast disk, writing to a slow network client).
 4. **`pipeline(src, ...transforms, dest)`** from `node:stream/promises` connects the stages, **handles backpressure automatically**, **forwards errors from any stage**, **destroys all streams** on failure, and returns a promise. Prefer it over the older `src.pipe(dest)`, which does not propagate errors or clean up.
 5. Readables are **async iterables**, so `for await (const chunk of readable)` works (and respects backpressure).
@@ -874,7 +874,7 @@ Streams move data in chunks: Readable, Writable, Duplex, Transform. Backpressure
 - **`req`** (`IncomingMessage`) — a **Readable stream** of the request body, plus `req.method`, `req.url` (path + query string), `req.headers` (lower-cased names).
 - **`res`** (`ServerResponse`) — a **Writable stream**: set status and headers (`res.writeHead(status, headers)` or `res.statusCode` + `res.setHeader`), write the body (`res.write`), and finish with **`res.end()`**.
 
-Frameworks such as **Express**, **Fastify**, **Koa** and **Hono** wrap exactly this API, adding routing, middleware, body parsing and validation. Knowing the raw layer makes those frameworks — and their performance and error behaviour — understandable. (HTTP concepts: methods, status codes, headers, CORS are covered from the browser side in [Chapter 14](../14-browser-apis-and-security/README.md).)
+Frameworks such as **Express**, **Fastify**, **Koa** and **Hono** wrap exactly this API, adding routing (picking a handler by method and path), middleware (functions every request passes through), body parsing and validation. Knowing the raw layer makes those frameworks — and their performance and error behaviour — understandable. (HTTP concepts: methods, status codes, headers, CORS are covered from the browser side in [Chapter 14](../14-browser-apis-and-security/README.md).)
 
 ### How a request flows
 ```mermaid
@@ -981,16 +981,16 @@ How each part works:
 1. **Routing** is `if` statements on `req.method` and `url.pathname`; `new URL(req.url, base)` parses path and query safely.
 2. **Reading the body**: `req` is a stream, so `for await` collects chunks; the size limit protects memory (a real server would also check `Content-Type`).
 3. **Status codes**: 200, 201 Created (+ `Location`), 400 bad JSON, 404 unknown route, 413 too large, 422 failed validation, 500 unexpected — with internal details hidden.
-4. **`closeAllConnections()`**: `server.close()` stops *new* connections but waits for existing ones; `fetch` keeps connections alive, so without it `'close'` would wait for idle sockets to time out.
+4. **`closeAllConnections()`**: `server.close()` stops *new* connections but waits for existing ones; `fetch` keeps connections alive (keep-alive: reusing one connection for several requests), so without it `'close'` would wait for idle sockets to time out.
 5. **Port 0 + `127.0.0.1`**: no port conflicts, nothing reachable from other machines — the standard pattern in test suites.
 
 ### Production concerns (what frameworks and platforms add)
 | Concern | Raw `node:http` | Typical solution |
 |---|---|---|
 | Routing with params (`/notes/:id`) | Manual | Framework router (Express, Fastify, Hono) |
-| Body parsing, size limits, validation | Manual | Framework + schema (Zod, JSON Schema) |
+| Body parsing, size limits, validation | Manual | Framework + schema (a description of the expected data shape: Zod, JSON Schema) |
 | Error handling | `try/catch` per handler | Central error middleware |
-| HTTPS/TLS | `node:https` with certs | Usually terminated at a reverse proxy/load balancer (nginx, cloud LB) |
+| HTTPS/TLS (TLS is the encryption under HTTPS) | `node:https` with certs (certificates proving the server's identity) | Usually terminated (decrypted) at a reverse proxy — a server in front of your app that forwards traffic — or load balancer (nginx, cloud LB) |
 | HTTP/2 | `node:http2` | Proxy or `http2` module |
 | Timeouts | `server.requestTimeout` (default 300 s), `headersTimeout`, `keepAliveTimeout` | Tune per workload |
 | Graceful shutdown | `close()` + `SIGTERM` handler (§15.6) | Same, plus health checks |
@@ -1000,15 +1000,15 @@ How each part works:
 - Forgetting `res.end()` — the client hangs until a timeout.
 - Setting headers after the body started (`ERR_HTTP_HEADERS_SENT`).
 - Not handling a rejected promise inside an async handler — Node doesn't catch it for you; the request hangs and an unhandled rejection crashes the process. Wrap handlers in `try/catch` (as above).
-- Unlimited body size (memory exhaustion attack).
-- Using `str.length` for `Content-Length` with non-ASCII text.
+- Unlimited body size (memory exhaustion attack — sending huge bodies until the server runs out of memory).
+- Using `str.length` for `Content-Length` with non-ASCII text (characters beyond basic English, which take more than one byte).
 - Returning stack traces to clients.
 
 ### In the interview
 **Q: How does a Node HTTP server handle many concurrent requests on one thread?** "Each request is an event; the handler runs briefly, and whenever it awaits I/O (database, another API) the thread serves other requests. As long as handlers don't do long synchronous work, thousands of connections share one thread."
 
 - *How do you shut down gracefully?* On `SIGTERM`: stop accepting (`server.close()`), finish in-flight requests, close idle keep-alive sockets, close DB pools, exit with a deadline.
-- *Express vs Fastify?* Express: minimal, huge ecosystem, v5 (2024) handles rejected promises from async handlers. Fastify: schema-based validation/serialization, faster JSON handling, plugin system.
+- *Express vs Fastify?* Express: minimal, huge ecosystem (plugins and libraries built around it), v5 (2024) handles rejected promises from async handlers. Fastify: schema-based validation/serialization, faster JSON handling, plugin system.
 
 ### Self-check
 1. How do you get the query parameter `q` from `req.url`? → `new URL(req.url, 'http://x').searchParams.get('q')`.
@@ -1026,10 +1026,10 @@ How each part works:
 
 | Function | Shell? | Output | Use for |
 |---|---|---|---|
-| `execFile(file, args)` | No | Buffered (callback/promise) | Run a program with arguments — **safe default** |
+| `execFile(file, args)` | No | Buffered (collected in memory, handed over at the end) | Run a program with arguments — **safe default** |
 | `spawn(cmd, args)` | No (unless `shell: true`) | Streams (`child.stdout`) | Long-running or large output |
 | `exec(commandString)` | **Yes** | Buffered | Quick shell one-liners with **trusted** input only |
-| `fork(modulePath)` | No | Streams + IPC channel (`send`/`'message'`) | Another Node script that talks to the parent |
+| `fork(modulePath)` | No | Streams + IPC (inter-process communication) channel (`send`/`'message'`) | Another Node script that talks to the parent |
 | `*Sync` versions | — | Blocks | Build scripts and CLIs, never servers |
 
 **Security**: `exec(\`convert ${userFile}\`)` passes a string to a shell, so a file name like `x; rm -rf ~` becomes two commands — **command injection**. `execFile`/`spawn` pass arguments as an array with no shell interpretation.
@@ -1064,7 +1064,7 @@ node --run hello -> hello from script
 node --run greet -- Ana -> hello from Ana
 ```
 
-`process.execPath` is the absolute path of the running `node` binary — safer than assuming `node` is on the `PATH`. Arguments after `--` are passed to the script.
+`process.execPath` is the absolute path of the running `node` binary (the compiled program file) — safer than assuming `node` is on the `PATH` (the list of folders the shell searches for programs). Arguments after `--` are passed to the script.
 
 ### npm scripts in a Node project
 A typical back-end `package.json` `scripts` block:
@@ -1097,13 +1097,13 @@ Use `execFile`/`spawn` with argument arrays (no shell); `exec` only with trusted
 | `node --env-file=.env app.mjs` | Load environment variables from a file | Stable (24.10+) |
 | `node --run <script>` | Run a `package.json` script | Added 22 |
 | `node --test` | Run tests ([Chapter 16](../16-testing-and-typescript/README.md)) | Stable (20+) |
-| `node app.ts` | Run TypeScript by **stripping types** ([§16.9](../16-testing-and-typescript/README.md)) | On by default since 23.6; stable in 24.12 |
+| `node app.ts` | Run TypeScript by **stripping types** (deleting the type annotations, without checking them) ([§16.9](../16-testing-and-typescript/README.md)) | On by default since 23.6; stable in 24.12 |
 | `node --inspect` / `--inspect-brk` | Attach Chrome DevTools / VS Code debugger ([§11.9](../11-errors-and-debugging/README.md#119-debugging-with-devtools-and-the-node-inspector)) | Stable |
 | `node --cpu-prof`, `--heap-prof` | Write CPU / heap profiles | Stable |
 | `node --permission --allow-fs-read=./data app.mjs` | **Permission model**: deny file-system reads and writes, child processes, workers, native addons … unless explicitly allowed | Stable since 23.5 / 22.13 |
 | `node -e "code"` / `node -p "expr"` | Evaluate / evaluate-and-print | Stable |
 
-The permission model is defence in depth — it limits what a compromised dependency can do — but the docs are explicit that it is not a sandbox against deliberately malicious code.
+The permission model is defence in depth — it limits what a compromised dependency (a third-party package your project uses) can do — but the docs are explicit that it is not a sandbox against deliberately malicious code.
 
 ### Node vs Deno vs Bun
 Two newer runtimes also run JavaScript and TypeScript on servers. All three run most npm packages today.
@@ -1111,14 +1111,14 @@ Two newer runtimes also run JavaScript and TypeScript on servers. All three run 
 | | **Node.js** | **Deno** | **Bun** |
 |---|---|---|---|
 | First release | 2009 | 2020 (1.0); **Deno 2** in Oct 2024 added full npm / `package.json` compatibility | 2023 (1.0, September) |
-| Creator / owner | Ryan Dahl; now OpenJS Foundation | Ryan Dahl; Deno Land Inc. | Jarred Sumner / Oven; **acquired by Anthropic in December 2025**, still MIT-licensed |
+| Creator / owner | Ryan Dahl; now OpenJS Foundation | Ryan Dahl; Deno Land Inc. | Jarred Sumner / Oven; **acquired by Anthropic in December 2025**, still MIT-licensed (a permissive open-source licence) |
 | Engine | V8 | V8 (runtime written in Rust) | **JavaScriptCore** (Safari's engine; runtime written in Zig) |
 | TypeScript | Type stripping built in (erasable syntax only); type-check with `tsc` | Built in; `deno check` type-checks | Built in (transpiles, no type check) |
 | Security default | Full access (opt-in `--permission`) | **Deny by default** — `--allow-net`, `--allow-read` … | Full access |
 | Built-in tools | test runner, watch mode, `--run` | formatter, linter, test runner, bundler-ish `compile`, package manager | package manager (fast `bun install`), bundler, test runner (Jest-like) |
 | Strength | Maturity, ecosystem, LTS policy, hosting support everywhere | Secure defaults, web-standard APIs, all-in-one tooling | Speed of install and startup, all-in-one tooling |
 
-**Which to choose?** Node for production by default — largest ecosystem, predictable LTS, supported by every host and observability tool. Deno for secure-by-default permissions and integrated tooling. Bun when install/startup speed matters; many teams use `bun install` or Bun's test runner alongside a Node production runtime. Check native add-ons and less common Node APIs before switching.
+**Which to choose?** Node for production by default — largest ecosystem, predictable LTS, supported by every host and observability tool (monitoring, logging and tracing services). Deno for secure-by-default permissions and integrated tooling. Bun when install/startup speed matters; many teams use `bun install` or Bun's test runner alongside a Node production runtime. Check native add-ons and less common Node APIs before switching.
 
 ### TL;DR
 Learn `--watch`, `--env-file`, `--run`, `--test`, `--inspect`, and running `.ts` directly. Node is the safe default runtime; Deno (secure-by-default, V8) and Bun (fast, JavaScriptCore) are credible alternatives that run most npm code.

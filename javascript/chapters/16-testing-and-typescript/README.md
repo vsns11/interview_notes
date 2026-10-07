@@ -1,6 +1,6 @@
 # Chapter 16 — Testing and TypeScript
 
-Two habits separate code that *seems* to work from code you can change without fear. **Automated tests** prove behaviour by running your code and checking the results. **Static types** (TypeScript) catch whole classes of mistakes — typos, wrong argument types, forgotten `null` checks — before the code runs at all. They overlap only a little: types tell you *the shapes fit*; tests tell you *the answers are right*. This chapter teaches both with tools that ship with Node 24 and the TypeScript compiler.
+Two habits separate code that *seems* to work from code you can change without fear. **Automated tests** prove behaviour by running your code and checking the results. **Static types** (TypeScript) catch whole classes of mistakes — typos, wrong argument types, forgotten `null` checks — before the code runs at all. They overlap only a little: types tell you *the shapes fit*; tests tell you *the answers are right*. This chapter teaches both with tools that ship with Node 24 and the TypeScript compiler (the program that checks TypeScript and can translate it to JavaScript).
 
 **What you'll learn**
 
@@ -11,16 +11,16 @@ Two habits separate code that *seems* to work from code you can change without f
 5. Test doubles: fakes, stubs, spies, `mock.fn`, `mock.method`, fake timers, module mocks.
 6. Snapshot tests and code coverage.
 7. TypeScript: what it is, `tsc`, `tsconfig.json`, TypeScript 7.
-8. Running `.ts` files directly with Node (type stripping) and its rules.
+8. Running `.ts` files directly with Node (type stripping — deleting the type annotations so plain JavaScript remains) and its rules.
 9. Types: primitives, arrays, tuples, object types, interfaces, unions, literals, `any` vs `unknown`.
 10. Narrowing, discriminated unions and exhaustive checks.
 11. Generics and utility types.
 12. Classes, `as const`, `satisfies`, enums and their alternatives.
-13. Tests written in TypeScript, and JSDoc types for plain JavaScript.
+13. Tests written in TypeScript, and JSDoc types (types written inside specially formatted `/** … */` comments) for plain JavaScript.
 
 **Before you start.** You need functions ([Chapter 4](../04-functions-scope-and-closures/README.md)), classes ([Chapter 9](../09-this-prototypes-and-classes/README.md)), modules and `package.json` scripts ([Chapter 10](../10-modules-and-tooling/README.md)), errors ([Chapter 11](../11-errors-and-debugging/README.md)), and `async`/`await` ([Chapter 12](../12-asynchronous-javascript/README.md)). Testing React components (Testing Library) and TypeScript with React are in the React Handbook: [ch11](../../../react/chapters/11-typescript-with-react/README.md) and [ch12](../../../react/chapters/12-testing-react/README.md).
 
-**The code.** Everything is in [`code/`](code/) — a tiny project with its own [`package.json`](code/package.json) (`"type": "module"`, scripts `test`, `coverage`, `typecheck`) and [`tsconfig.json`](code/tsconfig.json). The modules under test live in `code/src/`. All outputs are real: **Node 24.11.1** and **TypeScript 7.0.2** (`tsc`). Test files are ordinary scripts too — running `node cart.test.mjs` executes its tests and exits with code 1 if any fail — so the book's runner executes them like every other program. Files that fail *on purpose* (`demo_failing.mjs`, `ts_errors.ts`, `jsdoc_errors.mjs`) or need a special flag (`module_mock_demo.mjs`) are marked `// tools_run: skip`, and the exact command to run them is in their first line and in the text. Timings in test output (the `(0.42ms)` parts) vary from run to run.
+**The code.** Everything is in [`code/`](code/) — a tiny project with its own [`package.json`](code/package.json) (the project's manifest: name, scripts, dependencies — here `"type": "module"`, scripts `test`, `coverage`, `typecheck`) and [`tsconfig.json`](code/tsconfig.json). The modules under test live in `code/src/`. All outputs are real: **Node 24.11.1** and **TypeScript 7.0.2** (`tsc`). Test files are ordinary scripts too — running `node cart.test.mjs` executes its tests and exits with code 1 if any fail — so the book's runner executes them like every other program. Files that fail *on purpose* (`demo_failing.mjs`, `ts_errors.ts`, `jsdoc_errors.mjs`) or need a special flag (`module_mock_demo.mjs`) are marked `// tools_run: skip`, and the exact command to run them is in their first line and in the text. Timings in test output (the `(0.42ms)` parts) vary from run to run.
 
 ---
 
@@ -32,27 +32,27 @@ An **automated test** is code that runs other code with known inputs and **asser
 Analogy: a checklist a pilot runs before every flight. It is boring, fast, and catches the one thing you'd otherwise forget.
 
 ### Why it matters
-- **Regression safety**: after a refactor or upgrade, the suite tells you in seconds whether something that used to work broke.
-- **Design feedback**: code that's hard to test (hidden global state, hard-wired network calls) is usually hard to reuse.
-- **Executable documentation** and a **CI gate**: the test command's exit code decides whether a pull request can merge.
+- **Regression safety** (a *regression* is something that used to work and broke): after a refactor (restructuring code without changing what it does) or upgrade, the suite tells you in seconds whether something that used to work broke.
+- **Design feedback**: code that's hard to test (hidden global state — data any code can change — or hard-wired network calls) is usually hard to reuse.
+- **Executable documentation** and a **CI gate** (CI, continuous integration, is a server that builds and tests every change automatically): the test command's exit code (0 = success) decides whether a pull request (a proposed change submitted for review) can merge (be added to the main code).
 
 ### Kinds of tests
 | Kind | What it exercises | Speed | Typical tool (JS) |
 |---|---|---|---|
-| **Unit** | One function/class/module in isolation; dependencies replaced by doubles | Milliseconds | node:test, Vitest, Jest |
-| **Integration** | Real pieces together (HTTP handler + a real database in a container) | Tens of ms to seconds | Same runners + Testcontainers |
+| **Unit** | One function/class/module in isolation; dependencies replaced by doubles (stand-ins, §16.5) | Milliseconds | node:test, Vitest, Jest |
+| **Integration** | Real pieces together (HTTP handler + a real database in a container — a lightweight packaged environment, e.g. Docker) | Tens of ms to seconds | Same runners + Testcontainers (a library that starts such containers for tests) |
 | **End-to-end (E2E)** | The whole app through its real interface (a browser clicking through pages) | Seconds | Playwright, Cypress |
-| **Static checks** | No execution: types, lint rules | Fast | TypeScript, ESLint |
+| **Static checks** | No execution: types, lint rules (automatic checks for suspicious code) | Fast | TypeScript, ESLint |
 
-The **test pyramid** advises many unit tests, fewer integration tests and a handful of E2E tests, because higher layers are slower and flakier. The **testing trophy** (popular in front-end) makes integration tests the fattest layer, for the most confidence per test. Both agree: static checks at the bottom, few E2E tests, and test **behaviour**, not implementation details.
+The **test pyramid** advises many unit tests, fewer integration tests and a handful of E2E tests, because higher layers are slower and flakier (a *flaky* test sometimes passes and sometimes fails with no code change). The **testing trophy** (popular in front-end) makes integration tests the fattest layer, for the most confidence per test. Both agree: static checks at the bottom, few E2E tests, and test **behaviour**, not implementation details.
 
 ### Test runners in 2026
 | Runner | Strengths | Notes |
 |---|---|---|
 | **`node:test`** (built in) | No dependencies, fast, runs TypeScript via type stripping; mocks, fake timers, snapshots, coverage built in | Stable since Node 20; used here |
-| **Vitest** | Jest-compatible API, Vite's config and transforms, browser mode | Common for Vite / React projects |
-| **Jest** | Very large ecosystem | Older projects; ESM historically needed extra config |
-| **Playwright Test** | Real browsers (Chromium, Firefox, WebKit), auto-waiting, tracing | E2E and component tests |
+| **Vitest** | Jest-compatible API, Vite's (a popular build tool's) config and transforms, browser mode | Common for Vite / React projects |
+| **Jest** | Very large ecosystem (plugins and add-ons) | Older projects; ESM (`import`/`export` modules) historically needed extra config |
+| **Playwright Test** | Real browsers (Chromium, Firefox, WebKit — the engines behind Chrome, Firefox and Safari), auto-waiting, tracing (recording each step for later inspection) | E2E and component tests |
 | **Bun test / Deno test** | Built into those runtimes ([§15.12](../15-nodejs-basics/README.md#1512-everyday-node-flags-and-node-vs-deno-vs-bun)) | Jest-like APIs |
 
 The concepts (describe/it, hooks, assertions, mocks, snapshots) are nearly identical across all of them; §16.7 has a translation table.
@@ -72,8 +72,8 @@ An **assertion** is a check that throws an `AssertionError` when it fails. A tes
 | `equal(actual, expected)` | `Object.is(actual, expected)` — same primitive value or **same object reference** |
 | `deepEqual(actual, expected)` | Same structure and values, recursively, **type-strict** (`1` ≠ `'1'`), same prototypes |
 | `notEqual` / `notDeepEqual` | The opposites |
-| `ok(value)` | `value` is truthy |
-| `match(string, regex)` / `doesNotMatch` | Regex matches / doesn't |
+| `ok(value)` | `value` is truthy (counts as true in an `if`) |
+| `match(string, regex)` / `doesNotMatch` | Regex (regular expression, a text pattern) matches / doesn't |
 | `throws(fn, expected?)` | `fn()` throws; `expected` can be an error class, a regex for the message, a validation object `{ name, message }`, or a function |
 | `rejects(promiseOrFn, expected?)` | The promise **rejects** — must be `await`ed |
 | `doesNotThrow` / `fail(msg)` | Rarely needed (just call the code) / always fails |
@@ -138,7 +138,7 @@ PASS rejects
 ```
 
 What to notice:
-- `0.1 + 0.2` is not `0.3` in floating point ([§2 Number](../02-variables-types-and-operators/README.md)) — compare floats with a tolerance, or keep money in integer cents (as the examples below do).
+- `0.1 + 0.2` is not `0.3` in floating point (the approximate way computers store decimal numbers) ([§2 Number](../02-variables-types-and-operators/README.md)) — compare floats with a tolerance, or keep money in integer cents (as the examples below do).
 - `equal` on two separate objects fails even with identical contents; use `deepEqual` for structure.
 - The diff (`+ actual - expected`) is what makes a failing test quick to diagnose — prefer one `deepEqual` on a whole object over many `equal`s on single fields.
 
@@ -162,10 +162,10 @@ Use `node:assert/strict`. `equal` for primitives/same reference, `deepEqual` for
 | `t.mock`, `t.assert`, `t.plan(n)`, `t.signal`, `t.diagnostic(msg)` | Context helpers: auto-restoring mocks (§16.5), assertions incl. snapshots (§16.6), expected assertion count, an `AbortSignal` for cancellation, extra output |
 
 ### How it works
-1. You run `node --test` (usually via `npm test`). With no arguments Node searches the current folder recursively (skipping `node_modules`) for files named like `*.test.{js,mjs,cjs}`, `*-test.*`, `*_test.*`, `test-*.*`, `test.*`, or anything inside a `test/` folder — and the same patterns with `.ts/.mts/.cts`.
-2. Each file runs in **its own child process** by default (isolation: one file's globals or mocks can't leak into another; `--test-isolation=none` runs them in one process for speed).
+1. You run `node --test` (usually via `npm test`). With no arguments Node searches the current folder recursively (into every subfolder, skipping `node_modules` — the folder where installed packages live) for files named like `*.test.{js,mjs,cjs}`, `*-test.*`, `*_test.*`, `test-*.*`, `test.*`, or anything inside a `test/` folder — and the same patterns with `.ts/.mts/.cts`.
+2. Each file runs in **its own child process** (a separate program Node starts) by default (isolation: one file's globals or mocks can't leak into another; `--test-isolation=none` runs them in one process for speed).
 3. Inside a file, tests run **in order**; `describe` callbacks run immediately to collect tests; hooks wrap them.
-4. The **reporter** prints results: `spec` (default, the tree below), `tap`, `dot`, `junit` (CI dashboards), `lcov` (coverage); `--test-reporter-destination` writes to a file.
+4. The **reporter** prints results: `spec` (default, the tree below), `tap`, `dot`, `junit` (CI dashboards), `lcov` (coverage) — standard machine-readable report formats; `--test-reporter-destination` writes to a file.
 5. The **exit code** is 1 if any test failed — what CI checks.
 
 Useful commands:
@@ -301,8 +301,8 @@ What each part shows:
 1. **Arrange–Act–Assert (AAA)**: set up, do one action, check. One behaviour per test, named as a sentence so the report reads like a specification.
 2. **`beforeEach` creates a fresh `Cart`**, so tests don't depend on each other's leftovers.
 3. **Table-driven tests**: one named test per row of bad inputs — cheap to extend, each failure reported separately.
-4. **Edge cases** are explicit: zero, 100 %, rounding (`849.15 → 849`), mutation of returned data.
-5. The `'1.234,56 €'` expectation contains a **non-breaking space** before the euro sign — locale output is a classic source of surprising failures.
+4. **Edge cases** (unusual or boundary inputs) are explicit: zero, 100 %, rounding (`849.15 → 849`), mutation of returned data.
+5. The `'1.234,56 €'` expectation contains a **non-breaking space** (a special space character that stops a line break there) before the euro sign — locale output (formatting that depends on language and region settings) is a classic source of surprising failures.
 6. The `after` hook's `console.log` printed at the very top: each file runs in a child process whose stdout is printed before the formatted results. Use `t.diagnostic()` for messages inside the report.
 
 ### Common mistakes
@@ -313,7 +313,7 @@ What each part shows:
 - Tests with no assertion at all (they always pass). `t.plan(n)` can enforce a count when callbacks are involved.
 
 ### TL;DR
-`import { test, describe, it, beforeEach } from 'node:test'`, run `node --test`. One behaviour per test, AAA, fresh fixtures in `beforeEach`, table-driven tests for many inputs, `skip`/`todo` for known gaps. Exit code 1 on failure.
+`import { test, describe, it, beforeEach } from 'node:test'`, run `node --test`. One behaviour per test, AAA, fresh fixtures (the prepared objects and data a test starts from) in `beforeEach`, table-driven tests for many inputs, `skip`/`todo` for known gaps. Exit code 1 on failure.
 
 ---
 
@@ -387,7 +387,7 @@ Make tests `async` and `await` everything; set `timeout` for code that could han
 ## 16.5 Test doubles and mocking
 
 ### What it is
-A **test double** is a stand-in for a real dependency (network API, database, clock, random numbers) so the unit under test runs fast, deterministically, and offline. Terms you'll meet:
+A **test double** is a stand-in for a real dependency (network API, database, clock, random numbers) so the unit under test runs fast, deterministically (same result every run), and offline. Terms you'll meet:
 
 | Double | What it is | Example |
 |---|---|---|
@@ -395,7 +395,7 @@ A **test double** is a stand-in for a real dependency (network API, database, cl
 | **Stub** | Returns canned answers | `getDiscount: async () => ({ percent: 10 })` |
 | **Spy** | Records how it was called (and may call through) | `mock.fn()` → `.mock.calls` |
 | **Mock** | A spy with expectations about calls, verified in the test | "called once with 500" |
-| **Fake** | A working lightweight implementation | An in-memory repository instead of Postgres |
+| **Fake** | A working lightweight implementation | An in-memory repository (an object that loads and saves records) instead of Postgres (a popular SQL database) |
 
 In everyday speech people say "mock" for all of these.
 ### Why it matters — and dependency injection
@@ -527,13 +527,13 @@ Output of `node --test --experimental-test-module-mocks module_mock_demo.mjs`:
 ...
 ```
 
-Module mocking is still **experimental** in Node 24 (hence the flag and warning), and the module must be imported *after* the mock is set up — hence the dynamic `import()` (Vitest's `vi.mock` and Jest's `jest.mock` hoist mocks above imports for you). Prefer dependency injection; use module mocks when you can't change the code.
+Module mocking is still **experimental** in Node 24 (hence the flag and warning), and the module must be imported *after* the mock is set up — hence the dynamic `import()` (Vitest's `vi.mock` and Jest's `jest.mock` hoist — automatically move — mocks above imports for you). Prefer dependency injection; use module mocks when you can't change the code.
 
 ### When not to mock
-- **Don't mock what you own and can run cheaply** (pure functions, your own small modules) — use the real thing.
+- **Don't mock what you own and can run cheaply** (pure functions — no side effects, same input always gives the same output — and your own small modules) — use the real thing.
 - **Don't mock the unit under test** — you would be testing the mock.
-- Too many mocks give tests that pass while production fails (doubles drift from reality) — balance with integration tests against real (containerized) databases and **contract tests** for external APIs.
-- For HTTP, prefer a real local server (§15.10's port-0 pattern) or an interception library (MSW, undici `MockAgent`) over hand-mocking `fetch`.
+- Too many mocks give tests that pass while production fails (doubles drift from reality) — balance with integration tests against real (containerized) databases and **contract tests** (tests checking that both sides of an API still agree on its request/response format) for external APIs.
+- For HTTP, prefer a real local server (§15.10's port-0 pattern) or an interception library (one that catches outgoing requests and answers them: MSW, undici `MockAgent`) over hand-mocking `fetch`.
 
 ### In the interview
 **Q: Stub vs mock vs fake?** "A stub returns canned data; a mock (or spy) records calls so you can assert on them; a fake is a simple working implementation, like an in-memory DB. I prefer injecting dependencies so tests can pass fakes without a mocking framework."
@@ -572,12 +572,12 @@ Workflow:
    `;
    ```
 2. Commit the `.snapshot` file. Later runs compare against it; without the file, the test fails with "Missing snapshots can be generated by rerunning the command with the --test-update-snapshots flag".
-3. When the output changes **on purpose**, rerun with `--test-update-snapshots` and review the diff in code review.
+3. When the output changes **on purpose**, rerun with `--test-update-snapshots` and review the diff (line-by-line comparison of old and new) in code review (teammates reading a change before it's merged).
 
 The danger: updating snapshots without reading them. Keep them small and review them like code.
 
 ### Code coverage
-**Coverage** measures which lines, branches and functions your tests executed. Output of `node --test --experimental-test-coverage` in `code/` (all test files):
+**Coverage** measures which lines, branches (each possible path through an `if`/`else`, `switch` or `?:`) and functions your tests executed. Output of `node --test --experimental-test-coverage` in `code/` (all test files):
 
 ```
 ℹ start of coverage report
@@ -609,7 +609,7 @@ Snapshots record output and flag changes — commit and review them. Coverage (`
 |---|---|
 | **Fast** | Milliseconds; slow suites stop being run |
 | **Independent/Isolated** | No shared state, any order |
-| **Repeatable** | Same result every run: fixed clock, seeded randomness, no real network |
+| **Repeatable** | Same result every run: fixed clock, seeded randomness (random numbers generated from a fixed starting value, so they repeat), no real network |
 | **Self-validating** | Pass/fail by assertions, not by a human reading logs |
 | **Timely** | Written with (or before — **TDD**, test-driven development: red → green → refactor) the code |
 | **Behaviour-focused** | Tests public behaviour; survives refactoring |
@@ -639,7 +639,7 @@ Fast, isolated, repeatable, behaviour-focused, readable tests. The API names cha
 ## 16.8 TypeScript: what it is and how it's checked
 
 ### What it is
-**TypeScript** (TS) is JavaScript plus a **static type system**, developed by Microsoft since 2012. You add **type annotations** (`let pages: number`), and the **type checker** (the compiler `tsc`, or your editor using it) verifies that values are used consistently — *before* the code runs. The types are then **erased**: what executes is ordinary JavaScript. TS has **no runtime** of its own.
+**TypeScript** (TS) is JavaScript plus a **static type system** (rules about what kind of value each variable may hold, checked without running the code), developed by Microsoft since 2012. You add **type annotations** (`let pages: number`), and the **type checker** (the compiler `tsc`, or your editor using it) verifies that values are used consistently — *before* the code runs. The types are then **erased**: what executes is ordinary JavaScript. TS has **no runtime** of its own (nothing of TypeScript exists while the program runs).
 
 Key terms:
 - **Static typing**: types are checked by analyzing code, not by running it (JavaScript itself is dynamically typed — [§2](../02-variables-types-and-operators/README.md)).
@@ -651,24 +651,24 @@ Key terms:
 Analogy: a spell-checker for program structure. It underlines mistakes as you type; the printed letter (the JavaScript) contains no red lines.
 
 ### Why it matters
-Catches typos, wrong argument orders, missing `null` checks and forgotten cases at edit time; powers accurate autocomplete and safe renames; documents APIs. It is the industry default for serious front-end and Node projects (React, Angular, Vue and Next.js all support it first-class).
+Catches typos, wrong argument orders, missing `null` checks and forgotten cases at edit time; powers accurate autocomplete (the editor suggesting names as you type) and safe renames; documents APIs. It is the industry default for serious front-end and Node projects (React, Angular, Vue and Next.js all support it first-class).
 
 ### Trade-offs
 | Benefit | Cost |
 |---|---|
 | Bugs caught before running; editor support | A check step and a `tsconfig.json`; a learning curve for advanced types |
-| Self-documenting APIs | Types lie if you misuse `any`/`as`, and never validate **runtime** data (API JSON still needs a check or a schema library such as Zod) |
+| Self-documenting APIs | Types lie if you misuse `any`/`as`, and never validate **runtime** data (API JSON still needs a check or a schema library — one that validates data against a described shape — such as Zod) |
 
 ### `tsc` and TypeScript 7
-`tsc` is the TypeScript compiler. Its two jobs are **type-checking** and **emitting** JavaScript. Today, emitting is often left to faster tools (esbuild, Vite, SWC, or Node's type stripping, §16.9) and `tsc` is run only for checking: **`tsc --noEmit`**.
+`tsc` is the TypeScript compiler. Its two jobs are **type-checking** and **emitting** JavaScript (writing out `.js` files). Today, emitting is often left to faster tools (esbuild, Vite, SWC — very fast compilers and build tools written in Go or Rust, or Node's type stripping, §16.9) and `tsc` is run only for checking: **`tsc --noEmit`**.
 
-**TypeScript 7.0** (released 8 July 2026) is a **native port of the compiler written in Go**; Microsoft reports full builds roughly 8–12× faster than TypeScript 6, with the same `typescript` npm package and `tsc` command. It also changes defaults and removes legacy options:
+**TypeScript 7.0** (released 8 July 2026) is a **native port of the compiler written in Go** (a rewrite in Go, a compiled language, instead of JavaScript); Microsoft reports full builds roughly 8–12× faster than TypeScript 6, with the same `typescript` npm package and `tsc` command. It also changes defaults and removes legacy options:
 
 | In TypeScript 7 | Details |
 |---|---|
-| New defaults | `strict: true`, `module: esnext`, `target`: the current stable ECMAScript version, `types: []` (you list `@types` packages explicitly), `noUncheckedSideEffectImports: true` |
+| New defaults | `strict: true`, `module: esnext`, `target`: the current stable ECMAScript version, `types: []` (you list `@types` packages — community-written type definitions for JavaScript libraries — explicitly), `noUncheckedSideEffectImports: true` |
 | Removed | `target: es5`, `downlevelIteration`, `moduleResolution: node`/`node10`/`classic`, `module: amd/umd/systemjs/none`, `baseUrl` (use `paths`) |
-| Not yet | A stable programmatic (JavaScript) API — expected in 7.1; tools that call the compiler's API may lag |
+| Not yet | A stable programmatic (callable from your own code; JavaScript) API — expected in 7.1; tools that call the compiler's API may lag |
 
 Everyday commands (not run — the project in `code/` already has TypeScript available):
 ```bash
@@ -709,7 +709,7 @@ The project's [`code/tsconfig.json`](code/tsconfig.json):
 | `noEmit` | Check only; something else runs the code |
 | `noUncheckedIndexedAccess` | `arr[i]` and `record[key]` are `T \| undefined` — catches out-of-range reads |
 | `allowImportingTsExtensions` | Allow `import './shapes.ts'` (Node requires the real extension) |
-| `erasableSyntaxOnly` | Reject TS features that need code generation (enum, namespaces with code, parameter properties) — exactly what Node can't strip (TS 5.8+) |
+| `erasableSyntaxOnly` | Reject TS features that need code generation (enum — a set of named constants; namespaces with code; parameter properties) — exactly what Node can't strip (TS 5.8+) |
 | `verbatimModuleSyntax` | Force `import type` for type-only imports, so removing types never changes which modules load |
 
 Running the checker on the whole project:
@@ -730,7 +730,7 @@ TypeScript = JavaScript + static types that are checked by `tsc` and erased befo
 ## 16.9 Running TypeScript: Node's type stripping and other tools
 
 ### What it is
-Since **Node 23.6** (and backported to 22.18), `node file.ts` works with no flags: Node **strips the type annotations** — replacing them with whitespace, so line and column numbers stay correct without source maps — and runs the remaining JavaScript. The feature stopped printing an experimental warning in Node 24.3 and was declared **stable in Node 24.12**.
+Since **Node 23.6** (and backported — also added — to the older 22.18 line), `node file.ts` works with no flags: Node **strips the type annotations** — replacing them with whitespace, so line and column numbers stay correct without source maps (files mapping generated code back to the original lines) — and runs the remaining JavaScript. The feature stopped printing an experimental warning in Node 24.3 and was declared **stable in Node 24.12**.
 
 **Stripping is not checking.** [`code/no_typecheck_demo.ts`](code/no_typecheck_demo.ts):
 
@@ -747,13 +747,13 @@ total = "52" | typeof string
 no_typecheck_demo.ts(4,7): error TS2322: Type 'string' is not assignable to type 'number'.
 ```
 
-Node ran code whose `number` annotation holds the string `"52"`. **Always run `tsc --noEmit`** (editor, pre-commit, CI) as well.
+Node ran code whose `number` annotation holds the string `"52"`. **Always run `tsc --noEmit`** (editor, pre-commit — a hook that runs before every Git commit — and CI) as well.
 
 ### The rules for Node's type stripping
-1. **Only erasable syntax.** Things that generate JavaScript are rejected with `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`: `enum`, `namespace`/`module` blocks containing code, **parameter properties** (`constructor(public x: number)`), `import x = require()` aliases, and legacy decorators. (`--experimental-transform-types` enables them, with a warning.) Turn on `erasableSyntaxOnly` so the editor flags them.
+1. **Only erasable syntax.** Things that generate JavaScript are rejected with `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`: `enum`, `namespace`/`module` blocks containing code, **parameter properties** (`constructor(public x: number)`), `import x = require()` aliases, and legacy decorators (`@name` annotations placed on classes and members). (`--experimental-transform-types` enables them, with a warning.) Turn on `erasableSyntaxOnly` so the editor flags them.
 2. **Write real file extensions** in relative imports: `import { area } from './shapes.ts'`.
 3. **Use `import type`** (or inline `type` modifiers) for imports that are only types (`verbatimModuleSyntax` enforces it).
-4. **`tsconfig.json` is ignored** by Node — no `paths` aliases, no `target` downlevelling.
+4. **`tsconfig.json` is ignored** by Node — no `paths` aliases (short import names mapped to folders), no `target` downlevelling (rewriting new syntax for older engines).
 5. **Not in `node_modules`**: Node refuses to strip TypeScript files inside dependencies; packages must publish JavaScript (+ `.d.ts` type declarations).
 6. `.ts` follows the same ESM/CommonJS rules as `.js`; `.mts`/`.cts` force one.
 
@@ -793,7 +793,7 @@ shapes: rect, circle
 |---|---|---|
 | `node file.ts` | Strips erasable types | No |
 | **tsx** (npm) | esbuild-powered runner; supports all TS syntax and `tsconfig` paths | No |
-| **esbuild / Vite / SWC** | Transpile or bundle TS for browsers and Node (this book's runner uses esbuild) | No |
+| **esbuild / Vite / SWC** | Transpile (convert to plain JavaScript) or bundle (merge into a few files) TS for browsers and Node (this book's runner uses esbuild) | No |
 | **`tsc`** | Checks, and can emit `.js` + `.d.ts` (needed when publishing libraries) | **Yes** |
 | **Deno / Bun** | Run TS natively ([§15.12](../15-nodejs-basics/README.md#1512-everyday-node-flags-and-node-vs-deno-vs-bun)); `deno check` type-checks | Deno: on request |
 
@@ -877,7 +877,7 @@ Output of `node 10_ts_basics.ts`:
 | `void` | A function returns nothing useful |
 | `object` | Any non-primitive |
 
-**`type` vs `interface`**: both describe object shapes. `interface` can be **reopened** (declaration merging, used to extend library types) and `extends` others; `type` can also name unions, tuples and computed types. Many teams use `interface` for object shapes and `type` for the rest — consistency matters more than the choice.
+**`type` vs `interface`**: both describe object shapes. `interface` can be **reopened** (declaration merging, used to extend library types) and `extends` others; `type` can also name unions, tuples and computed types (types derived from other types, §16.12). Many teams use `interface` for object shapes and `type` for the rest — consistency matters more than the choice.
 
 ### Seeing the checker work
 [`code/ts_errors.ts`](code/ts_errors.ts) (skip-marked) contains nine deliberate mistakes:
@@ -919,7 +919,7 @@ ts_errors.ts(20,27): error TS1294: This syntax is not allowed when 'erasableSynt
 ...
 ```
 
-Each line is `file(line,column): error TSxxxx: message` (`--ignoreConfig` is needed because TypeScript 7 won't combine a present `tsconfig.json` with file names on the command line). Error 3 is the famous one: with `strict`, "possibly `undefined`" catches `TypeError: Cannot read properties of undefined` ([§11.10](../11-errors-and-debugging/README.md#1110-common-runtime-errors--a-field-guide)) before it happens. Error 1, the **excess property check**, applies only to object literals written where a type is expected; an object stored in a variable first may carry extra properties (structural typing).
+Each line is `file(line,column): error TSxxxx: message` (`--ignoreConfig` is needed because TypeScript 7 won't combine a present `tsconfig.json` with file names on the command line). Error 3 is the famous one: with `strict`, "possibly `undefined`" catches `TypeError: Cannot read properties of undefined` ([§11.10](../11-errors-and-debugging/README.md#1110-common-runtime-errors--a-field-guide)) before it happens. Error 1, the **excess property check**, applies only to object literals (objects written out inline with `{ … }`) written where a type is expected; an object stored in a variable first may carry extra properties (structural typing).
 
 ### Common mistakes
 - `any` to silence an error — it spreads to everything derived from it. Use `unknown` and narrow.
@@ -992,7 +992,7 @@ Output of `node 11_narrowing.ts`:
 ```
 
 ### Real-world examples
-Redux actions (`{ type: 'added' } | { type: 'removed' }`, [React Handbook ch6](../../../react/chapters/06-state-management/README.md)), API responses (`{ status: 'loading' } | { status: 'success'; data } | { status: 'error'; error }`), and `Result` types in libraries that avoid exceptions are all discriminated unions.
+Redux (a popular state-management library) actions (`{ type: 'added' } | { type: 'removed' }`, [React Handbook ch6](../../../react/chapters/06-state-management/README.md)), API responses (`{ status: 'loading' } | { status: 'success'; data } | { status: 'error'; error }`), and `Result` types in libraries that avoid exceptions are all discriminated unions.
 
 ### In the interview
 **Q: How do you make sure every case of a union is handled?** "Model it as a discriminated union, switch on the discriminant, and assign the value to a `never`-typed variable in `default`. Adding a new member makes that assignment a compile error."
@@ -1070,7 +1070,7 @@ Output of `node 12_generics.ts`:
 - Deep type gymnastics in application code — hard to read; keep types boring.
 
 ### TL;DR
-Generics (`<T>`) keep precise types across reusable code; constrain with `extends`, use `keyof`/`T[K]` for property-safe helpers. Know `Partial`, `Pick`, `Omit`, `Record`, `ReturnType`, `Awaited`.
+Generics (`<T>`) keep precise types across reusable code; constrain with `extends`, use `keyof` (the union of an object type's key names) / `T[K]` (the type of property `K`) for property-safe helpers. Know `Partial`, `Pick`, `Omit`, `Record`, `ReturnType`, `Awaited`.
 
 ---
 
@@ -1118,7 +1118,7 @@ What each feature is for:
 | `readonly` | Can't be reassigned after construction | Compile time only |
 | `abstract class` | Can't be instantiated; subclasses implement abstract members | Erasable |
 | `as const` | Make a literal deeply `readonly` with literal types | Derive unions from data (`typeof ROLES[number]`) — one source of truth |
-| `satisfies T` (TS 4.9+) | Check a value against `T` **without widening** it | `routes.admin` stays known; with `: Record<string, Route>` it would be "any string key" |
+| `satisfies T` (TS 4.9+) | Check a value against `T` **without widening** it (widening = TS loosening a type to something broader, e.g. `'admin'` to `string`) | `routes.admin` stays known; with `: Record<string, Route>` it would be "any string key" |
 | `enum` | Named constants that generate a runtime object | **Not erasable** — rejected by Node's type stripping. Prefer a union of literals or an `as const` object |
 
 ### TL;DR
@@ -1128,7 +1128,7 @@ TS classes add `implements`, `private/protected/readonly` (compile-time) on top 
 
 ## 16.14 Tests written in TypeScript
 
-`node --test` also finds `*.test.ts` files and type-strips them, so TypeScript projects can use the built-in runner with **no build step**. The module [`code/src/money.ts`](code/src/money.ts) splits money without losing cents:
+`node --test` also finds `*.test.ts` files and type-strips them, so TypeScript projects can use the built-in runner with **no build step** (no separate compile command before running). The module [`code/src/money.ts`](code/src/money.ts) splits money without losing cents:
 
 ```ts
 export type Currency = 'USD' | 'EUR' | 'INR';
@@ -1180,7 +1180,7 @@ Output of `node --test money.test.ts`:
 ...
 ```
 
-"values are immutable" relies on `Object.freeze` plus module strict mode (assigning to a frozen property throws `TypeError`). The `as { cents: number }` cast steps around TS's (correct) `readonly` error so the test can prove the *runtime* guard works too.
+"values are immutable" (cannot be changed) relies on `Object.freeze` plus module strict mode (the stricter JS mode, always on in modules) (assigning to a frozen property throws `TypeError`). The `as { cents: number }` cast steps around TS's (correct) `readonly` error so the test can prove the *runtime* guard works too.
 
 **Type-checking test files needs Node's type definitions.** This project doesn't install `@types/node` (hence `tsconfig.json` excludes `*.test.ts`); checking the file alone shows the error a fresh project gets:
 
@@ -1207,7 +1207,7 @@ The full suite in `code/` (`node --test` finds all four test files):
 ## 16.15 JSDoc types: TypeScript checking for plain JavaScript
 
 ### What it is
-Without any `.ts` files, TypeScript can check **JavaScript** using types in **JSDoc comments** (`/** @param {number} x */`). Add `// @ts-check` at the top of a file (or `checkJs: true` in `tsconfig.json`) and the editor and `tsc` check it with the same engine — nothing to compile or strip. Svelte and webpack are well-known codebases typed this way.
+Without any `.ts` files, TypeScript can check **JavaScript** using types in **JSDoc comments** (`/** @param {number} x */`). Add `// @ts-check` at the top of a file (or `checkJs: true` in `tsconfig.json`) and the editor and `tsc` check it with the same engine — nothing to compile or strip. Svelte (a UI framework) and webpack (a bundler) are well-known codebases typed this way.
 
 | JSDoc tag | Meaning |
 |---|---|

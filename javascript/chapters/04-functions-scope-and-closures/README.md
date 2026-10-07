@@ -1,6 +1,6 @@
 # Chapter 4 — Functions, Scope and Closures
 
-Functions are the heart of JavaScript. They let you name a piece of behaviour, reuse it, pass it to other code, and even return it from other functions. Understanding functions properly also means understanding **scope** (which variables a piece of code can see) and **closures** (functions that remember the variables around them) — the ideas behind private state, event handlers, React hooks and a large share of interview questions.
+Functions are the heart of JavaScript. They let you name a piece of behaviour, reuse it, pass it to other code, and even return it from other functions. Understanding functions properly also means understanding **scope** (which variables a piece of code can see) and **closures** (functions that remember the variables around them) — the ideas behind private state (data only certain functions can touch), event handlers (functions that run when something happens, like a click), React hooks (functions such as `useState` that give React components memory between screen updates) and a large share of interview questions.
 
 **What you'll learn**
 
@@ -126,7 +126,7 @@ What the output teaches:
 3. **JavaScript never checks argument counts.** Missing arguments become `undefined`; extra ones are ignored (though still reachable, §4.4).
 4. **Functions are values** (**first-class** functions): they can be stored in variables, passed around and given properties. `typeof` reports `"function"`; `.name` is the function's name; `.length` is the number of declared parameters.
 5. **`square` vs `square()`**: without parentheses you refer to the function itself; with them you call it. Passing `handleClick()` where `handleClick` was expected is a classic bug — you pass its *result*.
-6. **Arguments are passed by value**, but for objects the value is a **reference** ([Chapter 2 §2.4](../02-variables-types-and-operators/README.md#24-primitives-vs-objects)). The function can mutate the caller's object (`obj.changed = true`), but reassigning the parameter only changes the local name. This is sometimes called "call by sharing".
+6. **Arguments are passed by value**, but for objects the value is a **reference** ([Chapter 2 §2.4](../02-variables-types-and-operators/README.md#24-primitives-vs-objects)). The function can mutate (change in place) the caller's object (`obj.changed = true`), but reassigning the parameter only changes the local name. This is sometimes called "call by sharing".
 
 ### Common mistakes
 - **Forgetting `return`** in a function meant to compute something → the caller gets `undefined`.
@@ -147,8 +147,8 @@ There are two classic ways to create a function with the `function` keyword:
 |---|---|---|
 | Looks like | `function add(a, b) { … }` as a statement on its own | `const add = function (a, b) { … };` — a function used as a value |
 | Name | required | optional (anonymous, or named for internal use) |
-| Hoisting | **fully hoisted** — callable before its line | follows the variable: `const`/`let` → TDZ error, `var` → `undefined` (so calling it gives `TypeError`) |
-| Typical use | top-level helpers, named utilities | callbacks, conditional definitions, values stored in objects |
+| Hoisting | **fully hoisted** — callable before its line | follows the variable: `const`/`let` → TDZ (Temporal Dead Zone, the stretch before the declaration line) error, `var` → `undefined` (so calling it gives `TypeError`) |
+| Typical use | top-level helpers, named utilities | callbacks (functions handed to other code to call later), conditional definitions, values stored in objects |
 
 A third form, the **arrow function** (`const add = (a, b) => a + b;`), is also an expression; §4.3 covers it.
 
@@ -199,7 +199,7 @@ strict: block function visible outside block? undefined
 What it shows:
 1. A **declaration** can be called above the line where it's written — the engine creates the whole function when it enters the scope. This lets you put the "story" of a file at the top and helpers below.
 2. A **`const` expression** is in the Temporal Dead Zone until its line ([Chapter 2 §2.2](../02-variables-types-and-operators/README.md#22-hoisting-and-the-temporal-dead-zone)); a **`var` expression** exists but holds `undefined`, so calling it gives "is not a function".
-3. A **named function expression** (`function fact(n) {…}`) can refer to itself by that name inside its body — useful for recursion and clearer stack traces — but the name is not visible outside.
+3. A **named function expression** (`function fact(n) {…}`) can refer to itself by that name inside its body — useful for recursion (a function calling itself, §4.10) and clearer stack traces (the list of nested function calls printed with an error) — but the name is not visible outside.
 4. Anonymous functions assigned to variables get an **inferred `name`**, which is what shows up in error stack traces.
 5. In strict code (modules, classes), a function *declared inside a block* is scoped to that block. (Sloppy mode has murky legacy rules for this; avoid block-level function declarations there.)
 
@@ -214,7 +214,7 @@ Declarations are hoisted whole; expressions behave like the variable that holds 
 ## 4.3 Arrow functions
 
 ### What it is
-**Arrow functions** (ES2015) are a compact syntax for function expressions: `(params) => body`. Beyond being shorter, they differ from regular functions in a few important ways — most notably, they don't have their own `this`.
+**Arrow functions** (ES2015) are a compact syntax for function expressions: `(params) => body`. Beyond being shorter, they differ from regular functions in a few important ways — most notably, they don't have their own `this` (the keyword that refers to the object a function is currently working on — [Chapter 9](../09-this-prototypes-and-classes/README.md)).
 
 ### Syntax forms
 | Form | Example | Notes |
@@ -225,7 +225,7 @@ Declarations are hoisted whole; expressions behave like the variable that holds 
 | default / rest / destructured parameter | `(name = "Guest") => …`, `(...xs) => …`, `({ id }) => …` | parentheses required |
 | **expression body** | `x => x * 2` | the expression's value is returned automatically (**implicit return**) |
 | **block body** | `x => { const y = x * 2; return y; }` | braces → you must write `return` |
-| returning an object literal | `(x, y) => ({ x, y })` | wrap in parentheses, or the braces are read as a block |
+| returning an object literal (an object written directly in `{ }`) | `(x, y) => ({ x, y })` | wrap in parentheses, or the braces are read as a block |
 
 ### Example
 ```js
@@ -289,25 +289,25 @@ new on arrow -> TypeError: square is not a constructor
 
 | Feature | Regular `function` | Arrow `=>` |
 |---|---|---|
-| `this` | set by **how** the function is called ([Ch. 9](../09-this-prototypes-and-classes/README.md)) | **lexical**: taken from the surrounding code, fixed forever (even `call`/`bind` can't change it) |
+| `this` | set by **how** the function is called ([Ch. 9](../09-this-prototypes-and-classes/README.md)) | **lexical**: taken from the surrounding code, fixed forever (even `call`/`bind`, methods that run a function with a chosen `this`, can't change it) |
 | `arguments` object | yes | no — uses the enclosing function's, if any |
 | Can be called with `new` | yes (declarations/expressions) | no — `TypeError`; no `prototype` property |
-| `super`, `new.target` | own | lexical |
-| Can be a generator (`yield`) | yes | no |
+| `super` (reaches the parent class), `new.target` (tells whether `new` was used) | own | lexical |
+| Can be a generator (a function that pauses and hands out values one at a time with `yield`, [Ch. 8](../08-maps-sets-iterators-and-generators/README.md)) | yes | no |
 | Hoisted | declarations yes | no (it's an expression) |
 | Good as object method | yes | **no** — `this` won't be the object |
 | Good as callback inside a method | needs `bind`/`self = this` | **yes** — sees the method's `this` |
 
-The `timer` example shows why lexical `this` matters: in `tickRegular`, the inner `function` callback is called plainly by `map`, so in strict mode its `this` is `undefined` — it lost the object. In `tickArrow`, the arrow borrows `this` from `tickArrow`, which *is* `timer`, so `this.seconds++` works. Before ES2015, people wrote `var self = this;` or `.bind(this)` to solve this; arrows made that unnecessary. The flip side is `counter.arrow`: an arrow used *as* a method doesn't get the object as `this` either — its `this` is whatever it was where the object literal was written. Here that is the top level of a CommonJS file, where Node sets `this` to `module.exports` (an empty object), so `this.count` is `undefined`; in an ES module the top-level `this` is `undefined`, so `this?.count` would give `undefined` there too.
+The `timer` example shows why lexical `this` matters: in `tickRegular`, the inner `function` callback is called plainly by `map`, so in strict mode its `this` is `undefined` — it lost the object. In `tickArrow`, the arrow borrows `this` from `tickArrow`, which *is* `timer`, so `this.seconds++` works. Before ES2015, people wrote `var self = this;` or `.bind(this)` to solve this; arrows made that unnecessary. The flip side is `counter.arrow`: an arrow used *as* a method doesn't get the object as `this` either — its `this` is whatever it was where the object literal was written. Here that is the top level of a CommonJS file (Node's original module format, using `require`/`module.exports`), where Node sets `this` to `module.exports` (an empty object), so `this.count` is `undefined`; in an ES module the top-level `this` is `undefined`, so `this?.count` would give `undefined` there too.
 
 ### Why it matters / benefits
 - **Concise** callbacks: `items.filter(i => i.inStock).map(i => i.price)`.
 - **Predictable `this`** in callbacks, timers and event handlers inside class methods.
-- Common in React code (component definitions, handlers) and functional-style code.
+- Common in React code (React is a popular library for building user interfaces out of *components*, reusable pieces of UI) and functional-style code.
 
 ### When not to use arrows
 - **Object methods** that use `this` → use method shorthand `name() { … }`.
-- **Constructors** → use a `class` ([Ch. 9](../09-this-prototypes-and-classes/README.md)).
+- **Constructors** (functions called with `new` to build objects) → use a `class` ([Ch. 9](../09-this-prototypes-and-classes/README.md)).
 - **DOM event handlers that need `this` to be the element** → use a regular function or `event.currentTarget` ([Ch. 13](../13-dom-and-events/README.md)).
 - **Long, multi-step logic** — a named declaration can read better.
 
@@ -335,7 +335,7 @@ function greet(name) {
 }
 ```
 
-That's extra code in every function, and it has a hidden bug: `||` replaces **every falsy value**, so a deliberate `""` or `0` gets overwritten. **Default parameters** put the fallback directly in the signature — `function greet(name = "Guest")` — which is shorter, self-documenting, and replaces **only `undefined`**.
+That's extra code in every function, and it has a hidden bug: `||` replaces **every falsy value**, so a deliberate `""` or `0` gets overwritten. **Default parameters** put the fallback directly in the signature (the function's name plus its parameter list) — `function greet(name = "Guest")` — which is shorter, self-documenting, and replaces **only `undefined`**.
 
 ### How defaults work
 1. When the function is called, parameters are initialised **left to right**.
@@ -448,11 +448,11 @@ OK (blue) | Save (blue, disabled)
 |---|---|---|
 | **Rest parameter** `...args` | last parameter in a definition | collects all remaining arguments into a **real array** (empty if none) |
 | **`arguments`** | inside any non-arrow function | legacy **array-like** object of all arguments: has `length` and indexes, but no array methods; absent in arrows |
-| **Spread** `...array` | in a call (or array/object literal) | expands an iterable into separate arguments — the mirror image of rest |
-| **Options object** with destructuring | `function f({ a = 1, b = 2 } = {})` | named, order-independent parameters with defaults; the `= {}` lets you call `f()` with no argument at all |
+| **Spread** `...array` | in a call (or array/object literal) | expands an iterable (anything `for…of` can loop over: arrays, strings …) into separate arguments — the mirror image of rest |
+| **Options object** with destructuring (pulling properties out into variables) | `function f({ a = 1, b = 2 } = {})` | named, order-independent parameters with defaults; the `= {}` lets you call `f()` with no argument at all |
 | `fn.length` | property | number of parameters **before** the first one with a default or rest |
 
-Prefer rest parameters over `arguments` in new code: they're real arrays, work in arrows, and make the signature self-describing. Destructuring syntax is explained fully in [Chapter 5](../05-objects-math-date-and-json/README.md); the options-object pattern is how most JavaScript APIs (and React props) take many optional settings.
+Prefer rest parameters over `arguments` in new code: they're real arrays, work in arrows, and make the signature self-describing. Destructuring syntax is explained fully in [Chapter 5](../05-objects-math-date-and-json/README.md); the options-object pattern is how most JavaScript APIs (the functions a library exposes for you to call) and React props (the settings object passed into a component) take many optional settings.
 
 ### Common mistakes
 - Expecting `null` to trigger a default — only `undefined` does. Use `??` inside the body if `null` should also fall back.
@@ -571,15 +571,15 @@ flowchart LR
 3. Repeat up to the global scope.
 4. Still not found → `ReferenceError: x is not defined` (or, when *assigning* in sloppy mode, an accidental global is created).
 
-**Shadowing**: an inner declaration with the same name as an outer one hides the outer one within the inner scope (`paint`'s `color`). The outer variable is untouched. Shadowing is legal but can confuse readers; linters can flag it.
+**Shadowing**: an inner declaration with the same name as an outer one hides the outer one within the inner scope (`paint`'s `color`). The outer variable is untouched. Shadowing is legal but can confuse readers; linters (tools such as ESLint that scan code for likely mistakes) can flag it.
 
 ### The global object and scripts vs modules
 In a **classic browser script**, top-level `var` declarations and function declarations become properties of the global object (`window` / `globalThis`); top-level `let`/`const` are global *variables* but not properties. The example demonstrates this by running a snippet as a classic script with Node's `vm` module. In **ES modules** and **Node CommonJS files**, top-level declarations are private to the file — which is why `globalVar` did *not* appear on `globalThis` in the last line.
 
 ### Why it matters
 - **Fewer collisions**: two functions can both use a variable named `i` or `result` without interfering.
-- **Encapsulation**: variables that are only visible where they're needed can't be changed by accident elsewhere. Global variables are shared by *every* script on a page — including third-party ones — so keep the global scope clean.
-- **Garbage collection**: once no code can reach a scope's variables, their memory can be freed.
+- **Encapsulation**: variables that are only visible where they're needed can't be changed by accident elsewhere. Global variables are shared by *every* script on a page — including third-party ones (code written by other companies, such as ads or analytics) — so keep the global scope clean.
+- **Garbage collection** (the engine automatically reclaiming memory nothing uses any more): once no code can reach a scope's variables, their memory can be freed.
 
 ### Common mistakes
 - Declaring with `var` inside an `if` or `for` and being surprised it's visible after the block (the `vi` example).
@@ -775,7 +775,7 @@ memoized: underlying function ran 1 time(s)
 - **Function factories** — configure a function once (`factor`), get a specialised function back.
 - **Closures capture variables, not values** — `read` returned `"changed later"`, the value at *call* time, because it holds a live reference to the variable.
 - **`once`** — the `done` flag lives in the closure; used for one-time initialisation, "submit only once" buttons.
-- **`memoize`** — the cache lives in the closure; repeated calls with the same input skip the work. (Real memoizers must think about cache size and multi-argument keys.)
+- **`memoize`** (memoization = remembering the results of earlier calls) — the cache (a store of saved results for quick reuse) lives in the closure; repeated calls with the same input skip the work. (Real memoizers must think about cache size and multi-argument keys.)
 
 ### The classic loop puzzle
 ```js
@@ -796,18 +796,18 @@ var closures: [ 3, 3, 3 ] | let closures: [ 0, 1, 2 ]
 var-timer 3  var-timer 3  var-timer 3  let-timer 0  let-timer 1  let-timer 2  
 ```
 
-Why: with `var` there is **one** `i` for the whole loop (function scope). All three closures capture that same variable, and by the time they run the loop has finished and `i` is 3. With `let` in a `for` header, JavaScript creates a **new binding for each iteration**, copying the current value into it, so each closure captures its own `j`. The timer version is the same story with asynchronous callbacks ([Chapter 12](../12-asynchronous-javascript/README.md)). Pre-ES2015 fixes used an IIFE per iteration (§4.9); today, just use `let`.
+Why: with `var` there is **one** `i` for the whole loop (function scope). All three closures capture that same variable, and by the time they run the loop has finished and `i` is 3. With `let` in a `for` header, JavaScript creates a **new binding** (a fresh name-to-value slot) **for each iteration**, copying the current value into it, so each closure captures its own `j`. The timer version is the same story with asynchronous callbacks ([Chapter 12](../12-asynchronous-javascript/README.md)). Pre-ES2015 fixes used an IIFE per iteration (§4.9); today, just use `let`.
 
 ### Why closures matter — real-world examples
 - **Event handlers** remember the data they were created with: `button.addEventListener("click", () => deleteItem(item.id))` ([Ch. 13](../13-dom-and-events/README.md)).
-- **Debounce / throttle** utilities keep their timer IDs in a closure ([Ch. 17](../17-javascript-for-interviews/README.md)).
-- **React hooks**: every render's event handlers close over that render's props and state — which is also the source of "stale closure" bugs.
+- **Debounce / throttle** utilities (debounce = wait until calls stop for a moment, then run once; throttle = run at most once per time window) keep their timer IDs in a closure ([Ch. 17](../17-javascript-for-interviews/README.md)).
+- **React hooks**: every render's (each time React redraws a component) event handlers close over that render's props and state (the component's own remembered data) — which is also the source of "stale closure" bugs.
 - **Callbacks with context**: `setTimeout(() => notify(user), 1000)` keeps `user` alive until the timer fires.
 - **Private state** and factories, as above.
 
 ### Common mistakes and costs
 - **Stale closures**: a closure keeps reading a variable from an old scope (e.g. an old render in React) when you expected the latest value.
-- **Memory**: anything a live closure references can't be garbage-collected. A long-lived event listener that captures a huge array keeps that array in memory — remove listeners you no longer need.
+- **Memory**: anything a live closure references can't be garbage-collected. A long-lived event listener (a function registered to run on an event such as a click) that captures a huge array keeps that array in memory — remove listeners you no longer need.
 - **The loop puzzle** — use `let`.
 
 ### In the interview
@@ -815,7 +815,7 @@ Why: with `var` there is **one** `i` for the whole loop (function scope). All th
 
 - *Follow-up: Why does `for (var i…) setTimeout(() => log(i))` print the final value three times?* One shared function-scoped `i`; the callbacks run after the loop ends. `let` gives one binding per iteration.
 - *Follow-up: Do closures copy values?* No, they keep live references to the variables themselves, so later changes show up.
-- *Follow-up: Can closures cause memory leaks?* They keep referenced variables reachable; long-lived closures (listeners, timers, caches) holding large objects keep them in memory.
+- *Follow-up: Can closures cause memory leaks (memory that is never freed because something still points at it)?* They keep referenced variables reachable; long-lived closures (listeners, timers, caches) holding large objects keep them in memory.
 
 ### Self-check
 1. After `const c = makeCounter(); c(); c();`, what does `c()` return? → `3`.
@@ -902,8 +902,8 @@ D: setTimeout callback runs later (asynchronous)
 | Pattern | Idea | Example above |
 |---|---|---|
 | **Callback** | pass behaviour in | `repeat(3, action)` |
-| **Array HOFs** | `map`, `filter`, `reduce`, `sort`, `find`, `some` … take callbacks ([Ch. 7](../07-arrays/README.md)) | revenue of paid orders |
-| **Returning a function** | build a predicate/handler from settings | `greaterThan(10)` |
+| **Array HOFs** (higher-order functions) | `map`, `filter`, `reduce`, `sort`, `find`, `some` … take callbacks ([Ch. 7](../07-arrays/README.md)) | revenue of paid orders |
+| **Returning a function** | build a predicate (a function that answers true/false)/handler from settings | `greaterThan(10)` |
 | **Composition** | combine small functions into a pipeline; `pipe` runs left→right, `compose` right→left | `slugify` |
 | **Currying** | turn `f(a, b, c)` into `f(a)(b)(c)` so arguments can be supplied one at a time | `curriedAdd` |
 | **Partial application** | fix some arguments now, supply the rest later (`bind` can do it) | `baseTen` |
@@ -915,11 +915,11 @@ The last line shows that functions are objects: you can attach properties to the
 
 ### Why it matters
 - Separates **what** to do from **how/when**: `filter` knows how to loop; you only supply the rule.
-- Declarative, reusable code; the foundation of functional programming and of every event-driven API.
+- Declarative (describing *what* you want rather than each step), reusable code; the foundation of functional programming (a style built from small functions that return new values instead of changing existing ones) and of every event-driven API.
 
 ### When not to use
 - Deep chains of tiny anonymous callbacks can hurt readability and debugging — name them.
-- For heavy loops in hot code, a plain loop can be marginally faster than chained `map/filter`, but measure before optimising.
+- For heavy loops in hot code (code that runs very often), a plain loop can be marginally faster than chained `map/filter`, but measure before optimising.
 
 ### TL;DR
 Callbacks are functions passed in; higher-order functions take or return functions. They enable array methods, composition, currying and every event/async API.
@@ -932,7 +932,7 @@ Callbacks are functions passed in; higher-order functions take or return functio
 An **IIFE** (pronounced "iffy") is a function expression that is called right where it's defined: `(function () { … })();` or `(() => { … })();`. The surrounding parentheses turn the `function` keyword into an *expression* (a statement starting with `function` would be a declaration, which can't be called immediately — that's a `SyntaxError`).
 
 ### The problem it solves
-Before `let`/`const` and modules, the only way to create a private scope was a function. Wrapping a script in an IIFE kept its variables out of the global scope, preventing clashes between scripts on the same page. The IIFE returning an object of public functions was *the* **module pattern** of the 2000s (jQuery plugins, early libraries).
+Before `let`/`const` and modules, the only way to create a private scope was a function. Wrapping a script in an IIFE kept its variables out of the global scope, preventing clashes between scripts on the same page. The IIFE returning an object of public functions was *the* **module pattern** of the 2000s (jQuery plugins, early libraries; jQuery was the dominant library for working with web pages in that era).
 
 ### Example
 ```js
@@ -993,7 +993,7 @@ async IIFE done
 | capture loop variable | `let` in the loop header |
 | `await` at the top level | top-level `await` in modules |
 
-IIFEs still appear in bundler output, in snippets that must not leak globals (analytics tags), and as async IIFEs in CommonJS scripts. Recognise them; you'll rarely need to write them. If a line starts with `(` and the previous line has no semicolon, ASI won't insert one — which is why IIFEs are sometimes written `;(function () { … })()`.
+IIFEs still appear in bundler output (the combined files produced by tools that merge many modules into one), in snippets that must not leak globals (analytics tags — small scripts that track page visits), and as async IIFEs in CommonJS scripts. Recognise them; you'll rarely need to write them. If a line starts with `(` and the previous line has no semicolon, ASI (Automatic Semicolon Insertion) won't insert one — which is why IIFEs are sometimes written `;(function () { … })()`.
 
 ### TL;DR
 `(function () { … })()` creates and runs a private scope at once. Modules and block scope have mostly replaced it.
@@ -1084,16 +1084,16 @@ sequenceDiagram
   C1-->>C2: returns
 ```
 
-The stack has a limited size (roughly ten thousand frames, depending on the engine and frame size). Recursing too deep — or forever, with no base case — throws **`RangeError: Maximum call stack size exceeded`**, the JavaScript "stack overflow". JavaScript engines (except Safari's) do **not** implement tail-call optimisation, so deep recursion can't be made safe by writing it in tail-call form.
+The stack has a limited size (roughly ten thousand frames — one *frame* is the stored record of one active call — depending on the engine and frame size). Recursing too deep — or forever, with no base case — throws **`RangeError: Maximum call stack size exceeded`**, the JavaScript "stack overflow". JavaScript engines (except Safari's) do **not** implement tail-call optimisation (reusing the current stack frame when a function's very last action is a call to itself), so deep recursion can't be made safe by writing it in tail-call form.
 
 ### When to use it (and when not)
 | Good fit | Better as a loop |
 |---|---|
 | tree-shaped data: file systems, the DOM, JSON, org charts, comments with replies | simple counting / summing over a flat list |
-| divide-and-conquer algorithms: merge sort, quicksort, binary search | inputs that could nest tens of thousands of calls deep |
-| backtracking: permutations, sudoku | naive recursions that repeat work (Fibonacci) unless memoized |
+| divide-and-conquer algorithms (split the problem into halves, solve each, combine): merge sort, quicksort, binary search | inputs that could nest tens of thousands of calls deep |
+| backtracking (try a choice, undo it if it leads nowhere): permutations, sudoku | naive recursions that repeat work (Fibonacci) unless memoized |
 
-The naive `fib(25)` made **242,785** calls because it recomputes the same values over and over — exponential time. Memoization (§4.7) or a simple loop makes it linear. Also note `fibLoop` stops at 50 on purpose: `fib(79)` and above exceed `Number.MAX_SAFE_INTEGER`, so results would silently lose precision ([Chapter 2 §2.10](../02-variables-types-and-operators/README.md#210-numbers-in-depth)) — use `BigInt` for those.
+The naive `fib(25)` made **242,785** calls because it recomputes the same values over and over — exponential time (each step up in *n* multiplies the work). Memoization (§4.7) or a simple loop makes it linear (work grows in step with *n*). Also note `fibLoop` stops at 50 on purpose: `fib(79)` and above exceed `Number.MAX_SAFE_INTEGER`, so results would silently lose precision ([Chapter 2 §2.10](../02-variables-types-and-operators/README.md#210-numbers-in-depth)) — use `BigInt` for those.
 
 ### TL;DR
 Recursion = base case + smaller recursive case. Natural for trees and divide-and-conquer; watch stack depth (`RangeError`) and repeated work (memoize).
@@ -1105,7 +1105,7 @@ Recursion = base case + smaller recursive case. Natural for trees and divide-and
 ### What it is
 A **pure function**:
 1. always returns the **same output for the same inputs** (it depends only on its arguments), and
-2. has **no side effects** — it doesn't modify anything outside itself (no mutating arguments or globals, no I/O, no DOM changes, no logging, no network).
+2. has **no side effects** — it doesn't modify anything outside itself (no mutating arguments or globals, no I/O (input/output, such as reading files or the keyboard), no DOM changes (edits to the web page), no logging, no network).
 
 Anything else is **impure**. `Math.max` is pure; `Math.random`, `Date.now`, `console.log` and `array.push` are not.
 
@@ -1147,15 +1147,15 @@ tests passed
 ```
 
 ### Why it matters
-- **Predictable and testable** — no setup, no mocks: call it and compare the result.
+- **Predictable and testable** — no setup, no mocks (fake stand-ins for real dependencies used in tests): call it and compare the result.
 - **Safe to cache** (memoize) and to run in any order or in parallel.
-- **Frameworks depend on it**: React requires components to be pure functions of their props and state during rendering; Redux reducers must be pure. Returning a new array (`[...cart, item]`) instead of mutating is what lets them detect changes by reference ([Chapter 2 §2.4](../02-variables-types-and-operators/README.md#24-primitives-vs-objects)).
+- **Frameworks depend on it**: React requires components to be pure functions of their props and state during rendering; Redux reducers (in the Redux state library, functions that compute the next state from the current state and an action) must be pure. Returning a new array (`[...cart, item]`) instead of mutating is what lets them detect changes by reference ([Chapter 2 §2.4](../02-variables-types-and-operators/README.md#24-primitives-vs-objects)).
 
 ### Trade-offs
 A program with no side effects does nothing visible — you must eventually write to the screen, disk or network. The practical goal is a **pure core, impure shell**: keep calculations pure and push side effects to the edges (event handlers, API calls). Copying instead of mutating costs some memory and time; for most UI-sized data it's negligible.
 
 ### TL;DR
-Pure = same inputs → same output, no side effects. Keep business logic pure; isolate I/O and mutation.
+Pure = same inputs → same output, no side effects. Keep business logic (the rules specific to your app, like prices and discounts) pure; isolate I/O and mutation.
 
 ---
 

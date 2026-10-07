@@ -1,6 +1,6 @@
 # Chapter 14 — Browser APIs and Security
 
-Beyond the DOM, browsers give JavaScript a large toolbox: talking to servers (`fetch`), remembering things (Web Storage, cookies, IndexedDB), scheduling visual updates (`requestAnimationFrame`), managing URLs and history, running code on other threads (Web Workers), and watching elements (observers). The same power makes web pages a target, so the second half of this chapter covers the security model — the same-origin policy and CORS — and the three attacks every web developer must be able to prevent: XSS, CSRF, and the defence-in-depth header CSP.
+Beyond the DOM, browsers give JavaScript a large toolbox: talking to servers (`fetch`), remembering things (Web Storage, cookies, IndexedDB), scheduling visual updates (`requestAnimationFrame`), managing URLs and history, running code on other threads (separate lines of execution that run at the same time — Web Workers), and watching elements (observers). The same power makes web pages a target, so the second half of this chapter covers the security model — the same-origin policy and CORS — and the three attacks every web developer must be able to prevent: XSS (cross-site scripting), CSRF (cross-site request forgery), and the defence-in-depth (an extra protective layer in case another one fails) header CSP (Content Security Policy).
 
 **What you'll learn**
 
@@ -17,21 +17,21 @@ Beyond the DOM, browsers give JavaScript a large toolbox: talking to servers (`f
 
 **Before you start.** Promises and `async`/`await` ([Chapter 12](../12-asynchronous-javascript/README.md)), and DOM/events ([Chapter 13](../13-dom-and-events/README.md)). JSON is covered in [Chapter 5](../05-objects-math-date-and-json/README.md); error classes in [Chapter 11](../11-errors-and-debugging/README.md).
 
-**How the code runs.** Programs in [`code/`](code/) run in Node 24. `fetch` demos start a real **`node:http` server inside the same script** on a free local port, so nothing touches the internet. Storage, URL and History demos use jsdom (`tools_dom.mjs`), which implements `localStorage`, `document.cookie` and `history`. Features that need a real browser — CORS enforcement, CSP, Web Workers, observers, IndexedDB — are small pages served by [`code/10_browser_demo_server.mjs`](code/10_browser_demo_server.mjs) on `localhost:4101` (the "site") and `localhost:4102` (a second origin, the "API"), run in headless Chrome and screenshotted.
+**How the code runs.** Programs in [`code/`](code/) run in Node 24. `fetch` demos start a real **`node:http` server inside the same script** on a free local port (a numbered "door" on a machine that one network program listens on), so nothing touches the internet. Storage, URL and History demos use jsdom (`tools_dom.mjs`, a JavaScript implementation of the browser DOM for Node), which implements `localStorage`, `document.cookie` and `history`. Features that need a real browser — CORS enforcement, CSP, Web Workers, observers, IndexedDB — are small pages served by [`code/10_browser_demo_server.mjs`](code/10_browser_demo_server.mjs) on `localhost:4101` (`localhost` = your own computer; this one is the "site") and `localhost:4102` (a second origin, the "API"), run in headless Chrome (Chrome with no visible window, driven by a script) and screenshotted.
 
 ---
 
 ## 14.1 `fetch` and HTTP
 
 ### What it is
-`fetch(url, options?)` sends an HTTP request and returns a promise for a **`Response`**. It's built into browsers and, since Node 18, into Node (same API). It replaced the callback-based `XMLHttpRequest` (XHR).
+`fetch(url, options?)` sends an HTTP (HyperText Transfer Protocol — the request/response language browsers and web servers speak; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) request and returns a promise for a **`Response`**. It's built into browsers and, since Node 18, into Node (same API). It replaced the callback-based `XMLHttpRequest` (XHR).
 
-HTTP in one paragraph: a **request** has a **method** (`GET` read, `POST` create, `PUT`/`PATCH` update, `DELETE` remove), a URL, **headers** (metadata like `Content-Type`, `Authorization`) and optionally a **body**. The **response** has a **status code** (2xx success, 3xx redirect, 4xx client error such as 404 Not Found or 401 Unauthorized, 5xx server error), headers and a body.
+HTTP in one paragraph: a **request** has a **method** (`GET` read, `POST` create, `PUT`/`PATCH` update, `DELETE` remove), a URL, **headers** (metadata — data about the request — like `Content-Type`, the body's format, and `Authorization`, the caller's credentials) and optionally a **body**. The **response** has a **status code** (2xx success, 3xx redirect — "look elsewhere", 4xx client error such as 404 Not Found or 401 Unauthorized, 5xx server error), headers and a body.
 
 ### How it works
 1. `fetch` resolves as soon as the **headers** arrive — with a `Response`, whatever the status code.
-2. You read the body with one of `res.json()`, `res.text()`, `res.blob()`, `res.arrayBuffer()`, `res.formData()` — each returns another promise, and a body can be read **once**.
-3. `fetch` **rejects only on network failure** (DNS, refused connection, CORS block, abort). A 404 or 500 is a successful HTTP exchange: check `res.ok` (status 200–299).
+2. You read the body with one of `res.json()`, `res.text()`, `res.blob()` (a Blob is raw binary data such as an image), `res.arrayBuffer()`, `res.formData()` — each returns another promise, and a body can be read **once**.
+3. `fetch` **rejects only on network failure** (DNS — the system that turns names like `example.com` into IP addresses — failing, refused connection, CORS block, abort). A 404 or 500 is a successful HTTP exchange: check `res.ok` (status 200–299).
 
 [`code/01_fetch.mjs`](code/01_fetch.mjs) — the server part:
 
@@ -129,12 +129,12 @@ Output:
 |---|---|---|
 | `method` | `'GET'` (default), `'POST'`, … | HTTP method |
 | `headers` | object or `Headers` | e.g. `Content-Type`, `Authorization`, `Accept` |
-| `body` | string, `FormData`, `URLSearchParams`, `Blob`, `ArrayBuffer`, stream | Not allowed with GET/HEAD. `FormData` sets a multipart `Content-Type` for you — don't set it yourself |
+| `body` | string, `FormData`, `URLSearchParams`, `Blob`, `ArrayBuffer`, stream | Not allowed with GET/HEAD. `FormData` sets a multipart (several parts, e.g. fields plus files) `Content-Type` for you — don't set it yourself |
 | `signal` | `AbortSignal` | Cancel / timeout ([§12.11](../12-asynchronous-javascript/README.md#1211-cancellation-abortcontroller-and-abortsignal)) |
 | `credentials` | `'same-origin'` (default), `'include'`, `'omit'` | Whether cookies are sent (§14.2) |
 | `mode` | `'cors'` (default), `'same-origin'`, `'no-cors'` | CORS behaviour |
-| `cache` | `'default'`, `'no-store'`, `'reload'`, … | HTTP cache use |
-| `keepalive` | `true` | Let a small request outlive the page (analytics on unload) |
+| `cache` | `'default'`, `'no-store'`, `'reload'`, … | HTTP cache use (the browser's saved copies of earlier responses) |
+| `keepalive` | `true` | Let a small request outlive the page (analytics — usage tracking — sent as the page closes) |
 
 ### Common mistakes
 - Not checking `res.ok` → your code parses an error page, or treats a 500 as data.
@@ -142,13 +142,13 @@ Output:
 - Forgetting `Content-Type: application/json` when sending JSON — many servers won't parse the body.
 - Building query strings by concatenation (`'?q=' + text`) — `&` or `#` in the text breaks the URL. Use `URLSearchParams` (§14.6).
 - No timeout: a hung server leaves your UI spinning forever. Always pass a `signal`.
-- Putting secrets (API keys) in front-end code — anything shipped to the browser is public. Call your own backend, which holds the key.
+- Putting secrets (API keys — secret strings that identify your app to a paid service) in front-end code (code that runs in the user's browser) — anything shipped to the browser is public. Call your own backend (your server-side code), which holds the key.
 
 ### In the interview
 **30-second answer:** "`fetch` returns a promise for a `Response` that resolves when headers arrive, even for 404 or 500 — it only rejects on network errors or aborts, so you check `res.ok`. You read the body once with `json()` or `text()`. For sending JSON you set `Content-Type` and `JSON.stringify` the body. I always wrap it in a helper that throws on non-2xx and use `AbortSignal.timeout` so requests can't hang."
 
 - *Q: Does `fetch` send cookies?* A: For same-origin requests, yes (default `credentials: 'same-origin'`); cross-origin only with `credentials: 'include'` and the right CORS headers.
-- *Q: `fetch` vs axios?* A: axios adds conveniences (auto JSON, throw on non-2xx, interceptors); `fetch` is built in and a small wrapper covers most needs.
+- *Q: `fetch` vs axios?* A: axios (a popular HTTP-client library) adds conveniences (auto JSON, throw on non-2xx, interceptors — hooks that run on every request or response); `fetch` is built in and a small wrapper covers most needs.
 
 ### TL;DR
 `fetch` → `Response`; check `res.ok`; read the body once; HTTP errors resolve, network errors reject; send JSON with a header + `JSON.stringify`; always time out.
@@ -158,7 +158,7 @@ Output:
 ## 14.2 The same-origin policy and CORS
 
 ### What it is
-An **origin** is the triple **scheme + host + port**: `https://shop.example.com:443`. `http://localhost:4101` and `http://localhost:4102` are different origins (different port), as are `http://` vs `https://` and `a.example.com` vs `b.example.com`.
+An **origin** is the triple **scheme + host + port** (scheme = `http` or `https`; host = the domain name; port = the number after `:`, 443 by default for HTTPS): `https://shop.example.com:443`. `http://localhost:4101` and `http://localhost:4102` are different origins (different port), as are `http://` vs `https://` and `a.example.com` vs `b.example.com`.
 
 The **same-origin policy (SOP)** is the browser's core security rule: a page may **send** requests anywhere, but its JavaScript may **read responses** only from its own origin. Without it, any website you visit could `fetch('https://your-bank.example/account')` — your browser would attach your bank cookies — and read your balance.
 
@@ -227,14 +227,14 @@ What the screenshot proves:
 ### CORS headers
 | Header (response) | Meaning |
 |---|---|
-| `Access-Control-Allow-Origin` | `*` or one exact origin (not a list — echo back an allow-listed `Origin` and add `Vary: Origin`) |
+| `Access-Control-Allow-Origin` | `*` or one exact origin (not a list — echo back an allow-listed (approved) `Origin` and add `Vary: Origin`, which tells caches the answer differs per origin) |
 | `Access-Control-Allow-Methods` / `-Headers` | Preflight answer: allowed methods and request headers |
 | `Access-Control-Allow-Credentials: true` | Allow cookies with `credentials: 'include'`; then `Allow-Origin` **can't** be `*` |
 | `Access-Control-Max-Age` | Seconds the browser may cache the preflight answer |
 | `Access-Control-Expose-Headers` | Non-standard response headers JS may read (e.g. `X-Total-Count`) |
 
 ### Common mistakes
-- "Fixing" CORS in the front end — impossible; the **server** must send the headers (or proxy the API through your own origin, e.g. the dev-server proxy in Vite).
+- "Fixing" CORS in the front end — impossible; the **server** must send the headers (or proxy the API through your own origin — a proxy is a server that forwards requests on your behalf — e.g. the dev-server proxy in Vite, a popular front-end build tool).
 - `Access-Control-Allow-Origin: *` plus credentials — browsers reject it.
 - Reflecting any `Origin` back with credentials allowed — effectively disables the SOP for your API. Use an allow-list.
 - Thinking a CORS error means the server is down — it usually means the server answered without the right headers.
@@ -242,8 +242,8 @@ What the screenshot proves:
 ### In the interview
 **30-second answer:** "The same-origin policy lets a page send requests anywhere but only read responses from its own scheme-host-port. CORS lets a server opt in with `Access-Control-Allow-Origin`. Non-simple requests — JSON bodies, custom headers, PUT/DELETE — first get an OPTIONS preflight. CORS is enforced by the browser, not the server, and it protects reading, not sending."
 
-- *Q: Why does Postman/curl work but the browser fails?* A: Only browsers enforce CORS.
-- *Q: Is CORS a security feature for the server?* A: No, it's a relaxation of the browser's SOP; servers still need authentication and CSRF protection.
+- *Q: Why does Postman/curl (tools for sending HTTP requests by hand) work but the browser fails?* A: Only browsers enforce CORS.
+- *Q: Is CORS a security feature for the server?* A: No, it's a relaxation of the browser's SOP; servers still need authentication (checking who the caller is) and CSRF protection.
 
 ### TL;DR
 Origin = scheme + host + port. SOP blocks reading cross-origin responses; CORS headers relax it per origin. Non-simple requests get an OPTIONS preflight. Browsers enforce it; the server configures it.
@@ -253,7 +253,7 @@ Origin = scheme + host + port. SOP blocks reading cross-origin responses; CORS h
 ## 14.3 Web Storage: `localStorage` and `sessionStorage`
 
 ### What it is
-Two simple **key–value stores** of **strings**, per origin, with a synchronous API:
+Two simple **key–value stores** (each value is saved and looked up under a name, its key) of **strings**, per origin, with a synchronous API (calls finish before returning, no promises):
 - **`localStorage`** — persists until cleared (by your code or the user); shared by all tabs of the origin.
 - **`sessionStorage`** — per **tab** (and origin); cleared when the tab closes; survives reloads.
 
@@ -299,14 +299,14 @@ Output (lines 1–6):
 ### Trade-offs
 | ✓ Good for | ✗ Not for |
 |---|---|
-| UI preferences (theme, collapsed panels), drafts, small caches | **Secrets and auth tokens** — any script on the page (including an XSS payload or a compromised npm package) can read it |
+| UI preferences (theme, collapsed panels), drafts, small caches | **Secrets and auth tokens** (strings proving a user is logged in) — any script on the page (including an XSS payload — the attacker's injected code — or a compromised npm package, i.e. a hacked library) can read it |
 | Data that must survive reloads, a few KB–MB | Large data (quota ~5 MB per origin; use IndexedDB) |
-| | Hot paths — it's **synchronous** and blocks the main thread on disk access |
+| | Hot paths (code that runs very often) — it's **synchronous** and blocks the main thread on disk access |
 | | Data for the server — it's never sent automatically (unlike cookies) |
 
 ### Common mistakes
 - Storing objects without `JSON.stringify` → `"[object Object]"`.
-- Not wrapping in `try`/`catch`: quota errors, and storage can be disabled (some privacy modes, sandboxed iframes) so even *reading* can throw.
+- Not wrapping in `try`/`catch`: quota errors, and storage can be disabled (some privacy modes, sandboxed iframes — embedded pages with restricted permissions) so even *reading* can throw.
 - Expecting `sessionStorage` to be shared across tabs — it isn't (a duplicated tab gets a copy).
 
 ### TL;DR
@@ -317,7 +317,7 @@ String key–value storage per origin; `localStorage` persists, `sessionStorage`
 ## 14.4 Cookies and IndexedDB — choosing storage
 
 ### Cookies
-A **cookie** is a small (≈4 KB) name=value pair the browser stores per site and **sends automatically with every matching HTTP request** in the `Cookie` header. Servers set them with `Set-Cookie`; JavaScript can read/write non-HttpOnly cookies through the awkward `document.cookie` string.
+A **cookie** is a small (≈4 KB) name=value pair the browser stores per site and **sends automatically with every matching HTTP request** in the `Cookie` header. Servers set them with `Set-Cookie`; JavaScript can read/write non-HttpOnly cookies (ones without the `HttpOnly` flag, which hides a cookie from scripts) through the awkward `document.cookie` string.
 
 ```js
 document.cookie = 'lang=en; Path=/; Max-Age=86400; SameSite=Lax';
@@ -341,15 +341,15 @@ Assigning to `document.cookie` adds or updates **one** cookie; reading returns a
 |---|---|
 | `Expires=<date>` / `Max-Age=<seconds>` | Lifetime; without either it's a **session cookie** (deleted when the browser session ends) |
 | `Domain` / `Path` | Which hosts/paths receive it (omit `Domain` = this host only, the safest) |
-| `Secure` | Only sent over HTTPS (browsers treat `localhost` as secure for development) |
+| `Secure` | Only sent over HTTPS (encrypted HTTP) (browsers treat `localhost` as secure for development) |
 | `HttpOnly` | Invisible to JavaScript — protects session cookies from theft by XSS |
 | `SameSite=Strict` / `Lax` / `None` | Whether it's sent on **cross-site** requests (§14.11). `None` requires `Secure`. Chrome and Edge treat a missing attribute as `Lax`; set it explicitly |
 | `__Host-` name prefix | Browser enforces `Secure`, `Path=/`, no `Domain` — hardest to tamper with |
 
-For session IDs the standard recipe is: `Set-Cookie: __Host-sid=…; HttpOnly; Secure; SameSite=Lax; Path=/`. (A newer asynchronous `cookieStore` API exists; check browser support before using it.)
+For session IDs (random strings the server uses to recognise a logged-in user) the standard recipe is: `Set-Cookie: __Host-sid=…; HttpOnly; Secure; SameSite=Lax; Path=/`. (A newer asynchronous `cookieStore` API exists; check browser support before using it.)
 
 ### IndexedDB
-**IndexedDB** is the browser's real database: asynchronous, transactional, storing **structured-cloneable** values (objects, arrays, `Date`, `Map`, `Blob`, typed arrays) in **object stores** with **keys** and **indexes**, with quotas typically in the hundreds of MB to GB range. Its raw API is event-based and verbose, so most apps use a thin promise wrapper (like the small `req2p` below, or the `idb` library) or a higher-level library (Dexie).
+**IndexedDB** is the browser's real database: asynchronous, transactional (a group of changes either all happen or none do), storing **structured-cloneable** values (ones the browser's built-in deep-copy algorithm can copy: objects, arrays, `Date`, `Map`, `Blob`, typed arrays) in **object stores** (roughly, tables) with **keys** and **indexes** (extra lookup structures for searching fast by a field), with quotas typically in the hundreds of MB to GB range. Its raw API is event-based and verbose, so most apps use a thin promise wrapper (like the small `req2p` below, or the `idb` library) or a higher-level library (Dexie).
 
 The page [`code/idb.html`](code/idb.html) — key parts:
 
@@ -384,11 +384,11 @@ await req2p(ro.getAll(IDBKeyRange.bound(2, 3)));           // key range
 | API | String; sync | Sync | Sync | Async, transactions |
 | Data types | Strings | Strings | Strings | Structured clone (objects, Dates, Blobs…) |
 | Sent to server | **Automatically** | No | No | No |
-| Lifetime | Expiry / session | Until cleared | Tab | Until cleared (may be evicted under storage pressure unless `navigator.storage.persist()` is granted) |
+| Lifetime | Expiry / session | Until cleared | Tab | Until cleared (may be evicted — deleted by the browser — under storage pressure unless `navigator.storage.persist()` is granted) |
 | Readable by JS | Unless `HttpOnly` | Yes | Yes | Yes |
 | Typical use | Session ID, CSRF, consent | Preferences | Wizard progress | Offline data, caches, large datasets |
 
-A fifth option, the **Cache API**, stores whole HTTP responses; service workers use it to make apps work offline (§14.8).
+A fifth option, the **Cache API**, stores whole HTTP responses; service workers (background scripts that sit between a page and the network) use it to make apps work offline (§14.8).
 
 ### TL;DR
 Cookies = tiny, auto-sent, the right place for `HttpOnly` session IDs. Web Storage = small, sync, strings. IndexedDB = async database for big or structured data.
@@ -398,12 +398,12 @@ Cookies = tiny, auto-sent, the right place for `HttpOnly` session IDs. Web Stora
 ## 14.5 Timers and `requestAnimationFrame`
 
 ### What it is
-`requestAnimationFrame(callback)` (**rAF**) asks the browser to run `callback(timestamp)` **just before the next repaint** — once per frame, matching the display's refresh rate (60 Hz → every ~16.7 ms, 120 Hz → ~8.3 ms). It's the right scheduler for anything visual. Timers (`setTimeout`/`setInterval`, [Chapter 12 §12.5](../12-asynchronous-javascript/README.md#125-timers)) are for everything else.
+`requestAnimationFrame(callback)` (**rAF**) asks the browser to run `callback(timestamp)` **just before the next repaint** — once per frame, matching the display's refresh rate (how many times per second the screen redraws; 60 Hz → every ~16.7 ms, 120 Hz → ~8.3 ms). It's the right scheduler for anything visual. Timers (`setTimeout`/`setInterval`, [Chapter 12 §12.5](../12-asynchronous-javascript/README.md#125-timers)) are for everything else.
 
 | | `setTimeout`/`setInterval` | `requestAnimationFrame` |
 |---|---|---|
 | When | After a delay, as a task | Right before paint, in the render step of the event loop |
-| Synced to display | No (can run twice per frame or miss frames → jank) | Yes |
+| Synced to display | No (can run twice per frame or miss frames → jank, visible stutter) | Yes |
 | Background tabs | Throttled (≥1 s typically) | **Paused** — saves battery |
 | Callback argument | Your args | High-resolution frame timestamp |
 | Cancel | `clearTimeout` | `cancelAnimationFrame(id)` |
@@ -453,7 +453,7 @@ The intermediate widths depend on real frame timing, so they differ slightly fro
 1. **Base progress on time, not frame count** — frame rates vary (60/120/144 Hz, dropped frames). Compute `t = elapsed / duration` from the timestamp.
 2. rAF runs **once**; call it again inside the callback to continue.
 3. Use it to **coalesce** bursts of events (`scroll`, `pointermove`, `resize`) into one DOM update per frame — the third output line.
-4. Prefer **CSS transitions/animations** or the Web Animations API (`el.animate()`) for simple effects; they can run on the compositor thread. Use rAF when JavaScript must compute each frame (games, canvas, physics, drag).
+4. Prefer **CSS transitions/animations** or the Web Animations API (`el.animate()`) for simple effects; they can run on the compositor thread (a separate browser thread that stacks finished page layers onto the screen). Use rAF when JavaScript must compute each frame (games, canvas — an element you draw pixels on from JS — physics, drag).
 5. Animate `transform`/`opacity` where possible ([Chapter 13 §13.11](../13-dom-and-events/README.md#1311-rendering-performance-reflow-repaint-and-layout-thrashing)).
 
 ### TL;DR
@@ -464,7 +464,7 @@ rAF = "run before the next paint", once per frame, paused in background tabs. Ti
 ## 14.6 `URL` and `URLSearchParams`
 
 ### What it is
-`new URL(input, base?)` parses a URL into parts; `url.searchParams` is a `URLSearchParams` for the query string. Both handle **percent-encoding** correctly, so you never glue URLs together with `+`.
+`new URL(input, base?)` parses a URL into parts; `url.searchParams` is a `URLSearchParams` for the query string (the `?key=value&…` part). Both handle **percent-encoding** (writing unsafe characters as `%` plus a hex code, e.g. a space as `%20`) correctly, so you never glue URLs together with `+`.
 
 [`code/04_url.mjs`](code/04_url.mjs) — key parts:
 
@@ -520,7 +520,7 @@ Output:
 - `new URL('relative')` **without a base throws** `TypeError: Invalid URL`; `URL.canParse()` checks without throwing.
 - `URLSearchParams` encodes spaces as `+` (form encoding); `encodeURIComponent` uses `%20`. Both decode correctly on servers.
 - `get` returns the first value; `getAll` all of them — repeated keys are normal (`?size=9&size=10`).
-- In the browser, `location` is URL-like (`location.pathname`, `location.search`), and `new URL(location.href)` gives you a mutable copy.
+- In the browser, `location` is URL-like (`location.pathname`, `location.search`), and `new URL(location.href)` gives you a mutable (changeable) copy.
 - **Validate user-supplied URLs** by parsing and allow-listing the protocol (item 5). Blocking `javascript:` URLs prevents a classic XSS (§14.10).
 
 ### TL;DR
@@ -531,7 +531,7 @@ Parse with `new URL`, build queries with `URLSearchParams`, resolve relative URL
 ## 14.7 The History API
 
 ### What it is
-The **History API** lets a page change the URL in the address bar and add entries to the back/forward list **without loading a new page** — the foundation of **single-page application (SPA)** routing (React Router, Vue Router).
+The **History API** lets a page change the URL in the address bar and add entries to the back/forward list **without loading a new page** — the foundation of **single-page application (SPA)** routing — an SPA loads one HTML page and swaps views with JavaScript; *routing* maps each URL to a view (React Router, Vue Router).
 
 | API | Does |
 |---|---|
@@ -581,7 +581,7 @@ external link: same origin? false -> not intercepted
 
 ### Must-knows for SPA routing
 1. **The server must serve your app for every route** (a "fallback" to `index.html`) — otherwise a reload or shared link to `/products/42` gets a 404.
-2. Respect modifier keys, `target="_blank"` and external links (let the browser do its normal thing).
+2. Respect modifier keys (Ctrl, Cmd, Shift — e.g. Ctrl+click opens a new tab), `target="_blank"` and external links (let the browser do its normal thing).
 3. Manage **focus and scroll** after navigation (move focus to the new heading; restore scroll on back) — screen-reader users otherwise don't notice the page changed.
 4. Put UI state that should be shareable (filters, tabs, search) in the URL (`replaceState` + `URLSearchParams`), not only in memory.
 5. Hash routing (`#/products`) + the `hashchange` event is the older approach that needs no server config.
@@ -596,7 +596,7 @@ A newer **Navigation API** (`navigation.navigate()`, a single `navigate` event f
 ## 14.8 Web Workers
 
 ### What it is
-A **Web Worker** runs a script on a **separate background thread** with its own event loop and global scope (`self`). It has no access to the DOM, `window` or `document`, but it has `fetch`, timers, IndexedDB, `crypto` and more. The page and the worker communicate only by **messages**:
+A **Web Worker** runs a script on a **separate background thread** with its own event loop and global scope (`self` — its top-level object, like `window` on a page). It has no access to the DOM, `window` or `document`, but it has `fetch`, timers, IndexedDB, `crypto` (built-in cryptography: hashing, random numbers, encryption) and more. The page and the worker communicate only by **messages**:
 
 ```js
 // main page                                         // prime_worker.js
@@ -606,7 +606,7 @@ w.postMessage(5_000_000);                              self.postMessage({ upTo: 
                                                      };
 ```
 
-Messages are copied with the **structured clone algorithm** (plain objects, arrays, `Date`, `Map`, `Set`, `Blob`, typed arrays… but **not** functions, DOM nodes or class prototypes). Big binary buffers can be **transferred** instead of copied (`postMessage(buf, [buf])` — the sender loses access, zero-copy).
+Messages are copied with the **structured clone algorithm** (plain objects, arrays, `Date`, `Map`, `Set`, `Blob`, typed arrays… but **not** functions, DOM nodes or class prototypes). Big binary buffers (blocks of raw bytes, `ArrayBuffer`) can be **transferred** instead of copied (`postMessage(buf, [buf])` — the sender loses access, zero-copy: ownership moves, no bytes are duplicated).
 
 ### Why it matters — measured
 [`code/worker.html`](code/worker.html) counts primes up to 5 million twice: once on the main thread, once in [`code/prime_worker.js`](code/prime_worker.js). A 10 ms `setInterval` tick counter measures whether the page could do anything else meanwhile:
@@ -642,11 +642,11 @@ structuredClone keeps Date/Map: true
 |---|---|
 | Dedicated `Worker` | Background computation for one page (this section). `new Worker(url, { type: 'module' })` allows `import` |
 | `SharedWorker` | One worker shared by several tabs of the same origin |
-| **Service worker** | A network proxy between the page and the server — offline support, caching, push notifications (PWAs). Event-driven, not for computation |
+| **Service worker** | A network proxy between the page and the server — offline support, caching, push notifications (PWAs — progressive web apps, websites that can be installed and work offline like native apps). Event-driven, not for computation |
 | Worklets | Tiny specialized scripts (audio, CSS paint) |
 
 ### When not to use it
-For I/O (`fetch` is already asynchronous) or small tasks — message copying and worker start-up cost more than they save. Use it for parsing big files, image/audio processing, compression, cryptography, syntax highlighting, search indexes. Libraries like Comlink make the message passing feel like function calls.
+For I/O (`fetch` is already asynchronous) or small tasks — message copying and worker start-up cost more than they save. Use it for parsing big files, image/audio processing, compression, cryptography, syntax highlighting, search indexes (precomputed lookup tables for fast text search). Libraries like Comlink make the message passing feel like function calls.
 
 ### TL;DR
 Workers = real parallel threads without DOM access, talking via `postMessage` (structured clone or transfer). Use them to keep CPU-heavy work off the main thread.
@@ -660,8 +660,8 @@ Observers are callbacks the browser calls **when something changes**, instead of
 
 | Observer | Tells you when… | Typical uses |
 |---|---|---|
-| `IntersectionObserver` | An element enters/leaves the viewport (or a scroll container), by a given fraction | Lazy loading, infinite scroll, "seen" analytics, starting animations |
-| `ResizeObserver` | An element's size changes (for any reason, not just window resize) | Responsive components, charts that redraw to their container |
+| `IntersectionObserver` | An element enters/leaves the viewport (the visible part of the page) (or a scroll container), by a given fraction | Lazy loading (loading things only when about to be seen), infinite scroll, "seen" analytics, starting animations |
+| `ResizeObserver` | An element's size changes (for any reason, not just window resize) | Responsive components (that adapt their layout to available space), charts that redraw to their container |
 | `MutationObserver` | The DOM changes | [Chapter 13 §13.10](../13-dom-and-events/README.md#1310-watching-the-dom-mutationobserver) |
 
 [`code/observers.html`](code/observers.html) — key parts:
@@ -706,7 +706,7 @@ Notes:
 ## 14.10 Cross-site scripting (XSS) and sanitizing
 
 ### What it is
-**Cross-site scripting (XSS)** happens when an attacker gets **their JavaScript to run in your page**, with your page's privileges: reading data shown to the user, calling your APIs as the user, reading non-HttpOnly cookies and `localStorage`, changing the page (fake login forms). It has appeared in every edition of the OWASP Top 10 — as its own category until 2017, and folded into "Injection" since the 2021 edition.
+**Cross-site scripting (XSS)** happens when an attacker gets **their JavaScript to run in your page**, with your page's privileges: reading data shown to the user, calling your APIs as the user, reading non-HttpOnly cookies and `localStorage`, changing the page (fake login forms). It has appeared in every edition of the OWASP Top 10 (a widely used ranking of the most critical web-application security risks, published by the OWASP non-profit) — as its own category until 2017, and folded into "Injection" since the 2021 edition.
 
 | Type | How the payload arrives |
 |---|---|
@@ -759,10 +759,10 @@ Output:
 ```
 
 ### How to prevent it (in priority order)
-1. **Treat all external data as text.** Use `textContent`, `setAttribute` for non-event attributes, and `createElement` — the DOM APIs from [Chapter 13 §13.3](../13-dom-and-events/README.md#133-creating-inserting-and-removing-nodes). Frameworks do this by default: React escapes `{value}` in JSX; the danger is in escape hatches (`dangerouslySetInnerHTML`, Vue's `v-html`).
-2. **Escape for the context** when you build HTML strings (server templates): HTML body, attribute, URL and JavaScript contexts each need different encoding (item 4: HTML-escaping doesn't make a `javascript:` URL safe). Use a template engine that auto-escapes.
+1. **Treat all external data as text.** Use `textContent`, `setAttribute` for non-event attributes, and `createElement` — the DOM APIs from [Chapter 13 §13.3](../13-dom-and-events/README.md#133-creating-inserting-and-removing-nodes). Frameworks do this by default: React escapes `{value}` in JSX (React's HTML-like syntax inside JavaScript); the danger is in escape hatches (deliberate ways to bypass a safety feature) (`dangerouslySetInnerHTML`, Vue's `v-html`).
+2. **Escape for the context** (escaping = rewriting special characters, like `<` → `&lt;`, so they're shown, not interpreted) when you build HTML strings (server templates): HTML body, attribute, URL and JavaScript contexts each need different encoding (item 4: HTML-escaping doesn't make a `javascript:` URL safe). Use a template engine (a library that fills HTML templates with data) that auto-escapes.
 3. **Validate URLs** by parsing and allow-listing `http:`/`https:` (§14.6).
-4. **Sanitize when you must render user HTML** (rich-text comments, Markdown output): run it through a well-maintained sanitizer such as **DOMPurify** (`el.innerHTML = DOMPurify.sanitize(html)`), which removes scripts, event-handler attributes and dangerous URLs. The standard **HTML Sanitizer API** (`el.setHTML()`) is still of limited availability across browsers (per MDN), so use it only with a fallback. Never write your own regex-based sanitizer.
+4. **Sanitize** (strip out every dangerous part) **when you must render user HTML** (rich-text comments, Markdown output — Markdown is a lightweight text format that converts to HTML): run it through a well-maintained sanitizer such as **DOMPurify** (`el.innerHTML = DOMPurify.sanitize(html)`), which removes scripts, event-handler attributes and dangerous URLs. The standard **HTML Sanitizer API** (`el.setHTML()`) is still of limited availability across browsers (per MDN, Mozilla's web documentation), so use it only with a fallback. Never write your own regex-based sanitizer.
 5. **Defence in depth**: a strict **CSP** (§14.12) so injected code doesn't run even if a bug slips through; `HttpOnly` cookies so sessions can't be stolen; **Trusted Types** (a CSP feature that makes dangerous sinks reject plain strings; check browser support).
 
 ### In the interview
@@ -779,7 +779,7 @@ XSS = untrusted data parsed as code. Render as text, escape by context, allow-li
 ## 14.11 Cross-site request forgery (CSRF)
 
 ### What it is
-**CSRF** tricks a logged-in user's browser into sending a request they didn't intend — for example, a hidden form on `evil.example` that auto-submits `POST https://bank.example/transfer`. Unless the cookie is protected by `SameSite`, the browser attaches the bank's cookies automatically, so the bank sees a valid session. The attacker can't **read** the response (SOP), but for a state-changing request they don't need to.
+**CSRF** tricks a logged-in user's browser into sending a request they didn't intend — for example, a hidden form on `evil.example` that auto-submits `POST https://bank.example/transfer`. Unless the cookie is protected by `SameSite`, the browser attaches the bank's cookies automatically, so the bank sees a valid session. The attacker can't **read** the response (SOP), but for a state-changing request (one that modifies data, like a transfer) they don't need to.
 
 ### How it's prevented
 | Defence | How it helps |
@@ -790,7 +790,7 @@ XSS = untrusted data parsed as code. Render as text, escape by context, allow-li
 | **Require a custom header or JSON `Content-Type`** | Forces a CORS preflight for cross-origin requests, which your server won't approve |
 | Re-authentication | For critical actions (change password, large transfer) |
 
-Use at least two: `SameSite` + token (or origin check). [`code/09_csrf_cookies_headers.mjs`](code/09_csrf_cookies_headers.mjs) implements session cookies + a token on a local server; since Node's `fetch` has no cookie jar, the script plays the browser and sends the `Cookie` header by hand:
+Use at least two: `SameSite` + token (or origin check). [`code/09_csrf_cookies_headers.mjs`](code/09_csrf_cookies_headers.mjs) implements session cookies + a token on a local server; since Node's `fetch` has no cookie jar (storage that keeps cookies between requests), the script plays the browser and sends the `Cookie` header by hand:
 
 ```js
 if (req.method === 'POST' && req.url === '/login') {
@@ -843,12 +843,12 @@ Common directives:
 | Directive | Controls | Example |
 |---|---|---|
 | `default-src` | Fallback for all fetch directives | `'self'` |
-| `script-src` | Scripts (`'unsafe-inline'` would re-allow inline code — avoid) | `'self'` or `'nonce-r4nd0m'` |
+| `script-src` | Scripts (`'unsafe-inline'` would re-allow inline code — avoid; a *nonce* is a random one-time token) | `'self'` or `'nonce-r4nd0m'` |
 | `script-src-attr` | Inline event-handler attributes (`onclick=…`) | falls back to `script-src` |
-| `style-src`, `img-src`, `connect-src` (fetch/WebSocket), `font-src`, `frame-src` | Each resource type | `connect-src 'self' https://api.example.com` |
+| `style-src`, `img-src`, `connect-src` (fetch/WebSocket — a persistent two-way connection), `font-src`, `frame-src` | Each resource type | `connect-src 'self' https://api.example.com` |
 | `object-src 'none'` | Plugins (`<object>`, `<embed>`) | Always `'none'` |
 | `base-uri 'self'` | Stops `<base>` tag hijacking relative URLs | |
-| `frame-ancestors 'none'` | Who may embed you in an iframe — **clickjacking** protection (supersedes the older `X-Frame-Options` header) | |
+| `frame-ancestors 'none'` | Who may embed you in an iframe — **clickjacking** (hiding your page in an invisible frame to trick clicks) protection (supersedes the older `X-Frame-Options` header) | |
 | `report-to` / `report-uri` | Where to send violation reports | |
 
 ### Seen in a real browser
@@ -878,9 +878,9 @@ document.getElementById('comment').innerHTML =
 ### Other security headers worth sending
 | Header | Purpose |
 |---|---|
-| `Strict-Transport-Security: max-age=31536000; includeSubDomains` | HTTPS only (HSTS) |
-| `X-Content-Type-Options: nosniff` | Don't guess MIME types (stops some script injection via uploads) |
-| `Referrer-Policy: strict-origin-when-cross-origin` | Don't leak full URLs to other sites (this is also the browser default today) |
+| `Strict-Transport-Security: max-age=31536000; includeSubDomains` | HTTPS only (HSTS: HTTP Strict Transport Security) |
+| `X-Content-Type-Options: nosniff` | Don't guess MIME types (labels like `text/html` naming a file's format; stops some script injection via uploads) |
+| `Referrer-Policy: strict-origin-when-cross-origin` | Don't leak full URLs (the *referrer*, the page a request came from) to other sites (this is also the browser default today) |
 | `Permissions-Policy: camera=(), geolocation=()` | Turn off powerful features you don't use |
 | `Cross-Origin-Opener-Policy: same-origin` | Isolate your window from cross-origin popups |
 
@@ -891,10 +891,10 @@ document.getElementById('comment').innerHTML =
 | Session theft | `HttpOnly; Secure; SameSite` cookies; never tokens in URLs |
 | CSRF | SameSite + CSRF token or origin check; no state change on GET |
 | Secrets | No API keys or secrets in front-end bundles |
-| Dependencies | `npm audit`, lockfiles, few and well-maintained packages ([Chapter 10](../10-modules-and-tooling/README.md#1010-semantic-versioning-ranges-and-lockfiles)); Subresource Integrity (`integrity=`) for third-party CDN scripts |
+| Dependencies | `npm audit` (scans installed packages for known vulnerabilities), lockfiles (files pinning exact dependency versions), few and well-maintained packages ([Chapter 10](../10-modules-and-tooling/README.md#1010-semantic-versioning-ranges-and-lockfiles)); Subresource Integrity (`integrity=`, a hash the browser checks so a tampered file is refused) for third-party CDN (content delivery network) scripts |
 | Clickjacking | `frame-ancestors 'none'` or `'self'` |
 | Validation | Client-side validation is UX; the server validates everything |
-| Prototype pollution | Don't deep-merge untrusted JSON into objects ([Chapter 9](../09-this-prototypes-and-classes/README.md#93-prototypes-and-the-prototype-chain)) |
+| Prototype pollution (attacker data adding properties to `Object.prototype`, affecting every object) | Don't deep-merge untrusted JSON into objects ([Chapter 9](../09-this-prototypes-and-classes/README.md#93-prototypes-and-the-prototype-chain)) |
 
 ### TL;DR
 CSP limits where scripts/styles/images may come from and blocks inline code, so injected markup can't execute. Roll out in report-only mode, prefer nonces + `'strict-dynamic'`, add HSTS, `nosniff` and `frame-ancestors`.

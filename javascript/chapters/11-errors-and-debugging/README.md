@@ -1,30 +1,30 @@
 # Chapter 11 — Errors and Debugging
 
-Every program fails sometimes: users type letters into number fields, networks drop, files go missing, and programmers make mistakes. JavaScript reports problems with **error objects** that are **thrown** and can be **caught**. This chapter shows how errors work, how to design your own, and how to find bugs quickly with the console, stack traces and real debuggers — in the browser and in Node.
+Every program fails sometimes: users type letters into number fields, networks drop, files go missing, and programmers make mistakes. JavaScript reports problems with **error objects** that are **thrown** and can be **caught**. This chapter shows how errors work, how to design your own, and how to find bugs quickly with the console, stack traces and real debuggers — in the browser and in Node (**Node.js**, the program that runs JavaScript outside the browser, on servers and laptops).
 
 **What you'll learn**
 
 1. The built-in error types, what each one means, and what every error object contains.
 2. `throw`, `try` / `catch` / `finally` — exact control flow, rethrowing, and the traps.
 3. Custom error classes and a clean error-handling layer.
-4. Error chaining with `cause` (ES2022) and `AggregateError`.
+4. Error chaining with `cause` (ES2022 — the 2022 edition of ECMAScript, the official JavaScript standard; a new edition comes out every year) and `AggregateError`.
 5. Errors in asynchronous code (the preview; the full story is in Chapter 12).
 6. Guaranteed cleanup with `finally` and the new `using` declaration.
 7. The console toolbox beyond `console.log`.
 8. Reading stack traces; source maps.
-9. Debugging with browser DevTools and the Node inspector; a systematic debugging method.
+9. Debugging with browser DevTools (the developer-tools panel built into every browser) and the Node inspector; a systematic debugging method.
 10. A gallery of the most common runtime errors, with their exact messages and causes.
 
 **Before you start.** Custom errors use classes and `extends` ([Chapter 9](../09-this-prototypes-and-classes/README.md)). Type coercion, which causes many silent bugs, is in [Chapter 2](../02-variables-types-and-operators/README.md).
 
-All runnable code is in [`code/`](code/). Outputs are real (Node 24, V8 engine). Error **messages** are not standardized — Firefox and Safari word them differently — but error **types** are.
+All runnable code is in [`code/`](code/). Outputs are real (Node 24, V8 engine — V8 is Google's JavaScript **engine**, the program that actually reads and runs JS inside Chrome and Node). Error **messages** are not standardized — Firefox and Safari word them differently — but error **types** are.
 
 ---
 
 ## 11.1 Errors and the built-in error types
 
 ### What it is
-An **error** (also called an **exception**) is an object that describes something that went wrong. When code **throws** an error, normal execution stops immediately, and the engine unwinds the call stack looking for a `catch` that will handle it. If none is found, the error is **uncaught**: the browser logs it to the console (and the rest of that script task stops), and Node prints it and exits the process with a non-zero exit code.
+An **error** (also called an **exception**) is an object that describes something that went wrong. When code **throws** an error, normal execution stops immediately, and the engine unwinds the call stack looking for a `catch` that will handle it. If none is found, the error is **uncaught**: the browser logs it to the console (and the rest of that script task stops), and Node prints it and exits the process with a non-zero **exit code** (the number a program hands back to the operating system when it ends: `0` means success, anything else means failure).
 
 Analogy: a fire alarm. Someone pulls it (`throw`); everyone stops what they're doing; the alarm travels up floor by floor until someone responsible (`catch`) deals with it. If nobody does, the building is evacuated (the program crashes).
 
@@ -38,15 +38,15 @@ Terms:
 |---|---|---|
 | `Error` | Generic base type — use for your own errors or subclass it | `throw new Error('config missing')` |
 | `TypeError` | A value is the wrong type for an operation | `null.length`, calling a non-function, assigning to a `const` |
-| `ReferenceError` | A name doesn't exist, or is used in its TDZ | typo in a variable name; `let` used before its line |
+| `ReferenceError` | A name doesn't exist, or is used in its TDZ (temporal dead zone: the lines before its `let`/`const` declaration) | typo in a variable name; `let` used before its line |
 | `SyntaxError` | Code (or JSON) can't be parsed | `JSON.parse('{bad}')`, `new Function('1 +')` |
-| `RangeError` | A number is outside the allowed range | `new Array(-1)`, `toFixed(101)`, stack overflow |
-| `URIError` | Malformed URI component | `decodeURIComponent('%')` |
+| `RangeError` | A number is outside the allowed range | `new Array(-1)`, `toFixed(101)`, stack overflow (too many nested calls) |
+| `URIError` | Malformed URI (web address) component | `decodeURIComponent('%')` |
 | `EvalError` | Not thrown by modern engines; exists for backward compatibility | — |
 | `AggregateError` (ES2021) | Several errors need reporting together | `Promise.any` when every promise rejects |
 | `SuppressedError` (ES2027) | An error happened while disposing after another error | `using` declarations (§11.6) |
 
-All of them inherit from `Error` (`TypeError.prototype.[[Prototype]] === Error.prototype`), so `err instanceof Error` is `true` for every built-in error. Environments add their own: browsers have `DOMException` (e.g., `AbortError`, `NotAllowedError`), Node adds `code` properties like `'ENOENT'` to system errors.
+All of them inherit from `Error` (`TypeError.prototype.[[Prototype]] === Error.prototype`), so `err instanceof Error` is `true` for every built-in error. Environments add their own: browsers have `DOMException` (the error type browser APIs throw, e.g., `AbortError`, `NotAllowedError`), Node adds `code` properties like `'ENOENT'` ("Error NO ENTry" — file or folder not found) to system errors.
 
 [`code/01_error_types.mjs`](code/01_error_types.mjs) triggers each one for real:
 
@@ -129,7 +129,7 @@ parse-time  : SyntaxError - Unexpected token '}'
 
 `String(err)` (and `err.toString()`) gives `"Name: message"`. The stack is captured when the error object is **created** (with `new`), not when it's thrown.
 
-`Error.isError(value)` (ES2026; available in Node 24 and recent browser versions — check support if you target older ones) is the reliable check for "is this a genuine error object?" — unlike `instanceof Error` it works for errors from other realms (iframes, `vm` contexts) and can't be fooled by an object with a hand-made prototype.
+`Error.isError(value)` (ES2026; available in Node 24 and recent browser versions — check support if you target older ones) is the reliable check for "is this a genuine error object?" — unlike `instanceof Error` it works for errors from other **realms** (a realm is a separate JavaScript global environment with its own copy of built-ins like `Error` — e.g., an iframe, which is a page embedded inside another page, or a Node `vm` sandbox) and can't be fooled by an object with a hand-made prototype.
 
 ### Self-check
 1. `undefinedFn()` where `undefinedFn` was never declared — which error? → `ReferenceError` (name not found). If it's declared but holds `undefined`, it's a `TypeError` (not a function).
@@ -257,16 +257,16 @@ timer error caught INSIDE the callback: from timer
 
 What to notice:
 - `finally` ran in all three cases — even though `try` and `catch` both `return`. The return value is computed first, then `finally` runs, then the function actually returns.
-- A `return` (or `throw`) *inside* `finally` replaces whatever `try`/`catch` was doing — the error `'lost forever'` vanished. ESLint's `no-unsafe-finally` rule flags this.
+- A `return` (or `throw`) *inside* `finally` replaces whatever `try`/`catch` was doing — the error `'lost forever'` vanished. ESLint's `no-unsafe-finally` rule flags this (**ESLint** is a *linter* — a tool that scans your code for likely mistakes without running it).
 - **Catch narrowly, rethrow the rest.** `loadUser` expects bad JSON (a `SyntaxError`) and recovers; a `TypeError` means the data shape is wrong — a real bug that should surface.
 - `catch` receives *whatever* was thrown. Throwing strings or plain objects loses the stack trace and breaks `instanceof Error` checks. **Always throw `Error` objects** (or subclasses).
 - The `catch` variable is block-scoped to the `catch` block.
-- `try/catch` only covers code that runs *synchronously inside it*. The timer callback ran later, on a fresh call stack, after the outer `try` was long gone.
+- `try/catch` only covers code that runs *synchronously inside it* (synchronously = right now, line after line, before anything else gets a turn). The timer callback (a **callback** is a function you hand to other code so it can call you back later) ran later, on a fresh call stack, after the outer `try` was long gone.
 
 ### When to use try/catch — and when not
 | Use it | Don't use it |
 |---|---|
-| At boundaries where failure is expected: parsing input, `JSON.parse`, network/file I/O, third-party code | To replace simple checks — `if (user?.name)` is cheaper and clearer than catching a `TypeError` |
+| At boundaries where failure is expected: parsing input, `JSON.parse`, network/file I/O (input/output), third-party code (libraries you didn't write) | To replace simple checks — `if (user?.name)` is cheaper and clearer than catching a `TypeError` |
 | In a top-level handler that turns errors into a response/UI message and logs them | Wrapping every function "just in case" — it hides bugs |
 | To add context and rethrow (§11.4) | To silently swallow errors: `catch {}` with no comment or handling |
 
@@ -292,14 +292,14 @@ Performance note: in modern engines a `try` block that doesn't throw costs essen
 ## 11.3 Custom errors
 
 ### What it is
-A **custom error** is a subclass of `Error` for a specific failure in *your* domain: `ValidationError`, `NotFoundError`, `PaymentDeclinedError`. It lets callers react to *kinds* of failure with `instanceof` (or a `code`), and carry extra data (which field was invalid, what HTTP status to return).
+A **custom error** is a subclass of `Error` for a specific failure in *your* domain: `ValidationError`, `NotFoundError`, `PaymentDeclinedError`. It lets callers react to *kinds* of failure with `instanceof` (or a `code`), and carry extra data (which field was invalid, what HTTP status to return — the **HTTP status** is the 3-digit code a web server sends with every response, e.g. 200 OK, 400 bad request, 404 not found, 500 server error; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
 
 ### How it works
 1. `class MyError extends Error`.
 2. Call `super(message, options)` so `message`, `stack` and `cause` are set up.
 3. Set `this.name` (otherwise it prints as plain `Error`). Using `new.target.name` sets it automatically for every subclass.
 4. Add fields (`code`, `status`, `field`…).
-5. Handle errors in **one place** (a top-level handler, an Express error middleware, a React error boundary) that maps error types to responses, and treats *unknown* errors as 500s without leaking their details to users.
+5. Handle errors in **one place** (a top-level handler, an Express error middleware — Express is a popular Node web-server library, and *middleware* is a function every request passes through — or a React error boundary, a component that catches errors from the UI below it) that maps error types to responses, and treats *unknown* errors as 500s without leaking their details to users.
 
 [`code/03_custom_errors.mjs`](code/03_custom_errors.mjs):
 
@@ -395,25 +395,25 @@ classDiagram
     }
 ```
 
-Why the stack's first line already says `ValidationError`: V8 builds the `stack` string lazily from the error's `name` the first time it's read — here after `this.name` was set. Don't rely on that everywhere: set `name` in the constructor so all engines agree.
+Why the stack's first line already says `ValidationError`: V8 builds the `stack` string lazily (only when first needed) from the error's `name` the first time it's read — here after `this.name` was set. Don't rely on that everywhere: set `name` in the constructor so all engines agree.
 
-`JSON.stringify(new Error('x'))` gives `{}` because `message` and `stack` are **non-enumerable** own properties, and `name` lives on the prototype. That's why `AppError` defines `toJSON()` — useful for logs and API responses (but never send `stack` to end users).
+`JSON.stringify(new Error('x'))` gives `{}` because `message` and `stack` are **non-enumerable** own properties (hidden from `for…in`, `Object.keys` and `JSON.stringify`), and `name` lives on the prototype. That's why `AppError` defines `toJSON()` (which `JSON.stringify` calls automatically if it exists) — useful for logs and API responses (an **API** — application programming interface — is the set of operations a program or server offers for other code to call) (but never send `stack` to end users).
 
 ### Error codes vs classes
 | Approach | Pros | Cons |
 |---|---|---|
 | Subclasses + `instanceof` | Rich, typed, hierarchical (`catch` a whole family) | Breaks across realms/duplicated packages (two copies of the class) |
-| `code` string (`err.code === 'ENOENT'`) | Survives serialization, logs, process boundaries; Node's own convention | No hierarchy; typos go unnoticed |
+| `code` string (`err.code === 'ENOENT'`) | Survives serialization (turning data into text to store or send), logs, process boundaries; Node's own convention | No hierarchy; typos go unnoticed |
 | Both (as above) | `instanceof` inside the app, `code` in logs and API bodies | A little more code |
 
 ### Common mistakes
 - Forgetting `super(message)` → `ReferenceError` when you touch `this` ([Chapter 9](../09-this-prototypes-and-classes/README.md)).
 - Not setting `name` → logs say `Error: …` for everything.
-- Leaking internals: sending `err.message` / `err.stack` of *unexpected* errors to clients can reveal SQL, paths or secrets. Log them server-side; send a generic message.
+- Leaking internals: sending `err.message` / `err.stack` of *unexpected* errors to clients can reveal SQL (database query text), file paths or secrets. Log them server-side; send a generic message.
 - Over-engineering: dozens of error classes nobody catches differently. Create a class only when some caller will handle it differently.
 
 ### Real-world examples
-Node's system errors carry `code` (`ENOENT`, `EADDRINUSE`, `ECONNREFUSED`); `fetch` rejects with a `TypeError` on network failure and an `AbortError` `DOMException` when aborted; HTTP libraries throw errors with a `status`/`response`; ORMs throw `UniqueConstraintError`-style subclasses.
+Node's system errors carry `code` (`ENOENT`, `EADDRINUSE` — the network port is already taken, `ECONNREFUSED` — the other machine refused the connection); `fetch` rejects with a `TypeError` on network failure and an `AbortError` `DOMException` when aborted; HTTP libraries throw errors with a `status`/`response`; ORMs (object-relational mappers — libraries that let you work with database rows as JavaScript objects) throw `UniqueConstraintError`-style subclasses.
 
 ### Self-check
 1. Why set `this.name` in a custom error? → So `String(err)`, stacks and logs show the right type.
@@ -497,7 +497,7 @@ Wrap with `new Error('what I was doing', { cause: err })`; walk `.cause` to the 
 ## 11.5 Errors in asynchronous code (preview)
 
 ### The problem it solves
-Asynchronous code (timers, network, files) finishes *later*, after the `try` block around the call has already exited. Promises carry errors as **rejections** instead. The event loop and promises are explained in [Chapter 12](../12-asynchronous-javascript/README.md); here are the error-handling rules you need now.
+Asynchronous code (timers, network, files) finishes *later*, after the `try` block around the call has already exited. Promises (objects that stand for a result that will arrive later) carry errors as **rejections** (the promise's "it failed" outcome) instead. The event loop (the engine's mechanism for running queued work one piece at a time) and promises are explained in [Chapter 12](../12-asynchronous-javascript/README.md); here are the error-handling rules you need now.
 
 [`code/05_async_errors.mjs`](code/05_async_errors.mjs):
 
@@ -546,7 +546,7 @@ unhandledRejection: user 5 not found (Node would crash here without this handler
 
 Rules:
 1. Inside an `async` function, `throw` becomes a rejected promise, and `await` of a rejected promise throws — so `try { await … } catch` works naturally.
-2. **Always `await` (or `return`, or `.catch()`) every promise.** A forgotten promise's rejection escapes every `try`. ESLint (with type info, `@typescript-eslint/no-floating-promises`) can flag this.
+2. **Always `await` (or `return`, or `.catch()`) every promise.** A forgotten promise's rejection escapes every `try`. ESLint (with type info, `@typescript-eslint/no-floating-promises`) can flag this — a *floating* promise is one nobody awaits or handles.
 3. An **unhandled rejection** — a rejected promise nobody handles — crashes Node by default (since Node 15) and logs "Uncaught (in promise)" in browsers.
 
 ### Last-resort global handlers
@@ -555,7 +555,7 @@ Rules:
 | Browser | `window.addEventListener('error', e => …)` | `window.addEventListener('unhandledrejection', e => …)` |
 | Node | `process.on('uncaughtException', err => …)` | `process.on('unhandledRejection', reason => …)` |
 
-Use them to **log and report** (e.g., to an error-tracking service such as Sentry), not to keep going as if nothing happened. After an `uncaughtException`, a Node process is in an unknown state — log, then exit and let a process manager restart it.
+Use them to **log and report** (e.g., to an error-tracking service such as Sentry — a hosted tool that collects crashes from real users), not to keep going as if nothing happened. After an `uncaughtException`, a Node process is in an unknown state — log, then exit and let a process manager (a supervisor program such as PM2, systemd or Kubernetes that keeps your app running) restart it.
 
 ### TL;DR
 `await` inside `try`, or `.catch()` every promise; never leave a promise floating. Global handlers are for logging, not recovery.
@@ -565,7 +565,7 @@ Use them to **log and report** (e.g., to an error-tracking service such as Sentr
 ## 11.6 Guaranteed cleanup: `finally` and `using`
 
 ### What it is
-Resources — open files, database connections, locks, timers, subscriptions — must be released even if something fails. `finally` has always done this. **Explicit Resource Management** (the `using` declaration) is a newer feature that makes cleanup automatic: an object with a `[Symbol.dispose]()` method, declared with `using`, is disposed when the enclosing block exits, however it exits. It reached TC39 stage 4 in 2025 and is slated for ES2027; Node 24 and Chromium-based browsers (Chrome 134+) already support it — check your targets before relying on it in browsers. It mirrors C#'s `using`, Python's `with` and Java's try-with-resources.
+Resources — open files, database connections, locks (flags that give one piece of code exclusive use of something), timers, subscriptions — must be released even if something fails. `finally` has always done this. **Explicit Resource Management** (the `using` declaration) is a newer feature that makes cleanup automatic: an object with a `[Symbol.dispose]()` method (a method whose name is a built-in *symbol* — a unique key the language reserves for this purpose), declared with `using`, is disposed when the enclosing block exits, however it exits. It reached TC39 stage 4 in 2025 (TC39 is the committee that designs JavaScript; stage 4 means "finished, will be in the next standard") and is slated for ES2027; Node 24 and Chromium-based browsers (Chromium is the open-source core of Chrome and Edge; Chrome 134+) already support it — check your targets before relying on it in browsers. It mirrors C#'s `using`, Python's `with` and Java's try-with-resources.
 
 [`code/09_using_and_cleanup.mjs`](code/09_using_and_cleanup.mjs):
 
@@ -640,7 +640,7 @@ Release resources in `finally`, or with `using` + `[Symbol.dispose]` where suppo
 ## 11.7 The console toolbox
 
 ### What it is
-`console` is the built-in logging object in browsers and Node. `console.log` is only the start; the other methods save a lot of time when debugging. In the browser they print to the DevTools **Console** panel (with filtering by level); in Node, `log/info/debug/table/dir/group/count/time` write to **stdout** and `warn/error/trace/assert` to **stderr**.
+`console` is the built-in logging object in browsers and Node. `console.log` is only the start; the other methods save a lot of time when debugging. In the browser they print to the DevTools **Console** panel (with filtering by level); in Node, `log/info/debug/table/dir/group/count/time` write to **stdout** (standard output, the normal output stream of a program) and `warn/error/trace/assert` to **stderr** (standard error, a separate stream meant for problems, so it can be redirected on its own).
 
 [`code/06_console_methods.mjs`](code/06_console_methods.mjs):
 
@@ -730,7 +730,7 @@ Trace: trace: how did we get here?
 |---|---|
 | `log` / `info` / `debug` | General output; in browsers they're separate filter levels |
 | `warn` / `error` | Problems — shown in yellow/red in DevTools, go to stderr in Node, include a stack in browsers |
-| `%s %d %i %f %o %O %c` | Format specifiers (string, integer, float, object; `%c` applies CSS in browsers) |
+| `%s %d %i %f %o %O %c` | Format specifiers (string, integer, float, object; `%c` applies CSS styling in browsers) |
 | `table(data, cols?)` | Arrays of objects → readable grid |
 | `dir(obj, { depth })` | Full object inspection (Node's `console.log` stops at depth 2 and shows `[Object]`) |
 | `group` / `groupCollapsed` / `groupEnd` | Indent related messages |
@@ -740,8 +740,8 @@ Trace: trace: how did we get here?
 | `trace(msg)` | Print the current stack without throwing |
 
 ### Common mistakes
-- **Logging objects in the browser and reading them later**: DevTools shows a *live* reference; when you expand it, you see the object's *current* state, not the state at log time. Log a snapshot: `console.log(structuredClone(obj))` or `JSON.stringify(obj)`.
-- Leaving debug logs in production code — use a lint rule (`no-console`) or a logger with levels.
+- **Logging objects in the browser and reading them later**: DevTools shows a *live* reference; when you expand it, you see the object's *current* state, not the state at log time. Log a snapshot: `console.log(structuredClone(obj))` (a built-in that makes a deep copy) or `JSON.stringify(obj)`.
+- Leaving debug logs in production code (the live version real users run) — use a lint rule (`no-console`) or a logger with levels (a logging library where each message is tagged debug/info/warn/error and you choose which levels to keep).
 - `console.log('user: ' + user)` → `user: [object Object]`. Pass objects as separate arguments: `console.log('user:', user)`.
 
 ### TL;DR
@@ -794,7 +794,7 @@ How to read it:
 V8-specific helpers (Node, Chrome, Edge — not standard): `Error.stackTraceLimit` (frames kept, default 10; raise it when debugging deep stacks, or run Node with `--stack-trace-limit=50`), and `Error.captureStackTrace(obj, fn?)`, which attaches a stack to any object (optionally hiding frames above `fn`). Async stack traces: V8 stitches together frames across `await` points (you'll see `at async functionName`), so `async/await` code has far more useful traces than old callback code.
 
 ### Source maps
-Production JavaScript is usually bundled and minified ([Chapter 10](../10-modules-and-tooling/README.md)), so a raw trace says something like `at e (app.3f9a1c.js:1:48213)` — useless. A **source map** (`app.js.map`) maps each position in the generated file back to the original file, line and column. DevTools applies source maps automatically when it finds a `//# sourceMappingURL=` comment; Node applies them to stack traces with `node --enable-source-maps`. Error-tracking services let you upload maps privately so production traces are readable without publishing your source.
+Production JavaScript is usually bundled (many files merged into a few) and minified (whitespace removed and names shortened to make the file smaller) ([Chapter 10](../10-modules-and-tooling/README.md)), so a raw trace says something like `at e (app.3f9a1c.js:1:48213)` — useless. A **source map** (`app.js.map`) maps each position in the generated file back to the original file, line and column. DevTools applies source maps automatically when it finds a `//# sourceMappingURL=` comment; Node applies them to stack traces with `node --enable-source-maps`. Error-tracking services let you upload maps privately so production traces are readable without publishing your source.
 
 ### TL;DR
 Read the first line for *what*, the first frame in your code for *where*, the rest for *how*. Use source maps for bundled code; name functions for clearer traces.
@@ -804,7 +804,7 @@ Read the first line for *what*, the first frame in your code for *where*, the re
 ## 11.9 Debugging with DevTools and the Node inspector
 
 ### What it is
-A **debugger** lets you **pause** a running program at a chosen line, **inspect** every variable in scope, and **step** through the code one line at a time. It's far faster than adding `console.log`s and re-running when the problem is "why is this value wrong here?". Browsers ship one in **DevTools** (F12, or Cmd+Option+I on macOS); Node exposes the same Chrome DevTools protocol through its **inspector**.
+A **debugger** lets you **pause** a running program at a chosen line, **inspect** every variable in scope, and **step** through the code one line at a time. It's far faster than adding `console.log`s and re-running when the problem is "why is this value wrong here?". Browsers ship one in **DevTools** (F12, or Cmd+Option+I on macOS); Node exposes the same Chrome DevTools protocol (the message format DevTools uses to control a running program) through its **inspector**.
 
 ### Core concepts
 | Concept | What it does |
@@ -824,7 +824,7 @@ A **debugger** lets you **pause** a running program at a chosen line, **inspect*
 
 (Keyboard shortcuts are Chrome DevTools' defaults; VS Code uses F10/F11/Shift+F11 too, with F5 to continue.)
 
-Browser-only extras: **DOM breakpoints** (pause when an element's subtree/attributes change), **event listener breakpoints** (pause on any `click`), **XHR/fetch breakpoints** (pause when a URL is requested), the **Network** panel (see every request, status and response — the first stop for "the API call failed" bugs), **Performance** and **Memory** panels (profiling and heap snapshots for leaks), and an **ignore list** that hides framework/library frames when stepping.
+Browser-only extras: **DOM breakpoints** (the DOM — Document Object Model — is the browser's tree of objects representing the page; these pause when an element's subtree/attributes change), **event listener breakpoints** (pause on any `click`), **XHR/fetch breakpoints** (XHR = `XMLHttpRequest`, the older API for HTTP requests; these pause when a URL is requested), the **Network** panel (see every request, status and response — the first stop for "the API call failed" bugs), **Performance** and **Memory** panels (profiling — measuring where time goes — and heap snapshots, a dump of every object in memory, for finding memory leaks: memory that is never freed because something still references it), and an **ignore list** that hides framework/library frames when stepping.
 
 ### Debugging Node (not run — interactive)
 ```bash
@@ -836,7 +836,7 @@ node --enable-source-maps dist/app.js   # readable traces for transpiled code
 node --watch app.mjs            # restart automatically on save while you fix things
 ```
 
-In **VS Code**, open a "JavaScript Debug Terminal" and run the program normally — breakpoints set in the editor just work, for Node scripts, test runners and dev servers alike. Never expose `--inspect` on a public network interface: anyone who can connect can run code in your process.
+In **VS Code**, open a "JavaScript Debug Terminal" and run the program normally — breakpoints set in the editor just work, for Node scripts, test runners and dev servers alike. Never expose `--inspect` on a public network interface (an address other machines can reach, unlike `127.0.0.1`, which only your own computer can): anyone who can connect can run code in your process.
 
 ### A systematic method
 ```mermaid
@@ -852,7 +852,7 @@ flowchart LR
 1. **Reproduce** the bug reliably, with the smallest input that triggers it.
 2. **Read** the actual error message and stack (really read it).
 3. **Hypothesize** what's wrong, then **inspect** the values that would confirm or refute it — breakpoint/`debugger` or targeted, labelled logs.
-4. **Narrow down** by halving: is the value already wrong at the midpoint? (`git bisect` does the same across commits.)
+4. **Narrow down** by halving: is the value already wrong at the midpoint? (`git bisect` does the same across commits — it binary-searches your Git history, the saved snapshots of your code, to find the change that introduced the bug.)
 5. **Fix the root cause**, not the symptom.
 6. **Add a test** that fails without the fix ([Chapter 16](../16-testing-and-typescript/README.md)).
 
@@ -910,7 +910,7 @@ fixed         : 30
 tests         : passed
 ```
 
-The inspection shows `typeofSum: 'string'` from the very first step: the initial value `''` made `+` concatenate (`'25' + 5` → `'255'`), while `*` had quietly converted the strings to numbers — a coercion rule from [Chapter 2](../02-variables-types-and-operators/README.md). No error was thrown at all, which is why these bugs are hard: **the most dangerous bugs are wrong values, not exceptions.** Converting input at the boundary (`Number(...)`) and adding tests prevents the whole class of bug. TypeScript would also have flagged `string * string` ([Chapter 16](../16-testing-and-typescript/README.md)).
+The inspection shows `typeofSum: 'string'` from the very first step: the initial value `''` made `+` concatenate (`'25' + 5` → `'255'`), while `*` had quietly converted the strings to numbers — a coercion rule from [Chapter 2](../02-variables-types-and-operators/README.md). No error was thrown at all, which is why these bugs are hard: **the most dangerous bugs are wrong values, not exceptions.** Converting input at the boundary (`Number(...)`) and adding tests prevents the whole class of bug. TypeScript (JavaScript plus type annotations that a compiler checks before the code runs) would also have flagged `string * string` ([Chapter 16](../16-testing-and-typescript/README.md)).
 
 ### In the interview
 **30-second answer:** "I reproduce the bug first, read the stack trace, then use breakpoints — often conditional ones or 'pause on exceptions' — to inspect the actual state instead of guessing. I step over/into to follow the flow and check the Network panel for API issues. For Node I use `--inspect` with Chrome DevTools or VS Code's debug terminal. Once fixed, I add a test that reproduces the bug."
@@ -988,19 +988,19 @@ in on a primitive          TypeError: Cannot use 'in' operator to search for 'x'
 | `Cannot read properties of undefined (reading 'y')` | Data not loaded yet (async), wrong shape of an API response, array index out of range, missing `return` | Find *which* value is `undefined` (the part before `.y`); use `?.` and defaults only if absence is legitimate |
 | `Cannot set properties of undefined` | Writing into a nested object that doesn't exist | Create it first, or `obj.cfg ??= {}` |
 | `x is not defined` | Typo, missing import, variable in another scope, browser-only global used in Node (`window`, `document`) | Declare/import it; check the environment |
-| `Cannot access 'x' before initialization` | `let`/`const`/`class` used before its line (TDZ), often via circular imports | Reorder code; break import cycles |
+| `Cannot access 'x' before initialization` | `let`/`const`/`class` used before its line (TDZ), often via circular imports (two modules importing each other) | Reorder code; break import cycles |
 | `Assignment to constant variable.` | Reassigning a `const` or an imported binding | Use `let`, or mutate instead of reassign |
-| `… is not iterable` | `for…of` / spread / destructuring on a plain object, `undefined`, or a number | Use `Object.entries(obj)`, check for `undefined` |
-| `"undefined" is not valid JSON` / `Unexpected token '<' … is not valid JSON` | Parsing a missing value; the server returned an HTML error page instead of JSON | Check `response.ok` and the content type before `response.json()` ([Chapter 14](../14-browser-apis-and-security/README.md)) |
+| `… is not iterable` (iterable = loopable with `for…of`) | `for…of` / spread / destructuring on a plain object, `undefined`, or a number | Use `Object.entries(obj)`, check for `undefined` |
+| `"undefined" is not valid JSON` / `Unexpected token '<' … is not valid JSON` | Parsing a missing value; the server returned an HTML error page instead of JSON | Check `response.ok` and the content type (`Content-Type` header) before `response.json()` ([Chapter 14](../14-browser-apis-and-security/README.md)) |
 | `Class constructor X cannot be invoked without 'new'` | Calling a class like a function | Add `new` |
 | `Reduce of empty array with no initial value` | `reduce` on a possibly empty array | Always pass an initial value |
 | `Cannot mix BigInt and other types` | `bigint + number` | Convert explicitly: `BigInt(n)` or `Number(b)` |
-| `Maximum call stack size exceeded` | Infinite or too-deep recursion; a setter that assigns to itself; two functions calling each other | Fix the base case; iterate instead |
-| `Converting circular structure to JSON` | Serializing objects with back-references (DOM nodes, parent links, some library objects) | Pick the fields you need, or use a replacer |
-| `Cannot assign to read only property` | Writing to a frozen object or a getter-only accessor in strict code | Copy instead of mutating: `{ ...obj, a: 2 }` |
+| `Maximum call stack size exceeded` | Infinite or too-deep recursion (a function calling itself); a setter that assigns to itself; two functions calling each other | Fix the base case (the input where recursion stops); iterate instead |
+| `Converting circular structure to JSON` | Serializing objects with back-references (DOM nodes, parent links, some library objects) | Pick the fields you need, or use a replacer (a filter function passed to `JSON.stringify`) |
+| `Cannot assign to read only property` | Writing to a frozen object or a getter-only accessor in strict code (strict mode: always on in modules and classes) | Copy instead of mutating: `{ ...obj, a: 2 }` |
 | `Cannot use 'in' operator to search for …` | `in` on a string/number (often an un-parsed JSON string) | Parse first; `in` works on objects only |
 
-Other messages worth recognizing: `Unexpected token` / `Unexpected end of input` (syntax: a missing bracket or comma), `await is only valid in async functions and the top level bodies of modules`, `Cannot use import statement outside a module` ([Chapter 10](../10-modules-and-tooling/README.md)), and `Failed to fetch` (network/CORS failure in browsers, a `TypeError` — [Chapter 14](../14-browser-apis-and-security/README.md)).
+Other messages worth recognizing: `Unexpected token` / `Unexpected end of input` (syntax: a missing bracket or comma), `await is only valid in async functions and the top level bodies of modules`, `Cannot use import statement outside a module` ([Chapter 10](../10-modules-and-tooling/README.md)), and `Failed to fetch` (network/CORS failure in browsers — CORS is the browser rule that blocks reading another site's responses unless that site allows it; a `TypeError` — [Chapter 14](../14-browser-apis-and-security/README.md)).
 
 ### Self-check
 1. `Cannot read properties of undefined (reading 'map')` — what is `undefined`? → The value *before* `.map`, not `map` itself.

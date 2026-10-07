@@ -1,6 +1,6 @@
 # Chapter 3 — Control Flow and Loops
 
-Left alone, a program runs its statements once each, top to bottom. **Control flow** is everything that changes that: *choosing* which statements run (conditionals) and *repeating* statements (loops). With the values and operators from [Chapter 2](../02-variables-types-and-operators/README.md), these two tools are enough to express any algorithm.
+Left alone, a program runs its statements once each, top to bottom. **Control flow** is everything that changes that: *choosing* which statements run (conditionals) and *repeating* statements (loops). With the values and operators from [Chapter 2](../02-variables-types-and-operators/README.md), these two tools are enough to express any algorithm (a precise, step-by-step recipe for solving a problem).
 
 **What you'll learn**
 
@@ -20,7 +20,7 @@ Code: [`code/`](code/). Every "Output:" block is real Node 24 output.
 ## 3.1 Conditional statements — making decisions
 
 ### What it is
-A **conditional statement** evaluates a **condition** — an expression — and, depending on whether it is truthy or falsy, runs one block of code or another. It's the program's way of saying "if this, do that; otherwise do something else".
+A **conditional statement** evaluates a **condition** — an expression — and, depending on whether it is truthy or falsy (treated as `true` or as `false` when used as a condition), runs one block of code or another. It's the program's way of saying "if this, do that; otherwise do something else".
 
 Analogy: a railway switch. The train (your program) always moves forward, but the switch decides which track it takes.
 
@@ -34,10 +34,10 @@ JavaScript has two conditional **statements** and one conditional **operator**:
 
 ### Where you meet them in real applications
 - **Form validation** — is the email field filled in and shaped like an email? Only then enable the Submit button.
-- **Authentication and permissions** — show the admin panel only if the user is logged in *and* has the admin role.
-- **Interactive UI** — if the menu is open, close it on click; otherwise open it. If the user prefers dark mode, apply the dark theme.
+- **Authentication and permissions** (checking *who* the user is, then *what* they may do) — show the admin panel only if the user is logged in *and* has the admin role.
+- **Interactive UI** (user interface — the buttons, menus and screens people interact with) — if the menu is open, close it on click; otherwise open it. If the user prefers dark mode, apply the dark theme.
 - **Filtering data** — show a product only if its price is inside the range the shopper selected.
-- **Error handling** — if the server answered with status 404, show "Not found"; if 500, show "Try again later".
+- **Error handling** — if the server answered with status 404, show "Not found"; if 500, show "Try again later". (An HTTP status code is the number a web server sends back to say how a request went: 2xx success, 4xx your mistake, 5xx the server's — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).)
 
 ### TL;DR
 Conditionals choose between code paths based on a condition's truthiness. `if` handles anything, `switch` handles one-value-many-options, the ternary chooses between two values.
@@ -173,7 +173,7 @@ if (isAdmin)
   logAccess();   // looks conditional, but ALWAYS runs — only the first line belongs to the if
 ```
 
-A formatter (Prettier) re-indents code to expose this; many teams simply always use braces.
+A formatter (a tool that automatically rewrites code layout — e.g. Prettier) re-indents code to expose this; many teams simply always use braces.
 
 ### Common mistakes
 - **`=` instead of `===`**: `if (role = "admin")` assigns and is always truthy.
@@ -229,9 +229,9 @@ to pay: 90
 ### When to use it (and when not)
 | Use the ternary when… | Use `if` when… |
 |---|---|
-| choosing between two **values** | running **statements** (side effects, several lines) |
+| choosing between two **values** | running **statements** (side effects — changes beyond returning a value, like printing or updating a variable — several lines) |
 | it fits on one line and reads naturally | the logic needs explanation or more than two outcomes |
-| you need an expression: inside a template literal, an argument, a `const` initialiser, JSX in React | — |
+| you need an expression: inside a template literal, an argument, a `const` initialiser, JSX in React (HTML-like syntax inside JavaScript) | — |
 
 Chained ternaries are acceptable when formatted one condition per line as above; nesting them inside each other's branches quickly becomes unreadable.
 
@@ -351,7 +351,7 @@ Output:
 admin: [ 'delete', 'edit', 'read' ] viewer: [ 'read' ]
 ```
 
-Intentional fall-through like this is rare; accidental fall-through (a forgotten `break`) is a classic bug. If you do it on purpose, add a `// falls through` comment — ESLint's `no-fallthrough` rule recognises it.
+Intentional fall-through like this is rare; accidental fall-through (a forgotten `break`) is a classic bug. If you do it on purpose, add a `// falls through` comment — ESLint's `no-fallthrough` rule recognises it (ESLint is a linter: a tool that scans code for likely bugs).
 
 ### Two useful patterns
 ```js
@@ -375,7 +375,7 @@ Not Found | Unknown status
 ```
 
 - **`switch (true)`** matches the first case whose expression is `true` — a way to use ranges. It works, but many developers find a plain `if … else if` clearer.
-- **A lookup object** (or a `Map`) is often cleaner than a switch whose only job is to translate one value to another; add a fallback with `??`.
+- **A lookup object** (or a `Map` — a built-in key-to-value collection, [Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) is often cleaner than a switch whose only job is to translate one value to another; add a fallback with `??`.
 
 ### Scope inside cases
 The whole switch body is **one block**, so `const r` declared in two different cases collides. Wrap each case body in its own braces when declaring variables:
@@ -414,15 +414,15 @@ A **loop** repeats a block of code — the **body** — while some condition hol
 
 Without loops, printing "Hello" ten times means writing ten `console.log` lines, and processing a 10,000-item shopping list is impossible to write out. With a loop you write the body once and describe *how often* it should run.
 
-Real uses: rendering every product in a cart, summing an order, retrying a network request, reading lines of a file, walking a grid in a game, polling until a job is done.
+Real uses: rendering every product in a cart, summing an order, retrying a network request, reading lines of a file, walking a grid in a game, polling (checking again and again at intervals) until a job is done.
 
 | Loop | Repeats… | Checks condition | Typical use |
 |---|---|---|---|
-| `for` | a counted number of times | before each iteration | index-based loops over arrays, counting |
+| `for` | a counted number of times | before each iteration | index-based loops (using each item's position number, starting at 0) over arrays, counting |
 | `while` | while a condition is truthy | before each iteration (may run 0 times) | unknown number of iterations |
 | `do…while` | while a condition is truthy | **after** each iteration (runs at least once) | "do it, then decide whether to repeat" |
-| `for…in` | once per enumerable **property name** of an object | — | inspecting an object's keys |
-| `for…of` | once per **value** of an iterable (array, string, Map, Set …) | — | the everyday way to walk a collection |
+| `for…in` | once per enumerable (visible to loops, §3.9) **property name** of an object | — | inspecting an object's keys |
+| `for…of` | once per **value** of an iterable (anything that can hand out values one by one, §3.10: array, string, Map, Set …) | — | the everyday way to walk a collection |
 
 ---
 
@@ -529,7 +529,7 @@ Output:
 inner body ran 16 times
 ```
 
-Nested loops are how you walk two-dimensional data — matrices, spreadsheet rows and columns, game boards, image pixels — and how you compare every item with every other item. That *m × n* cost is also why nested loops are the first thing to look at when code is slow: two nested loops over 10,000 items each is 100 million iterations. Interview problems often ask you to replace such an O(n²) nested loop with a single loop and a `Map` or `Set` ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)).
+Nested loops are how you walk two-dimensional data — matrices (grids of numbers arranged in rows and columns), spreadsheet rows and columns, game boards, image pixels — and how you compare every item with every other item. That *m × n* cost is also why nested loops are the first thing to look at when code is slow: two nested loops over 10,000 items each is 100 million iterations. Interview problems often ask you to replace such an O(n²) nested loop (Big-O notation describes how work grows with input size *n*; O(n²) means doubling the input roughly quadruples the work) with a single loop and a `Map` or `Set` ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)).
 
 ### Edge cases
 ```js
@@ -624,7 +624,7 @@ The second loop has a **compound condition**: stop at the end of the array *or* 
 ### Common mistakes
 - **Infinite loop** — the body never changes anything the condition depends on (`while (count <= 5) { console.log(count); }` with no `count++`). In the browser the tab freezes; in Node, press `Ctrl+C`.
 - **Using `while` for a simple count** — a `for` loop keeps the counter logic in one visible place.
-- **Busy-waiting** — `while (!dataArrived) {}` to wait for a network response never works in JavaScript: the single thread is stuck in your loop, so the response can never be processed. Waiting is done with callbacks, promises and `await` ([Chapter 12](../12-asynchronous-javascript/README.md)).
+- **Busy-waiting** — `while (!dataArrived) {}` to wait for a network response never works in JavaScript: the single thread is stuck in your loop, so the response can never be processed. Waiting is done with callbacks (functions handed over to run later), promises (objects standing for a result that will arrive later) and `await` ([Chapter 12](../12-asynchronous-javascript/README.md)).
 
 ### TL;DR
 `while (cond) { … }` checks first, may run zero times, and is for an unknown number of iterations. Make sure the body moves toward ending the loop.
@@ -693,7 +693,7 @@ attempt 2: failed
 attempt 3: success
 ```
 
-The first two lines show the key difference: with the same false condition, `while` ran zero times and `do…while` ran once. The dice example is the natural shape for "generate something, then decide whether to try again" — you can't test the roll before you've rolled. (In real code you'd use `Math.random()`, [Chapter 5](../05-objects-math-date-and-json/README.md); the seeded generator here keeps the printed output identical on every run.) The retry loop combines "until success" with a safety cap on attempts so it can't run forever.
+The first two lines show the key difference: with the same false condition, `while` ran zero times and `do…while` ran once. The dice example is the natural shape for "generate something, then decide whether to try again" — you can't test the roll before you've rolled. (In real code you'd use `Math.random()`, [Chapter 5](../05-objects-math-date-and-json/README.md); the seeded generator — one that starts from a fixed starting number, the *seed*, so it produces the same "random" sequence every time — keeps the printed output identical on every run.) The retry loop combines "until success" with a safety cap on attempts so it can't run forever.
 
 ### Trade-offs — `while` vs `do…while`
 
@@ -712,7 +712,7 @@ The first two lines show the key difference: with the same false condition, `whi
 ## 3.9 The `for…in` loop
 
 ### What it is
-**`for…in`** loops over the **property names (keys)** of an object — all **enumerable string-keyed** properties, **including inherited ones**. It's useful when you need to inspect an object whose shape you don't know in advance.
+**`for…in`** loops over the **property names (keys)** of an object — all **enumerable string-keyed** properties, **including inherited ones** (properties the object gets from another object it is linked to, rather than its own). It's useful when you need to inspect an object whose shape you don't know in advance.
 
 ```js
 for (const key in object) {
@@ -773,7 +773,7 @@ order: 1, 2, b, a
 
 What the output teaches:
 1. **The loop variable is the key**; use bracket notation `person[key]` to get the value (`person.key` would look for a property literally named "key").
-2. **Inherited properties appear too.** `bike` has only `wheels` of its own, but the loop also visited `kind` from its prototype ([Chapter 9](../09-this-prototypes-and-classes/README.md)). Filter with `Object.hasOwn(obj, key)` (ES2022; older code uses `obj.hasOwnProperty(key)`), or avoid the issue with `Object.keys(obj)`, which returns only own enumerable keys.
+2. **Inherited properties appear too.** `bike` has only `wheels` of its own, but the loop also visited `kind` from its prototype (the object it falls back to when a property is missing — [Chapter 9](../09-this-prototypes-and-classes/README.md)). Filter with `Object.hasOwn(obj, key)` (ES2022; older code uses `obj.hasOwnProperty(key)`), or avoid the issue with `Object.keys(obj)`, which returns only own enumerable keys.
 3. **On arrays it's a trap.** Arrays are objects whose indexes are property names, so `for…in` gives you **strings** (`"0"`, not `0`) and also visits any extra property someone attached (`note`) — or any enumerable property a library added to `Array.prototype`. Use `for…of`, a `for` loop or array methods for arrays.
 4. **Order:** integer-like keys come first in ascending numeric order, then other string keys in the order they were created.
 
@@ -795,7 +795,7 @@ These are what most modern code uses; `for…in` is mainly seen in older code an
 ## 3.10 The `for…of` loop
 
 ### What it is
-**`for…of`** (ES2015) loops over the **values** of any **iterable** — an object that knows how to hand out its values one at a time. Built-in iterables: arrays, strings, `Map`, `Set`, typed arrays, the `arguments` object, DOM collections such as `NodeList`, and generators. (How iterables work under the hood — the `Symbol.iterator` protocol — is in [Chapter 8](../08-maps-sets-iterators-and-generators/README.md).)
+**`for…of`** (ES2015) loops over the **values** of any **iterable** — an object that knows how to hand out its values one at a time. Built-in iterables: arrays, strings, `Map`, `Set`, typed arrays (fixed-type arrays of raw numbers, used for binary data), the `arguments` object (a function's list of passed values), DOM collections such as `NodeList` (lists of page elements), and generators (functions that produce values one at a time). (How iterables work under the hood — the `Symbol.iterator` protocol, i.e. an agreed set of method names an object must provide — is in [Chapter 8](../08-maps-sets-iterators-and-generators/README.md).)
 
 ```js
 for (const value of iterable) {
@@ -866,8 +866,8 @@ unchanged: [ 1, 2, 3 ]
 ```
 
 What the output teaches:
-1. **Strings** are iterated character by character — and correctly by **Unicode code point**: the emoji counts as one character in `for…of`, while `.length` reports 4 because the emoji occupies two UTF-16 units ([Chapter 6](../06-strings-and-regular-expressions/README.md)).
-2. **Need the index as well?** Iterate `array.entries()`, which yields `[index, value]` pairs, and unpack them with array destructuring `[i, task]` ([Chapter 5](../05-objects-math-date-and-json/README.md)).
+1. **Strings** are iterated character by character — and correctly by **Unicode code point** (the unique number Unicode assigns to each character): the emoji counts as one character in `for…of`, while `.length` reports 4 because the emoji occupies two UTF-16 units ([Chapter 6](../06-strings-and-regular-expressions/README.md)).
+2. **Need the index as well?** Iterate `array.entries()`, which yields `[index, value]` pairs, and unpack them with array destructuring `[i, task]` (syntax that pulls items out of an array into separate variables) ([Chapter 5](../05-objects-math-date-and-json/README.md)).
 3. **Maps** yield `[key, value]` pairs; **Sets** yield each unique value once.
 4. **Plain objects are not iterable** → `TypeError`. Iterate `Object.keys/values/entries(obj)` instead.
 5. `for…in` gives index *strings*; `for…of` gives *values*.
@@ -1007,7 +1007,7 @@ Walk-through:
 | Keep only some elements | `arr.filter(...)` |
 | Combine all elements into one value | `arr.reduce(...)` or a `for…of` with an accumulator |
 | Find the first match / check any / check all | `find` / `some` / `every` |
-| Wait for asynchronous work | `for await…of`, `await` in a loop ([Ch. 12](../12-asynchronous-javascript/README.md)) — never a busy `while` |
+| Wait for asynchronous work (work that finishes later, e.g. a network request) | `for await…of`, `await` in a loop ([Ch. 12](../12-asynchronous-javascript/README.md)) — never a busy `while` |
 
 Performance is rarely a reason to prefer one loop over another; modern engines optimise all of them. Choose the one that states your intent most clearly.
 

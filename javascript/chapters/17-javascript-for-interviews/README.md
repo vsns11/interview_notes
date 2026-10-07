@@ -1,13 +1,13 @@
 # Chapter 17 — JavaScript for Interviews
 
-A JavaScript interview usually has three parts. A **coding round** asks you to solve an algorithm problem (in JavaScript, so you need to know which built-ins are fast and which are traps). A **"build it yourself" round** asks you to write a utility that libraries normally give you — `debounce`, `Promise.all`, a deep clone. And a **language round** throws short snippets at you and asks "what does this print, and why?". This chapter prepares all three. It does not re-teach the language: every answer links to the section of this book that explains it fully.
+A JavaScript interview usually has three parts. A **coding round** asks you to solve an algorithm (a step-by-step method for solving a problem) problem (in JavaScript, so you need to know which built-ins are fast and which are traps). A **"build it yourself" round** asks you to write a utility that libraries normally give you — `debounce`, `Promise.all`, a deep clone. And a **language round** throws short snippets at you and asks "what does this print, and why?". This chapter prepares all three. It does not re-teach the language: every answer links to the section of this book that explains it fully.
 
 **What you'll learn**
 
-1. The JavaScript **DSA toolkit**: arrays as stacks and queues, `Map`/`Set`, sorting comparators and stability, number pitfalls (`0.1 + 0.2`, safe integers, integer division), building strings, `BigInt` — with a complexity table.
-2. **Twenty-one coding patterns** — two pointers, sliding window, hashing, stack, prefix sums, intervals, heap (with a hand-written `MinHeap`, since JavaScript has none, plus two heaps for a running median and k-way merge), binary search, BFS, DFS, dynamic programming with memoization, backtracking, linked lists, fast & slow pointers, trees, tries, topological sort and union-find, greedy, sort & search (quickselect, Dutch flag, merge sort), bit manipulation, math & geometry — each with two or three classic problems in runnable, asserted code.
-3. **Implement-from-scratch classics** with tests: `debounce`, `throttle`, `curry`, `compose`/`pipe`, `memoize`, `flatten`, a `bind` polyfill, deep clone (`structuredClone` vs manual), deep equal, an LRU cache, an `EventEmitter`, and `Promise.all`/`allSettled`/`race`/`any` polyfills.
-4. **Fifty-three tricky questions** with real outputs: coercion, equality, `typeof null`, `NaN`, hoisting and the TDZ, closures in loops, `this`, arrow vs regular functions, prototypes, classes, event-loop ordering puzzles, shallow vs deep copies, garbage collection and memory leaks.
+1. The JavaScript **DSA toolkit** (DSA = data structures and algorithms, §17.1): arrays as stacks and queues, `Map`/`Set`, sorting comparators and stability, number pitfalls (`0.1 + 0.2`, safe integers, integer division), building strings, `BigInt` — with a complexity table.
+2. **Twenty-one coding patterns** — two pointers, sliding window, hashing, stack, prefix sums, intervals, heap (with a hand-written `MinHeap`, since JavaScript has none, plus two heaps for a running median and k-way merge), binary search, BFS (breadth-first search), DFS (depth-first search), dynamic programming with memoization, backtracking, linked lists, fast & slow pointers, trees, tries, topological sort and union-find, greedy, sort & search (quickselect, Dutch flag, merge sort), bit manipulation, math & geometry — each with two or three classic problems in runnable, asserted code.
+3. **Implement-from-scratch classics** with tests: `debounce`, `throttle`, `curry`, `compose`/`pipe`, `memoize`, `flatten`, a `bind` polyfill (your own implementation of a built-in feature), deep clone (`structuredClone` vs manual), deep equal, an LRU (least recently used) cache, an `EventEmitter`, and `Promise.all`/`allSettled`/`race`/`any` polyfills.
+4. **Fifty-three tricky questions** with real outputs: coercion (JavaScript's automatic conversion between types), equality, `typeof null`, `NaN`, hoisting and the TDZ, closures in loops, `this`, arrow vs regular functions, prototypes, classes, event-loop ordering puzzles, shallow vs deep copies, garbage collection (the engine automatically freeing memory nothing uses any more) and memory leaks.
 
 **Before you start.** This chapter assumes the whole book up to [Chapter 16](../16-testing-and-typescript/README.md). The tests use `node:assert/strict` and fake timers from `node:test`, explained in [§16.2](../16-testing-and-typescript/README.md#162-assertions-with-nodeassertstrict) and [§16.5](../16-testing-and-typescript/README.md#165-test-doubles-and-mocking). The same patterns are solved in Python in the Python Handbook's [Chapter 19: Python for Coding Interviews](../../../python/chapters/19-python-for-coding-interviews/README.md) — handy for comparing; here we focus on what is specific to JavaScript.
 
@@ -21,7 +21,7 @@ All code is in [`code/`](code/). Every program checks itself with `assert` and e
 | [`04_classics_functions.mjs`](code/04_classics_functions.mjs) | debounce, throttle, curry, compose/pipe, memoize, flatten, bind/call |
 | [`05_classics_data.mjs`](code/05_classics_data.mjs) | structuredClone, deepClone, deepEqual, LRU cache, EventEmitter |
 | [`06_promise_polyfills.mjs`](code/06_promise_polyfills.mjs) | all/allSettled/race/any, timeout, promisify, pool, retry |
-| [`07_qa_language.js`](code/07_qa_language.js) | Outputs for the language questions (CommonJS, sloppy mode on purpose) |
+| [`07_qa_language.js`](code/07_qa_language.js) | Outputs for the language questions (CommonJS, sloppy mode — i.e. non-strict mode — on purpose) |
 | [`08_qa_async_and_memory.mjs`](code/08_qa_async_and_memory.mjs) | Outputs for event-loop, strict-mode and memory questions |
 | [`09_patterns_lists_trees_tries.mjs`](code/09_patterns_lists_trees_tries.mjs) | Linked lists, fast & slow pointers, trees, tries (Patterns 13–16) |
 | [`10_patterns_graphs_greedy_bits_math.mjs`](code/10_patterns_graphs_greedy_bits_math.mjs) | Topological sort, union-find, greedy, quickselect/Dutch flag/merge sort, bits, math & geometry (Patterns 17–21) |
@@ -31,26 +31,30 @@ All code is in [`code/`](code/). Every program checks itself with `assert` and e
 ## 17.1 The JavaScript DSA toolkit
 
 ### What it is
-**DSA** means *data structures and algorithms*. In an interview you have to turn an idea ("use a queue", "count with a hash map") into working code quickly. JavaScript gives you fewer ready-made structures than Java or Python — no priority queue, no deque, no sorted map — so you need to know what the built-ins really cost and how to fill the gaps.
+**DSA** means *data structures and algorithms*. In an interview you have to turn an idea ("use a queue", "count with a hash map") into working code quickly. JavaScript gives you fewer ready-made structures than Java or Python — no priority queue (always hands back the smallest or most urgent item), no deque (double-ended queue: add/remove at both ends), no sorted map (keeps keys in order) — so you need to know what the built-ins really cost and how to fill the gaps.
+
+> **Key term — hash map (hash table):** a structure that stores key → value pairs and finds a key almost instantly. A *hash function* turns the key into a number that picks a slot in an internal array, so a lookup doesn't scan every entry. JavaScript's `Map`, `Set` and plain objects are built on hash tables. Lookups are O(1) "on average" because two keys occasionally land in the same slot and need a little extra work.
 
 ### Why it matters
 Two JavaScript-specific traps sink otherwise-correct solutions: **hidden O(n) operations** (`shift`, `unshift`, `includes` on an array inside a loop) and **wrong answers from defaults** (`sort()` comparing numbers as text, floating-point arithmetic). Knowing the table below is the difference between an O(n) and an O(n²) solution.
+
+> **Key term — Big-O notation (complexity):** a way to describe how the work (or memory) of an algorithm grows as the input size `n` grows, ignoring constant factors. O(1) = constant, same cost for any size; O(log n) = grows very slowly (halving each step); O(n) = linear, proportional to the input; O(n log n) = typical good sorting; O(n²) = quadratic, 10× more input means ~100× more work. Interviewers expect you to state both *time* and extra *space* complexity.
 
 ### Complexity of the built-ins
 
 | Operation | Cost | Note |
 |---|---|---|
 | `arr[i]`, `arr[i] = x`, `arr.length`, `arr.at(-1)` | O(1) | |
-| `push`, `pop` | O(1) amortized | Use the end of an array as a **stack** |
+| `push`, `pop` | O(1) amortized (averaged over many calls) | Use the end of an array as a **stack** |
 | `shift`, `unshift`, `splice(i, …)` | O(n) | Every later element moves — avoid in loops |
 | `indexOf`, `includes`, `find`, `some` | O(n) | Put values in a `Set` if you look them up repeatedly |
 | `slice`, spread `[...a]`, `concat`, `Array.from` | O(k) | k = number of elements copied |
 | `map`, `filter`, `reduce`, `forEach` | O(n) | Plus the callback's cost |
-| `sort`, `toSorted` | O(n log n) | Stable (guaranteed since ES2019); V8 uses TimSort |
-| `Map`/`Set` `get`, `set`, `has`, `add`, `delete` | O(1) average | The spec only requires *sublinear* on average; engines use hash tables |
+| `sort`, `toSorted` | O(n log n) | Stable (guaranteed since ES2019 — the 2019 edition of the JS standard); V8 uses TimSort (a hybrid of merge and insertion sort) |
+| `Map`/`Set` `get`, `set`, `has`, `add`, `delete` | O(1) average | The spec only requires *sublinear* (growing slower than n) on average; engines use hash tables |
 | Object property read/write, `in`, `Object.hasOwn` | O(1) average | |
 | `Object.keys` / `entries`, `[...map]` | O(n) | |
-| `str[i]`, `str.length`, `charCodeAt` | O(1) | Strings are immutable |
+| `str[i]`, `str.length`, `charCodeAt` | O(1) | Strings are immutable (can't be changed in place) |
 | `str.slice`, `split`, `join`, `[...str]` | O(n) | |
 | `JSON.stringify`, `structuredClone` | O(size) | |
 | Heap push/pop (you write it, §17.2) | O(log n) | |
@@ -99,7 +103,7 @@ Array.from rows are separate: [[9,0],[0,0]]
 ```
 
 1. A **stack** (last in, first out) is just `push`/`pop`; peek with `at(-1)`.
-2. A **queue** (first in, first out) with `shift()` is fine for small inputs, but in general each `shift` moves every element. Measured in Node 24: emptying a 10,000-element array with `shift` took 0.3 ms, a 100,000-element one 0.6 s, a 400,000-element one 10 s — quadratic growth (V8 has a shortcut for smaller arrays, not for big ones). For BFS on large graphs keep a **head index** — the `Queue` class above, or simply `for (let head = 0; head < queue.length; head++)` as in §17.2.
+2. A **queue** (first in, first out) with `shift()` is fine for small inputs, but in general each `shift` moves every element. Measured in Node 24: emptying a 10,000-element array with `shift` took 0.3 ms, a 100,000-element one 0.6 s, a 400,000-element one 10 s — quadratic growth (V8 has a shortcut for smaller arrays, not for big ones). For BFS on large graphs (a *graph* is a set of nodes joined by edges, like cities and roads) keep a **head index** — the `Queue` class above, or simply `for (let head = 0; head < queue.length; head++)` as in §17.2.
 3. `fill(x)` puts the *same* value in every slot; with an array as `x`, every row is the same object. `Array.from({ length }, () => …)` calls the function once per row. (Sorting, copying and array methods are taught in [Chapter 7](../07-arrays/README.md).)
 
 ### `Map` and `Set`
@@ -149,7 +153,7 @@ original untouched: Ann Bob Cid Dee
 1. A **comparator** `(a, b) => number` returns negative if `a` goes first, positive if `b` goes first, `0` for a tie. `a - b` sorts numbers ascending; `b - a` descending.
 2. **Multi-key sort**: chain comparisons with `||` — when the first difference is `0`, the second decides.
 3. **Stability** means equal elements keep their original relative order (Bob before Dee, Ann before Cid above). It is guaranteed since ES2019, so you can sort by a secondary key first and the primary key second.
-4. `sort` **mutates**; `toSorted` (ES2023) returns a new array. In an interview, say which one you use — mutating the caller's input is a classic review comment.
+4. `sort` **mutates** (changes the array in place); `toSorted` (ES2023) returns a new array. In an interview, say which one you use — mutating the caller's input is a classic review comment.
 5. Common mistake: returning a boolean (`(a, b) => a > b`). `true`/`false` become `1`/`0`, never negative, so the result is engine-dependent and wrong. Full details: [§7.6](../07-arrays/README.md#76-sorting-correctly).
 
 ### Number pitfalls
@@ -181,11 +185,11 @@ NaN === NaN: false | Number.isNaN(NaN): true | isNaN("x"): true Number.isNaN("x"
 
 | Pitfall | What to do |
 |---|---|
-| All numbers are 64-bit floats (IEEE 754 doubles), so `0.1 + 0.2 !== 0.3` | Compare with a tolerance (`Math.abs(a - b) < Number.EPSILON * scale`), or work in integers (cents, not dollars) |
+| All numbers are 64-bit floats (IEEE 754 doubles — the standard binary format for decimals, which can't store most fractions exactly), so `0.1 + 0.2 !== 0.3` | Compare with a tolerance (`Math.abs(a - b) < Number.EPSILON * scale`), or work in integers (cents, not dollars) |
 | No integer division | `Math.trunc(a / b)` (towards zero) or `Math.floor(a / b)` (towards −∞) — they differ for negatives |
 | `%` is a *remainder*, sign follows the left side | For array wrap-around use `((i % n) + n) % n` |
 | Integers are exact only up to `2**53 − 1` | Check with `Number.isSafeInteger`; use `BigInt` beyond (e.g. factorials, large Fibonacci, 64-bit IDs) |
-| Bitwise operators (`|`, `>>`, `~~`) convert to 32-bit signed ints | `(lo + hi) >> 1` is fine for array indexes (< 2³¹); otherwise use `Math.floor((lo + hi) / 2)`. Unlike Java, there is no overflow for `lo + hi` below 2⁵³ |
+| Bitwise operators (`|`, `>>`, `~~`) convert to 32-bit signed ints | `(lo + hi) >> 1` is fine for array indexes (< 2³¹); otherwise use `Math.floor((lo + hi) / 2)`. Unlike Java, there is no overflow (a result too big for its number type) for `lo + hi` below 2⁵³ |
 | `Infinity` / `-Infinity` | Handy initial values for min/max; but `Math.max(...[])` is `-Infinity` and spreading a very large array (about 125,000+ elements in Node 24 on this machine — the limit depends on stack size) throws `RangeError` — use a loop or `reduce` |
 | `isNaN('x')` coerces first | Use `Number.isNaN` |
 
@@ -202,9 +206,9 @@ parts.join('-');                                  // '0-1-2-3-4'
 ```
 
 - Strings can't be changed in place; `s[0] = 'x'` silently does nothing (throws in strict mode). To edit, convert to an array (`[...s]`), change it, `join('')`.
-- Building with `+=` in a loop is fine in modern engines (V8 uses *ropes*, a tree of pieces, to avoid copying), but `push` + `join` is the clear, portable idiom and makes the O(n) cost obvious.
+- Building with `+=` in a loop is fine in modern engines (V8 uses *ropes*, a tree of pieces, to avoid copying), but `push` + `join` is the clear, portable idiom (the usual way experienced programmers write it) and makes the O(n) cost obvious.
 - A 26-slot counting array (`charCodeAt(0) - 97`) is faster than a `Map` for lowercase-letter problems.
-- `[...s]` splits by **code point** (emoji stay whole); `s.split('')` splits by UTF-16 code unit. See [§6.5](../06-strings-and-regular-expressions/README.md#65-unicode-code-units-code-points-and-graphemes).
+- `[...s]` splits by **code point** (one Unicode character number, so emoji stay whole); `s.split('')` splits by UTF-16 code unit (16-bit pieces; some characters need two). See [§6.5](../06-strings-and-regular-expressions/README.md#65-unicode-code-units-code-points-and-graphemes).
 
 ### `BigInt`
 
@@ -291,7 +295,7 @@ flowchart LR
 For each pattern: the idea, when it applies, the code (with asserts), and its cost. The full programs are [`code/02_patterns_arrays.mjs`](code/02_patterns_arrays.mjs), [`code/03_patterns_search_graphs_dp.mjs`](code/03_patterns_search_graphs_dp.mjs), [`code/09_patterns_lists_trees_tries.mjs`](code/09_patterns_lists_trees_tries.mjs) and [`code/10_patterns_graphs_greedy_bits_math.mjs`](code/10_patterns_graphs_greedy_bits_math.mjs).
 
 ### Pattern 1 — Two pointers
-**Idea:** two indexes move towards each other (or in the same direction) so each element is looked at once. **Signal:** sorted array, pairs, palindromes, in-place partitioning. **Cost:** O(n) time, O(1) space.
+**Idea:** two indexes move towards each other (or in the same direction) so each element is looked at once. **Signal:** sorted array, pairs, palindromes (text that reads the same backwards), in-place partitioning (rearranging inside the same array, no copy). **Cost:** O(n) time, O(1) space.
 
 ```js
 function pairSum(sorted, target) {
@@ -316,7 +320,7 @@ assert.equal(isPalindrome('A man, a plan, a canal: Panama'), true);
 Why it's correct: if the sum is too small, the smallest element can't be part of any answer with a *smaller* partner, so discarding it (`lo++`) loses nothing.
 
 ### Pattern 2 — Sliding window
-**Idea:** keep a window `[start, end]` over a sequence; grow the end, shrink the start when a rule breaks. **Signal:** "longest/shortest/max-sum **contiguous** subarray or substring". **Cost:** O(n) — each index enters and leaves the window once.
+**Idea:** keep a window `[start, end]` over a sequence; grow the end, shrink the start when a rule breaks. **Signal:** "longest/shortest/max-sum **contiguous** (neighbouring, with no gaps) subarray or substring". **Cost:** O(n) — each index enters and leaves the window once.
 
 ```js
 function longestUnique(s) {
@@ -369,7 +373,7 @@ function groupAnagrams(words) {
 }
 ```
 
-Checking before inserting is what makes `[3, 3]` work: the first `3` is not paired with itself. (`Map.groupBy` from [§8.7](../08-maps-sets-iterators-and-generators/README.md#87-grouping-objectgroupby-and-mapgroupby-es2024) does the grouping step in one call.)
+Checking before inserting is what makes `[3, 3]` work: the first `3` is not paired with itself. (Anagrams are words with the same letters in a different order; sorting the letters gives every anagram the same *canonical* key.) (`Map.groupBy` from [§8.7](../08-maps-sets-iterators-and-generators/README.md#87-grouping-objectgroupby-and-mapgroupby-es2024) does the grouping step in one call.)
 
 ### Pattern 4 — Stack (and monotonic stack)
 **Idea:** a stack remembers "things still open" — brackets, unfinished elements. A **monotonic stack** keeps its contents increasing or decreasing and answers "next greater/smaller element" questions. **Cost:** O(n) — every index is pushed and popped at most once.
@@ -461,7 +465,7 @@ all array-pattern asserts passed
 ```
 
 ### Pattern 7 — Heap (write your own `MinHeap`)
-**What it is:** a **binary heap** is a complete binary tree stored in an array where every parent is ≤ its children (a *min*-heap). The smallest item is always at index 0. For index `i`, the children are `2i+1` and `2i+2`, the parent is `(i−1)>>1`. **Signal:** "k largest/smallest", "merge k sorted lists", "median of a stream", "always process the cheapest next" (Dijkstra, scheduling). **Cost:** `push`/`pop` O(log n), `peek` O(1).
+**What it is:** a **binary heap** is a complete binary tree (a tree where each node has at most two children and every level is full except possibly the last, filled from the left — see Pattern 15) stored in an array where every parent is ≤ its children (a *min*-heap). The smallest item is always at index 0. For index `i`, the children are `2i+1` and `2i+2`, the parent is `(i−1)>>1`. **Signal:** "k largest/smallest", "merge k sorted lists", "median (middle value when sorted) of a stream", "always process the cheapest next" (Dijkstra's shortest-path algorithm, scheduling). **Cost:** `push`/`pop` O(log n), `peek` O(1).
 
 JavaScript has **no built-in priority queue**, so interviewers expect you to write one (or at least describe it). Twenty-five lines are enough:
 
@@ -593,10 +597,10 @@ function minEatingSpeed(piles, hours) {     // binary search on the ANSWER
 assert.equal(minEatingSpeed([3, 6, 7, 11], 8), 4);
 ```
 
-Use one template (half-open `[lo, hi)`, `lo < hi`, `hi = mid`) and you avoid the off-by-one bugs that make binary search famous. JavaScript has no `bisect` built-in; `indexOf`/`findIndex` are linear.
+Use one template (half-open `[lo, hi)`, `lo < hi`, `hi = mid`) and you avoid the off-by-one bugs (being wrong by exactly one index) that make binary search famous. JavaScript has no `bisect` built-in; `indexOf`/`findIndex` are linear.
 
 ### Pattern 9 — Breadth-first search (BFS)
-**Idea:** explore in rings — all nodes 1 step away, then 2 steps, … using a queue. The first time you reach a node is by a **shortest path** (in steps). **Signal:** "minimum number of moves", unweighted shortest path, level-order traversal. **Cost:** O(V + E) (for a grid, O(rows × cols)).
+**Idea:** explore in rings — all nodes 1 step away, then 2 steps, … using a queue. The first time you reach a node is by a **shortest path** (in steps). **Signal:** "minimum number of moves", unweighted shortest path, level-order traversal. **Cost:** O(V + E) (V = number of vertices/nodes, E = number of edges; for a grid, O(rows × cols)).
 
 ```js
 function shortestPath(grid, [sr, sc], [tr, tc]) {
@@ -618,10 +622,10 @@ function shortestPath(grid, [sr, sc], [tr, tc]) {
 assert.equal(shortestPath(['..#.', '..#.', '....'], [0, 0], [0, 3]), 7);
 ```
 
-Mark a cell visited when you **enqueue** it, not when you dequeue it — otherwise the same cell enters the queue many times.
+Mark a cell visited when you **enqueue** it (add it to the queue), not when you dequeue it (take it out) — otherwise the same cell enters the queue many times.
 
 ### Pattern 10 — Depth-first search (DFS)
-**Idea:** go as deep as possible, then back up. **Signal:** connectivity ("number of islands"), cycle detection, topological order, exploring every path. **Cost:** O(V + E).
+**Idea:** go as deep as possible, then back up. **Signal:** connectivity ("number of islands"), cycle detection, topological order (an ordering where every dependency comes first — Pattern 17), exploring every path. **Cost:** O(V + E).
 
 ```js
 function numIslands(rows) {
@@ -660,7 +664,7 @@ function topoSort(n, edges) {               // recursive DFS with three colours
 assert.deepEqual(topoSort(4, [[0, 1], [0, 2], [1, 3], [2, 3]]), [0, 2, 1, 3]);
 ```
 
-JavaScript-specific: recursion depth is limited (roughly ten thousand frames in V8, depending on frame size), and there's no tail-call optimisation in V8. For inputs that can be deep — a 1000×1000 grid of land — use the iterative version with an explicit stack.
+JavaScript-specific: recursion depth is limited (roughly ten thousand frames — one stack frame per active call — in V8, depending on frame size), and there's no tail-call optimisation (reusing the current frame when a function's very last action is a call) in V8. For inputs that can be deep — a 1000×1000 grid of land — use the iterative version with an explicit stack.
 
 ### Pattern 11 — Dynamic programming with memoization
 **What it is:** **dynamic programming (DP)** solves a problem by combining answers to smaller versions of the same problem, storing each answer so it is computed once. **Top-down** = recursion + a cache (**memoization**); **bottom-up** = fill a table in order. **Signal:** "count the ways", "minimum cost", "longest …", when the plain recursion repeats the same calls. **Cost:** (number of states) × (work per state).
@@ -696,7 +700,7 @@ assert.equal(lcs('abcde', 'ace'), 3);
 Without the memo, `climb(70)` would make about 6 × 10¹⁴ calls; with it, about 140. Note the JavaScript twist: the answer for 80 stairs is larger than `2**53`, so a real solution would switch to `BigInt` (§17.1). For multi-argument states, use a string key (`` `${i},${j}` ``) or a 2D array.
 
 ### Pattern 12 — Backtracking
-**Idea:** build a solution one choice at a time; after exploring a choice, **undo** it and try the next (choose → explore → un-choose). Prune branches that can't succeed. **Signal:** "list all subsets/permutations/combinations", puzzles (N-Queens, Sudoku). **Cost:** exponential — 2ⁿ subsets, n! permutations — so inputs are small.
+**Idea:** build a solution one choice at a time; after exploring a choice, **undo** it and try the next (choose → explore → un-choose). Prune (stop exploring) branches that can't succeed. **Signal:** "list all subsets/permutations (orderings)/combinations", puzzles (N-Queens, Sudoku). **Cost:** exponential (doubling or worse with every extra item) — 2ⁿ subsets, n! permutations — so inputs are small.
 
 ```js
 function subsets(nums) {
@@ -816,7 +820,7 @@ assert.equal(isHappy(2), false);
 Why the second phase finds the loop's start: say the start is `a` steps from the head and the pointers meet `b` steps into a loop of length `c`. Fast walked twice as far, so `2(a + b) = a + b + k·c` for some whole number `k`, which gives `a = k·c − b`. Walking `a` more steps from the meeting point therefore lands exactly on the loop's start — the same place a pointer starting at the head reaches after `a` steps. `isHappy` shows the pattern without any list: the "next" function defines an implicit chain.
 
 ### Pattern 15 — Trees
-**What it is:** a **binary tree** is a set of nodes where each node has at most two children (`left`, `right`); the top node is the **root**, nodes without children are **leaves**. A **binary search tree (BST)** adds a rule: every value in the left subtree is smaller than the node, every value in the right subtree larger. Most tree answers are a short recursive function that asks each subtree a question and combines the two answers. **Signal:** "validate", "lowest common ancestor", "path sum", "rebuild / encode a tree". **Cost:** O(n) time, O(h) stack for a tree of height `h` (h = log n when balanced, n when it degenerates into a line).
+**What it is:** a **binary tree** is a set of nodes where each node has at most two children (`left`, `right`); the top node is the **root**, nodes without children are **leaves**. A **binary search tree (BST)** adds a rule: every value in the left subtree is smaller than the node, every value in the right subtree larger. Most tree answers are a short recursive function that asks each subtree a question and combines the two answers. **Signal:** "validate", "lowest common ancestor", "path sum", "rebuild / encode a tree". **Cost:** O(n) time, O(h) stack for a tree of height `h` (h = log n when balanced — both sides of every node about equally deep — n when it degenerates into a line).
 
 ```js
 class TreeNode { constructor(val, left = null, right = null) { this.val = val; this.left = left; this.right = right; } }
@@ -857,7 +861,7 @@ function deserialize(text) {
 assert.equal(serialize(fromLevels([1, 2, 3, null, null, 4, 5])), '1,2,#,#,3,4,#,#,5,#,#');
 ```
 
-The classic BST bug is comparing a node only with its parent: in `[5, 1, 7, null, null, 4, 8]`, 4 is a correct left child of 7 but sits in 5's *right* subtree, so the tree is invalid. Passing the range `(lo, hi)` down catches it. Serialization works because preorder plus explicit `#` markers fixes the shape: the reader always knows whether the next token is a left child, a right child or an empty slot. (`fromLevels`, which builds a tree from a level-order array with `null` gaps, is in the code file; deep, unbalanced trees hit the recursion-depth limit from Pattern 10 — switch to an explicit stack.)
+The classic BST bug is comparing a node only with its parent: in `[5, 1, 7, null, null, 4, 8]`, 4 is a correct left child of 7 but sits in 5's *right* subtree, so the tree is invalid. Passing the range `(lo, hi)` down catches it. Serialization (turning the tree into a string) works because preorder (visit a node, then its left subtree, then its right) plus explicit `#` markers fixes the shape: the reader always knows whether the next token is a left child, a right child or an empty slot. (`fromLevels`, which builds a tree from a level-order array with `null` gaps, is in the code file; deep, unbalanced trees hit the recursion-depth limit from Pattern 10 — switch to an explicit stack.)
 
 ### Pattern 16 — Tries
 **What it is:** a **trie** (prefix tree, pronounced "try") stores strings one character per level; words that share a prefix share the same path from the root, and a flag marks "a word ends here". Looking up a word or prefix of length `L` costs O(L), no matter how many words are stored. **Signal:** "autocomplete", "starts with", "search with a wildcard", "find many words in a grid". **Cost:** O(L) per insert/search; memory O(total characters).
@@ -934,7 +938,7 @@ all list/tree/trie asserts passed
 ```
 
 ### Pattern 17 — Topological sort and union-find
-**What it is:** two graph tools that plain BFS/DFS (Patterns 9–10) don't cover directly. A **topological order** lists the nodes of a directed graph so every edge goes from earlier to later ("take prerequisites first"); it exists only if the graph has no cycle. **Kahn's algorithm** builds it with BFS: repeatedly take a node whose **in-degree** (number of incoming edges still unprocessed) is 0. A **union-find** (disjoint-set union) keeps a collection of groups and answers "are x and y in the same group?" and "merge their groups" in almost constant time. **Signal:** "order of tasks with dependencies", "can all courses be finished" → topological sort; "number of connected groups", "does this edge create a cycle", merging accounts or friend circles → union-find. **Cost:** Kahn O(V + E); union-find O(α(n)) per operation, where α (the inverse Ackermann function) is below 5 for any real input.
+**What it is:** two graph tools that plain BFS/DFS (Patterns 9–10) don't cover directly. A **topological order** lists the nodes of a directed graph (one whose edges point one way, like "A before B") so every edge goes from earlier to later ("take prerequisites first"); it exists only if the graph has no cycle. **Kahn's algorithm** builds it with BFS: repeatedly take a node whose **in-degree** (number of incoming edges still unprocessed) is 0. A **union-find** (disjoint-set union) keeps a collection of groups and answers "are x and y in the same group?" and "merge their groups" in almost constant time. **Signal:** "order of tasks with dependencies", "can all courses be finished" → topological sort; "number of connected groups", "does this edge create a cycle", merging accounts or friend circles → union-find. **Cost:** Kahn O(V + E); union-find O(α(n)) per operation, where α (the inverse Ackermann function) is below 5 for any real input.
 
 ```js
 function courseOrder(n, prereqs) {           // prereqs: [course, mustTakeFirst]
@@ -987,7 +991,7 @@ assert.deepEqual(redundantEdge([[1, 2], [2, 3], [3, 4], [1, 4], [1, 5]]), [1, 4]
 Kahn vs the DFS topological sort in Pattern 10: both are O(V + E). Kahn detects a cycle by counting ("fewer than n nodes came out") instead of by recursion colours, needs no recursion (no depth limit), and processes the graph in "waves" — handy when asked for the minimum number of semesters. Union-find answers connectivity for edges that arrive one at a time, where rerunning BFS after each edge would cost O(V + E) each time. The two optimisations (path halving and union by size) are what make it fast; without them a chain of unions can make `find` O(n).
 
 ### Pattern 18 — Greedy
-**What it is:** a **greedy** algorithm makes the choice that looks best right now and never revisits it. It is fast (usually one pass, often after a sort) but only correct when you can argue that a locally best choice never blocks a globally best answer — so in the interview, always say *why* the greedy choice is safe, or give a counterexample and switch to DP (Pattern 11). **Signal:** "minimum number of …", "can you reach …", scheduling, and problems where a sort plus one sweep feels natural. **Cost:** O(n) or O(n log n) with a sort.
+**What it is:** a **greedy** algorithm makes the choice that looks best right now and never revisits it. It is fast (usually one pass, often after a sort) but only correct when you can argue that a locally best choice never blocks a globally best answer — so in the interview, always say *why* the greedy choice is safe, or give a counterexample (one input where it gives the wrong answer) and switch to DP (Pattern 11). **Signal:** "minimum number of …", "can you reach …", scheduling, and problems where a sort plus one sweep feels natural. **Cost:** O(n) or O(n log n) with a sort.
 
 ```js
 function canJump(nums) {                     // nums[i] = max jump length from i
@@ -1023,7 +1027,7 @@ assert.equal(candies([1, 3, 4, 5, 2]), 11);  // 1, 2, 3, 4, 1
 The safety arguments, in one line each. **Jump game:** every index up to `reach` is reachable, so extending `reach` from each of them loses nothing. **Gas station:** if the tank goes negative at `i` after starting at `s`, every station between `s` and `i` arrived with at least 0 fuel from `s`, so starting there is no better — skip to `i + 1`; and if total gas covers total cost, the last surviving start completes the loop. **Candies:** the left-to-right pass satisfies every "better than my left neighbour" rule with the fewest candies, the right-to-left pass does the same for right neighbours, and `Math.max` keeps both. When greedy fails — coin change with coins `[1, 3, 4]` and amount 6 (greedy picks 4+1+1, the best is 3+3) — use DP. (Pattern 6's meeting-rooms and merge-intervals are greedy too: sort, then sweep.)
 
 ### Pattern 19 — Sort & search: quickselect, Dutch flag, merge sort
-**Idea:** some questions are really about the sorting algorithms themselves: find the k-th item *without* fully sorting, partition in place, or sort stably. **Quickselect** partitions like quicksort (a **pivot** value; smaller items to its left, the rest to its right) but then continues into only the side that contains the answer. **Signal:** "k-th largest/smallest", "median", "sort 0/1/2 in one pass", "sort a linked list", "count inversions". **Cost:** quickselect O(n) average (O(n²) worst, made unlikely by a random pivot); Dutch flag O(n) one pass, O(1) space; merge sort O(n log n) always, O(n) extra space, **stable**.
+**Idea:** some questions are really about the sorting algorithms themselves: find the k-th item *without* fully sorting, partition in place, or sort stably. **Quickselect** partitions like quicksort (a **pivot** value; smaller items to its left, the rest to its right) but then continues into only the side that contains the answer. **Signal:** "k-th largest/smallest", "median", "sort 0/1/2 in one pass", "sort a linked list", "count inversions" (pairs that are in the wrong order). **Cost:** quickselect O(n) average (O(n²) worst, made unlikely by a random pivot); Dutch flag O(n) one pass, O(1) space; merge sort O(n log n) always, O(n) extra space, **stable**.
 
 ```js
 function kthLargest(nums, k) {               // quickselect
@@ -1069,7 +1073,7 @@ assert.deepEqual(mergeSort(people, (x, y) => x[1] - y[1]).map(p => p[0]), ['bob'
 Quickselect vs a heap (Pattern 7): quickselect is O(n) on average but needs the whole array in memory and rearranges a copy; a size-k heap is O(n log k) but works on a stream. The code file also checks `kthLargest` against `toSorted` on 200 random arrays — a cheap way to test any randomised algorithm. Merge sort's merge step is the same idea as "merge two sorted lists" and, on a linked list, needs no extra array (find the middle with Pattern 14, sort both halves, merge). In everyday JavaScript, `toSorted` is already a stable O(n log n) sort (§17.1); write these only when the question is about the algorithm.
 
 ### Pattern 20 — Bit manipulation
-**What it is:** treating a number as its binary digits (**bits**) and using the bitwise operators: `&` (and), `|` (or), `^` (xor: 1 when the bits differ), `~` (not), `<<` (shift left = ×2), `>>` (shift right keeping the sign), `>>>` (shift right filling with 0). **Signal:** "without extra space, find the one that appears once", "count 1-bits", "power of two", subsets as bitmasks. **Cost:** O(1) per operation. **The JavaScript twist:** numbers are 64-bit floats, but every bitwise operator first converts to a **32-bit signed integer**, so results can come out negative and values above 2³² lose their high bits; `x >>> 0` reinterprets the 32 bits as unsigned.
+**What it is:** treating a number as its binary digits (**bits**) and using the bitwise operators: `&` (and), `|` (or), `^` (xor: 1 when the bits differ), `~` (not), `<<` (shift left = ×2), `>>` (shift right keeping the sign), `>>>` (shift right filling with 0). **Signal:** "without extra space, find the one that appears once", "count 1-bits", "power of two", subsets as bitmasks (an integer whose bits mark which items are chosen). **Cost:** O(1) per operation. **The JavaScript twist:** numbers are 64-bit floats, but every bitwise operator first converts to a **32-bit signed integer**, so results can come out negative and values above 2³² lose their high bits; `x >>> 0` reinterprets the 32 bits as unsigned (no sign bit, so never negative).
 
 ```js
 const singleNumber = (nums) => nums.reduce((acc, x) => acc ^ x, 0);   // x ^ x = 0, x ^ 0 = x
@@ -1091,10 +1095,10 @@ assert.equal(0x40000000 << 1, -2147483648);              // the trap without it
 const isPowerOfTwo = (n) => n > 0 && (n & (n - 1)) === 0;   // n & (n-1) clears the lowest 1-bit
 ```
 
-`singleNumber` works in any order because xor is commutative and associative: the pairs cancel and only the lone value is left, with O(1) space instead of a `Set`. `countBits` is a tiny DP: `i >> 1` is `i` without its last bit (already computed) and `i & 1` is that last bit. In the swap, the final `>>> 0` matters: shifting a 1 into bit 31 makes the signed result negative. Because the file asserts against a slow bit-by-bit version on edge values (`0`, `0x80000000`, `0xFFFFFFFF`), the sign bug would be caught. For numbers beyond 32 bits, `BigInt` supports the same operators (`5n & 3n`), except `>>>`.
+`singleNumber` works in any order because xor is commutative and associative (neither the order nor the grouping of the operations changes the result): the pairs cancel and only the lone value is left, with O(1) space instead of a `Set`. `countBits` is a tiny DP: `i >> 1` is `i` without its last bit (already computed) and `i & 1` is that last bit. In the swap, the final `>>> 0` matters: shifting a 1 into bit 31 makes the signed result negative. Because the file asserts against a slow bit-by-bit version on edge values (`0`, `0x80000000`, `0xFFFFFFFF`), the sign bug would be caught. For numbers beyond 32 bits, `BigInt` supports the same operators (`5n & 3n`), except `>>>`.
 
 ### Pattern 21 — Math & geometry
-**Idea:** simulation and number facts rather than a data structure: walk a matrix in a given order, handle integer limits, compare slopes exactly. The skill is spotting the invariant and the edge cases. **Signal:** "spiral / rotate a matrix", "reverse digits … return 0 on overflow", "points on a line", gcd, modular arithmetic. **Cost:** problem-specific — here O(rows × cols), O(digits) and O(n²).
+**Idea:** simulation and number facts rather than a data structure: walk a matrix in a given order, handle integer limits, compare slopes exactly. The skill is spotting the invariant (a fact that stays true at every step) and the edge cases. **Signal:** "spiral / rotate a matrix", "reverse digits … return 0 on overflow", "points on a line", gcd (greatest common divisor), modular arithmetic (arithmetic with remainders, like hours on a clock). **Cost:** problem-specific — here O(rows × cols), O(digits) and O(n²).
 
 ```js
 function spiral(m) {                         // peel layers with four shrinking walls
@@ -1147,7 +1151,7 @@ function maxPointsOnLine(points) {           // most points on one straight line
 assert.equal(maxPointsOnLine([[1, 1], [3, 2], [5, 3], [4, 1], [2, 3], [1, 4]]), 4);
 ```
 
-The two `if`s in `spiral` stop a single remaining row or column from being walked twice (try a 3×1 matrix). In `reverseInt`, JavaScript is *easier* than languages with fixed-size integers: numbers are exact up to 2⁵³, so the intermediate value cannot overflow and one range check at the end is enough; in Java or C++ you must check *before* `r * 10`. In `maxPointsOnLine`, a floating-point slope `dy / dx` would be both imprecise (in the code file, `94911150 / 94911151 === 94911151 / 94911152` is `true` although the two directions differ, so three non-collinear points would be counted as one line) and infinite for vertical lines; the reduced integer pair as a `Map` key avoids both — the same "canonical key" idea as Pattern 3's anagram grouping.
+The two `if`s in `spiral` stop a single remaining row or column from being walked twice (try a 3×1 matrix). In `reverseInt`, JavaScript is *easier* than languages with fixed-size integers: numbers are exact up to 2⁵³, so the intermediate value cannot overflow and one range check at the end is enough; in Java or C++ you must check *before* `r * 10`. In `maxPointsOnLine`, a floating-point slope `dy / dx` would be both imprecise (in the code file, `94911150 / 94911151 === 94911151 / 94911152` is `true` although the two directions differ, so three non-collinear points — not on one straight line — would be counted as one line) and infinite for vertical lines; the reduced integer pair as a `Map` key avoids both — the same "canonical key" idea as Pattern 3's anagram grouping.
 
 Output of the graph/greedy/sort/bit/math program:
 
@@ -1187,9 +1191,9 @@ all graph/greedy/sort/bit/math asserts passed
 | 21 | Math & geometry | spiral, overflow, collinear points, gcd | problem-specific | O(1)–O(n) |
 
 ### In the interview
-**30-second answer — "How do you approach a coding problem?"** Restate it; agree on input/output and edge cases (empty, duplicates, negatives). State the brute force and its cost. Find the pattern — sorted → binary search/two pointers; contiguous → window; lookups → hash map; fewest steps → BFS — and state the better complexity before coding. Then test by hand with a normal and an edge case.
+**30-second answer — "How do you approach a coding problem?"** Restate it; agree on input/output and edge cases (empty, duplicates, negatives). State the brute force (the obvious try-everything solution) and its cost. Find the pattern — sorted → binary search/two pointers; contiguous → window; lookups → hash map; fewest steps → BFS — and state the better complexity before coding. Then test by hand with a normal and an edge case.
 - *Why BFS rather than DFS for shortest path?* BFS reaches nodes in order of distance, so the first visit is the shortest; DFS may find a long path first.
-- *Top-down or bottom-up DP?* Top-down is easier to derive and computes only needed states; bottom-up avoids recursion-depth limits (important in JavaScript) and allows rolling arrays.
+- *Top-down or bottom-up DP?* Top-down is easier to derive and computes only needed states; bottom-up avoids recursion-depth limits (important in JavaScript) and allows rolling arrays (keeping only the last row or two of the table).
 - *How do you implement a priority queue in JavaScript?* A binary heap over an array: push = append + sift up, pop = move last to root + sift down, both O(log n).
 - *Why a dummy head in linked-list problems?* It gives every real node a predecessor, so removing or inserting at the head needs no special case.
 - *How do you prove a greedy solution?* Show that the greedy choice can be swapped into any optimal answer without making it worse (an **exchange argument**), or that it keeps an invariant (jump game: everything up to `reach` is reachable). If you can't, try a small counterexample and fall back to DP.
@@ -1250,10 +1254,10 @@ assert.deepEqual(calls, ['jav']);                   // cancelled
 
 Output: `debounce calls: [ 'jav' ]`
 
-Interviewers check: (1) the timer lives in a **closure** shared by all calls; (2) `debounced` is a regular `function` forwarding `this` and arguments with `apply`, so it works as a method; (3) a `cancel` method (Lodash also offers `flush` and `leading`).
+Interviewers check: (1) the timer lives in a **closure** shared by all calls; (2) `debounced` is a regular `function` forwarding `this` and arguments with `apply`, so it works as a method; (3) a `cancel` method (Lodash — a popular utility library — also offers `flush` and `leading`).
 
 ### Throttle
-**What it is:** a **throttled** function runs **at most once per `wait` ms**, however often it's called. Analogy: a bus that leaves every 10 minutes whether 1 or 50 people arrive. **Use it for:** scroll and mousemove handlers, rate-limited API calls. This version runs on the **leading** edge (immediately) and also on the **trailing** edge (once more at the end with the latest arguments) so the final position is never lost.
+**What it is:** a **throttled** function runs **at most once per `wait` ms**, however often it's called. Analogy: a bus that leaves every 10 minutes whether 1 or 50 people arrive. **Use it for:** scroll and mousemove handlers, rate-limited API calls (APIs that allow only so many calls per second). This version runs on the **leading** edge (immediately) and also on the **trailing** edge (once more at the end with the latest arguments) so the final position is never lost.
 
 ```js
 function throttle(fn, wait) {
@@ -1348,7 +1352,7 @@ assert.equal(runs, 2);
 const fib = memoize((n) => (n < 2 ? n : fib(n - 1) + fib(n - 2)));
 ```
 
-Output: `memoize runs: 2 | fib(50): 12586269025`. `JSON.stringify` keys can't tell apart some values (`undefined` and `null` in arrays both become `null`; objects with different key orders differ) — mention it and offer a custom `keyOf`, or a `WeakMap` for single-object arguments.
+Output: `memoize runs: 2 | fib(50): 12586269025`. `JSON.stringify` keys can't tell apart some values (`undefined` and `null` in arrays both become `null`; objects with different key orders differ) — mention it and offer a custom `keyOf`, or a `WeakMap` (a `Map` whose object keys don't stop garbage collection) for single-object arguments.
 
 ### Flatten
 Flatten a nested array to a given depth, exactly like the built-in `arr.flat(depth)` ([§7.5](../07-arrays/README.md#75-iteration-methods-map-filter-reduce-and-friends)):
@@ -1417,7 +1421,7 @@ Function.prototype.myCall = function (thisArg, ...args) {
 
 Output: `myBind: Hi, Ada! | new bound -> {"x":1,"y":2}`
 
-`myCall` shows the classic trick: calling a function as a method of `ctx` makes `this === ctx`. (The real `call` doesn't box primitives or default to `globalThis` in strict code — that's the sloppy-mode behaviour.) Adding methods to built-in prototypes is fine in an interview but **not** in real code — it can clash with future standard methods.
+`myCall` shows the classic trick: calling a function as a method of `ctx` makes `this === ctx`. (The real `call` doesn't box primitives — wrap them in object form, like `Object(5)` — or default to `globalThis` in strict code — that's the sloppy-mode behaviour.) Adding methods to built-in prototypes is fine in an interview but **not** in real code — it can clash with future standard methods.
 
 ### Deep clone: `structuredClone` vs manual
 A **shallow copy** (`{ ...obj }`, `[...arr]`, `Object.assign`) copies the top level only; nested objects are still shared. A **deep copy** copies every level. The built-in is **`structuredClone`** (browsers since 2022, Node 17+), which uses the *structured clone algorithm* (the one `postMessage` uses).
@@ -1454,7 +1458,7 @@ JSON clone: { d: '1970-01-01T00:00:00.000Z', m: {}, n: null }
 | Cycles | ✓ (shared) | Throws `TypeError` | ✓ | ✓ (with a `WeakMap`) |
 | Functions | Shared | Dropped | Throws `DataCloneError` | Shared (as written) |
 | Class prototype | Lost (spread gives a plain object) | Lost | Lost | Kept (as written) |
-| Getters, property descriptors | Values copied | Values copied | Values copied | Values copied |
+| Getters, property descriptors (a property's hidden settings: writable, enumerable, getter/setter) | Values copied | Values copied | Values copied | Values copied |
 
 The manual version interviewers ask for — a recursive walk that handles primitives, `Date`, `RegExp`, `Map`, `Set`, arrays, objects with their prototype, and **cycles** via a `WeakMap` of already-copied objects:
 
@@ -1523,7 +1527,7 @@ assert.ok(!deepEqual([1, 2], { 0: 1, 1: 2 }));
 In tests you don't write this: `assert.deepStrictEqual` does it ([§16.2](../16-testing-and-typescript/README.md#162-assertions-with-nodeassertstrict)).
 
 ### LRU cache
-An **LRU (least recently used) cache** holds at most `capacity` entries; when full, it evicts the entry that was used longest ago. The textbook design is a hash map plus a doubly linked list. In JavaScript a single **`Map`** is enough, because a `Map` iterates in insertion order: delete-and-reinsert moves a key to the "newest" end, and `map.keys().next().value` is the oldest. Both operations are O(1).
+An **LRU (least recently used) cache** holds at most `capacity` entries; when full, it evicts the entry that was used longest ago. The textbook design is a hash map plus a doubly linked list (each node links to both the previous and the next one). Caches in general — keeping copies of results so repeat requests are fast — are covered in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md). In JavaScript a single **`Map`** is enough, because a `Map` iterates in insertion order: delete-and-reinsert moves a key to the "newest" end, and `map.keys().next().value` is the oldest. Both operations are O(1).
 
 ```js
 class LRUCache {
@@ -1554,7 +1558,7 @@ lru.put('a', 10);                       // update moves a to the end
 assert.deepEqual(lru.keys(), ['c', 'a']);
 ```
 
-If the interviewer forbids the `Map` trick, build the linked list: nodes with `prev`/`next`, a `Map` from key to node, and dummy head/tail nodes so insert and remove never special-case the ends. The LLD handbook builds the linked-list version (in Java) with eviction policies and thread safety: [§20.3](../../../lld/chapters/20-case-components/README.md#203-design-an-in-memory-cache-and-an-lru-cache-from-scratch).
+If the interviewer forbids the `Map` trick, build the linked list: nodes with `prev`/`next`, a `Map` from key to node, and dummy head/tail nodes so insert and remove never special-case the ends. The LLD (low-level design) handbook builds the linked-list version (in Java) with eviction policies (rules for what to throw out) and thread safety (staying correct when several threads use it at once): [§20.3](../../../lld/chapters/20-case-components/README.md#203-design-an-in-memory-cache-and-an-lru-cache-from-scratch).
 
 ### EventEmitter
 The **publish/subscribe** pattern: code registers listeners for named events; `emit` calls them in registration order. Node's own `EventEmitter` is covered in [§15.8](../15-nodejs-basics/README.md#158-events-eventemitter); this is the interview version with `on`, `off`, `once` and `emit`.
@@ -1727,7 +1731,7 @@ Q1  [] + {}                        "[object Object]"
 Q1  [1,2] + [3]                    "1,23"
 ```
 
-`+` first turns objects into primitives (arrays → `"1,2"`-style strings, plain objects → `"[object Object]"`); if **either** side is then a string it concatenates, otherwise it adds. `-`, `*`, `/` always convert to numbers. (At the start of a console line, `{} + []` is `0`: `{}` parses as an empty block and `+[]` is unary plus.) → [§2.5](../02-variables-types-and-operators/README.md#25-arithmetic-operators), [§2.12](../02-variables-types-and-operators/README.md#212-type-conversion-summary)
+`+` first turns objects into primitives (arrays → `"1,2"`-style strings, plain objects → `"[object Object]"`); if **either** side is then a string it concatenates, otherwise it adds. `-`, `*`, `/` always convert to numbers. (At the start of a console line, `{} + []` is `0`: `{}` parses as an empty block and `+[]` is unary plus — the `+x` operator that converts `x` to a number.) → [§2.5](../02-variables-types-and-operators/README.md#25-arithmetic-operators), [§2.12](../02-variables-types-and-operators/README.md#212-type-conversion-summary)
 
 **Q2. What do `null == undefined`, `null == 0`, `null >= 0`, `'' == 0` and `'0' == false` give?**
 
@@ -1739,7 +1743,7 @@ Q2  '' == 0                        true
 Q2  '0' == false                   true
 ```
 
-`==` converts types first (booleans and strings become numbers), but `null` and `undefined` are `==` only to each other, so `null == 0` is false. Relational operators have no such exception — `null` becomes `0`, so `null >= 0` is true. Use `===`; keep `x == null` for a deliberate "null or undefined" check. → [§2.6](../02-variables-types-and-operators/README.md#26-comparison-operators-and-equality)
+`==` converts types first (booleans and strings become numbers), but `null` and `undefined` are `==` only to each other, so `null == 0` is false. Relational operators (`<`, `>`, `<=`, `>=`) have no such exception — `null` becomes `0`, so `null >= 0` is true. Use `===`; keep `x == null` for a deliberate "null or undefined" check. → [§2.6](../02-variables-types-and-operators/README.md#26-comparison-operators-and-equality)
 
 **Q3. Why is `[] == ![]` true?**
 
@@ -1755,7 +1759,7 @@ Q3  [] == ![]                      true
 Q4  typeof null                    "object"
 ```
 
-A bug from the first engine (1995): values carried a type tag, objects had tag 0, and `null` (the null pointer) also read as tag 0. Fixing it would break the web. Use `x === null`, and `x !== null && typeof x === 'object'` for "a real object". → [§2.3](../02-variables-types-and-operators/README.md#23-data-types-and-typeof)
+A bug from the first engine (1995): values carried a type tag, objects had tag 0, and `null` (the null pointer — a reference to nothing, stored as 0) also read as tag 0. Fixing it would break the web. Use `x === null`, and `x !== null && typeof x === 'object'` for "a real object". → [§2.3](../02-variables-types-and-operators/README.md#23-data-types-and-typeof)
 
 **Q5. How does `NaN` behave?**
 
@@ -1783,7 +1787,7 @@ Q7  typeof [] / function / class   "object / function / function"
 Q7  typeof undeclaredVar           "undefined"
 ```
 
-Arrays are objects — use `Array.isArray`. Classes are functions underneath. `typeof` on a name that was never declared returns `'undefined'` instead of throwing (useful for feature detection) — but see Q16 for the TDZ exception. → [§2.3](../02-variables-types-and-operators/README.md#23-data-types-and-typeof)
+Arrays are objects — use `Array.isArray`. Classes are functions underneath. `typeof` on a name that was never declared returns `'undefined'` instead of throwing (useful for feature detection — checking whether an API exists before using it) — but see Q16 for the TDZ exception. → [§2.3](../02-variables-types-and-operators/README.md#23-data-types-and-typeof)
 
 **Q8. Which values are falsy? Is `[]` truthy? And `new Boolean(false)`?**
 
@@ -1809,7 +1813,7 @@ Q10 ['1','7','11'].map(parseInt)   [ 1, NaN, 3 ]
 Q10 ['1','7','11'].map(Number)     [ 1, 7, 11 ]
 ```
 
-`map` passes `(value, index, array)`, and `parseInt`'s second parameter is the **radix**: `parseInt('1', 0)` (0 = default base 10 → 1), `parseInt('7', 1)` (invalid base → `NaN`), `parseInt('11', 2)` (binary → 3). Fix: `map(Number)` or `map((s) => parseInt(s, 10))`. → [§7.5](../07-arrays/README.md#75-iteration-methods-map-filter-reduce-and-friends), [§2.10](../02-variables-types-and-operators/README.md#210-numbers-in-depth)
+`map` passes `(value, index, array)`, and `parseInt`'s second parameter is the **radix** (the number base, e.g. 10 for decimal, 2 for binary): `parseInt('1', 0)` (0 = default base 10 → 1), `parseInt('7', 1)` (invalid base → `NaN`), `parseInt('11', 2)` (binary → 3). Fix: `map(Number)` or `map((s) => parseInt(s, 10))`. → [§7.5](../07-arrays/README.md#75-iteration-methods-map-filter-reduce-and-friends), [§2.10](../02-variables-types-and-operators/README.md#210-numbers-in-depth)
 
 **Q11. Why does `[10, 1, 2].sort()` give `[1, 10, 2]`?**
 
@@ -1889,7 +1893,7 @@ for (var k = 0; k < 3; k++) ((k2) => setTimeout(() => out.fixed.push(k2), 0))(k)
 Q18 closures in loops              {"var":[3,3,3],"let":[0,1,2],"fixed":[0,1,2]}
 ```
 
-The callbacks run after the loop. `var` has **one** `i` for the whole function — `3` by then. `let` in a `for` header creates a **fresh binding per iteration**. The pre-ES2015 fix was an IIFE copying the value into a parameter. → [§4.7](../04-functions-scope-and-closures/README.md#47-closures)
+The callbacks run after the loop. `var` has **one** `i` for the whole function — `3` by then. `let` in a `for` header creates a **fresh binding per iteration**. The pre-ES2015 fix was an IIFE (immediately invoked function expression — a function defined and called on the spot) copying the value into a parameter. → [§4.7](../04-functions-scope-and-closures/README.md#47-closures)
 
 **Q19. What is a closure? Show one.**
 
@@ -2010,7 +2014,7 @@ Q29 proto links                    "true true true"
 Q29 own vs inherited               "true false true"
 ```
 
-Every object has an internal **`[[Prototype]]`** link (read with `Object.getPrototypeOf`; `__proto__` is the legacy accessor); missed lookups continue along this **prototype chain**. `F.prototype` is an ordinary property of **functions**: the object `new F()` installs as the instance's `[[Prototype]]`. So methods live on `Animal.prototype` (shared) and data on the instance (`Object.hasOwn(rex, 'speak')` is false, `'speak' in rex` is true). → [§9.3](../09-this-prototypes-and-classes/README.md#93-prototypes-and-the-prototype-chain)
+Every object has an internal **`[[Prototype]]`** link (read with `Object.getPrototypeOf`; `__proto__` is the legacy accessor — an old getter/setter property for the same link); missed lookups continue along this **prototype chain**. `F.prototype` is an ordinary property of **functions**: the object `new F()` installs as the instance's `[[Prototype]]`. So methods live on `Animal.prototype` (shared) and data on the instance (`Object.hasOwn(rex, 'speak')` is false, `'speak' in rex` is true). → [§9.3](../09-this-prototypes-and-classes/README.md#93-prototypes-and-the-prototype-chain)
 
 **Q30. How does `instanceof` work? Can it be fooled?**
 
@@ -2018,7 +2022,7 @@ Every object has an internal **`[[Prototype]]`** link (read with `Object.getProt
 Q30 instanceof after proto swap    true
 ```
 
-`x instanceof F` walks `x`'s prototype chain looking for `F.prototype`. It doesn't check how `x` was created, so a plain object whose prototype was set to `Animal.prototype` passes. It also fails across realms (an array from an iframe isn't `instanceof Array` here — use `Array.isArray`). → [§9.7](../09-this-prototypes-and-classes/README.md#97-instanceof-and-type-checks)
+`x instanceof F` walks `x`'s prototype chain looking for `F.prototype`. It doesn't check how `x` was created, so a plain object whose prototype was set to `Animal.prototype` passes. It also fails across realms (separate JavaScript environments with their own built-ins — an array from an iframe, a page embedded in another, isn't `instanceof Array` here — use `Array.isArray`). → [§9.7](../09-this-prototypes-and-classes/README.md#97-instanceof-and-type-checks)
 
 **Q31. How are classes different from constructor functions?**
 
@@ -2055,7 +2059,7 @@ Q33 #private vs closure            "10 undefined 0 {}"
 Q34 this before super()            "ReferenceError: Must call super constructor in derived class before accessing 'this' or returning from derived constructor"
 ```
 
-In a derived class the **parent** constructor creates the object, so `this` doesn't exist until `super(...)` returns. → [§9.6](../09-this-prototypes-and-classes/README.md#96-inheritance-with-extends-and-super)
+In a derived class (one that `extends` another) the **parent** constructor creates the object, so `this` doesn't exist until `super(...)` returns. → [§9.6](../09-this-prototypes-and-classes/README.md#96-inheritance-with-extends-and-super)
 
 ### 17.4.5 The event loop and async code
 
@@ -2235,7 +2239,7 @@ Q49 JSON drops                     "{\"n\":null,\"d\":\"1970-01-01T00:00:00.000Z
 Q49 JSON array holes               "[null,null]"
 ```
 
-Object properties holding `undefined`, a function or a symbol are **omitted** (in arrays they become `null`); `NaN`/`Infinity` → `null`; dates → ISO strings; `Map`/`Set` → `{}`; `BigInt` and cycles throw. → [§5.12](../05-objects-math-date-and-json/README.md#512-json)
+Object properties holding `undefined`, a function or a symbol are **omitted** (in arrays they become `null`); `NaN`/`Infinity` → `null`; dates → ISO strings (the standard `2026-01-15T10:00:00.000Z` format); `Map`/`Set` → `{}`; `BigInt` and cycles throw. → [§5.12](../05-objects-math-date-and-json/README.md#512-json)
 
 **Q50. `for…in` vs `for…of`?**
 
@@ -2243,7 +2247,7 @@ Object properties holding `undefined`, a function or a symbol are **omitted** (i
 Q50 for...in vs for...of           "in: 0,1,extra | of: a,b"
 ```
 
-`for…in` loops over **enumerable property keys** (strings), including inherited ones and extras like `extra` — meant for plain objects. `for…of` loops over the **values** of any *iterable*; use it for arrays. → [§3.10](../03-control-flow-and-loops/README.md#310-the-forof-loop)
+`for…in` loops over **enumerable property keys** (strings; enumerable = visible to loops, which ordinary properties are), including inherited ones and extras like `extra` — meant for plain objects. `for…of` loops over the **values** of any *iterable*; use it for arrays. → [§3.10](../03-control-flow-and-loops/README.md#310-the-forof-loop)
 
 ### 17.4.7 Garbage collection and memory leaks
 
@@ -2269,7 +2273,7 @@ The demo stores ~8 KB of data per short-lived "request" object in a `Map` and in
 Q52 Map vs WeakMap cache       Map retains > 10 MB: true, WeakMap retains < 2 MB: true
 ```
 
-The `Map` keeps every key object and its data alive forever; the `WeakMap` lets both be collected once the request object is unreachable. Find leaks with DevTools' **Memory** panel: take heap snapshots before and after an action and compare what grew. → [§4.7](../04-functions-scope-and-closures/README.md#47-closures), [§8.3](../08-maps-sets-iterators-and-generators/README.md#83-weakmap-weakset-weakref-and-finalizationregistry), [§11.9](../11-errors-and-debugging/README.md#119-debugging-with-devtools-and-the-node-inspector)
+The `Map` keeps every key object and its data alive forever; the `WeakMap` lets both be collected once the request object is unreachable. Find leaks with DevTools' **Memory** panel: take heap snapshots (a dump of every object in memory at that moment) before and after an action and compare what grew. → [§4.7](../04-functions-scope-and-closures/README.md#47-closures), [§8.3](../08-maps-sets-iterators-and-generators/README.md#83-weakmap-weakset-weakref-and-finalizationregistry), [§11.9](../11-errors-and-debugging/README.md#119-debugging-with-devtools-and-the-node-inspector)
 
 **Q53. What are `WeakMap`, `WeakRef` and `FinalizationRegistry` for?**
 

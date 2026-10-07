@@ -6507,3 +6507,556 @@ socket.on('data', chunk => {
 
 ### TL;DR
 Treat TCP as a byte stream, parse incrementally with a strict state machine, decide body length exactly as RFC 9112 says, stream bodies with backpressure, and enforce limits and timeouts everywhere.
+
+## Appendix: Concepts you need
+
+Every technical term, acronym, tool and library name used in the 40 briefs, in alphabetical order and in plain English, with the projects that use it. Terms from system design (latency, caching, rate limiting, proxies, replication and eventual consistency, idempotency and so on) are explained in more depth in [System Design Fundamentals](../../system-design-patterns/modules/00-system-design-fundamentals/README.md), and the chapter links point to where this book teaches the idea. The [glossary in Chapter 18](../chapters/18-cheatsheet-and-glossary/README.md#1821-glossary-az) gives the short form of every term in the chapters themselves.
+
+### A
+
+- **A11y (accessibility)** — Making an app usable by everyone, including people using a keyboard only, a screen reader or zoom; "a11y" is shorthand (11 letters between a and y). Used in projects 1, 3, 6, 7, 10, 12, 21, 22.
+- **Abort / `AbortController`** — A browser and Node object whose `signal` you pass to `fetch`, listeners or timers; calling `abort()` cancels all of them, rejecting with an `AbortError`. Used in projects 4, 7, 11, 21, 23–25, 28. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **`AbortSignal.timeout` / `AbortSignal.any`** — Ready-made signals: one aborts itself after N milliseconds, the other aborts as soon as any of several signals do (for "cancel or time out"). Used in projects 4, 23, 25. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Access token / refresh token** — In OAuth, the short-lived access token proves permission on each API call; the long-lived refresh token is used only to get a new access token. Used in project 33.
+- **Accumulator (game loop)** — A running total of unprocessed real time; the loop runs fixed-size simulation steps while the accumulator holds at least one step's worth. Used in projects 10, 36.
+- **Acorn** — A small, fast JavaScript parser library that turns source code into a standard (ESTree) AST; bundlers and instrumenters build on it. Used in projects 27, 29.
+- **Action (state machine)** — A side effect attached to a transition (or to entering or leaving a state), such as starting a timer; the pure transition only says which actions to run. Used in project 35.
+- **AES-GCM** — A standard symmetric encryption mode that both encrypts data and detects tampering; used to encrypt tokens stored at rest. Used in project 33.
+- **`AggregateError`** — An error holding several errors in its `errors` array; `Promise.any` rejects with one when every input rejects. Used in project 28. ([Ch 11](../chapters/11-errors-and-debugging/README.md))
+- **`allowJs` / `checkJs`** — TypeScript compiler options that let `.js` files take part in a project and, with `checkJs`, be type-checked from their JSDoc comments. Used in project 19. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Allow-list** — A list of the only values that are permitted (e.g. `http:`, `https:`, `mailto:` URL schemes); safer than trying to block every bad value. Used in projects 13, 16. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **API** — Application Programming Interface: the functions, objects or HTTP endpoints one piece of software offers for others to call. Used in projects 2–7, 9–14, 16–24, 27–30, 32–34, 36, 38, 39.
+- **API key** — A secret string that identifies the caller to a paid or private API; anything shipped to the browser is public, so keys belong on a server. Used in projects 4, 11, 16, 23.
+- **API proxy** — A small server your front end calls instead of the third-party API, so it can add the secret key, cache and rate-limit. Used in projects 4, 11, 33.
+- **App shell** — The minimal HTML, CSS and JavaScript an offline-capable app needs to start, cached by a service worker so the app opens with no network. Used in project 17.
+- **ARIA** — Accessible Rich Internet Applications: HTML attributes (`role`, `aria-live`, `aria-invalid` …) that tell assistive technology what custom widgets are and what state they are in. Used in projects 1, 6, 7, 22. ([Ch 13](../chapters/13-dom-and-events/README.md))
+- **ARIA grid pattern** — The W3C-documented way to make a 2D grid of cells keyboard- and screen-reader-friendly: `role="grid"`, arrow-key movement and one focusable cell at a time. Used in projects 6, 22.
+- **`aria-describedby` / `aria-invalid`** — Attributes that link a field to its error message and mark it as invalid, so screen readers announce both. Used in project 7.
+- **`aria-live` (live region)** — Marks an area whose changes screen readers should announce without moving focus, such as a calculator display or a status message. Used in projects 1, 10, 12, 21.
+- **Array buffer / `ArrayBuffer`** — A fixed block of raw bytes that typed arrays and `DataView` read and write; it can be transferred to a worker without copying. Used in projects 22, 34, 36. ([Ch 7](../chapters/07-arrays/README.md))
+- **AST (abstract syntax tree)** — A tree of objects describing the structure of code or text (a call, an operator, a heading); parsers build it, and compilers, linters and bundlers walk it. Used in projects 13, 27, 29, 31, 37. ([Ch 1](../chapters/01-introduction-and-setup/README.md))
+- **astring** — A small library that turns an ESTree AST back into JavaScript source code. Used in project 29.
+- **`async` / `await`** — `async` functions always return a promise; `await` pauses that function until a promise settles and unwraps its value or throws its error. Used in projects 3, 4, 7, 15, 16, 20, 21, 23, 24, 28, 29, 32, 33, 39. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Atomic write (rename)** — Writing to a temporary file and then renaming it over the real one, so readers see either the old file or the complete new one, never half of it. Used in projects 20, 24.
+- **Atomics** — Built-in operations for reading and updating shared memory (`SharedArrayBuffer`) safely from several threads, plus waiting and waking. Used in project 34.
+- **Authoritative server** — A game or app server whose state is the only true version; clients send inputs and display what the server decides, which stops cheating. Used in project 36.
+- **Authorization code flow** — The OAuth 2.0 login flow where the browser gets a short-lived code from the login server and your app exchanges it for tokens. Used in project 33.
+- **autocannon** — A Node.js HTTP load-testing tool that fires many concurrent requests and reports throughput and latency percentiles. Used in projects 23, 40.
+- **Auto-escaping** — A template engine that HTML-escapes every inserted value by default, so forgetting to escape can't create an XSS hole. Used in project 20.
+- **Automatic dependency tracking** — A reactive system recording which signals a computed value or effect reads while it runs, so it knows exactly what to re-run when one changes. Used in projects 20, 26.
+- **Awareness (collaboration)** — Short-lived presence data in a collaborative editor, like other users' cursors and names, kept separate from the document itself. Used in project 30.
+
+### B
+
+- **Backend-for-frontend (BFF)** — A small server owned by the front-end team that sits between the browser and other services; for login it keeps tokens server-side and gives the browser only a cookie. Used in project 33.
+- **`backface-visibility`** — A CSS property that hides the back of an element when it is rotated, used to build two-sided flip cards. Used in project 6.
+- **Background Sync** — A service-worker API that retries a deferred task when the device is back online; not supported in every browser. Used in project 17.
+- **Backoff (exponential, with jitter)** — Retrying a failure after waits that grow (e.g. 1 s, 2 s, 4 s) plus a random extra (jitter), so many clients don't retry in lockstep. Used in projects 11, 14, 24, 25. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Backpressure** — Slowing a fast producer when the consumer can't keep up (a full write buffer, a slow socket), so memory doesn't grow without limit. Used in projects 14, 15, 40. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Base64** — Encoding bytes as text using 64 safe characters; about 33% larger than the raw bytes. Used in projects 3, 16, 27, 33. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Batching** — Grouping many small operations (DOM writes, network events, signal updates) and handling them together once, which is much cheaper. Used in projects 2, 8, 14, 17, 20, 26, 34, 38.
+- **`bin` field** — The `package.json` entry naming a command and the script it runs, so `npm install -g` (or `npx`) can put your CLI on the PATH. Used in project 15. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **Binary search** — Finding a value in sorted data by repeatedly checking the middle and discarding half, in O(log n) steps. Used in project 12. ([Ch 17](../chapters/17-javascript-for-interviews/README.md))
+- **`Blob` / object URL** — A `Blob` is an immutable chunk of file-like data in the browser; `URL.createObjectURL(blob)` gives it a temporary URL for downloads or `<img>` sources. Used in projects 9, 17, 24. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Block vs inline parsing** — Markdown parsing in two passes: first split the text into blocks (headings, lists, code), then parse emphasis and links inside each block. Used in project 13.
+- **BOM / CRLF** — A byte-order mark is an invisible marker some editors put at the start of a text file; CRLF is the Windows line ending `\r\n`. Parsers must handle both. Used in project 22.
+- **Boundary validation** — Checking untrusted data (JSON from an API, user input, files) where it enters your program, because TypeScript types don't exist at runtime. Used in project 19. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Bounded concurrency / concurrency pool** — Running many async jobs but only N at a time; a new job starts whenever one finishes. Used in projects 16, 20, 24, 25. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Breadcrumbs** — A short trail of recent events (clicks, navigations, requests, logs) attached to an error report to show what led up to it. Used in project 38.
+- **Breadth-first search (BFS)** — Exploring a graph level by level with a queue, so the nearest items are visited first. Used in projects 10, 25, 31, 35. ([Ch 17](../chapters/17-javascript-for-interviews/README.md))
+- **`BroadcastChannel`** — A browser API that lets tabs, windows and workers of the same origin send messages to each other. Used in project 12.
+- **Browser extension** — A packaged add-on that changes or extends the browser using its own APIs (`chrome.*`), content scripts and a background service worker. Used in projects 32, 38.
+- **Bubbling (events)** — An event travelling from the element where it happened up through its ancestors, which is what makes event delegation work. Used in projects 1, 7, 35. ([Ch 13](../chapters/13-dom-and-events/README.md))
+- **`Buffer`** — Node's class for raw bytes (a `Uint8Array` subclass), used for network data, files and binary encodings. Used in projects 23, 30, 36, 40. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Bundler** — A tool that follows imports from an entry file and combines modules into a few optimized files for the browser (Vite, esbuild, webpack, Rollup). Used in projects 4, 11, 19, 27, 32. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **Bytecode VM** — An interpreter design that first compiles code to compact instructions and then runs them in a loop; faster than walking the AST. Used in project 37. ([Ch 1](../chapters/01-introduction-and-setup/README.md))
+
+### C
+
+- **Cache Storage** — The browser's store of request/response pairs, used by service workers to serve pages and assets offline. Used in project 17. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Cache with TTL** — A cache whose entries expire after a fixed time to live, after which they must be fetched again. Used in project 4.
+- **`Cache-Control`** — The HTTP header that says whether and for how long a response may be cached (`max-age=60`, `no-store`, `private`). Used in project 23.
+- **Caching strategies** — Rules for when to use the cache versus the network: cache-first, network-first or stale-while-revalidate (serve cached, refresh in the background). Used in projects 17, 23.
+- **Call stack** — The engine's stack of functions currently running; each call pushes a frame and each return pops it. Used in projects 28, 29, 37. ([Ch 11](../chapters/11-errors-and-debugging/README.md))
+- **Canvas 2D** — An HTML `<canvas>` element plus its 2D drawing API; it draws pixels immediately and keeps no objects, so you redraw each frame. Used in projects 6, 10, 22, 34, 36.
+- **CDN** — Content delivery network: servers around the world that cache and serve your static files close to users. Used in project 20.
+- **`child_process.fork`** — Starts a new Node.js process running a given module, with a built-in message channel (IPC) to the parent. Used in projects 15, 39. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Chunked transfer encoding** — An HTTP/1.1 way to send a body in pieces, each prefixed by its size, when the total length isn't known up front. Used in project 40.
+- **Chunking** — Splitting a large file or data set into smaller pieces that can be processed, sent or retried one at a time. Used in projects 15, 21, 22, 24, 27, 40. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **CI (continuous integration)** — A service that automatically installs, lints, tests and builds every change pushed to a repository and fails the build on errors. Used in projects 18, 19, 25, 36, 39. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **Client-side prediction** — A multiplayer technique where your client applies your own inputs immediately instead of waiting for the server, then corrects if the server disagrees. Used in project 36.
+- **Closure** — A function together with the variables of the scope it was created in, which it keeps using after that scope has finished. Used in projects 3–5, 11, 26, 37. ([Ch 4](../chapters/04-functions-scope-and-closures/README.md))
+- **CLS (Cumulative Layout Shift)** — A Core Web Vital measuring how much visible content jumps around while the page loads; reserve space for images to keep it low. Used in projects 11, 38.
+- **Code coverage** — The share of lines, branches or functions your tests actually ran; useful to find untested code but not proof of good tests. Used in projects 18, 39. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Code point** — The number Unicode gives one character (U+1F600 for 😀); may need one or two UTF-16 code units. Used in project 8. ([Ch 6](../chapters/06-strings-and-regular-expressions/README.md))
+- **Code splitting** — Splitting a bundle into several files so code loaded with `import()` is downloaded only when needed. Used in projects 21, 27. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **Collect, then run** — A test-runner design that first imports every test file to register tests, then runs them, so `only`, filters and counts are known before anything starts. Used in project 39.
+- **Collections (site generator)** — Groups of content (all blog posts, all posts with one tag) that templates can list, sort and paginate. Used in project 20.
+- **Columnar storage** — Storing a table as one array per column instead of one object per row, which saves memory and makes sorting and filtering a column fast. Used in projects 22, 38.
+- **Command pattern / undo stack** — Representing each user action as an object that knows how to do and undo itself, kept on a stack so undo and redo are simple. Used in projects 2, 6, 12, 30, 31.
+- **CommonJS** — Node's original module system (`require`, `module.exports`), loaded synchronously; ES modules are the standard replacement. Used in project 27. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **Commutative and idempotent** — Commutative: applying updates in any order gives the same result; idempotent: applying one twice changes nothing. CRDT merges need both. Used in project 30.
+- **Compaction** — Shrinking stored history by merging or dropping old entries (e.g. deleted characters) that are no longer needed. Used in project 30.
+- **Compositor-friendly animation** — Animating only `transform` and `opacity`, which the browser can move on the GPU without recalculating layout or repainting. Used in project 6.
+- **Computed (signal)** — A derived reactive value that recalculates from other signals, only when one of them has changed and someone reads it. Used in project 26.
+- **Concurrency** — Several tasks in progress at the same time; in JavaScript async operations overlap while one thread runs the code. Used in projects 12, 16, 17, 20, 23–25, 28, 30, 33, 34. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Conditional request** — An HTTP request that says "only send the body if it changed" (`If-None-Match` with an ETag); an unchanged resource gets a short `304 Not Modified`. Used in projects 16, 25, 40.
+- **Connection pool** — A set of open database connections reused across requests, because opening a new connection per request is slow. Used in project 16.
+- **Constraint Validation API** — Built-in form validation from HTML attributes (`required`, `minlength`, `type=email`), read through `input.validity` and customised with `setCustomValidity`. Used in project 7. ([Ch 13](../chapters/13-dom-and-events/README.md))
+- **Content script** — Extension code injected into web pages; it can read and change the page's DOM but runs in an isolated world with limited extension APIs. Used in project 32.
+- **Content Security Policy (CSP)** — A response header listing where scripts, styles and other resources may come from; it blocks inline and injected scripts and is a strong XSS defence. Used in projects 1, 13, 29, 31–33. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **`Content-Length`** — The HTTP header giving the exact size of a body in bytes, so the receiver knows where it ends. Used in project 40.
+- **Context (extended state)** — Extra data a state machine carries besides its named state, like a retry counter or form values. Used in project 35.
+- **Convolution kernel** — A small grid of weights slid over an image; each output pixel is the weighted sum of its neighbours, which gives blur, sharpen and edge detection. Used in projects 34, 40.
+- **Core Web Vitals** — Google's user-experience metrics: LCP (how fast the main content appears), INP (how fast the page responds to input) and CLS (how much the layout jumps). Used in projects 11, 38.
+- **CORS** — Cross-Origin Resource Sharing: headers a server sends to allow pages from other origins to read its responses. Used in projects 3, 38. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **CPU** — The processor that runs code; "CPU-bound" work is limited by computation rather than by waiting for the network or disk. Used in projects 5, 24, 34, 36.
+- **CRDT** — Conflict-free replicated data type: a data structure that many replicas can edit independently and that always merges to the same result, without a central lock. Used in projects 17, 30, 31.
+- **Cross-origin isolation** — A state enabled by two response headers (COOP and COEP) that isolates a page from other origins and unlocks `SharedArrayBuffer`. Used in project 34.
+- **Cross-site WebSocket hijacking** — An attack where another site opens a WebSocket to your server using the victim's cookies; prevented by checking the `Origin` header. Used in project 14.
+- **CRUD** — Create, read, update, delete: the four basic operations on stored data. Used in projects 2, 9, 16, 36.
+- **`crypto.getRandomValues` / `crypto.subtle`** — The Web Crypto API: cryptographically strong random numbers, UUIDs and hashing such as SHA-256; Node has the same plus `node:crypto`. Used in projects 2, 9, 24, 33. ([Ch 5](../chapters/05-objects-math-date-and-json/README.md))
+- **CSRF** — Cross-site request forgery: another site makes the user's browser send an authenticated request to your site; blocked with `SameSite` cookies, tokens or Origin checks. Used in project 33. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **CSS** — Cascading Style Sheets: the language that styles HTML (colours, layout, animation). Used in projects 1, 4, 6, 7, 10–12, 27, 29, 32.
+- **CSS grid** — A CSS layout system for two-dimensional rows and columns, a natural fit for keypads, boards and dashboards. Used in projects 1, 4, 11.
+- **CSV** — Comma-separated values: a plain-text table format; fields can contain quoted commas and newlines, so it needs a real parser, not `split(',')`. Used in projects 15, 22, 31.
+- **Cursor (keyset) pagination** — Paging through results with "items after this last-seen key" instead of `OFFSET`, so pages stay fast and stable while data changes. Used in projects 16, 30.
+
+### D
+
+- **`data-*` attributes / `dataset`** — Custom HTML attributes such as `data-id="7"`, read in JavaScript as `element.dataset.id` (always a string). Used in projects 1, 2, 22, 24. ([Ch 13](../chapters/13-dom-and-events/README.md))
+- **Data model** — The shapes of the data an app stores and passes around: the entities, their fields and types. Used in all 40 projects.
+- **`DataView`** — A view over an `ArrayBuffer` for reading and writing numbers of different sizes at any byte offset, with chosen byte order; good for binary protocols. Used in project 36. ([Ch 7](../chapters/07-arrays/README.md))
+- **Deadline timestamp** — Storing the absolute time something ends (`performance.now() + 15000`) and computing what's left from it, instead of counting timer ticks. Used in project 3.
+- **Debounce** — Delaying a function until input has stopped for N ms, then running it once (search boxes, file watchers). Used in projects 4, 7, 11, 13, 20. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **`declarativeNetRequest`** — The Manifest V3 extension API for blocking or changing network requests through declared rules instead of running code on every request. Used in project 32.
+- **Deep link** — A URL that opens a specific screen or item inside an app, not just its home page. Used in project 21.
+- **Delimiter stack** — A stack of open emphasis markers (`*`, `_`) a Markdown parser keeps so it can match each closing marker with the right opener. Used in project 13.
+- **Delta compression** — Sending only what changed since the last state the receiver acknowledged, instead of the whole state every time. Used in projects 27, 36.
+- **Dependency graph** — A graph of which items depend on which (modules on imports, cells on other cells, pages on templates); used to rebuild only what changed, in the right order. Used in projects 7, 18, 20, 21, 26, 27, 31. ([Ch 17](../chapters/17-javascript-for-interviews/README.md))
+- **Dependency injection** — Passing a function or object its dependencies (a clock, `fetch`, a database) instead of letting it reach for globals, so tests can substitute fakes. Used in projects 4, 5, 8, 18, 23, 35. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Derived index** — Extra lookup structures (such as tag to bookmark ids) computed from the main data and rebuilt when it changes, never stored as a second truth. Used in project 9.
+- **Deterministic** — Producing exactly the same output for the same input every time; needed for reproducible builds, replayable games and reliable tests. Used in projects 4, 10, 12, 20, 27, 29, 30, 33, 35, 36, 39.
+- **Dev server** — A local web server for development that serves your files, often rebuilds on save and reloads the browser. Used in projects 20, 21. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **`devicePixelRatio`** — How many physical screen pixels make up one CSS pixel (2 on many phones); canvases must be scaled by it to look sharp. Used in project 10.
+- **`<dialog>` / `showModal`** — The HTML dialog element; `showModal()` opens it as a modal with focus trapping and Escape-to-close built in. Used in projects 11, 12.
+- **Diff** — A description of the differences between two values or texts; test runners show one for failed comparisons, virtual DOMs compute one to update the page. Used in projects 18, 20, 26, 30, 39.
+- **Dirty set** — The set of items marked as changed and waiting to be recomputed, such as spreadsheet cells affected by an edit. Used in projects 17, 26, 31.
+- **Discriminated union** — A TypeScript union of object types that share a literal "tag" property (like `kind`), so checking the tag narrows to the right shape. Used in projects 19, 35, 37. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **DNS** — Domain Name System: the internet's directory that turns a host name like `example.com` into an IP address. Used in project 25.
+- **Docker** — A tool that runs software in lightweight isolated containers, handy for starting a throwaway database for tests. Used in project 16.
+- **`DocumentFragment`** — A lightweight container for DOM nodes; build many nodes in it and insert them with one operation. Used in project 11. ([Ch 13](../chapters/13-dom-and-events/README.md))
+- **DOM** — Document Object Model: the browser's tree of objects representing the page, which JavaScript reads and changes. Used in projects 1–3, 6–13, 17, 18, 21, 22, 26, 29–32, 34, 37, 38. ([Ch 13](../chapters/13-dom-and-events/README.md))
+- **DOM node recycling** — Reusing a small fixed set of DOM elements for whichever rows are visible, instead of creating and destroying elements while scrolling. Used in project 22.
+- **DOMPurify** — A widely used library that removes scripts and dangerous attributes from untrusted HTML before you insert it. Used in project 13. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Drag and drop** — Moving items with a mouse, finger or pen; built on Pointer Events for full control, plus a keyboard alternative for accessibility. Used in projects 2, 12, 22, 34.
+
+### E
+
+- **Effect (signal)** — A function that runs side effects (such as updating the DOM) and re-runs automatically when the signals it read change. Used in project 26.
+- **Entity interpolation** — Showing other players smoothly by drawing them slightly in the past, between two known server snapshots. Used in project 36.
+- **Environment (interpreter)** — A table mapping variable names to values for one scope, linked to its parent scope; closures keep a reference to the environment they were created in. Used in project 37.
+- **Environment variable** — A named string setting passed to a process by the OS (`PORT=3000`), read in Node with `process.env`. Used in projects 4, 16. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **`EPIPE`** — Node's error when writing to a pipe whose reader has gone away (e.g. `mytool | head`); a well-behaved CLI exits quietly. Used in project 15.
+- **Error `cause`** — The `{ cause }` option of `new Error`, which attaches the original error to a new, more descriptive one. Used in projects 4, 16, 39. ([Ch 11](../chapters/11-errors-and-debugging/README.md))
+- **Error serialisation** — Turning an error (message, stack, `cause`, custom fields) into plain JSON so it can cross a process or network boundary. Used in project 39.
+- **Errors as values** — Representing a failure as an ordinary result value (like a spreadsheet's `#DIV/0!`) that flows through calculations, instead of throwing. Used in project 31.
+- **ES modules (ESM)** — JavaScript's standard module system with `import` and `export`; static, strict and loaded asynchronously. Used in projects 1, 15, 19, 27, 32, 36, 38. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **ES2025 / ES2026** — Yearly editions of the ECMAScript standard; ES2025 added iterator helpers, new `Set` methods, `Promise.try` and `RegExp.escape`. Used in projects 9, 28, 34, 38. ([Ch 1](../chapters/01-introduction-and-setup/README.md))
+- **esbuild** — A very fast bundler and transpiler written in Go. Used in projects 19, 26, 27, 32, 38. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **Escaping** — Replacing characters that have special meaning in a context (like `<` and `&` in HTML) with safe codes so data stays data. Used in projects 13, 16, 20, 22, 31. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **`eval`** — Runs a string as JavaScript code; dangerous with untrusted input and blocked by a strict Content Security Policy. Used in projects 1, 31, 32. ([Ch 1](../chapters/01-introduction-and-setup/README.md))
+- **Event delegation** — One listener on a parent element that handles events from many children, finding the right child with `event.target.closest(...)`. Used in projects 1, 2, 6, 21. ([Ch 13](../chapters/13-dom-and-events/README.md))
+- **Event loop** — The mechanism that runs one task, then all queued microtasks, then possibly renders, then takes the next task. Used in projects 14, 29, 34–36, 39. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **`EventTarget`** — The built-in class that provides `addEventListener` and `dispatchEvent`; your own classes can extend it to emit events. Used in project 6. ([Ch 13](../chapters/13-dom-and-events/README.md))
+- **Eventual consistency** — A guarantee that replicas may differ for a while but will agree once they have all received the same updates. Used in project 30.
+- **Exit code** — The number a process returns when it ends: 0 for success, non-zero for failure; CI and shell scripts rely on it. Used in projects 15, 20, 25, 39. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Express** — The most widely used Node.js web framework: routing, middleware and helpers on top of `node:http`. Used in projects 16, 19, 33. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+
+### F
+
+- **Fake timers** — A test tool that replaces `setTimeout` and the clock so a test can jump time forward instantly. Used in projects 3, 5–7, 11, 14, 18, 23, 29, 35, 39. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **fast-check** — A property-based testing library for JavaScript that generates many random inputs and shrinks any failing one to a minimal example. Used in project 18.
+- **Feature detection** — Checking whether an API exists before using it, instead of guessing from the browser name. Used in projects 32, 34. ([Ch 1](../chapters/01-introduction-and-setup/README.md))
+- **`fetch`** — The standard function for HTTP requests; it resolves even for 404 or 500, so you must check `response.ok`, and rejects only on network failure or abort. Used in projects 3, 4, 7, 11, 14, 16, 17, 21–25, 35, 38, 40. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **`fetch` `keepalive` / `sendBeacon`** — Ways to send a small request that the browser finishes even while the page is closing, used for analytics and error reports. Used in project 38. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **File API (`File.slice`, `file.text()`)** — Browser objects for user-chosen files; `slice` cuts a piece without reading the whole file, `text()` reads it as a string. Used in projects 9, 24.
+- **Fingerprint (error grouping)** — A stable key computed from an error's type, message and top stack frames, so repeat occurrences group into one issue. Used in project 38.
+- **Finite state machine (FSM)** — A model where something is always in exactly one of a fixed set of states, and events move it between them through defined transitions. Used in project 35.
+- **Fisher–Yates shuffle** — The correct way to shuffle fairly: walk from the end, swapping each item with a random item at or before it; O(n). Used in projects 3, 6. ([Ch 7](../chapters/07-arrays/README.md))
+- **Fixed timestep** — Advancing a simulation in equal steps (e.g. 1/60 s) regardless of frame rate, so physics and game rules behave the same on every machine. Used in projects 10, 36.
+- **Flaky test** — A test that sometimes passes and sometimes fails with no code change, usually because of timing, order or shared state. Used in projects 18, 25, 39. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **`Float64Array`** — A typed array of 64-bit floats stored compactly in one buffer; much smaller and faster to scan than an array of objects. Used in project 22. ([Ch 7](../chapters/07-arrays/README.md))
+- **Focus management** — Deliberately moving keyboard focus to the right element after a change (a new question, a new page), so keyboard and screen-reader users aren't lost. Used in projects 3, 6, 21.
+- **`FormData`** — Reads all fields of a `<form>` as name/value pairs; can be sent directly as a request body. Used in project 7. ([Ch 13](../chapters/13-dom-and-events/README.md))
+- **Fractional indexing** — Ordering items by sortable string keys and giving a moved item a new key between its neighbours, so a move updates one record. Used in project 12.
+- **Front matter** — A metadata block (usually YAML between `---` lines) at the top of a Markdown file, holding the title, date and tags. Used in project 20.
+- **Frontier** — The queue of discovered but not yet visited items in a graph search, such as URLs a crawler still has to fetch. Used in project 25.
+- **`fs.watch`** — Node's API for watching files or folders for changes; events can be noisy or repeated, so debounce them. Used in projects 20, 27, 39.
+- **Full-duplex** — Both sides can send at the same time over one connection, as with WebSockets. Used in project 14.
+- **Fuzz testing** — Feeding huge numbers of random or mutated inputs to code to find crashes and broken assumptions. Used in projects 9, 30, 37, 40.
+
+### G
+
+- **Game loop** — The repeating cycle of reading input, updating the simulation and drawing a frame. Used in project 10.
+- **Garbage collection** — The engine automatically freeing memory for objects nothing can reach any more. Used in project 30. ([Ch 17](../chapters/17-javascript-for-interviews/README.md))
+- **Geolocation** — The browser API (`navigator.geolocation`) that asks the user's permission and returns their approximate position. Used in project 4. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **GIN index / `tsvector`** — PostgreSQL full-text search: a `tsvector` column holds searchable words and a GIN index makes searching them fast. Used in project 16.
+- **Glitch (reactivity)** — A moment where a derived value is computed from a mix of old and new inputs and shows an inconsistent result. Used in project 26.
+- **Global error handlers** — Last-resort listeners (`error`, `unhandledrejection` in browsers; `uncaughtException`, `unhandledRejection` in Node) that see errors nothing else caught. Used in projects 28, 38, 39. ([Ch 11](../chapters/11-errors-and-debugging/README.md))
+- **GPU** — Graphics processing unit: the chip that draws the screen; compositor animations and WebGL/WebGPU shaders run on it. Used in project 6.
+- **Graceful shutdown** — Stopping cleanly on a signal: stop accepting new work, finish in-flight requests, close connections and the database pool, then exit. Used in projects 15, 16, 40. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Grapheme cluster** — What a reader sees as one character, which may be several code points (an emoji with skin tone, a letter with accents); count with `Intl.Segmenter`. Used in project 8. ([Ch 6](../chapters/06-strings-and-regular-expressions/README.md))
+- **Guard (state machine)** — A condition that must be true for a transition to happen, such as "only submit if the form is valid". Used in project 35.
+- **Gzip / `node:zlib`** — Gzip is a common compression format; Node's `node:zlib` module compresses and decompresses it as a stream. Used in projects 15, 38. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+
+### H
+
+- **Hash routing** — Keeping the app's view in the URL fragment (`#/active`), read on `hashchange`, which needs no server setup. Used in projects 2, 21. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **`HEAD` request** — An HTTP request like `GET` that returns only the headers, used to check a link without downloading it (not every server supports it well). Used in projects 23–25, 40. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Head-of-line blocking** — When one lost or slow item at the front of an ordered stream holds up everything behind it, as in TCP or HTTP/1.1 pipelining. Used in project 36.
+- **Health check vs readiness** — A health (liveness) endpoint says the process is alive; readiness says it can serve traffic now (database reachable, warm-up done). Used in projects 16, 32, 36, 38.
+- **Heartbeat (ping/pong)** — Small messages sent on a schedule so each side can detect a dead connection that never closed properly. Used in project 14.
+- **Hidden input** — An off-screen `<input>` that receives real keyboard and IME typing while the visible display is drawn separately. Used in project 8.
+- **Histogram percentile** — Estimating values such as the 95th percentile (95% of samples are at or below it) by counting samples in buckets, using fixed memory. Used in projects 15, 16, 38.
+- **History API** — `history.pushState`, `replaceState` and the `popstate` event, which let a single-page app change the URL without a page load. Used in projects 11, 21, 38. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Hit testing** — Working out which item lies under a pointer position. Used in project 12.
+- **Hooks (test runner)** — Setup and cleanup functions (`before`, `beforeEach`, `afterEach`, `after`) that a test runner calls around tests. Used in project 39. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **HTML** — HyperText Markup Language: the tag-based language that describes a page's structure and content. Used in projects 1–3, 7, 9, 10, 12–14, 20, 21, 25, 29.
+- **HTML entities** — Codes like `&amp;`, `&lt;` or `&#039;` that stand for characters in HTML; decoding them through `innerHTML` also runs any markup. Used in project 3.
+- **HTTP** — HyperText Transfer Protocol: the request/response rules browsers and servers use; HTTPS is the encrypted version. Used in projects 3, 4, 9, 11, 13, 14, 16, 19, 20, 23, 25, 33, 36, 40. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **HTTP 429 / `Retry-After`** — The "Too Many Requests" status a rate-limited server returns, often with a `Retry-After` header saying how long to wait. Used in projects 3, 11, 23, 25.
+- **HTTP 502 vs 504** — Proxy errors: 502 Bad Gateway means the upstream server sent an invalid reply or failed; 504 Gateway Timeout means it didn't reply in time. Used in project 23.
+- **HTTP/2 and HTTP/3** — Newer HTTP versions that multiplex many requests over one connection; HTTP/3 runs over QUIC (UDP) to avoid TCP head-of-line blocking. Used in projects 36, 40.
+
+### I
+
+- **IANA time zone** — Named zones like `Europe/London` or `Asia/Tokyo` from the IANA database, which include each zone's daylight-saving rules. Used in projects 4, 20. ([Ch 5](../chapters/05-objects-math-date-and-json/README.md))
+- **Idempotent / idempotency** — An operation that has the same effect whether it runs once or many times, so it can be retried safely (e.g. upload chunk 7, or send message id 42). Used in projects 14, 17, 24, 30, 32. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **IEEE 754 double** — The 64-bit binary floating-point format of every JavaScript `number`; it explains why `0.1 + 0.2` isn't exactly `0.3`. Used in project 1. ([Ch 2](../chapters/02-variables-types-and-operators/README.md))
+- **IIFE** — Immediately Invoked Function Expression: a function that runs as soon as it is defined, used for private scope and single-file script bundles. Used in project 38. ([Ch 4](../chapters/04-functions-scope-and-closures/README.md))
+- **IME composition** — Typing through an Input Method Editor (common for Chinese, Japanese, Korean), where several keystrokes build one character; listen for `compositionend`. Used in project 8.
+- **Immediate-mode rendering** — Drawing everything again each frame with nothing remembered by the graphics API, as `<canvas>` does; contrast with the DOM's retained tree. Used in project 10.
+- **Immutable update** — Producing a new array or object with the change instead of modifying the old one, so "did it change?" is a cheap reference comparison. Used in projects 2, 35. ([Ch 7](../chapters/07-arrays/README.md))
+- **Incremental build / recalculation** — Redoing only the work affected by a change (rebuild changed pages, recalculate dependent cells) instead of everything. Used in projects 19, 20, 24, 25, 27, 31, 40.
+- **Incremental migration** — Converting a codebase (e.g. to TypeScript) a file at a time while it keeps working and shipping. Used in project 19.
+- **Incremental parser** — A parser that accepts input in pieces as it arrives and keeps its state between pieces, needed for network streams. Used in project 40.
+- **Index array** — An array of row positions that you sort or filter instead of moving the rows themselves. Used in project 22.
+- **IndexedDB** — The browser's built-in asynchronous database for large amounts of structured data, with transactions and indexes. Used in projects 2, 9, 12, 13, 17, 30, 31. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Infinite scroll** — Loading the next page of results automatically as the user nears the bottom of the list. Used in project 11.
+- **Input buffering** — Queuing key presses so each one is applied on its own game tick, so quick taps aren't lost. Used in project 10.
+- **Instrumentation** — Adding code (often automatically) that records what a program does, such as each step, timer or promise, without changing its result. Used in project 29.
+- **Interaction state vs data state** — Temporary UI state (what is being dragged right now) kept separate from the saved data (which column a card is in). Used in project 12.
+- **Interleaving anomaly** — When two users type at the same spot at once and a weak merge rule mixes their letters together ("hweolrllod"). Used in project 30.
+- **Interpreter** — A program that runs code by reading and executing it directly, instead of first compiling it to machine code. Used in projects 35, 37.
+- **`IntersectionObserver`** — Reports when an element enters or leaves the viewport (or another element), without scroll listeners; used for infinite scroll and lazy loading. Used in project 11. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **`Intl.Collator`** — Compares strings by a language's rules, with options such as ignoring accents and natural number order. Used in projects 9, 22. ([Ch 6](../chapters/06-strings-and-regular-expressions/README.md))
+- **`Intl.DateTimeFormat`** — Formats dates and times for a locale and a chosen time zone without a date library. Used in project 4. ([Ch 5](../chapters/05-objects-math-date-and-json/README.md))
+- **`Intl.NumberFormat` / `Intl.RelativeTimeFormat`** — Locale-aware formatting of numbers (grouping, currency) and of relative times ("in 2 days"). Used in projects 1, 2. ([Ch 5](../chapters/05-objects-math-date-and-json/README.md))
+- **`Intl.Segmenter`** — Splits text into graphemes, words or sentences according to Unicode rules. Used in project 8. ([Ch 6](../chapters/06-strings-and-regular-expressions/README.md))
+- **Invariant** — A rule that must always hold, such as "the cart total equals the sum of its lines"; property-based tests check invariants. Used in projects 18, 30.
+- **IP address** — The numeric address of a machine on a network; rate limits are often counted per IP. Used in projects 3, 4, 23, 38.
+- **IPC (inter-process communication)** — Sending messages between separate processes, such as a test runner and its worker processes. Used in project 39. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Isolated world** — The separate JavaScript environment an extension's content script runs in: it shares the page's DOM but not its variables. Used in project 32.
+
+### J
+
+- **`javascript:` URL** — A URL that runs code when followed; links built from user input must reject this scheme. Used in projects 13, 20, 25. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **JIT compilation** — Just-in-time compilation: the engine compiles frequently run code to machine code while the program runs, making it much faster. Used in project 37. ([Ch 1](../chapters/01-introduction-and-setup/README.md))
+- **JSDoc types** — Type information written in `/** @param {number} x */` comments, which TypeScript can check in plain `.js` files. Used in project 19. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **jsdom** — A JavaScript implementation of the DOM that runs in Node, so DOM code can be tested without a browser. Used in projects 1, 2, 6–8, 11, 12, 21, 26. ([Ch 13](../chapters/13-dom-and-events/README.md))
+- **JSON** — JavaScript Object Notation: the standard text format for data exchange; `JSON.parse` throws on bad input. Used in projects 2–4, 9–16, 18, 19, 24, 25, 27, 36, 38–40. ([Ch 5](../chapters/05-objects-math-date-and-json/README.md))
+- **JSONB** — PostgreSQL's binary JSON column type, which stores JSON documents that can be indexed and queried. Used in project 38.
+
+### K
+
+- **Kahn's algorithm** — A topological sort that repeatedly removes items with no remaining dependencies, and detects cycles when items are left over. Used in project 31. ([Ch 17](../chapters/17-javascript-for-interviews/README.md))
+- **Keep-alive** — Reusing one TCP connection for several HTTP requests instead of opening a new one each time. Used in projects 38, 40.
+- **Keyed diffing** — Matching old and new list items by a stable key (not by position) so a UI library moves existing DOM nodes rather than recreating them. Used in project 26.
+
+### L
+
+- **Lag compensation** — Server-side rewinding of other players' positions to what the shooter saw, so hits feel fair despite network delay. Used in project 36.
+- **LAN** — Local area network: computers connected in one building or home, with very low network delay. Used in projects 14, 30.
+- **Latency** — The time one operation takes from start to finish, such as a network round trip. Used in projects 14–16, 23, 24, 30, 36, 38.
+- **Layered architecture** — Splitting a server into layers (routes, services, data access) where each only talks to the one below, so each can be tested and changed alone. Used in project 16.
+- **Layout thrashing** — Alternating DOM reads and writes so the browser has to recalculate layout again and again; batch all reads, then all writes. Used in projects 8, 11, 12, 22. ([Ch 13](../chapters/13-dom-and-events/README.md))
+- **Lazy loading** — Loading images or code only when they are about to be needed; `loading="lazy"` does it natively for images. Used in projects 11, 13, 21, 23, 26. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **Leaked handles** — Timers, sockets or files left open after a test or program should be finished, which keep the process alive or interfere with later tests. Used in project 39.
+- **Least common compound ancestor** — In statecharts, the nearest parent state containing both the source and target of a transition; states below it are exited and entered. Used in project 35.
+- **Least privilege** — Asking for only the permissions a program really needs, so a bug or compromise can do less damage. Used in project 32.
+- **Lexer / tokenizer** — The first stage of a parser, which turns raw text into a list of tokens such as numbers, names and symbols. Used in projects 1, 20, 25, 31, 37. ([Ch 6](../chapters/06-strings-and-regular-expressions/README.md))
+- **Lexical scope** — Variables are looked up where the code is written, in enclosing blocks and functions, not where it is called from. Used in project 37. ([Ch 4](../chapters/04-functions-scope-and-closures/README.md))
+- **Lighthouse** — Google's tool (built into Chrome DevTools) that audits a page's performance, accessibility and best practices. Used in project 11.
+- **Link interception** — Catching clicks on same-site links so a single-page app can change the view itself instead of loading a new page. Used in projects 17, 21, 33.
+- **Live binding** — An ES module import that always shows the exporter's current value of a variable, not a copy taken at import time. Used in project 27. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **llhttp** — The fast HTTP/1.1 parser inside Node.js, generated as C code. Used in project 40.
+- **`localStorage`** — A small, synchronous, string-only key-value store per origin that survives reloads; never store secrets in it. Used in projects 1–6, 8, 9, 12, 13, 19, 24, 33. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Long task** — Main-thread work longer than 50 ms, which delays input and makes the page feel stuck. Used in projects 8, 34, 38.
+- **LRU cache** — A fixed-size cache that removes the least recently used entry when full; a `Map` (insertion-ordered) makes it simple. Used in project 23. ([Ch 17](../chapters/17-javascript-for-interviews/README.md))
+
+### M
+
+- **MagicString** — A library for editing source code as text while keeping track of positions, so a correct source map can be produced. Used in project 27.
+- **Main thread** — The single thread that runs a page's JavaScript, layout and painting; long work there freezes the UI. Used in projects 2, 3, 5, 6, 22, 34. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Manifest V3** — The current Chrome extension platform: background service workers instead of persistent pages, declarative request rules and no remote code. Used in project 32.
+- **Manual redirects** — Telling `fetch` not to follow redirects automatically, so a crawler can record each hop, cap the chain and detect loops. Used in project 25.
+- **`Map`** — A key-value collection with keys of any type, insertion order and fast lookups. Used in projects 4, 7, 9, 11, 14–16, 20, 22, 23, 26, 27, 31, 35–37, 40. ([Ch 8](../chapters/08-maps-sets-iterators-and-generators/README.md))
+- **Markdown** — A lightweight text format where `# heading`, `*emphasis*` and `- lists` turn into HTML. Used in projects 13, 20, 32.
+- **MDN** — MDN Web Docs: Mozilla's free reference for JavaScript, HTML, CSS and web APIs. Used in projects 2–5, 7–12, 17, 21, 24, 32, 38.
+- **Mermaid** — A text-based diagram language (flowcharts, state diagrams) rendered to images by its library. Used in project 35.
+- **Message passing** — Communicating between workers, frames, extension parts or processes by sending copies of messages instead of sharing variables. Used in projects 17, 29, 32, 34. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Microtask** — A high-priority job (promise reactions, code after `await`, `queueMicrotask`) that runs as soon as the current code finishes, before the next task. Used in projects 26, 28, 29. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Middleware** — A function in a web server's request pipeline that can inspect or change the request and response, or pass control to the next one. Used in projects 16, 40. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Migration (database)** — A versioned script that changes the database schema; migrations run in order so every environment ends up the same. Used in projects 16, 19.
+- **Mock / test double** — A stand-in for a real dependency in a test: stubs return fixed answers, spies and mocks record calls, fakes are simplified working versions. Used in projects 3–7, 11, 12, 14, 17, 18, 21, 23, 24, 26, 27, 29, 30, 33–35, 39. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Model-based testing** — Generating tests from a model of the system (like a state machine) by walking its paths automatically. Used in project 35.
+- **Module graph** — All the modules an app loads, linked by their imports, starting from the entry point. Used in projects 27, 39. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **Module resolution** — The rules that turn an import string like `'./a.js'` or `'lodash'` into an actual file path. Used in projects 25, 27, 28, 37. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **Monkey-patching** — Replacing a built-in or library function at runtime with a wrapper, e.g. wrapping `fetch` to record breadcrumbs. Used in projects 38, 39.
+- **Monotonic clock** — A clock that never jumps backwards (`performance.now()`), ideal for measuring elapsed time; unlike the wall clock. Used in projects 3, 5, 8, 15, 22, 26, 38. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **mulberry32 (seeded PRNG)** — A pseudo-random number generator that produces the same sequence from the same seed, making games and tests reproducible. Used in projects 6, 10, 18, 36.
+- **Mutation testing** — Deliberately making small bugs in the code and checking that the tests catch them, which measures test quality better than coverage. Used in project 18.
+- **Myers diff** — The standard algorithm for finding the smallest set of line insertions and deletions between two texts, used by `git diff`. Used in project 39.
+
+### N
+
+- **Narrowing (TypeScript)** — TypeScript refining a broad type to a specific one after a check such as `typeof`, `in` or a discriminant. Used in project 19. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Navigation API** — A newer browser API that intercepts every navigation in one place, a cleaner successor to the History API for single-page apps. Used in project 21. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Navigation cancellation** — Aborting the data loading of a page the user has already navigated away from, so it can't overwrite the newer page. Used in project 21.
+- **Nested layouts and outlets** — Routes inside routes, where a parent page keeps its frame and renders the child page into a placeholder (outlet). Used in project 21.
+- **`node:http` / `node:net`** — Node's built-in modules for HTTP servers and clients and for raw TCP sockets. Used in projects 11, 14, 16, 20, 23, 24, 33, 40. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Node.js** — A JavaScript runtime built on V8 for servers, command-line tools and build tooling. Used in projects 6–30, 32–34, 36–40. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **`node:sqlite`** — Node's built-in SQLite database module, not yet stable in Node 24. Used in projects 15, 17, 23–25.
+- **`node:test` / `node:assert/strict`** — Node's built-in test runner and strict assertion library, needing no extra packages. Used in projects 1–3, 5, 6, 14, 16, 18, 24, 26, 28, 30, 33, 35, 37, 39. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Normalisation (Unicode)** — Converting text to a standard form (NFC composes, NFD splits letters from accents) so identical-looking strings compare equal. Used in projects 8, 9. ([Ch 6](../chapters/06-strings-and-regular-expressions/README.md))
+- **Notifications API** — The browser API that shows system notifications after the user grants permission. Used in project 5.
+- **npm** — Node's package manager and public registry; `package.json` lists a project's dependencies and scripts. Used in projects 15, 16, 19, 27. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+
+### O
+
+- **OAuth 2.0** — The standard protocol that lets an app get limited access to a user's account on another service without seeing their password. Used in project 33.
+- **Offline-first** — Designing an app to work fully without a network, saving locally first and syncing when a connection returns. Used in projects 3, 4, 11, 17, 30, 38.
+- **`OffscreenCanvas`** — A canvas that isn't tied to the page, so a Web Worker can draw or encode images off the main thread. Used in project 34.
+- **Open redirect** — A bug where a site redirects to any URL given in a parameter, letting attackers send users to a phishing page from a trusted link. Used in project 33.
+- **Open Trivia Database** — A free API of trivia questions that needs no key and limits each IP to one call every 5 seconds. Used in project 3.
+- **Open-Meteo** — A free weather API (no key needed for non-commercial use) with forecast and geocoding endpoints. Used in project 4.
+- **Operational transformation (OT)** — An older collaborative-editing technique (used by Google Docs) that adjusts concurrent edits against each other through a central server. Used in project 30.
+- **Optimistic concurrency** — Letting edits proceed without locks and rejecting a save if the record's version changed since it was read. Used in project 17.
+- **Origin** — Scheme + host + port of a URL; storage, cookies, CORS and the same-origin policy are all scoped to it. Used in projects 2, 12, 14, 17, 21, 29, 30, 33, 34, 38. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **ORM** — Object-relational mapper: a library that maps database rows to objects so you write less SQL; it doesn't make string-built SQL safe by itself. Used in project 16.
+- **Outbox pattern** — Saving pending changes in a local queue (the outbox) in the same transaction as the data, then sending them to the server when possible. Used in projects 14, 17.
+- **Overscan** — Rendering a few extra rows above and below the visible area so fast scrolling doesn't show blank gaps. Used in project 22.
+- **OWASP** — The Open Worldwide Application Security Project, which publishes widely used guides and cheat sheets on web security. Used in project 13.
+
+### P
+
+- **Page Visibility API** — `document.visibilityState` and the `visibilitychange` event, which tell you when a tab is hidden so you can pause work. Used in projects 5, 10, 38.
+- **Parameterised query** — A database query where values are passed separately from the SQL text (`$1`), so user input can never change the query: the fix for SQL injection. Used in projects 16, 28.
+- **`parseArgs` (`util.parseArgs`)** — Node's built-in command-line argument parser for flags like `--port 8080`. Used in projects 15, 25. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Parser** — Code that reads text following a grammar and builds a structure, usually an AST, from it. Used in projects 1–4, 6, 9, 13–16, 19, 20, 22, 25, 27, 29, 31, 33, 34, 36–38, 40. ([Ch 6](../chapters/06-strings-and-regular-expressions/README.md))
+- **`performance.now()`** — A high-resolution monotonic clock in milliseconds since the page (or process) started. Used in projects 3, 5, 8, 15, 22, 26, 38. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **`PerformanceObserver`** — Delivers browser performance entries (long tasks, paint timings, layout shifts) as they happen. Used in project 38.
+- **Per-host limit** — A cap on concurrent requests to any single server, so a crawler is polite and doesn't overload one site. Used in project 25.
+- **Pipelining (HTTP)** — Sending several HTTP requests on one connection without waiting for each response; responses must come back in the same order. Used in project 40.
+- **Playwright** — A tool for end-to-end tests that drives real Chromium, Firefox and WebKit browsers, including offline mode. Used in projects 11, 12, 17, 21, 22, 24, 30, 32, 38. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Pointer Events** — One event model for mouse, touch and pen (`pointerdown`, `pointermove`, `pointerup`); `setPointerCapture` keeps the moves coming even off the element. Used in project 12.
+- **PostgreSQL / `pg`** — A powerful open-source relational database; `pg` is the common Node.js client library for it. Used in projects 14, 16, 17, 30, 38.
+- **Pratt parser** — A compact way to parse expressions where each operator has a binding power, which handles precedence and associativity neatly. Used in projects 31, 37.
+- **`prefers-color-scheme`** — A CSS media query that matches the user's light or dark mode setting. Used in project 4.
+- **Pre-signed multipart upload** — Uploading a large file straight to cloud storage in parts, using time-limited URLs signed by your server. Used in project 24.
+- **`#private` fields** — Class fields whose names start with `#`; only code inside the class body can read or write them, and the engine enforces this at runtime. Used in projects 6, 18, 26, 28. ([Ch 9](../chapters/09-this-prototypes-and-classes/README.md))
+- **Problem Details (RFC 9457)** — A standard JSON shape for HTTP API errors (`type`, `title`, `status`, `detail`) sent as `application/problem+json`. Used in projects 16, 23.
+- **Progressive enhancement** — Building a page that works with plain HTML first and then adding JavaScript improvements on top. Used in project 7.
+- **Progressive Web App (PWA)** — A website that can be installed and work offline like an app, using a manifest and a service worker. Used in projects 4, 17. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Promise** — An object representing a future result; it is pending until it is fulfilled with a value or rejected with an error, and settles only once. Used in projects 4, 7, 16, 17, 20, 23–29, 32, 33, 38, 39. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Promise combinators** — `Promise.all`, `allSettled`, `race` and `any`, which turn several promises into one. Used in projects 20, 23–25, 28, 29, 39. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Promises/A+** — The open specification for how `then` must behave, with a public test suite (`promises-aplus-tests`) that native promises pass. Used in project 28.
+- **Property-based testing** — Testing with many generated random inputs against a rule that must always hold, instead of a few hand-picked examples. Used in project 18.
+- **Prototype pollution** — An attack where untrusted keys like `__proto__` change `Object.prototype`, affecting every object in the app. Used in project 9. ([Ch 9](../chapters/09-this-prototypes-and-classes/README.md))
+- **Pub/sub** — Publish/subscribe: senders publish messages to a topic or event, and every subscriber receives them without the sender knowing who they are. Used in projects 2, 6, 14, 26, 35.
+- **Push-pull invalidation** — A reactivity scheme: changes push a cheap "dirty" mark through dependents, and values are pulled (recomputed) only when read. Used in project 26.
+
+### Q
+
+- **`queueMicrotask`** — Schedules a function to run as a microtask, right after the current code finishes. Used in projects 26, 28, 29. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+
+### R
+
+- **Race condition** — A bug where the result depends on which of several async operations finishes first. Used in projects 3, 4, 6–8, 11, 21, 39. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Range request** — An HTTP request for only part of a file (`Range: bytes=0-999`), used for resuming downloads and seeking in video. Used in projects 32, 40.
+- **Rate limiting** — Restricting how many requests a client may make in a period, to protect a server and share capacity fairly. Used in projects 3, 4, 7, 11, 14, 23, 38.
+- **`readline`** — Node's module for reading input one line at a time, from a file stream or the keyboard; works with `for await`. Used in projects 15, 37. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Reconnect** — Opening a new connection after one drops, with backoff, and resynchronising so nothing is lost or duplicated. Used in projects 14, 16, 17, 20, 30, 36, 38.
+- **Recursive descent** — A hand-written parser with one function per grammar rule, calling each other recursively. Used in project 37.
+- **Redis** — A fast in-memory data store often used for caches, rate-limit counters and pub/sub messaging between servers. Used in projects 14, 23, 33.
+- **Reducer** — A pure function `(state, action) => newState` that holds all of an app's update logic. Used in projects 1, 6. ([Ch 4](../chapters/04-functions-scope-and-closures/README.md))
+- **Reference (cell)** — In a spreadsheet, `A1` is a relative reference that shifts when copied, `$A$1` is absolute and stays fixed. Used in project 31.
+- **Reporter** — The part of a test runner that formats results, such as spec, dot, TAP or JSON output. Used in projects 25, 39. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Request coalescing** — Merging identical requests that arrive at the same time into one upstream call whose result is shared. Used in project 23.
+- **Request smuggling** — An attack that exploits two servers disagreeing on where an HTTP request ends (e.g. `Content-Length` vs `Transfer-Encoding`) to sneak in a hidden request. Used in project 40.
+- **`requestAnimationFrame`** — Asks the browser to call your function just before the next repaint; ideal for animation and paused in hidden tabs. Used in projects 5, 10, 12, 22, 29, 36. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Resolution procedure (promises)** — The Promises/A+ rules for resolving a promise with a value: adopt the state of a thenable, reject on cycles, otherwise fulfil. Used in project 28.
+- **Resolver (interpreter)** — A pass over the AST before running it that works out which scope each variable refers to. Used in projects 25, 27, 28, 37.
+- **REST** — A style for HTTP APIs where URLs name resources (`/notes/42`) and HTTP methods say what to do with them. Used in projects 16, 23.
+- **Resumable upload** — An upload that can continue from the last confirmed chunk after a network failure or reload, instead of restarting. Used in project 24.
+- **Reverse proxy** — A server that receives requests on behalf of other servers and forwards them, often adding caching, rate limiting or TLS. Used in projects 11, 23, 40.
+- **RFC** — "Request for Comments": the numbered documents that define internet standards (RFC 9112 for HTTP/1.1, RFC 9457 for problem details). Used in projects 14, 16, 25, 33, 40.
+- **`robots.txt`** — A file at a site's root telling crawlers which paths they may fetch (standardised as RFC 9309). Used in project 25.
+- **`rootMargin`** — An `IntersectionObserver` option that grows the detection area, so loading starts before the element is actually visible. Used in project 11. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Router** — Code that maps URLs (and, on a server, methods) to the handler or page that should respond. Used in projects 2, 16, 21, 23, 36, 40. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **RSS** — Two meanings in this book: an RSS feed is an XML list of a site's latest posts; RSS (resident set size) is the memory a process really uses. Used in projects 15, 20.
+- **RTT (round-trip time)** — The time for a message to reach the other side and a reply to come back. Used in project 36.
+- **Run-to-completion** — A rule that each event is fully processed before the next one starts, so handlers never interleave. Used in project 35. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+
+### S
+
+- **S3 / object storage** — Cloud storage for files ("objects") addressed by key; Amazon S3 is the best known and many others copy its API. Used in projects 19, 24.
+- **Sampling** — Recording only a fraction of events (say 10% of performance traces) to control cost and volume. Used in project 38.
+- **Sandboxed iframe** — An `<iframe sandbox>` that runs untrusted code with restricted powers and, without `allow-same-origin`, in a separate unique origin. Used in projects 13, 29.
+- **Sanitising** — Removing dangerous parts (scripts, event attributes, `javascript:` URLs) from untrusted HTML so the rest can be shown. Used in project 13. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Schema validation** — Checking data against a described shape (fields, types, limits) before using it; libraries such as Zod do it at runtime. Used in projects 2, 7, 14, 16, 19. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Schema versioning** — Storing a version number with saved data so a later release can migrate the old shape to the new one. Used in projects 2, 17.
+- **Scope hoisting** — A bundler optimization that puts all modules into one shared scope (renaming clashes) instead of wrapping each in a function. Used in project 27.
+- **"Script error."** — The useless message browsers report for errors in scripts from another origin unless the script is loaded with `crossorigin` and served with CORS. Used in project 38.
+- **Scroll restoration** — Returning to the right scroll position when the user goes back or forward in a single-page app. Used in projects 11, 13, 21, 22.
+- **SCXML** — A W3C standard XML format for statecharts whose algorithm defines exactly how states are entered and exited. Used in project 35.
+- **SDK** — Software development kit: a library you add to your app to use a service, such as an error-monitoring or login SDK. Used in projects 33, 38.
+- **Seen set** — A `Set` of items already discovered in a graph search, so each is processed once even when found many times. Used in projects 9, 25, 27. ([Ch 17](../chapters/17-javascript-for-interviews/README.md))
+- **Semaphore** — A counter that limits how many tasks may run at once; a task waits until a slot is free. Used in project 25.
+- **Sentinel element** — An empty element at the end of a list; when it becomes visible, an observer triggers loading the next page. Used in project 11.
+- **Sequence number** — An increasing number on each message, used to detect gaps, ignore duplicates and resume from the last one received. Used in projects 14, 30, 36.
+- **Server fallback (SPA)** — Configuring the server to return `index.html` for unknown paths so deep links into a single-page app don't give 404s. Used in project 21.
+- **Server reconciliation** — When the authoritative state arrives, the client resets to it and replays its own inputs that the server hasn't processed yet. Used in project 36.
+- **Server-Sent Events (SSE)** — A one-way stream of text events from server to browser over plain HTTP, read with `EventSource`; it reconnects automatically. Used in projects 14, 20.
+- **Service worker** — A background script that sits between a page and the network, serving cached responses offline and handling push and sync. Used in projects 11, 17, 32. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Service worker lifecycle** — Install, waiting, activate: a new service worker waits until old tabs close (or calls `skipWaiting`) before taking control. Used in projects 17, 38.
+- **`Set`** — A collection of unique values with fast membership checks; ES2025 added `union`, `intersection` and `difference`. Used in projects 6, 8–12, 14, 19, 20, 25–27, 31, 33, 35. ([Ch 8](../chapters/08-maps-sets-iterators-and-generators/README.md))
+- **`setInterval` / `setTimeout`** — Timers that run a callback after (at least) a delay or repeatedly; they drift and are throttled in hidden tabs. Used in projects 3–6, 10, 11, 18, 28, 29, 32, 36, 39. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **SHA-256** — A cryptographic hash function that turns any data into a 256-bit fingerprint; changing one byte changes the result completely. Used in projects 24, 33.
+- **Shadow DOM** — A hidden, encapsulated DOM subtree attached to an element, whose styles and markup don't leak in or out. Used in project 32.
+- **`SharedArrayBuffer`** — Memory several threads can read and write at the same time; browsers allow it only on cross-origin-isolated pages. Used in project 34. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Shebang** — The `#!/usr/bin/env node` first line that lets a script run as a command on Unix systems. Used in project 15.
+- **Side effect** — Anything a function does besides returning a value: changing outside state, writing to the DOM, logging, network requests. Used in projects 1, 27, 35. ([Ch 4](../chapters/04-functions-scope-and-closures/README.md))
+- **`SIGINT` / `SIGTERM`** — Operating-system signals asking a process to stop: `SIGINT` from Ctrl+C, `SIGTERM` from process managers such as Docker. Used in projects 15, 16. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Signal (reactivity)** — A reactive value container; reading it inside a computed or effect subscribes, and writing it notifies the subscribers. Used in project 26.
+- **SIMD / WebAssembly** — WebAssembly is a fast binary instruction format browsers run next to JavaScript; SIMD instructions process several numbers in one step. Used in project 34.
+- **Single source of truth** — Keeping one authoritative copy of the data and deriving everything else (like the screen) from it. Used in projects 2, 17, 19, 24, 32.
+- **Single-page app (SPA)** — A web app that loads once and then changes views with JavaScript and the History API, without full page loads. Used in projects 9, 21, 33. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Slowloris** — A denial-of-service attack that opens many connections and sends headers very slowly to tie up the server; stopped with header timeouts. Used in project 40.
+- **Snapshot** — A full copy of some state at one moment, such as the game state a server sends to clients; a snapshot test compares output with a saved copy from an earlier run. Used in projects 6, 18, 20, 26, 29, 30, 35, 36, 39.
+- **Source map** — A file that maps positions in bundled or minified code back to the original source; symbolication applies it to error stack traces. Used in projects 13, 27, 38, 39. ([Ch 11](../chapters/11-errors-and-debugging/README.md))
+- **Spacer element** — A single empty element sized to the full list height so the scrollbar looks right while only visible rows exist in the DOM. Used in projects 11, 22.
+- **Spiral of death** — A game loop that falls further behind because each frame must simulate more steps than it has time for; cap the steps per frame. Used in project 10.
+- **SQL** — Structured Query Language: the language for querying and changing relational databases such as PostgreSQL. Used in projects 15, 16.
+- **SQL injection** — An attack where user input is pasted into SQL text and changes the query; prevented by parameterised queries. Used in project 16.
+- **Stable sort** — A sort that keeps items with equal keys in their original order; JavaScript's `sort` is stable. Used in projects 20, 22. ([Ch 7](../chapters/07-arrays/README.md))
+- **State machine** — A model where the app is always in exactly one named state and events move it to defined next states; statecharts add nested and parallel states. Used in projects 1, 3, 11, 12, 22, 28, 35, 40.
+- **`state` parameter (OAuth)** — A random value the app sends to the login server and checks on return, to stop forged login responses (login CSRF). Used in project 33.
+- **State vector** — A compact summary of which updates a replica has seen from each peer, so peers can send each other only what is missing. Used in project 30.
+- **stdout / stderr** — A process's two output streams: normal results go to stdout, messages and errors to stderr, so piping results stays clean. Used in projects 15, 27. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **`storage` event** — Fires in other tabs of the same origin when one tab changes `localStorage`, enabling cross-tab sync. Used in project 2. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Storage eviction** — The browser deleting a site's stored data when the device is low on space, unless the site was granted persistent storage. Used in projects 17, 23.
+- **Stored XSS** — XSS where the attacker's script is saved (a note, a comment) and runs for everyone who views it. Used in project 13. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Stream** — Data processed piece by piece as it arrives, instead of loading it all into memory; Node has readable, writable and transform streams. Used in projects 14, 15, 20, 22–25, 38–40. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **`stream.pipeline`** — Connects streams so data flows from source to destination, handles backpressure and destroys every stream on error. Used in projects 15, 24, 40. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Strict mode (TypeScript)** — The TypeScript `strict` option set, including strict null checks, which catches far more bugs than the defaults. Used in project 19. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Structured clone** — The algorithm that deep-copies values for `postMessage`, `structuredClone` and IndexedDB; handles Maps, Dates and cycles but not functions. Used in project 34. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **SVG** — Scalable Vector Graphics: an XML image format drawn with shapes, paths and text that stays sharp at any size and can be styled with CSS. Used in projects 4, 6, 8, 29.
+
+### T
+
+- **Tab throttling** — Browsers slowing timers in background tabs (often to once a second or less) to save power; also, throttle as a helper that runs a function at most once per interval. Used in projects 3–5, 14, 30, 36. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Table-driven test** — One test body run over a table of inputs and expected outputs, so each new case is one row. Used in projects 1, 7, 13, 18. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **TAP** — Test Anything Protocol: a simple text format for test results that many tools can read. Used in project 39.
+- **Task (macrotask) queue** — The queue of bigger jobs (timer callbacks, I/O, user events) the event loop takes one at a time. Used in projects 28, 29. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **TCP** — Transmission Control Protocol: a reliable, ordered byte stream between two machines; it has no message boundaries, so the receiver must find them. Used in projects 14, 24, 36, 40. ([Ch 15](../chapters/15-nodejs-basics/README.md))
+- **Template compilation** — Turning a template once into a JavaScript function that builds the output string, which is much faster than re-reading the template every time. Used in project 20.
+- **Test isolation** — Making each test independent of every other (fresh state, separate process or module graph) so order and leftovers don't change results. Used in project 39. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Test runner** — The tool that discovers tests, runs them with hooks and timeouts, and reports results with an exit code. Used in projects 16, 18, 39. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Text quote selector** — Identifying a passage on a web page by its exact text plus some words before and after, so a highlight can be found again after the page changes. Used in project 32.
+- **`textContent`** — Sets or reads an element's text; anything assigned is shown as text, never parsed as HTML, which makes it XSS-safe. Used in projects 2, 3, 14. ([Ch 13](../chapters/13-dom-and-events/README.md))
+- **`TextDecoder` / `atob`** — `atob` decodes Base64 into a "binary string" of bytes; `TextDecoder` turns those bytes into real text, needed for non-ASCII UTF-8. Used in projects 3, 33. ([Ch 6](../chapters/06-strings-and-regular-expressions/README.md))
+- **Thenable** — Any object with a `then` method; promises and `await` adopt its state as if it were a promise. Used in projects 28, 29. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Thundering herd** — Many clients hitting the same resource at once (e.g. all requesting a just-expired cache entry), overloading the server. Used in project 23.
+- **Tick rate / snapshot rate** — How many times per second the server updates the simulation, and how often it sends state snapshots to clients. Used in project 36.
+- **Tiling with overlap** — Splitting an image into tiles for parallel workers, each with a margin of extra pixels so filters at tile edges are correct. Used in project 34.
+- **Timeout** — A limit on how long to wait for something before giving up and treating it as failed. Used in projects 3–6, 11, 14, 18, 23, 25, 28, 29, 32, 35, 36, 39, 40. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **TLS** — Transport Layer Security: the encryption under HTTPS that keeps traffic private and proves the server's identity. Used in project 40.
+- **Token bucket** — A rate-limiting algorithm: a bucket refills with tokens at a steady rate, each request spends one, and an empty bucket means "wait". Used in project 23.
+- **Tombstone** — A marker left in place of a deleted item so replicas still agree on positions; removed later during compaction. Used in project 30.
+- **Topological order** — An ordering of a dependency graph where every item comes after everything it depends on. Used in project 31. ([Ch 17](../chapters/17-javascript-for-interviews/README.md))
+- **Touched state** — Whether the user has already interacted with a form field; errors usually appear only after a field is touched or the form is submitted. Used in project 7.
+- **Trace replay** — Recording a sequence of events once and playing it back step by step, for example to animate how the event loop ran. Used in project 29.
+- **Transaction (database)** — A group of database changes that succeed or fail together (all or nothing), so data is never left half-updated. Used in projects 16, 17.
+- **Transferable object** — An object such as an `ArrayBuffer` that `postMessage` can move to another thread without copying; the sender loses access to it. Used in projects 22, 34. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **Tree shaking** — Removing exports that nothing imports from a bundle, using the static structure of ES modules. Used in project 27. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **Tree-walking interpreter** — An interpreter that executes a program by visiting its AST nodes directly. Used in projects 31, 37.
+- **`@ts-expect-error`** — A TypeScript comment that silences the error on the next line and itself becomes an error once that line stops failing, so temporary escape hatches get cleaned up. Used in project 19.
+- **Type narrowing** — TypeScript refining a type after a runtime check such as `typeof`, `instanceof` or a tag comparison. Used in project 19. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Type stripping** — Running TypeScript by deleting the type syntax without checking it, as `node file.ts` does in Node 24. Used in projects 19, 35. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Typed arrays** — Fixed-length arrays of raw numbers of one type stored in an `ArrayBuffer`, far more compact than ordinary arrays. Used in projects 3, 8, 22, 33, 34, 40. ([Ch 7](../chapters/07-arrays/README.md))
+- **TypeScript** — JavaScript with static types, checked by the `tsc` compiler before the code runs; the types are erased at runtime. Used in projects 18, 19, 31, 35, 37, 40. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+
+### U
+
+- **UI / UX** — User interface (what the user sees and touches) and user experience (how using it feels). Used in projects 1, 2, 7–9, 11, 12, 14, 17, 21, 22, 24, 26, 31, 32, 34, 35.
+- **`Uint8ClampedArray`** — A typed array of bytes that clamps values to 0–255 instead of wrapping, the format of canvas pixel data. Used in project 34. ([Ch 7](../chapters/07-arrays/README.md))
+- **undici** — The HTTP client library inside Node that powers its global `fetch`. Used in project 23.
+- **Unhandled rejection** — A promise that rejects with no handler attached; browsers and Node report it as an error. Used in projects 28, 38, 39. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Unicode** — The standard that gives every character a number (a code point), with encodings such as UTF-8 and UTF-16. Used in projects 7–9, 37. ([Ch 6](../chapters/06-strings-and-regular-expressions/README.md))
+- **Unique character ids** — Giving every inserted character a permanent id (replica id plus counter) so edits can refer to it even as positions shift. Used in project 30.
+- **`unknown` vs `any`** — In TypeScript, `unknown` must be checked before use, while `any` turns checking off; prefer `unknown` for untrusted data. Used in projects 19, 28. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **Upload progress** — Reporting how many bytes have been sent; `fetch` can't report upload progress, so `XMLHttpRequest.upload` is still used. Used in project 24.
+- **`URL` / `URLSearchParams`** — Built-in classes for parsing and building URLs and query strings, with correct encoding; `URL.canParse` checks validity without throwing. Used in projects 2–4, 9, 11, 13, 17, 21, 23, 25, 33, 37, 38. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **URL normalisation** — Rewriting URLs to one standard form (lower-case host, no default port or fragment) so duplicates can be detected. Used in projects 9, 25.
+- **`URLPattern`** — A built-in for matching URLs against patterns such as `/notes/:id` and extracting parameters. Used in projects 21, 25.
+- **`:user-invalid`** — A CSS pseudo-class that matches an invalid form field only after the user has interacted with it, so fresh empty forms don't start out red. Used in project 7.
+- **Username enumeration** — Learning which usernames exist from different error messages or timings; avoided with generic responses. Used in project 7.
+- **UTF-16 / UTF-8** — Text encodings: JavaScript strings use UTF-16 code units, while files and the network mostly use UTF-8 bytes. Used in projects 3, 8, 9. ([Ch 6](../chapters/06-strings-and-regular-expressions/README.md))
+- **`util.inspect`** — Node's function that turns any value into a readable string, as `console.log` shows it; good for printing diffs. Used in project 39.
+- **UUID** — A 128-bit random identifier (`crypto.randomUUID()`) that is practically unique without any coordination. Used in projects 2, 9, 24, 33, 38.
+
+### V
+
+- **V8** — Google's JavaScript engine, used by Chrome, Node.js and Deno. Used in projects 29, 37, 39. ([Ch 1](../chapters/01-introduction-and-setup/README.md))
+- **Vanilla JavaScript** — Plain JavaScript with no framework such as React, Vue or Svelte. Used in project 2.
+- **`Vary`** — An HTTP header listing request headers that change the response (e.g. `Accept-Encoding`), which a cache must include in its key. Used in project 23.
+- **Virtual clock** — A clock controlled by code instead of real time, so timers can be run instantly and deterministically. Used in projects 5, 23, 29, 39.
+- **Virtual DOM** — A lightweight JavaScript description of the UI; a library compares the new one with the old one and patches only the differences into the real DOM. Used in project 26.
+- **Virtualisation (windowing)** — Rendering only the rows that are visible (plus a little overscan) so a list of 100,000 items stays fast. Used in projects 2, 9, 11, 12, 22, 26, 31. ([Ch 13](../chapters/13-dom-and-events/README.md))
+- **Vite** — A modern build tool with a fast dev server and hot module replacement, using esbuild and Rollup. Used in projects 18, 19. ([Ch 10](../chapters/10-modules-and-tooling/README.md))
+- **Vitest** — A fast test runner built on Vite with a Jest-compatible `expect` API, watch mode and browser-like environments. Used in project 18. ([Ch 16](../chapters/16-testing-and-typescript/README.md))
+- **VLQ** — Variable-length quantity: the compact Base64 number encoding source maps use for their position mappings. Used in projects 27, 38.
+- **Volatile functions** — Spreadsheet functions such as `NOW()` and `RAND()` whose results change without their inputs changing, so they recalculate every time. Used in project 31.
+
+### W
+
+- **W3C / IETF** — The standards bodies behind many web specs: the W3C for web platform features, the IETF for internet protocols such as HTTP. Used in projects 6, 7, 22, 23, 32, 33, 35.
+- **Wall-clock time** — The real-world time of day (`Date.now()`); it can jump when the system clock is corrected, unlike a monotonic clock. Used in project 5. ([Ch 5](../chapters/05-objects-math-date-and-json/README.md))
+- **Web Audio API** — The browser API for generating and processing sound, such as a short beep from an oscillator. Used in projects 5, 6.
+- **Web Worker** — A background thread with no DOM access that runs JavaScript off the main thread and talks to the page with `postMessage`. Used in projects 5, 13, 22, 24, 29, 31, 34, 37. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **WebGL / WebGPU** — Browser APIs for running graphics and computation on the GPU. Used in project 34.
+- **WebSocket** — A protocol for a long-lived, two-way connection between browser and server, started from an HTTP request. Used in projects 12, 14, 20, 27, 30, 36, 40. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **web-vitals library** — Google's small library that measures Core Web Vitals in real users' browsers. Used in project 38.
+- **WMO weather code** — Numeric weather condition codes from the World Meteorological Organization (e.g. 61 for slight rain), which apps map to icons. Used in project 4.
+- **Worker pool** — A fixed number of worker threads or processes that take jobs from a queue, so work runs in parallel without creating a worker per job. Used in projects 34, 39.
+- **WPM** — Words per minute: typing speed, conventionally counted as (characters typed ÷ 5) per minute. Used in project 8.
+- **`wrk`** — A command-line HTTP load-testing tool, like `autocannon`. Used in project 40.
+- **`ws`** — A popular, fast WebSocket server and client library for Node.js. Used in projects 14, 30, 36.
+
+### X
+
+- **`XMLHttpRequest`** — The older browser API for HTTP requests; still useful because it reports upload progress, which `fetch` cannot. Used in project 24. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+- **XSS (cross-site scripting)** — Attacker-controlled script running in your page, usually through unescaped HTML; prevented with `textContent`, escaping, sanitising and CSP. Used in projects 2, 3, 13, 14, 20, 32, 33. ([Ch 14](../chapters/14-browser-apis-and-security/README.md))
+
+### Y
+
+- **YATA** — A sequence-CRDT algorithm (used by Yjs) that records each item's left and right neighbours at insert time to merge concurrent typing without interleaving. Used in project 30.
+- **Yjs** — A widely used CRDT library for collaborative apps, with shared types such as `Y.Text` and providers that sync over WebSockets or other transports. Used in project 30.
+
+### Z
+
+- **Zalgo** — A callback API that is sometimes synchronous and sometimes asynchronous; promises avoid it by always calling handlers asynchronously. Used in project 28. ([Ch 12](../chapters/12-asynchronous-javascript/README.md))
+- **Zero-width joiner (ZWJ)** — An invisible Unicode character that joins emoji into one picture, such as a family emoji. Used in project 8.
+- **Zod** — A TypeScript-first library for describing data shapes and validating untrusted input at runtime. Used in project 19. ([Ch 16](../chapters/16-testing-and-typescript/README.md))

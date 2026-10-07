@@ -81,7 +81,7 @@ Hello World
 | | `let` | `const` | `var` |
 |---|---|---|---|
 | Introduced | ES2015 | ES2015 | original (1995) |
-| Scope | **block** `{ }` | **block** `{ }` | **function** (or global) |
+| Scope (where the name is visible) | **block** `{ }` | **block** `{ }` | **function** (or global) |
 | Reassign | yes | **no** (`TypeError`) | yes |
 | Redeclare in same scope | no (`SyntaxError`) | no | **yes, silently** |
 | Must initialise | no | **yes** | no |
@@ -96,10 +96,10 @@ Scope — *where* a variable is visible — is covered properly in [Chapter 4 §
 3. **`var` never, in new code.** You need to *recognise* it because older code and tutorials use it everywhere (and some lessons you'll see online use `var` "to keep things simple"), but its function scope, silent redeclaration and hoisting cause bugs that `let`/`const` were designed to prevent.
 
 ### Naming rules and conventions
-- Allowed characters: letters, digits, `_`, `$`; the first character can't be a digit. Unicode letters work (`café`), but stick to ASCII in shared code.
+- Allowed characters: letters, digits, `_`, `$`; the first character can't be a digit. Unicode letters work (`café`) — Unicode is the worldwide standard that gives every character in every script a number — but stick to ASCII (the basic 128-character English set: plain letters, digits, punctuation) in shared code.
 - Case matters: `total` and `Total` are different variables.
 - Reserved words (`let`, `class`, `return`, `if`, `for`, `new`, `typeof` …) can't be names.
-- Conventions: **camelCase** for variables and functions (`totalPrice`), **PascalCase** for classes (`ShoppingCart`), **UPPER_SNAKE_CASE** for fixed configuration constants (`MAX_RETRIES`). Name booleans as questions: `isOpen`, `hasAccess`.
+- Conventions: **camelCase** for variables and functions (`totalPrice`), **PascalCase** for classes (`ShoppingCart`; a class is a blueprint for making objects — [Chapter 9](../09-this-prototypes-and-classes/README.md)), **UPPER_SNAKE_CASE** for fixed configuration constants (`MAX_RETRIES`). Name booleans as questions: `isOpen`, `hasAccess`.
 
 ### Common mistakes
 - **Thinking `const` makes an object read-only.** It only prevents reassigning the variable. To freeze the contents, use `Object.freeze` ([Chapter 5](../05-objects-math-date-and-json/README.md)).
@@ -107,7 +107,7 @@ Scope — *where* a variable is visible — is covered properly in [Chapter 4 §
 - **Declaring with `let` inside a block and using it outside** → `ReferenceError`.
 
 ### TL;DR
-`const` by default, `let` when you must reassign, `var` only when reading old code. `const` freezes the binding, not the value.
+`const` by default, `let` when you must reassign, `var` only when reading old code. `const` freezes the binding (the link between a name and the value it points to), not the value.
 
 ---
 
@@ -161,8 +161,8 @@ The TDZ is a feature: with `var`, reading a variable too early silently gives `u
 ### In the interview
 **"What is the Temporal Dead Zone?"** `let`, `const` and `class` declarations are hoisted — the scope knows about them from the start — but they aren't initialised until their declaration is evaluated. Accessing them in that window throws a `ReferenceError`. `var` is hoisted *and* initialised to `undefined`, so early access silently returns `undefined`.
 
-- *Follow-up: Are `let` and `const` hoisted?* Yes — which is why an inner `let x` shadows an outer `x` even on lines above it (you get a TDZ error instead of the outer value).
-- *Follow-up: Is the TDZ about lines or time?* Time: a closure that refers to a later `let` is fine as long as it runs after the declaration executes.
+- *Follow-up: Are `let` and `const` hoisted?* Yes — which is why an inner `let x` shadows an outer `x` (hides it, because the inner name wins inside its block) even on lines above it (you get a TDZ error instead of the outer value).
+- *Follow-up: Is the TDZ about lines or time?* Time: a closure (a function that remembers the variables around where it was created — [Chapter 4](../04-functions-scope-and-closures/README.md)) that refers to a later `let` is fine as long as it runs after the declaration executes.
 
 ### TL;DR
 All declarations are hoisted; `var` starts as `undefined`, `let`/`const` start in the TDZ and throw if touched early.
@@ -178,11 +178,11 @@ Every value has a **type**. JavaScript has **eight** types: seven **primitive** 
 |---|---|---|
 | `number` | `42`, `3.14`, `-0`, `Infinity`, `NaN` | One type for integers and decimals: 64-bit floating point (§2.10) |
 | `bigint` | `10n`, `2n ** 64n` | Whole numbers of any size (ES2020) |
-| `string` | `"hi"`, `'hi'`, `` `hi ${x}` `` | Text, immutable ([Chapter 6](../06-strings-and-regular-expressions/README.md)) |
+| `string` | `"hi"`, `'hi'`, `` `hi ${x}` `` | Text, immutable (can't be changed in place) ([Chapter 6](../06-strings-and-regular-expressions/README.md)) |
 | `boolean` | `true`, `false` | §2.11 |
 | `undefined` | `undefined` | "No value assigned yet" — what JS itself gives you |
 | `null` | `null` | "Intentionally empty" — what *you* assign to mean "nothing" |
-| `symbol` | `Symbol("id")` | Unique identifiers, mostly for object keys ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) |
+| `symbol` | `Symbol("id")` | Unique identifiers, mostly for object keys (property names) ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) |
 | **`object`** | `{ a: 1 }`, `[1, 2]`, functions, dates, maps … | Everything that isn't a primitive |
 
 JavaScript is **dynamically typed**: variables don't have types, values do. The same variable can hold a number and later a string.
@@ -241,7 +241,7 @@ Three quirks to memorise:
 | `Number(…)` | `NaN` | `0` |
 | `== null` | `true` | `true` |
 
-A handy idiom: `value == null` is true for *both* `null` and `undefined` and nothing else — the one widely accepted use of `==`.
+A handy idiom (a common, widely recognised coding pattern): `value == null` is true for *both* `null` and `undefined` and nothing else — the one widely accepted use of `==`.
 
 ### TL;DR
 Seven primitives (`number`, `bigint`, `string`, `boolean`, `undefined`, `null`, `symbol`) plus objects. `typeof` identifies them, except `null` (→ `"object"`) and arrays (use `Array.isArray`).
@@ -252,7 +252,7 @@ Seven primitives (`number`, `bigint`, `string`, `boolean`, `undefined`, `null`, 
 
 ### What it is
 - A **primitive** is a simple, **immutable** value. The variable holds the value itself. Copying copies the value.
-- An **object** is a mutable collection of properties living in memory. The variable holds a **reference** — like an address — to the object. Copying copies the address, so both variables point at the *same* object.
+- An **object** is a mutable (changeable after creation) collection of properties (named values) living in memory. The variable holds a **reference** — like an address — to the object. Copying copies the address, so both variables point at the *same* object.
 
 ### Example
 ```js
@@ -309,8 +309,8 @@ You can also create wrappers yourself with `new Number(5)`, `new String("x")` or
 
 ### Why it matters
 - Passing an object to a function lets the function change *your* object ([Chapter 4](../04-functions-scope-and-closures/README.md)).
-- `===` on objects asks "same object?", not "same contents?". Comparing contents needs a loop or a library.
-- Frameworks like React rely on this: they detect a change by checking whether you created a *new* object, which is why "don't mutate state" is a React rule.
+- `===` on objects asks "same object?", not "same contents?". Comparing contents needs a loop or a library (ready-made code written by someone else).
+- Frameworks like React rely on this: they detect a change by checking whether you created a *new* object, which is why "don't mutate state" is a React rule (*mutate* = change in place; *state* = the data that decides what the screen currently shows).
 
 ### TL;DR
 Primitives: immutable, copied and compared by value. Objects: mutable, copied and compared by reference. Use `Number()/String()/Boolean()` without `new` to convert.
@@ -324,7 +324,7 @@ An **operator** is a symbol that takes one or more values (**operands**) and pro
 
 | Operator | Name | Example | Result |
 |---|---|---|---|
-| `+` | addition (or string concatenation) | `10 + 5` | `15` |
+| `+` | addition (or string concatenation — joining texts end to end) | `10 + 5` | `15` |
 | `-` | subtraction | `10 - 5` | `5` |
 | `*` | multiplication | `10 * 5` | `50` |
 | `/` | division (always floating point) | `7 / 2` | `3.5` |
@@ -389,10 +389,10 @@ after b--: 4
 1. **Division never throws.** Dividing by zero gives `Infinity`/`-Infinity`; `0 / 0` gives `NaN`.
 2. **`%` is a remainder, not a mathematical modulo:** the result has the sign of the left operand (`-7 % 3` is `-1`). For an always-positive modulo use `((a % n) + n) % n`.
 3. **Prefix vs postfix.** Both `n++` and `++n` add one to `n`. The difference is the value of the *expression*: postfix returns the value *before* the change, prefix the value *after*. On a line by itself (`i++;`) there is no difference.
-4. **`+` is overloaded.** If either operand is a string (after converting objects to primitives), `+` joins strings; otherwise it adds numbers. Evaluation goes left to right, so `1 + 2 + "3"` is `3 + "3"` = `"33"`, while `"1" + 2 + 3` is `"12" + 3` = `"123"`.
+4. **`+` is overloaded** (one symbol, more than one job). If either operand is a string (after converting objects to primitives), `+` joins strings; otherwise it adds numbers. Evaluation goes left to right, so `1 + 2 + "3"` is `3 + "3"` = `"33"`, while `"1" + 2 + 3` is `"12" + 3` = `"123"`.
 5. **Other arithmetic operators always convert to numbers**, so `"3" - 4` is `-1` and `"3" * "4"` is `12`.
 6. **Unary `+`** is the shortest way to convert to a number (`+"42"` → `42`); the empty string becomes `0`, non-numeric text becomes `NaN`.
-7. **`-2 ** 2` is a `SyntaxError`** — the language forces you to write `(-2) ** 2` or `-(2 ** 2)` to avoid ambiguity. `**` is right-associative: `2 ** 3 ** 2` is `2 ** 9` = `512`.
+7. **`-2 ** 2` is a `SyntaxError`** — the language forces you to write `(-2) ** 2` or `-(2 ** 2)` to avoid ambiguity. `**` is right-associative (grouped from the right, §2.9): `2 ** 3 ** 2` is `2 ** 9` = `512`.
 
 ### Common mistakes
 - Adding form input values: `input.value` is always a string, so `"2" + "3"` gives `"23"`. Convert first: `Number(input.value)`.
@@ -456,7 +456,7 @@ NaN === NaN: false | Object.is(NaN, NaN): true
 0 === -0: true | Object.is(0, -0): false
 ```
 
-Look at the first three surprise rows: `0 == ""` and `0 == "0"` are both true, yet `"" == "0"` is false. Loose equality isn't even *transitive*. That is the main reason to avoid it.
+Look at the first three surprise rows: `0 == ""` and `0 == "0"` are both true, yet `"" == "0"` is false. Loose equality isn't even *transitive* (the rule "if a equals b and b equals c, then a equals c" fails). That is the main reason to avoid it.
 
 ### How it works — the `==` algorithm (simplified from the spec)
 Given `a == b`:
@@ -472,7 +472,7 @@ Given `a == b`:
 
 ### Relational comparisons (`<`, `>` …)
 1. Convert objects to primitives.
-2. If **both are strings**, compare them character by character by UTF-16 code unit — i.e. dictionary order by character code. So `"10" < "9"` (because `"1"` < `"9"`), and all uppercase letters come before lowercase (`"Z" < "a"`). For human-friendly sorting use `localeCompare` ([Chapter 6](../06-strings-and-regular-expressions/README.md)).
+2. If **both are strings**, compare them character by character by UTF-16 code unit (UTF-16 is how JavaScript stores text internally: each character becomes one or two 16-bit numbers called code units) — i.e. dictionary order by character code. So `"10" < "9"` (because `"1"` < `"9"`), and all uppercase letters come before lowercase (`"Z" < "a"`). For human-friendly sorting use `localeCompare` ([Chapter 6](../06-strings-and-regular-expressions/README.md)).
 3. Otherwise convert both to numbers. `null` → `0`, so `null >= 0` is true even though `null == 0` is false (`==` uses rule 2 above, relational operators don't). Any comparison involving `NaN` is false.
 
 ### Trade-offs — `==` vs `===`
@@ -482,7 +482,7 @@ Given `a == b`:
 | Predictable | yes | needs the rules above |
 | Catches type bugs | yes (`"5" === 5` false) | hides them |
 | Useful idiom | — | `x == null` (null **or** undefined) |
-| Linters (ESLint `eqeqeq`) | recommended | flagged, except `== null` if configured |
+| Linters (tools that scan code for likely bugs; ESLint rule `eqeqeq`) | recommended | flagged, except `== null` if configured |
 
 ### In the interview
 **30-second answer — "Difference between `==` and `===`?"** `===` compares type and value with no conversion. `==` converts operands first: null and undefined equal only each other; strings and booleans are turned into numbers; objects into primitives. Those rules make `==` non-transitive (`0 == ""`, `0 == "0"`, but `"" != "0"`), so I use `===` everywhere except the `x == null` idiom.
@@ -599,7 +599,7 @@ They short-circuit too: if no assignment is needed, `b` isn't even evaluated.
 ## 2.8 Bitwise and assignment operators
 
 ### Bitwise operators
-**Bitwise** operators treat numbers as 32-bit signed integers and work on the individual binary digits (**bits**). Beginners can skim this; they appear in low-level code (graphics, compression, hashing, permission flags) and in interview puzzles.
+**Bitwise** operators treat numbers as 32-bit signed integers and work on the individual binary digits (**bits**). Beginners can skim this; they appear in low-level code (graphics, compression, hashing (turning data into a short fixed-size fingerprint number), permission flags) and in interview puzzles.
 
 | Operator | Name | Rule per bit |
 |---|---|---|
@@ -638,9 +638,9 @@ c >>> 1 = 2 | -5 >>> 1 = 2147483645 (fills with 0)
 can write? true | can exec? false
 ```
 
-Walk-through: `101 & 010` has no position where both are 1 → `000` = 0. OR and XOR both give `111` = 7 because 5 and 2 never share a 1-bit. `~2` = `-3` (two's complement). The **flags** idiom packs several yes/no settings into one number: each flag is a power of two, `|` combines them, `&` tests one. Unix file permissions (`chmod 755`) and many binary file formats use this idea.
+Walk-through: `101 & 010` has no position where both are 1 → `000` = 0. OR and XOR both give `111` = 7 because 5 and 2 never share a 1-bit. `~2` = `-3` (two's complement — the standard way computers store negative integers in binary: flip all bits and add 1). The **flags** idiom packs several yes/no settings into one number: each flag is a power of two, `|` combines them, `&` tests one. Unix (Linux/macOS) file permissions (`chmod 755`) and many binary file formats use this idea.
 
-Caveat: bitwise operators first truncate their operands to 32-bit integers, so they break for numbers beyond ±2³¹ (about 2.1 billion). Old tricks like `x | 0` to truncate decimals share this limit — prefer `Math.trunc`.
+Caveat: bitwise operators first truncate their operands (cut off anything that doesn't fit) to 32-bit integers, so they break for numbers beyond ±2³¹ (about 2.1 billion). Old tricks like `x | 0` to truncate decimals share this limit — prefer `Math.trunc`.
 
 ### Assignment operators
 `=` stores the right-hand value in the variable on the left. **Compound assignment** operators combine an operation with assignment: `x += y` means `x = x + y`.
@@ -716,8 +716,10 @@ Practical advice: you don't need to memorise this. **When in doubt, add parenthe
 ## 2.10 Numbers in depth
 
 ### What it is
-All ordinary JavaScript numbers — integers and decimals alike — are stored as **64-bit IEEE-754 double-precision floating-point** values ("doubles"), the same format as `double` in Java or C. That single choice explains almost everything unusual about numbers in JS:
-- about 15–17 significant decimal digits of precision;
+All ordinary JavaScript numbers — integers and decimals alike — are stored as **64-bit IEEE-754 double-precision floating-point** values ("doubles"), the same format as `double` in Java or C.
+
+> **Key term — floating point:** a way of storing numbers in binary as a fixed number of significant digits plus an exponent (like scientific notation, 1.23 × 10⁵), so the decimal point can "float" to handle both tiny and huge values. **IEEE-754** is the international standard that defines this format; "double precision" means 64 bits per number. The trade-off: range is enormous, but most decimal fractions are stored as close approximations, not exactly. That single choice explains almost everything unusual about numbers in JS:
+- about 15–17 significant decimal digits (meaningful digits, ignoring leading zeros) of precision;
 - integers are exact only up to **2⁵³ − 1** (9,007,199,254,740,991);
 - decimals like `0.1` can't be represented exactly in binary, just as 1/3 can't be written exactly in decimal;
 - special values `Infinity`, `-Infinity`, `NaN` and a separate `-0`.
@@ -803,19 +805,19 @@ BigInt(10) + 1n = 11n | Number(5n) + 1 = 6
 | `Number.MAX_SAFE_INTEGER` | 2⁵³ − 1 | largest integer `n` such that `n` and `n + 1` are both exactly representable |
 | `Number.MIN_SAFE_INTEGER` | −(2⁵³ − 1) | the negative counterpart |
 | `Number.EPSILON` | ≈ 2.22e-16 | gap between 1 and the next representable double; a tolerance for comparing decimals near 1 |
-| `Number.POSITIVE_INFINITY` / `NEGATIVE_INFINITY` | `Infinity` / `-Infinity` | results of overflow or division by zero |
+| `Number.POSITIVE_INFINITY` / `NEGATIVE_INFINITY` | `Infinity` / `-Infinity` | results of overflow (a result too large to store) or division by zero |
 | `Number.NaN` | `NaN` | same as the global `NaN` |
 
 ### `Number` methods
 
-**Instance methods** (called on a number value; they return strings except `valueOf`):
+**Instance methods** (called on one particular number value, the "instance"; they return strings except `valueOf`):
 
 | Method | What it does | Example → result |
 |---|---|---|
 | `toFixed(d)` | round to `d` digits after the decimal point | `(123.456).toFixed(2)` → `"123.46"` |
 | `toPrecision(p)` | round to `p` significant digits (may switch to exponent form) | `(123.456).toPrecision(4)` → `"123.5"` |
-| `toString(radix)` | write in base 2–36 | `(255).toString(16)` → `"ff"` |
-| `toLocaleString(locale)` | format for humans (thousands separators, currency) | `(1234.5).toLocaleString("en-US")` → `"1,234.5"` |
+| `toString(radix)` | write in base 2–36 (the radix is the number base) | `(255).toString(16)` → `"ff"` |
+| `toLocaleString(locale)` | format for humans (thousands separators, currency) using a locale (language + region, e.g. `"en-US"`) | `(1234.5).toLocaleString("en-US")` → `"1,234.5"` |
 | `valueOf()` | the primitive inside a `Number` wrapper | `new Number(7).valueOf()` → `7` |
 
 To call a method directly on an integer literal, wrap it: `(255).toString(16)` — `255.toString()` is a syntax error because the dot is read as a decimal point.
@@ -841,10 +843,10 @@ To call a method directly on an integer literal, wrap it: `(255).toString(16)` �
 1. **Never compare decimals with `===`.** Compare with a tolerance: `Math.abs(a - b) < 1e-9` (or `Number.EPSILON` for values near 1).
 2. **Money: work in integer cents** (store 1999, display 19.99), or use a decimal library. Payment APIs such as Stripe take amounts in the smallest currency unit for this reason.
 3. **Round only for display**, with `toFixed` or `Intl.NumberFormat`/`toLocaleString`. Be aware `toFixed` rounds the *binary* value: `(1.005).toFixed(2)` is `"1.00"` because 1.005 is stored as 1.00499999…
-4. **Large integers** (database IDs, Twitter/X post IDs, nanosecond timestamps) beyond 2⁵³ lose precision silently. Keep them as **strings** or use **`BigInt`**.
+4. **Large integers** (database IDs, Twitter/X post IDs, nanosecond timestamps — a timestamp is a number marking a moment in time) beyond 2⁵³ lose precision silently. Keep them as **strings** or use **`BigInt`**.
 
 ### `BigInt`
-`bigint` (ES2020) represents whole numbers of any size. Write it with an `n` suffix (`10n`) or convert with `BigInt(10)`. Rules: you **can't mix** `bigint` and `number` in arithmetic (`TypeError`) — convert explicitly; division truncates (`7n / 2n` is `3n`); `Math` functions don't accept BigInts; and `JSON.stringify` can't serialise them without help. Use BigInt for big IDs, cryptography and exact large-integer maths; use `number` for everything else (it's faster).
+`bigint` (ES2020) represents whole numbers of any size. Write it with an `n` suffix (`10n`) or convert with `BigInt(10)`. Rules: you **can't mix** `bigint` and `number` in arithmetic (`TypeError`) — convert explicitly; division truncates (`7n / 2n` is `3n`); `Math` functions don't accept BigInts; and `JSON.stringify` can't serialise them (turn them into JSON text for saving or sending) without help. Use BigInt for big IDs, cryptography (the maths behind encryption and secure signatures) and exact large-integer maths; use `number` for everything else (it's faster).
 
 ### In the interview
 **"Why is `0.1 + 0.2 !== 0.3`?"** Numbers are IEEE-754 binary doubles; 0.1 and 0.2 have no exact binary representation, so each is stored as the nearest double, and their sum is the double just above 0.3 (0.30000000000000004). Compare with a tolerance, or use integer units such as cents.

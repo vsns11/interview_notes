@@ -1,6 +1,6 @@
 # Chapter 7 — Arrays
 
-An **array** is JavaScript's ordered list: shopping-cart items, search results, rows from a database, pixels in an image, moves in a game. Arrays come with about forty built-in methods, and knowing which ones **change** the array and which ones **return a new one** is the single most useful thing to learn — it prevents a whole class of bugs, especially in React and Redux code.
+An **array** is JavaScript's ordered list: shopping-cart items, search results, rows from a database, pixels in an image, moves in a game. Arrays come with about forty built-in methods, and knowing which ones **change** the array and which ones **return a new one** is the single most useful thing to learn — it prevents a whole class of bugs, especially in React and Redux code (React is a popular library for building user interfaces; Redux is a library for managing an app's shared data, its *state*).
 
 **What you'll learn**
 
@@ -13,7 +13,7 @@ An **array** is JavaScript's ordered list: shopping-cart items, search results, 
 7. Spread, rest and array destructuring; shallow vs deep copies; array-likes; everyday recipes.
 8. When to use an array vs an object (vs `Map`/`Set`), and a short introduction to typed arrays.
 
-**Before you start.** You need functions and arrow functions ([Chapter 4](../04-functions-scope-and-closures/README.md)); callbacks are used everywhere here. Loops (`for`, `for…of`) are in [Chapter 3](../03-control-flow-and-loops/README.md). Object spread/destructuring are in [Chapter 5](../05-objects-math-date-and-json/README.md); `Map`, `Set` and the iterator protocol behind `for…of` are in [Chapter 8](../08-maps-sets-iterators-and-generators/README.md).
+**Before you start.** You need functions and arrow functions ([Chapter 4](../04-functions-scope-and-closures/README.md)); callbacks (functions you pass into another function so it can call them) are used everywhere here. Loops (`for`, `for…of`) are in [Chapter 3](../03-control-flow-and-loops/README.md). Object spread/destructuring are in [Chapter 5](../05-objects-math-date-and-json/README.md); `Map`, `Set` and the iterator protocol behind `for…of` are in [Chapter 8](../08-maps-sets-iterators-and-generators/README.md).
 
 All code is in [`code/`](code/); outputs are real, from Node 24.
 
@@ -55,7 +55,7 @@ Output:
 - An **array literal** is a comma-separated list inside square brackets `[ ]`.
 - `length` is the number of elements (strictly: the highest index + 1).
 - Arrays are **objects**: `typeof` says `'object'`. Use **`Array.isArray(x)`** to test for an array.
-- JavaScript arrays can mix types and nest (an array inside an array is how you build a grid or matrix). In practice, keep one type per array — it's easier to reason about and engines optimise it better.
+- JavaScript arrays can mix types and nest (an array inside an array is how you build a grid or matrix — a table of values in rows and columns). In practice, keep one type per array — it's easier to reason about and engines optimise it better.
 
 ---
 
@@ -67,7 +67,7 @@ Output:
 | `new Array(n)` (one number) | `new Array(3)` | length 3, **no elements** (3 empty slots) | Rarely — prefer `Array.from` |
 | `new Array(a, b, …)` | `new Array('a', 'b', 'c')` | those elements | Never needed — use a literal |
 | `Array.of(...items)` | `Array.of(3)` | `[3]` | When a single number must be an element, not a length |
-| `Array.from(iterableOrArrayLike, mapFn?)` | `Array.from({ length: 4 }, (_, i) => i * i)` | `[0, 1, 4, 9]` | Build from strings, Sets, Maps, NodeLists, `arguments`, or generate by index |
+| `Array.from(iterableOrArrayLike, mapFn?)` (iterable = anything `for…of` can loop over; array-like = see section 7.7) | `Array.from({ length: 4 }, (_, i) => i * i)` | `[0, 1, 4, 9]` | Build from strings, Sets, Maps, NodeLists (lists of page elements returned by DOM queries), `arguments`, or generate by index |
 | `Array(n).fill(v)` | `new Array(3).fill(0)` | `[0, 0, 0]` | Pre-filled with a **primitive** |
 | Spread | `[...set]`, `[...'abc']` | copy of any iterable | Copy or convert |
 | `str.split(sep)` | `'a,b'.split(',')` | `['a', 'b']` | From text |
@@ -88,7 +88,7 @@ Output:
 [ 0, 0, 0 ] [ [], [] ]
 ```
 
-The `new Array` constructor is inconsistent: **one** numeric argument means "length", but two arguments mean "these elements". And `new Array(5)` does not contain five `undefined` values — it contains five **empty slots** (holes; section 7.3). `Array.of` and `Array.from` were added in ES2015 to avoid both surprises.
+The `new Array` constructor (a function called with `new` to build an object) is inconsistent: **one** numeric argument means "length", but two arguments mean "these elements". And `new Array(5)` does not contain five `undefined` values — it contains five **empty slots** (holes; section 7.3). `Array.of` and `Array.from` were added in ES2015 to avoid both surprises.
 
 ---
 
@@ -131,12 +131,12 @@ Output:
 
 | Method | Where | Returns | Cost |
 |---|---|---|---|
-| `push(...items)` | adds at the **end** | new length | O(1) amortised |
+| `push(...items)` | adds at the **end** | new length | O(1) amortised (fast on average; the occasional slow resize is spread over many calls) |
 | `pop()` | removes from the **end** | the removed item (`undefined` if empty) | O(1) |
 | `unshift(...items)` | adds at the **start** | new length | **O(n)** — every element shifts up one index |
 | `shift()` | removes from the **start** | the removed item | **O(n)** |
 
-(O(1) means the time doesn't grow with the array size; O(n) means it grows in proportion to the number of elements. See [Chapter 17](../17-javascript-for-interviews/README.md) for complexity basics.) So `push`/`pop` make a fast **stack**; using `shift` as a **queue** on huge arrays is slow — for big queues use an index pointer or a linked structure.
+(O(1) means the time doesn't grow with the array size; O(n) means it grows in proportion to the number of elements. See [Chapter 17](../17-javascript-for-interviews/README.md) for complexity basics.) So `push`/`pop` make a fast **stack** (last in, first out — like a pile of plates); using `shift` as a **queue** (first in, first out — like a line at a shop) on huge arrays is slow — for big queues use an index pointer or a linked structure (items that each point to the next, so removing the first never moves the others).
 
 ### `length` is writable, and holes
 
@@ -162,7 +162,7 @@ Output:
 ```
 
 - Setting `length` smaller **deletes** elements; `arr.length = 0` empties the array in place (every reference sees the empty array).
-- Writing beyond the end makes a **sparse array**: the missing positions are **holes** (`3 in letters` is `false`). Reading a hole gives `undefined`, but many methods (`forEach`, `map`, `filter`, `reduce`, `some`, `every`) **skip** holes, while newer ones (`for…of`, `find`, `includes`, `Array.from`, `toSorted`, `with`, …) treat them as `undefined`. Avoid holes — they are confusing and make engines de-optimise the array.
+- Writing beyond the end makes a **sparse array**: the missing positions are **holes** (`3 in letters` is `false`). Reading a hole gives `undefined`, but many methods (`forEach`, `map`, `filter`, `reduce`, `some`, `every`) **skip** holes, while newer ones (`for…of`, `find`, `includes`, `Array.from`, `toSorted`, `with`, …) treat them as `undefined`. Avoid holes — they are confusing and make engines de-optimise the array (switch it to a slower general-purpose storage mode).
 
 ### Looping over an array
 
@@ -186,8 +186,8 @@ red green purple
 |---|---|---|---|---|
 | Classic `for (let i…)` | Yes | Yes | Yes | Most control (step by 2, go backwards) |
 | `for (const x of arr)` | Via `arr.entries()` | Yes | Yes | Cleanest default |
-| `arr.forEach(fn)` | Yes (2nd arg) | **No** | **No** (async callbacks aren't awaited) | Fine for simple side effects |
-| `for (const i in arr)` | Yes, as **strings** | Yes | Yes | **Avoid** for arrays: iterates keys, includes inherited enumerable ones |
+| `arr.forEach(fn)` | Yes (2nd arg) | **No** | **No** (async callbacks aren't awaited — `await` pauses until a result that arrives later is ready, [Chapter 12](../12-asynchronous-javascript/README.md)) | Fine for simple side effects (actions like printing, rather than computing a value) |
+| `for (const i in arr)` | Yes, as **strings** | Yes | Yes | **Avoid** for arrays: iterates keys, includes inherited enumerable ones (loop-visible properties added to `Array.prototype`) |
 
 ### Arrays are references
 
@@ -215,7 +215,7 @@ Like objects ([Chapter 5](../05-objects-math-date-and-json/README.md)), assignin
 ## 7.4 The methods table: mutating vs non-mutating
 
 ### Why it matters
-A **mutating** method changes the array it's called on. That is fine for a local array you own — but if the array is shared (passed into a function, stored in React state, cached), mutation changes it for **everybody** holding a reference. React compares state by reference, so mutating an array in place means React may not re-render at all. ES2023 added **copying** versions of the classic mutators so you rarely need the old "copy then mutate" dance.
+A **mutating** method changes the array it's called on. That is fine for a local array you own — but if the array is shared (passed into a function, stored in React state, cached), mutation changes it for **everybody** holding a reference. React compares state (the data a component displays) by reference, so mutating an array in place means React may not re-render (redraw that part of the screen) at all. ES2023 added **copying** versions of the classic mutators so you rarely need the old "copy then mutate" dance.
 
 ### Complete reference
 
@@ -241,7 +241,7 @@ A **mutating** method changes the array it's called on. That is fine for a local
 | `flat(depth = 1)` | | New array with nested arrays flattened | ES2019 |
 | `flatMap(fn)` | | `map` then `flat(1)`, in one pass | ES2019 |
 | `forEach(fn)` | | Calls `fn` on each element; returns `undefined` | ES5 |
-| `reduce(fn, init?)` / `reduceRight(fn, init?)` | | Folds to a single value, left→right / right→left | ES5 |
+| `reduce(fn, init?)` / `reduceRight(fn, init?)` | | Folds (combines step by step) to a single value, left→right / right→left | ES5 |
 | `find(fn)` / `findIndex(fn)` | | First matching element / its index (`undefined` / −1) | ES2015 |
 | `findLast(fn)` / `findLastIndex(fn)` | | Same, searching from the end | ES2023 |
 | `some(fn)` / `every(fn)` | | Does any / do all elements pass? (short-circuit) | ES5 |
@@ -250,7 +250,7 @@ A **mutating** method changes the array it's called on. That is fine for a local
 | `at(i)` | | Element at `i`; negatives from the end | ES2022 |
 | `join(sep = ',')` | | String of elements; `null`/`undefined` → empty | ES1 |
 | `toString()` / `toLocaleString()` | | Comma-joined string / locale-formatted | ES1 |
-| `keys()` / `values()` / `entries()` | | Iterators over indexes / values / `[index, value]` pairs | ES2015 |
+| `keys()` / `values()` / `entries()` | | Iterators (objects that hand out values one at a time, [Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) over indexes / values / `[index, value]` pairs | ES2015 |
 | **Static**: `Array.isArray(x)`, `Array.of(...)`, `Array.from(x, fn?)`, `Array.fromAsync(x)` | | Test / create arrays (`fromAsync` awaits async iterables; ES2026, already in Node 24) | ES5–ES2026 |
 
 (You may see `toSource()` in old lists; it was a non-standard Firefox-only method and has been removed — ignore it.)
@@ -334,7 +334,7 @@ The "bad" version silently reorders the caller's data. Before ES2023 the fix was
 | Sort / reverse | `arr.sort(fn)` / `arr.reverse()` | `arr.toSorted(fn)` / `arr.toReversed()` |
 
 ### Common mistakes
-- Using `sort`/`reverse`/`splice` on props or state; use the copying twins.
+- Using `sort`/`reverse`/`splice` on props (the inputs a React component receives from its parent) or state; use the copying twins.
 - Confusing `slice` (copy a range, non-mutating) with `splice` (edit in place).
 - Expecting `push` to return the array (it returns the new length), so `arr = arr.push(x)` turns `arr` into a number.
 - Thinking `const arr = […]` prevents `push`; freeze it with `Object.freeze(arr)` if needed (shallow).
@@ -393,7 +393,7 @@ cba
 | `forEach` | ignored | `undefined` | "do something with each" |
 | `map` | the new element | new array, **same length** | "transform each" |
 | `filter` | truthy/falsy | new array, **same or fewer** elements | "keep some" |
-| `reduce` | the new accumulator | the final accumulator | "combine all into one" |
+| `reduce` | the new accumulator (the running result carried from one step to the next) | the final accumulator | "combine all into one" |
 
 How `reduce` works, step by step, for `sum` over totals `[120, 60]` with initial value `0`:
 
@@ -403,7 +403,7 @@ How `reduce` works, step by step, for `sum` over totals `[120, 60]` with initial
 
 **Always pass the initial value.** Without it, `reduce` uses the first element as the starting accumulator — which throws on an empty array and gives wrong types when you're building an object.
 
-**The `map(parseInt)` trap**: `map` passes `(element, index, array)`, and `parseInt` takes `(string, radix)`, so it is called as `parseInt('2', 1)` and `parseInt('3', 2)` — invalid radix and invalid digit → `NaN`. Wrap it: `map((s) => parseInt(s, 10))` or use `map(Number)`.
+**The `map(parseInt)` trap**: `map` passes `(element, index, array)`, and `parseInt` takes `(string, radix)` (radix = the number base, such as 10), so it is called as `parseInt('2', 1)` and `parseInt('3', 2)` — invalid radix and invalid digit → `NaN`. Wrap it: `map((s) => parseInt(s, 10))` or use `map(Number)`.
 
 **Chaining into a pipeline:**
 
@@ -423,7 +423,7 @@ Output:
 1:132.00, 3:66.00, 2:38.50
 ```
 
-Each step returns a new array, so steps chain naturally and the original `orders` is never modified. Each step also loops over the data once; for normal UI-sized lists (hundreds or thousands) that's irrelevant, but for millions of rows a single `for` loop or lazy iterator helpers ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) avoid building intermediate arrays.
+Each step returns a new array, so steps chain naturally and the original `orders` is never modified. Each step also loops over the data once; for normal UI-sized lists (hundreds or thousands) that's irrelevant, but for millions of rows a single `for` loop or lazy iterator helpers (lazy = each value is computed only when it is asked for) ([Chapter 8](../08-maps-sets-iterators-and-generators/README.md)) avoid building intermediate arrays.
 
 **Searching:**
 
@@ -515,7 +515,7 @@ Use methods by default; switch to a loop when you need early exit, sequential `a
 - Rendering lists in React: `items.map((item) => <Row key={item.id} {...item} />)` ([React book](../../../react/chapters/02-components-and-props/README.md)).
 - API data cleanup: `rows.filter(isValid).map(normalize)`.
 - Totals in a shopping cart: `cart.reduce((sum, i) => sum + i.price * i.qty, 0)`.
-- Feature flags: `user.roles.some((r) => r === 'admin')`.
+- Feature flags (switches that turn a feature on for some users): `user.roles.some((r) => r === 'admin')`.
 
 ### In the interview
 **30-second answer:** "`map` transforms, `filter` selects, `reduce` folds to one value, `find` returns the first match, `some`/`every` answer yes/no with short-circuiting. They take `(element, index, array)` callbacks and don't mutate. I always give `reduce` an initial value and avoid `forEach` when I need `break` or sequential `await`."
@@ -536,7 +536,7 @@ Use methods by default; switch to a loop when you need early exit, sequential `a
 ## 7.6 Sorting correctly
 
 ### The problem it solves
-`sort()` with no arguments converts elements to **strings** and orders them by UTF-16 code units. That's right for simple ASCII words and **wrong for numbers**.
+`sort()` with no arguments converts elements to **strings** and orders them by UTF-16 code units (the 16-bit numbers JavaScript uses to store each character). That's right for simple ASCII (plain English letters and digits) words and **wrong for numbers**.
 
 From [`code/04_sorting.mjs`](code/04_sorting.mjs):
 
@@ -632,7 +632,7 @@ Output:
 [ '2023-12-25', '2024-01-15', '2024-03-01' ]
 ```
 
-When the sort key is expensive to compute (parsing a date string, normalizing text), compute it **once per element** first, sort by the stored key, then strip it — the "decorate–sort–undecorate" pattern (Schwartzian transform). Otherwise the comparator recomputes keys O(n log n) times.
+When the sort key is expensive to compute (parsing a date string, normalizing text), compute it **once per element** first, sort by the stored key, then strip it — the "decorate–sort–undecorate" pattern (Schwartzian transform). Otherwise the comparator recomputes keys O(n log n) times (a bit more than proportional to *n* — the usual cost of a good sort).
 
 ### Shuffling
 
@@ -647,10 +647,10 @@ function shuffle(arr, rand = Math.random) {
 }
 ```
 
-This is the **Fisher–Yates** shuffle: walk from the end, swapping each position with a random earlier (or same) position — every ordering is equally likely, in O(n). The popular one-liner `arr.sort(() => Math.random() - 0.5)` is **biased** (the comparator is inconsistent) and slower. (The demo passes a seeded generator so its output is reproducible: `[ 1, 2, 5, 6, 3, 4 ]`.)
+This is the **Fisher–Yates** shuffle: walk from the end, swapping each position with a random earlier (or same) position — every ordering is equally likely, in O(n). The popular one-liner `arr.sort(() => Math.random() - 0.5)` is **biased** (the comparator is inconsistent) and slower. (The demo passes a seeded generator — a fake random-number source that always produces the same sequence from the same starting "seed" — so its output is reproducible: `[ 1, 2, 5, 6, 3, 4 ]`.)
 
 ### Complexity
-V8 (Chrome, Node) implements `sort` with TimSort and other engines use merge-sort variants: **O(n log n)** comparisons, stable, and fast on partly-sorted data.
+V8 (Chrome, Node) implements `sort` with TimSort and other engines use merge-sort variants (sorting algorithms that split the list, sort the parts and merge them back): **O(n log n)** comparisons, stable, and fast on partly-sorted data.
 
 ### In the interview
 **30-second answer:** "Default `sort` compares strings, so numbers need `(a, b) => a - b`. The comparator returns negative, zero or positive; chain keys with `||`; strings use `localeCompare`. `sort` mutates and is stable since ES2019; use `toSorted` to keep the original."
@@ -707,7 +707,7 @@ h 3
 - **Spread** `...arr` expands any **iterable** (array, string, Set, Map, generator) into elements — in array literals and in function calls.
 - **Array destructuring** assigns by **position**. Defaults apply for `undefined`; commas skip positions; `...rest` gathers the remainder (always an array, possibly empty).
 - `[p, q] = [q, p]` swaps two variables.
-- Returning an array and destructuring it (`const [lo, hi] = minMax(...)`) is a light way to return multiple values — React's `const [state, setState] = useState(0)` uses exactly this.
+- Returning an array and destructuring it (`const [lo, hi] = minMax(...)`) is a light way to return multiple values — React's `const [state, setState] = useState(0)` (a *hook* that gives a component a remembered value plus a function to change it) uses exactly this.
 - A **rest parameter** `(...nums)` collects any number of arguments into a real array (replacing the old `arguments` object — [Chapter 4](../04-functions-scope-and-closures/README.md)).
 
 ### Copies are shallow; the `fill([])` trap
@@ -821,7 +821,7 @@ A simple **ordered list** of names is an array. Once each fruit carries its own 
 ## 7.9 Typed arrays (a short note)
 
 ### What it is
-A **typed array** is a fixed-length array of raw numbers of one machine type (8-bit unsigned integers, 32-bit floats, …) stored in a contiguous block of memory called an **`ArrayBuffer`**. Several typed-array **views** can look at the same buffer in different ways. They're used for binary data: files, images, audio, WebGL/WebGPU, WebSockets, `fetch` bodies, WebAssembly memory, and Node's `Buffer` (a `Uint8Array` subclass).
+A **typed array** is a fixed-length array of raw numbers of one machine type (8-bit unsigned integers, 32-bit floats, …) stored in a contiguous block of memory called an **`ArrayBuffer`**. Several typed-array **views** can look at the same buffer in different ways. They're used for binary data: files, images, audio, WebGL/WebGPU (browser APIs for GPU graphics), WebSockets (a two-way, always-open connection between browser and server), `fetch` bodies, WebAssembly memory (WebAssembly runs fast compiled code from languages like C or Rust in the browser), and Node's `Buffer` (a `Uint8Array` subclass — a specialised version that inherits all its behaviour).
 
 From [`code/06_typed_arrays.mjs`](code/06_typed_arrays.mjs):
 
@@ -863,7 +863,7 @@ Uint8Array(2) [ 171, 205 ] abcd
 
 | Type | Element | Range / precision |
 |---|---|---|
-| `Int8Array` / `Uint8Array` / `Uint8ClampedArray` | 1 byte | −128…127 / 0…255 (wraps) / 0…255 (clamps and rounds — used by `<canvas>` pixel data) |
+| `Int8Array` / `Uint8Array` / `Uint8ClampedArray` | 1 byte | −128…127 / 0…255 (wraps) / 0…255 (clamps and rounds — used by `<canvas>`, the HTML drawing surface, for pixel data) |
 | `Int16Array` / `Uint16Array` | 2 bytes | |
 | `Int32Array` / `Uint32Array` | 4 bytes | |
 | `Float16Array` (ES2025) / `Float32Array` / `Float64Array` | 2 / 4 / 8 bytes | half / single / double precision |

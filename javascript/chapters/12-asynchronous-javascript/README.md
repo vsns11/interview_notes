@@ -1,6 +1,6 @@
 # Chapter 12 — Asynchronous JavaScript
 
-JavaScript runs your code on **one thread**, yet a web page can download data, animate, and respond to clicks at the same time, and a Node server can handle thousands of connections. The trick is **asynchrony**: slow work is handed to the host (browser or Node), and your code is called back later, when the result is ready. The piece that decides *when* each callback runs is the **event loop**. This chapter explains the event loop precisely — precisely enough to predict the output of tricky ordering puzzles — and then the three generations of async code built on top of it: callbacks, promises, and `async`/`await`.
+JavaScript runs your code on **one thread**, yet a web page can download data, animate, and respond to clicks at the same time, and a Node server (Node.js runs JavaScript outside the browser) can handle thousands of connections. The trick is **asynchrony**: slow work is handed to the host (browser or Node), and your code is called back later, when the result is ready. The piece that decides *when* each callback (a function you hand over to be run later) runs is the **event loop**. This chapter explains the event loop precisely — precisely enough to predict the output of tricky ordering puzzles — and then the three generations of async code built on top of it: callbacks, promises, and `async`/`await`.
 
 **What you'll learn**
 
@@ -31,9 +31,9 @@ A **thread** is one sequence of instructions being executed. JavaScript gives yo
 Analogy: a restaurant with one chef. A good chef doesn't stand watching the oven for 20 minutes — they put the dish in, set a timer (asynchronous), and cook other orders. When the timer rings, they come back to that dish. A bad chef who stares at the oven (blocking) makes every other customer wait.
 
 Terms:
-- **Blocking** — code that keeps the thread busy, so nothing else (other callbacks, clicks, rendering) can run.
+- **Blocking** — code that keeps the thread busy, so nothing else (other callbacks, clicks, rendering — drawing the page on screen) can run.
 - **Non-blocking I/O** — input/output (network, disk) performed by the host in the background; JavaScript only runs when the result arrives.
-- **Host** / **runtime** — the environment around the engine: the browser (Web APIs) or Node (libuv, its C library for async I/O). The engine (V8) runs JavaScript; the host does the waiting.
+- **Host** / **runtime** — the environment around the engine: the browser (Web APIs — the extra features a browser provides, such as timers, `fetch` and the page itself) or Node (libuv, its C library for async I/O). The engine (V8, Google's JavaScript engine inside Chrome and Node) runs JavaScript; the host does the waiting.
 
 ### Why it matters
 In a browser, the same thread that runs your JavaScript also handles user input and (usually) page rendering. A 200 ms synchronous loop freezes scrolling, typing and animation for 200 ms. In Node, a blocking handler stalls *every* request the server is handling.
@@ -66,10 +66,10 @@ timer asked for 0 ms, ran after >= 200 ms: true
 file read finished, got bytes
 ```
 
-The 0 ms timer could not interrupt the loop. JavaScript callbacks are never pre-empted: a callback runs to completion before anything else starts (**run-to-completion**). That rule is a gift — you never need locks around your variables — and a responsibility: keep each piece of work short.
+The 0 ms timer could not interrupt the loop. JavaScript callbacks are never pre-empted (interrupted part-way through to let something else run): a callback runs to completion before anything else starts (**run-to-completion**). That rule is a gift — you never need locks (guards that stop two threads from changing the same data at the same moment) around your variables — and a responsibility: keep each piece of work short.
 
 ### When you really need parallel CPU work
-Heavy computation (image processing, big parsing) belongs off the main thread: **Web Workers** in the browser ([Chapter 14](../14-browser-apis-and-security/README.md#148-web-workers)) or `worker_threads` in Node ([Chapter 15](../15-nodejs-basics/README.md)). Workers are separate threads with separate memory that talk by messages.
+Heavy computation (image processing, big parsing) belongs off the main thread (the single thread that runs your page's JavaScript and its UI): **Web Workers** in the browser ([Chapter 14](../14-browser-apis-and-security/README.md#148-web-workers)) or `worker_threads` in Node ([Chapter 15](../15-nodejs-basics/README.md)). Workers are separate threads with separate memory that talk by messages.
 
 ### TL;DR
 One thread runs your JavaScript; the host waits for I/O and timers in the background. Long synchronous work blocks everything, including 0 ms timers and rendering.
@@ -84,19 +84,19 @@ The **event loop** is the host's scheduler. It repeatedly picks a piece of waiti
 | Part | What it holds | Examples |
 |---|---|---|
 | **Call stack** | Functions currently executing, newest on top | Your main script, a callback in progress |
-| **Host APIs** (Web APIs / libuv) | Operations in progress *outside* JavaScript | A timer counting down, an HTTP request, a file read |
+| **Host APIs** (Web APIs / libuv) | Operations in progress *outside* JavaScript | A timer counting down, an HTTP request (a message asking a web server for data), a file read |
 | **Task queue** (a.k.a. macrotask / callback queue) | Callbacks ready to run, one per loop turn | Timer callbacks, I/O callbacks, `message` events, user events like `click` |
-| **Microtask queue** | Short follow-up jobs that must run "as soon as the current code finishes" | Promise `then`/`catch`/`finally` callbacks, code after `await`, `queueMicrotask`, `MutationObserver` callbacks |
-| **Rendering** (browsers) | Style, layout, paint — typically up to ~60 times a second | `requestAnimationFrame` callbacks run just before paint |
+| **Microtask queue** | Short follow-up jobs that must run "as soon as the current code finishes" | Promise `then`/`catch`/`finally` callbacks, code after `await`, `queueMicrotask`, `MutationObserver` (watches the page for changes) callbacks |
+| **Rendering** (browsers) | Style (which CSS applies), layout (sizes and positions), paint (drawing pixels) — typically up to ~60 times a second | `requestAnimationFrame` callbacks run just before paint |
 
-The HTML specification (section "Event loops") defines the browser algorithm; ECMAScript itself only defines **jobs** (promise reactions) and leaves scheduling to the host. The spec actually allows several task queues (for example, user-input tasks may be prioritised over timers), but for predicting order you can treat tasks as one FIFO queue per source.
+The HTML specification (section "Event loops") defines the browser algorithm; ECMAScript (the official name of the JavaScript language standard) itself only defines **jobs** (promise reactions) and leaves scheduling to the host. The spec actually allows several task queues (for example, user-input tasks may be prioritised over timers), but for predicting order you can treat tasks as one FIFO (first in, first out — like a queue at a shop) queue per source.
 
 ### How it works
 One turn of the browser event loop, simplified from the HTML spec:
 
 1. **Run one task** — take the oldest runnable task and run its callback until the call stack is empty.
 2. **Perform a microtask checkpoint** — run microtasks until the microtask queue is **empty**, including any microtasks queued *by* microtasks.
-3. **Maybe render** — if it's time for a new frame (and something changed): run `requestAnimationFrame` callbacks, recalculate style and layout, paint.
+3. **Maybe render** — if it's time for a new frame (one fresh picture of the page on screen) (and something changed): run `requestAnimationFrame` callbacks, recalculate style and layout, paint.
 4. Go to step 1 (or sleep until a task arrives).
 
 The initial script is itself a task, so step 2 happens right after your top-level code finishes. Microtasks also run whenever the call stack becomes empty during a task — for example between two event listeners when the user physically clicks (but not when you call `el.click()` from code, because your code is still on the stack).
@@ -145,7 +145,7 @@ A promise callback should run **after** the current synchronous code (so behavio
 
 ### Common mistakes
 - **Thinking `setTimeout(fn, 0)` runs "immediately".** It runs in a *later task*, after every pending microtask and possibly after a render.
-- **Microtask starvation.** A microtask that always queues another microtask (e.g. a recursive `.then` loop) never lets the loop reach step 3 or step 1 — the page freezes exactly like a `while(true)`. Use `setTimeout` (a task) to yield when chunking long work.
+- **Microtask starvation.** A microtask that always queues another microtask (e.g. a recursive `.then` loop) never lets the loop reach step 3 or step 1 — the page freezes exactly like a `while(true)`. Use `setTimeout` (a task) to yield (hand the thread back so other work can run) when chunking long work (splitting it into small pieces).
 - **Expecting `await` to yield to rendering.** `await` only schedules a microtask; the browser can't paint in between. To let the page update during a long job, split it across tasks (`setTimeout`, `scheduler.yield()` where supported, or `requestAnimationFrame`).
 
 ### TL;DR
@@ -157,7 +157,7 @@ Loop: one task → **all** microtasks → maybe render → repeat. Promises and 
 
 Interviews love "what does this print?" questions. With the rules from §12.2 you can answer any of them:
 
-1. Run all synchronous code first (including promise **executors** and code before the first `await`).
+1. Run all synchronous code first (including promise **executors** — the function you pass to `new Promise` — and code before the first `await`).
 2. Then drain the microtask queue in FIFO order, adding new microtasks to the end as they're created.
 3. Then take the next task (timers in order of due time; equal times in creation order), run it, drain microtasks again, and so on.
 
@@ -250,7 +250,7 @@ P6 return promise  -> x1 | y1 | y2 | y3 | x2 (inner) | y4
 P7 timer delays    -> 0ms first | 1ms | 0ms second | 20ms
 ```
 
-The same puzzles, pasted into a web page ([`code/puzzles_browser.html`](code/puzzles_browser.html)) and run by headless Chrome, give the identical order — promise and timer ordering is standardized, not a Node quirk:
+The same puzzles, pasted into a web page ([`code/puzzles_browser.html`](code/puzzles_browser.html)) and run by headless Chrome (Chrome running without a visible window, driven by a program), give the identical order — promise and timer ordering is standardized, not a Node quirk:
 
 ![Headless Chrome running the seven ordering puzzles and printing the same order as Node](img/puzzles_browser.png)
 
@@ -294,12 +294,12 @@ Node's loop is implemented by **libuv** and cycles through **phases**, each with
 | Phase | Runs |
 |---|---|
 | **timers** | Expired `setTimeout` / `setInterval` callbacks |
-| **pending callbacks** | Some deferred system-level callbacks (e.g. certain TCP errors) |
-| **poll** | Waits for and runs I/O callbacks (files, sockets) |
+| **pending callbacks** | Some deferred system-level callbacks (e.g. certain TCP — the protocol under most network connections — errors) |
+| **poll** | Waits for and runs I/O callbacks (files, sockets — a program's end of a network connection) |
 | **check** | `setImmediate` callbacks |
 | **close callbacks** | `'close'` events, e.g. `socket.on('close')` |
 
-Between every callback, Node drains two queues: first the **`process.nextTick` queue**, then the **promise microtask queue** (that's the order in CommonJS; see the ES-module twist below).
+Between every callback, Node drains two queues: first the **`process.nextTick` queue**, then the **promise microtask queue** (that's the order in CommonJS — Node's original `require`/`module.exports` module system; see the ES-module twist below — ES modules are the standard `import`/`export` system, also called ESM).
 
 [`code/03_node_queues.mjs`](code/03_node_queues.mjs):
 
@@ -352,7 +352,7 @@ CommonJS main: sync | nextTick | promise
 
 ### Reading the results
 1. **`nextTick` vs promises.** Normally `nextTick` callbacks run before promise callbacks (the I/O callback and the CommonJS script show this). But an ES module's top level is itself evaluated inside promise machinery, so its promise microtasks drain before Node gets to the `nextTick` queue — hence `promise | nextTick` in the `.mjs` main module. Don't build logic on this difference.
-2. **`setImmediate` vs `setTimeout(0)` at top level** is **not deterministic**: it depends on whether 1 ms has already passed when the loop first checks timers. This run printed `immediate` first; another run may not.
+2. **`setImmediate` vs `setTimeout(0)` at top level** is **not deterministic** (not guaranteed to give the same result every run): it depends on whether 1 ms has already passed when the loop first checks timers. This run printed `immediate` first; another run may not.
 3. **Inside an I/O callback** it *is* deterministic: after the poll phase comes the check phase, so `setImmediate` always wins over a new `setTimeout(0)`.
 
 ### When to use which
@@ -363,7 +363,7 @@ CommonJS main: sync | nextTick | promise
 | Yield to I/O, then continue | `setImmediate(fn)` |
 | Run after a delay | `setTimeout(fn, ms)` |
 
-**Common mistake:** recursive `process.nextTick` starves I/O exactly like recursive microtasks do. The architecture of Node (libuv, thread pool) is covered in [Chapter 15](../15-nodejs-basics/README.md).
+**Common mistake:** recursive `process.nextTick` starves I/O exactly like recursive microtasks do. The architecture of Node (libuv, thread pool — a fixed set of helper threads that do blocking work such as file reads) is covered in [Chapter 15](../15-nodejs-basics/README.md).
 
 ### TL;DR
 Node phases: timers → pending → poll (I/O) → check (`setImmediate`) → close. Between callbacks: `nextTick` queue, then promises (ESM top level flips these). `setImmediate` vs `setTimeout(0)` is only guaranteed inside I/O callbacks.
@@ -391,8 +391,8 @@ The returned **handle** is a number in browsers and a `Timeout` object in Node (
 The delay is therefore a **minimum**, never a guarantee. Other rules (HTML spec + practice):
 - Negative delays become `0`.
 - After 5 levels of nested timers (a timer scheduling a timer scheduling…), browsers clamp delays below 4 ms up to **4 ms**.
-- Browsers throttle timers in background tabs (often to once per second or less) to save battery.
-- Delays above 2³¹−1 ms (about 24.8 days) overflow; Node prints a warning and uses 1 ms.
+- Browsers throttle (deliberately slow down) timers in background tabs (often to once per second or less) to save battery.
+- Delays above 2³¹−1 ms (about 24.8 days) overflow (exceed the largest number a 32-bit integer slot can hold); Node prints a warning and uses 1 ms.
 
 [`code/04_timers.mjs`](code/04_timers.mjs):
 
@@ -462,11 +462,11 @@ awaited sleep(15): >= 15 ms: true
 | Slow or async work | Runs can bunch up or overlap (an async `fn` isn't awaited) | Next run scheduled only after this one finishes |
 | Change the delay each time (backoff) | Awkward | Easy |
 
-For polling a server, prefer recursive `setTimeout` (after the previous request completes).
+For polling a server (asking it again and again whether something changed), prefer recursive `setTimeout` (after the previous request completes).
 
 ### Common mistakes
 - Passing the *result* of a call: `setTimeout(save(), 1000)` runs `save` now. Pass a function: `setTimeout(save, 1000)` or `() => save()`.
-- Forgetting to clear intervals (e.g. when a component unmounts) → leaks and duplicate work.
+- Forgetting to clear intervals (e.g. when a component unmounts — is removed from the page in a UI framework such as React) → memory leaks (memory that can never be freed) and duplicate work.
 - Using timers to "wait until something is ready" — listen for the actual event or await the actual promise instead.
 - A method passed as callback loses `this`: `setTimeout(obj.method, 10)` — use an arrow or `bind` ([Chapter 9](../09-this-prototypes-and-classes/README.md)).
 
@@ -539,7 +539,7 @@ zalgo order: cached cb | after call (a) | after call (b) | fetched cb
 | **"Releasing Zalgo"** | A callback that's sometimes sync and sometimes async makes ordering unpredictable (see the output: the cached callback ran *before* "after call") | `then` callbacks are always async |
 | **Composition** | Running things in parallel and waiting for all is hand-written counting code | `Promise.all` and friends |
 
-Callbacks remain perfect for **repeated events** (clicks, stream data) — a promise can only deliver one value. Named functions and early `return`s flatten a pyramid a bit, but the real fix is promises.
+Callbacks remain perfect for **repeated events** (clicks, stream data — a stream delivers data in chunks over time) — a promise can only deliver one value. Named functions and early `return`s flatten a pyramid a bit, but the real fix is promises.
 
 ### TL;DR
 Callbacks: pass a function to be called later; Node uses `cb(err, result)`. They nest badly, can't use `try/catch`, and depend on trusting the caller — promises solve all of these. Keep callbacks for multi-fire events.
@@ -648,21 +648,21 @@ Promise.try fail: negative
 ### Key API
 | API | Meaning |
 |---|---|
-| `new Promise(executor)` | Wrap a callback API. Rarely needed otherwise (**explicit-construction anti-pattern**: wrapping something that already returns a promise). |
+| `new Promise(executor)` | Wrap a callback API. Rarely needed otherwise (**explicit-construction anti-pattern** — an anti-pattern is a common habit that causes problems: wrapping something that already returns a promise). |
 | `Promise.resolve(v)` / `Promise.reject(e)` | Already-settled promise (`resolve` adopts thenables, returns `v` itself if it's a native promise) |
 | `.then(ok, fail)` / `.catch(fail)` / `.finally(fn)` | Reactions; each returns a new promise |
-| `Promise.withResolvers()` (ES2024) | `{ promise, resolve, reject }` — handy when resolve is triggered by an event elsewhere |
+| `Promise.withResolvers()` (ES2024, the 2024 edition of the JS standard) | `{ promise, resolve, reject }` — handy when resolve is triggered by an event elsewhere |
 | `Promise.try(fn, ...args)` (ES2025) | Call `fn`; a sync throw becomes a rejection, a returned value/promise is adopted |
 | `util.promisify(fn)` (Node) | Turn an error-first callback function into a promise-returning one. Most Node APIs also have promise versions: `node:fs/promises`, `node:timers/promises`. |
 
-A **thenable** is any object with a `then` method; promises from different libraries interoperate through this duck-typed protocol ([Chapter 9 — duck typing](../09-this-prototypes-and-classes/README.md#97-instanceof-and-type-checks)).
+A **thenable** is any object with a `then` method; promises from different libraries interoperate through this duck-typed protocol (judged by which methods an object has, not by its class) ([Chapter 9 — duck typing](../09-this-prototypes-and-classes/README.md#97-instanceof-and-type-checks)).
 
 ### Common mistakes
 - **Forgetting `return`** in a `then` callback (see output: `undefined`, and the inner promise's errors become unhandled).
 - **Nesting** `then` inside `then` instead of returning — recreates callback hell.
 - **`.then(ok, fail)` vs `.then(ok).catch(fail)`:** the first form does **not** catch errors thrown inside `ok`; the second does.
 - **No `catch` at the end** → an unhandled rejection (crashes Node, logs in browsers) — [§11.5](../11-errors-and-debugging/README.md#115-errors-in-asynchronous-code-preview).
-- **Thinking promises are cancellable or lazy.** A promise represents work that has *already started*; use `AbortController` (§12.11) to cancel the work.
+- **Thinking promises are cancellable or lazy** (lazy = not starting until someone asks for the result). A promise represents work that has *already started*; use `AbortController` (§12.11) to cancel the work.
 
 ### Self-check
 1. What does `.then(() => 5)` return? → A new promise fulfilled with 5.
@@ -678,7 +678,7 @@ A promise is a one-time, eventually-settled value: pending → fulfilled/rejecte
 ## 12.8 Promise combinators: `all`, `allSettled`, `race`, `any`
 
 ### What it is
-Static methods that take an iterable of promises (or plain values) and return one promise.
+Static methods (called on `Promise` itself, not on a promise instance) that take an iterable (anything `for…of` can loop over, such as an array) of promises (or plain values) and return one promise.
 
 | Method | Fulfils when | Rejects when | Result | Added |
 |---|---|---|---|---|
@@ -730,7 +730,7 @@ timeout   : timed out after 20 ms
 ```
 
 Notes:
-- `all` took 30 ms (the slowest), not 40 — the promises ran concurrently. The results are in input order even though `fast` finished first. Plain values like `42` are allowed.
+- `all` took 30 ms (the slowest), not 40 — the promises ran concurrently (their waiting overlapped in time). The results are in input order even though `fast` finished first. Plain values like `42` are allowed.
 - On failure, `all` rejects after 10 ms, but the other operation **keeps running** — combinators don't cancel anything. Pair them with an `AbortSignal` (§12.11) if you need that.
 - `withTimeout` via `race` is a classic interview answer; in real code prefer `AbortSignal.timeout(ms)`, which also stops the underlying work (e.g. the HTTP request).
 
@@ -739,13 +739,13 @@ Notes:
 |---|---|
 | Load user, settings and feed; the page needs all three | `all` |
 | Send 20 notifications; report which failed | `allSettled` |
-| Fastest of several mirrors / CDNs | `any` |
+| Fastest of several mirrors / CDNs (content delivery networks — servers worldwide holding copies of files) | `any` |
 | A result or a timeout, whichever comes first | `race` (or `AbortSignal.timeout`) |
 
 ### In the interview
 **30-second answer:** "`all` waits for everything and fails fast on the first rejection; `allSettled` waits for everything and never rejects; `race` settles with the first promise to settle, success or failure; `any` takes the first success and only rejects — with an `AggregateError` — if all fail. None of them cancel the losers."
 
-- *Q: Implement `Promise.all`.* A: Return a new promise; keep a results array and a counter; for each input, `Promise.resolve(item).then(v => { results[i] = v; if (++done === n) resolve(results) }, reject)`; resolve immediately if the input is empty. ([Chapter 17](../17-javascript-for-interviews/README.md) has runnable polyfills.)
+- *Q: Implement `Promise.all`.* A: Return a new promise; keep a results array and a counter; for each input, `Promise.resolve(item).then(v => { results[i] = v; if (++done === n) resolve(results) }, reject)`; resolve immediately if the input is empty. ([Chapter 17](../17-javascript-for-interviews/README.md) has runnable polyfills — a polyfill is code that implements a built-in feature yourself, for environments that lack it.)
 - *Q: `Promise.all` with one rejection — do the others stop?* A: No; their results are simply ignored.
 
 ### TL;DR
@@ -761,7 +761,7 @@ Syntax (ES2017) that lets you write promise-based code as if it were synchronous
 - **`await expr`** pauses the async function until the promise settles, then gives back its value — or **throws** its rejection reason. Pausing doesn't block the thread: the function's remaining code is resumed later as a microtask, and meanwhile the caller continues.
 - `await` is allowed only inside async functions and at the **top level of modules** ([Chapter 10](../10-modules-and-tooling/README.md#105-top-level-await)).
 
-Under the hood an async function is like a generator that yields promises, driven by a runner that resumes it when each promise settles.
+Under the hood an async function is like a generator (a function that can pause at `yield` and resume later — Chapter 8) that yields promises, driven by a runner that resumes it when each promise settles.
 
 [`code/08_async_await.mjs`](code/08_async_await.mjs):
 
@@ -909,7 +909,7 @@ try/catch works across `await` because rejections are re-thrown on resumption. E
 ## 12.11 Cancellation: `AbortController` and `AbortSignal`
 
 ### What it is
-Promises can't be cancelled, but the *work* behind them can. The standard mechanism (from the DOM spec, also in Node) is:
+Promises can't be cancelled, but the *work* behind them can. The standard mechanism (from the DOM spec — the standard for the browser's page APIs — also in Node) is:
 - **`AbortController`** — the object held by whoever decides to cancel; `controller.abort(reason?)`.
 - **`AbortSignal`** — `controller.signal`, handed to the operation; it has `.aborted`, `.reason`, an `abort` event and `throwIfAborted()`.
 
@@ -918,7 +918,7 @@ Analogy: the controller is the "cancel order" button at the till; the signal is 
 | API | Purpose | Support |
 |---|---|---|
 | `new AbortController()` / `.abort(reason)` | Manual cancel | All modern browsers, Node ≥ 15 |
-| `AbortSignal.timeout(ms)` | Signal that aborts with a `TimeoutError` `DOMException` after `ms` | Baseline since 2022 (Node ≥ 17.3) |
+| `AbortSignal.timeout(ms)` | Signal that aborts with a `TimeoutError` `DOMException` (browser-API error type) after `ms` | Baseline (works in all major browsers) since 2022 (Node ≥ 17.3) |
 | `AbortSignal.any([s1, s2])` | Aborts when any input aborts | Baseline since 2024 (Node ≥ 20.3) |
 | `AbortSignal.abort(reason)` | Already-aborted signal | Modern browsers, Node |
 | `{ signal }` option | Accepted by `fetch`, `addEventListener`, Node `timers/promises`, `fs.readFile`, streams, `events.on`… | — |
@@ -994,7 +994,7 @@ Callers distinguish a deliberate cancel from a real failure by `err.name === 'Ab
 
 ### Real-world examples
 - Search-as-you-type: abort the previous request when a new keystroke arrives.
-- React effects: abort the fetch in the effect's cleanup function when the component unmounts.
+- React effects (code React runs after a component appears on screen): abort the fetch in the effect's cleanup function when the component unmounts.
 - Removing a group of event listeners at once: one controller, `{ signal }` on each `addEventListener`, one `abort()`.
 
 ### TL;DR
@@ -1007,7 +1007,7 @@ Callers distinguish a deliberate cancel from a real failure by `err.name === 'Ab
 ### What it is
 Chapter 8 showed the (sync) **iterable protocol**: `[Symbol.iterator]()` returns an iterator whose `next()` returns `{ value, done }`. The **async iterable protocol** (ES2018) is the same, except the method is `[Symbol.asyncIterator]()` and `next()` returns a **promise** of `{ value, done }`. You consume it with **`for await (const x of source)`**, and you produce one easily with an **async generator** (`async function*`), which can both `await` and `yield`.
 
-Use it for data that arrives in pieces over time: paginated APIs, file and network streams (Node streams and web `ReadableStream`s are async iterable), event streams.
+Use it for data that arrives in pieces over time: paginated APIs (APIs that return a big result one page at a time), file and network streams (Node streams and web `ReadableStream`s are async iterable), event streams.
 
 [`code/10_async_iteration.mjs`](code/10_async_iteration.mjs):
 
@@ -1095,7 +1095,7 @@ Async iterables deliver `{value, done}` promises; `for await…of` consumes them
 
 ## 12.13 Real-world async patterns
 
-[`code/11_patterns.mjs`](code/11_patterns.mjs) implements three helpers that appear in almost every production codebase.
+[`code/11_patterns.mjs`](code/11_patterns.mjs) implements three helpers that appear in almost every production codebase (code that runs the real, live service).
 
 ```js
 // 1) Retry with exponential backoff
@@ -1152,11 +1152,11 @@ guarded     : results for "jav"
 
 | Pattern | Problem it solves | Production notes |
 |---|---|---|
-| **Retry + exponential backoff** | Transient failures (HTTP 503, network blips) | Add random **jitter** so many clients don't retry in sync; retry only idempotent operations; cap attempts and total time; respect `Retry-After` headers |
-| **Concurrency limit** | 10,000 requests at once would overload the server or hit rate limits / file-descriptor limits | Libraries: `p-limit`, `p-map`; the worker-pool shape above is enough for scripts |
-| **Last-request-wins** | Responses arrive out of order (search-as-you-type), stale data overwrites fresh | Better still: abort the old request (§12.11); React Query and similar libraries do this for you |
+| **Retry + exponential backoff** (double the wait after each failure) | Transient (temporary) failures (HTTP 503 "service unavailable", network blips) | Add random **jitter** so many clients don't retry in sync; retry only idempotent operations (safe to repeat — doing them twice equals doing them once; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)); cap attempts and total time; respect `Retry-After` headers |
+| **Concurrency limit** | 10,000 requests at once would overload the server or hit rate limits (caps on requests per second) / file-descriptor limits (caps on open files and sockets) | Libraries: `p-limit`, `p-map`; the worker-pool shape above is enough for scripts |
+| **Last-request-wins** | Responses arrive out of order (search-as-you-type), stale data overwrites fresh — a **race condition** (the result depends on which operation happens to finish first) | Better still: abort the old request (§12.11); React Query and similar libraries do this for you |
 | **Timeout** | A request that never answers | `AbortSignal.timeout(ms)` |
-| **Debounce / throttle** | Too many events (keystrokes, scroll) | Implemented in [Chapter 17](../17-javascript-for-interviews/README.md) |
+| **Debounce / throttle** (wait until events stop / run at most once per interval) | Too many events (keystrokes, scroll) | Implemented in [Chapter 17](../17-javascript-for-interviews/README.md) |
 
 Note `mapLimit`'s `next++`: because of run-to-completion, no other worker can run between reading and incrementing `next`, so no lock is needed — a direct benefit of the single thread.
 
@@ -1168,7 +1168,7 @@ Retry with backoff + jitter for transient errors; cap concurrency with a worker 
 ## Chapter 12 TL;DR
 
 - **One thread**, run-to-completion; the host does the waiting. Long sync work blocks timers, input and rendering.
-- **Event loop:** one task → drain **all** microtasks → maybe render (rAF → style → layout → paint) → repeat. Promise reactions, code after `await`, `queueMicrotask` = microtasks; timers, I/O, events = tasks.
+- **Event loop:** one task → drain **all** microtasks → maybe render (rAF = `requestAnimationFrame` → style → layout → paint) → repeat. Promise reactions, code after `await`, `queueMicrotask` = microtasks; timers, I/O, events = tasks.
 - **Puzzles:** sync first (including executors and code before the first `await`), then microtasks FIFO, then tasks. Returning a promise from `then` costs 2 extra ticks.
 - **Node:** phases timers → poll → check (`setImmediate`) → close; `nextTick` before promises (except at ESM top level); `setImmediate` vs `setTimeout(0)` only ordered inside I/O callbacks.
 - **Timers** are minimum delays; nested clamp 4 ms; overflow above 2³¹−1 ms; prefer recursive `setTimeout` for polling.
