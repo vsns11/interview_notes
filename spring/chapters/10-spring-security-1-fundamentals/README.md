@@ -1,15 +1,15 @@
 # Chapter 10 — Spring Security 1: Fundamentals
 
-Every web application eventually has to answer two questions for every request: **who is calling?** and **are they allowed to do this?** Spring Security answers both with a chain of servlet filters that runs *before* your controllers. It also switches on protections you would otherwise forget — CSRF tokens, security headers, session-fixation defence — the moment you add the starter.
+Every web application eventually has to answer two questions for every request: **who is calling?** and **are they allowed to do this?** Spring Security answers both with a chain of servlet filters (pieces of code the web server runs on every request before it reaches Spring MVC) that runs *before* your controllers. It also switches on protections you would otherwise forget — CSRF tokens (secret values that prove a form was sent by your own site, §10.8), security headers (response headers that turn on browser defences, §10.11), session-fixation defence (§10.10) — the moment you add the starter.
 
-Spring Security has a reputation for being "magic". It is not. Once you can picture the filter chain, name the object that holds the current user, and tell a 401 from a 403, the rest is configuration. This chapter builds that picture with small projects whose tests prove each behaviour.
+Spring Security has a reputation for being "magic". It is not. Once you can picture the filter chain, name the object that holds the current user, and tell a 401 (HTTP "I don't know who you are") from a 403 (HTTP "I know you, but no"), the rest is configuration. This chapter builds that picture with small projects whose tests prove each behaviour.
 
 **What you'll learn**
 
 1. What the starter does on its own (and why "everything is locked" is a feature).
 2. The architecture: `DelegatingFilterProxy`, `FilterChainProxy`, `SecurityFilterChain`, the filters, `SecurityContextHolder`.
-3. The lambda DSL in Spring Security 7 (what was removed and why), and several chains in one app.
-4. Authentication: `AuthenticationManager`, `UserDetailsService`, form login vs HTTP Basic, 302 vs 401.
+3. The lambda DSL (domain-specific language: a fluent, chained configuration API) in Spring Security 7 (what was removed and why), and several chains in one app.
+4. Authentication: `AuthenticationManager`, `UserDetailsService`, form login vs HTTP Basic (username and password sent in a header on every request), 302 (HTTP redirect) vs 401.
 5. Password storage: hashing, salt, work factor, bcrypt/Argon2 via `DelegatingPasswordEncoder`, upgrading old hashes on login.
 6. Request authorization: matchers, **roles vs authorities**, **401 vs 403**, role hierarchy, `denyAll` as the safe default.
 7. Method security: `@PreAuthorize`, `@PostAuthorize`, `@PostFilter` and the proxy rule behind them.
@@ -26,7 +26,7 @@ All code lives in [`code/`](code/) — three Spring Boot **4.1.1** projects (Spr
 
 Every output block is real `mvn -q -B -ntp verify` output with Spring's log lines trimmed to `...`. Hash values and timings change on every run.
 
-> **Prerequisites.** Proxies ([Chapter 4](../04-aop-and-proxies/README.md)) explain how method security works. Spring MVC ([Chapter 5](../05-spring-mvc-and-rest/README.md)) is where the controllers come from. The *browser* side of CORS, CSRF and XSS is taught in the JavaScript handbook, [Chapter 14](../../../javascript/chapters/14-browser-apis-and-security/README.md). This chapter links there instead of repeating it. Tokens, JWT and OAuth2 continue in [Chapter 11](../11-spring-security-2-tokens-and-oauth2/README.md).
+> **Prerequisites.** Proxies ([Chapter 4](../04-aop-and-proxies/README.md)) explain how method security works. Spring MVC ([Chapter 5](../05-spring-mvc-and-rest/README.md)) is where the controllers come from. The *browser* side of CORS (rules for letting one website's scripts call another site), CSRF and XSS (cross-site scripting: an attacker getting their JavaScript to run on your pages) is taught in the JavaScript handbook, [Chapter 14](../../../javascript/chapters/14-browser-apis-and-security/README.md). This chapter links there instead of repeating it. Tokens, JWT (JSON Web Token: a signed token carrying user details) and OAuth2 (the standard protocol for issuing access tokens) continue in [Chapter 11](../11-spring-security-2-tokens-and-oauth2/README.md).
 
 ---
 
@@ -87,7 +87,7 @@ basic, user   : 200 body=hello
 So, with no code at all, Boot and Spring Security:
 
 1. Protect **every** URL, so any request must be authenticated.
-2. Create one in-memory user named `user` with a random UUID password printed at startup. You can fix it with `spring.security.user.name`, `spring.security.user.password` and `spring.security.user.roles`, but only for experiments.
+2. Create one in-memory user named `user` with a random UUID (a random 128-bit identifier) password printed at startup. You can fix it with `spring.security.user.name`, `spring.security.user.password` and `spring.security.user.roles`, but only for experiments.
 3. Enable **form login** (a generated `/login` page) and **HTTP Basic**.
 4. Pick the response by client type. A browser asking for HTML gets a `302` redirect to `/login`. A client asking for JSON gets `401` with `WWW-Authenticate: Basic`. The `charset="UTF-8"` parameter is new in Spring Security 7.1.
 5. Turn on CSRF protection, security headers, session-fixation protection and a logout endpoint.
@@ -100,7 +100,7 @@ As soon as you declare your own `SecurityFilterChain` bean, Boot's default chain
 
 ### Self-check
 
-1. *You add the starter and your endpoint returns 401 in Postman but a login page in Chrome. Why?* → Chrome sends `Accept: text/html`, so Spring redirects it to the form login page. Postman's JSON-style request gets the HTTP Basic `401` challenge.
+1. *You add the starter and your endpoint returns 401 in Postman (a desktop tool for sending API requests) but a login page in Chrome. Why?* → Chrome sends `Accept: text/html`, so Spring redirects it to the form login page. Postman's JSON-style request gets the HTTP Basic `401` challenge.
 2. *Where does the password come from?* → Boot generates a random UUID at startup and logs it. Nothing is stored anywhere.
 3. *What makes the generated user disappear?* → Defining your own `UserDetailsService`, `AuthenticationManager` or `AuthenticationProvider` bean (or an OAuth2 setup — Chapter 11).
 
@@ -148,7 +148,7 @@ flowchart LR
 | `ExceptionTranslationFilter` | turns security exceptions from later filters into HTTP responses: 401/redirect or 403 |
 | `AuthorizationFilter` | the last gate: asks the `AuthorizationManager` whether this request is allowed |
 
-4. **`SecurityContextHolder`** stores the current `SecurityContext` in a `ThreadLocal` by default. Any code on the request thread — controller, service, logging — can read it with `SecurityContextHolder.getContext().getAuthentication()`.
+4. **`SecurityContextHolder`** stores the current `SecurityContext` in a `ThreadLocal` (a variable with a separate value for each thread; each request runs on its own thread) by default. Any code on the request thread — controller, service, logging — can read it with `SecurityContextHolder.getContext().getAuthentication()`.
 
 The test in `security-basics` prints the real filter list of our chain:
 
@@ -281,11 +281,11 @@ Spring Security 7 finished several clean-ups that 6.x had deprecated. Old tutori
 | `AccessDecisionManager` / voters in the main jar | moved to the legacy `spring-security-access` module; prefer `AuthorizationManager` |
 | OAuth2 *password* grant support | authorization code or client credentials (Chapter 11) |
 
-Other 7.0 additions worth knowing: built-in **multi-factor authentication** (below and §10.4), `csrf(c -> c.spa())` for single-page apps (§10.8), Password4j-based encoders (§10.5), and Spring Authorization Server now shipping *inside* Spring Security (Chapter 11).
+Other 7.0 additions worth knowing: built-in **multi-factor authentication** (MFA: requiring two or more kinds of proof, e.g. password plus a code; below and §10.4), `csrf(c -> c.spa())` for single-page apps (SPAs: browser apps that load once and then talk to the server only through JavaScript calls; §10.8), Password4j-based encoders (§10.5), and Spring Authorization Server (a server that issues OAuth2 tokens) now shipping *inside* Spring Security (Chapter 11).
 
 ### Several chains in one application
 
-Real apps often serve a JSON API *and* browser pages, and these need different rules. The API should be stateless with no CSRF. The browser pages should use a session cookie with CSRF on. Declare two chains and give each a **`securityMatcher`** (which requests this chain handles) and an **`@Order`**:
+Real apps often serve a JSON API *and* browser pages, and these need different rules. The API should be stateless (the server keeps no login state; every request carries its own credentials) with no CSRF. The browser pages should use a session cookie (a cookie holding the id of the user's server-side session) with CSRF on. Declare two chains and give each a **`securityMatcher`** (which requests this chain handles) and an **`@Order`**:
 
 ```java
 @Bean @Order(1)
@@ -362,7 +362,7 @@ sequenceDiagram
 
 ### `UserDetailsService`: your user store behind one method
 
-`UserDetailsService` has a single method, `loadUserByUsername(String)`. Behind it can sit a database table, LDAP, or anything else. `security-basics` implements it over a map (in a real app, a JPA repository — [Chapter 8](../08-spring-data-jpa-and-hibernate/README.md)):
+`UserDetailsService` has a single method, `loadUserByUsername(String)`. Behind it can sit a database table, LDAP (a directory protocol companies use to store employee accounts), or anything else. `security-basics` implements it over a map (in a real app, a JPA repository — [Chapter 8](../08-spring-data-jpa-and-hibernate/README.md)):
 
 ```java
 @Service
@@ -399,7 +399,7 @@ Because this bean exists together with a `PasswordEncoder` bean, Spring Security
 
 | | Form login | HTTP Basic |
 |---|---|---|
-| Credentials sent | once, in `POST /login` | on **every** request, Base64 in `Authorization` (encoded, **not encrypted**, so HTTPS only) |
+| Credentials sent | once, in `POST /login` | on **every** request, Base64 (a reversible text encoding) in `Authorization` (encoded, **not encrypted**, so HTTPS — HTTP over an encrypted TLS connection — only) |
 | Remembered by | HTTP session cookie (`JSESSIONID`) | nothing, the client resends them |
 | Unauthenticated response | `302` redirect to `/login` | `401` + `WWW-Authenticate: Basic realm=...` |
 | Logout | `POST /logout` invalidates the session | impossible server-side (browser caches credentials) |
@@ -447,12 +447,12 @@ Me me(Authentication auth, @AuthenticationPrincipal UserDetails principal) {
 
 ### The `FACTOR_PASSWORD` authority: multi-factor authentication in Spring Security 7
 
-Look at alice's authorities in the output: besides `ROLE_USER` and `report:read`, there is **`FACTOR_PASSWORD`**. Spring Security 7 adds a **factor authority** (`FactorGrantedAuthority`) for every authentication mechanism a user completes. Password login adds `FACTOR_PASSWORD`, one-time-token login adds `FACTOR_OTT`, and passkeys (WebAuthn) add `FACTOR_WEBAUTHN`. Authorization rules can then demand several factors, for example "`/admin/**` needs `ROLE_ADMIN` **and** both a password and a one-time token". You turn this on with `@EnableMultiFactorAuthentication(authorities = ...)` or selectively with `AuthorizationManagerFactories.multiFactor()`. If a factor is missing, Spring sends the user to the login step for that factor. The takeaway for now: **do not be surprised by `FACTOR_*` entries**, and filter them out if you copy authorities into a token (Chapter 11 does exactly that).
+Look at alice's authorities in the output: besides `ROLE_USER` and `report:read`, there is **`FACTOR_PASSWORD`**. Spring Security 7 adds a **factor authority** (`FactorGrantedAuthority`) for every authentication mechanism a user completes. Password login adds `FACTOR_PASSWORD`, one-time-token login (a single-use code, e.g. sent by e-mail) adds `FACTOR_OTT`, and passkeys (WebAuthn: password-less login with a key stored on the user's device) add `FACTOR_WEBAUTHN`. Authorization rules can then demand several factors, for example "`/admin/**` needs `ROLE_ADMIN` **and** both a password and a one-time token". You turn this on with `@EnableMultiFactorAuthentication(authorities = ...)` or selectively with `AuthorizationManagerFactories.multiFactor()`. If a factor is missing, Spring sends the user to the login step for that factor. The takeaway for now: **do not be surprised by `FACTOR_*` entries**, and filter them out if you copy authorities into a token (Chapter 11 does exactly that).
 
 ### Common mistakes
 
 - Returning `null` from `loadUserByUsername`. The contract is to throw `UsernameNotFoundException`.
-- Telling users "unknown username" vs "wrong password". It lets attackers enumerate accounts. Spring deliberately reports both the same way.
+- Telling users "unknown username" vs "wrong password". It lets attackers enumerate accounts (find out which usernames exist by trying many). Spring deliberately reports both the same way.
 - Storing the `UserDetails` (with its password hash) in logs or sending it to the client. Map it to a DTO.
 - Using HTTP Basic over plain HTTP. Base64 is readable by anyone on the path.
 
@@ -461,7 +461,7 @@ Look at alice's authorities in the output: besides `ROLE_USER` and `report:read`
 **30-second answer:** "An authentication filter extracts credentials and hands an unauthenticated token to the `AuthenticationManager`. `ProviderManager` delegates to a provider that supports the token — for passwords, `DaoAuthenticationProvider`, which loads the user via `UserDetailsService` and verifies the hash with the `PasswordEncoder`. The authenticated result goes into the `SecurityContext`, and form login persists it in the session."
 
 - *Why is `UsernameNotFoundException` turned into `BadCredentialsException`?* → To prevent username enumeration. The provider also spends a dummy password check so timing does not leak it either.
-- *How would you add login by API key?* → Write a filter (or an `AuthenticationConverter`) that builds an `ApiKeyAuthenticationToken`, plus an `AuthenticationProvider` that validates it. Register the filter with `addFilterBefore(..., BasicAuthenticationFilter.class)`.
+- *How would you add login by API key (a long secret string a client sends to identify itself)?* → Write a filter (or an `AuthenticationConverter`) that builds an `ApiKeyAuthenticationToken`, plus an `AuthenticationProvider` that validates it. Register the filter with `addFilterBefore(..., BasicAuthenticationFilter.class)`.
 
 ### Self-check
 
@@ -479,7 +479,7 @@ Filter → `AuthenticationManager` (`ProviderManager`) → `AuthenticationProvid
 
 ### What it is
 
-You must never store passwords, not even encrypted. Store a **password hash**: the output of a one-way function that is cheap to check once but expensive to compute billions of times. If the database leaks, attackers get hashes they must crack one guess at a time.
+You must never store passwords, not even encrypted. Store a **password hash**: the output of a one-way function (easy to compute from the input, practically impossible to reverse) that is cheap to check once but expensive to compute billions of times. If the database leaks, attackers get hashes they must crack one guess at a time.
 
 Three ideas make a hash suitable for passwords:
 
@@ -489,14 +489,14 @@ Three ideas make a hash suitable for passwords:
 | **Salt** | a random value stored with each hash and mixed in | equal passwords get different hashes, and precomputed "rainbow tables" are useless |
 | **Work factor** (cost) | a tunable amount of CPU and/or memory per check | makes each guess slow. Raise it as hardware gets faster |
 
-General-purpose hashes like SHA-256 or MD5 are designed to be *fast*, which is exactly wrong for passwords. Use an **adaptive password hash**:
+General-purpose hashes like SHA-256 or MD5 (fast hash functions built for checksums and signatures) are designed to be *fast*, which is exactly wrong for passwords. Use an **adaptive password hash**:
 
 | Algorithm | Spring encoder | Notes |
 |---|---|---|
 | **bcrypt** | `BCryptPasswordEncoder` (default strength 10) | CPU-hard, battle-tested. Uses only the first **72 bytes** of the password |
-| **Argon2id** | `Argon2PasswordEncoder` (needs Bouncy Castle `bcprov-jdk18on`) | memory-hard (resists GPU/ASIC cracking). Winner of the Password Hashing Competition; OWASP's first choice |
+| **Argon2id** | `Argon2PasswordEncoder` (needs Bouncy Castle `bcprov-jdk18on`) | memory-hard (resists GPU/ASIC — graphics cards and custom chips that try billions of guesses — cracking). Winner of the Password Hashing Competition; OWASP's (Open Worldwide Application Security Project, a respected web-security community) first choice |
 | **scrypt** | `SCryptPasswordEncoder` (Bouncy Castle) | memory-hard |
-| **PBKDF2** | `Pbkdf2PasswordEncoder` | choose it when FIPS-140 compliance is required |
+| **PBKDF2** | `Pbkdf2PasswordEncoder` | choose it when FIPS-140 (a US government standard for approved cryptography) compliance is required |
 
 Spring Security 7.0 also added **Password4j-based** encoders (`Argon2Password4jPasswordEncoder`, `BcryptPassword4jPasswordEncoder`, `ScryptPassword4jPasswordEncoder`, `Pbkdf2Password4jPasswordEncoder`, `BalloonHashingPassword4jPasswordEncoder`) for teams that prefer that library.
 
@@ -561,7 +561,7 @@ argon2 default: {argon2@SpringSecurity_v5_8}$argon2id$v=19$m=16384,t=2,p=1$Y...
 old bcrypt row still matches: true, needs upgrade: true
 ```
 
-`m=16384,t=2,p=1` means 16 MiB of memory, 2 passes and 1 lane. Those are Spring's `v5_8` defaults. OWASP's Password Storage Cheat Sheet currently suggests somewhat more memory for Argon2id (for example 19 MiB with 2 passes). Use the `Argon2PasswordEncoder(saltLength, hashLength, parallelism, memory, iterations)` constructor if you follow it. If you change parameters under the same id, `upgradeEncoding` also notices weaker stored parameters. Always measure the cost on your production hardware.
+`m=16384,t=2,p=1` means 16 MiB (mebibytes, 1 MiB = 1024 × 1024 bytes) of memory, 2 passes and 1 lane (parallel thread of work). Those are Spring's `v5_8` defaults. OWASP's Password Storage Cheat Sheet currently suggests somewhat more memory for Argon2id (for example 19 MiB with 2 passes). Use the `Argon2PasswordEncoder(saltLength, hashLength, parallelism, memory, iterations)` constructor if you follow it. If you change parameters under the same id, `upgradeEncoding` also notices weaker stored parameters. Always measure the cost on your production hardware.
 
 ### The work factor in numbers
 
@@ -570,7 +570,7 @@ bcrypt strength 10 -> $2a$10$...  ~59 ms per check
 bcrypt strength 12 -> $2a$12$...  ~239 ms per check
 ```
 
-Each +1 of strength doubles the work (here about 4x for +2). A common target is **"as slow as your login latency budget allows"**, often several hundred milliseconds. Remember the cost hits *your* servers on every login. Slow hashing plus no rate limiting makes the login endpoint an easy denial-of-service target (see the rate-limiting note in [Chapter 11](../11-spring-security-2-tokens-and-oauth2/README.md#1115-rate-limiting-and-brute-force-protection)).
+Each +1 of strength doubles the work (here about 4x for +2). A common target is **"as slow as your login latency budget allows"**, often several hundred milliseconds. Remember the cost hits *your* servers on every login. Slow hashing plus no rate limiting (capping how many attempts a client may make per second) makes the login endpoint an easy denial-of-service (overloading a service so real users cannot use it) target (see the rate-limiting note in [Chapter 11](../11-spring-security-2-tokens-and-oauth2/README.md#1115-rate-limiting-and-brute-force-protection)).
 
 ### bcrypt's 72-byte limit
 
@@ -600,8 +600,8 @@ after login : {bcrypt}$2a$10$6G6hiKY...
 
 ### Common mistakes
 
-- **Encrypting** passwords (AES) "so we can show them to support staff". Anyone with the key can decrypt them all. Hash them instead.
-- A hand-made `sha256(password + "pepper")`. It is fast, so it cracks quickly.
+- **Encrypting** passwords (AES, a standard two-way encryption algorithm) "so we can show them to support staff". Anyone with the key can decrypt them all. Hash them instead.
+- A hand-made `sha256(password + "pepper")` (a pepper is a fixed secret mixed into every hash). It is fast, so it cracks quickly.
 - Declaring `NoOpPasswordEncoder` as the bean "for now". It is deprecated for a reason.
 - Storing hashes without the `{id}` prefix, then switching encoders later. Every old row breaks. If you have such rows, `DelegatingPasswordEncoder.setDefaultPasswordEncoderForMatches(...)` tells Spring how to read unprefixed values.
 - Forgetting that the prefix makes the hash column longer. bcrypt is 60 characters plus `{bcrypt}`, and Argon2 values are longer still. Use `VARCHAR(255)` or more.
@@ -612,7 +612,7 @@ after login : {bcrypt}$2a$10$6G6hiKY...
 
 - *Why a salt?* → Equal passwords get different hashes, and precomputed tables become useless. The salt is not secret.
 - *bcrypt or Argon2?* → Both are fine. Argon2id is memory-hard, which makes GPU cracking more expensive, so it is OWASP's first choice. bcrypt is ubiquitous but has the 72-byte limit.
-- *What is a pepper?* → A secret added to every hash and stored *outside* the database (in a vault). It helps only if the database leaks without the app secrets. It is optional.
+- *What is a pepper?* → A secret added to every hash and stored *outside* the database (in a vault — a secure service for storing secrets). It helps only if the database leaks without the app secrets. It is optional.
 
 ### TL;DR
 
@@ -635,7 +635,7 @@ Hash, don't encrypt. Use an adaptive, salted, slow algorithm (Argon2id or bcrypt
 | `hasAnyAuthority("a", "b")` | holds at least one |
 | `hasRole("ADMIN")` | holds authority **`ROLE_ADMIN`** (the prefix is added for you) |
 | `hasAnyRole("ADMIN", "OPS")` | holds `ROLE_ADMIN` or `ROLE_OPS` |
-| `access(authorizationManager)` | your own `AuthorizationManager` decides, e.g. IP ranges or time of day |
+| `access(authorizationManager)` | your own `AuthorizationManager` decides, e.g. IP ranges (blocks of network addresses) or time of day |
 
 Matchers can take HTTP methods (`requestMatchers(HttpMethod.GET, "/reports/**")`). They use the same `PathPattern` syntax as Spring MVC mappings: `*` matches one path segment and `**` matches any number of segments.
 
@@ -648,7 +648,7 @@ Under the hood **there is only one concept: `GrantedAuthority`, a string**. A "r
 | Example | `ROLE_ADMIN` | `report:read`, `order:refund` |
 | Granularity | coarse: *who the user is* | fine: *what the user may do* |
 | Checked with | `hasRole("ADMIN")` | `hasAuthority("report:read")` |
-| Typical source | user's group membership | role-to-permission mapping, OAuth2 scopes (`SCOPE_...`, Chapter 11) |
+| Typical source | user's group membership | role-to-permission mapping, OAuth2 scopes (permissions granted to a token, e.g. `read`; `SCOPE_...`, Chapter 11) |
 
 Many teams check **authorities** in code and assign them to users *through* roles. Then a role change doesn't mean a code change. The prefix trips people up in two ways, and Spring rejects both:
 
@@ -702,7 +702,7 @@ With `anyRequest().authenticated()` as the last rule, any endpoint someone adds 
 ### Common mistakes
 
 - **Rule order.** `requestMatchers("/**").authenticated()` first makes every later rule dead code. Write rules from most specific to least specific.
-- **Securing only the URL.** `/orders/{id}` is protected, but can alice read order 2, which belongs to carol? That question needs the *data* and belongs in method security or in the query ("insecure direct object reference", §10.7).
+- **Securing only the URL.** `/orders/{id}` is protected, but can alice read order 2, which belongs to carol? That question needs the *data* and belongs in method security or in the query ("insecure direct object reference": letting a user reach someone else's record just by changing an id in the URL; §10.7).
 - Returning **404** for "exists but you may not see it" is sometimes a good idea, because it hides existence. Decide it deliberately. Spring gives 403 by default.
 - Relying on `permitAll()` to *skip* security. The request still passes CSRF and header filters. To bypass the chain for static files, give them their own chain with `permitAll()`. Avoid `WebSecurityCustomizer.ignoring()`, which also drops the security headers.
 
@@ -738,7 +738,7 @@ URL rules protect *endpoints*. **Method security** protects *business methods*, 
 | `@PreFilter("expr")` | before, filters a collection argument | rarely needed |
 | `@PostFilter("expr")` | after, removes elements of the returned collection (`filterObject`) | small lists only |
 | `@Secured("ROLE_ADMIN")` | before (enable with `securedEnabled = true`) | legacy, no SpEL |
-| `@RolesAllowed("ADMIN")` | before (enable with `jsr250Enabled = true`) | Jakarta standard annotation |
+| `@RolesAllowed("ADMIN")` | before (enable with `jsr250Enabled = true`; JSR-250 is the Java standard that defined it) | Jakarta standard annotation |
 
 Expressions are **SpEL** (Spring Expression Language). `authentication`, `principal`, `hasRole(...)`, `hasAuthority(...)`, method parameters as `#name` and `returnObject` are available.
 
@@ -834,7 +834,7 @@ Use both: URLs as the outer fence, methods for "may *this* user touch *this* rec
 
 ### What it is
 
-**Cross-site request forgery (CSRF)** tricks a logged-in user's browser into sending a state-changing request to your site from another site. The browser attaches the session cookie automatically. The attack and the browser side of the defence (tokens, `SameSite` cookies) are explained in the JavaScript handbook: [14.11 Cross-site request forgery](../../../javascript/chapters/14-browser-apis-and-security/README.md#1411-cross-site-request-forgery-csrf). Here we only cover what Spring does.
+**Cross-site request forgery (CSRF)** tricks a logged-in user's browser into sending a state-changing request to your site from another site. The browser attaches the session cookie automatically. The attack and the browser side of the defence (tokens, `SameSite` cookies — a cookie flag that stops the browser sending it on requests from other sites) are explained in the JavaScript handbook: [14.11 Cross-site request forgery](../../../javascript/chapters/14-browser-apis-and-security/README.md#1411-cross-site-request-forgery-csrf). Here we only cover what Spring does.
 
 ### How Spring's CSRF protection works
 
@@ -842,7 +842,7 @@ Use both: URLs as the outer fence, methods for "may *this* user touch *this* rec
 2. Server-rendered pages include it. Spring's login page, Thymeleaf forms and JSP tags add a hidden `_csrf` field automatically.
 3. For every **unsafe** method (`POST`, `PUT`, `PATCH`, `DELETE`), the filter compares the token sent in the `_csrf` parameter or the `X-CSRF-TOKEN` / `X-XSRF-TOKEN` header with the stored one. A missing or wrong token gets **403**.
 4. **Safe** methods (`GET`, `HEAD`, `OPTIONS`, `TRACE`) are not checked, so never change state in a `GET` handler.
-5. Refinements since Spring Security 6: the token is loaded **lazily** (no session touch for requests that don't need it), and the value rendered into pages is **XOR-masked** with fresh randomness on each request (protection against the BREACH compression attack). It looks different every time but validates the same.
+5. Refinements since Spring Security 6: the token is loaded **lazily** (no session touch for requests that don't need it), and the value rendered into pages is **XOR-masked** (combined bit by bit with a fresh random value) on each request (protection against the BREACH compression attack, which recovers secrets from the size of compressed HTTPS responses). It looks different every time but validates the same.
 
 ### Proved: on for the cookie app, off for the stateless API
 
@@ -872,7 +872,7 @@ CSRF needs **ambient credentials**, meaning credentials the *browser* attaches o
 
 | Your API authenticates with... | CSRF protection |
 |---|---|
-| session cookie (form login, OAuth2 login, BFF) | **keep it on** |
+| session cookie (form login, OAuth2 login, BFF — Backend for Frontend, a server that holds tokens on behalf of a browser app) | **keep it on** |
 | `Authorization: Bearer <token>` added by JavaScript or a server, never cookies | can be disabled for that chain |
 | Basic auth from scripts / other services only | can be disabled |
 | both cookies *and* tokens on the same endpoints | keep it on |
@@ -882,7 +882,7 @@ CSRF needs **ambient credentials**, meaning credentials the *browser* attaches o
 A JavaScript SPA that uses a session cookie still needs CSRF protection, but it can't read a hidden form field. `http.csrf(c -> c.spa())` sets up the standard SPA arrangement in one call:
 
 - the token is stored in a cookie named `XSRF-TOKEN` that JavaScript *can* read (`HttpOnly=false`),
-- the app echoes it in the `X-XSRF-TOKEN` header (Angular and axios do this automatically),
+- the app echoes it in the `X-XSRF-TOKEN` header (Angular, a front-end framework, and axios, a JavaScript HTTP library, do this automatically),
 - a request handler accepts both the raw cookie value and the masked form value.
 
 Before 7.0 this took several lines (`CookieCsrfTokenRepository.withHttpOnlyFalse()` plus a custom handler), and many tutorials still show that form.
@@ -890,7 +890,7 @@ Before 7.0 this took several lines (`CookieCsrfTokenRepository.withHttpOnlyFalse
 ### Common mistakes
 
 - `csrf.disable()` "because POST returned 403" in an app that logs users in with a session cookie. That re-opens the attack. Send the token instead.
-- Using `GET` for actions (`GET /delete?id=5`). CSRF protection ignores `GET`, and link prefetchers can trigger it.
+- Using `GET` for actions (`GET /delete?id=5`). CSRF protection ignores `GET`, and link prefetchers (browsers or tools that load links in advance) can trigger it.
 - Forgetting that `POST /logout` also needs the token (see §10.10).
 
 ### TL;DR
@@ -903,7 +903,7 @@ CSRF protection is on by default for unsafe methods. Keep it wherever the browse
 
 ### What it is
 
-**CORS (Cross-Origin Resource Sharing)** is how a *browser* lets JavaScript from origin A read responses from origin B. The server opts in with `Access-Control-Allow-*` headers. For "non-simple" requests (for example `POST` with JSON or an `Authorization` header), the browser first sends a **preflight** `OPTIONS` request to ask permission. The browser rules are covered in [14.2 The same-origin policy and CORS](../../../javascript/chapters/14-browser-apis-and-security/README.md#142-the-same-origin-policy-and-cors). CORS is **not** a protection for your server. It relaxes a browser restriction, and `curl` ignores it completely.
+**CORS (Cross-Origin Resource Sharing)** is how a *browser* lets JavaScript from origin A read responses from origin B (an *origin* is scheme + host + port, e.g. `https://app.example.com`). The server opts in with `Access-Control-Allow-*` headers. For "non-simple" requests (for example `POST` with JSON or an `Authorization` header), the browser first sends a **preflight** `OPTIONS` request to ask permission. The browser rules are covered in [14.2 The same-origin policy and CORS](../../../javascript/chapters/14-browser-apis-and-security/README.md#142-the-same-origin-policy-and-cors). CORS is **not** a protection for your server. It relaxes a browser restriction, and `curl` ignores it completely.
 
 ### Why Spring Security must be involved
 
@@ -955,7 +955,7 @@ GET with Origin + Basic -> 200, Access-Control-Allow-Origin: https://app.example
 |---|---|---|
 | `CorsConfigurationSource` bean + `http.cors(...)` | security chain | the endpoints are secured (almost always) |
 | `@CrossOrigin` on controllers / `WebMvcConfigurer.addCorsMappings` | Spring MVC ([Chapter 5](../05-spring-mvc-and-rest/README.md)) | no Spring Security, or as the source that `http.cors()` falls back to when no `CorsConfigurationSource` bean exists |
-| gateway / reverse proxy | outside the app | many services behind one edge |
+| gateway / reverse proxy (a server in front of your apps that receives requests and forwards them; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) | outside the app | many services behind one edge |
 
 The general CORS mistakes (`"*"` with credentials, CORS only in MVC) are listed in [Chapter 5, section 5.10](../05-spring-mvc-and-rest/README.md#510-cors-and-file-upload).
 
@@ -1016,7 +1016,7 @@ Other session features:
 | | Server session + cookie | Stateless (token per request) |
 |---|---|---|
 | Logout / revoke | immediate (invalidate session) | hard until the token expires (Chapter 11) |
-| Scaling | needs sticky sessions or Spring Session | any node can serve any request |
+| Scaling | needs sticky sessions (the load balancer always sends a user to the same server) or Spring Session | any node can serve any request |
 | CSRF | needed | not needed if the token is not in a cookie |
 | Best for | browser apps, BFF | APIs called by other services, mobile apps |
 
@@ -1051,8 +1051,8 @@ over HTTPS also: Strict-Transport-Security: max-age=31536000 ; includeSubDomains
 |---|---|---|
 | `Cache-Control`/`Pragma`/`Expires` | yes | don't cache authenticated pages (shared computers, proxies). Your own `Cache-Control` wins |
 | `X-Content-Type-Options: nosniff` | yes | trust `Content-Type`, don't guess (stops some script-injection tricks) |
-| `X-Frame-Options: DENY` | yes | don't render this page inside a frame (**clickjacking**) |
-| `Strict-Transport-Security` (HSTS) | yes, **HTTPS responses only** | use HTTPS for this host for one year |
+| `X-Frame-Options: DENY` | yes | don't render this page inside a frame (**clickjacking**: hiding your page in an invisible frame so the user clicks something they did not mean to) |
+| `Strict-Transport-Security` (HSTS — HTTP Strict Transport Security) | yes, **HTTPS responses only** | use HTTPS for this host for one year |
 | `X-XSS-Protection: 0` | yes | *turn off* the old browser XSS filter, which itself caused vulnerabilities |
 | `Content-Security-Policy` | **no**, you write it | which sources may load scripts, styles and frames. It is the strongest defence against **XSS** |
 | `Referrer-Policy` | no (configured here) | how much of the URL to leak in `Referer` |
@@ -1070,7 +1070,7 @@ What XSS is and how to write a CSP are explained in [14.10 XSS](../../../javascr
 ### Common mistakes
 
 - Disabling all headers (`headers(h -> h.disable())`) to fix one problem, such as an iframe. Change just that header: `frameOptions(f -> f.sameOrigin())`.
-- Expecting HSTS on `http://localhost`. It is only sent over HTTPS. Behind a TLS-terminating proxy, set `server.forward-headers-strategy=framework` so the app knows the request was HTTPS.
+- Expecting HSTS on `http://localhost`. It is only sent over HTTPS. Behind a TLS-terminating proxy (one that decrypts HTTPS and forwards plain HTTP to the app), set `server.forward-headers-strategy=framework` so the app knows the request was HTTPS.
 
 ### TL;DR
 
@@ -1109,7 +1109,7 @@ Five protective headers are on by default (HSTS only over HTTPS). Add a Content-
 
 ### Common mistakes
 
-- Only testing the happy path with `@WithMockUser(roles = "ADMIN")`. It proves admins get in, not that others are kept out.
+- Only testing the happy path (the case where everything goes right) with `@WithMockUser(roles = "ADMIN")`. It proves admins get in, not that others are kept out.
 - Using `@WithMockUser` when the code needs your custom principal class. Use `@WithUserDetails`, or a custom `@WithSecurityContext` annotation.
 - Forgetting `with(csrf())` and concluding "security blocks my POST" when the rule is actually fine.
 

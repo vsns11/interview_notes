@@ -2,11 +2,11 @@
 
 So far every piece of work in this book happened **inside the request**: the controller calls a service, the service calls the database, and the HTTP response waits for all of it. Real systems also need work that happens **later**, **elsewhere** or **on a timer**:
 
-- "After sign-up, send a welcome e-mail, but don't make the user wait for the SMTP server."
+- "After sign-up, send a welcome e-mail, but don't make the user wait for the SMTP server." (SMTP is the protocol for sending e-mail.)
 - "Every night at 02:00, expire unpaid orders."
-- "When an order is placed, tell the shipping, billing and analytics services. They run in other processes and may be down right now."
+- "When an order is placed, tell the shipping, billing and analytics services. They run in other processes and may be down right now." (A **process** is one running program with its own memory, such as one JVM.)
 
-Spring gives you one tool for each layer: **application events** (in-process notifications), **`@Async`** (run a method on another thread), **`@Scheduled`** (run a method on a timer), and **messaging** with Kafka or RabbitMQ (between processes, durable). The chapter ends with the **transactional outbox**, the pattern that joins a database transaction and a message broker without losing messages.
+Spring gives you one tool for each layer: **application events** (in-process notifications), **`@Async`** (run a method on another **thread**, i.e. a separate path of execution), **`@Scheduled`** (run a method on a timer), and **messaging** with Kafka or RabbitMQ (two popular **message brokers**, servers that store messages between programs; between processes, **durable** = kept safely on disk so they survive a crash). See [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) for queues and brokers in general. The chapter ends with the **transactional outbox**, the pattern that joins a database **transaction** (a group of changes that commit together or not at all) and a message broker without losing messages.
 
 **What you'll learn**
 
@@ -22,13 +22,13 @@ Spring gives you one tool for each layer: **application events** (in-process not
 
 | Project | Needs | What it proves |
 |---|---|---|
-| [`code/events-async`](code/events-async) | H2 in memory | sync vs async listeners, transaction phases, `@Async` executors and thread names, MDC propagation, virtual threads, async exceptions |
+| [`code/events-async`](code/events-async) | H2 in memory (a small Java database that lives inside the JVM) | sync vs async listeners, transaction phases, `@Async` executors and thread names, MDC propagation, virtual threads, async exceptions |
 | [`code/scheduling`](code/scheduling) | nothing | `fixedRate` vs `fixedDelay` vs `cron` timing, turning jobs off in tests, overlap on platform vs virtual threads |
 | [`code/kafka-orders`](code/kafka-orders) | nothing: an embedded Kafka broker runs inside the test JVM | keys → partitions, consumer groups, JSON on the wire, retries + DLT, `@RetryableTopic`, idempotence, transactions |
 | [`code/outbox`](code/outbox) | H2 in memory | atomic order + outbox row, polling publisher, broker outage, duplicate delivery, idempotent consumer |
 | [`code/rabbit-orders`](code/rabbit-orders) | a RabbitMQ broker (Docker) | exchange/queue/binding/DLX configuration; **compiles, not run** |
 
-Every output below was printed by a test and checked by an assertion. Run everything with `bash tools_run_spring.sh spring '14-*'` from the repository root. No Docker is needed: Kafka runs as `@EmbeddedKafka`, a real broker started inside the test JVM.
+Every output below was printed by a test and checked by an assertion. Run everything with `bash tools_run_spring.sh spring '14-*'` from the repository root (the top folder of the project's Git **repository**). No Docker (a tool that runs software in isolated containers) is needed: Kafka runs as `@EmbeddedKafka`, a real broker started inside the test JVM.
 
 ---
 
@@ -38,10 +38,10 @@ Every output below was printed by a test and checked by an assertion. Run everyt
 
 | Tool | Where the work runs | Survives a crash? | Typical use |
 |---|---|---|---|
-| **Application event** (`publishEvent` + `@EventListener`) | same JVM, same thread by default | no, it lives in memory | decoupling modules inside one app |
+| **Application event** (`publishEvent` + `@EventListener`) | same JVM, same thread by default | no, it lives in memory | decoupling modules (letting them work together without referring to each other directly) inside one app |
 | **`@Async` method** | same JVM, another thread | no | "don't make the caller wait": e-mails, reports, fan-out calls |
-| **`@Scheduled` method** | same JVM, a scheduler thread | the schedule restarts with the app, a run in progress is lost | housekeeping, polling, periodic reports |
-| **Message broker** (Kafka, RabbitMQ) | another process, maybe another service | yes: the broker stores the message on disk | integration between services, buffering load, event streaming |
+| **`@Scheduled` method** | same JVM, a scheduler thread | the schedule restarts with the app, a run in progress is lost | housekeeping, polling (checking repeatedly whether there is new work), periodic reports |
+| **Message broker** (Kafka, RabbitMQ) | another process, maybe another service | yes: the broker stores the message on disk | integration between services, buffering load, event streaming (a continuous flow of "something happened" records) |
 
 ```mermaid
 flowchart LR
@@ -69,11 +69,11 @@ The patterns behind this map (message queue, publish-subscribe, event-driven arc
 
 Chapter 2 introduced the container's built-in **publish/subscribe**: any bean publishes an object with `ApplicationEventPublisher.publishEvent(...)`, and every `@EventListener` method whose parameter type matches receives it ([2.12](../02-ioc-and-dependency-injection/README.md#212-application-events)). The key fact from that section: **listeners run synchronously, on the publisher's thread, before `publishEvent` returns.**
 
-Put `@Async` on a listener and it changes character. The publisher hands the event to an executor and continues at once. Think of the difference between handing a letter to a colleague and waiting while they read it, versus dropping it in their in-tray.
+Put `@Async` on a listener and it changes character. The publisher hands the event to an **executor** (an object that owns a set of worker threads and a queue of tasks, §14.4) and continues at once. Think of the difference between handing a letter to a colleague and waiting while they read it, versus dropping it in their in-tray.
 
 ### How it works
 
-1. `@EnableAsync` on a configuration class installs a post-processor. It wraps every bean that has `@Async` methods in a **proxy** ([ch04](../04-aop-and-proxies/README.md)).
+1. `@EnableAsync` on a configuration class installs a post-processor (a hook that can modify or wrap each bean after Spring creates it). It wraps every bean that has `@Async` methods in a **proxy** ([ch04](../04-aop-and-proxies/README.md); a stand-in object that intercepts calls before passing them to the real one).
 2. `publishEvent` finds the matching listeners and calls them in order.
 3. For a plain listener, the call runs the method right away.
 4. For an `@Async` listener, the call goes through the proxy. The proxy submits the method to an executor and returns immediately.
@@ -111,7 +111,7 @@ public class SignupListeners {
 }
 ```
 
-`Trace` is a small thread-safe list (a `CopyOnWriteArrayList`) that the tests print. The test calls `signUp`, prints the trace at once, then waits with **Awaitility**, a test library that polls a condition until it is true or a timeout expires:
+`Trace` is a small thread-safe (safe to use from several threads at once) list (a `CopyOnWriteArrayList`) that the tests print. The test calls `signUp`, prints the trace at once, then waits with **Awaitility**, a test library that polls a condition until it is true or a timeout expires:
 
 ```java
 signups.signUp("ana@example.com");
@@ -140,12 +140,12 @@ The synchronous listener ran on `main` (the test thread) between the two publish
 | Exception reaches the publisher? | yes, and it can roll back the publisher's transaction | no: it goes to the `AsyncUncaughtExceptionHandler` (14.6) |
 | Runs in the publisher's transaction? | yes | no: a new thread has no transaction |
 | Return value published as a new event? | yes | no |
-| `@Order` between listeners | respected | only the hand-off order is ordered; the executions race |
+| `@Order` between listeners | respected | only the hand-off order is ordered; the executions race (run at the same time, finishing in an unpredictable order) |
 
 ### Common mistakes
 
 - **Forgetting `@EnableAsync`.** Boot auto-configures an executor but does **not** enable `@Async`. Without the annotation, `@Async` is silently ignored and the listener runs synchronously.
-- **Expecting ThreadLocal state on the async thread**: the current transaction, the Spring Security context, the logging MDC. None of it moves across threads unless you copy it (14.4 shows a `TaskDecorator`).
+- **Expecting ThreadLocal state on the async thread** (a `ThreadLocal` holds a separate value per thread): the current transaction, the Spring Security context, the logging MDC (per-thread values such as a request id that appear in every log line, explained in §14.4). None of it moves across threads unless you copy it (14.4 shows a `TaskDecorator`).
 - **Treating async events as reliable.** They live in memory. If the JVM stops before the listener runs, the work is gone.
 
 ### TL;DR
@@ -215,7 +215,7 @@ What the test proved:
 
 ### Why `REQUIRES_NEW` on the async listener
 
-Since Framework 6.1, a `@TransactionalEventListener` that is also `@Transactional` must use `REQUIRES_NEW` or `NOT_SUPPORTED`, or the context fails to start (details in 7.15). With `@Async` the method runs on another thread anyway, so `REQUIRES_NEW` just states the intent: the e-mail log gets its own transaction.
+Since Framework 6.1, a `@TransactionalEventListener` that is also `@Transactional` must use `REQUIRES_NEW` (always start a fresh, separate transaction) or `NOT_SUPPORTED` (run with no transaction), or the context fails to start (details in 7.15). With `@Async` the method runs on another thread anyway, so `REQUIRES_NEW` just states the intent: the e-mail log gets its own transaction.
 
 ### When not to use it
 
@@ -226,7 +226,7 @@ When the side effect **must** happen. `AFTER_COMMIT` + `@Async` is still an in-m
 **30-second answer:** see 7.15. Add: "With `@Async` the side effect also leaves the request thread and gets its own transaction (`REQUIRES_NEW`). It is still an in-memory hand-off, so critical messages go through an outbox."
 
 - *What if no transaction is active?* → Transactional listeners are skipped, unless `fallbackExecution = true`.
-- *Can a `BEFORE_COMMIT` listener veto the commit?* → Yes. An exception there propagates and the transaction rolls back.
+- *Can a `BEFORE_COMMIT` listener veto (block) the commit?* → Yes. An exception there propagates and the transaction rolls back.
 
 ### Self-check
 
@@ -251,7 +251,7 @@ When the side effect **must** happen. `AFTER_COMMIT` + `@Async` is still an in-m
    - else a unique `TaskExecutor` bean, or the bean named `taskExecutor`. With Boot this is the auto-configured `applicationTaskExecutor`.
 3. It submits the real method call as a task and returns right away:
    - `void` → returns nothing. An exception goes to the `AsyncUncaughtExceptionHandler`.
-   - `CompletableFuture<T>` (or `Future<T>`) → returns a future that completes when the task finishes.
+   - `CompletableFuture<T>` (or `Future<T>`) → returns a **future** (a placeholder object for a result that will exist later) that completes when the task finishes.
 4. Inside the method you return `CompletableFuture.completedFuture(value)`. Spring unwraps it and completes the caller's future.
 
 ### Boot's auto-configured executor
@@ -321,7 +321,7 @@ public class ReportService {
 }
 ```
 
-The **MDC** (Mapped Diagnostic Context) is SLF4J's per-thread map of values, such as a request id, that every log line can include. It is a `ThreadLocal`, so a new thread starts with an empty one. A **`TaskDecorator`** wraps each submitted task. It reads the caller's values while still on the caller thread and restores them on the worker thread.
+The **MDC** (Mapped Diagnostic Context) is SLF4J's (the standard Java logging facade) per-thread map of values, such as a request id, that every log line can include. It is a `ThreadLocal`, so a new thread starts with an empty one. A **`TaskDecorator`** wraps each submitted task. It reads the caller's values while still on the caller thread and restores them on the worker thread.
 
 The test puts `requestId=r-42` into the MDC and calls the three methods:
 
@@ -343,7 +343,7 @@ Boot 4.1 also has `spring.task.execution.propagate-context=true`. It registers S
 
 | Workload | Pool shape |
 |---|---|
-| CPU-bound (image resizing, PDF rendering) | about as many threads as cores. More threads only add context switching |
+| CPU-bound (image resizing, PDF rendering) | about as many threads as cores. More threads only add context switching (the CPU's cost of swapping one thread out for another) |
 | I/O-bound (HTTP calls, SMTP, database) | many threads, or virtual threads (14.5) |
 | Must not pile up in memory | a **bounded** queue plus a rejection policy. The default `AbortPolicy` throws `TaskRejectedException` to the caller; `CallerRunsPolicy` runs the task on the caller's thread, which slows the producer down |
 | Isolate slow jobs from fast ones | separate pools (a **bulkhead**, see [microservices notes](../../../microservices-patterns/chapters/07-bulkhead/README.md)) |
@@ -351,7 +351,7 @@ Boot 4.1 also has `spring.task.execution.propagate-context=true`. It registers S
 ### Common mistakes
 
 - **Self-invocation, `private` or `final` methods**: no proxy, so no async. Move the method to another bean.
-- **An unbounded queue in front of a slow dependency.** Tasks accumulate until the heap is full. Set `queue-capacity`.
+- **An unbounded queue in front of a slow dependency.** Tasks accumulate until the heap (the JVM's memory area for objects) is full. Set `queue-capacity`.
 - **Declaring your own `Executor` bean and wondering why MVC async or `@Async` changed pools.** Boot's executor backed off. Use `defaultCandidate = false` or `mode=force`.
 - **Calling `.join()` right after the async call.** The caller waits anyway, and you only added a thread hop. Start several futures first, then join them all.
 - **Losing work on shutdown.** Tasks still queued when the context closes are dropped unless `shutdown.await-termination=true`.
@@ -371,7 +371,7 @@ Boot 4.1 also has `spring.task.execution.propagate-context=true`. It registers S
 
 ### What it is
 
-A **virtual thread** (final in Java 21) is a thread managed by the JVM rather than the operating system. It costs a few hundred bytes instead of about a megabyte of stack, so you can have hundreds of thousands. When it blocks on I/O, the JVM parks it and reuses the underlying carrier thread. Java's side of the story is in [Java 15.4 — Virtual threads](../../../java/chapters/15-concurrency-2-modern/README.md#154-virtual-threads).
+A **virtual thread** (final in Java 21) is a thread managed by the JVM rather than the operating system. It costs a few hundred bytes instead of about a megabyte of stack, so you can have hundreds of thousands. When it blocks on I/O (waits for network or disk), the JVM parks it and reuses the underlying carrier thread (the real OS thread it was running on). Java's side of the story is in [Java 15.4 — Virtual threads](../../../java/chapters/15-concurrency-2-modern/README.md#154-virtual-threads).
 
 With `spring.threads.virtual.enabled=true` (Boot 3.2+, needs Java 21+), Boot switches its executors to virtual threads. The same property also moves Tomcat request threads, `@Scheduled` and the Kafka and RabbitMQ listener containers to virtual threads.
 
@@ -413,10 +413,10 @@ report-3 built on virtual task-3 requestId=null
 
 ### Common mistakes
 
-- **Flooding a downstream system.** Without a pool there is no throttle. If each task opens a database connection, the connection pool (10 by default in HikariCP) becomes the real limit and tasks wait there instead. Set a concurrency limit on purpose.
+- **Flooding a downstream system.** Without a pool there is no throttle. If each task opens a database connection, the connection pool (the fixed set of reusable database connections; 10 by default in HikariCP, Boot's default pool) becomes the real limit and tasks wait there instead. Set a concurrency limit on purpose.
 - **Expecting CPU-bound work to get faster.** Virtual threads help with waiting, not with computing.
 - **Pinning.** Before JDK 24, a virtual thread blocked inside `synchronized` pinned its carrier thread. JEP 491 (JDK 24) removed that for `synchronized`. Native calls can still pin.
-- **An app whose only work is scheduled jobs exits at startup.** Virtual threads are daemon threads, so the JVM may see "no non-daemon threads" and stop. Set `spring.main.keep-alive=true`.
+- **An app whose only work is scheduled jobs exits at startup.** Virtual threads are daemon threads (background threads that do not keep the JVM alive), so the JVM may see "no non-daemon threads" and stop. Set `spring.main.keep-alive=true`.
 
 ### TL;DR
 
@@ -498,7 +498,7 @@ Notice that the message inside `handle` starts with `java.lang.IllegalStateExcep
 
 ### What it is
 
-`@Scheduled` makes the container call a method on a timer: every N milliseconds, N milliseconds after the previous run finished, or at calendar times given by a **cron expression**. Like `@Async`, it needs a switch: `@EnableScheduling`. Boot then auto-configures a `ThreadPoolTaskScheduler` with **one thread** named `scheduling-1`.
+`@Scheduled` makes the container call a method on a timer: every N milliseconds, N milliseconds after the previous run finished, or at calendar times given by a **cron expression** (a compact text format, borrowed from the Unix `cron` tool, that describes repeating times). Like `@Async`, it needs a switch: `@EnableScheduling`. Boot then auto-configures a `ThreadPoolTaskScheduler` with **one thread** named `scheduling-1`.
 
 ### How it works
 
@@ -508,11 +508,11 @@ Notice that the message inside `handle` starts with `java.lang.IllegalStateExcep
 
 | Attribute | Meaning | Example |
 |---|---|---|
-| `fixedRate = 300` | start every 300 ms, measured **start to start** | heartbeat, metrics push |
+| `fixedRate = 300` | start every 300 ms, measured **start to start** | heartbeat (a regular "I'm alive" signal), metrics push |
 | `fixedDelay = 300` | wait 300 ms **after the previous run ends** | polling a table or an API: never overlaps, never floods |
 | `initialDelay = 50` | wait before the first run | let the app warm up |
 | `cron = "0 0 2 * * *"` | calendar-based, 6 fields | nightly jobs |
-| `zone = "Europe/Berlin"` | time zone for `cron` (default: the server's zone) | daylight-saving-safe jobs |
+| `zone = "Europe/Berlin"` | time zone for `cron` (default: the server's zone) | daylight-saving-safe jobs (clocks jump an hour in spring and autumn) |
 | `timeUnit = TimeUnit.SECONDS` | unit for rate/delay (default ms) | `fixedDelay = 30, timeUnit = SECONDS` |
 | `fixedDelayString = "${outbox.poller.delay-ms}"` | value from configuration | tunable per environment |
 
@@ -594,7 +594,7 @@ If a job must never overlap itself, use `fixedDelay`, or guard it (an `AtomicBoo
 
 ### Turning jobs off in tests
 
-Background jobs make tests flaky: they touch data at random moments. Put `@EnableScheduling` on its own configuration class behind a property (`@ConditionalOnBooleanProperty` is new in Boot 3.5):
+Background jobs make tests **flaky** (sometimes passing, sometimes failing, with no code change): they touch data at random moments. Put `@EnableScheduling` on its own configuration class behind a property (`@ConditionalOnBooleanProperty` is new in Boot 3.5):
 
 ```java
 @Configuration(proxyBeanMethods = false)
@@ -611,13 +611,13 @@ Then test the job's **method** directly, as the outbox test in 14.17 does with `
 
 ### Running in a cluster
 
-`@Scheduled` knows nothing about other instances. With three pods, the 02:00 job runs **three times**. Options:
+`@Scheduled` knows nothing about other instances (running copies of the same app). With three pods (a **pod** is Kubernetes' unit for one running app instance; Kubernetes is the common platform for running containers), the 02:00 job runs **three times**. Options:
 
 | Option | How |
 |---|---|
 | **ShedLock** (a library) | `@SchedulerLock(name = "cleanup")` takes a lock row in a shared database table. Only one instance runs the job |
-| Leader election | Spring Integration `LockRegistryLeaderInitiator`, Kubernetes leader election |
-| Move the job out | a Kubernetes `CronJob`, or Quartz in clustered JDBC mode for persistent, missed-fire-aware schedules |
+| Leader election (the instances agree that exactly one of them is "leader" and does the job) | Spring Integration `LockRegistryLeaderInitiator`, Kubernetes leader election |
+| Move the job out | a Kubernetes `CronJob`, or Quartz (a Java job-scheduling library) in clustered JDBC mode for persistent, missed-fire-aware schedules |
 | Make the job idempotent and safe to run concurrently | `UPDATE ... WHERE status = 'PENDING'` claims rows, or `SELECT ... FOR UPDATE SKIP LOCKED` (14.17) |
 
 ### Common mistakes
@@ -652,12 +652,12 @@ Two broker designs dominate:
 
 | | **Queue broker** (RabbitMQ, ActiveMQ, Amazon SQS) | **Log broker** (Apache Kafka, Redpanda, Amazon Kinesis) |
 |---|---|---|
-| Storage | a queue per consumer group of interest. A message is **deleted** once acknowledged | an append-only **log**. Messages stay for a retention period (e.g. 7 days) whether read or not |
+| Storage | a queue per consumer group of interest. A message is **deleted** once acknowledged ("acked": the consumer confirms it has handled it) | an append-only **log**. Messages stay for a retention period (e.g. 7 days) whether read or not |
 | Reading | the broker pushes messages and tracks which are acknowledged | each consumer group tracks its own **offset** (position) and pulls |
 | Replay old messages | no, they are gone after the ack | yes: reset the offset |
-| Routing | rich: exchanges, routing keys, patterns, headers | by topic and partition only |
+| Routing | rich: exchanges, routing keys, patterns, headers (explained in §14.18) | by topic and partition only (§14.9) |
 | Ordering | per queue, weakened by multiple consumers and redelivery | strict **per partition** |
-| Typical use | task distribution, request/reply, complex routing | event streaming, event sourcing, feeding many independent consumers, high throughput |
+| Typical use | task distribution, request/reply, complex routing | event streaming, event sourcing (storing every change as an event and rebuilding state from them), feeding many independent consumers, high throughput |
 
 ### Delivery guarantees
 
@@ -669,7 +669,7 @@ Two broker designs dominate:
 
 An **idempotent** operation gives the same result when repeated: "set status to PAID" is idempotent, "add 10 € to the balance" is not. Because at-least-once delivery is the normal case, **every consumer should tolerate duplicates**. 14.17 shows the usual technique: remember processed message ids.
 
-The theory, including why exactly-once is hard, is in [DDIA ch11 — Stream processing](../../../ddia/chapters/11-stream-processing/README.md).
+The theory, including why exactly-once is hard, is in [DDIA (the book *Designing Data-Intensive Applications*) ch11 — Stream processing](../../../ddia/chapters/11-stream-processing/README.md).
 
 ---
 
@@ -677,16 +677,16 @@ The theory, including why exactly-once is hard, is in [DDIA ch11 — Stream proc
 
 ### What it is
 
-**Apache Kafka** is a distributed, replicated **commit log**. Its vocabulary:
+**Apache Kafka** is a distributed (spread over several servers), replicated (each piece stored on several servers) **commit log** (an append-only list of records, read in order). Its vocabulary:
 
 | Term | Meaning |
 |---|---|
-| **Broker** | one Kafka server. A **cluster** has several. Since Kafka 4.0 the cluster manages itself with **KRaft** (Kafka Raft); ZooKeeper is gone |
+| **Broker** | one Kafka server. A **cluster** has several. Since Kafka 4.0 the cluster manages itself with **KRaft** (Kafka Raft; Raft is an algorithm that lets servers agree on shared state); ZooKeeper (the separate coordination service Kafka used before) is gone |
 | **Topic** | a named stream of records, e.g. `orders` |
 | **Partition** | a topic is split into N partitions. Each is an ordered, append-only log stored on a broker, which is the unit of parallelism |
 | **Offset** | a record's position inside its partition: 0, 1, 2, ... |
 | **Record** | key (optional) + value + headers + timestamp |
-| **Key** | decides the partition: the default partitioner hashes the key (murmur2) modulo the partition count. **Same key → same partition → ordered**. No key → records are spread across partitions |
+| **Key** | decides the partition: the default partitioner hashes the key (turns it into a number with a fixed function, here murmur2) modulo (remainder after dividing by) the partition count. **Same key → same partition → ordered**. No key → records are spread across partitions |
 | **Replication factor** | copies of each partition on different brokers. One is the **leader**, the others are followers |
 | **Consumer group** | consumers sharing a `group.id`. Each partition is read by **exactly one** member of the group, and each group gets **every** record |
 | **Committed offset** | per group and partition: "we've processed up to here". After a restart the group continues from it |
@@ -718,7 +718,7 @@ Two rules follow from the picture:
 1. **Scale consumers up to the partition count.** A fourth consumer in `shipping` would sit idle. Choose partitions for the parallelism you will need.
 2. **Ordering is per partition.** Records with the same key are processed in order. There is no order across partitions.
 
-Spring for Apache Kafka ("spring-kafka") wraps the Kafka Java client with `KafkaTemplate` (sending), `@KafkaListener` (receiving), error handlers, retry topics, transactions and test support. Boot 4.1.1 manages **spring-kafka 4.1.1** and **kafka-clients 4.2.1** (checked in the Boot 4.1.1 dependency BOM and the spring-kafka 4.1 reference docs).
+Spring for Apache Kafka ("spring-kafka") wraps the Kafka Java client with `KafkaTemplate` (sending), `@KafkaListener` (receiving), error handlers, retry topics, transactions and test support. Boot 4.1.1 manages **spring-kafka 4.1.1** and **kafka-clients 4.2.1** (checked in the Boot 4.1.1 dependency BOM — the "bill of materials" that pins compatible library versions — and the spring-kafka 4.1 reference docs).
 
 ---
 
@@ -774,7 +774,7 @@ What each part does:
 | `ErrorHandlingDeserializer` | wraps the real deserializer. If a record's bytes are not valid JSON (a **poison pill**), the failure is handed to the error handler instead of failing inside `poll()` again and again forever |
 | `spring.json.trusted.packages` | the deserializer creates the class named in the record's `__TypeId__` header only if it is in a trusted package. Never use `*` for data from untrusted producers |
 | `auto-offset-reset=earliest` | a **new** group with no committed offset starts at the beginning. The Kafka default `latest` would skip everything sent before the consumer joined |
-| `acks=all` | the leader waits for all in-sync replicas before confirming. Already the client default since Kafka 3.0; written out here for clarity |
+| `acks=all` | the leader waits for all in-sync replicas (copies that are fully up to date) before confirming. Already the client default since Kafka 3.0; written out here for clarity |
 
 The event is a plain record:
 
@@ -801,7 +801,7 @@ value bytes as text: {"orderId":"o-json","customer":"zoe","cents":4200}
 __TypeId__ header  : ch14.kafka.OrderEvent
 ```
 
-The **type header** tells the consumer which class to build. It couples producer and consumer to the same Java class name. Across services, either give the consumer a fixed target type (`spring.json.value.default.type` plus `spring.json.use.type.headers=false`), map type ids to local classes (`spring.json.type.mapping`), or use a schema format such as Avro or Protobuf with a schema registry.
+The **type header** tells the consumer which class to build. It couples producer and consumer to the same Java class name. Across services, either give the consumer a fixed target type (`spring.json.value.default.type` plus `spring.json.use.type.headers=false`), map type ids to local classes (`spring.json.type.mapping`), or use a schema format such as Avro or Protobuf (compact binary formats with an explicit schema) with a schema registry (a server that stores the schemas and checks that new versions stay compatible).
 
 ---
 
@@ -809,7 +809,7 @@ The **type header** tells the consumer which class to build. It couples producer
 
 ### How it works
 
-1. `kafkaTemplate.send(topic, key, value)` serializes the key and value, picks a partition (hash of the key), and puts the record into an in-memory batch.
+1. `kafkaTemplate.send(topic, key, value)` serializes (turns into bytes) the key and value, picks a partition (hash of the key), and puts the record into an in-memory batch.
 2. A background I/O thread sends batches to the partition leaders. Batching is where Kafka's throughput comes from (`linger.ms`, `batch.size`).
 3. `send` returns a `CompletableFuture<SendResult<K, V>>`. It completes when the broker acknowledges, and its `RecordMetadata` holds the topic, partition and offset. It completes exceptionally if the send failed after the client's own retries.
 
@@ -977,7 +977,7 @@ A listener throws. What now? If the container simply re-reads the same record, a
 
 ### How it works in spring-kafka
 
-- `DefaultErrorHandler` is the container's error handler. On failure it **seeks** the partition back to the failed record, so the next `poll()` returns it again. That is a **blocking** retry: the partition waits.
+- `DefaultErrorHandler` is the container's error handler. On failure it **seeks** (moves the read position of) the partition back to the failed record, so the next `poll()` returns it again. That is a **blocking** retry: the partition waits.
 - Its `BackOff` decides how often and how long. The default is `FixedBackOff(0, 9)`: 9 retries, no delay, 10 attempts in total.
 - When retries are exhausted, it calls a `ConsumerRecordRecoverer`. `DeadLetterPublishingRecoverer` sends the record to the DLT.
 - Some exceptions are **fatal by default** and skip retries: `DeserializationException`, `MessageConversionException`, `ConversionException`, `MethodArgumentResolutionException`, `NoSuchMethodException`, `ClassCastException`. Add your own with `addNotRetryableExceptions(...)`.
@@ -1145,7 +1145,7 @@ max.in.flight      = 5
 
 ### Transactional producer
 
-A **Kafka transaction** makes several sends (to several topics or partitions, plus consumer offsets) **atomic**. Consumers with `isolation.level=read_committed` see all of them or none.
+A **Kafka transaction** makes several sends (to several topics or partitions, plus consumer offsets) **atomic** (all happen or none do). Consumers with `isolation.level=read_committed` see all of them or none.
 
 ```java
 var pf = new DefaultKafkaProducerFactory<String, String>(props);
@@ -1176,7 +1176,7 @@ In a Boot app you set `spring.kafka.producer.transaction-id-prefix=tx-`. Boot th
 
 ### What Kafka transactions do not give you
 
-**Exactly-once** holds for the loop "consume from Kafka → process → produce to Kafka, and commit the input offsets in the same transaction". It does **not** cover a database write plus a Kafka send. There is no two-phase commit between them. The old `ChainedKafkaTransactionManager` (deprecated since spring-kafka 2.7) only committed one after the other, which is best effort, not atomic. For database + broker, use the transactional outbox.
+**Exactly-once** holds for the loop "consume from Kafka → process → produce to Kafka, and commit the input offsets in the same transaction". It does **not** cover a database write plus a Kafka send. There is no two-phase commit (a protocol where a coordinator first asks every system "can you commit?" and then tells all of them to commit) between them. The old `ChainedKafkaTransactionManager` (deprecated since spring-kafka 2.7) only committed one after the other, which is best effort, not atomic. For database + broker, use the transactional outbox.
 
 ---
 
@@ -1206,7 +1206,7 @@ This is the **dual-write problem**. The database and the broker cannot share one
 
 1. In the **same local database transaction** as the business change, insert a row into an `outbox` table describing the event.
 2. Commit. Now the order and the event exist together, or neither does.
-3. A separate **message relay** reads unsent outbox rows in order, publishes them to the broker, and marks them sent. It is either a **poller** (shown here) or **change data capture**: Debezium reads the database's write-ahead log and publishes the outbox rows.
+3. A separate **message relay** reads unsent outbox rows in order, publishes them to the broker, and marks them sent. It is either a **poller** (shown here) or **change data capture** (CDC: streaming every committed change out of the database): Debezium reads the database's write-ahead log (the file where the database records each change before applying it) and publishes the outbox rows.
 4. Consumers get **at-least-once** delivery, so they must be **idempotent**. Each message carries a unique id they can de-duplicate on.
 
 ```mermaid
@@ -1339,7 +1339,7 @@ consumer handled: [true, false] -> stock_reservations=1
 published by the scheduled poller within ~200 ms: OrderPlaced {"orderId":1,"item":"desk","cents":25000}
 ```
 
-(The id numbers depend on test order, because identity columns keep counting after `DELETE`.)
+(The id numbers depend on test order, because identity columns (auto-incrementing id columns) keep counting after `DELETE`.)
 
 | Scenario | What the test proved |
 |---|---|
@@ -1370,12 +1370,12 @@ The id insert and the business change are in **one** transaction. If the busines
 | Poller (this demo) | CDC (Debezium outbox event router) |
 |---|---|
 | plain SQL + `@Scheduled`, easy to understand | no polling load, lower latency |
-| adds query load; latency = poll interval | extra infrastructure: Kafka Connect, Debezium, access to the DB log |
+| adds query load; latency = poll interval | extra infrastructure: Kafka Connect (Kafka's framework for moving data in and out), Debezium, access to the DB log |
 | works on any database | needs DB support (Postgres logical decoding, MySQL binlog) |
 
 Housekeeping: delete or archive published rows (e.g. a nightly job that removes rows with `published_at` older than 7 days), or the table grows forever.
 
-**Spring Modulith** offers a ready-made variant for modular monoliths. Its *event publication registry* stores application events in a database table before commit and re-delivers the ones whose listeners did not complete, and its *event externalization* forwards selected events to Kafka or AMQP.
+**Spring Modulith** offers a ready-made variant for modular monoliths (one deployable application split internally into well-separated modules). Its *event publication registry* stores application events in a database table before commit and re-delivers the ones whose listeners did not complete, and its *event externalization* forwards selected events to Kafka or AMQP (Advanced Message Queuing Protocol, the protocol RabbitMQ speaks).
 
 ### When not to use it
 
@@ -1394,7 +1394,7 @@ Housekeeping: delete or archive published rows (e.g. a nightly job that removes 
 **30-second answer:** "You can't atomically write to a database and publish to Kafka. That's the dual-write problem. The outbox pattern writes the event into an outbox table in the same local transaction as the business change. A relay (a poller with `SELECT ... FOR UPDATE SKIP LOCKED`, or Debezium CDC) publishes the rows and marks them sent. Delivery is at-least-once, because the relay can crash between publishing and marking, so consumers de-duplicate by message id in the same transaction as their own change."
 
 - *Why not a Kafka transaction?* → It only covers Kafka. The database commit is outside it.
-- *How do you keep ordering?* → Publish in id order, stop at the first failure, and use the aggregate id as the Kafka key so each aggregate's events share a partition.
+- *How do you keep ordering?* → Publish in id order, stop at the first failure, and use the aggregate id as the Kafka key so each aggregate's events share a partition (an **aggregate** is a business object that changes as one unit, such as an order with its lines).
 - *Poller or CDC?* → Start with a poller. Switch to CDC when polling load or latency matters, or when Kafka Connect is already there.
 
 ### Self-check
@@ -1495,14 +1495,14 @@ Testing without Docker: Spring AMQP has no embedded broker. Use `@RabbitListener
 | Question | Leans Kafka | Leans RabbitMQ |
 |---|---|---|
 | Several independent consumers read the same stream, maybe later | yes: each group has its own offset, and records are retained | each consumer needs its own queue, and messages are gone after the ack |
-| Replay history, rebuild a read model | yes | no |
+| Replay history, rebuild a read model (a copy of data shaped for queries) | yes | no |
 | Complex routing by key patterns or headers | limited | yes: exchanges |
-| Per-message priorities, TTL, delayed delivery | no | yes (TTL, priorities; delays via a plugin) |
+| Per-message priorities, TTL (time to live: an expiry time), delayed delivery | no | yes (TTL, priorities; delays via a plugin) |
 | Throughput | very high (batching, sequential disk I/O) | high, lower per node |
 | Ordering | per partition, scales with partitions | per queue, weakened by competing consumers |
 | Operational model | a cluster plus partitions to plan | simpler for small setups |
 
-Spring also supports **JMS** (`JmsTemplate`, `@JmsListener`; ActiveMQ Artemis, IBM MQ), **Apache Pulsar** (Spring for Apache Pulsar) and a binder abstraction, **Spring Cloud Stream** ([ch16](../16-spring-cloud-and-microservices/README.md)).
+Spring also supports **JMS** (`JmsTemplate`, `@JmsListener`; ActiveMQ Artemis, IBM MQ), **Apache Pulsar** (Spring for Apache Pulsar) and a binder abstraction (one API with plug-in "binders" for each broker), **Spring Cloud Stream** ([ch16](../16-spring-cloud-and-microservices/README.md)).
 
 ---
 

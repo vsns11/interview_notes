@@ -1,8 +1,8 @@
 # Chapter 16 — Spring Cloud and Microservices
 
-A **microservice architecture** splits one application into small services that are deployed independently and talk over the network. That buys independent releases and scaling, and costs you every problem of distributed systems: where is the other service, what if it is slow, how do clients find a single entry point, where does configuration live, how do you follow one request through ten services. **Spring Cloud** is a family of projects that gives Spring Boot applications ready-made answers to those problems.
+A **microservice architecture** splits one application into small services that are deployed independently and talk over the network. That buys independent releases and scaling, and costs you every problem of **distributed systems** (systems whose parts run on different machines and can only talk over an unreliable network; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)): where is the other service, what if it is slow, how do clients find a single entry point, where does configuration live, how do you follow one request through ten services. **Spring Cloud** is a family of projects that gives Spring Boot applications ready-made answers to those problems.
 
-This chapter is about the *Spring implementation*. The patterns themselves — why a gateway, how a circuit breaker thinks, sagas, CQRS — are explained in the [Microservices Patterns notes](../../../microservices-patterns/README.md) and the [System Design Patterns](../../../system-design-patterns/README.md) modules; each section links to the right one instead of re-teaching it.
+This chapter is about the *Spring implementation*. The patterns themselves — why a gateway (one front door for all clients), how a circuit breaker (a switch that stops calls to a failing service) thinks, sagas (multi-service workflows made of local steps plus undo steps), CQRS (separate models for writing and for reading data) — are explained in the [Microservices Patterns notes](../../../microservices-patterns/README.md) and the [System Design Patterns](../../../system-design-patterns/README.md) modules; each section links to the right one instead of re-teaching it.
 
 **What you'll learn**
 
@@ -16,7 +16,7 @@ This chapter is about the *Spring implementation*. The patterns themselves — w
 8. **Resilience**: Resilience4j circuit breaker, retry and rate limiter state transitions (run) vs Framework 7's `@Retryable` / `@ConcurrencyLimit`.
 9. Distributed tracing across services, contract testing, messaging between services.
 
-The code: four Spring Boot 4.1.1 projects on Java 25 in [`code/`](code/) — `config-demo`, `service-clients`, `gateway-demo`, `resilience-demo` (7 tests, all run). Downstream services in the tests are tiny local HTTP servers on random ports, so nothing external is needed. Outputs are real `mvn -q verify` output (log noise trimmed as `...`).
+The code: four Spring Boot 4.1.1 projects on Java 25 in [`code/`](code/) — `config-demo`, `service-clients`, `gateway-demo`, `resilience-demo` (7 tests, all run). Downstream services (the services a service calls) in the tests are tiny local HTTP servers on random ports, so nothing external is needed. Outputs are real `mvn -q verify` output (log noise trimmed as `...`).
 
 > **Prerequisites.** HTTP clients and HTTP interfaces: [Chapter 6](../06-rest-clients-and-http-interfaces/README.md). Proxies and Framework 7 `@Retryable`: [Chapter 4](../04-aop-and-proxies/README.md). Configuration and `spring.config.import`: [Chapter 3](../03-configuration-and-auto-configuration/README.md). Tracing and health probes: [Chapter 15](../15-observability-and-production/README.md). Messaging: [Chapter 14](../14-messaging-async-and-scheduling/README.md).
 
@@ -26,15 +26,15 @@ The code: four Spring Boot 4.1.1 projects on Java 25 in [`code/`](code/) — `co
 
 ### Why it matters
 
-Before adding any dependency, know which problem it solves — and whether your platform already solves it. Many teams on Kubernetes still add Eureka and a Config Server out of habit, doubling the moving parts.
+Before adding any dependency, know which problem it solves — and whether your platform already solves it. Many teams on Kubernetes (the standard platform for running containers across machines) still add Eureka and a Config Server out of habit, doubling the moving parts.
 
 | Problem | Pattern notes | Spring answer | On Kubernetes, often instead |
 |---|---|---|---|
-| One entry point for clients, cross-cutting edge concerns | [API Gateway](../../../microservices-patterns/chapters/03-api-gateway/README.md), [BFF](../../../microservices-patterns/chapters/04-bff/README.md) | **Spring Cloud Gateway** | Ingress / Gateway API controller, service mesh |
-| Find instances whose addresses change | [Service Discovery](../../../microservices-patterns/chapters/05-service-discovery/README.md) | Eureka, Consul, Zookeeper, Spring Cloud Kubernetes | Kubernetes Services + DNS |
-| Spread calls over instances | [Load balancing](../../../system-design-patterns/modules/06-scaling/README.md) | **Spring Cloud LoadBalancer** (client side) | kube-proxy / mesh (server side) |
-| Configuration per environment, changed without rebuild | [Config externalization](../../../microservices-patterns/chapters/13-config-externalization/README.md) | **Spring Cloud Config**, Vault, Consul KV | ConfigMaps / Secrets (`spring.config.import=configtree:`) |
-| Failing or slow dependencies | [Circuit Breaker](../../../microservices-patterns/chapters/06-circuit-breaker/README.md), [Retry](../../../microservices-patterns/chapters/08-retry/README.md), [Bulkhead](../../../microservices-patterns/chapters/07-bulkhead/README.md) | **Resilience4j** (+ Spring Cloud CircuitBreaker), Framework 7 `@Retryable`/`@ConcurrencyLimit` | mesh retries/outlier detection (coarser) |
+| One entry point for clients, cross-cutting edge concerns (things every request needs at the front door, such as auth and rate limits) | [API Gateway](../../../microservices-patterns/chapters/03-api-gateway/README.md), [BFF](../../../microservices-patterns/chapters/04-bff/README.md) | **Spring Cloud Gateway** | Ingress / Gateway API controller (Kubernetes' built-in HTTP entry points), service mesh (a network layer of sidecar proxies that handles routing, retries and encryption between services) |
+| Find instances whose addresses change | [Service Discovery](../../../microservices-patterns/chapters/05-service-discovery/README.md) | Eureka, Consul, Zookeeper, Spring Cloud Kubernetes | Kubernetes Services + DNS (the system that turns names into IP addresses) |
+| Spread calls over instances | [Load balancing](../../../system-design-patterns/modules/06-scaling/README.md) | **Spring Cloud LoadBalancer** (client side) | kube-proxy (the Kubernetes component that forwards a Service's traffic to its pods) / mesh (server side) |
+| Configuration per environment, changed without rebuild | [Config externalization](../../../microservices-patterns/chapters/13-config-externalization/README.md) | **Spring Cloud Config**, Vault, Consul KV | ConfigMaps / Secrets (Kubernetes objects that hold configuration and secret values) (`spring.config.import=configtree:`) |
+| Failing or slow dependencies | [Circuit Breaker](../../../microservices-patterns/chapters/06-circuit-breaker/README.md), [Retry](../../../microservices-patterns/chapters/08-retry/README.md), [Bulkhead](../../../microservices-patterns/chapters/07-bulkhead/README.md) | **Resilience4j** (+ Spring Cloud CircuitBreaker), Framework 7 `@Retryable`/`@ConcurrencyLimit` | mesh retries/outlier detection (automatically ejecting instances that keep failing) (coarser) |
 | Following a request across services | [Distributed Tracing](../../../system-design-patterns/modules/09-operating-in-production/README.md) | Micrometer Tracing + OpenTelemetry ([15.7](../15-observability-and-production/README.md#157-distributed-tracing)) | same, plus mesh telemetry |
 | Declarative HTTP calls | — | HTTP interface clients (Framework), OpenFeign (maintenance) | — |
 | Async communication, events | [Event-Driven](../../../microservices-patterns/chapters/11-event-driven/README.md), [Saga](../../../microservices-patterns/chapters/10-saga/README.md), [CQRS](../../../microservices-patterns/chapters/12-cqrs/README.md) | Spring Kafka / AMQP ([Chapter 14](../14-messaging-async-and-scheduling/README.md)), Spring Cloud Stream | — |
@@ -58,7 +58,7 @@ flowchart LR
 
 ### When not to use microservices
 
-Distributed systems are harder to build, test, debug and operate. A small team, an unclear domain or no need for independent scaling are strong reasons to start with a **well-modularised monolith** (Spring Modulith helps enforce module boundaries) and extract services later with the [Strangler Fig](../../../microservices-patterns/chapters/02-strangler-fig/README.md) approach. Also see [DDIA](../../../ddia/) for the consistency problems you inherit.
+Distributed systems are harder to build, test, debug and operate. A small team, an unclear domain (the business area the software models) or no need for independent scaling are strong reasons to start with a **well-modularised monolith** (one deployable application with clean internal module boundaries) (Spring Modulith helps enforce module boundaries) and extract services later with the [Strangler Fig](../../../microservices-patterns/chapters/02-strangler-fig/README.md) approach. Also see [DDIA](../../../ddia/) (the book *Designing Data-Intensive Applications*) for the consistency problems you inherit.
 
 ---
 
@@ -66,7 +66,7 @@ Distributed systems are harder to build, test, debug and operate. A small team, 
 
 ### What it is
 
-Spring Cloud is ~15 separate projects (Commons, Config, Gateway, OpenFeign, Netflix, Consul, Kubernetes, Circuit Breaker, Stream, Function, Bus, Vault, Task, Zookeeper...), each with its own version. A **release train** is a BOM (bill of materials) that pins a set of versions known to work together and with one Spring Boot generation. Trains are named `YYYY.MINOR.PATCH` (since 2020) with a codename.
+Spring Cloud is ~15 separate projects (Commons, Config, Gateway, OpenFeign, Netflix, Consul, Kubernetes, Circuit Breaker, Stream, Function, Bus, Vault, Task, Zookeeper...), each with its own version. A **release train** is a BOM (bill of materials) that pins a set of versions known to work together and with one Spring Boot generation. Trains are named `YYYY.MINOR.PATCH` (since 2020) with a codename (a nickname such as "Oakwood").
 
 | Train | Codename | Spring Boot | Component versions |
 |---|---|---|---|
@@ -74,7 +74,7 @@ Spring Cloud is ~15 separate projects (Commons, Config, Gateway, OpenFeign, Netf
 | 2025.0.x | Northfields | 3.5.x | 4.3.x — open-source support ended June 2026 |
 | 2024.0.x | Moorgate | 3.4.x | 4.2.x |
 
-(Source: the compatibility table on spring.io/projects/spring-cloud; 2025.1.3, August 2026, is the latest service release at the time of writing and states it is based on Boot 4.0.x and compatible with 4.1.x. A `2026.0.0-M1` milestone exists on Maven Central.)
+(Source: the compatibility table on spring.io/projects/spring-cloud; 2025.1.3, August 2026, is the latest service release at the time of writing and states it is based on Boot 4.0.x and compatible with 4.1.x. A `2026.0.0-M1` milestone (an early preview build) exists on Maven Central, the public repository Maven downloads libraries from.)
 
 ```xml
 <properties>
@@ -105,7 +105,7 @@ Things that changed recently and trip people up:
 
 ### Common mistakes
 
-- Mixing trains and Boot generations (e.g. 2025.0 with Boot 4) → `NoSuchMethodError`/`ClassNotFoundException` at startup. Spring Cloud checks compatibility on startup and fails fast with a clear message (`spring.cloud.compatibility-verifier.enabled`).
+- Mixing trains and Boot generations (e.g. 2025.0 with Boot 4) → `NoSuchMethodError`/`ClassNotFoundException` at startup. Spring Cloud checks compatibility on startup and fails fast (stops immediately instead of misbehaving later) with a clear message (`spring.cloud.compatibility-verifier.enabled`).
 - Hard-coding component versions instead of importing the BOM.
 
 ---
@@ -114,20 +114,20 @@ Things that changed recently and trip people up:
 
 ### What it is
 
-A **Config Server** is a small Spring Boot app that serves configuration files over HTTP from a backend — usually a **Git repository**, also a local folder (`native` profile), Vault, JDBC, S3 and others. Every service is a **config client**: at startup it imports its properties from the server, layered by *application name*, *profile* and *label* (Git branch/tag).
+A **Config Server** is a small Spring Boot app that serves configuration files over HTTP from a backend — usually a **Git repository** (a folder whose full change history is tracked by the Git version-control tool), also a local folder (`native` profile), Vault (HashiCorp's secret store), JDBC, S3 (Amazon's file storage) and others. Every service is a **config client**: at startup it imports its properties from the server, layered by *application name*, *profile* and *label* (Git branch/tag).
 
 Analogy: a company handbook kept in one shared binder. Each department (service) reads the general chapter plus its own chapter; when the binder is updated, departments can re-read it without re-hiring staff.
 
 ### Why it matters
 
-With 30 services and 4 environments you have 120 configuration sets. A Config Server gives one place to review, version (Git history = audit log), and change them — and to refresh running services without a rebuild. See [Config externalization notes](../../../microservices-patterns/chapters/13-config-externalization/README.md).
+With 30 services and 4 environments you have 120 configuration sets. A Config Server gives one place to review, version (Git history = audit log, a record of who changed what and when), and change them — and to refresh running services without a rebuild. See [Config externalization notes](../../../microservices-patterns/chapters/13-config-externalization/README.md).
 
 ### How it works
 
 1. The server exposes `GET /{application}/{profile}[/{label}]` (plus file-style URLs like `/{application}-{profile}.properties`).
 2. For `orders` + profile `prod` it returns an ordered list of property sources — most specific first: `orders-prod.properties` → `orders.properties` → `application-prod.properties` → `application.properties`.
 3. The client adds `spring.config.import=configserver:http://config:8888` (Boot's config-data API; the old `bootstrap.yml` mechanism is legacy). Use `optional:configserver:...` if the service may start without it.
-4. Remote properties are added to the `Environment` and **override the service's own `application.properties`**. Whether local system properties or environment variables may override remote values is controlled from the repository side (`spring.cloud.config.allow-override`, `override-none`, `override-system-properties`).
+4. Remote properties are added to the `Environment` and **override the service's own `application.properties`**. Whether local system properties or environment variables (named values set outside the program by the OS or platform) may override remote values is controlled from the repository side (`spring.cloud.config.allow-override`, `override-none`, `override-system-properties`).
 5. On refresh the client refetches, rebinds `@ConfigurationProperties` beans and re-creates `@RefreshScope` beans.
 
 ```mermaid
@@ -193,21 +193,21 @@ One demo-only detail: because server and client share one classpath here, the cl
 
 ### Refreshing many instances, secrets and alternatives
 
-- **Spring Cloud Bus** (`spring-cloud-starter-bus-kafka` / `-amqp`) broadcasts one refresh to all instances (`POST /actuator/busrefresh`); the Config Server's `spring-cloud-config-monitor` can trigger it from a Git webhook.
-- Values like `{cipher}AQB...` are decrypted by the server (`encrypt.key` or a keystore); better, keep secrets in **Vault** (`spring-cloud-starter-vault-config`) or Kubernetes Secrets.
+- **Spring Cloud Bus** (`spring-cloud-starter-bus-kafka` / `-amqp`) broadcasts one refresh to all instances (`POST /actuator/busrefresh`); the Config Server's `spring-cloud-config-monitor` can trigger it from a Git webhook (an HTTP call the Git host makes to your server when something is pushed).
+- Values like `{cipher}AQB...` are decrypted by the server (`encrypt.key` or a keystore, a protected file that holds keys); better, keep secrets in **Vault** (`spring-cloud-starter-vault-config`) or Kubernetes Secrets.
 - On Kubernetes, mounting ConfigMaps/Secrets as files and importing them with `spring.config.import=configtree:/etc/config/` needs no extra server ([3.8](../03-configuration-and-auto-configuration/README.md#38-importing-configuration-springconfigimport)); Spring Cloud Kubernetes can also read ConfigMaps via the API and reload.
 
 ### Trade-offs and when not to use it
 
 | Pro | Con |
 |---|---|
-| One reviewed, versioned source; environment diffs visible | Another critical service: if it is down, new instances can't start (use `optional:`, `fail-fast` + retry, run ≥2 replicas) |
+| One reviewed, versioned source; environment diffs visible | Another critical service: if it is down, new instances can't start (use `optional:`, `fail-fast` + retry, run ≥2 replicas, i.e. copies) |
 | Runtime refresh without redeploy | Runtime refresh is also runtime *risk* — a bad value hits all instances at once |
 | Works on any platform | On Kubernetes, ConfigMaps may be enough |
 
 ### Common mistakes
 
-- Expecting every bean to see new values after refresh — only `@ConfigurationProperties` beans (rebound) and `@RefreshScope` beans (re-created) do. A `@Value` field in a normal singleton keeps the old value.
+- Expecting every bean to see new values after refresh — only `@ConfigurationProperties` beans (rebound) and `@RefreshScope` beans (re-created) do. A `@Value` field in a normal singleton (a bean created once and shared, Spring's default) keeps the old value.
 - Putting secrets in plain text in the Git repo.
 - Forgetting `spring.application.name` — the client then asks for `application`, not `orders`.
 
@@ -223,17 +223,17 @@ One demo-only detail: because server and client share one classpath here, the cl
 
 ### What it is
 
-In a dynamic environment instances come and go and their IP addresses change. **Service discovery** keeps a **registry** of live instances per service name; clients ask "where is `inventory`?" instead of hard-coding addresses. Details and client-side vs server-side discovery: [Service Discovery notes](../../../microservices-patterns/chapters/05-service-discovery/README.md).
+In a dynamic environment instances come and go and their IP addresses (the numeric network addresses of machines) change. **Service discovery** keeps a **registry** of live instances per service name; clients ask "where is `inventory`?" instead of hard-coding addresses. Details and client-side vs server-side discovery: [Service Discovery notes](../../../microservices-patterns/chapters/05-service-discovery/README.md).
 
 Spring Cloud Commons defines the abstraction — `DiscoveryClient` (`getInstances("inventory")` → list of `ServiceInstance` with host, port, metadata) — and each backend implements it:
 
 | Backend | Starter | How instances register | Health | Notes (not run here) |
 |---|---|---|---|---|
-| **Netflix Eureka** | `spring-cloud-starter-netflix-eureka-server` / `-client` | client registers itself and sends heartbeats (every 30 s by default) | heartbeat lease expiry | AP design (in CAP terms: stays **A**vailable during a network **P**artition rather than **C**onsistent): may serve stale entries (self-preservation mode) |
+| **Netflix Eureka** | `spring-cloud-starter-netflix-eureka-server` / `-client` | client registers itself and sends heartbeats ("I'm still alive" messages, every 30 s by default) | heartbeat lease expiry (dropped if heartbeats stop) | AP design (in CAP terms: stays **A**vailable during a network **P**artition rather than **C**onsistent): may serve stale (out-of-date) entries (self-preservation mode) |
 | **HashiCorp Consul** | `spring-cloud-starter-consul-discovery` | client registers via the local Consul agent | Consul calls the app's health URL | also KV store for config (`spring-cloud-starter-consul-config`) |
 | **Kubernetes** | `spring-cloud-starter-kubernetes-client-all` (or `-fabric8`) | Kubernetes itself (Endpoints of a Service) | readiness probes | needs RBAC (role-based access control) permission to read endpoints |
 | **Simple** (in Commons) | none | static list in properties | none | tests, local dev, fixed topologies — used in 16.5 |
-| Zookeeper | `spring-cloud-starter-zookeeper-discovery` | ephemeral nodes | session | CP design |
+| Zookeeper | `spring-cloud-starter-zookeeper-discovery` | ephemeral nodes (entries that vanish when their owner disconnects) | session | CP design (stays consistent, may refuse requests during a partition) |
 
 Eureka in a nutshell (not run):
 
@@ -256,7 +256,7 @@ eureka:
 
 ### On Kubernetes, do you need it?
 
-Usually **no**. A Kubernetes `Service` named `inventory` already gives a stable DNS name (`http://inventory:8080`) and kube-proxy spreads connections over ready pods (server-side discovery and load balancing). Add Spring Cloud Kubernetes only if you need client-side features: instance metadata, per-request load balancing over pods, or discovery across namespaces. The table in 16.1 shows the platform equivalents.
+Usually **no**. A Kubernetes `Service` named `inventory` already gives a stable DNS name (`http://inventory:8080`) and kube-proxy spreads connections over ready pods (server-side discovery and load balancing). Add Spring Cloud Kubernetes only if you need client-side features: instance metadata, per-request load balancing over pods (Kubernetes' running app instances), or discovery across namespaces (separate named areas inside one cluster). The table in 16.1 shows the platform equivalents.
 
 ### Self-check
 
@@ -270,14 +270,14 @@ Usually **no**. A Kubernetes `Service` named `inventory` already gives a stable 
 
 ### What it is
 
-**Client-side load balancing**: the *caller* picks which instance of a service to call, from the list discovery provides — no load-balancer box in between. Spring Cloud LoadBalancer (the replacement for Netflix Ribbon) resolves a service id in a URL (`http://inventory/...` or `lb://inventory`) to a concrete instance per request.
+**Client-side load balancing** (load balancing = spreading requests over several instances; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)): the *caller* picks which instance of a service to call, from the list discovery provides — no load-balancer box in between. Spring Cloud LoadBalancer (the replacement for Netflix Ribbon) resolves a service id in a URL (`http://inventory/...` or `lb://inventory`) to a concrete instance per request.
 
 ### How it works
 
 1. A client marked for load balancing (`@LoadBalanced RestClient.Builder`, a Feign client with only a `name`, an HTTP service group without a `base-url`, the gateway's `lb://` URIs) makes a request to `http://inventory/stock/1`.
 2. An interceptor asks the `ReactorLoadBalancer` for service `inventory`.
 3. A `ServiceInstanceListSupplier` gets instances from the `DiscoveryClient` (cached), optionally filtered (health-check, zone, hints).
-4. The algorithm picks one — **round robin** by default (start position randomised), or `RandomLoadBalancer`, weighted, "same instance preference", subset.
+4. The algorithm picks one — **round robin** by default (take the instances in turn: A, B, A, B; start position randomised), or `RandomLoadBalancer`, weighted, "same instance preference", subset.
 5. The URL is rewritten to `http://host:port/stock/1` and sent.
 
 ### The demo: static instances, two clients
@@ -306,7 +306,7 @@ Round robin alternates between the instances. The starting instance is random, s
 WARN ... LoadBalancerCaffeineWarnLogger : Spring Cloud LoadBalancer is currently working with the default cache. While this cache implementation is useful for development and tests, it's recommended to use Caffeine cache in pr...
 ```
 
-— in production add `com.github.ben-manes.caffeine:caffeine` so the instance list cache is bounded and refreshed properly (`spring.cloud.loadbalancer.cache.ttl`, default 35 s).
+— in production add `com.github.ben-manes.caffeine:caffeine` (Caffeine, a fast in-memory cache library) so the instance list cache is bounded and refreshed properly (`spring.cloud.loadbalancer.cache.ttl` — TTL = time to live, how long an entry is kept; default 35 s).
 
 Useful settings:
 
@@ -329,7 +329,7 @@ RestClient.Builder loadBalancedBuilder() { return RestClient.builder(); }
 | Client-side (Spring Cloud LoadBalancer) | Server-side (K8s Service, NGINX, cloud LB, mesh) |
 |---|---|
 | per-request choice, custom algorithms, zone/metadata aware | nothing in the app; works for every language |
-| each client needs the library and a discovery source | extra hop (except kube-proxy/mesh sidecars), fewer app-level decisions |
+| each client needs the library and a discovery source | extra hop (one more network step between caller and service; except kube-proxy/mesh sidecars), fewer app-level decisions |
 
 ---
 
@@ -337,7 +337,7 @@ RestClient.Builder loadBalancedBuilder() { return RestClient.builder(); }
 
 ### What it is
 
-Both let you declare a Java interface and get a generated proxy that makes the HTTP calls ([6.6](../06-rest-clients-and-http-interfaces/README.md#66-http-service-interfaces-httpexchange) teaches HTTP interfaces in depth).
+Both let you declare a Java interface and get a generated proxy (an object Spring creates at runtime that implements the interface) that makes the HTTP calls ([6.6](../06-rest-clients-and-http-interfaces/README.md#66-http-service-interfaces-httpexchange) teaches HTTP interfaces in depth).
 
 ```java
 // Spring Cloud OpenFeign: name = service id -> resolved by the LoadBalancer (no url given)
@@ -382,7 +382,7 @@ Since Spring Cloud 2025.1 (Commons 5.0), LoadBalancer plugs into Boot 4's **HTTP
 
 ### What it is
 
-An **API gateway** is the single front door for external clients: it **routes** each request to the right service and applies **edge concerns** once — authentication/token relay, rate limiting, CORS, header rewriting, retries/circuit breaking, request size limits. Pattern details and trade-offs: [API Gateway notes](../../../microservices-patterns/chapters/03-api-gateway/README.md), [BFF](../../../microservices-patterns/chapters/04-bff/README.md), [API & Edge module](../../../system-design-patterns/modules/08-api-and-edge/README.md).
+An **API gateway** is the single front door for external clients: it **routes** each request to the right service and applies **edge concerns** once — authentication/token relay, rate limiting, CORS (Cross-Origin Resource Sharing: the headers that tell browsers which other websites may call the API), header rewriting, retries/circuit breaking, request size limits. Pattern details and trade-offs: [API Gateway notes](../../../microservices-patterns/chapters/03-api-gateway/README.md), [BFF](../../../microservices-patterns/chapters/04-bff/README.md), [API & Edge module](../../../system-design-patterns/modules/08-api-and-edge/README.md).
 
 Spring Cloud Gateway comes in two flavours with the same concepts:
 
@@ -467,13 +467,13 @@ GET /api/inventory/items (service down) -> {"items":[],"note":"inventory tempora
 
 - **Token relay** (`TokenRelay` filter with `spring-boot-starter-oauth2-client`): the gateway logs the user in and forwards the access token to services — see [11.10](../11-spring-security-2-tokens-and-oauth2/README.md#1110-calling-other-services-client-credentials-and-token-relay) and the BFF discussion in [11.12](../11-spring-security-2-tokens-and-oauth2/README.md#1112-where-should-a-browser-keep-tokens-the-bff-pattern).
 - **Rate limiting**: WebFlux flavour has `RequestRateLimiter` backed by Redis; the MVC flavour offers a Bucket4j-based filter. See [Rate Limiting](../../../system-design-patterns/modules/08-api-and-edge/README.md).
-- **Weighted routes** (`Weight=group, 90`) for canary releases.
+- **Weighted routes** (`Weight=group, 90`) for canary releases (sending a small share of traffic to a new version first).
 
 ### Common mistakes
 
 - Putting business logic or aggregation of many services in the gateway → it becomes a "distributed monolith" bottleneck. Keep it thin; use a BFF for client-specific aggregation.
 - Using Spring Cloud Gateway *and* an Ingress/cloud gateway that do the same things — pick one layer for each concern.
-- Retrying non-idempotent `POST`s at the gateway.
+- Retrying non-idempotent `POST`s at the gateway (an *idempotent* call can safely run twice with the same effect; a `POST` that creates an order usually cannot).
 
 ---
 
@@ -486,10 +486,10 @@ Remote calls fail and, worse, become **slow**. Without protection, callers pile 
 | Tool | Idea | Notes |
 |---|---|---|
 | **Timeout** | never wait forever | the first line of defence; set on every client ([Chapter 6](../06-rest-clients-and-http-interfaces/README.md)) |
-| **Retry** | try again after a transient failure, with back-off + jitter | only idempotent operations — [Retry notes](../../../microservices-patterns/chapters/08-retry/README.md) |
+| **Retry** | try again after a transient (temporary) failure, with back-off (growing waits) + jitter (a random extra wait so clients don't retry in lockstep) | only idempotent operations — [Retry notes](../../../microservices-patterns/chapters/08-retry/README.md) |
 | **Circuit breaker** | after many failures, stop calling for a while and fail fast / fall back | [Circuit Breaker notes](../../../microservices-patterns/chapters/06-circuit-breaker/README.md) |
 | **Bulkhead** | cap concurrent calls to one dependency | [Bulkhead notes](../../../microservices-patterns/chapters/07-bulkhead/README.md) |
-| **Rate limiter** | cap calls per time period | protects a dependency or enforces a quota |
+| **Rate limiter** | cap calls per time period | protects a dependency or enforces a quota (an agreed maximum usage) |
 | **Fallback** | a degraded answer (cache, default, empty list) | [Graceful degradation](../../../system-design-patterns/modules/05-reliability/README.md) |
 
 **Resilience4j** is the standard Java library for all of these (Hystrix's successor). Use it directly (`resilience4j-spring-boot4`: annotations + properties + Micrometer metrics + health) or through **Spring Cloud CircuitBreaker**, an abstraction (`CircuitBreakerFactory.create("id").run(supplier, fallback)`) with a Resilience4j implementation, used e.g. by the gateway filter above.
@@ -613,7 +613,7 @@ public String stock(String sku) { return "live stock " + remote.stock(sku); }
 | Need | Framework 7 core | Resilience4j |
 |---|---|---|
 | Retry with back-off, jitter | `@Retryable`, `RetryTemplate` | `@Retry`, `Retry` |
-| Bulkhead (concurrency cap) | `@ConcurrencyLimit` (BLOCK or REJECT) | `@Bulkhead` (semaphore or thread pool) |
+| Bulkhead (concurrency cap) | `@ConcurrencyLimit` (BLOCK or REJECT) | `@Bulkhead` (semaphore — a counter of free slots — or thread pool) |
 | Circuit breaker | — | `@CircuitBreaker` |
 | Rate limiter | — | `@RateLimiter` |
 | Time limiter | — (use client timeouts) | `@TimeLimiter` (async/reactive) |
@@ -666,11 +666,11 @@ Service A (consumer) and service B (provider) are tested separately — how do y
 
 1. Consumer-driven: the consumer writes what it needs.
 2. The provider's build **verifies** it really responds that way.
-3. The consumer's tests run against a **stub** generated from the same contract.
+3. The consumer's tests run against a **stub** (a fake server that returns canned answers) generated from the same contract.
 
 | Tool | How | Status |
 |---|---|---|
-| **Pact** (pact-jvm) | consumer tests produce a pact file; a Pact Broker shares it; provider verifies; `can-i-deploy` gate | active, polyglot |
+| **Pact** (pact-jvm) | consumer tests produce a pact file; a Pact Broker (a server that stores contracts and results) shares it; provider verifies; `can-i-deploy` gate | active, polyglot (works across programming languages) |
 | **Spring Cloud Contract** | contracts in YAML/Groovy/Java in the provider repo; the plugin generates provider tests and a stubs jar; consumers use `@AutoConfigureStubRunner` | JVM/Spring-centric; not in the 2025.1.3 BOM, repository archived in `spring-attic` (see 16.2) |
 | OpenAPI-based checks | validate both sides against the OpenAPI document | good for provider-driven public APIs |
 
@@ -704,7 +704,7 @@ Synchronous HTTP chains couple availability: if any service in the chain is down
 
 - **Spring for Apache Kafka / Spring AMQP** — templates and `@KafkaListener`/`@RabbitListener` ([Chapter 14](../14-messaging-async-and-scheduling/README.md), including the [transactional outbox](../14-messaging-async-and-scheduling/README.md#1417-the-transactional-outbox)).
 - **Spring Cloud Stream** — a binder abstraction: you write `java.util.function` beans (`Supplier`, `Function`, `Consumer`) and bind them to Kafka/RabbitMQ destinations by configuration (`spring.cloud.function.definition=enrichOrder`, `spring.cloud.stream.bindings.enrichOrder-in-0.destination=orders`). Good for many similar pipelines; it hides broker-specific features you may need.
-- Cross-service consistency without distributed transactions: [Saga](../../../microservices-patterns/chapters/10-saga/README.md) (choreography with events or orchestration), idempotent consumers, and [CQRS](../../../microservices-patterns/chapters/12-cqrs/README.md) read models.
+- Cross-service consistency without distributed transactions (one transaction spanning several databases): [Saga](../../../microservices-patterns/chapters/10-saga/README.md) (choreography — each service reacts to others' events — or orchestration — one coordinator tells each service what to do), idempotent consumers, and [CQRS](../../../microservices-patterns/chapters/12-cqrs/README.md) read models.
 
 ---
 

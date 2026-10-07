@@ -1,6 +1,6 @@
 # Chapter 3 — Configuration and Auto-configuration
 
-A real application runs in many places — your laptop, CI, staging, production — with different database URLs, passwords, timeouts and feature flags. Spring Boot's answer is **externalized configuration**: the same jar reads its settings from outside, from sources with a well-defined priority. Boot then uses those settings, together with what is on the classpath, to **auto-configure** beans for you. This chapter covers both halves and ends by writing your own auto-configuration and starter.
+A real application runs in many places — your laptop, CI (the continuous-integration server that builds and tests every change), staging (a production-like test environment), production (the live system real users hit) — with different database URLs, passwords, timeouts and feature flags (on/off switches for features). Spring Boot's answer is **externalized configuration**: the same jar reads its settings from outside, from sources with a well-defined priority. Boot then uses those settings, together with what is on the classpath (the jars and classes available to the app at runtime), to **auto-configure** beans for you. This chapter covers both halves and ends by writing your own auto-configuration and starter.
 
 **What you'll learn**
 
@@ -24,7 +24,7 @@ Background you may want first: the container, `@Conditional` and profiles in [Ch
 ## 3.1 Externalized configuration and the `Environment`
 
 ### What it is
-**Externalized configuration** means settings live *outside* the compiled code, so one build artifact runs everywhere and only its configuration changes. (This is factor III, "Config", of the Twelve-Factor App methodology.)
+**Externalized configuration** means settings live *outside* the compiled code, so one build artifact runs everywhere and only its configuration changes. (This is factor III, "Config", of the Twelve-Factor App methodology — a well-known list of twelve rules for building cloud-friendly services.)
 
 In Spring, all configuration is reached through one object, the **`Environment`**:
 - a **property source** (`PropertySource`) is one named set of key/value pairs — a file, the OS environment, the command line, a map in a test;
@@ -35,12 +35,12 @@ Analogy: a stack of transparent sheets on an overhead projector. Each sheet (pro
 
 ### Why it matters
 - **No rebuilds per environment** — the same jar goes from test to production.
-- **Secrets stay out of Git** — passwords arrive through environment variables or mounted files.
-- **Operations can change behaviour** (timeouts, pool sizes, feature flags) without a code change.
+- **Secrets stay out of Git** (the version-control system that stores your source code) — passwords arrive through environment variables (named values the operating system passes to a process) or mounted files (files a platform places into the app's file system at startup).
+- **Operations can change behaviour** (timeouts, pool sizes such as how many database connections to keep open, feature flags) without a code change.
 
 ### How it works in Boot
 1. `SpringApplication.run` builds the `Environment` *before* creating any bean.
-2. It adds sources: command-line arguments, `SPRING_APPLICATION_JSON`, Java system properties, OS environment variables, `random.*`, then the **config data** files (`application.properties`/`.yaml` and profile-specific variants, imports).
+2. It adds sources: command-line arguments, `SPRING_APPLICATION_JSON`, Java system properties (key/value settings passed to the JVM with `-Dkey=value`), OS environment variables, `random.*`, then the **config data** files (`application.properties`/`.yaml` and profile-specific variants, imports).
 3. Beans read values through `@Value`, `@ConfigurationProperties` or `Environment` injection.
 4. Auto-configuration conditions (`@ConditionalOnProperty`) read the same `Environment`.
 
@@ -49,7 +49,7 @@ Analogy: a stack of transparent sheets on an overhead projector. Each sheet (pro
 ## 3.2 `application.properties` vs `application.yaml`
 
 ### Syntax
-Both formats hold the same data; pick one per project. The book's demo uses YAML:
+Both formats hold the same data; pick one per project. The book's demo uses YAML (a human-friendly configuration format that uses indentation to show nesting):
 
 ```yaml
 # config-demo/src/main/resources/application.yaml (first part)
@@ -85,11 +85,11 @@ shop.payment.retries=2
 | Structure | Flat `a.b.c=value` lines | Indentation-based tree |
 | Lists | `x=a,b` or `x[0]=a` | `[a, b]` or `- a` lines |
 | Multiple documents in one file | `#---` separator line | `---` separator line |
-| Pitfalls | Long repeated prefixes | Indentation errors; unquoted values like `on`, `no`, `010` may be read as booleans/octal — quote them |
+| Pitfalls | Long repeated prefixes | Indentation errors; unquoted values like `on`, `no`, `010` may be read as booleans (true/false)/octal (base-8 numbers) — quote them |
 | Loadable by `@PropertySource` | Yes | **No** |
 | Both in the same folder | `.properties` wins over `.yaml` | |
 
-Use **kebab-case** keys in files (`checkout-timeout`), the recommended canonical form.
+Use **kebab-case** keys in files (`checkout-timeout` — lower-case words joined by dashes), the recommended canonical (standard, official) form.
 
 ### Where Boot looks
 Boot loads `application.properties`/`.yaml` from these locations; **later ones override earlier ones**:
@@ -118,7 +118,7 @@ shop:
     gateway-url: https://pay.prod.example.test
     retries: 5
 ```
-`spring.config.activate.on-profile` takes a profile expression (`prod | staging`); `spring.config.activate.on-cloud-platform` (e.g. `kubernetes`) is the other activation property. Later documents override earlier ones.
+`spring.config.activate.on-profile` takes a profile expression (`prod | staging`); `spring.config.activate.on-cloud-platform` (e.g. `kubernetes` — Kubernetes is the most common platform for running containers across many machines) is the other activation property. Later documents override earlier ones.
 
 ---
 
@@ -135,12 +135,12 @@ From **lowest** to **highest** priority (a higher item overrides lower ones), pe
 | 4 | `RandomValuePropertySource` | `${random.uuid}` |
 | 5 | **OS environment variables** | `SHOP_NAME=...` |
 | 6 | **Java system properties** | `java -Dshop.name=... -jar app.jar` |
-| 7 | JNDI attributes | (app servers) |
-| 8–9 | `ServletContext` / `ServletConfig` init parameters | (WAR deployments) |
+| 7 | JNDI (Java Naming and Directory Interface, a lookup service in classic app servers) attributes | (app servers) |
+| 8–9 | `ServletContext` / `ServletConfig` init parameters | (WAR — web-archive — deployments to an external server) |
 | 10 | `SPRING_APPLICATION_JSON` | `SPRING_APPLICATION_JSON='{"shop":{"name":"X"}}'` |
 | 11 | **Command-line arguments** | `java -jar app.jar --shop.name=...` |
 | 12 | `properties` attribute of tests | `@SpringBootTest(properties = "shop.name=T")` |
-| 13 | `@DynamicPropertySource` | Testcontainers URLs (Chapter 12) |
+| 13 | `@DynamicPropertySource` | Testcontainers (a library that starts real databases in Docker for tests) URLs (Chapter 12) |
 | 14 | `@TestPropertySource` | |
 | 15 | DevTools global settings | `~/.config/spring-boot/` |
 
@@ -191,18 +191,18 @@ Environment property sources (first wins):
 ```
 
 Notes on this list:
-- `configurationProperties` at the top is not a real source; it's Boot's adapter that exposes all the others to the binder with relaxed names.
+- `configurationProperties` at the top is not a real source; it's Boot's adapter that exposes all the others to the binder (Boot's component that copies property values into Java objects) with relaxed names.
 - `owner.properties` sits *above* `application.yaml` because `application.yaml` imports it (§3.8): **an imported file overrides the file that imports it**.
 - The profile file `application-dev.yaml` is above both.
 
 ### Common mistakes
-- Setting a value in `application.yaml` and wondering why it's ignored — an environment variable (often from a Kubernetes manifest or a `.env` file) with the same relaxed name overrides it.
-- Putting secrets in `application.yaml` in Git. Use env vars, mounted files (`configtree:`, §3.8), or a secret manager.
+- Setting a value in `application.yaml` and wondering why it's ignored — an environment variable (often from a Kubernetes manifest — the YAML file describing how to run the app — or a `.env` file) with the same relaxed name overrides it.
+- Putting secrets in `application.yaml` in Git. Use env vars, mounted files (`configtree:`, §3.8), or a secret manager (a dedicated service that stores and hands out passwords and keys).
 - Expecting a value set in `@PropertySource` to beat `application.yaml` — `@PropertySource` is near the bottom (row 2).
 
 ### In the interview
 **Q: A property is set in `application.yaml`, an environment variable and a command-line argument. Which wins?** The command-line argument; then system properties, then environment variables, then profile-specific files, then `application.yaml`. Test properties beat all of them.
-- *Follow-up: How do you see where a value came from?* The Actuator `env` endpoint (`/actuator/env/shop.name`) lists every source that defines it, highest first; failure messages from binding also show the *origin* (e.g. `"shop.name" from property source "commandLineArgs"`, §3.6).
+- *Follow-up: How do you see where a value came from?* The Actuator (Boot's production-monitoring module, Chapter 15) `env` endpoint (a URL the app exposes, here `/actuator/env/shop.name`) lists every source that defines it, highest first; failure messages from binding also show the *origin* (e.g. `"shop.name" from property source "commandLineArgs"`, §3.6).
 
 ### TL;DR
 Command line > system properties > env vars > profile files > `application.*`; outside the jar > inside; imported file > importer. Tests override all.
@@ -217,7 +217,7 @@ Environment variable names can't contain dots or dashes on most systems, so Boot
 | Form | Example | Use in |
 |---|---|---|
 | Kebab case (canonical, recommended) | `shop.checkout-timeout` | `.properties` / `.yaml` |
-| Camel case | `shop.checkoutTimeout` | Also accepted in files |
+| Camel case (words joined, each new word capitalized) | `shop.checkoutTimeout` | Also accepted in files |
 | Underscore | `shop.checkout_timeout` | Also accepted in files |
 | Upper case with underscores | `SHOP_CHECKOUTTIMEOUT` | **Environment variables** |
 
@@ -232,7 +232,7 @@ SHOP_PAYMENT_RETRIES=4, SHOP_CHECKOUTTIMEOUT=2m -> retries=4, checkoutTimeout=PT
 ```
 
 ### Common mistakes
-- Assuming `SHOP_CHECKOUT_TIMEOUT` (an underscore where the dash was) is wrong or ignored. It isn't: for backward compatibility Boot's binder also accepts this **legacy** spelling and binds it to `shop.checkout-timeout` (proved in [ch19](../19-cheatsheet-and-glossary/README.md#1915-proofs-the-facts-on-these-sheets-run) — `SHOP_CHECKOUT_TIMEOUT=3m -> PT3M`). The real mistake is using two spellings for the same property: they are separate environment variables, so a search for `SHOP_CHECKOUTTIMEOUT` misses the value set by the other one. Stick to the documented form (drop the dash).
+- Assuming `SHOP_CHECKOUT_TIMEOUT` (an underscore where the dash was) is wrong or ignored. It isn't: for backward compatibility (so older setups keep working) Boot's binder also accepts this **legacy** spelling and binds it to `shop.checkout-timeout` (proved in [ch19](../19-cheatsheet-and-glossary/README.md#1915-proofs-the-facts-on-these-sheets-run) — `SHOP_CHECKOUT_TIMEOUT=3m -> PT3M`). The real mistake is using two spellings for the same property: they are separate environment variables, so a search for `SHOP_CHECKOUTTIMEOUT` misses the value set by the other one. Stick to the documented form (drop the dash).
 - Using camelCase keys in `@Value("${shop.checkoutTimeout}")`. `@Value` only gets relaxed matching if the placeholder uses the canonical kebab-case form: `@Value("${shop.checkout-timeout}")`.
 
 ---
@@ -265,17 +265,17 @@ public class ValueStyle {
 | `#{expression}` | SpEL (Spring Expression Language) — arithmetic, method calls, other beans: `#{@clock.millis()}` |
 | `#{${key} * 2}` | Placeholder resolved first, then SpEL evaluated |
 
-Conversion to `int`, `boolean`, `Duration`, enums, etc. is automatic; comma-separated strings convert to arrays/lists.
+Conversion to `int`, `boolean`, `Duration`, enums (Java types with a fixed set of named values), etc. is automatic; comma-separated strings convert to arrays/lists.
 
 ### When not to use it
-For more than two or three related settings, use `@ConfigurationProperties`: `@Value` strings are scattered, untyped until runtime, not validated, and have no IDE auto-completion.
+For more than two or three related settings, use `@ConfigurationProperties`: `@Value` strings are scattered, untyped until runtime, not validated, and have no IDE (code editor such as IntelliJ IDEA) auto-completion.
 
 ---
 
 ## 3.6 `@ConfigurationProperties` — type-safe configuration
 
 ### What it is
-`@ConfigurationProperties("shop")` binds **every property under a prefix** into one Java object. With a **record**, the object is immutable and bound through its constructor ("constructor binding").
+`@ConfigurationProperties("shop")` binds **every property under a prefix** into one Java object. With a **record** (a compact Java class that just holds data; fields are fixed once created), the object is immutable (cannot change after creation) and bound through its constructor ("constructor binding").
 
 ```java
 // config-demo/src/main/java/com/example/config/ShopProperties.java
@@ -314,18 +314,18 @@ Any bean can now take `ShopProperties` as a constructor parameter and read `prop
 
 | Type | Accepted values | Notes |
 |---|---|---|
-| `java.time.Duration` | `45s`, `5m`, `2h`, `1d`, `500ms`, `PT45S` (ISO-8601), plain `45` | Plain numbers default to milliseconds; change with `@DurationUnit(ChronoUnit.SECONDS)` |
+| `java.time.Duration` | `45s`, `5m`, `2h`, `1d`, `500ms`, `PT45S` (ISO-8601, the international standard text format for dates and durations), plain `45` | Plain numbers default to milliseconds; change with `@DurationUnit(ChronoUnit.SECONDS)` |
 | `org.springframework.util.unit.DataSize` | `10MB`, `512KB`, `1GB`, plain `1024` | Plain numbers are bytes; `@DataSizeUnit` changes it. `10MB` = 10 × 1024 × 1024 = `10485760B` |
 | `java.time.Period` | `1y3d`, `P1Y3D` | |
 
 4. **Defaults**: `@DefaultValue("...")` on a constructor parameter supplies a value when the property is absent. A bare `@DefaultValue` on a nested record (as on `payment`) means "create it even if no `shop.payment.*` property exists" — otherwise the nested object would be `null`. `gatewayUrl` came from its default because only `retries` was configured.
-5. **Validation**: with `@Validated` on the class and a Bean Validation provider on the classpath (`spring-boot-starter-validation` → Hibernate Validator), constraints are checked at startup. Put `@Valid` on nested objects so their constraints are checked too.
+5. **Validation**: with `@Validated` on the class and a Bean Validation provider (a library implementing the standard `@NotBlank`/`@Min`-style rules) on the classpath (`spring-boot-starter-validation` → Hibernate Validator), constraints are checked at startup. Put `@Valid` on nested objects so their constraints are checked too.
 
 ### Validation failure — proved
 ```java
 Apps.start("--shop.payment.retries=9", "--shop.name= ")
 ```
-Boot's failure analyzer prints this (real output) and the app does not start:
+Boot's failure analyzer (a component that turns a startup exception into a readable explanation) prints this (real output) and the app does not start:
 ```
 ***************************
 APPLICATION FAILED TO START
@@ -352,7 +352,7 @@ Update your application's configuration
 The root exception is `BindValidationException`. **Failing at startup is the point**: a bad production setting is caught during deployment, not at 3 a.m. when the first payment retries.
 
 ### IDE auto-completion — configuration metadata
-Adding `spring-boot-configuration-processor` as an annotation processor generates `META-INF/spring-configuration-metadata.json` at compile time. IDEs use it for auto-completion and documentation of `shop.*` keys. Its descriptions come from the record's Javadoc `@param` tags. Generated for this project (first entries):
+Adding `spring-boot-configuration-processor` as an annotation processor (a plug-in that runs inside the Java compiler and can generate files) generates `META-INF/spring-configuration-metadata.json` at compile time. IDEs use it for auto-completion and documentation of `shop.*` keys. Its descriptions come from the record's Javadoc (documentation comments `/** ... */`) `@param` tags. Generated for this project (first entries):
 
 ```json
 {"name": "shop.checkout-timeout", "type": "java.time.Duration", "description": "how long a checkout may take", "sourceType": "com.example.config.ShopProperties", "defaultValue": "30s"}
@@ -490,9 +490,9 @@ The optional `./local-overrides.yaml` doesn't exist and the app starts anyway.
 | Location form | Example | Use |
 |---|---|---|
 | `classpath:` | `classpath:owner.properties` | Split a large config into files |
-| `file:` | `file:/etc/myapp/extra.yaml` | Files on the host/volume |
+| `file:` | `file:/etc/myapp/extra.yaml` | Files on the host/volume (storage attached to a container) |
 | `optional:` prefix | `optional:file:./local.yaml` | Don't fail if missing (without it: `ConfigDataLocationNotFoundException`) |
-| `configtree:` | `optional:configtree:/etc/secrets/` | **Kubernetes secrets/ConfigMaps mounted as files**: each file name becomes a key, its content the value (`/etc/secrets/db/password` → `db.password`) |
+| `configtree:` | `optional:configtree:/etc/secrets/` | **Kubernetes secrets/ConfigMaps (Kubernetes objects holding secret or plain settings) mounted as files**: each file name becomes a key, its content the value (`/etc/secrets/db/password` → `db.password`) |
 | Extension hint | `file:/etc/app/conf[.yaml]` | Location without a recognisable extension |
 | Other schemes (via libraries) | `configserver:http://...` (Spring Cloud Config), `vault://` (Spring Cloud Vault), `aws-secretsmanager:` / `aws-parameterstore:` (Spring Cloud AWS) | Central config / secret stores (Chapter 16) |
 
@@ -503,7 +503,7 @@ Rules: relative locations are resolved relative to the importing file; an import
 ## 3.9 Placeholders, random values and other sources
 
 - **Placeholders inside property files**: `app.description=${spring.application.name} runs on port ${server.port:8080}`. Refer to other keys in canonical kebab-case.
-- **Random values** (row 4 of the precedence table), handy for test secrets or instance ids:
+- **Random values** (row 4 of the precedence table), handy for test secrets or instance ids (`uuid` = universally unique identifier, a random 128-bit id):
   ```properties
   my.secret=${random.value}
   my.id=${random.uuid}
@@ -511,7 +511,7 @@ Rules: relative locations are resolved relative to the importing file; an import
   my.port=${random.int[1024,65536]}
   my.small=${random.int(10)}
   ```
-  Each placeholder is evaluated independently at startup; they are not secure random tokens for production secrets.
+  Each placeholder is evaluated independently at startup; they are not secure random tokens (values generated by a cryptographically strong, unguessable generator) for production secrets.
 - **`SPRING_APPLICATION_JSON`**: a JSON blob in one env var or system property, flattened into properties — convenient where only one variable can be set.
 - **`@PropertySource("classpath:legacy.properties")`** on a `@Configuration` class: plain Spring's way to add a file. Low priority, `.properties` only (no YAML, no profiles). In Boot apps prefer `spring.config.import`.
 - **Injecting `Environment`**: `env.getProperty("shop.name")`, `env.getProperty("shop.payment.retries", Integer.class, 3)`, `env.matchesProfiles("prod")`. Useful in conditions and registrars (Chapter 2 §2.14).
@@ -521,7 +521,7 @@ Rules: relative locations are resolved relative to the importing file; an import
 ## 3.10 How auto-configuration works
 
 ### What it is
-**Auto-configuration** is Boot's mechanism for registering beans you'd otherwise have to write yourself — a `DispatcherServlet`, an embedded Tomcat, a Jackson `JsonMapper`, a `DataSource`, a transaction manager — *only when it makes sense*: the required library is on the classpath, you haven't defined your own bean, and the relevant property allows it.
+**Auto-configuration** is Boot's mechanism for registering beans you'd otherwise have to write yourself — a `DispatcherServlet`, an embedded Tomcat, a Jackson `JsonMapper`, a `DataSource` (hands out database connections), a transaction manager (the object that starts, commits and rolls back transactions) — *only when it makes sense*: the required library is on the classpath, you haven't defined your own bean, and the relevant property allows it.
 
 Each auto-configuration is just a `@Configuration` class (marked `@AutoConfiguration`) whose class and `@Bean` methods carry **conditions**. There's no special magic beyond Chapter 2's `@Conditional` and `@Import`.
 
@@ -563,12 +563,12 @@ All in `org.springframework.boot.autoconfigure.condition`:
 | `@ConditionalOnBean` / `@ConditionalOnMissingBean` | A bean of a type/name exists / doesn't exist | **Back off** if the user defined their own |
 | `@ConditionalOnSingleCandidate` | Exactly one (or one primary) bean of a type | "Create a `JdbcTemplate` if there's one `DataSource`" |
 | `@ConditionalOnProperty` | A property has a value (`havingValue`), or exists; `matchIfMissing` | Feature switches |
-| `@ConditionalOnBooleanProperty` (Boot 3.5+) | A boolean property is `true` (by default); `matchIfMissing` | `spring.jmx.enabled` |
+| `@ConditionalOnBooleanProperty` (Boot 3.5+) | A boolean property is `true` (by default); `matchIfMissing` | `spring.jmx.enabled` (JMX = Java Management Extensions, a built-in JVM monitoring interface) |
 | `@ConditionalOnResource` | A resource exists | `classpath:META-INF/build-info.properties` |
 | `@ConditionalOnWebApplication` / `@ConditionalOnNotWebApplication` | Servlet or reactive web app / not | Web-only beans |
 | `@ConditionalOnWarDeployment` / `@ConditionalOnNotWarDeployment` | Deployed as WAR / not | |
-| `@ConditionalOnThreading` | Platform or virtual threads selected (`spring.threads.virtual.enabled`) | Executors (Chapter 14) |
-| `@ConditionalOnCloudPlatform` | Running on Kubernetes, Cloud Foundry, ... | Platform tweaks |
+| `@ConditionalOnThreading` | Platform (classic OS) or virtual (lightweight, JVM-managed) threads selected (`spring.threads.virtual.enabled`) | Executors — thread pools that run tasks (Chapter 14) |
+| `@ConditionalOnCloudPlatform` | Running on Kubernetes, Cloud Foundry (another app-hosting platform), ... | Platform tweaks |
 | `@ConditionalOnJava` | JVM version range | |
 | `@ConditionalOnExpression` | A SpEL expression is true | Last resort — can trigger early bean creation |
 
@@ -699,7 +699,7 @@ In order of preference:
 ## 3.13 Writing your own auto-configuration and starter
 
 ### Why
-Companies write starters so every service gets the same client library, tracing setup or security defaults with one dependency — for example an internal `payments-client-spring-boot-starter`. Open-source examples: `mybatis-spring-boot-starter`, `springdoc-openapi-starter-webmvc-ui`.
+Companies write starters so every service gets the same client library, tracing setup (recording a request's path through several services) or security defaults with one dependency — for example an internal `payments-client-spring-boot-starter`. Open-source examples: `mybatis-spring-boot-starter`, `springdoc-openapi-starter-webmvc-ui` (generates OpenAPI — a standard machine-readable API description — and a docs UI).
 
 ### The structure
 The Boot 4.1 reference recommends two modules (merge them into one `acme-spring-boot-starter` if the auto-configuration is simple):
@@ -791,7 +791,7 @@ The starter's `pom.xml` is just:
 ```
 
 ### Testing auto-configuration with `ApplicationContextRunner`
-`ApplicationContextRunner` builds a tiny, throw-away context per test with exactly the configuration, properties and classpath you specify — much faster and more precise than `@SpringBootTest`. Its AssertJ assertions (`hasSingleBean`, `doesNotHaveBean`, `hasBean`) read naturally.
+`ApplicationContextRunner` builds a tiny, throw-away context per test with exactly the configuration, properties and classpath you specify — much faster and more precise than `@SpringBootTest`. Its AssertJ (a fluent test-assertion library) assertions (`hasSingleBean`, `doesNotHaveBean`, `hasBean`) read naturally.
 
 ```java
 private final ApplicationContextRunner runner = new ApplicationContextRunner()
@@ -865,7 +865,7 @@ GreetingAutoConfiguration matched? true
 ## 3.14 Boot 4 modularization
 
 ### What changed
-Up to Boot 3.5, one jar — `spring-boot-autoconfigure` — held auto-configuration for *every* supported technology (156 auto-configuration classes in 3.5.6). **Boot 4 split it into one module per technology.** In 4.1.1, `spring-boot-autoconfigure` itself lists only 12 core auto-configurations (AOP, task execution/scheduling, JMX, SSL, lifecycle, message source, property placeholders...). The rest moved to modules such as:
+Up to Boot 3.5, one jar — `spring-boot-autoconfigure` — held auto-configuration for *every* supported technology (156 auto-configuration classes in 3.5.6). **Boot 4 split it into one module per technology.** In 4.1.1, `spring-boot-autoconfigure` itself lists only 12 core auto-configurations (AOP, task execution/scheduling, JMX, SSL (encrypted connections), lifecycle, message source, property placeholders...). The rest moved to modules such as:
 
 | Module jar | Auto-configurations (4.1.1) | Example |
 |---|---|---|
@@ -877,7 +877,7 @@ Up to Boot 3.5, one jar — `spring-boot-autoconfigure` — held auto-configurat
 | `spring-boot-micrometer-metrics` | 28 | Metrics |
 
 ### Why it matters to you
-- **Smaller classpath, faster and more predictable startup**: only modules for technologies you use are present, so fewer candidates to filter and no accidental auto-configuration from a stray transitive library.
+- **Smaller classpath, faster and more predictable startup**: only modules for technologies you use are present, so fewer candidates to filter and no accidental auto-configuration from a stray transitive library (one pulled in indirectly by another dependency).
 - **Clearer ownership**: each module has its own packages, its own starter and its own `-test` starter (`@WebMvcTest` now lives in `spring-boot-webmvc-test`, `@DataJpaTest` in `spring-boot-data-jpa-test`).
 - **Migration impact**: imports of auto-configuration classes (in `exclude = ...`, `@ImportAutoConfiguration`, `@AutoConfiguration(after = ...)`) and of test-slice annotations change package. The quick path is `spring-boot-starter-classic` / `spring-boot-starter-test-classic`, which restore the Boot 3-style "everything on the classpath" behaviour while you move to the modular starters. Full migration notes: Chapter 17.
 

@@ -1,6 +1,6 @@
 # Chapter 19 — Cheat Sheet and Glossary
 
-This chapter is the book on one table. Chapters 1–18 teach each topic with runnable projects; this chapter **looks things up**. You come here when you remember that something exists but not its exact name, default or package: "which starter brings `@WebMvcTest` in Boot 4?", "what does `REQUIRES_NEW` do when the caller rolls back?", "which property turns on virtual threads?", "is it `hasRole("ADMIN")` or `hasRole("ROLE_ADMIN")`?".
+This chapter is the book on one table. Chapters 1–18 teach each topic with runnable projects; this chapter **looks things up**. Any word you meet here and don't know — starter, BOM, proxy, propagation, slice — has a plain-English entry in the A–Z glossary at the end ([§19.16](#1916-glossary-az)). You come here when you remember that something exists but not its exact name, default or package: "which starter brings `@WebMvcTest` in Boot 4?", "what does `REQUIRES_NEW` do when the caller rolls back?", "which property turns on virtual threads?", "is it `hasRole("ADMIN")` or `hasRole("ROLE_ADMIN")`?".
 
 Every row links to the section that explains it, so a sheet is never the end of the road: if a line is not enough, follow the **§** link. Nothing here is new material; where a sheet quotes a default or a behaviour, a test in [`code/cheatsheet-checks/`](code/cheatsheet-checks/) proves it (§19.15).
 
@@ -15,7 +15,7 @@ Every row links to the section that explains it, so a sheet is never the end of 
 7. **Spring Security 7 DSL** snippets that compile: form login, JWT resource server, method security, CORS/CSRF (§19.8).
 8. **Testing** annotations and slices (§19.9), **Reactor** operators (§19.10), **Actuator** endpoints (§19.11).
 9. **Which tool for which job** decision tables (§19.12) and a **Boot 3 → 4 checklist** (§19.13).
-10. An **interview index** into Chapter 18 (§19.14), the **proofs** (§19.15) and an **A–Z glossary** of more than 200 terms (§19.16).
+10. An **interview index** into Chapter 18 (§19.14), the **proofs** (§19.15) and an **A–Z glossary** of more than 500 terms (§19.16).
 
 Versions: Spring Boot **4.1.1** → Spring Framework **7.0.9**, Spring Security **7.1.1**, Java **25** (17 minimum). "(Boot 4)", "(F7)" and "(S7)" mark things that are new or changed in Boot 4, Framework 7 or Security 7.
 
@@ -43,16 +43,16 @@ Versions: Spring Boot **4.1.1** → Spring Framework **7.0.9**, Spring Security 
 
 ### Conventions
 
-- **Module / starter**: the jar that contains the class, and the Boot starter that brings it. "core" means `spring-context`/`spring-beans`, which every starter includes.
+- **Module / starter**: the jar (Java archive — a zip file of compiled classes) that contains the class, and the Boot starter that brings it. "core" means `spring-context`/`spring-beans`, which every starter includes.
 - **§N.M** links go to the teaching section of Chapters 1–18. Follow them for the explanation, the trade-offs and the proof.
 - Defaults quoted in these sheets come from the Boot 4.1.1 configuration metadata (the `spring-configuration-metadata.json` files inside the Boot jars) or from the chapter that measured them. The ones marked **✔ proved** are asserted by a test in §19.15.
-- Properties are written in `.properties` form. The same keys work in YAML and as environment variables ([§3.4](../03-configuration-and-auto-configuration/README.md#34-environment-variables-and-relaxed-binding)).
+- Properties are written in `.properties` form. The same keys work in YAML (an indentation-based configuration format) and as environment variables (named values set outside the app by the shell, OS or container) ([§3.4](../03-configuration-and-auto-configuration/README.md#34-environment-variables-and-relaxed-binding)).
 
 ---
 
 ## 19.2 Versions at a glance
 
-What `spring-boot-starter-parent` **4.1.1** puts on your classpath (from the `spring-boot-dependencies-4.1.1` BOM). You choose one number, the Boot version, and Boot chooses the rest ([§1.4](../01-spring-ecosystem-and-first-app/README.md#14-history-and-versions)).
+What `spring-boot-starter-parent` **4.1.1** puts on your classpath — the list of jars the JVM loads classes from — (from the `spring-boot-dependencies-4.1.1` BOM — bill of materials, a list that pins compatible versions of many libraries). You choose one number, the Boot version, and Boot chooses the rest ([§1.4](../01-spring-ecosystem-and-first-app/README.md#14-history-and-versions)).
 
 | Component | Version | Notes |
 |---|---|---|
@@ -262,7 +262,7 @@ Testing annotations have their own sheet: [§19.9](#199-testing-annotations-and-
 
 ## 19.4 Starters in Boot 4.1
 
-A **starter** is a code-free dependency that brings one capability's libraries plus the Boot module holding its auto-configuration ([§1.7](../01-spring-ecosystem-and-first-app/README.md#17-starters)). Boot 4 made them **modular**: one starter per technology, and a matching **`-test`** starter that brings the test slice for it and already includes `spring-boot-starter-test` ([§3.14](../03-configuration-and-auto-configuration/README.md#314-boot-4-modularization), [§12.3](../12-testing-spring-apps/README.md#123-test-dependencies-in-boot-4)). All names below are managed by the 4.1.1 BOM — never add a `<version>`.
+A **starter** is a code-free dependency that brings one capability's libraries plus the Boot module holding its auto-configuration ([§1.7](../01-spring-ecosystem-and-first-app/README.md#17-starters)). Boot 4 made them **modular**: one starter per technology, and a matching **`-test`** starter that brings the test slice (a test that starts only one layer of the app, such as the web layer) for it and already includes `spring-boot-starter-test` ([§3.14](../03-configuration-and-auto-configuration/README.md#314-boot-4-modularization), [§12.3](../12-testing-spring-apps/README.md#123-test-dependencies-in-boot-4)). All names below are managed by the 4.1.1 BOM — never add a `<version>`.
 
 ### The starters you will use most
 
@@ -317,7 +317,7 @@ Third-party starters are named `<name>-spring-boot-starter` (`mybatis-spring-boo
 
 ## 19.5 Key properties cheat sheet
 
-Defaults are the Boot 4.1.1 metadata values; "—" means *no default: the feature is off, or the value comes from somewhere else*. Precedence (which source wins) and relaxed binding are at the end of this section.
+Defaults are the Boot 4.1.1 metadata values; "—" means *no default: the feature is off, or the value comes from somewhere else*. Precedence (which source wins) and relaxed binding (several spellings of one property name, e.g. `SHOP_NAME` for `shop.name`, are accepted) are at the end of this section.
 
 ### Core, profiles and startup
 
@@ -362,7 +362,7 @@ Defaults are the Boot 4.1.1 metadata values; "—" means *no default: the featur
 | `spring.jackson.use-jackson2-defaults` | `false` | restore Jackson 2 defaults while migrating | [§17.13](../17-spring-ai-and-whats-new/README.md#1713-spring-boot-3x--4x-migration-table) |
 | `spring.threads.virtual.enabled` | `false` | virtual threads for Tomcat, `@Async`, `@Scheduled`, listeners (Java 21+) ✔ | [§15.10](../15-observability-and-production/README.md#1510-virtual-threads) |
 
-Jackson 3 defaults under Boot 4 (✔ proved): `LocalDate` written as `"2026-09-28"`, unknown JSON properties ignored, `JacksonException` is unchecked ([§5.5](../05-spring-mvc-and-rest/README.md#55-json-with-jackson-3)).
+Jackson 3 defaults under Boot 4 (✔ proved): `LocalDate` written as `"2026-09-28"`, unknown JSON properties ignored, `JacksonException` is unchecked (a `RuntimeException`, so callers need not catch it) ([§5.5](../05-spring-mvc-and-rest/README.md#55-json-with-jackson-3)).
 
 ### API versioning (F7 / Boot 4)
 
@@ -520,7 +520,7 @@ Highest wins ([§3.3](../03-configuration-and-auto-configuration/README.md#33-pr
 
 ## 19.6 Transactions: `@Transactional` at a glance
 
-A Spring transaction = a **proxy** + a `PlatformTransactionManager` + a connection **bound to the current thread** ([§7.7](../07-data-access-jdbc-and-transactions/README.md#77-how-a-spring-transaction-works)). Everything below applies only to calls that go **through the proxy** ([§7.13](../07-data-access-jdbc-and-transactions/README.md#713-transaction-pitfalls)).
+A Spring transaction = a **proxy** + a `PlatformTransactionManager` + a connection **bound to the current thread** (stored per thread, so every data-access call on that thread reuses the same connection) ([§7.7](../07-data-access-jdbc-and-transactions/README.md#77-how-a-spring-transaction-works)). Everything below applies only to calls that go **through the proxy** ([§7.13](../07-data-access-jdbc-and-transactions/README.md#713-transaction-pitfalls)).
 
 ### Attributes and their defaults (✔ proved)
 
@@ -570,7 +570,7 @@ Global switch: `@EnableTransactionManagement(proxyTargetClass = true, rollbackOn
 | `REPEATABLE_READ` | + non-repeatable reads | PostgreSQL: one snapshot; concurrent update → serialization failure (`40001`) → retry the whole transaction |
 | `SERIALIZABLE` | + phantoms, write skew | expect serialization failures; always retry |
 
-The anomalies themselves: [SQL 13.4](../../../sql/chapters/13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels).
+The anomalies themselves (wrong results that concurrent transactions can produce, such as dirty reads, non-repeatable reads and lost updates): [SQL 13.4](../../../sql/chapters/13-transactions-and-concurrency/README.md#134-isolation--anomalies-and-isolation-levels).
 
 ### Transaction managers and helpers
 
@@ -612,14 +612,14 @@ The anomalies themselves: [SQL 13.4](../../../sql/chapters/13-transactions-and-c
 | `websocket` | one per WebSocket session | yes | `@Scope("websocket")` | [§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes) |
 | refresh (Spring Cloud) | re-created after a config refresh | yes | `@RefreshScope` | [§16.3](../16-spring-cloud-and-microservices/README.md#163-centralized-configuration-spring-cloud-config) |
 
-A prototype injected into a singleton is created **once** and stays ✔. For a fresh one each time: `ObjectProvider<T>.getObject()`, a `@Lookup` method, or a scoped proxy ([§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes)).
+A prototype injected into a singleton is created **once** and stays ✔. For a fresh one each time: `ObjectProvider<T>.getObject()`, a `@Lookup` method, or a scoped proxy (a stand-in that looks up the right instance on every call) ([§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes)).
 
 ### How Spring picks one bean among several (✔ proved)
 
 1. `@Qualifier("name")` on the injection point
 2. `@Primary` bean
 3. the only non-`@Fallback` bean (F6.2)
-4. a bean whose name equals the parameter name (needs `-parameters`, which the Boot parent sets)
+4. a bean whose name equals the parameter name (needs `-parameters` — a compiler flag that keeps parameter names in the bytecode — which the Boot parent sets)
 5. otherwise `NoUniqueBeanDefinitionException`
 
 `List<T>` gets all beans ordered by `@Order` (lowest first); `Map<String, T>` is keyed by bean name. Optional dependencies: `Optional<T>`, `ObjectProvider<T>`, `@Nullable`, `@Autowired(required = false)` ([§2.5](../02-ioc-and-dependency-injection/README.md#25-how-spring-picks-a-bean)).
@@ -657,7 +657,7 @@ Pitfall: a `@Transactional` call from `@PostConstruct` has no transaction — th
 
 ## 19.8 Spring Security 7 DSL snippets
 
-Security 7 accepts only the **lambda DSL**: one lambda per feature, no `.and()`, `authorizeHttpRequests` (not `authorizeRequests`), path matchers built on `PathPattern` ([§10.3](../10-spring-security-1-fundamentals/README.md#103-configuring-a-chain-the-lambda-dsl-in-spring-security-7)). The four snippets below are compiled by every build of [`SecuritySnippets.java`](code/cheatsheet-checks/src/main/java/ch19/checks/security/SecuritySnippets.java), so each DSL call exists in Security 7.1.1. Rules are checked **top to bottom, first match wins** ([§10.6](../10-spring-security-1-fundamentals/README.md#106-authorizing-requests-roles-authorities-401-vs-403)).
+Security 7 accepts only the **lambda DSL** (domain-specific language: configuration written as method calls that take lambdas, i.e. short inline functions `x -> ...`): one lambda per feature, no `.and()`, `authorizeHttpRequests` (not `authorizeRequests`), path matchers built on `PathPattern` ([§10.3](../10-spring-security-1-fundamentals/README.md#103-configuring-a-chain-the-lambda-dsl-in-spring-security-7)). The four snippets below are compiled by every build of [`SecuritySnippets.java`](code/cheatsheet-checks/src/main/java/ch19/checks/security/SecuritySnippets.java), so each DSL call exists in Security 7.1.1. Rules are checked **top to bottom, first match wins** ([§10.6](../10-spring-security-1-fundamentals/README.md#106-authorizing-requests-roles-authorities-401-vs-403)).
 
 ### Form login + HTTP Basic (browser app)
 
@@ -845,7 +845,7 @@ CorsConfigurationSource corsConfigurationSource() {
 | `WebTestClient` | WebFlux (also MockMvc) | optional | [§13.12](../13-reactive-and-webflux/README.md#1312-full-stack-webflux-tests-and-server-sent-events) |
 | `TestRestTemplate` | any | yes | [§12.9](../12-testing-spring-apps/README.md#129-resttestclient-framework-70) |
 
-Context cache: key = the merged configuration (classes, profiles, properties, `@MockitoBean`s, `@DynamicPropertySource`, `@AutoConfigure...`, `webEnvironment`); **max 32** contexts, LRU (`spring.test.context.cache.maxSize`); Framework 7 **pauses** inactive contexts (`spring.test.context.cache.pause`). Keep one shared base class ([§12.11](../12-testing-spring-apps/README.md#1211-test-context-caching)).
+Context cache: key = the merged configuration (classes, profiles, properties, `@MockitoBean`s, `@DynamicPropertySource`, `@AutoConfigure...`, `webEnvironment`); **max 32** contexts, LRU (least recently used — the context unused for longest is evicted first) (`spring.test.context.cache.maxSize`); Framework 7 **pauses** inactive contexts (`spring.test.context.cache.pause`). Keep one shared base class ([§12.11](../12-testing-spring-apps/README.md#1211-test-context-caching)).
 
 ---
 
@@ -887,7 +887,7 @@ Context cache: key = the merged configuration (classes, profiles, properties, `@
 
 ## 19.11 Actuator endpoints
 
-Add `spring-boot-starter-actuator`. Two switches decide availability: **access** (`none` / `read-only` / `unrestricted`) and **exposure** (HTTP / JMX). By default only `health` is exposed over HTTP ([§15.2](../15-observability-and-production/README.md#152-spring-boot-actuator)).
+Add `spring-boot-starter-actuator`. Two switches decide availability: **access** (`none` / `read-only` / `unrestricted`) and **exposure** (HTTP / JMX — Java Management Extensions, the JVM's built-in management channel). By default only `health` is exposed over HTTP ([§15.2](../15-observability-and-production/README.md#152-spring-boot-actuator)).
 
 | Endpoint (`/actuator/<id>`) | Shows / does | Notes | § |
 |---|---|---|---|
@@ -1002,7 +1002,7 @@ Also: R2DBC for non-blocking SQL ([§13.14](../13-reactive-and-webflux/README.md
 | **Choose for** | simple retries and concurrency caps, no extra dependency | circuit breaking, rate limits, fallbacks | legacy code only |
 | § | [§4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit) | [§16.8](../16-spring-cloud-and-microservices/README.md#168-resilience-circuit-breaker-retry-rate-limiter) | [§4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit) |
 
-Rules for any retry: only transient failures and idempotent operations, exponential back-off with jitter, a total time budget, retry in **one** layer ([§6.7](../06-rest-clients-and-http-interfaces/README.md#67-client-side-api-versioning-and-retries)).
+Rules for any retry: only transient failures (short-lived ones that may succeed a moment later) and idempotent operations (safe to repeat), exponential back-off (longer waits after each failure) with jitter (a random extra delay so clients don't retry in lockstep), a total time budget, retry in **one** layer ([§6.7](../06-rest-clients-and-http-interfaces/README.md#67-client-side-api-versioning-and-retries)).
 
 ### More decisions in one line each
 
@@ -1031,7 +1031,7 @@ Work top to bottom; each step names the symptom you see if you skip it. Details:
 
 - [ ] Upgrade to **Boot 3.5.x** first and remove every deprecation warning (4.0 deletes what 3.x deprecated). From 2.7, go 2.7 → 3.5 (`javax` → `jakarta`) first.
 - [ ] Java 17+ (25 recommended); Kotlin 2.2+, GraalVM 25+, Gradle 8.14+ if you use them.
-- [ ] Run OpenRewrite's `org.openrewrite.java.spring.boot4.UpgradeSpringBoot_4_0` recipe and review the diff.
+- [ ] Run OpenRewrite's (an automated code-refactoring tool) `org.openrewrite.java.spring.boot4.UpgradeSpringBoot_4_0` recipe and review the diff.
 - [ ] Add `spring-boot-properties-migrator` (runtime, temporarily) to report renamed properties; remove it afterwards.
 - [ ] Stuck? `spring-boot-starter-classic` / `spring-boot-starter-test-classic` restore the old all-in-one layout while you fix imports.
 
@@ -1049,7 +1049,7 @@ Work top to bottom; each step names the symptom you see if you skip it. Details:
 - [ ] Jackson 3: `com.fasterxml.jackson.databind` → `tools.jackson.databind` (annotations unchanged); `ObjectMapper` bean → `JsonMapper`; `Jackson2ObjectMapperBuilderCustomizer` → `JsonMapperBuilderCustomizer`; `@JsonComponent` → `@JacksonComponent`.
 - [ ] Auto-configuration class imports moved to per-module packages (check `exclude = ...`, `@ImportAutoConfiguration`, `@AutoConfiguration(after = ...)`).
 - [ ] `@EntityScan` → `org.springframework.boot.persistence.autoconfigure`; `hibernate-jpamodelgen` → `hibernate-processor`.
-- [ ] Null-safety: `org.springframework.lang.Nullable` → `org.jspecify.annotations.Nullable`; `javax.annotation`/`javax.inject` are gone.
+- [ ] Null-safety: `org.springframework.lang.Nullable` → `org.jspecify.annotations.Nullable`; `javax.annotation`/`javax.inject` (the old Java EE package names, now `jakarta.*`) are gone.
 - [ ] Security 7: rewrite `.and()` chains as one lambda per feature, `authorizeRequests` → `authorizeHttpRequests`, Ant/MVC matchers → `PathPatternRequestMatcher` (plain `requestMatchers("/x/**")`).
 - [ ] `RestTemplate` → `RestClient` (start with `RestClient.create(restTemplate)`).
 
@@ -1079,14 +1079,14 @@ Work top to bottom; each step names the symptom you see if you skip it. Details:
 
 - [ ] Health probes (`/actuator/health/liveness`, `/readiness`) are **on by default** — check what your platform calls.
 - [ ] DevTools LiveReload is off (and deprecated in 4.1).
-- [ ] `server.forward-headers-strategy` no longer applies to WAR deployments.
+- [ ] `server.forward-headers-strategy` no longer applies to WAR deployments (apps packaged as a `.war` file and deployed into an external servlet container).
 - [ ] Jackson 3 defaults: ISO dates, unknown properties ignored, properties sorted alphabetically after creator properties.
 
 ---
 
 ## 19.14 Interview index
 
-Chapter 18 holds 168 questions with short answers, five runnable proofs, a project walkthrough and ten debugging scenarios. This index maps each topic to its Chapter 18 section and to the chapter that teaches it.
+Chapter 18 holds 168 questions with short answers, five runnable proofs (small tests that demonstrate an answer by running it), a project walkthrough and ten debugging scenarios. This index maps each topic to its Chapter 18 section and to the chapter that teaches it.
 
 | Topic | Chapter 18 section | Questions | Teaching chapter |
 |---|---|---|---|
@@ -1138,7 +1138,7 @@ Chapter 18 holds 168 questions with short answers, five runnable proofs, a proje
 
 ### What it is
 
-[`code/cheatsheet-checks/`](code/cheatsheet-checks/) is a small Maven project (Boot 4.1.1, Java 25, no web server, no Docker) whose tests assert the facts marked **✔** in this chapter. If a future Boot version changes a default, a test fails, and the sheet must be updated. Run it from the repository root with `bash tools_run_spring.sh spring '19-*'`.
+[`code/cheatsheet-checks/`](code/cheatsheet-checks/) is a small Maven (Java's standard build tool) project (Boot 4.1.1, Java 25, no web server, no Docker) whose tests assert the facts marked **✔** in this chapter. If a future Boot version changes a default, a test fails, and the sheet must be updated. Run it from the repository root with `bash tools_run_spring.sh spring '19-*'`.
 
 | Test class | Proves | Sheet |
 |---|---|---|
@@ -1151,7 +1151,7 @@ Chapter 18 holds 168 questions with short answers, five runnable proofs, a proje
 | `CoreUtilitiesTests` | default cache keys, six-field cron, `@Retryable` defaults and 1 + `maxRetries` attempts | §19.3, §19.12 |
 | `JsonAndSecurityDefaultsTests` | Jackson 3 defaults, `hasRole` prefix rules, `DelegatingPasswordEncoder` | §19.5, §19.8 |
 
-The transaction checks use plain Spring on an in-memory H2 database, the same technique as [§18.15](../18-spring-interview-questions/README.md#1815-proofs-five-tricky-answers-run):
+The transaction checks use plain Spring on an in-memory H2 database (a small Java SQL database that lives only in the test's memory), the same technique as [§18.15](../18-spring-interview-questions/README.md#1815-proofs-five-tricky-answers-run):
 
 ```java
 @Transactional
@@ -1241,16 +1241,21 @@ Short definitions of the terms used in this book. Annotations are listed without
 | Term | Meaning | See |
 |---|---|---|
 | Access (Actuator) | per-endpoint permission: `none`, `read-only`, `unrestricted` (Boot 3.4+); separate from exposure | [§15.2](../15-observability-and-production/README.md#152-spring-boot-actuator) |
+| Access token | short-lived token a client sends to an API to prove it may call it | [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt) |
 | `acks` (Kafka) | how many replicas must confirm a write; `all` (`-1`) is the default since Kafka 3.0 | [§14.16](../14-messaging-async-and-scheduling/README.md#1416-producer-guarantees-idempotence-and-transactions) |
 | Actuator | Boot's management endpoints: health, metrics, info, loggers, env... | [§15.2](../15-observability-and-production/README.md#152-spring-boot-actuator) |
 | Advice (AOP) | the code an aspect runs at a join point: before, after returning, after throwing, after, around | [§4.1](../04-aop-and-proxies/README.md#41-cross-cutting-concerns-and-the-aop-vocabulary) |
 | Advisor (AOP) | Spring's internal pair of one advice and one pointcut | [§4.1](../04-aop-and-proxies/README.md#41-cross-cutting-concerns-and-the-aop-vocabulary) |
 | Advisor (Spring AI) | interceptor around every `ChatClient` call (memory, RAG, tool calling, logging), ordered by `getOrder()` | [§17.5](../17-spring-ai-and-whats-new/README.md#175-advisors) |
+| AES-GCM | standard symmetric encryption (one shared key) with built-in tamper detection; used for encrypting secrets and data | [§10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder) |
 | Aggregate | DDD cluster of objects loaded and saved as one unit through its root; the unit of Spring Data JDBC | [§9.2](../09-spring-data-beyond-jpa-and-caching/README.md#92-spring-data-jdbc-and-aggregates) |
 | `AggregateReference` | Spring Data JDBC reference to another aggregate by id only | [§9.2](../09-spring-data-beyond-jpa-and-caching/README.md#92-spring-data-jdbc-and-aggregates) |
+| Annotation (Java) | metadata written as `@Name` on a class, method or field; Spring reads it to add behaviour | [§1.1](../01-spring-ecosystem-and-first-app/README.md#11-what-spring-is) |
+| Anthropic / OpenAI / Ollama | AI model providers Spring AI has starters for; Ollama runs open models on your own machine | [§17.2](../17-spring-ai-and-whats-new/README.md#172-setting-up-a-project) |
 | AOP | Aspect-Oriented Programming: write a cross-cutting concern once, apply it where a pointcut matches | [§4.1](../04-aop-and-proxies/README.md#41-cross-cutting-concerns-and-the-aop-vocabulary) |
 | AOT cache (JDK) | JDK 24+ file of classes loaded and linked in a training run; `-XX:AOTCacheOutput` / `-XX:AOTCache` | [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images) |
 | AOT processing (Spring) | build-time generation of bean-definition code, used by native images and optionally on the JVM | [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images) |
+| API | Application Programming Interface: the operations one piece of software offers to another (Java methods or HTTP endpoints) | [§1.1](../01-spring-ecosystem-and-first-app/README.md#11-what-spring-is) |
 | API gateway | single front door that routes requests and applies edge concerns (Spring Cloud Gateway) | [§16.7](../16-spring-cloud-and-microservices/README.md#167-api-gateway-spring-cloud-gateway) |
 | API versioning | Framework 7 feature: read a version from the request and match `version = "1.1+"` mappings | [§5.9](../05-spring-mvc-and-rest/README.md#59-api-versioning-framework-7) |
 | `ApiVersionInserter` | client-side strategy that puts the API version into requests | [§6.7](../06-rest-clients-and-http-interfaces/README.md#67-client-side-api-versioning-and-retries) |
@@ -1259,9 +1264,14 @@ Short definitions of the terms used in this book. Annotations are listed without
 | `ApplicationEventPublisher` | bean used to publish application events | [§2.12](../02-ioc-and-dependency-injection/README.md#212-application-events) |
 | `ApplicationReadyEvent` | Boot event after startup and runners have finished | [§2.7](../02-ioc-and-dependency-injection/README.md#27-the-bean-lifecycle) |
 | `ApplicationRunner` / `CommandLineRunner` | beans run once at startup with the program arguments | [§1.8](../01-spring-ecosystem-and-first-app/README.md#18-the-main-class-and-springbootapplication) |
+| Argon2 / bcrypt / PBKDF2 / scrypt | slow, salted password-hashing algorithms; bcrypt is Spring Security's default | [§10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder) |
 | Aspect | class bundling pointcuts and advice for one concern (`@Aspect` + `@Component`) | [§4.2](../04-aop-and-proxies/README.md#42-writing-aspects-with-aspect) |
 | AspectJ | full AOP language with compile/load-time weaving; Spring borrows its annotations and pointcut syntax | [§4.8](../04-aop-and-proxies/README.md#48-spring-aop-vs-aspectj) |
+| AssertJ | fluent assertion library: `assertThat(x).isEqualTo(y)`; included in the Boot test starter | [§12.8](../12-testing-spring-apps/README.md#128-mockmvctester-assertj-style-mockmvc) |
+| Asynchronous | the caller continues without waiting; the result arrives later (callback, future, message) | [§14.1](../14-messaging-async-and-scheduling/README.md#141-the-map-four-ways-to-do-work-somewhere-else) |
 | At-least-once | delivery guarantee: never lost, possibly duplicated — consumers must be idempotent | [§14.8](../14-messaging-async-and-scheduling/README.md#148-messaging-concepts-you-need-first) |
+| Audience (`aud`) | JWT claim naming who the token is meant for; an API should reject tokens for another audience | [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt) |
+| Auditing (Spring Data) | automatically filling created/modified date and user columns | [§8.13](../08-spring-data-jpa-and-hibernate/README.md#813-auditing) |
 | `Authentication` | object holding the principal, credentials and authorities of the current caller | [§10.1](../10-spring-security-1-fundamentals/README.md#101-vocabulary-and-what-the-starter-does-by-default) |
 | Authentication | proving who the caller is | [§10.1](../10-spring-security-1-fundamentals/README.md#101-vocabulary-and-what-the-starter-does-by-default) |
 | `AuthenticationEntryPoint` | starts authentication for an anonymous, denied request: 401 challenge or login redirect | [§10.2](../10-spring-security-1-fundamentals/README.md#102-architecture-the-filter-chain) |
@@ -1281,10 +1291,12 @@ Short definitions of the terms used in this book. Annotations are listed without
 
 | Term | Meaning | See |
 |---|---|---|
+| B3 headers | Zipkin's older trace-propagation headers, an alternative to W3C `traceparent` | [§15.7](../15-observability-and-production/README.md#157-distributed-tracing) |
 | Backpressure | the consumer limits the producer via `request(n)` | [§13.7](../13-reactive-and-webflux/README.md#137-backpressure-in-practice) |
 | Baggage | extra key/value context that travels with a trace | [§15.7](../15-observability-and-production/README.md#157-distributed-tracing) |
 | Bean | object created, wired and managed by the Spring container | [§2.1](../02-ioc-and-dependency-injection/README.md#21-inversion-of-control-and-dependency-injection) |
 | Bean definition | the recipe for a bean: class or factory method, scope, dependencies, callbacks | [§2.2](../02-ioc-and-dependency-injection/README.md#22-the-container-beanfactory-vs-applicationcontext) |
+| Bean Validation | Jakarta standard for constraint annotations (`@NotBlank`, `@Email`); Hibernate Validator implements it | [§5.6](../05-spring-mvc-and-rest/README.md#56-validation) |
 | `BeanFactory` | minimal container: bean definitions + lazy creation | [§2.2](../02-ioc-and-dependency-injection/README.md#22-the-container-beanfactory-vs-applicationcontext) |
 | `BeanFactoryPostProcessor` | changes bean **definitions** before any bean is created (e.g. `${}` resolution) | [§2.8](../02-ioc-and-dependency-injection/README.md#28-post-processors-the-containers-extension-points) |
 | `BeanPostProcessor` | sees every bean **instance** before/after init and may wrap it in a proxy | [§2.8](../02-ioc-and-dependency-injection/README.md#28-post-processors-the-containers-extension-points) |
@@ -1292,10 +1304,18 @@ Short definitions of the terms used in this book. Annotations are listed without
 | Bearer token | token that grants access to whoever holds it, sent as `Authorization: Bearer ...` | [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt) |
 | BFF (Backend for Frontend) | server-side OAuth2 client that keeps tokens away from the browser and gives it a session cookie | [§11.12](../11-spring-security-2-tokens-and-oauth2/README.md#1112-where-should-a-browser-keep-tokens-the-bff-pattern) |
 | BlockHound | Java agent that detects blocking calls on non-blocking threads in tests | [§13.8](../13-reactive-and-webflux/README.md#138-schedulers-and-threads) |
+| Blocking call | a call that holds its thread while it waits (JDBC, `Thread.sleep`, a blocking HTTP client) | [§13.1](../13-reactive-and-webflux/README.md#131-why-reactive-the-cost-of-waiting) |
 | BOM | "bill of materials" POM pinning versions of many artifacts (`spring-boot-dependencies`) | [§1.6](../01-spring-ecosystem-and-first-app/README.md#16-project-layout-and-the-build-file) |
 | `boundedElastic` | Reactor scheduler for wrapping unavoidable blocking calls | [§13.8](../13-reactive-and-webflux/README.md#138-schedulers-and-threads) |
+| BPP / BFPP | short for `BeanPostProcessor` / `BeanFactoryPostProcessor` | [§2.8](../02-ioc-and-dependency-injection/README.md#28-post-processors-the-containers-extension-points) |
+| Brave / Zipkin / Jaeger / Tempo | tracing libraries and back ends: Brave records spans, Zipkin, Jaeger and Tempo store and display traces | [§15.7](../15-observability-and-production/README.md#157-distributed-tracing) |
+| Broker (message broker) | server that receives messages from producers and delivers them to consumers (Kafka, RabbitMQ) | [§14.8](../14-messaging-async-and-scheduling/README.md#148-messaging-concepts-you-need-first) |
+| Brute-force protection | slowing or locking out repeated failed logins so passwords can't simply be guessed | [§11.15](../11-spring-security-2-tokens-and-oauth2/README.md#1115-rate-limiting-and-brute-force-protection) |
+| Bucket4j | Java rate-limiting library based on the token-bucket algorithm | [§11.15](../11-spring-security-2-tokens-and-oauth2/README.md#1115-rate-limiting-and-brute-force-protection) |
+| Build tool | program that downloads dependencies, compiles, tests and packages the code (Maven, Gradle) | [§1.6](../01-spring-ecosystem-and-first-app/README.md#16-project-layout-and-the-build-file) |
 | Bulkhead | cap on concurrent calls to one dependency (`@ConcurrencyLimit`, Resilience4j `@Bulkhead`) | [§4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit), [§16.8](../16-spring-cloud-and-microservices/README.md#168-resilience-circuit-breaker-retry-rate-limiter) |
 | Buildpacks | Cloud Native Buildpacks: build an OCI image from a jar without a Dockerfile (`spring-boot:build-image`) | [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images) |
+| Bytecode | the compiled instructions in `.class` files that the JVM executes | [§4.4](../04-aop-and-proxies/README.md#44-how-spring-aop-works-proxies) |
 
 ### C
 
@@ -1307,16 +1327,24 @@ Short definitions of the terms used in this book. Annotations are listed without
 | Caffeine | high-performance local Java cache (W-TinyLFU eviction) | [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction) |
 | Cardinality | number of distinct tag-value combinations of a metric; keep it small | [§15.5](../15-observability-and-production/README.md#155-metrics-with-micrometer) |
 | Cascade | passing a JPA operation (persist, merge, remove...) from parent to children | [§8.5](../08-spring-data-jpa-and-hibernate/README.md#85-relationships) |
+| Cascading failure | one slow or failed service makes its callers fail too, spreading through the system | [§16.8](../16-spring-cloud-and-microservices/README.md#168-resilience-circuit-breaker-retry-rate-limiter) |
+| CDC (Change Data Capture) | streaming every insert/update/delete from the database's change log (e.g. Debezium); one way to relay an outbox | [§14.17](../14-messaging-async-and-scheduling/README.md#1417-the-transactional-outbox) |
 | CDS | Class Data Sharing: JVM archive of parsed classes for faster startup | [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images) |
 | CGLIB proxy | runtime subclass used as a proxy; Boot's default; cannot handle `final` | [§4.4](../04-aop-and-proxies/README.md#44-how-spring-aop-works-proxies) |
 | `ChatClient` | Spring AI fluent API over a `ChatModel`, with advisors, templates, tools | [§17.3](../17-spring-ai-and-whats-new/README.md#173-chatmodel-and-chatclient) |
 | `ChatMemory` | Spring AI store of past messages per conversation id (window of 20 by default) | [§17.6](../17-spring-ai-and-whats-new/README.md#176-chat-memory) |
 | `ChatModel` | Spring AI provider-level interface: `Prompt` in, `ChatResponse` out | [§17.3](../17-spring-ai-and-whats-new/README.md#173-chatmodel-and-chatclient) |
+| Checked exception | exception the compiler forces you to declare or catch (not a `RuntimeException`); commits a transaction by default | [§7.10](../07-data-access-jdbc-and-transactions/README.md#710-rollback-rules) |
+| Chunking (RAG) | splitting documents into small pieces before embedding them, so retrieval returns focused passages | [§17.9](../17-spring-ai-and-whats-new/README.md#179-rag-retrieval-augmented-generation) |
 | Circuit breaker | stops calling a failing dependency (CLOSED → OPEN → HALF_OPEN) | [§16.8](../16-spring-cloud-and-microservices/README.md#168-resilience-circuit-breaker-retry-rate-limiter) |
 | Circular dependency | dependency cycle between beans; constructor cycles always fail, Boot rejects field cycles | [§2.9](../02-ioc-and-dependency-injection/README.md#29-circular-dependencies) |
 | Claim | statement in a JWT payload (`sub`, `iss`, `aud`, `exp`, `scope`) | [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt) |
+| Class loader | JVM component that finds and loads `.class` files; DevTools uses two of them for fast restart | [§1.10](../01-spring-ecosystem-and-first-app/README.md#110-devtools) |
+| Classpath | the list of jars and folders the JVM loads classes from; auto-configuration reacts to what is on it | [§1.2](../01-spring-ecosystem-and-first-app/README.md#12-what-spring-boot-adds) |
+| CLI | command-line interface: a program you run from a terminal | [§1.9](../01-spring-ecosystem-and-first-app/README.md#19-running-the-application) |
 | Client credentials | OAuth2 grant for service-to-service calls without a user | [§11.10](../11-spring-security-2-tokens-and-oauth2/README.md#1110-calling-other-services-client-credentials-and-token-relay) |
 | Cold publisher | replays the whole pipeline for every subscriber | [§13.9](../13-reactive-and-webflux/README.md#139-hot-vs-cold-sinks-and-context) |
+| Commit / rollback | finish a transaction by making its changes permanent / by undoing all of them | [§7.7](../07-data-access-jdbc-and-transactions/README.md#77-how-a-spring-transaction-works) |
 | Component scanning | finding `@Component` classes in a package tree | [§2.3](../02-ioc-and-dependency-injection/README.md#23-defining-beans) |
 | `ConcurrencyLimit` | Framework 7 annotation limiting concurrent calls of a method (`BLOCK` or `REJECT`) | [§4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit) |
 | Condition evaluation report | Boot's list of which auto-configurations matched and why (`--debug`, `/actuator/conditions`) | [§3.11](../03-configuration-and-auto-configuration/README.md#311-seeing-what-boot-decided) |
@@ -1325,32 +1353,52 @@ Short definitions of the terms used in this book. Annotations are listed without
 | Config Server | Spring Cloud service serving configuration from Git or other backends | [§16.3](../16-spring-cloud-and-microservices/README.md#163-centralized-configuration-spring-cloud-config) |
 | `configtree:` | import where each file in a directory is a property (Kubernetes secrets) | [§3.8](../03-configuration-and-auto-configuration/README.md#38-importing-configuration-springconfigimport) |
 | `ConfigurationProperties` | binds a prefix of properties into a typed, validated object | [§3.6](../03-configuration-and-auto-configuration/README.md#36-configurationproperties--type-safe-configuration) |
+| Connection pool | set of open database connections reused across requests because opening one is slow (HikariCP) | [§7.2](../07-data-access-jdbc-and-transactions/README.md#72-datasource-and-hikaricp) |
+| Constructor injection | dependencies passed as constructor parameters; the recommended injection style | [§2.4](../02-ioc-and-dependency-injection/README.md#24-injection-types) |
+| Consul | HashiCorp service registry and key/value store, an alternative to Eureka | [§16.4](../16-spring-cloud-and-microservices/README.md#164-service-discovery-eureka-consul-kubernetes) |
 | Consumer group | Kafka consumers sharing a `group.id`; each partition goes to one member, each group gets every record | [§14.9](../14-messaging-async-and-scheduling/README.md#149-kafka-in-five-minutes) |
+| Consumer lag | how many messages a consumer group is behind the newest ones in a partition | [§14.12](../14-messaging-async-and-scheduling/README.md#1412-consuming-kafkalistener-concurrency-and-consumer-groups) |
+| Container (Docker) | isolated process packaged with everything it needs to run; started from a container image | [§12.14](../12-testing-spring-apps/README.md#1214-testcontainers-and-serviceconnection) |
+| Container image | packaged file system plus start command from which containers are run (OCI format) | [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images) |
 | Content negotiation | choosing the representation from `Accept` / `produces` (406 if impossible) | [§5.8](../05-spring-mvc-and-rest/README.md#58-content-negotiation) |
 | Context caching (tests) | the TestContext Framework reuses started contexts with the same configuration | [§12.11](../12-testing-spring-apps/README.md#1211-test-context-caching) |
 | Context pausing | Framework 7: inactive cached test contexts have their lifecycle beans stopped | [§12.11](../12-testing-spring-apps/README.md#1211-test-context-caching) |
 | Context propagation | copying `ThreadLocal` values (trace, MDC) across threads or into the Reactor `Context` | [§15.6](../15-observability-and-production/README.md#156-the-observation-api-and-observed), [§13.9](../13-reactive-and-webflux/README.md#139-hot-vs-cold-sinks-and-context) |
 | Contract testing | consumer and provider tested against a shared contract (Pact, Spring Cloud Contract) | [§16.10](../16-spring-cloud-and-microservices/README.md#1610-contract-testing) |
+| Cookie | small value a site stores in the browser, sent back automatically on every request to that site | [§10.10](../10-spring-security-1-fundamentals/README.md#1010-sessions-the-security-context-and-logout) |
 | CORS | browser rules letting a page from one origin read responses from another (preflight `OPTIONS`) | [§10.9](../10-spring-security-1-fundamentals/README.md#109-cors) |
+| Counter / Timer / DistributionSummary | Micrometer meters: a count that only rises / durations / sizes | [§15.5](../15-observability-and-production/README.md#155-metrics-with-micrometer) |
+| CPU-bound vs I/O-bound | work limited by computation vs work that mostly waits for network or disk | [§13.8](../13-reactive-and-webflux/README.md#138-schedulers-and-threads) |
+| CQRS | Command Query Responsibility Segregation: separate models for writes and for reads | [§16.1](../16-spring-cloud-and-microservices/README.md#161-the-map-microservice-problems-and-spring-answers) |
 | Cron expression | Spring's six-field schedule, starting with seconds (`0 0 2 * * *`) | [§14.7](../14-messaging-async-and-scheduling/README.md#147-scheduling-with-scheduled) |
 | Cross-cutting concern | requirement spread over many classes (logging, transactions, security) | [§4.1](../04-aop-and-proxies/README.md#41-cross-cutting-concerns-and-the-aop-vocabulary) |
+| CRUD | Create, Read, Update, Delete: the four basic data operations | [§8.8](../08-spring-data-jpa-and-hibernate/README.md#88-repositories) |
 | CSRF | attack that makes a logged-in browser send a forged state-changing request; blocked by tokens | [§10.8](../10-spring-security-1-fundamentals/README.md#108-csrf-protection) |
+| curl / Postman | command-line and graphical tools for sending HTTP requests by hand; they ignore CORS | [§1.5](../01-spring-ecosystem-and-first-app/README.md#15-creating-a-project-with-startspringio) |
 | Customizer | bean that adjusts an auto-configured object instead of replacing it | [§3.12](../03-configuration-and-auto-configuration/README.md#312-overriding-and-excluding-auto-configuration) |
 
 ### D
 
 | Term | Meaning | See |
 |---|---|---|
+| DAO | Data Access Object: a class that hides the SQL for one kind of data | [§7.1](../07-data-access-jdbc-and-transactions/README.md#71-the-data-access-stack) |
 | `DataAccessException` | Spring's unchecked, database-neutral exception hierarchy | [§7.5](../07-data-access-jdbc-and-transactions/README.md#75-exception-translation-dataaccessexception) |
 | `DataSize` | Boot type for sizes (`10MB`); plain numbers are bytes | [§3.6](../03-configuration-and-auto-configuration/README.md#36-configurationproperties--type-safe-configuration) |
 | `DataSource` | factory of JDBC connections; in Boot a HikariCP pool | [§7.2](../07-data-access-jdbc-and-transactions/README.md#72-datasource-and-hikaricp) |
+| DDD | Domain-Driven Design: modelling software around business concepts (entities, aggregates, bounded contexts) | [§9.2](../09-spring-data-beyond-jpa-and-caching/README.md#92-spring-data-jdbc-and-aggregates) |
+| DDL / `ddl-auto` | Data Definition Language (`CREATE TABLE`, `ALTER`); `ddl-auto` lets Hibernate create or validate the schema | [§8.16](../08-spring-data-jpa-and-hibernate/README.md#816-schema-migrations-with-flyway) |
+| Dead-letter exchange (DLX) | RabbitMQ exchange that receives rejected or expired messages from a queue | [§14.18](../14-messaging-async-and-scheduling/README.md#1418-rabbitmq-with-spring-amqp-configuration-not-run) |
 | Dead-letter topic (DLT) | where records go after the last failed attempt; default name `<topic>-dlt` (spring-kafka 3.3+) | [§14.14](../14-messaging-async-and-scheduling/README.md#1414-error-handling-defaulterrorhandler-and-the-dead-letter-topic) |
 | `DeadLetterPublishingRecoverer` | spring-kafka recoverer that publishes failed records to the DLT | [§14.14](../14-messaging-async-and-scheduling/README.md#1414-error-handling-defaulterrorhandler-and-the-dead-letter-topic) |
+| Deadlock | two transactions each wait for a lock the other holds; the database aborts one of them | [§7.11](../07-data-access-jdbc-and-transactions/README.md#711-isolation-levels) |
 | `DefaultErrorHandler` | spring-kafka container error handler: blocking retries, then a recoverer | [§14.14](../14-messaging-async-and-scheduling/README.md#1414-error-handling-defaulterrorhandler-and-the-dead-letter-topic) |
 | `DelegatingFilterProxy` | servlet filter that hands requests to the `springSecurityFilterChain` bean | [§10.2](../10-spring-security-1-fundamentals/README.md#102-architecture-the-filter-chain) |
 | `DelegatingPasswordEncoder` | encoder storing `{id}hash`; verifies old formats, upgrades on login | [§10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder) |
+| Dependency | a library your project uses, declared in the build file; or an object a bean needs | [§1.6](../01-spring-ecosystem-and-first-app/README.md#16-project-layout-and-the-build-file) |
 | Dependency Injection (DI) | an object receives its dependencies instead of creating them | [§2.1](../02-ioc-and-dependency-injection/README.md#21-inversion-of-control-and-dependency-injection) |
+| Deprecated | still works but is marked for removal in a later version; move off it | [§1.4](../01-spring-ecosystem-and-first-app/README.md#14-history-and-versions) |
 | Derived query | Spring Data method whose name is the query (`findByTitleContaining`) | [§8.9](../08-spring-data-jpa-and-hibernate/README.md#89-derived-queries) |
+| Deserialization / serialization | turning bytes or JSON into objects / objects into bytes or JSON | [§5.5](../05-spring-mvc-and-rest/README.md#55-json-with-jackson-3) |
 | Detached entity | JPA entity no longer in a persistence context; changes are not tracked | [§8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking) |
 | DevTools | development module: fast restart, dev defaults; off for `java -jar` | [§1.10](../01-spring-ecosystem-and-first-app/README.md#110-devtools) |
 | Dirty checking | Hibernate compares managed entities with their snapshots at flush and writes `UPDATE`s | [§8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking) |
@@ -1358,6 +1406,9 @@ Short definitions of the terms used in this book. Annotations are listed without
 | `DiscoveryClient` | Spring Cloud abstraction returning the instances of a service id | [§16.4](../16-spring-cloud-and-microservices/README.md#164-service-discovery-eureka-consul-kubernetes) |
 | `DispatcherServlet` | Spring MVC's front controller | [§5.2](../05-spring-mvc-and-rest/README.md#52-how-a-request-flows-the-dispatcherservlet) |
 | `DispatcherHandler` | WebFlux's front controller | [§13.10](../13-reactive-and-webflux/README.md#1310-spring-webflux-annotated-controllers) |
+| DNS | Domain Name System: turns host names into network addresses; Kubernetes uses it for service discovery | [§16.4](../16-spring-cloud-and-microservices/README.md#164-service-discovery-eureka-consul-kubernetes) |
+| Docker | tool that builds and runs containers; Testcontainers needs it | [§12.14](../12-testing-spring-apps/README.md#1214-testcontainers-and-serviceconnection) |
+| DTO | Data Transfer Object: a simple class or record shaped for an API instead of the database | [§5.4](../05-spring-mvc-and-rest/README.md#54-reading-input-and-writing-output) |
 | Dual-write problem | a database write and a broker publish cannot be atomic; solved by the outbox | [§14.17](../14-messaging-async-and-scheduling/README.md#1417-the-transactional-outbox) |
 | `Duration` binding | `45s`, `5m`, `PT1H`; plain numbers are milliseconds | [§3.6](../03-configuration-and-auto-configuration/README.md#36-configurationproperties--type-safe-configuration) |
 | `DynamicPropertySource` | test method registering properties with lazy suppliers (random ports, containers) | [§12.12](../12-testing-spring-apps/README.md#1212-dynamicpropertysource-properties-known-only-at-runtime) |
@@ -1367,6 +1418,8 @@ Short definitions of the terms used in this book. Annotations are listed without
 | Term | Meaning | See |
 |---|---|---|
 | EAGER / LAZY | load an association with its owner / on first access; make everything LAZY | [§8.6](../08-spring-data-jpa-and-hibernate/README.md#86-fetch-types-and-lazyinitializationexception) |
+| EJB | Enterprise JavaBeans: the older Java EE component model Spring was created as an alternative to | [§1.4](../01-spring-ecosystem-and-first-app/README.md#14-history-and-versions) |
+| Embedded database | database that runs inside the application's JVM (H2, HSQLDB); handy for tests and demos | [§7.2](../07-data-access-jdbc-and-transactions/README.md#72-datasource-and-hikaricp) |
 | Embedded server | Tomcat/Jetty/Netty running inside the application jar | [§1.2](../01-spring-ecosystem-and-first-app/README.md#12-what-spring-boot-adds) |
 | `EmbeddedKafka` | in-JVM Kafka broker for tests (spring-kafka-test) | [§14.13](../14-messaging-async-and-scheduling/README.md#1413-testing-with-embeddedkafka) |
 | Embedding | vector of numbers representing text so similar texts are close | [§17.9](../17-spring-ai-and-whats-new/README.md#179-rag-retrieval-augmented-generation) |
@@ -1376,12 +1429,18 @@ Short definitions of the terms used in this book. Annotations are listed without
 | Entity graph | declares associations to fetch with a query (`@EntityGraph`, left join) | [§8.7](../08-spring-data-jpa-and-hibernate/README.md#87-the-n1-problem) |
 | `EntityManager` | JPA API over the persistence context (Hibernate `Session`) | [§8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking) |
 | `Environment` | Spring's view of all property sources and active profiles | [§3.1](../03-configuration-and-auto-configuration/README.md#31-externalized-configuration-and-the-environment) |
+| ETag | response header holding a version fingerprint so clients can ask "has it changed?" (304 Not Modified) | [§8.14](../08-spring-data-jpa-and-hibernate/README.md#814-locking-optimistic-and-pessimistic) |
 | Eureka | Netflix service registry supported by Spring Cloud (AP design) | [§16.4](../16-spring-cloud-and-microservices/README.md#164-service-discovery-eureka-consul-kubernetes) |
 | Event loop | few threads that run pipeline steps when I/O completes, never waiting | [§13.1](../13-reactive-and-webflux/README.md#131-why-reactive-the-cost-of-waiting) |
+| Event-driven | services communicate by publishing and reacting to events instead of calling each other directly | [§14.8](../14-messaging-async-and-scheduling/README.md#148-messaging-concepts-you-need-first) |
 | `EventListener` | method receiving application events, synchronously by default | [§2.12](../02-ioc-and-dependency-injection/README.md#212-application-events) |
+| Eventual consistency | copies or services agree after a short delay instead of instantly | [§14.17](../14-messaging-async-and-scheduling/README.md#1417-the-transactional-outbox) |
+| Exactly-once | each message's effect happens once; in practice at-least-once delivery plus idempotent processing | [§14.16](../14-messaging-async-and-scheduling/README.md#1416-producer-guarantees-idempotence-and-transactions) |
 | Exception translation | turning `SQLException`s into `DataAccessException`s | [§7.5](../07-data-access-jdbc-and-transactions/README.md#75-exception-translation-dataaccessexception) |
 | `ExceptionTranslationFilter` | turns security exceptions into 401/redirect (anonymous) or 403 (authenticated) | [§10.2](../10-spring-security-1-fundamentals/README.md#102-architecture-the-filter-chain) |
+| Exchange / binding (RabbitMQ) | an exchange receives messages and routes them to queues according to bindings | [§14.18](../14-messaging-async-and-scheduling/README.md#1418-rabbitmq-with-spring-amqp-configuration-not-run) |
 | Executor / `TaskExecutor` | owner of worker threads and a task queue; runs `@Async` work | [§14.4](../14-messaging-async-and-scheduling/README.md#144-async-and-executors) |
+| Exponential back-off | waiting longer after each failed attempt (1 s, 2 s, 4 s...) before retrying | [§4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit) |
 | Exposure (Actuator) | whether an endpoint is reachable over HTTP or JMX (`health` only, by default) | [§15.2](../15-observability-and-production/README.md#152-spring-boot-actuator) |
 | Externalized configuration | settings outside the build artifact (files, env vars, args) | [§3.1](../03-configuration-and-auto-configuration/README.md#31-externalized-configuration-and-the-environment) |
 
@@ -1391,6 +1450,7 @@ Short definitions of the terms used in this book. Annotations are listed without
 |---|---|---|
 | `FACTOR_*` authority | Security 7 authority recording a completed login factor (`FACTOR_PASSWORD`) | [§10.4](../10-spring-security-1-fundamentals/README.md#104-authentication-users-providers-form-login-and-basic) |
 | `Fallback` | Framework 6.2: bean used only if no other candidate qualifies | [§2.5](../02-ioc-and-dependency-injection/README.md#25-how-spring-picks-a-bean) |
+| Fallback (resilience) | default answer returned when a protected call fails or a circuit is open | [§16.8](../16-spring-cloud-and-microservices/README.md#168-resilience-circuit-breaker-retry-rate-limiter) |
 | Fat (executable) jar | Boot jar with `BOOT-INF/lib` dependencies, started by `JarLauncher` | [§1.9](../01-spring-ecosystem-and-first-app/README.md#19-running-the-application) |
 | Filter (servlet) | code around every request before the `DispatcherServlet`; can wrap request/response | [§5.11](../05-spring-mvc-and-rest/README.md#511-filters-vs-interceptors-vs-aop) |
 | `FilterChainProxy` | the `springSecurityFilterChain` bean that picks the first matching `SecurityFilterChain` | [§10.2](../10-spring-security-1-fundamentals/README.md#102-architecture-the-filter-chain) |
@@ -1399,6 +1459,7 @@ Short definitions of the terms used in this book. Annotations are listed without
 | Flush | Hibernate sends queued SQL: before commit, before affected queries, on `flush()` | [§8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking) |
 | `Flux` | Reactor publisher of 0..N items | [§13.3](../13-reactive-and-webflux/README.md#133-project-reactor-mono-and-flux) |
 | Flyway | SQL-file schema migration tool (`V1__x.sql`, checksums) | [§8.16](../08-spring-data-jpa-and-hibernate/README.md#816-schema-migrations-with-flyway) |
+| Foreign key | column that points to the primary key of a row in another table | [§8.5](../08-spring-data-jpa-and-hibernate/README.md#85-relationships) |
 | Form login | username/password via an HTML form; session cookie afterwards | [§10.4](../10-spring-security-1-fundamentals/README.md#104-authentication-users-providers-form-login-and-basic) |
 | Full vs lite configuration | `@Configuration` CGLIB subclass (inter-bean calls return singletons) vs plain calls | [§2.3](../02-ioc-and-dependency-injection/README.md#23-defining-beans) |
 | Functional endpoints | routes as `RouterFunction` beans and handler functions instead of annotations | [§13.11](../13-reactive-and-webflux/README.md#1311-functional-endpoints) |
@@ -1407,47 +1468,84 @@ Short definitions of the terms used in this book. Annotations are listed without
 
 | Term | Meaning | See |
 |---|---|---|
+| GA / milestone / SNAPSHOT | release stages: general availability (production-ready) / preview builds / unreleased development builds | [§1.4](../01-spring-ecosystem-and-first-app/README.md#14-history-and-versions) |
+| Garbage collection (GC) | the JVM automatically freeing memory of objects no longer used; pauses can add latency | [§13.15](../13-reactive-and-webflux/README.md#1315-virtual-threads-vs-webflux-a-measured-comparison) |
 | Gateway (Spring Cloud) | API gateway: routes = predicates + filters; Web MVC or WebFlux flavour | [§16.7](../16-spring-cloud-and-microservices/README.md#167-api-gateway-spring-cloud-gateway) |
 | Gauge | Micrometer meter sampling a current value | [§15.5](../15-observability-and-production/README.md#155-metrics-with-micrometer) |
+| GPU | graphics processor; runs AI models much faster than a CPU | [§10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder) |
 | Graceful shutdown | stop accepting requests, finish in-flight ones, then close (default since Boot 3.4) | [§15.9](../15-observability-and-production/README.md#159-graceful-shutdown) |
 | GraalVM native image | whole app compiled ahead of time to a native executable (closed world) | [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images) |
+| Gradle | build tool alternative to Maven, with Groovy or Kotlin build scripts | [§1.5](../01-spring-ecosystem-and-first-app/README.md#15-creating-a-project-with-startspringio) |
+| Grant type (OAuth2) | way a client obtains a token: authorization code, client credentials, refresh token, token exchange | [§11.2](../11-spring-security-2-tokens-and-oauth2/README.md#112-oauth-20-and-openid-connect-in-one-picture) |
+| H2 | small Java SQL database that can run in memory; used for demos and quick tests | [§7.2](../07-data-access-jdbc-and-transactions/README.md#72-datasource-and-hikaricp) |
+| HAL / HATEOAS | REST style where responses include links to related actions; HAL is a JSON format for those links | [§5.12](../05-spring-mvc-and-rest/README.md#512-documenting-the-api-openapi-with-springdoc) |
 | `HandlerInterceptor` | MVC hook around handler methods (`preHandle`, `postHandle`, `afterCompletion`) | [§5.11](../05-spring-mvc-and-rest/README.md#511-filters-vs-interceptors-vs-aop) |
 | `HandlerMapping` | finds the handler method for a request | [§5.2](../05-spring-mvc-and-rest/README.md#52-how-a-request-flows-the-dispatcherservlet) |
+| Hash (password) | one-way fingerprint of a value; passwords are stored as slow, salted hashes, never encrypted | [§10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder) |
 | Health group | named subset of health indicators at `/actuator/health/<group>` | [§15.3](../15-observability-and-production/README.md#153-health-health-groups-and-kubernetes-probes) |
 | `HealthIndicator` | bean contributing one check to `/actuator/health` | [§15.3](../15-observability-and-production/README.md#153-health-health-groups-and-kubernetes-probes) |
+| Heap | JVM memory area where objects live; sized with `-Xmx` or `-XX:MaxRAMPercentage` | [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images) |
+| Hibernate | the JPA implementation (ORM) Boot uses; maps entities to tables and generates SQL | [§8.1](../08-spring-data-jpa-and-hibernate/README.md#81-jpa-hibernate-and-spring-data--who-does-what) |
 | HikariCP | Boot's default JDBC connection pool (default 10 connections) | [§7.2](../07-data-access-jdbc-and-transactions/README.md#72-datasource-and-hikaricp) |
+| HMAC / RSA / EC (JWT signing) | signing families: HMAC (HS256) shares one secret; RSA (RS256) and EC (ES256) sign privately and verify with a public key | [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt) |
 | Hot publisher | produces whether or not anyone listens; late subscribers miss items | [§13.9](../13-reactive-and-webflux/README.md#139-hot-vs-cold-sinks-and-context) |
+| HOTP / TOTP | one-time password algorithms based on a counter / on the current time | [§11.18](../11-spring-security-2-tokens-and-oauth2/README.md#1118-security-fundamentals-beyond-spring) |
+| HSQLDB / Derby | other embedded Java databases Boot can auto-configure, like H2 | [§7.2](../07-data-access-jdbc-and-transactions/README.md#72-datasource-and-hikaricp) |
+| HTTP | HyperText Transfer Protocol: request/response protocol of the web (method, path, headers, body, status) | [§5.1](../05-spring-mvc-and-rest/README.md#51-rest-in-one-page) |
 | HTTP Basic | credentials in an `Authorization: Basic` header on every request | [§10.4](../10-spring-security-1-fundamentals/README.md#104-authentication-users-providers-form-login-and-basic) |
+| HTTP methods | GET reads, POST creates, PUT replaces, PATCH partly updates, DELETE removes | [§5.1](../05-spring-mvc-and-rest/README.md#51-rest-in-one-page) |
 | HTTP service interface | Java interface with `@GetExchange`... implemented by a generated proxy | [§6.6](../06-rest-clients-and-http-interfaces/README.md#66-http-service-interfaces-httpexchange) |
+| HTTP status 401 vs 403 | 401 = not authenticated (who are you?), 403 = authenticated but not allowed | [§10.6](../10-spring-security-1-fundamentals/README.md#106-authorizing-requests-roles-authorities-401-vs-403) |
 | `HttpMessageConverter` | converts bodies to and from Java objects (Jackson for JSON) | [§5.2](../05-spring-mvc-and-rest/README.md#52-how-a-request-flows-the-dispatcherservlet) |
+| `HttpOnly` / `Secure` / `SameSite` | cookie flags: hidden from JavaScript / sent only over HTTPS / not sent on cross-site requests | [§11.12](../11-spring-security-2-tokens-and-oauth2/README.md#1112-where-should-a-browser-keep-tokens-the-bff-pattern) |
+| HTTPS / TLS | HTTP encrypted with TLS (Transport Layer Security), which also proves the server's identity | [§11.18](../11-spring-security-2-tokens-and-oauth2/README.md#1118-security-fundamentals-beyond-spring) |
 
 ### I – J
 
 | Term | Meaning | See |
 |---|---|---|
+| ID token | OIDC JWT that tells the client who logged in; not for calling APIs | [§11.2](../11-spring-security-2-tokens-and-oauth2/README.md#112-oauth-20-and-openid-connect-in-one-picture) |
+| IDE | Integrated Development Environment such as IntelliJ IDEA, Eclipse or VS Code | [§1.5](../01-spring-ecosystem-and-first-app/README.md#15-creating-a-project-with-startspringio) |
+| Idempotency key | unique id a client sends with a request so a retried request is processed only once | [§5.1](../05-spring-mvc-and-rest/README.md#51-rest-in-one-page) |
 | Idempotent | repeating the operation gives the same result (GET, PUT, DELETE; not POST) | [§5.1](../05-spring-mvc-and-rest/README.md#51-rest-in-one-page) |
 | Idempotent consumer | de-duplicates messages by id so at-least-once delivery is safe | [§14.17](../14-messaging-async-and-scheduling/README.md#1417-the-transactional-outbox) |
 | Idempotent producer | Kafka producer whose retries cannot duplicate records (on by default) | [§14.16](../14-messaging-async-and-scheduling/README.md#1416-producer-guarantees-idempotence-and-transactions) |
 | Identity provider (IdP) | system that owns user accounts and issues tokens | [§11.2](../11-spring-security-2-tokens-and-oauth2/README.md#112-oauth-20-and-openid-connect-in-one-picture) |
 | `IDENTITY` / `SEQUENCE` | JPA id strategies: auto-increment (no insert batching) / database sequence | [§8.3](../08-spring-data-jpa-and-hibernate/README.md#83-entities-and-ids) |
 | `ImportHttpServices` | Framework 7 registration of HTTP interface groups; Boot configures them by properties | [§6.6](../06-rest-clients-and-http-interfaces/README.md#66-http-service-interfaces-httpexchange) |
+| Integration test | test of several real parts working together (often a whole context plus a real database) | [§12.2](../12-testing-spring-apps/README.md#122-the-test-pyramid-in-a-spring-app) |
+| Interceptor | code that runs around a call (method, handler or HTTP request) and can change or stop it | [§5.11](../05-spring-mvc-and-rest/README.md#511-filters-vs-interceptors-vs-aop) |
 | Introspection | asking the authorization server whether an opaque token is active (RFC 7662) | [§11.7](../11-spring-security-2-tokens-and-oauth2/README.md#117-opaque-tokens-and-introspection) |
 | Inversion of Control (IoC) | the framework, not your code, creates objects and calls you | [§2.1](../02-ioc-and-dependency-injection/README.md#21-inversion-of-control-and-dependency-injection) |
 | Isolation level | how much a transaction sees of concurrent ones (READ COMMITTED...) | [§7.11](../07-data-access-jdbc-and-transactions/README.md#711-isolation-levels) |
+| Issuer (`iss`) | JWT claim naming the authorization server that created the token | [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt) |
+| J2EE / Java EE | old names of the enterprise Java standards, now Jakarta EE | [§1.4](../01-spring-ecosystem-and-first-app/README.md#14-history-and-versions) |
 | Jackson 3 | Boot 4's JSON library, packages `tools.jackson.*` | [§5.5](../05-spring-mvc-and-rest/README.md#55-json-with-jackson-3) |
 | Jakarta EE | successor of Java EE; `jakarta.*` packages (EE 11 in Boot 4) | [§1.4](../01-spring-ecosystem-and-first-app/README.md#14-history-and-versions) |
+| Jar / WAR | Java archive of compiled classes / web archive deployed into an external servlet container | [§1.9](../01-spring-ecosystem-and-first-app/README.md#19-running-the-application) |
 | `JarLauncher` | `Main-Class` of a Boot fat jar that loads nested jars and calls your `Start-Class` | [§1.9](../01-spring-ecosystem-and-first-app/README.md#19-running-the-application) |
+| Java record | compact immutable data class (`record Order(long id, String status)`); ideal for DTOs and properties | [§1.11](../01-spring-ecosystem-and-first-app/README.md#111-your-first-rest-endpoint) |
+| JDBC | Java Database Connectivity: Java's standard low-level API for SQL databases | [§7.1](../07-data-access-jdbc-and-transactions/README.md#71-the-data-access-stack) |
 | `JdbcClient` | Framework 6.1 fluent API for SQL with automatic record mapping | [§7.3](../07-data-access-jdbc-and-transactions/README.md#73-jdbcclient-and-jdbctemplate) |
 | `JdbcTemplate` | classic SQL template; still used for batch updates | [§7.3](../07-data-access-jdbc-and-transactions/README.md#73-jdbcclient-and-jdbctemplate) |
+| JDK | Java Development Kit: compiler, tools and the Java runtime | [§1.4](../01-spring-ecosystem-and-first-app/README.md#14-history-and-versions) |
 | JDK dynamic proxy | `java.lang.reflect.Proxy` implementing the bean's interfaces only | [§4.4](../04-aop-and-proxies/README.md#44-how-spring-aop-works-proxies) |
+| JEP | JDK Enhancement Proposal: the numbered design document for a new Java feature | [§13.15](../13-reactive-and-webflux/README.md#1315-virtual-threads-vs-webflux-a-measured-comparison) |
+| JIT compiler | Just-In-Time compiler: turns frequently run bytecode into machine code while the app runs | [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images) |
 | Jitter | random variation added to retry delays so clients don't retry in lockstep | [§4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit) |
+| JMS | Jakarta Messaging: the standard Java API for message brokers such as ActiveMQ Artemis | [§14.18](../14-messaging-async-and-scheduling/README.md#1418-rabbitmq-with-spring-amqp-configuration-not-run) |
+| JMX | Java Management Extensions: built-in JVM channel for monitoring and management tools | [§15.2](../15-observability-and-production/README.md#152-spring-boot-actuator) |
 | Join point | a point where advice can run; in Spring AOP always a bean method execution | [§4.1](../04-aop-and-proxies/README.md#41-cross-cutting-concerns-and-the-aop-vocabulary) |
 | `JOIN FETCH` | JPQL that loads an association in the same query (N+1 fix) | [§8.7](../08-spring-data-jpa-and-hibernate/README.md#87-the-n1-problem) |
 | JPA | Jakarta Persistence specification; Hibernate implements it | [§8.1](../08-spring-data-jpa-and-hibernate/README.md#81-jpa-hibernate-and-spring-data--who-does-what) |
 | JPQL | query language over entities and fields, not tables | [§8.10](../08-spring-data-jpa-and-hibernate/README.md#810-query-jpql-native-sql-and-modifying) |
+| JSON | JavaScript Object Notation: the text format of most REST APIs (`{"id": 1}`) | [§5.5](../05-spring-mvc-and-rest/README.md#55-json-with-jackson-3) |
 | `JsonMapper` | Jackson 3's immutable JSON mapper, built with `JsonMapper.builder()` | [§5.5](../05-spring-mvc-and-rest/README.md#55-json-with-jackson-3) |
 | JSpecify | standard null-safety annotations (`@NullMarked`, `@Nullable`) used by Framework 7 | [§2.13](../02-ioc-and-dependency-injection/README.md#213-null-safety-with-jspecify-framework-7) |
+| JUnit | the standard Java test framework (JUnit 6 / Jupiter in Boot 4) | [§12.3](../12-testing-spring-apps/README.md#123-test-dependencies-in-boot-4) |
+| JVM | Java Virtual Machine: the runtime that loads and executes bytecode | [§1.2](../01-spring-ecosystem-and-first-app/README.md#12-what-spring-boot-adds) |
 | JWK Set (JWKS) | JSON document of an issuer's public keys, selected by `kid` | [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt) |
+| JWS / JWE | a signed JWT (contents readable, tamper-proof) / an encrypted JWT (contents hidden) | [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt) |
 | JWT | signed token `header.payload.signature`; claims readable by anyone | [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt) |
 | `JwtAuthenticationConverter` | turns JWT claims into authorities (`scope` → `SCOPE_x`) | [§11.5](../11-spring-security-2-tokens-and-oauth2/README.md#115-mapping-claims-to-authorities) |
 | `JwtDecoder` | parses and validates a JWT (signature, `exp`, `iss`, custom validators) | [§11.3](../11-spring-security-2-tokens-and-oauth2/README.md#113-a-jwt-resource-server-in-spring) |
@@ -1460,15 +1558,29 @@ Short definitions of the terms used in this book. Annotations are listed without
 | `KafkaListener` | spring-kafka consumer method | [§14.12](../14-messaging-async-and-scheduling/README.md#1412-consuming-kafkalistener-concurrency-and-consumer-groups) |
 | `KafkaTemplate` | spring-kafka producer API; `send` returns a `CompletableFuture` | [§14.11](../14-messaging-async-and-scheduling/README.md#1411-producing-kafkatemplate-keys-and-partitions) |
 | Key (Kafka) | decides the partition; same key → same partition → ordered | [§14.9](../14-messaging-async-and-scheduling/README.md#149-kafka-in-five-minutes) |
+| Keycloak | open-source identity provider and authorization server | [§11.2](../11-spring-security-2-tokens-and-oauth2/README.md#112-oauth-20-and-openid-connect-in-one-picture) |
+| KMS | Key Management Service: cloud service that stores encryption keys and performs crypto without revealing them | [§11.13](../11-spring-security-2-tokens-and-oauth2/README.md#1113-storing-keys-and-secrets) |
 | KRaft | Kafka's built-in consensus replacing ZooKeeper (Kafka 4.0+) | [§14.9](../14-messaging-async-and-scheduling/README.md#149-kafka-in-five-minutes) |
+| Kubernetes (K8s) | platform that runs, restarts, scales and connects containers across machines | [§15.3](../15-observability-and-production/README.md#153-health-health-groups-and-kubernetes-probes) |
+| Lambda (Java) | short inline function, `x -> x * 2`; the Security DSL is configured with lambdas | [§10.3](../10-spring-security-1-fundamentals/README.md#103-configuring-a-chain-the-lambda-dsl-in-spring-security-7) |
+| Latency | how long one request takes from start to finish (often reported as p50/p99) | [§15.5](../15-observability-and-production/README.md#155-metrics-with-micrometer) |
+| Layered jar | Boot jar split into layers (dependencies, application code) so container images rebuild only what changed | [§15.11](../15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images) |
 | Lazy initialization | create beans on first use (`@Lazy`, `spring.main.lazy-initialization`) | [§2.10](../02-ioc-and-dependency-injection/README.md#210-lazy-initialization) |
 | `LazyInitializationException` | touching a lazy association after its persistence context closed | [§8.6](../08-spring-data-jpa-and-hibernate/README.md#86-fetch-types-and-lazyinitializationexception) |
+| LDAP | directory protocol used by companies to store users and groups; Spring Security can authenticate against it | [§9.1](../09-spring-data-beyond-jpa-and-caching/README.md#91-the-spring-data-family) |
 | Lifecycle callbacks | init/destroy hooks: `@PostConstruct`, `afterPropertiesSet`, `@PreDestroy`... | [§2.7](../02-ioc-and-dependency-injection/README.md#27-the-bean-lifecycle) |
 | Liquibase | changelog-based migration tool with rollbacks and preconditions | [§9.4](../09-spring-data-beyond-jpa-and-caching/README.md#94-schema-migrations-flyway-beyond-the-basics-and-flyway-vs-liquibase) |
+| Liveness / readiness / startup probes | Kubernetes health checks: restart me? / send me traffic? / am I still starting? | [§15.3](../15-observability-and-production/README.md#153-health-health-groups-and-kubernetes-probes) |
 | Liveness probe | "restart me?" — must depend only on internal state | [§15.3](../15-observability-and-production/README.md#153-health-health-groups-and-kubernetes-probes) |
+| LLM | large language model: the text-generating AI behind chat APIs | [§17.1](../17-spring-ai-and-whats-new/README.md#171-what-spring-ai-is) |
+| Load balancer | component that spreads requests over several instances of a service | [§16.5](../16-spring-cloud-and-microservices/README.md#165-client-side-load-balancing-with-spring-cloud-loadbalancer) |
 | Load balancing (client-side) | the caller picks an instance per request (Spring Cloud LoadBalancer, round robin) | [§16.5](../16-spring-cloud-and-microservices/README.md#165-client-side-load-balancing-with-spring-cloud-loadbalancer) |
+| Load testing (Gatling, k6, JMeter) | tools that fire many concurrent requests to measure throughput and latency under load | [§12.18](../12-testing-spring-apps/README.md#1218-types-of-api-testing--and-the-spring-tool-for-each) |
+| Logback / SLF4J | SLF4J is the logging API your code calls; Logback is Boot's default implementation behind it | [§15.8](../15-observability-and-production/README.md#158-structured-logging) |
+| Lombok | library that generates getters, constructors, `equals` and similar code at compile time | [§8.3](../08-spring-data-jpa-and-hibernate/README.md#83-entities-and-ids) |
 | `Lookup` | method injection returning a fresh prototype per call | [§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes) |
 | Lost update | two read-modify-write cycles overwrite each other; prevent with SQL math, locks or `@Version` | [§7.11](../07-data-access-jdbc-and-transactions/README.md#711-isolation-levels) |
+| LRU | least recently used: an eviction policy that removes the entry unused for longest | [§9.8](../09-spring-data-beyond-jpa-and-caching/README.md#98-the-caching-abstraction) |
 
 ### M
 
@@ -1477,29 +1589,43 @@ Short definitions of the terms used in this book. Annotations are listed without
 | Managed entity | entity tracked by the persistence context; changes are flushed automatically | [§8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking) |
 | `mappedBy` | marks the inverse side of a JPA relationship; only the owning side is written | [§8.5](../08-spring-data-jpa-and-hibernate/README.md#85-relationships) |
 | `MappedCollection` | Spring Data JDBC child collection mapping (`idColumn`, `keyColumn`) | [§9.2](../09-spring-data-beyond-jpa-and-caching/README.md#92-spring-data-jdbc-and-aggregates) |
+| Maven | Java build tool: `pom.xml` declares dependencies and plugins; `mvn verify` builds and tests | [§1.6](../01-spring-ecosystem-and-first-app/README.md#16-project-layout-and-the-build-file) |
 | MCP | Model Context Protocol: standard way to expose and call AI tools across processes | [§17.10](../17-spring-ai-and-whats-new/README.md#1710-mcp-the-model-context-protocol) |
+| MD5 / SHA-256 | fast hash functions; fine for checksums, unsafe alone for passwords because they are fast to guess | [§10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder) |
 | MDC | Mapped Diagnostic Context: per-thread log fields (request id, trace id) | [§14.4](../14-messaging-async-and-scheduling/README.md#144-async-and-executors), [§15.1](../15-observability-and-production/README.md#151-observability-in-one-page) |
 | `merge` vs `persist` | copy a detached entity's state onto a managed copy / make a new entity managed | [§8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking) |
 | `MeterRegistry` | Micrometer registry where meters are recorded and exported | [§15.5](../15-observability-and-production/README.md#155-metrics-with-micrometer) |
 | Method security | authorization on bean methods (`@PreAuthorize`...), proxy-based | [§10.7](../10-spring-security-1-fundamentals/README.md#107-method-security) |
 | Method validation | constraints on method parameters; built into MVC since Framework 6.1 | [§5.6](../05-spring-mvc-and-rest/README.md#56-validation) |
+| Metrics / logs / traces | the three kinds of observability data: numbers over time / event records / request paths | [§15.1](../15-observability-and-production/README.md#151-observability-in-one-page) |
 | Micrometer | vendor-neutral metrics facade ("SLF4J for metrics") | [§15.1](../15-observability-and-production/README.md#151-observability-in-one-page) |
 | Micrometer Tracing | tracing facade over OpenTelemetry or Brave | [§15.7](../15-observability-and-production/README.md#157-distributed-tracing) |
 | MFA | multi-factor authentication; Security 7 tracks factors as `FACTOR_*` authorities | [§10.4](../10-spring-security-1-fundamentals/README.md#104-authentication-users-providers-form-login-and-basic) |
+| Microservice | small, independently deployed service owning one business capability and its data | [§16.1](../16-spring-cloud-and-microservices/README.md#161-the-map-microservice-problems-and-spring-answers) |
+| Mock / stub / spy | test doubles: a mock records and checks calls, a stub returns canned answers, a spy wraps a real object | [§12.4](../12-testing-spring-apps/README.md#124-unit-tests-no-spring-at-all) |
+| Mockito | the Java mocking library behind `@MockitoBean` | [§12.10](../12-testing-spring-apps/README.md#1210-mockitobean-and-mockitospybean) |
 | `MockitoBean` / `MockitoSpyBean` | mock / spy registered in the test context (replaced `@MockBean` / `@SpyBean`) | [§12.10](../12-testing-spring-apps/README.md#1210-mockitobean-and-mockitospybean) |
 | `MockMvc` / `MockMvcTester` | in-process MVC test client; `MockMvcTester` adds AssertJ assertions (F6.2) | [§12.8](../12-testing-spring-apps/README.md#128-mockmvctester-assertj-style-mockmvc) |
 | `MockRestServiceServer` | fake server bound to a `RestClient.Builder` in `@RestClientTest` | [§6.8](../06-rest-clients-and-http-interfaces/README.md#68-testing-clients) |
 | Modular starters | Boot 4: one starter, one auto-configuration module and one test starter per technology | [§3.14](../03-configuration-and-auto-configuration/README.md#314-boot-4-modularization) |
+| MongoDB | document database storing JSON-like documents (BSON) | [§9.5](../09-spring-data-beyond-jpa-and-caching/README.md#95-spring-data-mongodb-not-run--needs-docker) |
 | `Mono` | Reactor publisher of 0..1 item | [§13.3](../13-reactive-and-webflux/README.md#133-project-reactor-mono-and-flux) |
+| Monolith / modular monolith | one deployable application; modular when its internal modules have strict boundaries (Spring Modulith) | [§16.1](../16-spring-cloud-and-microservices/README.md#161-the-map-microservice-problems-and-spring-answers) |
+| mTLS | mutual TLS: both client and server present certificates, so each proves its identity | [§11.10](../11-spring-security-2-tokens-and-oauth2/README.md#1110-calling-other-services-client-credentials-and-token-relay) |
 | Multi-tenancy (JWT) | several issuers in one API; `JwtIssuerAuthenticationManagerResolver` with an allow-list | [§11.8](../11-spring-security-2-tokens-and-oauth2/README.md#118-multi-tenancy-several-issuers-in-one-api) |
+| MVCC | Multi-Version Concurrency Control: the database keeps row versions so readers don't block writers | [§7.11](../07-data-access-jdbc-and-transactions/README.md#711-isolation-levels) |
 
 ### N – O
 
 | Term | Meaning | See |
 |---|---|---|
 | N+1 problem | 1 query for parents + 1 per parent for a lazy association | [§8.7](../08-spring-data-jpa-and-hibernate/README.md#87-the-n1-problem) |
+| Native query | plain database-specific SQL in a Spring Data `@Query` instead of JPQL | [§8.10](../08-spring-data-jpa-and-hibernate/README.md#810-query-jpql-native-sql-and-modifying) |
+| NDJSON | newline-delimited JSON: one JSON object per line, used for streaming responses | [§13.10](../13-reactive-and-webflux/README.md#1310-spring-webflux-annotated-controllers) |
 | `NESTED` | propagation using a savepoint inside the current transaction | [§7.9](../07-data-access-jdbc-and-transactions/README.md#79-propagation) |
+| Netty | non-blocking network library; Reactor Netty is WebFlux's default server | [§13.10](../13-reactive-and-webflux/README.md#1310-spring-webflux-annotated-controllers) |
 | `NimbusJwtEncoder` | Spring Security's JWT signer; Security 7 adds `withKeyPair`/`withSecretKey` builders | [§11.4](../11-spring-security-2-tokens-and-oauth2/README.md#114-minting-tokens-with-nimbusjwtencoder) |
+| Non-blocking | a call that returns immediately and frees its thread; the result is delivered later | [§13.1](../13-reactive-and-webflux/README.md#131-why-reactive-the-cost-of-waiting) |
 | Nonce | OIDC random value bound into the ID token against replay | [§11.9](../11-spring-security-2-tokens-and-oauth2/README.md#119-oauth2-login-sign-in-with-) |
 | `NullMarked` / `Nullable` | JSpecify: non-null by default in a scope / this may be null | [§2.13](../02-ioc-and-dependency-injection/README.md#213-null-safety-with-jspecify-framework-7) |
 | OAuth 2.0 | framework for delegated authorization with access tokens | [§11.2](../11-spring-security-2-tokens-and-oauth2/README.md#112-oauth-20-and-openid-connect-in-one-picture) |
@@ -1508,6 +1634,7 @@ Short definitions of the terms used in this book. Annotations are listed without
 | `Observed` | annotation creating an observation around a method | [§15.6](../15-observability-and-production/README.md#156-the-observation-api-and-observed) |
 | Offset (Kafka) | a record's position in its partition; committed per consumer group | [§14.9](../14-messaging-async-and-scheduling/README.md#149-kafka-in-five-minutes) |
 | OIDC | OpenID Connect: identity layer on OAuth2 adding the ID token | [§11.2](../11-spring-security-2-tokens-and-oauth2/README.md#112-oauth-20-and-openid-connect-in-one-picture) |
+| ONNX | portable file format for machine-learning models, e.g. local embedding models | [§17.1](../17-spring-ai-and-whats-new/README.md#171-what-spring-ai-is) |
 | Opaque token | random token string checked by introspection; instantly revocable | [§11.7](../11-spring-security-2-tokens-and-oauth2/README.md#117-opaque-tokens-and-introspection) |
 | Open Session in View | persistence context kept open for the whole web request (`spring.jpa.open-in-view`) | [§8.15](../08-spring-data-jpa-and-hibernate/README.md#815-open-session-in-view) |
 | OpenAPI | machine-readable API description; generated by springdoc | [§5.12](../05-spring-mvc-and-rest/README.md#512-documenting-the-api-openapi-with-springdoc) |
@@ -1515,38 +1642,53 @@ Short definitions of the terms used in this book. Annotations are listed without
 | OpenRewrite | automated refactoring recipes used for Boot upgrades | [§17.12](../17-spring-ai-and-whats-new/README.md#1712-whats-new-how-to-read-the-rest-of-this-chapter) |
 | OpenTelemetry | open standard and SDK for traces/metrics; OTLP is its protocol | [§15.7](../15-observability-and-production/README.md#157-distributed-tracing) |
 | Optimistic locking | `@Version` column checked in `UPDATE ... WHERE version = ?` | [§8.14](../08-spring-data-jpa-and-hibernate/README.md#814-locking-optimistic-and-pessimistic) |
+| ORM | Object-Relational Mapping: mapping classes to tables so you work with objects instead of SQL rows | [§8.1](../08-spring-data-jpa-and-hibernate/README.md#81-jpa-hibernate-and-spring-data--who-does-what) |
 | `orphanRemoval` | delete a child removed from its parent's collection | [§8.5](../08-spring-data-jpa-and-hibernate/README.md#85-relationships) |
+| OSIV | short for Open Session in View | [§8.15](../08-spring-data-jpa-and-hibernate/README.md#815-open-session-in-view) |
+| OTLP | OpenTelemetry Protocol: the standard wire format for exporting traces, metrics and logs | [§15.7](../15-observability-and-production/README.md#157-distributed-tracing) |
 | Outbox (transactional) | write the event into an outbox table in the same transaction; a relay publishes it | [§14.17](../14-messaging-async-and-scheduling/README.md#1417-the-transactional-outbox) |
+| OWASP | Open Worldwide Application Security Project: publishes the Top 10 web security risks | [§10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder) |
 | Owning side | the relationship side holding the foreign key; the only one JPA writes | [§8.5](../08-spring-data-jpa-and-hibernate/README.md#85-relationships) |
 
 ### P
 
 | Term | Meaning | See |
 |---|---|---|
+| p99 / percentile | the value that 99% of measurements are below; p99 latency shows the slow tail | [§15.5](../15-observability-and-production/README.md#155-metrics-with-micrometer) |
+| Pact | polyglot consumer-driven contract-testing tool with a broker and `can-i-deploy` check | [§16.10](../16-spring-cloud-and-microservices/README.md#1610-contract-testing) |
 | `Page` / `Slice` / `Window` | paged result with total (extra COUNT) / "has next" only / keyset scrolling | [§8.11](../08-spring-data-jpa-and-hibernate/README.md#811-pagination-and-sorting) |
 | Partition | ordered, append-only log inside a Kafka topic; unit of parallelism | [§14.9](../14-messaging-async-and-scheduling/README.md#149-kafka-in-five-minutes) |
+| Passkey / WebAuthn | password-less login with a key pair stored on the user's device; WebAuthn is the browser standard | [§10.4](../10-spring-security-1-fundamentals/README.md#104-authentication-users-providers-form-login-and-basic) |
+| Password4j | hashing library behind the new password encoders of Spring Security 7 | [§10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder) |
 | `PathPattern` | Spring's URL pattern matcher (`{id}`, `**`, `{*path}`); no trailing-slash match | [§5.3](../05-spring-mvc-and-rest/README.md#53-controllers-and-request-mappings) |
 | `PathPatternRequestMatcher` | Security 7 request matcher using `PathPattern` syntax | [§10.3](../10-spring-security-1-fundamentals/README.md#103-configuring-a-chain-the-lambda-dsl-in-spring-security-7) |
 | Persistence context | the `EntityManager`'s first-level cache and unit of work | [§8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking) |
 | Pessimistic locking | `SELECT ... FOR UPDATE` via `@Lock(PESSIMISTIC_WRITE)` | [§8.14](../08-spring-data-jpa-and-hibernate/README.md#814-locking-optimistic-and-pessimistic) |
 | PKCE | proof key that binds an authorization code to the client that started the flow | [§11.9](../11-spring-security-2-tokens-and-oauth2/README.md#119-oauth2-login-sign-in-with-) |
+| Platform thread | ordinary Java thread backed one-to-one by an operating-system thread | [§13.1](../13-reactive-and-webflux/README.md#131-why-reactive-the-cost-of-waiting) |
 | `PlatformTransactionManager` | Spring interface that begins, commits and rolls back transactions | [§7.7](../07-data-access-jdbc-and-transactions/README.md#77-how-a-spring-transaction-works) |
+| Pod | smallest unit Kubernetes runs: one or more containers sharing a network address | [§15.3](../15-observability-and-production/README.md#153-health-health-groups-and-kubernetes-probes) |
 | Pointcut | predicate selecting join points (`execution(...)`, `within(...)`, `@annotation(...)`) | [§4.3](../04-aop-and-proxies/README.md#43-pointcut-expressions) |
 | Poison pill | record that can never be deserialized; `ErrorHandlingDeserializer` sends it to the DLT | [§14.10](../14-messaging-async-and-scheduling/README.md#1410-setting-up-spring-kafka-with-json) |
+| POM | Project Object Model: Maven's `pom.xml` build file | [§1.6](../01-spring-ecosystem-and-first-app/README.md#16-project-layout-and-the-build-file) |
+| PostgreSQL | open-source relational database used for most examples in this book | [§8.2](../08-spring-data-jpa-and-hibernate/README.md#82-setting-up) |
 | Precedence | which property source wins (command line > ... > defaults) | [§3.3](../03-configuration-and-auto-configuration/README.md#33-precedence-which-value-wins) |
 | Preflight | the browser's `OPTIONS` request asking CORS permission | [§10.9](../10-spring-security-1-fundamentals/README.md#109-cors) |
 | `Primary` | default bean when several candidates match | [§2.5](../02-ioc-and-dependency-injection/README.md#25-how-spring-picks-a-bean) |
+| Primary key | column (or columns) that uniquely identifies each row of a table | [§8.3](../08-spring-data-jpa-and-hibernate/README.md#83-entities-and-ids) |
 | Principal | the "who" of a request: user, service or device | [§10.1](../10-spring-security-1-fundamentals/README.md#101-vocabulary-and-what-the-starter-does-by-default) |
 | `ProblemDetail` | RFC 9457 error body: `type`, `title`, `status`, `detail`, `instance` | [§5.7](../05-spring-mvc-and-rest/README.md#57-error-handling-and-problem-details-rfc-9457) |
 | Profile | named environment selecting beans (`@Profile`) and files (`application-dev.yaml`) | [§3.7](../03-configuration-and-auto-configuration/README.md#37-profiles-profile-specific-files-and-profile-groups) |
 | Profile group | one profile name that activates several | [§3.7](../03-configuration-and-auto-configuration/README.md#37-profiles-profile-specific-files-and-profile-groups) |
 | Projection | query result with only the needed fields (interface or record) | [§8.12](../08-spring-data-jpa-and-hibernate/README.md#812-projections) |
+| Prometheus | monitoring system that scrapes metrics from `/actuator/prometheus` and stores them as time series | [§15.5](../15-observability-and-production/README.md#155-metrics-with-micrometer) |
 | Prompt template | text with `{placeholders}` filled at run time (Spring AI `PromptTemplate`) | [§17.4](../17-spring-ai-and-whats-new/README.md#174-prompts-and-prompt-templates) |
 | Propagation | what a transactional method does when a transaction already exists | [§7.9](../07-data-access-jdbc-and-transactions/README.md#79-propagation) |
 | Property source | one named set of key/values inside the `Environment` | [§3.1](../03-configuration-and-auto-configuration/README.md#31-externalized-configuration-and-the-environment) |
 | Prototype scope | new bean instance per lookup; no destroy callbacks | [§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes) |
 | Proxy | stand-in object that runs extra behaviour and then calls the real bean | [§4.4](../04-aop-and-proxies/README.md#44-how-spring-aop-works-proxies) |
 | `Proxyable` | Framework 7 per-bean choice of JDK or CGLIB proxy | [§4.4](../04-aop-and-proxies/README.md#44-how-spring-aop-works-proxies) |
+| Publish/subscribe | messaging style where every subscriber gets its own copy of each message | [§14.8](../14-messaging-async-and-scheduling/README.md#148-messaging-concepts-you-need-first) |
 | `publishOn` / `subscribeOn` | move downstream operators / the subscription to a scheduler | [§13.8](../13-reactive-and-webflux/README.md#138-schedulers-and-threads) |
 
 ### Q – R
@@ -1559,21 +1701,28 @@ Short definitions of the terms used in this book. Annotations are listed without
 | RabbitMQ | queue broker: exchanges route messages to queues via bindings | [§14.18](../14-messaging-async-and-scheduling/README.md#1418-rabbitmq-with-spring-amqp-configuration-not-run) |
 | RAG | retrieval-augmented generation: add retrieved documents to the prompt | [§17.9](../17-spring-ai-and-whats-new/README.md#179-rag-retrieval-augmented-generation) |
 | Rate limiter | cap on calls per time period (Resilience4j, gateway filter) | [§16.8](../16-spring-cloud-and-microservices/README.md#168-resilience-circuit-breaker-retry-rate-limiter) |
+| Reactive programming | describing asynchronous data pipelines that are pushed through without blocking threads | [§13.1](../13-reactive-and-webflux/README.md#131-why-reactive-the-cost-of-waiting) |
 | Reactive Streams | spec: `Publisher`, `Subscriber`, `Subscription`, `Processor` with demand | [§13.2](../13-reactive-and-webflux/README.md#132-reactive-streams-the-contract) |
 | Readiness probe | "send me traffic?" — may include essential dependencies | [§15.3](../15-observability-and-production/README.md#153-health-health-groups-and-kubernetes-probes) |
+| Redis | in-memory key/value store used as a shared cache, session store or lock | [§9.6](../09-spring-data-beyond-jpa-and-caching/README.md#96-spring-data-redis-not-run--needs-docker) |
+| Reflection | Java code inspecting or calling classes, methods and fields at runtime | [§2.4](../02-ioc-and-dependency-injection/README.md#24-injection-types) |
 | Refresh (context) | `refresh()` creates all non-lazy singletons and starts the context | [§2.2](../02-ioc-and-dependency-injection/README.md#22-the-container-beanfactory-vs-applicationcontext) |
+| Refresh token | long-lived token used only to get a new access token without logging in again | [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt) |
 | `RefreshScope` | Spring Cloud scope re-creating beans after a configuration refresh | [§16.3](../16-spring-cloud-and-microservices/README.md#163-centralized-configuration-spring-cloud-config) |
 | Relaxed binding | several spellings map to one property (`checkout-timeout`, `checkoutTimeout`, `SHOP_CHECKOUTTIMEOUT`) | [§3.4](../03-configuration-and-auto-configuration/README.md#34-environment-variables-and-relaxed-binding) |
 | Release train | set of versions released together (Spring Data 2026.0, Spring Cloud 2025.1) | [§16.2](../16-spring-cloud-and-microservices/README.md#162-release-trains-and-versions) |
+| Replica / replication | a copy of data kept on another server; replication keeps the copies in sync | [§7.12](../07-data-access-jdbc-and-transactions/README.md#712-readonly-and-timeout) |
 | Repository | Spring Data interface implemented at startup (`JpaRepository`, `CrudRepository`) | [§8.8](../08-spring-data-jpa-and-hibernate/README.md#88-repositories) |
 | `REQUIRES_NEW` | propagation that suspends the caller's transaction and runs its own | [§7.9](../07-data-access-jdbc-and-transactions/README.md#79-propagation) |
 | Resilience4j | library for circuit breaker, retry, rate limiter, bulkhead, time limiter | [§16.8](../16-spring-cloud-and-microservices/README.md#168-resilience-circuit-breaker-retry-rate-limiter) |
 | Resource server | API that accepts access tokens (`oauth2ResourceServer`) | [§11.3](../11-spring-security-2-tokens-and-oauth2/README.md#113-a-jwt-resource-server-in-spring) |
 | `ResponseEntity` | full control of status, headers and body in MVC | [§5.4](../05-spring-mvc-and-rest/README.md#54-reading-input-and-writing-output) |
 | `ResponseEntityExceptionHandler` | advice base class mapping Spring MVC exceptions to `ProblemDetail` | [§5.7](../05-spring-mvc-and-rest/README.md#57-error-handling-and-problem-details-rfc-9457) |
+| REST | style of HTTP API built around resources (URLs) and standard methods and status codes | [§5.1](../05-spring-mvc-and-rest/README.md#51-rest-in-one-page) |
 | `RestClient` | Framework 6.1 fluent blocking HTTP client | [§6.2](../06-rest-clients-and-http-interfaces/README.md#62-restclient-basics) |
 | `RestTemplate` | legacy blocking HTTP client; deprecation announced | [§6.9](../06-rest-clients-and-http-interfaces/README.md#69-resttemplate-and-webclient-in-brief) |
 | `RestTestClient` | Framework 7 fluent test client for MockMvc or a real server | [§12.9](../12-testing-spring-apps/README.md#129-resttestclient-framework-70) |
+| Retry | calling an operation again after a transient failure, usually with back-off and jitter | [§4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit) |
 | `Retryable` | Framework 7 retry annotation (1 + `maxRetries` attempts) | [§4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit) |
 | `RetryableTopic` | spring-kafka non-blocking retries via retry topics | [§14.15](../14-messaging-async-and-scheduling/README.md#1415-non-blocking-retries-with-retryabletopic) |
 | `RetryTemplate` | programmatic retry (Framework 7 `org.springframework.core.retry`) | [§4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit) |
@@ -1586,55 +1735,93 @@ Short definitions of the terms used in this book. Annotations are listed without
 
 | Term | Meaning | See |
 |---|---|---|
+| Saga | sequence of local transactions across services, with compensating steps that undo earlier ones on failure | [§14.17](../14-messaging-async-and-scheduling/README.md#1417-the-transactional-outbox) |
+| Salt | random value mixed into each password before hashing so equal passwords give different hashes | [§10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder) |
+| SAML | older XML-based single sign-on standard used by enterprises; Spring Security supports it | [§11.18](../11-spring-security-2-tokens-and-oauth2/README.md#1118-security-fundamentals-beyond-spring) |
 | Sampling (tracing) | share of traces recorded; Boot default `0.1` | [§15.7](../15-observability-and-production/README.md#157-distributed-tracing) |
 | Savepoint | point inside a transaction that can be rolled back to (`NESTED`) | [§7.9](../07-data-access-jdbc-and-transactions/README.md#79-propagation) |
 | `Scheduled` | method run on a timer (`fixedRate`, `fixedDelay`, `cron`) | [§14.7](../14-messaging-async-and-scheduling/README.md#147-scheduling-with-scheduled) |
 | Scheduler (Reactor) | thread pool abstraction: `parallel`, `boundedElastic`, `single` | [§13.8](../13-reactive-and-webflux/README.md#138-schedulers-and-threads) |
 | Scope | how many bean instances exist and how long they live | [§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes) |
+| Scope (OAuth2) | permission requested for an access token (`orders.read`); mapped to `SCOPE_x` authorities | [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt) |
 | Scoped proxy | stand-in that finds the request/session instance on every call | [§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes) |
+| Security headers (HSTS, CSP...) | response headers that make browsers safer: force HTTPS, restrict scripts, block framing | [§10.11](../10-spring-security-1-fundamentals/README.md#1011-security-headers) |
 | `securityMatcher` | which requests a whole `SecurityFilterChain` handles | [§10.3](../10-spring-security-1-fundamentals/README.md#103-configuring-a-chain-the-lambda-dsl-in-spring-security-7) |
 | `SecurityContextHolder` | `ThreadLocal` holder of the current `Authentication` | [§10.2](../10-spring-security-1-fundamentals/README.md#102-architecture-the-filter-chain) |
 | `SecurityFilterChain` | ordered list of security filters for matching requests | [§10.3](../10-spring-security-1-fundamentals/README.md#103-configuring-a-chain-the-lambda-dsl-in-spring-security-7) |
 | Self-invocation | `this.method()` inside a bean bypasses its proxy and all proxy features | [§4.5](../04-aop-and-proxies/README.md#45-proxy-limitations--proved) |
+| Service discovery | how a service finds the current addresses of another (Eureka, Consul, Kubernetes DNS) | [§16.4](../16-spring-cloud-and-microservices/README.md#164-service-discovery-eureka-consul-kubernetes) |
+| Service mesh | infrastructure layer of sidecar proxies handling traffic, mTLS and retries between services | [§16.1](../16-spring-cloud-and-microservices/README.md#161-the-map-microservice-problems-and-spring-answers) |
 | `ServiceConnection` | Boot takes connection details from a Testcontainers container | [§12.14](../12-testing-spring-apps/README.md#1214-testcontainers-and-serviceconnection) |
+| Servlet / servlet container | Java standard API for HTTP request handling / the server that runs servlets (Tomcat, Jetty) | [§5.2](../05-spring-mvc-and-rest/README.md#52-how-a-request-flows-the-dispatcherservlet) |
+| Session (HTTP) | server-side state for one browser, found through the `JSESSIONID` cookie | [§10.10](../10-spring-security-1-fundamentals/README.md#1010-sessions-the-security-context-and-logout) |
 | Session fixation | attack reusing a pre-login session id; Spring changes the id at login | [§10.10](../10-spring-security-1-fundamentals/README.md#1010-sessions-the-security-context-and-logout) |
 | `SessionCreationPolicy` | `IF_REQUIRED`, `ALWAYS`, `NEVER`, `STATELESS` | [§10.10](../10-spring-security-1-fundamentals/README.md#1010-sessions-the-security-context-and-logout) |
 | ShedLock | library that lets a `@Scheduled` job run on one instance only | [§14.7](../14-messaging-async-and-scheduling/README.md#147-scheduling-with-scheduled) |
+| SIGTERM / SIGKILL | operating-system signals: "please stop" (allows graceful shutdown) / "stop now" (cannot be handled) | [§15.9](../15-observability-and-production/README.md#159-graceful-shutdown) |
 | Singleton scope | one bean instance per container, shared by all threads (default) | [§2.6](../02-ioc-and-dependency-injection/README.md#26-bean-scopes) |
 | Sinks | Reactor API to push values into a `Flux`/`Mono` from imperative code | [§13.9](../13-reactive-and-webflux/README.md#139-hot-vs-cold-sinks-and-context) |
 | Slice (test) | partial context for one layer (`@WebMvcTest`, `@DataJpaTest`...) | [§12.7](../12-testing-spring-apps/README.md#127-test-slices) |
 | `SmartLifecycle` | beans started/stopped with the context, ordered by phase | [§2.7](../02-ioc-and-dependency-injection/README.md#27-the-bean-lifecycle) |
+| SMTP | Simple Mail Transfer Protocol: how applications send e-mail | [§14.4](../14-messaging-async-and-scheduling/README.md#144-async-and-executors) |
+| SPA | single-page application: a browser app (React, Angular...) that calls APIs from JavaScript | [§10.8](../10-spring-security-1-fundamentals/README.md#108-csrf-protection) |
 | Span | one timed operation in a trace, with trace id, span id and parent | [§15.7](../15-observability-and-production/README.md#157-distributed-tracing) |
 | SpEL | Spring Expression Language: `#{...}` in `@Value`, security and cache expressions | [§3.5](../03-configuration-and-auto-configuration/README.md#35-value) |
+| Spock | Groovy-based test framework; supported again in Boot 4.1 | [§17.13](../17-spring-ai-and-whats-new/README.md#1713-spring-boot-3x--4x-migration-table) |
 | Spring AI | Spring project for LLM chat, embeddings, RAG, tools and MCP | [§17.1](../17-spring-ai-and-whats-new/README.md#171-what-spring-ai-is) |
+| Spring Authorization Server | Spring's own OAuth2/OIDC authorization server, now part of Spring Security | [§11.14](../11-spring-security-2-tokens-and-oauth2/README.md#1114-spring-authorization-server) |
+| Spring Batch | framework for large, restartable batch jobs (read-process-write in chunks) | [§1.3](../01-spring-ecosystem-and-first-app/README.md#13-the-spring-ecosystem) |
 | Spring Boot | Spring + starters + managed versions + auto-configuration + embedded server + Actuator | [§1.2](../01-spring-ecosystem-and-first-app/README.md#12-what-spring-boot-adds) |
 | Spring Cloud | projects for distributed systems: config, discovery, gateway, load balancing | [§16.1](../16-spring-cloud-and-microservices/README.md#161-the-map-microservice-problems-and-spring-answers) |
+| Spring Cloud Stream | binder-based messaging abstraction over Kafka, RabbitMQ and others | [§14.18](../14-messaging-async-and-scheduling/README.md#1418-rabbitmq-with-spring-amqp-configuration-not-run) |
 | Spring Data | family of repository modules sharing one programming model | [§9.1](../09-spring-data-beyond-jpa-and-caching/README.md#91-the-spring-data-family) |
 | Spring Data JDBC | aggregate-oriented mapping over plain JDBC, no persistence context | [§9.2](../09-spring-data-beyond-jpa-and-caching/README.md#92-spring-data-jdbc-and-aggregates) |
 | Spring Data REST | exports repositories as HAL REST endpoints | [§9.3](../09-spring-data-beyond-jpa-and-caching/README.md#93-spring-data-rest) |
+| Spring Framework | the core project: container, AOP, MVC, WebFlux, transactions; Boot builds on it | [§1.1](../01-spring-ecosystem-and-first-app/README.md#11-what-spring-is) |
 | Spring Initializr | start.spring.io project generator | [§1.5](../01-spring-ecosystem-and-first-app/README.md#15-creating-a-project-with-startspringio) |
+| Spring Modulith | project for structuring and verifying a modular monolith | [§1.3](../01-spring-ecosystem-and-first-app/README.md#13-the-spring-ecosystem) |
+| Spring Security | Spring's authentication and authorization framework, built from servlet filters | [§10.1](../10-spring-security-1-fundamentals/README.md#101-vocabulary-and-what-the-starter-does-by-default) |
+| Spring Session | stores HTTP sessions in Redis or JDBC so all instances share them | [§10.10](../10-spring-security-1-fundamentals/README.md#1010-sessions-the-security-context-and-logout) |
+| SQL | Structured Query Language for relational databases | [§7.1](../07-data-access-jdbc-and-transactions/README.md#71-the-data-access-stack) |
 | SSE | Server-Sent Events: one-way server push over `text/event-stream` | [§13.12](../13-reactive-and-webflux/README.md#1312-full-stack-webflux-tests-and-server-sent-events) |
+| SSL | the old name of TLS; still used in property names (`server.ssl.*`) | [§3.14](../03-configuration-and-auto-configuration/README.md#314-boot-4-modularization) |
+| SSO | single sign-on: log in once and reach several applications | [§11.2](../11-spring-security-2-tokens-and-oauth2/README.md#112-oauth-20-and-openid-connect-in-one-picture) |
+| Stack trace | list of method calls printed with an exception; read the last "Caused by" first | [§5.7](../05-spring-mvc-and-rest/README.md#57-error-handling-and-problem-details-rfc-9457) |
 | Starter | code-free dependency bringing one capability's libraries and auto-configuration | [§1.7](../01-spring-ecosystem-and-first-app/README.md#17-starters) |
+| Stateless | keeps no per-client data between requests (no HTTP session); every request carries what it needs | [§11.1](../11-spring-security-2-tokens-and-oauth2/README.md#111-from-sessions-to-tokens-bearer-tokens-and-jwt) |
 | `StepVerifier` | reactor-test tool that asserts the signals of a publisher | [§13.5](../13-reactive-and-webflux/README.md#135-testing-with-stepverifier-and-virtual-time) |
 | Stereotype annotation | `@Component` and its specialisations `@Service`, `@Repository`, `@Controller` | [§2.3](../02-ioc-and-dependency-injection/README.md#23-defining-beans) |
 | Structured logging | JSON log lines (`ecs`, `logstash`, `gelf`), Boot 3.4+ | [§15.8](../15-observability-and-production/README.md#158-structured-logging) |
 | Structured output | converting an LLM answer into a Java type (`.entity(...)`) | [§17.7](../17-spring-ai-and-whats-new/README.md#177-structured-output) |
 | `SpringBootApplication` | `@SpringBootConfiguration` + `@EnableAutoConfiguration` + `@ComponentScan` | [§1.8](../01-spring-ecosystem-and-first-app/README.md#18-the-main-class-and-springbootapplication) |
 | `SpringBootTest` | test that starts the whole application context | [§12.6](../12-testing-spring-apps/README.md#126-springboottest-the-whole-application) |
+| Swagger UI | web page that renders an OpenAPI description and lets you try the endpoints | [§5.12](../05-spring-mvc-and-rest/README.md#512-documenting-the-api-openapi-with-springdoc) |
+| Synchronous | the caller waits until the operation finishes and has its result | [§14.2](../14-messaging-async-and-scheduling/README.md#142-application-events-synchronous-vs-async-listeners) |
 
 ### T
 
 | Term | Meaning | See |
 |---|---|---|
 | `TaskDecorator` | wraps submitted tasks to copy `ThreadLocal`s (MDC) to worker threads | [§14.4](../14-messaging-async-and-scheduling/README.md#144-async-and-executors) |
+| TCP | Transmission Control Protocol: reliable, ordered byte stream under HTTP, JDBC and Kafka connections | [§6.4](../06-rest-clients-and-http-interfaces/README.md#64-timeouts-and-the-underlying-http-library) |
+| Test pyramid | many fast unit tests, fewer slice tests, few full-context tests | [§12.2](../12-testing-spring-apps/README.md#122-the-test-pyramid-in-a-spring-app) |
 | `TestConfiguration` | configuration for tests that adds to (not replaces) the app's configuration | [§12.6](../12-testing-spring-apps/README.md#126-springboottest-the-whole-application) |
 | TestContext Framework | spring-test engine: `SpringExtension`, listeners, context cache | [§12.5](../12-testing-spring-apps/README.md#125-how-the-spring-testcontext-framework-works) |
 | Testcontainers | library starting real services in Docker for tests | [§12.14](../12-testing-spring-apps/README.md#1214-testcontainers-and-serviceconnection) |
+| Thread / thread pool | a thread runs code concurrently; a pool keeps a fixed set of threads that take tasks from a queue | [§14.4](../14-messaging-async-and-scheduling/README.md#144-async-and-executors) |
 | Thread-per-request | classic servlet model: one thread per request from start to end | [§13.1](../13-reactive-and-webflux/README.md#131-why-reactive-the-cost-of-waiting) |
+| `ThreadLocal` | variable with a separate value per thread; holds the security context and the transaction | [§7.7](../07-data-access-jdbc-and-transactions/README.md#77-how-a-spring-transaction-works) |
+| Throughput | how much work is done per unit of time (requests or messages per second) | [§13.15](../13-reactive-and-webflux/README.md#1315-virtual-threads-vs-webflux-a-measured-comparison) |
+| Time limiter | Resilience4j pattern that cancels a call taking longer than a set time | [§16.8](../16-spring-cloud-and-microservices/README.md#168-resilience-circuit-breaker-retry-rate-limiter) |
 | Timeout (connect / read) | time to establish a connection / to wait for response data | [§6.4](../06-rest-clients-and-http-interfaces/README.md#64-timeouts-and-the-underlying-http-library) |
+| TL;DR | "too long; didn't read": the short summary at the end of a section | [§1.1](../01-spring-ecosystem-and-first-app/README.md#11-what-spring-is) |
+| Token exchange | OAuth2 grant (RFC 8693) that swaps one token for another, e.g. for a downstream service | [§11.10](../11-spring-security-2-tokens-and-oauth2/README.md#1110-calling-other-services-client-credentials-and-token-relay) |
 | Token relay | forwarding the user's access token to downstream services | [§11.10](../11-spring-security-2-tokens-and-oauth2/README.md#1110-calling-other-services-client-credentials-and-token-relay) |
 | Tool calling | the model requests a function; the application runs it (`@Tool`) | [§17.8](../17-spring-ai-and-whats-new/README.md#178-tool-calling) |
+| Topic (Kafka) | named stream of records in Kafka, split into partitions | [§14.8](../14-messaging-async-and-scheduling/README.md#148-messaging-concepts-you-need-first) |
+| TOTP | time-based one-time password: the 6-digit code from an authenticator app (a second factor) | [§10.4](../10-spring-security-1-fundamentals/README.md#104-authentication-users-providers-form-login-and-basic) |
 | Trace / `traceparent` | a request's tree of spans / the W3C header that propagates it | [§15.7](../15-observability-and-production/README.md#157-distributed-tracing) |
+| Transaction | group of database operations that succeed or fail together (ACID) | [§7.7](../07-data-access-jdbc-and-transactions/README.md#77-how-a-spring-transaction-works) |
 | `Transactional` | declarative transaction around a method (proxy-based) | [§7.7](../07-data-access-jdbc-and-transactions/README.md#77-how-a-spring-transaction-works) |
 | `TransactionalEventListener` | listener bound to a transaction phase (`AFTER_COMMIT` default) | [§7.15](../07-data-access-jdbc-and-transactions/README.md#715-transactionaleventlistener) |
 | `TransactionTemplate` | programmatic transaction around a lambda | [§7.14](../07-data-access-jdbc-and-transactions/README.md#714-programmatic-transactions-transactiontemplate) |
@@ -1645,19 +1832,38 @@ Short definitions of the terms used in this book. Annotations are listed without
 
 | Term | Meaning | See |
 |---|---|---|
+| Unchecked exception | `RuntimeException` or `Error`; need not be declared; rolls a transaction back by default | [§7.10](../07-data-access-jdbc-and-transactions/README.md#710-rollback-rules) |
+| Undertow | embedded web server removed in Boot 4 (no Servlet 6.1 support) | [§17.13](../17-spring-ai-and-whats-new/README.md#1713-spring-boot-3x--4x-migration-table) |
 | `UnexpectedRollbackException` | commit of a transaction already marked rollback-only | [§7.9](../07-data-access-jdbc-and-transactions/README.md#79-propagation) |
+| Unit of work | set of changes tracked and written together; the persistence context is one | [§8.4](../08-spring-data-jpa-and-hibernate/README.md#84-the-persistence-context-and-dirty-checking) |
+| Unit test | fast test of one class in isolation, usually without Spring | [§12.4](../12-testing-spring-apps/README.md#124-unit-tests-no-spring-at-all) |
+| URI / URL | address of a resource; a URL is a URI that also says how to reach it (`https://...`) | [§5.1](../05-spring-mvc-and-rest/README.md#51-rest-in-one-page) |
 | `UserDetailsService` | loads a user by name for password authentication | [§10.4](../10-spring-security-1-fundamentals/README.md#104-authentication-users-providers-form-login-and-basic) |
+| UUID | 128-bit random-looking unique id, often used as a primary key or message id | [§8.3](../08-spring-data-jpa-and-hibernate/README.md#83-entities-and-ids) |
 | Validation groups | subsets of constraints selected with `@Validated(Group.class)` | [§5.6](../05-spring-mvc-and-rest/README.md#56-validation) |
 | `Validated` | Spring annotation: validation groups; on a class, method validation via proxy | [§5.6](../05-spring-mvc-and-rest/README.md#56-validation) |
+| Vault | HashiCorp secret store; Spring Cloud Vault loads secrets from it | [§3.8](../03-configuration-and-auto-configuration/README.md#38-importing-configuration-springconfigimport) |
 | `Version` | optimistic-locking column (JPA and Spring Data) | [§8.14](../08-spring-data-jpa-and-hibernate/README.md#814-locking-optimistic-and-pessimistic) |
 | Vector store | database of embeddings for similarity search (`SimpleVectorStore`, PgVector) | [§17.9](../17-spring-ai-and-whats-new/README.md#179-rag-retrieval-augmented-generation) |
 | Virtual threads | cheap JVM-managed threads (Java 21); `spring.threads.virtual.enabled=true` | [§13.15](../13-reactive-and-webflux/README.md#1315-virtual-threads-vs-webflux-a-measured-comparison), [§15.10](../15-observability-and-production/README.md#1510-virtual-threads) |
 | Virtual time | `StepVerifier` clock that advances only when the test says so | [§13.5](../13-reactive-and-webflux/README.md#135-testing-with-stepverifier-and-virtual-time) |
+| W3C Trace Context | web standard defining the `traceparent` header used to propagate traces | [§15.7](../15-observability-and-production/README.md#157-distributed-tracing) |
 | Weaving | linking aspects with targets; Spring does it at runtime with proxies | [§4.1](../04-aop-and-proxies/README.md#41-cross-cutting-concerns-and-the-aop-vocabulary) |
 | `WebClient` | reactive, non-blocking HTTP client | [§13.13](../13-reactive-and-webflux/README.md#1313-webclient-calling-other-services-without-blocking) |
 | WebFlux | Spring's reactive web framework on Reactor Netty | [§13.10](../13-reactive-and-webflux/README.md#1310-spring-webflux-annotated-controllers) |
 | `WebMvcTest` | web-layer test slice | [§12.7](../12-testing-spring-apps/README.md#127-test-slices) |
+| WebSocket | long-lived, two-way connection between browser and server | [§13.12](../13-reactive-and-webflux/README.md#1312-full-stack-webflux-tests-and-server-sent-events) |
 | `WebTestClient` | fluent test client for WebFlux (and MockMvc) | [§13.12](../13-reactive-and-webflux/README.md#1312-full-stack-webflux-tests-and-server-sent-events) |
+| WireMock | stub HTTP server for testing clients against canned responses | [§6.8](../06-rest-clients-and-http-interfaces/README.md#68-testing-clients) |
+
+### X – Z
+
+| Term | Meaning | See |
+|---|---|---|
+| X25519 / ECDHE | elliptic-curve key-exchange methods TLS uses to agree on a fresh session key | [§11.18](../11-spring-security-2-tokens-and-oauth2/README.md#1118-security-fundamentals-beyond-spring) |
+| XSRF-TOKEN | cookie name in which Spring sends the CSRF token for JavaScript clients to echo back in a header | [§10.8](../10-spring-security-1-fundamentals/README.md#108-csrf-protection) |
+| XSS | cross-site scripting: attacker JavaScript running in your page, able to read anything scripts can | [§10.11](../10-spring-security-1-fundamentals/README.md#1011-security-headers) |
+| YAML | indentation-based configuration format (`application.yaml`), an alternative to `.properties` | [§3.2](../03-configuration-and-auto-configuration/README.md#32-applicationproperties-vs-applicationyaml) |
 
 ---
 

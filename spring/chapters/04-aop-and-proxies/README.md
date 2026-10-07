@@ -1,6 +1,6 @@
 # Chapter 4 — AOP and Proxies
 
-Many things an application must do are not part of any single business rule: logging, timing, transactions, caching, security checks, retries. If you write that code by hand inside every service method, the business logic drowns in it and one forgotten line becomes a bug. **Aspect-Oriented Programming (AOP)** lets you write such a concern once and declare *where* it applies. Spring implements AOP with **proxies** — stand-in objects that wrap your beans — and the same proxy mechanism is what makes `@Transactional`, `@Cacheable`, `@Async`, `@PreAuthorize` and the new Framework 7 `@Retryable` work.
+Many things an application must do are not part of any single business rule: logging, timing, transactions (groups of database changes that are saved together or not at all), caching (keeping recent results in memory so repeat requests are fast), security checks, retries (trying a failed call again). If you write that code by hand inside every service method, the business logic drowns in it and one forgotten line becomes a bug. **Aspect-Oriented Programming (AOP)** lets you write such a concern once and declare *where* it applies. Spring implements AOP with **proxies** — stand-in objects that wrap your beans — and the same proxy mechanism is what makes `@Transactional`, `@Cacheable`, `@Async`, `@PreAuthorize` and the new Framework 7 `@Retryable` work.
 
 Understanding proxies is the single most useful piece of "Spring internals" knowledge: it explains the most common Spring bug of all (an annotation that silently does nothing) and it comes up in almost every Spring interview.
 
@@ -9,13 +9,13 @@ Understanding proxies is the single most useful piece of "Spring internals" know
 1. The problem AOP solves and its vocabulary: aspect, advice, pointcut, join point, target, proxy, weaving.
 2. Writing aspects with `@Aspect`: the five advice types, binding arguments, ordering several aspects.
 3. The pointcut expression language (`execution`, `within`, `@annotation`, `bean`, ...).
-4. How Spring creates proxies: JDK dynamic proxies vs CGLIB subclasses, Boot's default, Framework 7's `@Proxyable`.
+4. How Spring creates proxies: JDK dynamic proxies (Java's built-in runtime proxies, which implement interfaces) vs CGLIB subclasses (classes generated at runtime that extend your class), Boot's default, Framework 7's `@Proxyable`.
 5. Proxy limitations, **proved by tests**: self-invocation, `final` methods, `private` methods — and the fixes.
 6. Which Spring features are proxy-based and what that means for you.
-7. Framework 7 core resilience: `@Retryable`, `@ConcurrencyLimit`, `RetryTemplate`.
+7. Framework 7 core resilience (keeping an app working when things it depends on fail): `@Retryable`, `@ConcurrencyLimit`, `RetryTemplate`.
 8. Spring AOP vs full AspectJ weaving, and when not to use AOP at all.
 
-All code lives in [`code/aop-proxies/`](code/aop-proxies/) — a Spring Boot 4.1.1 / Framework 7.0 project on Java 25. Every claim marked "proved" is checked by a JUnit test; the output shown is real `mvn -q verify` output (Spring's log lines trimmed as `...`).
+All code lives in [`code/aop-proxies/`](code/aop-proxies/) — a Spring Boot 4.1.1 / Framework 7.0 project on Java 25. Every claim marked "proved" is checked by a JUnit (Java's standard test framework) test; the output shown is real `mvn -q verify` output (Spring's log lines trimmed as `...`).
 
 > **Prerequisites.** Beans, the `ApplicationContext` and `BeanPostProcessor` are explained in [Chapter 2](../02-ioc-and-dependency-injection/README.md). The Proxy *design pattern* itself (without Spring) is covered in the LLD handbook: [Proxy Pattern](../../../lld/chapters/09-patterns-structural/README.md#97-proxy-pattern).
 
@@ -61,12 +61,12 @@ Analogy: airport security. Passengers (method calls) go to many different gates 
 | Term | Meaning | In this chapter's code |
 |---|---|---|
 | **Join point** | A point during execution where extra behaviour *could* be added. In Spring AOP this is always **a method execution on a bean**. | the call `orders.placeOrder("book", 2)` |
-| **Pointcut** | A predicate that selects join points. | `execution(public * ch04.aop.OrderService.*(..))` |
+| **Pointcut** | A predicate (a yes/no test) that selects join points. | `execution(public * ch04.aop.OrderService.*(..))` |
 | **Advice** | The code to run at the selected join points, plus *when* (before, after, around...). | `LoggingAspect.before(...)` |
 | **Aspect** | A class that bundles pointcuts and advice for one concern. | `LoggingAspect`, `TimingAspect` |
 | **Target object** | The real object being advised. | the plain `OrderService` instance |
 | **AOP proxy** | The object Spring creates that wraps the target and runs the advice. Other beans receive the proxy. | `OrderService$$SpringCGLIB$$0` |
-| **Weaving** | Linking aspects with targets. Spring does it **at runtime by creating proxies**; AspectJ can do it at compile time or class-load time. | done by a `BeanPostProcessor` at startup |
+| **Weaving** | Linking aspects with targets. Spring does it **at runtime by creating proxies**; AspectJ (the original, full AOP tool for Java) can do it at compile time (when `javac` builds the code) or class-load time (when the JVM first loads a class). | done by a `BeanPostProcessor` at startup |
 | **Advisor** | Spring's internal pairing of one advice with one pointcut. You rarely write these by hand. | — |
 | **Introduction** | Adding a new interface to an advised object. Rarely used. | — |
 
@@ -105,8 +105,8 @@ The caller *thinks* it holds an `OrderService`. It actually holds the proxy, whi
    </dependency>
    ```
 
-2. Boot's `AopAutoConfiguration` sees AspectJ on the classpath and switches on `@EnableAspectJAutoProxy` for you (property `spring.aop.auto`, default `true`). In a plain Spring (non-Boot) app you add `@EnableAspectJAutoProxy` to a `@Configuration` class yourself.
-3. Write a class annotated **both** `@Aspect` and `@Component` (or register it with `@Bean`). `@Aspect` alone is *not* a stereotype — component scanning ignores it, and an aspect that is not a bean never runs.
+2. Boot's `AopAutoConfiguration` sees AspectJ on the classpath (the set of jars the app runs with) and switches on `@EnableAspectJAutoProxy` for you (property `spring.aop.auto`, default `true`). In a plain Spring (non-Boot) app you add `@EnableAspectJAutoProxy` to a `@Configuration` class yourself.
+3. Write a class annotated **both** `@Aspect` and `@Component` (or register it with `@Bean`). `@Aspect` alone is *not* a stereotype (one of the role annotations like `@Component`/`@Service` that scanning looks for) — component scanning ignores it, and an aspect that is not a bean never runs.
 
 ### The five kinds of advice
 
@@ -114,7 +114,7 @@ The caller *thinks* it holds an `OrderService`. It actually holds the proxy, whi
 |---|---|---|---|
 | `@Before` | before the method | only by throwing an exception (the method then never runs) | argument checks, audit "who called" |
 | `@AfterReturning` | after a normal return | can read the return value (bind with `returning=`), cannot replace it | log results, publish an event |
-| `@AfterThrowing` | after the method throws | can read the exception (`throwing=`); the exception still propagates unless the advice throws a different one | translate/log errors |
+| `@AfterThrowing` | after the method throws | can read the exception (`throwing=`); the exception still propagates (continues up to the caller) unless the advice throws a different one | translate/log errors |
 | `@After` | always, like `finally` | no | release resources, clear context |
 | `@Around` | wraps the call; *you* call `proceed()` | yes: skip the call, change arguments, change or replace the return value, catch exceptions, retry | timing, caching, transactions, retries |
 
@@ -182,7 +182,7 @@ public class LoggingAspect {
 What each part does:
 
 - `@Pointcut` on an empty method gives the expression a **name** (`orderServiceMethods()`) that the advice annotations reuse. The method body is never executed.
-- `JoinPoint` gives access to the method signature, the arguments (`getArgs()`), the target (`getTarget()`) and the proxy (`getThis()`).
+- `JoinPoint` gives access to the method signature (its name, parameter types and return type), the arguments (`getArgs()`), the target (`getTarget()`) and the proxy (`getThis()`).
 - `returning = "result"` binds the return value to the parameter named `result`. If you declare the parameter as `String` instead of `Object`, the advice only matches methods returning a `String`.
 - `throwing = "ex"` does the same for the exception; the parameter type also filters (here: only `Exception` and subclasses).
 
@@ -325,7 +325,7 @@ This matters in real systems. Spring's own infrastructure advisors (transactions
 1. Which advice type can prevent the target method from running without throwing? → Only `@Around` (by not calling `proceed()`).
 2. Does `@AfterThrowing` stop the exception? → No. The exception continues to the caller unless the advice itself throws another one.
 3. Aspect A has `@Order(1)` and B `@Order(2)`. Whose `@Before` runs first? → A's; A is the outer layer.
-4. Why must `Timed` have `RetentionPolicy.RUNTIME`? → Spring inspects annotations with reflection at runtime; `CLASS`/`SOURCE` retention makes them invisible, so the pointcut never matches.
+4. Why must `Timed` have `RetentionPolicy.RUNTIME`? → Spring inspects annotations with reflection (Java's API for examining classes and methods while the program runs) at runtime; `CLASS`/`SOURCE` retention makes them invisible, so the pointcut never matches.
 
 ---
 
@@ -357,7 +357,7 @@ execution( public      *            com.shop.service..*Service.find*(Long, ..) )
 
 | Part | Meaning in the example |
 |---|---|
-| `public` | optional; only public methods (with CGLIB proxies, protected/package-private methods can also be matched) |
+| `public` | optional; only public methods (with CGLIB proxies, protected/package-private — no modifier, visible only inside the same package — methods can also be matched) |
 | `*` | any return type |
 | `com.shop.service..` | the package `com.shop.service` **or any sub-package** (`..` in a type pattern) |
 | `*Service` | any type whose name ends in `Service` |
@@ -415,7 +415,7 @@ A **proxy** is an object that has the same type as your bean (so callers cannot 
 1. The container creates the real bean (constructor, dependency injection, `@PostConstruct`).
 2. In `postProcessAfterInitialization`, the auto-proxy creator asks: *does any advisor's pointcut match any method of this bean's class?*
 3. If no: the raw bean is registered. If yes: it builds a proxy around the bean with the matching advisors, and **the proxy** is what gets registered in the context and injected everywhere.
-4. At call time the proxy builds a chain of interceptors (advice) for that method and walks it; the last link calls the real method on the target.
+4. At call time the proxy builds a chain of interceptors (advice objects, each of which can act before and after passing the call on) for that method and walks it; the last link calls the real method on the target.
 
 ```mermaid
 flowchart TD
@@ -431,7 +431,7 @@ flowchart TD
 
 | | **JDK dynamic proxy** | **CGLIB proxy** |
 |---|---|---|
-| Built with | `java.lang.reflect.Proxy` (part of the JDK) | bytecode generation of a **subclass** (Spring ships a repackaged CGLIB) |
+| Built with | `java.lang.reflect.Proxy` (part of the JDK — Java Development Kit, the standard Java tools and libraries) | bytecode (compiled JVM instructions) generation of a **subclass** (Spring ships a repackaged CGLIB) |
 | Requires | the bean implements at least one interface | the class is not `final` and has a usable constructor |
 | The proxy *is a* | implementation of the interfaces only | subclass of the bean's class |
 | Can be injected as the concrete class? | **No** — `BeanNotOfRequiredTypeException` | Yes |
@@ -511,7 +511,7 @@ Spring's JDK proxies are exactly this, with an `InvocationHandler` that runs the
 
 ### Spring's `ProxyFactory`
 
-Spring exposes its proxy machinery as `ProxyFactory`, handy in tests or libraries. The advice here is an AOP Alliance `MethodInterceptor` — the low-level interface all Spring advice is converted into:
+Spring exposes its proxy machinery as `ProxyFactory`, handy in tests or libraries. The advice here is an AOP Alliance (a small, shared set of AOP interfaces several frameworks agreed on) `MethodInterceptor` — the low-level interface all Spring advice is converted into:
 
 ```java
 MethodInterceptor upper = inv -> ((String) inv.proceed()).toUpperCase();
@@ -543,7 +543,7 @@ factory 2: CGLIB proxy -> ch04.proxy.DefaultGreetingService$$SpringCGLIB$$1 says
 | Inject by concrete class | fails | works |
 | `final` classes / methods | irrelevant (interface-based) | class cannot be proxied / method silently not advised |
 | Startup cost | tiny | generates a class per bean (small, and cached) |
-| Constructor | not involved | Spring uses Objenesis, so the target's constructor is **not** run again for the proxy |
+| Constructor | not involved | Spring uses Objenesis (a library that creates objects without calling a constructor), so the target's constructor is **not** run again for the proxy |
 | Recommended | when you program to interfaces and want only interface methods exposed | Boot's default; works for classes without interfaces |
 
 ### Self-check
@@ -596,7 +596,7 @@ public class AccountService {
 }
 ```
 
-`TransactionSynchronizationManager.isActualTransactionActive()` reports whether a real transaction is bound to the current thread. The project has H2 + `spring-boot-starter-jdbc`, so Boot configured a `DataSourceTransactionManager`.
+`TransactionSynchronizationManager.isActualTransactionActive()` reports whether a real transaction is bound to the current thread (a thread is one independent path of execution; Spring tracks the transaction per thread). The project has H2 (a small in-memory database) + `spring-boot-starter-jdbc`, so Boot configured a `DataSourceTransactionManager`.
 
 #### Proof 2 — `@Cacheable`
 
@@ -636,7 +636,7 @@ caller thread:          main
 @Async via this.build(): main
 ```
 
-`task-1` is a thread of Boot's auto-configured `applicationTaskExecutor`. Via `this`, the "async" method ran synchronously on `main` — no error, no warning.
+`task-1` is a thread of Boot's auto-configured `applicationTaskExecutor` (a thread pool: a set of reusable worker threads that run submitted tasks). Via `this`, the "async" (meant to run in the background on another thread) method ran synchronously (the caller waited, on its own thread) on `main` — no error, no warning.
 
 #### Fixes, best first
 
@@ -680,7 +680,7 @@ final method:  currencies=null
 advice log:    [trace PricingService.currencies()]
 ```
 
-The final method was not advised **and** read `null` instead of `[EUR, USD]`. In real code this shows up as a mysterious `NullPointerException` on an injected field that "definitely was injected". Kotlin classes are `final` by default, which is why Kotlin Spring projects use the `kotlin-spring` (all-open) compiler plugin.
+The final method was not advised **and** read `null` instead of `[EUR, USD]`. In real code this shows up as a mysterious `NullPointerException` on an injected field that "definitely was injected". Kotlin classes are `final` by default, which is why Kotlin (a JVM language) Spring projects use the `kotlin-spring` (all-open) compiler plugin, which makes annotated classes non-final automatically.
 
 A `final` **class** cannot be subclassed at all; if it needs advice and has no interface, startup fails with an error saying CGLIB cannot subclass it.
 
@@ -701,7 +701,7 @@ For `@Transactional` specifically: since Framework 6.0, `protected` and package-
 
 **30-second answer:** "Spring AOP is proxy-based. At startup a BeanPostProcessor wraps any bean that matches a pointcut in a proxy — CGLIB by default in Boot, JDK dynamic proxy for interface-only proxying — and other beans get the proxy. Advice runs only when a call goes through the proxy. So `this.method()` calls, private or final methods, and calls from constructors skip `@Transactional`, `@Cacheable`, `@Async` and custom aspects. The fix is usually to move the method to another bean, or to call through an injected reference to the proxy."
 
-- *"My `@Transactional` method doesn't roll back — why?"* → Top causes: self-invocation; method is private/final; exception is checked (rollback defaults to unchecked exceptions only — see [Chapter 7](../07-data-access-jdbc-and-transactions/README.md)); exception caught inside the method; bean created with `new`.
+- *"My `@Transactional` method doesn't roll back — why?"* → Top causes: self-invocation; method is private/final; exception is checked (a *checked* exception must be declared with `throws`, e.g. `IOException`; an *unchecked* one extends `RuntimeException`; rollback defaults to unchecked exceptions only — see [Chapter 7](../07-data-access-jdbc-and-transactions/README.md)); exception caught inside the method; bean created with `new`.
 - *"How can you see if a bean is proxied?"* → `AopUtils.isAopProxy(bean)` / `isCglibProxy` / `isJdkDynamicProxy`, or print `bean.getClass()` and look for `$$SpringCGLIB$$` or `$Proxy`.
 - *"JDK vs CGLIB?"* → JDK: interface-based, from the JDK, cannot be cast to the class. CGLIB: runtime subclass, can't handle final classes/methods. Boot defaults to CGLIB via `spring.aop.proxy-target-class=true`.
 
@@ -726,11 +726,11 @@ Many annotations in this book are "AOP you did not write yourself". They are pro
 | `@Retryable`, `@ConcurrencyLimit` (Framework 7) | `@EnableResilientMethods` | `RetryAnnotationBeanPostProcessor`, `ConcurrencyLimitBeanPostProcessor` | 4.7 below |
 | `@PreAuthorize`, `@PostAuthorize`, `@Secured` | `@EnableMethodSecurity` | `AuthorizationManagerBeforeMethodInterceptor`, ... | [10](../10-spring-security-1-fundamentals/README.md) |
 | `@Validated` on a class + constraint annotations on method parameters | Boot auto-config (`MethodValidationPostProcessor`) | `MethodValidationInterceptor` | [5](../05-spring-mvc-and-rest/README.md) |
-| `@Observed` (Micrometer) | an `ObservedAspect` bean | an `@Aspect` | [15](../15-observability-and-production/README.md) |
+| `@Observed` (Micrometer, Spring's metrics library) | an `ObservedAspect` bean | an `@Aspect` | [15](../15-observability-and-production/README.md) |
 | Spring Data repository interfaces | `@EnableJpaRepositories` / Boot | JDK proxy generated for the interface | [8](../08-spring-data-jpa-and-hibernate/README.md) |
 | `@Configuration` classes (full mode) | always | CGLIB subclass that intercepts `@Bean` method calls (not AOP advice, same technique) | [2](../02-ioc-and-dependency-injection/README.md) |
 
-**Order matters when several apply.** For example, `@Retryable` + `@Transactional` on the same method: if the transaction interceptor is outside the retry interceptor, all attempts share one transaction that is already marked rollback-only after the first failure. Put retries on a caller one layer up, or set the orders explicitly (`@EnableTransactionManagement(order = ...)`, `@EnableResilientMethods(order = ...)`).
+**Order matters when several apply.** For example, `@Retryable` + `@Transactional` on the same method: if the transaction interceptor is outside the retry interceptor, all attempts share one transaction that is already marked rollback-only (doomed to be undone, whatever happens next) after the first failure. Put retries on a caller one layer up, or set the orders explicitly (`@EnableTransactionManagement(order = ...)`, `@EnableResilientMethods(order = ...)`).
 
 ### Self-check
 
@@ -746,14 +746,14 @@ Many annotations in this book are "AOP you did not write yourself". They are pro
 Spring Framework **7.0** (November 2025) added a small resilience toolkit to the core framework, in the packages `org.springframework.resilience.annotation` and `org.springframework.core.retry`:
 
 - **`@Retryable`** — call a method again when it throws, with back-off delay.
-- **`@ConcurrencyLimit`** — allow at most N threads inside a method at a time (a *bulkhead*).
+- **`@ConcurrencyLimit`** — allow at most N threads inside a method at a time (a *bulkhead*: a limit that stops one overloaded part from sinking the whole app, named after a ship's watertight walls).
 - **`RetryTemplate` / `RetryPolicy`** — the same retry logic, programmatically.
 
-They replace most uses of the separate **Spring Retry** project; Boot 4 removed dependency management for Spring Retry. They are **not** a full resilience library: there is no circuit breaker, rate limiter or time limiter — for those use Resilience4j (see [Chapter 16](../16-spring-cloud-and-microservices/README.md) and the [circuit breaker notes](../../../microservices-patterns/chapters/06-circuit-breaker/README.md)).
+They replace most uses of the separate **Spring Retry** project; Boot 4 removed dependency management for Spring Retry. They are **not** a full resilience library: there is no circuit breaker (stops calling a failing service for a while so it can recover), rate limiter (caps calls per second) or time limiter (gives up after a deadline) — for those use Resilience4j (a popular Java resilience library) (see [Chapter 16](../16-spring-cloud-and-microservices/README.md) and the [circuit breaker notes](../../../microservices-patterns/chapters/06-circuit-breaker/README.md)).
 
 ### Why it matters
 
-Remote calls fail *transiently*: a timeout, a 503 during a deploy, a dropped connection. Retrying once or twice with a short, growing delay turns many such failures into successes. And with **virtual threads** ([Java book 15.4](../../../java/chapters/15-concurrency-2-modern/README.md#154-virtual-threads)) you no longer have a thread-pool size that naturally caps how many callers hit a slow downstream service at once — `@ConcurrencyLimit` puts that cap back where you need it.
+Remote calls fail *transiently* (briefly, then work again): a timeout, a 503 (HTTP "service unavailable") during a deploy (rolling out a new version), a dropped connection. Retrying once or twice with a short, growing delay turns many such failures into successes. And with **virtual threads** (very cheap threads managed by the JVM, so you can have millions) ([Java book 15.4](../../../java/chapters/15-concurrency-2-modern/README.md#154-virtual-threads)) you no longer have a thread-pool size that naturally caps how many callers hit a slow downstream service (a service *you* call) at once — `@ConcurrencyLimit` puts that cap back where you need it.
 
 ### How to switch it on
 
@@ -778,14 +778,14 @@ public class AopApplication { ... }
 | `predicate` | none | a `MethodRetryPredicate` class for custom decisions, applied after includes/excludes |
 | `maxRetries` | `3` | retries **after** the first call → total attempts = 1 + `maxRetries` |
 | `delay` | `1000` ms | wait before the first retry |
-| `multiplier` | `1.0` | each delay = previous × multiplier (exponential back-off when > 1) |
+| `multiplier` | `1.0` | each delay = previous × multiplier (exponential back-off — waits that double or grow each time — when > 1) |
 | `maxDelay` | `Long.MAX_VALUE` | cap for the growing delay |
-| `jitter` | `0` | random variation applied to each delay, so many clients don't retry in lock-step |
+| `jitter` | `0` | random variation applied to each delay, so many clients don't retry in lock-step (all at the same instant) |
 | `timeout` | `0` = none | total time budget for all attempts including delays (since 7.0.2) |
 | `timeUnit` | `MILLISECONDS` | unit for the numeric delay attributes |
 | `...String` variants | — | `maxRetriesString`, `delayString`, ... accept `${...}` placeholders and SpEL |
 
-It works on methods returning `Mono`/`Flux` too (the retry is applied to the reactive pipeline), and publishes a `MethodRetryEvent` for each failed attempt, which you can observe with an `@EventListener`.
+It works on methods returning `Mono`/`Flux` (Project Reactor's types for 0–1 and 0–N values that arrive later) too (the retry is applied to the reactive pipeline), and publishes a `MethodRetryEvent` for each failed attempt, which you can observe with an `@EventListener`.
 
 ### Example: a flaky client
 
@@ -850,7 +850,7 @@ public void printUrgent(String doc) throws InterruptedException {
 }
 ```
 
-- `value`/`limit`: the maximum concurrent invocations **per bean instance**. `1` makes the method behave like a lock on the bean.
+- `value`/`limit`: the maximum concurrent invocations **per bean instance**. `1` makes the method behave like a lock (only one thread may be inside at a time) on the bean.
 - `limitString`: placeholder/SpEL variant, e.g. `"${printer.max-concurrent}"`.
 - `policy` (since 7.0.3): `BLOCK` (default) makes extra callers wait; `REJECT` throws `InvocationRejectedException` (a subclass of `RejectedExecutionException`) immediately.
 
@@ -896,15 +896,17 @@ RetryTemplate -> done on call 3
 | Retry + back-off + jitter | yes | yes | yes |
 | Recovery method (`@Recover`) | no — catch the exception at the caller | yes | fallback methods |
 | Circuit breaker, rate limiter, time limiter | no | basic circuit breaker only | yes, all |
-| Bulkhead | `@ConcurrencyLimit` | no | semaphore and thread-pool bulkheads |
+| Bulkhead | `@ConcurrencyLimit` | no | semaphore (a counter of free permits) and thread-pool bulkheads |
 | Metrics | via `RetryListener` / `MethodRetryEvent` | listeners | built-in Micrometer metrics |
 | Choose when | you need simple retries / limits and want no extra dependency | legacy code | you need circuit breaking and rich resilience policies |
 
 ### When not to use it
 
-- **Non-idempotent operations** (charging a card, sending an email) — a retry after a timeout may do the work twice. Retry only operations that are safe to repeat, or make them idempotent first (idempotency keys). See [Retry pattern notes](../../../microservices-patterns/chapters/08-retry/README.md).
-- **Errors that won't go away** — validation errors, 4xx responses, `NullPointerException`. Always set `includes` narrowly.
-- **Retry at every layer** — if the gateway, the client library and your service each retry 3 times, one user request can become 64 downstream calls ("retry storm"). Retry at one layer.
+- **Non-idempotent operations** (charging a card, sending an email) — a retry after a timeout may do the work twice.
+
+  > **Key term — idempotent:** an operation is idempotent if doing it twice has the same effect as doing it once. "Set the price to 10" is idempotent; "add 10 to the balance" is not. An **idempotency key** is a unique id the caller sends with a request so the server can recognise a repeat and skip it. See [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md). Retry only operations that are safe to repeat, or make them idempotent first (idempotency keys). See [Retry pattern notes](../../../microservices-patterns/chapters/08-retry/README.md).
+- **Errors that won't go away** — validation errors, 4xx responses (HTTP status codes 400–499, meaning the *request* was wrong), `NullPointerException`. Always set `includes` narrowly.
+- **Retry at every layer** — if the gateway (the entry-point server in front of your services), the client library and your service each retry 3 times, one user request can become 64 downstream calls ("retry storm"). Retry at one layer.
 - **Inside a transaction** — see section 4.6.
 
 ### Common mistakes
@@ -912,7 +914,7 @@ RetryTemplate -> done on call 3
 - Forgetting `@EnableResilientMethods` → no retries, no error.
 - Self-invocation → `this.stockFor()` is not retried (it is proxy-based).
 - `maxRetries = 3` read as "3 attempts" → it is 4 attempts.
-- No jitter on a fleet of instances → synchronised retry waves after an outage.
+- No jitter on a fleet of instances (many running copies of the same app) → synchronised retry waves after an outage.
 
 ### Self-check
 
@@ -934,20 +936,20 @@ RetryTemplate -> done on call 3
 
 | | Spring AOP (default) | AspectJ weaving |
 |---|---|---|
-| How advice is applied | runtime proxy around a bean | bytecode modified at compile time (`ajc`), post-compile, or load time (LTW with a Java agent) |
+| How advice is applied | runtime proxy around a bean | bytecode modified at compile time (`ajc`), post-compile, or load time (LTW — load-time weaving — with a Java agent, a helper that can change classes as the JVM loads them) |
 | Join points | method execution on Spring beans only | method call and execution, constructor, field get/set, static initialisers, ... on **any** object |
 | Self-invocation, `final`, `private` | not advised | advised |
 | Objects created with `new` | not advised | advised |
 | Setup | add the starter | AspectJ compiler plugin or `-javaagent`, extra build complexity |
-| Performance | a few extra method calls per advised invocation | practically zero overhead (code is inlined) |
-| Good for | 95% of enterprise needs: transactions, logging, security | fine-grained or domain-object advice, very hot paths |
+| Performance | a few extra method calls per advised invocation | practically zero overhead (code is inlined — copied straight into the method) |
+| Good for | 95% of enterprise needs: transactions, logging, security | fine-grained or domain-object advice, very hot paths (code that runs extremely often) |
 
 `@Transactional`, `@Cacheable` and `@Async` can be switched to AspectJ mode (`@EnableTransactionManagement(mode = AdviceMode.ASPECTJ)` plus the weaver), which removes the self-invocation limitation. Very few teams do this; extracting a bean is simpler.
 
 ### When not to use AOP at all
 
 - **Business logic** — if a rule matters to the domain (e.g. "orders over 1000 need approval"), write it explicitly in the service. Hidden advice makes code hard to follow and test.
-- **When a plain decorator, filter or interceptor fits** — HTTP concerns belong in servlet filters / `HandlerInterceptor` ([Chapter 5](../05-spring-mvc-and-rest/README.md)); client concerns in `ClientHttpRequestInterceptor` ([Chapter 6](../06-rest-clients-and-http-interfaces/README.md)).
+- **When a plain decorator (a wrapper object that adds behaviour), filter or interceptor fits** — HTTP concerns belong in servlet filters (code that runs on every web request before it reaches Spring MVC) / `HandlerInterceptor` ([Chapter 5](../05-spring-mvc-and-rest/README.md)); client concerns in `ClientHttpRequestInterceptor` ([Chapter 6](../06-rest-clients-and-http-interfaces/README.md)).
 - **Very broad pointcuts** — "log every method in the app" produces noise and cost; use tracing/metrics tools ([Chapter 15](../15-observability-and-production/README.md)).
 
 ### Real-world examples
@@ -955,7 +957,7 @@ RetryTemplate -> done on call 3
 - **Spring itself**: transactions, caching, security, async and retries as shown above.
 - **Micrometer `@Timed` / `@Observed`** — aspects that record metrics/traces around annotated methods.
 - **Audit logging** in banking/insurance apps: an `@Audited` annotation + `@AfterReturning` advice writes who-did-what records.
-- **Multi-tenant routing**: an `@Around` aspect sets a tenant id in a `ThreadLocal`/scoped value before repository calls and clears it after.
+- **Multi-tenant routing** (one app serving many customer organisations, "tenants", with separate data): an `@Around` aspect sets a tenant id in a `ThreadLocal` (a variable with a separate value per thread)/scoped value before repository calls and clears it after.
 - **Feature flags / rate limits** on specific service methods via custom annotations.
 
 ---

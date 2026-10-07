@@ -7215,3 +7215,539 @@ sequenceDiagram
 
 ### TL;DR
 A gateway-based BFF that logs users in, keeps tokens in a Redis-backed session, relays and refreshes them for downstream APIs, and protects its cookies with `SameSite`, HttpOnly and CSRF tokens.
+
+## Appendix: Concepts you need
+
+This appendix lists, in alphabetical order, every technical term, acronym, library and tool that the 40 briefs above rely on, each explained in plain English in a sentence or two. After each definition you'll find the projects that use the term and, where this handbook teaches it, a link to the chapter. System-design ideas such as latency, caching, replication, queues and idempotency are explained in more depth in [System Design Fundamentals](../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
+
+### A
+
+- **`AbstractRoutingDataSource`** — A `DataSource` that picks a real target (e.g. per tenant or replica) for each connection request. Used in project 26. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Acceptance criteria / "done when"** — The concrete, testable condition that tells you a milestone is finished. Used in all 40 projects.
+- **Access token** — Short-lived credential a client sends (usually as a bearer token) to call an API on a user's or its own behalf. Used in projects 11, 12, 26, 34, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **ACID** — The guarantees of a database transaction: Atomic (all or nothing), Consistent, Isolated from others, Durable once committed. Used in project 13. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Actuator (Spring Boot)** — Boot's production endpoints under `/actuator` for health, metrics, configuration, loggers and more. Used in projects 3, 5, 9, 10, 14, 29, 32, 33, 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Advice order (`@Order`)** — When several aspects or filters apply, `@Order` decides nesting: the lowest value is the outermost layer. Used in projects 9, 34. ([Ch 4](../chapters/04-aop-and-proxies/README.md))
+- **Agent (AI)** — An LLM application that loops: the model decides which tool to call, the app runs it, and the result goes back to the model until the task is done. Used in project 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Aggregate / event stream** — A cluster of objects changed together through one root; in event sourcing, each aggregate has its own ordered stream of events. Used in projects 16, 17, 28, 35. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **Aging (scheduling)** — Raising the priority of work the longer it waits, so low-priority jobs are never starved. Used in project 38.
+- **Allow-list** — A list of explicitly permitted values (sort fields, hosts, issuers); anything not on it is rejected. Used in projects 7, 9, 15, 25, 36. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **AMQP** — Advanced Message Queuing Protocol, spoken by RabbitMQ; Spring AMQP is Spring's library for it. Used in project 17. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **ANN index (HNSW)** — Approximate-nearest-neighbour index that finds similar vectors quickly by trading a little accuracy for speed; HNSW is a common graph-based one. Used in project 30. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Apache Tika** — Library that detects a file's real type (and extracts text) from its content. Used in project 15.
+- **API** — Application Programming Interface: the operations a program offers to others; here usually HTTP endpoints. Used in projects 1, 2, 3, 4, 6, 7, 8, 11, 12, 15, 16, 17, 18, 19, 21, 22, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **API gateway** — A single entry point in front of services that routes requests and handles edge concerns such as authentication, rate limits and CORS. Used in projects 21, 22, 27, 40. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **API key** — A secret string identifying a calling application; store only its hash, like a password. Used in projects 2, 3, 22, 25. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+- **API versioning (Framework 7)** — Framework 7 support for reading a version from a header, path or query parameter and routing to handlers mapped with `version = "1.1+"`. Used in projects 3, 7, 21, 37. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **`ApiVersionStrategy`** — Framework 7 component that resolves, parses and validates the API version of a request. Used in project 21. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Application events / `ApplicationEventPublisher`** — In-process publish/subscribe: a bean publishes an object and `@EventListener` methods receive it, synchronously by default. Used in projects 9, 31. ([Ch 2](../chapters/02-ioc-and-dependency-injection/README.md))
+- **Application module (Spring Modulith)** — A top-level package of a modular monolith with its own public API; other modules may use only that API. Used in projects 9, 31.
+- **`ApplicationContextRunner`** — Test helper that starts a tiny Spring context with chosen configuration and properties, ideal for testing auto-configuration conditions. Used in projects 5, 9, 25. ([Ch 3](../chapters/03-configuration-and-auto-configuration/README.md))
+- **`@ApplicationModuleListener`** — Spring Modulith listener that runs asynchronously in its own transaction after the publisher commits. Used in project 31.
+- **`ApplicationModules.verify()`** — Spring Modulith check that fails a test when one module reaches into another module's internals or modules depend on each other in a cycle. Used in project 31.
+- **`@ApplicationModuleTest` / `Scenario`** — Spring Modulith test that boots only one module; `Scenario` publishes an event and waits for the expected outcome. Used in project 31.
+- **`@Around` advice / `proceed()`** — The AOP advice type that wraps a method call; it decides whether and when the real method runs by calling `proceed()`. Used in project 9. ([Ch 4](../chapters/04-aop-and-proxies/README.md))
+- **`@Async`** — Runs a bean method on another thread from an executor and returns immediately; needs `@EnableAsync` and works only through the proxy. Used in projects 2, 15, 26, 29, 31. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **At-least-once delivery / execution** — Every message or job is processed, but a crash can cause a repeat, so the processing must be idempotent. Used in projects 16, 17, 24, 28, 31, 35, 38. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Atomic** — All or nothing: either the whole operation happens or none of it does, and nobody sees a half-done state. Used in projects 1, 2, 6, 8, 10, 13, 15, 22, 23, 25, 28, 35, 39, 40. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Atomic file write** — Write to a temporary file and rename it into place, so readers never see a half-written file. Used in projects 6, 15.
+- **Audience (`aud`)** — JWT claim naming the API a token is meant for; an API should reject tokens issued for another audience. Used in projects 11, 12, 22, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Audit log** — An append-only record of who did what and when, kept for security and compliance. Used in projects 4, 9, 13, 20, 24, 25, 34, 35, 36.
+- **Authentication vs authorization** — Authentication proves who the caller is; authorization decides what that known caller may do. Used in projects 11, 12, 22, 26, 27, 30, 34, 36, 39, 40. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+- **Authorization code flow with PKCE** — OAuth2 login flow: the browser receives a one-time code and the client swaps it for tokens; PKCE ties the code to the client that started the flow. Used in projects 12, 34, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Authorization server / IdP** — The service that logs users in and issues tokens (Keycloak, Okta, Spring Authorization Server). Used in projects 11, 12, 26, 34, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Authorize vs capture (payments)** — Authorizing reserves money on the card; capturing actually takes it, often later when the goods ship. Used in projects 26, 27, 28, 39.
+- **Auto-configuration** — Boot's conditional configuration classes that create sensible beans for whatever is on the classpath, unless you define your own. Used in projects 3, 4, 5, 8, 9, 17, 25, 29, 32. ([Ch 3](../chapters/03-configuration-and-auto-configuration/README.md))
+- **`AutoConfiguration.imports`** — The file inside a jar (`META-INF/spring/...AutoConfiguration.imports`) listing its auto-configuration classes. Used in project 9. ([Ch 3](../chapters/03-configuration-and-auto-configuration/README.md))
+- **Availability state** — Boot's internal liveness and readiness flags, which the health probes report and the app can change at runtime. Used in project 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Awaitility** — Test library that waits until an asynchronous condition becomes true, instead of a fixed `sleep`. Used in projects 15, 16, 20. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **AWS SDK / S3** — Amazon's Java library and its object-storage service; MinIO offers the same S3 API locally. Used in projects 15, 18.
+- **Axon** — Java framework for event sourcing and CQRS. Used in project 35.
+
+### B
+
+- **Back-pressure** — A consumer limiting how fast a producer sends data, so a fast source cannot overwhelm a slow sink. Used in projects 16, 19. ([Ch 13](../chapters/13-reactive-and-webflux/README.md))
+- **Backend-for-Frontend (BFF)** — A server dedicated to one front end that logs the user in, keeps tokens server-side and gives the browser only a session cookie. Used in projects 11, 12, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Backward-compatible change** — A change old clients or old code can live with, such as adding an optional field or a new nullable column. Used in projects 7, 37. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Base62 code** — A short id written with the 62 characters 0-9, a-z, A-Z, as used by URL shorteners. Used in project 2.
+- **Baseline version (`1.1+`)** — A version mapping that also matches all later versions, so a handler need not be copied for every release. Used in project 21. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Bean** — An object created, wired and managed by the Spring container. Used in projects 1, 3, 5, 9, 11, 13, 14, 17, 20, 21, 24, 25, 26, 27, 30, 31, 32, 33, 36, 38. ([Ch 2](../chapters/02-ioc-and-dependency-injection/README.md))
+- **Bean Validation (`@Valid`)** — Jakarta standard for declaring input rules with annotations such as `@NotBlank` and `@Size`; Spring runs them before your method. Used in projects 1, 7, 18. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Best-effort** — Done when possible but not guaranteed; losing an occasional update is accepted. Used in project 2.
+- **`BigDecimal` / `numeric`** — Exact decimal number types in Java and SQL; required for money because floating-point types round. Used in projects 6, 8, 19, 35.
+- **Blocking vs non-blocking retry** — Blocking retries hold the partition while waiting; non-blocking retries move the message to a retry topic so others keep flowing. Used in project 16. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **BOM (bill of materials)** — A Maven file that pins compatible versions of many libraries; Boot's BOM manages most versions for you. Used in projects 20, 27, 30. ([Ch 1](../chapters/01-spring-ecosystem-and-first-app/README.md))
+- **Breaking vs additive change** — A breaking change forces clients to change (removed field, new required input); an additive one does not. Used in projects 5, 7, 21, 37. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Broker (message broker)** — A server that receives messages from producers and delivers them to consumers (Kafka, RabbitMQ). Used in projects 12, 16, 17, 20, 28, 31, 38. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Bucket4j** — Java rate-limiting library implementing the token-bucket algorithm, with Redis support for shared limits. Used in project 22. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Buildpacks** — Tools that turn an application into a container image without a Dockerfile (`mvn spring-boot:build-image`). Used in projects 32, 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Bulkhead** — Limiting concurrent calls to one dependency so it cannot use up all threads or connections. Used in projects 27, 33. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Burn rate / error budget** — Error budget = how many failures an SLO allows; burn rate = how fast you are using that budget up. Used in project 29. ([Ch 15](../chapters/15-observability-and-production/README.md))
+
+### C
+
+- **Cache abstraction (`@Cacheable`, `@CachePut`, `@CacheEvict`)** — Spring annotations that read from, update or remove entries in a cache around a method call; the storage behind them is pluggable. Used in projects 2, 3, 14. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **Cache stampede (thundering herd)** — Many requests miss the same expired key at once and all hit the database together. Used in projects 14, 24. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **Cache-aside (look-aside)** — Check the cache first; on a miss load from the database, store the result and return it. Used in projects 2, 14. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **`CacheErrorHandler`** — Spring hook that decides what happens when the cache itself fails, e.g. log and fall back to the database. Used in project 14. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **Caffeine** — Fast in-process Java cache with size and time limits. Used in projects 2, 3, 14. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **Cardinality (metrics)** — Number of distinct tag-value combinations of a metric; high cardinality (user ids, raw URLs) explodes storage. Used in projects 26, 29. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **CDN** — Content Delivery Network: servers near users that cache and serve static files and media. Used in projects 14, 15, 21, 22, 40.
+- **Chat memory** — Earlier messages of a conversation that Spring AI stores and re-sends so the model has context. Used in projects 30, 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **`ChatClient` and advisors** — Spring AI's fluent API for calling a chat model; advisors are interceptors that add memory, retrieved documents or logging. Used in projects 30, 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Checkpoint / execution context** — Saved progress (the last line or event position processed) so a restarted job or projection continues where it stopped; Spring Batch keeps it in the step's execution context. Used in projects 18, 35.
+- **Checksum** — A short value computed from content to detect changes or corruption; Flyway stores one per migration. Used in projects 4, 7, 8. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Chunk-oriented step** — Spring Batch step that reads, processes and writes items in fixed-size chunks, each chunk in its own transaction. Used in project 18.
+- **Chunking (RAG)** — Splitting documents into small passages before embedding them, so retrieval returns focused text. Used in projects 18, 30. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **CI (Continuous Integration)** — Building and testing every change automatically on a shared server. Used in projects 1, 4, 20, 26, 30, 31, 32, 36. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+- **Circuit breaker** — Watches failures to a dependency and, past a threshold, stops calling it for a while (open), then lets a few trial calls through (half-open). Used in projects 27, 33, 39. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **CLI** — Command-line interface: a program you run from a terminal. Used in projects 24, 32.
+- **Client credentials flow** — OAuth2 grant where a service gets a token for itself, with no user involved. Used in projects 12, 34. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Client-side load balancing** — The caller picks one instance from the registry for each request instead of going through a central load balancer. Used in project 27. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **`@ClientRegistrationId`** — Marks an HTTP interface (or method) so Spring Security attaches that OAuth2 client's access token to each call. Used in project 12. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **`Clock` (injected)** — Passing a `java.time.Clock` bean instead of calling `now()` directly, so tests can fix or move time. Used in projects 5, 6, 10, 16, 20, 24.
+- **Clock skew** — Different machines' clocks disagree slightly; token and lease checks allow a small tolerance for it. Used in projects 6, 38. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Closed-world assumption** — GraalVM native images must know at build time every class, proxy and resource the program will ever use. Used in project 32. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Cold start** — The delay of starting a new instance from nothing, which hurts most in scale-to-zero setups. Used in project 32. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Collector (OpenTelemetry)** — A separate process that receives telemetry, samples, filters and routes it to one or more back ends. Used in project 29. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Compensating action** — A step that semantically undoes an earlier one (refund a payment, release stock) because a distributed transaction cannot roll back. Used in projects 28, 35. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Competing consumers** — Several workers read from the same queue so each message is handled by exactly one of them. Used in project 17. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Concurrency** — Several things in progress at the same time; needs care when they touch shared data. Used in projects 1, 2, 3, 4, 10, 13, 14, 15, 16, 19, 22, 23, 24, 26, 28, 33, 35, 38, 39, 40. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **`@ConcurrencyLimit`** — Framework 7 annotation that caps how many calls of a method may run at the same time (a bulkhead); needs `@EnableResilientMethods`. Used in projects 10, 22, 24, 33. ([Ch 4](../chapters/04-aop-and-proxies/README.md))
+- **Condition annotations (`@ConditionalOn...`)** — Annotations that register a bean only if a class, property or other bean is (or isn't) present. Used in projects 5, 6, 9, 25. ([Ch 3](../chapters/03-configuration-and-auto-configuration/README.md))
+- **Conditional (atomic) update** — An `UPDATE ... WHERE` that changes a row only if it is still in the expected state, checked atomically by the database. Used in projects 13, 23, 38. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Config Server** — Spring Cloud service that serves configuration from Git (or other stores) to many services. Used in project 27. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **`@ConfigurationProperties`** — Binds a group of properties with a common prefix into a typed object (ideally a record) that can be validated at startup. Used in projects 3, 5, 9, 25. ([Ch 3](../chapters/03-configuration-and-auto-configuration/README.md))
+- **Connect vs read timeout** — How long to wait to establish a connection vs how long to wait for response data once connected. Used in projects 3, 10, 19. ([Ch 6](../chapters/06-rest-clients-and-http-interfaces/README.md))
+- **Connection pool** — A set of open database or HTTP connections reused across requests, because opening one is slow. Used in projects 13, 14, 26, 27, 29, 40. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Consistent lock ordering** — Always locking rows in the same order (e.g. by id) so two transactions cannot deadlock each other. Used in project 23. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Consumer group** — Kafka consumers sharing a group id; each partition goes to one member, so they split the work. Used in projects 16, 19. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Consumer lag** — How far a consumer is behind the newest messages; the key health signal of a Kafka consumer. Used in projects 16, 29, 35. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Container (Docker)** — An isolated process packaged with everything it needs; Testcontainers starts real databases and brokers this way. Used in projects 4, 8, 12, 13, 14, 15, 16, 17, 20, 22, 23, 26, 27, 28, 29, 30, 31, 32, 35, 37, 38. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+- **Content negotiation / `HttpMessageConverter`** — Picking the response format from the `Accept` header; converters turn Java objects into JSON, XML or CSV and back. Used in project 7. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Content sniffing / magic bytes** — Detecting a file's real type from its first bytes instead of trusting the file name or the client's `Content-Type`. Used in project 15.
+- **Contention** — Many transactions or threads competing for the same lock or row, so they queue and slow down. Used in projects 13, 23. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Context caching (tests)** — Spring's test framework reuses a started application context for test classes with the same configuration. Used in project 20. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+- **Context propagation** — Copying per-thread values (tenant, user, trace id) onto the threads or messages that continue the work. Used in projects 26, 27, 29. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Contract-first** — Writing the API description (OpenAPI) before the code and treating it as the agreement with clients. Used in project 7. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Cookie flags (`HttpOnly`, `Secure`, `SameSite`)** — Cookie settings: not readable by JavaScript / sent only over HTTPS / not sent on cross-site requests. Used in projects 11, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **CORS** — Browser rule that lets a page from one origin read responses from another origin only if the server allows it. Used in projects 11, 27, 40. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+- **CQRS** — Command Query Responsibility Segregation: one model handles writes, separate read models serve queries. Used in project 35. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **Cron expression** — Calendar schedule; Spring's form has six fields starting with seconds (`0 0 2 * * *` = 02:00 daily). Used in projects 6, 38. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **`CronExpression`** — Spring class that parses a cron string and computes the next fire time, the same way `@Scheduled` does. Used in projects 6, 38. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **CRUD** — Create, Read, Update, Delete: the four basic data operations. Used in projects 1, 4, 8, 10, 13, 19, 25, 27, 35. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Crypto-shredding** — Deleting personal data in an immutable store by destroying the per-user encryption key, which makes the data unreadable. Used in project 35.
+- **CSRF** — Cross-Site Request Forgery: another site makes the user's browser send a request with their cookies; blocked with a secret token. Used in project 40. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+- **CSV** — Comma-separated values: a plain-text table format, one record per line. Used in projects 6, 7, 8, 18.
+- **Custom constraint annotation** — Your own Bean Validation annotation (e.g. `@Isbn`) backed by a `ConstraintValidator` class. Used in project 7. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+
+### D
+
+- **Data model notation (PK, FK, UK)** — Primary key, foreign key and unique key markers in the entity diagrams. Used in projects 2, 4, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 19, 22, 23, 24, 25, 26, 28, 30, 31, 34, 35, 36, 38, 39. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Data retention** — How long data is kept before a job deletes or archives it. Used in projects 10, 24, 29. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Database per service** — Each service (or module) owns its tables, and others reach that data only through its API or events. Used in projects 27, 28, 31. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Dead-letter topic / queue / exchange (DLT, DLQ, DLX)** — Where messages that keep failing are parked for inspection instead of blocking or being lost. Used in projects 16, 17, 28, 38. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Deadline / timeout budget** — The total time a request may take; every downstream call must fit in what is left of it. Used in projects 10, 27, 28, 33. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Deadlock** — Two transactions each wait for a lock the other holds; the database aborts one of them. Used in projects 13, 18, 23, 37. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Debezium / CDC** — Change Data Capture reads the database's change log and publishes each change; Debezium is the common tool. Used in projects 9, 28. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Decompression bomb** — A tiny file that expands into gigabytes when unpacked, used to exhaust memory or disk. Used in project 15.
+- **Decorator ordering** — The nesting order of retry, circuit breaker, bulkhead and timeout around a call, which changes how they interact. Used in project 33. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **`DefaultErrorHandler` / `DeadLetterPublishingRecoverer`** — spring-kafka's listener error handler (retries with back-off) and the recoverer that sends failures to the DLT. Used in project 16. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **`DelegatingPasswordEncoder`** — Spring Security encoder that stores `{algorithm}hash`, so stored passwords can move to a stronger algorithm over time. Used in project 11. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+- **Dependency injection** — An object receives what it needs (usually through its constructor) instead of creating it itself. Used in projects 2, 5, 6, 9, 20, 29, 31, 32, 36, 40. ([Ch 2](../chapters/02-ioc-and-dependency-injection/README.md))
+- **Deprecation / `Sunset` headers** — HTTP headers telling clients an API version is deprecated and the date it will be switched off. Used in project 21. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Deterministic bucketing** — Hashing a stable id (user id + flag key) into a number 0-99 so the same user always gets the same rollout decision. Used in project 25.
+- **Dirty checking** — Hibernate compares managed entities with their loaded snapshot at flush and writes `UPDATE`s for changes. Used in projects 4, 8. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **`DispatcherServlet`** — Spring MVC's front controller that receives every request and routes it to a handler method. Used in project 1. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Distributed lock** — A lock shared by all instances (in a database or Redis) so only one runs a job at a time. Used in projects 6, 23, 38. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Distributed tracing** — Following one request across services by passing a trace id; each step is recorded as a span. Used in projects 27, 29, 32, 36. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **DNS rebinding** — Attack where a host name first resolves to a public IP and later to an internal one, to sneak past SSRF checks. Used in project 24.
+- **Dockerfile (multi-stage)** — Recipe for building a container image; multi-stage builds compile in one image and copy only the result into a small one. Used in project 32. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Documenter (Spring Modulith)** — Generates module diagrams and documentation from the code structure. Used in project 31.
+- **Double-entry bookkeeping / ledger** — Every money movement is written as equal debit and credit entries, so the books always balance. Used in projects 35, 39.
+- **DSL** — Domain-specific language: an API that reads like configuration, such as Spring Security's lambda DSL. Used in project 11. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+- **DTO / DTO projection** — Data Transfer Object: a simple record shaped for the API; a DTO projection loads only the columns it needs. Used in projects 3, 4, 14, 21, 31, 32. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Dual-write problem** — Writing to the database and publishing to a broker cannot be made atomic; one may succeed and the other fail. Used in project 28. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Due-work query** — A query that selects only rows whose `next_run_at` is in the past, so a scheduler finds work cheaply. Used in project 10.
+- **Durable** — Survives a crash or restart because it is written to disk (and often replicated). Used in projects 15, 16, 17, 24, 28, 31, 34, 38. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **`@DynamicPropertySource`** — Test method that registers properties known only at runtime, such as a container's random port. Used in project 20. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+
+### E
+
+- **`@EmbeddedKafka`** — Starts an in-memory Kafka broker inside the test JVM. Used in project 16. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Embedding** — A list of numbers representing the meaning of text, so similar texts have nearby vectors. Used in project 30. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **`@EnableJpaAuditing` / `@CreatedDate`** — Switches on Spring Data auditing, which fills created/modified timestamp (and user) fields automatically. Used in project 4. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **`@EnableResilientMethods`** — Switch that activates Framework 7's `@Retryable` and `@ConcurrencyLimit`; without it they silently do nothing. Used in projects 3, 10, 33. ([Ch 4](../chapters/04-aop-and-proxies/README.md))
+- **Envelope encryption** — Data is encrypted with a data key, and that key is itself encrypted with a master key held in a vault or KMS. Used in projects 24, 26. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Environment (Spring)** — Spring's view of all property sources and active profiles. Used in project 5. ([Ch 3](../chapters/03-configuration-and-auto-configuration/README.md))
+- **`ErrorResponseException`** — Spring exception that already carries a `ProblemDetail`, so it maps straight to an RFC 9457 response. Used in project 7. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **ETag / `If-None-Match` / 304** — A version fingerprint of a response; a client sends it back and gets `304 Not Modified` if nothing changed. Used in projects 1, 7, 14, 25. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Eureka** — Netflix service registry supported by Spring Cloud. Used in project 27. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Evaluation set (AI)** — Fixed questions with known good answers used to measure whether changes improve or break an AI feature. Used in projects 30, 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Event loop** — The few non-blocking threads of WebFlux/Netty; blocking one stalls every connection it serves. Used in project 19. ([Ch 13](../chapters/13-reactive-and-webflux/README.md))
+- **Event publication registry (Spring Modulith)** — A table where Spring Modulith records each event until every listener has completed, so events survive crashes. Used in projects 28, 31.
+- **Event sourcing** — Storing every change as an immutable event and rebuilding current state by replaying them. Used in projects 19, 35.
+- **Eventual consistency / read-your-writes** — Copies agree after a short delay; read-your-writes means a user at least sees their own changes immediately. Used in projects 27, 28, 31, 35. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Exception translation** — Spring converts database-specific `SQLException`s into its own `DataAccessException` types such as `DuplicateKeyException`. Used in projects 2, 8. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Exchange / queue / binding / routing key (RabbitMQ)** — Producers send to an exchange, which routes each message to queues whose binding matches its routing key. Used in project 17. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Exemplar** — A sample trace id attached to a metric data point, letting you jump from a latency spike to one example trace. Used in project 29. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Expand/contract migration** — Change a schema in safe steps: add the new form, migrate data and code, then remove the old form in a later release. Used in projects 8, 37. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Exponential back-off with jitter** — Wait longer after each failure (1 s, 2 s, 4 s...) plus a random extra so clients don't retry all at once. Used in projects 3, 10, 14, 16, 24, 28, 33, 38, 39. ([Ch 6](../chapters/06-rest-clients-and-http-interfaces/README.md))
+- **`@Externalized` (event externalization)** — Spring Modulith marker that also publishes an internal event to a broker such as Kafka. Used in project 31.
+
+### F
+
+- **Fail open vs fail closed** — When a safety component (rate limiter, auth check) breaks: let requests through anyway, or reject them. Used in project 22.
+- **Fan-out** — Sending one request to many downstream services in parallel and combining the answers. Used in projects 3, 14, 24, 25, 29, 33. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Feature flag** — A runtime switch that turns behaviour on or off (for some users) without redeploying. Used in projects 5, 25, 33.
+- **Fencing token** — An increasing number handed out with each lock or lease; storage rejects writes carrying an older number, stopping zombie workers. Used in project 38.
+- **FIFO** — First in, first out: items are processed in arrival order. Used in project 38.
+- **Filter vs interceptor** — A servlet filter wraps every request before Spring MVC; an interceptor runs inside MVC and knows the chosen handler. Used in projects 7, 11, 12, 17, 22, 24, 30, 39. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Fingerprint (request / file)** — A hash of the content that identifies it, used to detect duplicates. Used in projects 8, 39.
+- **Fixed vs sliding window** — Rate-limit counting per fixed clock interval (allows bursts at the edges) vs over a moving interval (smoother). Used in projects 22, 27. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **`fixedRate` vs `fixedDelay`** — Run every N ms from start to start, or wait N ms after the previous run finished. Used in projects 6, 10. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Flag debt** — Old feature flags left in the code after rollout; they add branches nobody tests and should be removed. Used in project 25.
+- **Flaky test** — A test that sometimes passes and sometimes fails without code changes, usually because of timing or shared state. Used in projects 20, 33. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+- **Flapping / hysteresis** — Flapping is a status switching back and forth rapidly; hysteresis requires several results in a row before changing state. Used in project 10.
+- **`FlatFileItemReader` / `JdbcBatchItemWriter`** — Spring Batch reader that streams lines from a file and writer that inserts items with JDBC batches. Used in project 18.
+- **Flyway** — Schema migration tool that applies numbered SQL scripts (`V1__init.sql`) in order and records them with checksums. Used in projects 4, 7, 8, 10, 11, 26, 31, 34, 37. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Foreign key** — A column that must match the primary key of a row in another table. Used in project 8. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+
+### G
+
+- **GA (general availability)** — The first production-ready release of a version. Used in projects 3, 31. ([Ch 1](../chapters/01-spring-ecosystem-and-first-app/README.md))
+- **Garbage collection (GC)** — The JVM freeing memory of unused objects automatically; pauses can add latency. Used in projects 5, 38. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **GraalVM native image** — An application compiled ahead of time into a standalone executable that starts in milliseconds and uses less memory. Used in projects 32, 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Graceful shutdown** — On a stop signal, stop taking new requests, finish in-flight ones, then exit. Used in project 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Grafana / Loki / Tempo / Jaeger** — Open-source observability back ends: dashboards / log storage / trace storage and viewing. Used in projects 29, 35, 38. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **GreenMail / SMTP** — SMTP is the protocol for sending e-mail; GreenMail is a fake mail server for tests. Used in project 6. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Guardrails (AI)** — Checks around an AI model's input and output (allowed tools, limits, content filters) that keep it within safe bounds. Used in project 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+
+### H
+
+- **H2** — Small in-memory Java SQL database, fine for quick tests but different from PostgreSQL in locking and SQL features. Used in projects 2, 4, 6, 8, 13, 20. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Half-open range** — A time range that includes its start but excludes its end, so adjacent ranges never overlap or leave gaps. Used in project 6.
+- **HATEOAS** — REST style where responses include links to the next possible actions. Used in project 7. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Head vs tail sampling** — Deciding whether to keep a trace at its start (cheap, random) or after it finishes (can keep all slow or failed traces). Used in project 29. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Heartbeat** — A periodic "I'm alive" signal; missing heartbeats mark a worker or lease as dead. Used in projects 19, 27, 38.
+- **Hedged request** — Sending a second copy of a slow request to another replica and taking whichever answers first. Used in project 33. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Hibernate** — The JPA implementation Boot uses: maps entities to tables and generates SQL. Used in projects 1, 4, 7, 8, 11, 13, 23, 26, 28, 37. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Hit rate (cache)** — Share of lookups answered from the cache; the main measure of whether a cache helps. Used in projects 14, 30, 33. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **HMAC signature** — A keyed hash of a message; only holders of the shared secret can produce or verify it, so it proves integrity and origin. Used in project 24. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Hold with expiry** — A temporary reservation (e.g. of a seat) that is released automatically if not confirmed in time. Used in project 23.
+- **`__Host-` cookie prefix** — A cookie name prefix that browsers accept only for a `Secure`, host-only cookie with `Path=/`, so a subdomain cannot overwrite it. Used in project 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Hot vs cold publisher** — A cold publisher starts again for each subscriber; a hot one emits regardless, and late subscribers miss earlier items. Used in project 19. ([Ch 13](../chapters/13-reactive-and-webflux/README.md))
+- **HTTP** — The web's request/response protocol: a method and path go in, a status code, headers and body come back. Used in projects 1, 2, 3, 7, 10, 12, 15, 19, 20, 21, 24, 25, 27, 29, 32, 33, 34, 36, 39, 40. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **HTTP 401 vs 403** — 401 = not authenticated (missing or invalid credentials); 403 = authenticated but not allowed. Used in projects 11, 12, 26, 30, 40. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+- **HTTP methods (GET, POST, PUT, PATCH, DELETE)** — Read, create, replace, partly update and delete a resource. Used in projects 1, 7, 15. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **HTTP service client group (`@ImportHttpServices`)** — Framework 7 / Boot 4 way to register many HTTP interfaces at once and configure each group (base URL, timeouts) by properties. Used in projects 3, 21. ([Ch 6](../chapters/06-rest-clients-and-http-interfaces/README.md))
+- **HTTP service interface (`@HttpExchange`)** — A Java interface whose annotated methods Spring implements as HTTP calls. Used in projects 3, 10, 12, 15, 21, 24, 25, 27, 33, 40. ([Ch 6](../chapters/06-rest-clients-and-http-interfaces/README.md))
+- **HTTP status codes** — Three-digit result of an HTTP call: 2xx success, 3xx redirect, 4xx client error, 5xx server error. Used in projects 1, 2, 3, 4, 11, 15, 22, 23, 26, 39. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Human-in-the-loop approval** — A person must confirm a risky action (refund, delete) before an AI agent's tool call is executed. Used in project 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+
+### I
+
+- **ID token vs access token** — The ID token tells the client who logged in (OIDC); the access token is what APIs accept. Used in projects 12, 34. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **IDE** — Integrated Development Environment such as IntelliJ IDEA or VS Code. Used in projects 5, 9, 36. ([Ch 1](../chapters/01-spring-ecosystem-and-first-app/README.md))
+- **Idempotency** — Doing an operation twice has the same effect as doing it once; makes retries safe. Used in projects 1, 3, 6, 8, 13, 15, 16, 17, 18, 24, 27, 28, 31, 35, 36, 38, 39. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Idempotency key** — A unique id the client sends with a request; the server stores it and returns the original result for repeats. Used in projects 13, 16, 27, 39. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Idempotent consumer / inbox** — A consumer that records processed message ids so a redelivered message has no second effect. Used in projects 16, 28, 35, 39. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **IETF / RFC** — The Internet Engineering Task Force publishes internet standards as numbered RFC documents. Used in projects 1, 7, 11, 12, 21, 22, 34, 39, 40. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Index (database)** — A sorted lookup structure that lets the database find rows without scanning the whole table. Used in projects 1, 2, 4, 6, 7, 8, 11, 18, 23, 24, 26, 30, 32, 34, 38. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **`IN_PROGRESS` record** — Marker row stored before work starts, so a concurrent duplicate request sees the work is already under way. Used in project 39.
+- **Integration test** — A test of several real parts together, often the whole app plus a real database. Used in projects 5, 20, 25, 28, 31. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+- **Invalidation after commit** — Removing cached entries only after the database transaction commits, so no reader caches the old value again. Used in projects 14, 25. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **IoC container** — The Spring object that creates beans and injects their dependencies (Inversion of Control). Used in projects 5, 6, 9, 20, 22, 31, 32. ([Ch 2](../chapters/02-ioc-and-dependency-injection/README.md))
+- **ISBN** — International Standard Book Number; its last digit is a checksum, which makes it a good custom-validation example. Used in project 7.
+- **Isolation level** — How much concurrent transactions see of each other's changes (READ COMMITTED, REPEATABLE READ, SERIALIZABLE). Used in project 13. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Issuer discovery and JWKS** — A resource server reads the issuer's metadata to find its public-key set (JWKS) for verifying token signatures. Used in projects 11, 12, 34. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+
+### J
+
+- **Jackson 3** — The JSON library in Boot 4 (packages `tools.jackson.*`). Used in projects 1, 3, 35. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Jakarta EE** — The enterprise Java standards (Servlet, JPA, Bean Validation) Spring builds on; formerly Java EE. Used in project 4. ([Ch 1](../chapters/01-spring-ecosystem-and-first-app/README.md))
+- **JDBC / JDBC batching** — Java's low-level SQL API; batching sends many inserts or updates in one round trip. Used in projects 2, 4, 6, 8, 9, 13, 14, 18, 19, 20, 23, 26, 28, 31, 34, 35, 38, 39. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **`JdbcClient`** — Spring's fluent API for plain SQL with named parameters and automatic mapping to records. Used in projects 2, 4, 6, 8, 10, 13, 16, 18, 35, 38, 39. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **JDK AOT cache / CDS** — JDK files of pre-loaded and linked classes from a training run that make a normal JVM start much faster. Used in projects 32, 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **JDK `HttpClient`** — The HTTP client built into Java 11+, usable underneath `RestClient`. Used in projects 10, 24. ([Ch 6](../chapters/06-rest-clients-and-http-interfaces/README.md))
+- **JFR (Java Flight Recorder)** — Low-overhead profiler built into the JVM. Used in projects 18, 29, 32. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **JIT vs AOT compilation** — JIT compiles hot code to machine code while the app runs; AOT does the work at build time. Used in projects 32, 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Job / step / job instance / job execution (Spring Batch)** — A job is made of steps; a job instance is one logical run (e.g. one file), and each attempt to run it is a job execution stored in the `JobRepository`. Used in project 18.
+- **`JobRepository` / `JobOperator`** — Spring Batch's store of job and step executions, and the API to start, stop and restart jobs. Used in project 18.
+- **JPA / Spring Data JPA** — JPA is the Java standard for mapping objects to tables; Spring Data JPA generates repositories on top of it. Used in projects 1, 2, 3, 4, 7, 8, 11, 13, 14, 16, 20, 22, 23, 25, 26, 28, 31, 35, 37, 39. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **JPQL** — JPA's query language over entities and fields rather than tables and columns. Used in projects 4, 7. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **JSON** — JavaScript Object Notation: the text format most REST APIs exchange. Used in projects 1, 2, 3, 4, 7, 8, 11, 14, 16, 20, 21, 24, 26, 29, 32, 34, 36, 40. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **JWK set and `kid`** — The published list of an issuer's public keys; the `kid` header in a token says which key signed it. Used in projects 11, 12, 34. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **JWT (claims, signature, `exp`)** — Signed JSON token of `header.payload.signature`; the claims (user, scopes, expiry `exp`) are readable by anyone but cannot be changed. Used in projects 11, 12, 26, 27, 30, 34, 36, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **JWT vs opaque token** — A JWT is checked locally from its signature; an opaque token is a random reference the API must look up (introspect). Used in projects 11, 34, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+
+### K
+
+- **Kafka** — Distributed, replicated log for event streaming; records are kept and can be re-read. Used in projects 2, 16, 17, 19, 20, 21, 24, 26, 28, 29, 31, 35, 37, 39. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **`@KafkaListener` / `KafkaTemplate`** — Spring for Apache Kafka's consumer annotation and producer API. Used in project 16. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Key / token rotation** — Replacing signing or encryption keys regularly while still accepting the previous one for a while. Used in projects 11, 12, 22, 24, 34, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Keycloak** — Open-source identity provider and OAuth2/OIDC authorization server. Used in projects 12, 34, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **kind / minikube** — Tools that run a small Kubernetes cluster on a laptop. Used in project 37.
+- **Kubernetes** — Platform that runs, restarts, scales and connects containers across machines. Used in projects 6, 10, 17, 27, 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+
+### L
+
+- **L1 / L2 cache** — Two cache levels: a fast local in-process cache (L1, e.g. Caffeine) in front of a shared cache (L2, e.g. Redis). Used in project 14. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **Latency / p95 / p99** — How long a request takes; p99 is the time 99% of requests beat, which exposes the slow tail. Used in projects 1, 2, 3, 7, 9, 10, 13, 14, 15, 16, 20, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 38, 39, 40. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Lazy vs eager loading** — Load an association only when first accessed, or always together with its owner. Used in projects 4, 14. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Leader election** — Instances agree that exactly one of them (the leader) does a given job. Used in project 38. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Lease** — A lock with an expiry time that its holder must renew; if the holder dies the lease simply runs out. Used in projects 14, 38.
+- **Liberica NIK** — A GraalVM-based native-image kit distribution. Used in project 32. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Liveness / readiness / startup probe** — Kubernetes checks: should I restart it? / may it take traffic? / is it still starting? Used in projects 10, 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **LLM** — Large language model: the text-generating AI behind chat APIs. Used in projects 30, 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Load testing (k6, Gatling)** — Firing many concurrent requests to measure throughput, latency and errors under load. Used in projects 14, 22, 24, 26, 27, 29, 33, 37. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+- **Local evaluation (feature flags)** — The client library keeps a copy of the rules and decides flags in-process, with no network call per check. Used in project 25.
+- **`lockAtMostFor` / `lockAtLeastFor`** — ShedLock settings: release the lock after this long even if the holder died / keep it at least this long to stop a second run. Used in project 6. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Lost update** — Two read-modify-write cycles run concurrently and one silently overwrites the other. Used in projects 4, 13. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+
+### M
+
+- **Manual acknowledgement** — The consumer tells the broker a message is done only after processing succeeds, so a crash leads to redelivery. Used in project 17. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Many-to-many with join table** — Two entities linked by a third table holding pairs of ids (book_author). Used in project 7. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **MCP (Model Context Protocol) client / server** — Standard protocol for exposing tools and data to AI applications across processes; a server offers tools, a client uses them. Used in projects 30, 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Metadata filter expression** — A condition on stored document metadata (department, date) applied during vector search. Used in project 30. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Method security (`@PreAuthorize`)** — Authorization rules on service methods, checked by a proxy before the method runs. Used in project 11. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+- **Metrics / traces / logs** — The three kinds of observability data: numbers over time / the path of one request / individual event records. Used in projects 3, 6, 10, 14, 16, 19, 21, 22, 25, 29, 30, 33, 36. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Micrometer** — Spring's vendor-neutral metrics (and observation) library; exports to Prometheus, OTLP and others. Used in projects 10, 14, 16, 18, 29, 36. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Micrometer Observation API** — Instrument an operation once and get a timer metric, a trace span and log correlation from it. Used in project 29. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Microservices** — An architecture of small, independently deployed services, each owning one business capability and its data. Used in projects 27, 28, 29, 31, 33, 39, 40. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **MinIO / object storage** — Storage for whole files addressed by key over HTTP (S3 API); MinIO is an S3-compatible server you can run locally. Used in projects 15, 17, 18.
+- **`MockitoBean`** — Replaces a bean in the test context with a Mockito mock (successor of `@MockBean`). Used in projects 1, 20. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+- **`MockMvcTester`** — Framework 6.2 test API that calls Spring MVC in memory and checks results with AssertJ. Used in projects 1, 20, 21. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+- **`MockRestServiceServer`** — Fake server for `RestClient` tests that checks the requests sent and returns canned responses. Used in projects 3, 12, 21, 27, 40. ([Ch 6](../chapters/06-rest-clients-and-http-interfaces/README.md))
+- **Modular monolith** — One deployable application split into modules with strict boundaries; Spring Modulith verifies them. Used in projects 27, 28, 31.
+- **Mono / Flux** — Reactor's publishers of 0..1 and 0..N items; nothing happens until something subscribes. Used in projects 19, 30. ([Ch 13](../chapters/13-reactive-and-webflux/README.md))
+- **Multi-factor authentication (MFA)** — Login that needs two proofs, e.g. a password plus a one-time code or a passkey. Used in projects 11, 34, 40. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+- **Multi-issuer resource server** — An API that accepts tokens from several identity providers, choosing the right keys per issuer. Used in projects 12, 26. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Multi-tenancy / tenant** — One system serving many customer organisations (tenants) whose data must stay isolated. Used in projects 12, 21, 24, 26, 29, 33, 34, 37. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Multipart upload** — HTTP request format (`multipart/form-data`) that carries files and form fields together. Used in project 15. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+
+### N
+
+- **N+1 problem** — One query loads N rows, then each row triggers another query for its association: N+1 round trips. Used in projects 4, 8, 37. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **`@NamedInterface`** — Spring Modulith annotation that exposes a sub-package of a module as part of its public API. Used in project 31.
+- **`NimbusJwtEncoder`** — Spring Security's JWT signer, built on the Nimbus JOSE library. Used in project 11. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Noisy neighbour** — One tenant using so many resources that others sharing the system slow down. Used in project 26.
+- **Non-functional requirements** — How well the system must work (latency, throughput, availability, security) rather than what it does. Used in all 40 projects.
+
+### O
+
+- **OAuth 2.0 / OAuth 2.1** — Standard for delegated authorization with access tokens; 2.1 folds in best practices such as mandatory PKCE. Used in projects 11, 12, 22, 24, 25, 26, 27, 30, 34, 36, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **`OAuth2AuthorizationService`** — Spring Authorization Server store of issued authorizations and tokens. Used in project 34. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **`OAuth2AuthorizedClient`** — Spring Security object holding the access and refresh tokens a client obtained for a user. Used in projects 12, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **`OAuth2ClientHttpRequestInterceptor`** — `RestClient` interceptor that obtains (and refreshes) an OAuth2 access token and adds it to each request. Used in project 12. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Observability** — Being able to understand a running system from its outputs: metrics, traces and logs. Used in projects 6, 10, 14, 16, 20, 21, 26, 27, 29, 31, 32, 33, 36, 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **OIDC (OpenID Connect)** — Identity layer on top of OAuth2 that adds the ID token and login, answering "who is the user?". Used in projects 12, 26, 34. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Open redirect** — A link on your site that forwards to any URL given as input, which attackers abuse for phishing. Used in project 2.
+- **Open Session in View (OSIV)** — Keeps the persistence context open for the whole web request; hides N+1 queries, so turn it off for APIs. Used in project 4. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **OpenAPI** — Standard, machine-readable description of a REST API; springdoc generates it from the code. Used in projects 1, 7, 21. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **OpenTelemetry / OTLP** — Vendor-neutral standard for traces, metrics and logs; OTLP is its export protocol. Used in projects 27, 29. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Optimistic concurrency (expected version)** — An append succeeds only if the stream is still at the version the writer read; otherwise it retries. Used in project 35. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **Optimistic locking (`@Version`)** — Each update checks a version column; if someone changed the row since it was read, the update fails instead of overwriting. Used in projects 1, 4, 13, 23, 28, 35. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Orchestration vs choreography** — A saga coordinated by one orchestrator telling services what to do, vs services reacting to each other's events. Used in projects 3, 13, 26, 28. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **ORM** — Object-Relational Mapping: working with objects that a library (Hibernate) maps to tables. Used in projects 2, 4, 26. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Outbox (transactional)** — Write the event into an outbox table in the same transaction as the data; a relay publishes it afterwards. Used in projects 16, 17, 24, 28, 31, 35, 39. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **OWASP** — Open Worldwide Application Security Project, known for its Top 10 list of web risks. Used in projects 15, 24. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+
+### P
+
+- **Pagination** — Returning a list in pages (`page`, `size`) or after a cursor, so no request loads everything. Used in projects 1, 2, 4, 7, 10, 11, 12, 14, 19, 25, 34, 35, 40. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Partial result / stale fallback** — When some sources fail, return what you have, or a recently cached answer, and say so. Used in projects 14, 33. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Partial unique index** — A unique index that applies only to rows matching a condition (e.g. only active holds). Used in project 23. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Path traversal** — Attack using `../` in a file name to read or write files outside the intended directory. Used in project 15.
+- **Percentage rollout** — Turning a feature on for a growing share of users, chosen deterministically. Used in project 25.
+- **Persistence context** — Hibernate's first-level cache and unit of work: one managed object per row, changes tracked until flush. Used in project 4. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Pessimistic locking (`SELECT ... FOR UPDATE`)** — Locking rows when reading them so others must wait; `@Lock(PESSIMISTIC_WRITE)` in Spring Data JPA. Used in projects 4, 10, 13, 23, 24, 28, 38. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **pgvector** — PostgreSQL extension that stores vectors and runs similarity search. Used in project 30. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Playwright** — Browser-automation tool for end-to-end tests that drive a real browser. Used in project 40.
+- **PodDisruptionBudget** — Kubernetes rule that keeps a minimum number of pods running during voluntary disruptions such as node upgrades. Used in project 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Poison message** — A message that fails every time (bad format, bug); it must be moved aside so it does not block the queue. Used in project 16. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **PostgreSQL** — Open-source relational database used by most projects here. Used in projects 2, 4, 6, 7, 8, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 25, 26, 30, 31, 34, 35, 36, 37, 38, 39. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Prefetch** — How many unacknowledged messages a RabbitMQ consumer may hold at once; limits per-worker load. Used in project 17. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Presigned URL** — A time-limited URL signed by the server that lets a client upload or download one object directly from storage. Used in project 15.
+- **preStop hook** — Kubernetes command run before a container is stopped; a short sleep lets traffic drain first. Used in project 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Price snapshot** — Copying the price into the order line at checkout so later catalogue changes do not alter past orders. Used in projects 13, 27.
+- **Problem Details (RFC 9457) / `ProblemDetail`** — Standard JSON error body with `type`, `title`, `status` and `detail`; Spring's `ProblemDetail` produces it. Used in projects 1, 3, 7, 15, 20, 21, 22, 30, 39. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Profile (Spring)** — A named set of beans and property files activated per environment (`dev`, `prod`). Used in projects 3, 5, 11, 17, 20, 27, 32, 34, 40. ([Ch 3](../chapters/03-configuration-and-auto-configuration/README.md))
+- **Profile-guided optimisation (PGO)** — Compiling a native image with data from a training run so hot paths are optimised. Used in project 32. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Projection / read model** — A query-optimised view of data, built from events or a subset of columns. Used in projects 4, 31, 35. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **Prometheus** — Monitoring system that scrapes metrics from `/actuator/prometheus` and stores them as time series. Used in projects 10, 29. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Prompt / system prompt** — The text sent to an AI model; the system prompt holds fixed instructions that come before the user's message. Used in projects 30, 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Prompt injection** — Instructions hidden in user input or retrieved documents that try to make the model ignore its rules. Used in projects 30, 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Propagation (transactions)** — What a transactional method does when a transaction already exists: join it (`REQUIRED`) or start its own (`REQUIRES_NEW`). Used in projects 13, 26. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Property source and precedence** — Each place a setting can come from (file, env var, argument); precedence decides which one wins. Used in projects 5, 30. ([Ch 3](../chapters/03-configuration-and-auto-configuration/README.md))
+- **Proxy (AOP, JDK vs CGLIB)** — Stand-in object Spring puts in front of a bean to add transactions, caching or security; JDK proxies implement interfaces, CGLIB proxies subclass. Used in projects 3, 8, 9, 10, 12, 13, 14, 19, 22, 24, 25, 32, 33, 38. ([Ch 4](../chapters/04-aop-and-proxies/README.md))
+- **PSP (payment service provider)** — The external company (Stripe, Adyen...) that actually moves card money and calls you back with webhooks. Used in project 39.
+- **Public vs confidential client** — A public client (SPA, mobile app) cannot keep a secret; a confidential client (server) can. Used in projects 12, 34. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Publisher confirms** — RabbitMQ acknowledgements to the producer that a message was safely stored. Used in project 17. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+
+### Q
+
+- **Quorum queue** — Replicated RabbitMQ queue type that survives the loss of a node. Used in project 17. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Quotas / fair scheduling** — Limits per team or tenant so one heavy user cannot take all workers. Used in projects 15, 17, 22, 24, 38.
+
+### R
+
+- **R2DBC** — Reactive, non-blocking API for SQL databases. Used in project 19. ([Ch 13](../chapters/13-reactive-and-webflux/README.md))
+- **`@RabbitListener` / `RabbitTemplate`** — Spring AMQP's consumer annotation and producer API for RabbitMQ. Used in project 17. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **RabbitMQ** — Message broker with exchanges, queues and per-message acknowledgements. Used in projects 15, 16, 17, 20. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **RAG (retrieval-augmented generation)** — Find relevant documents first and put them in the prompt so the model answers from your data. Used in project 30. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Rate limit / rate-limit key** — A cap on requests per client per time window; the key says who is counted (API key, user, IP). Used in projects 3, 11, 16, 22, 26, 27, 30, 33, 39. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Reachability metadata / runtime hints** — Build-time declarations of reflection, proxies and resources a native image must include. Used in project 32. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **React SPA** — A single-page application built with React that runs in the browser and calls APIs. Used in projects 11, 12, 19, 25, 29, 30, 34, 40.
+- **Reactive / non-blocking** — Code that never holds a thread while waiting; results are pushed through a pipeline when ready. Used in projects 3, 16, 19, 25, 29, 30. ([Ch 13](../chapters/13-reactive-and-webflux/README.md))
+- **Reactor Netty** — Non-blocking network server and client under WebFlux. Used in project 19. ([Ch 13](../chapters/13-reactive-and-webflux/README.md))
+- **Reaper** — Background job that finds work whose lease expired (a crashed worker) and makes it available again. Used in project 38.
+- **Rebalance (Kafka)** — Reassigning partitions among the consumers of a group when one joins or leaves. Used in project 16. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Reconciliation** — Comparing your records with another system's (stock, payments) and fixing differences. Used in projects 13, 35, 39.
+- **Record key and ordering (Kafka)** — Records with the same key go to the same partition, which is the only place Kafka keeps order. Used in projects 16, 28, 29, 39. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Redirect (301/302/307/308)** — HTTP responses telling the client to go to another URL; 301/308 permanent, 302/307 temporary. Used in projects 2, 12, 24, 34, 39. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Redis** — In-memory key/value store used for shared caches, sessions, rate limits and locks. Used in projects 2, 3, 12, 13, 14, 19, 20, 22, 40. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **`RedisCacheManager` / Lettuce** — Spring's Redis-backed `CacheManager`; Lettuce is the Redis client library Boot uses. Used in projects 14, 22. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **Refresh token / rotation / reuse detection** — Long-lived token used only to get new access tokens; rotation issues a new one each time and a reused old one signals theft. Used in projects 11, 12, 34, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **`RegisteredClientRepository`** — Spring Authorization Server store of the client applications allowed to request tokens. Used in project 34. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Relaxed binding** — Boot accepts several spellings of a property (`shop.page-size`, `SHOP_PAGESIZE`). Used in project 5. ([Ch 3](../chapters/03-configuration-and-auto-configuration/README.md))
+- **Release train** — A set of project versions released and tested together, such as Spring Cloud 2025.1. Used in project 27. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Replay protection** — Rejecting a captured message sent again, using a timestamp window and remembered ids. Used in project 24. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Resilience4j** — Library for circuit breakers, retries, rate limiters, bulkheads and time limiters. Used in projects 27, 33, 39. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Resource server** — An API that accepts access tokens and checks them on every request. Used in projects 11, 12, 26, 30, 34, 36, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **`ResponseEntity`** — Controller return type that sets status code, headers and body together. Used in projects 1, 7. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **`ResponseEntityExceptionHandler`** — Base class for a `@ControllerAdvice` that turns Spring MVC's own exceptions into Problem Details. Used in project 7. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **REST / REST resource** — API style built on resources named by URLs and acted on with standard HTTP methods and status codes. Used in projects 1, 2, 3, 4, 7, 10, 12, 15, 18, 21, 22, 24, 25, 27, 33, 35, 37, 39, 40. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **`RestClient`** — Spring's fluent, blocking HTTP client (Framework 6.1+). Used in projects 3, 10, 12, 13, 16, 21, 24, 25, 27, 33, 39. ([Ch 6](../chapters/06-rest-clients-and-http-interfaces/README.md))
+- **`@RestControllerAdvice`** — A bean with `@ExceptionHandler` methods that turns exceptions from all controllers into HTTP responses. Used in project 1. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **`RestTestClient`** — Framework 7 fluent test client that calls MockMvc or a running server. Used in projects 1, 2, 20, 21. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+- **Retry amplification** — Retries at several layers multiply: 3 retries × 3 layers can turn one request into 27 calls on a struggling service. Used in projects 27, 33. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **`Retry-After`** — Response header telling the client how many seconds to wait before trying again (with 429 or 503). Used in projects 3, 22, 39. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **`@Retryable` (Framework 7)** — Framework 7 annotation that calls a method again after an exception, with a delay, multiplier and jitter between attempts. Used in projects 3, 16, 24, 33, 39. ([Ch 4](../chapters/04-aop-and-proxies/README.md))
+- **`@RetryableTopic`** — spring-kafka annotation for non-blocking retries through delayed retry topics, ending in a dead-letter topic. Used in project 16. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Rollback rules** — Spring rolls back on unchecked exceptions and commits on checked ones unless told otherwise. Used in projects 4, 8, 13, 14, 18, 20, 23, 31, 35. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Rolling update** — Replacing instances a few at a time so the service stays up during a deployment. Used in project 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Row-level security (RLS)** — PostgreSQL feature that filters rows per session (e.g. by tenant id) inside the database itself. Used in project 26.
+- **RP-initiated logout** — The client app (relying party) asks the identity provider to end the user's login session too. Used in projects 12, 34. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **RS256 / JWKS** — RS256 signs tokens with an RSA private key; anyone can verify with the public key published in the JWKS. Used in project 11. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+
+### S
+
+- **Safe default** — The value used when configuration or a remote service is missing; it must be the harmless choice. Used in project 25.
+- **Saga** — A business process spread over services as a series of local transactions, with compensations when a step fails. Used in projects 13, 27, 28, 29, 35. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Saga timeout** — A deadline after which a waiting saga step is treated as failed and compensated. Used in project 28. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Scale-to-zero** — Running no instances when there is no traffic and starting one on the first request. Used in project 32. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **`@Scheduled` / `@EnableScheduling`** — Runs a bean method on a timer (`fixedRate`, `fixedDelay` or a cron expression) once scheduling is switched on. Used in projects 2, 6, 10, 13, 23, 26, 28, 38. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **`ScopedValue` vs `ThreadLocal`** — Ways to make a value available to code on the current thread; a `ScopedValue` (Java 25) is immutable and ends with its scope. Used in project 26. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Scopes and `SCOPE_` authorities** — OAuth2 permissions in a token (`notes.read`); Spring maps them to authorities named `SCOPE_notes.read`. Used in projects 12, 34, 36. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Security filter chain** — The ordered servlet filters through which Spring Security authenticates and authorizes every request. Used in projects 11, 12, 22, 26, 34, 40. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+- **Self-invocation** — A bean calling its own method through `this`, which skips the proxy and its transaction, cache or retry. Used in projects 3, 9, 13, 14, 33. ([Ch 4](../chapters/04-aop-and-proxies/README.md))
+- **Semantic lock** — A status flag (e.g. `PENDING`) marking data as in use by an unfinished saga. Used in project 28. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Semantic versioning / version parser** — Versions written MAJOR.MINOR.PATCH, where a major bump signals breaking changes. Used in project 21. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Semaphore** — A counter of permits limiting how many threads may do something at once. Used in projects 10, 24, 38. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Server-Sent Events (SSE)** — One-way stream of events from server to browser over a long-lived HTTP response. Used in projects 16, 17, 19, 23, 25, 30, 36, 38. ([Ch 13](../chapters/13-reactive-and-webflux/README.md))
+- **Service discovery** — How services find the current addresses of each other (Eureka, Consul, Kubernetes DNS). Used in projects 12, 27, 34. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **`@ServiceConnection`** — Boot reads connection details straight from a Testcontainers container, no properties needed. Used in projects 13, 17, 20. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+- **Session (HTTP) / Spring Session** — Server-side state for one browser, found by a cookie; Spring Session stores it in Redis so all instances share it. Used in projects 4, 11, 12, 14, 26, 34, 40. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+- **`SET LOCAL`** — PostgreSQL command that sets a session variable (e.g. the tenant id) only until the current transaction ends. Used in project 26.
+- **SHA-256** — Cryptographic hash function; fine for API keys and fingerprints, too fast on its own for passwords. Used in projects 12, 15, 22, 24. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+- **Silo / bridge / pool models** — Multi-tenant isolation levels: separate database per tenant / separate schema / shared tables with a tenant column. Used in project 26.
+- **Sinks / `.share()`** — Reactor tools to push values into a stream from ordinary code and to share one stream among many subscribers. Used in project 19. ([Ch 13](../chapters/13-reactive-and-webflux/README.md))
+- **Skip / retry policy (Spring Batch)** — Rules for which item errors are retried and which bad items are skipped and logged. Used in project 18.
+- **`SKIP LOCKED`** — SQL option that skips rows locked by others, so many workers can claim different rows without waiting. Used in projects 10, 23, 24, 28, 38. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **SLO** — Service Level Objective: a target such as "99.9% of requests under 300 ms over 30 days". Used in projects 29, 33, 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Snapshot** — A saved copy of state at one moment (a price at checkout, an aggregate after N events, an API contract) used as a reference or to avoid recomputing. Used in projects 4, 7, 13, 19, 20, 21, 25, 27, 32, 35. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **Span and trace context (`traceparent`)** — A span is one timed step of a request; the trace context (W3C `traceparent` header) carries the trace id between services. Used in projects 13, 24, 27, 29. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **`Specification` (Spring Data JPA)** — Composable query criteria objects for building dynamic `WHERE` clauses. Used in project 7. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **SpEL** — Spring Expression Language: small expressions such as `#id` or `#result == null` inside annotations. Used in project 9. ([Ch 3](../chapters/03-configuration-and-auto-configuration/README.md))
+- **Spring AI** — Spring project for calling AI models, embeddings, vector stores, tools and MCP. Used in projects 18, 21, 30, 34, 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Spring AOT processing** — Build-time step that turns configuration into generated code and hints, needed for native images. Used in project 32. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Spring Authorization Server** — Spring's own OAuth2/OIDC authorization server, now part of Spring Security. Used in projects 12, 34. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Spring Batch** — Framework for large, restartable batch jobs that read, process and write data in chunks. Used in projects 6, 18.
+- **Spring Boot** — Spring with starters, managed versions, auto-configuration, an embedded server and Actuator. Used in projects 1, 5, 9, 10, 12, 14, 17, 20, 25, 29, 31, 32, 37. ([Ch 1](../chapters/01-spring-ecosystem-and-first-app/README.md))
+- **Spring Cloud Gateway** — Spring's API gateway: routes with predicates and filters, in a WebMVC or WebFlux flavour. Used in projects 21, 22, 27, 40. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Spring Modulith** — Spring project that verifies module boundaries in a monolith and offers durable application events. Used in projects 28, 31.
+- **SQL** — Structured Query Language for relational databases. Used in projects 2, 4, 6, 8, 9, 10, 13, 14, 19, 20, 23, 26, 30, 31. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **SQLSTATE** — Standard five-character database error code (e.g. `23505` = unique violation). Used in projects 13, 23. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **`SseEmitter`** — Spring MVC's way to send Server-Sent Events without WebFlux. Used in projects 19, 25. ([Ch 13](../chapters/13-reactive-and-webflux/README.md))
+- **SSRF** — Server-Side Request Forgery: tricking your server into calling an internal address chosen by the attacker. Used in project 24.
+- **Starter (Spring Boot)** — A code-free dependency that brings everything for one capability plus its auto-configuration. Used in projects 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 17, 18, 19, 20, 25, 27, 28, 29, 31, 32, 34, 36, 37, 40. ([Ch 1](../chapters/01-spring-ecosystem-and-first-app/README.md))
+- **Starter vs auto-configure module** — A reusable library is split into a module with the auto-configuration code and a starter that just pulls in dependencies. Used in project 9. ([Ch 3](../chapters/03-configuration-and-auto-configuration/README.md))
+- **State machine (status, payment)** — The allowed statuses of a record and the transitions between them (e.g. PENDING → AUTHORIZED → CAPTURED), enforced in code and the database. Used in projects 10, 15, 28, 39.
+- **Stateless** — Keeps no per-client data between requests, so any instance can serve any request. Used in projects 1, 2, 11, 12, 34, 40. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+- **`StepVerifier` / virtual time** — Reactor test tool that subscribes and checks emitted items; virtual time fast-forwards delays. Used in project 19. ([Ch 13](../chapters/13-reactive-and-webflux/README.md))
+- **Streamable HTTP / STDIO (MCP transports)** — Ways an MCP client talks to a server: over HTTP, or through a child process's standard input/output. Used in project 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Streaming vs buffering** — Processing data piece by piece as it arrives, vs loading all of it into memory first. Used in projects 15, 29. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Structured logging** — Writing each log event as JSON with fields, so tools can search and correlate it. Used in project 29. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Supported versions** — The list of API versions the server accepts; others are rejected with 400. Used in project 21. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **`sync = true` (`@Cacheable`)** — Lets only one thread per key and instance compute a missing cache value while others wait. Used in project 14. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+
+### T
+
+- **Targeting rule** — Feature-flag condition choosing who gets a variant (country, plan, user list). Used in project 25.
+- **Tasklet step** — Spring Batch step that runs one piece of code once (e.g. delete a temp file), not item by item. Used in project 18.
+- **`@TenantId` (Hibernate)** — Hibernate annotation for a tenant column that it fills and filters automatically on every query. Used in project 26.
+- **`terminationGracePeriodSeconds`** — How long Kubernetes waits after SIGTERM before killing a container; must exceed preStop plus shutdown time. Used in project 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Test pyramid** — Many fast unit tests, fewer slice tests, few full end-to-end tests. Used in project 20. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+- **Test slice (`@WebMvcTest`, `@DataJpaTest`)** — A test that starts only one layer of the app, which is much faster than a full context. Used in projects 1, 4, 7, 11, 12, 20. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+- **Testcontainers** — Library that starts real databases and brokers in Docker for the duration of a test. Used in projects 4, 8, 12, 13, 14, 15, 16, 17, 20, 22, 23, 26, 27, 28, 30, 31, 35, 38. ([Ch 12](../chapters/12-testing-spring-apps/README.md))
+- **Thread pool / executor** — A fixed set of worker threads that take tasks from a queue. Used in projects 3, 10, 24, 26, 29, 33, 36, 38. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Throughput** — How much work is completed per unit of time (requests or messages per second). Used in projects 2, 10, 13, 14, 16, 17, 18, 19, 22, 23, 24, 32, 33, 37. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Thymeleaf** — Server-side HTML template engine supported by Spring Boot. Used in project 12.
+- **Time limiter** — Resilience4j pattern that gives up on a call after a set time. Used in projects 27, 33. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+- **Token bucket** — Rate-limit algorithm: a bucket refills with tokens at a steady rate and each request takes one, which allows short bursts. Used in project 22. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Token customizer** — Hook in Spring Authorization Server that adds or changes claims in issued tokens. Used in project 34. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Token exchange (RFC 8693)** — OAuth2 grant that swaps one token for another, e.g. a narrower token for a downstream service. Used in projects 12, 34, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Token relay** — Forwarding the logged-in user's access token from a gateway or BFF to downstream APIs. Used in projects 12, 27, 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+- **Tolerant reader** — A client that ignores unknown fields and copes with missing optional ones, so additive API changes don't break it. Used in projects 21, 37. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Tool calling / `@Tool` / tool schema** — The model asks the app to run a described function; Spring AI builds the JSON schema from `@Tool` methods and runs the call. Used in project 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **`ToolContext`** — Spring AI object carrying extra data (such as the current user) to a tool without exposing it to the model. Used in project 36. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Top-K and similarity threshold** — How many nearest chunks to retrieve and the minimum similarity a chunk needs to be used. Used in project 30. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **Topic / partition / offset (Kafka)** — A topic is a named stream split into ordered partitions; an offset is a record's position in its partition. Used in projects 16, 24, 26, 28, 35, 39. ([Ch 14](../chapters/14-messaging-async-and-scheduling/README.md))
+- **Tracing agent (GraalVM)** — A JVM agent that records reflection and resource use during a run to generate native-image metadata. Used in project 32. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **Transaction (database)** — A group of operations that succeed or fail together. Used in projects 2, 4, 6, 8, 9, 13, 14, 15, 16, 17, 18, 20, 23, 24, 26, 27, 28, 31, 35, 38, 39. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **`@Transactional`** — Declares that a method runs inside a database transaction; a proxy begins it before the call and commits or rolls back afterwards. Used in projects 4, 8, 9, 13, 20, 23, 28. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **`@TransactionalEventListener`** — Event listener that runs at a transaction phase, by default only after the publishing transaction has committed. Used in projects 9, 13, 14, 15, 28, 31. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **`TransactionTemplate`** — Programmatic transaction around a block of code, for boundaries smaller than a method. Used in project 13. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **Transient failure** — A short-lived error (timeout, 503) that may succeed if tried again. Used in projects 3, 18, 24, 33. ([Ch 6](../chapters/06-rest-clients-and-http-interfaces/README.md))
+- **TTL and jitter (cache)** — Time to live of a cache entry; adding random jitter stops many keys expiring at the same moment. Used in projects 2, 3, 14, 16, 17. ([Ch 9](../chapters/09-spring-data-beyond-jpa-and-caching/README.md))
+- **Two-phase commit (2PC/XA)** — Protocol coordinating one commit across several resources; avoided in microservices because it blocks and couples them. Used in project 28. ([Ch 16](../chapters/16-spring-cloud-and-microservices/README.md))
+
+### U
+
+- **Unique index / constraint** — Database rule that rejects a second row with the same value; the safest guard against duplicates. Used in projects 2, 8, 13, 23, 26, 35, 39. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+- **Unknown outcome** — A call timed out and you can't tell whether it succeeded; never blindly retry money movements in this state. Used in projects 18, 39.
+- **Upcaster** — Code that converts an old stored event format into the current one while reading. Used in projects 21, 35.
+- **Upsert (`INSERT ... ON CONFLICT`)** — Insert a row, or update/ignore it if a row with the same key already exists, in one atomic statement. Used in projects 2, 8, 18, 20, 38, 39. ([Ch 7](../chapters/07-data-access-jdbc-and-transactions/README.md))
+- **URI / URL** — Address of a resource; a URL also says how to reach it (`https://...`). Used in projects 1, 2, 3, 7, 10, 11, 12, 15, 20, 21, 24, 25, 27, 29, 33, 34. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **UTC** — Coordinated Universal Time; store timestamps in UTC and convert only for display. Used in project 6.
+- **UUID** — 128-bit unique identifier that can be generated anywhere without coordination. Used in projects 21, 26. ([Ch 8](../chapters/08-spring-data-jpa-and-hibernate/README.md))
+
+### V
+
+- **`Vary` header** — Response header listing request headers (like `X-API-Version`) that caches must include in their key. Used in project 21. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Vector store** — Database of embeddings that finds the chunks most similar to a query. Used in project 30. ([Ch 17](../chapters/17-spring-ai-and-whats-new/README.md))
+- **`version` mapping attribute** — Framework 7 attribute on `@GetMapping` and friends that ties a handler to an API version. Used in projects 3, 21. ([Ch 5](../chapters/05-spring-mvc-and-rest/README.md))
+- **Virtual threads** — Cheap JVM-managed threads (Java 21+) that free their OS thread while waiting, so blocking code scales. Used in projects 2, 3, 6, 10, 13, 15, 19, 23, 24, 26, 27, 33, 38. ([Ch 15](../chapters/15-observability-and-production/README.md))
+
+### W
+
+- **W3C** — The World Wide Web Consortium; its Trace Context standard defines the `traceparent` header. Used in project 29. ([Ch 15](../chapters/15-observability-and-production/README.md))
+- **WebFlux vs MVC + virtual threads** — Spring's reactive web stack vs the classic servlet stack running each request on a virtual thread. Used in projects 19, 21, 25, 27, 29, 30. ([Ch 13](../chapters/13-reactive-and-webflux/README.md))
+- **Webhook** — An HTTP callback: your server POSTs an event to a URL the customer registered. Used in projects 10, 24, 39.
+- **`WebTestClient`** — Fluent test client for WebFlux endpoints. Used in project 19. ([Ch 13](../chapters/13-reactive-and-webflux/README.md))
+- **WireMock** — Stub HTTP server for tests, able to simulate slow or failing services. Used in projects 13, 20, 27, 33. ([Ch 6](../chapters/06-rest-clients-and-http-interfaces/README.md))
+- **`@WithMockUser` / `jwt()`** — spring-security-test helpers that run a test as a fake user or with a fake JWT. Used in projects 11, 12. ([Ch 10](../chapters/10-spring-security-1-fundamentals/README.md))
+
+### X
+
+- **XSS** — Cross-site scripting: attacker JavaScript running in your page, able to read anything scripts can. Used in project 40. ([Ch 11](../chapters/11-spring-security-2-tokens-and-oauth2/README.md))
+
+### Y
+
+- **YAML** — Indentation-based configuration format (`application.yaml`). Used in projects 3, 5, 7, 27. ([Ch 3](../chapters/03-configuration-and-auto-configuration/README.md))
+
+### Z
+
+- **Zombie worker** — A worker that was presumed dead (its lease expired) but is still running and may write stale results. Used in project 38.

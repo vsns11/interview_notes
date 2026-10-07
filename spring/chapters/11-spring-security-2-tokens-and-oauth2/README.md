@@ -1,6 +1,6 @@
 # Chapter 11 — Spring Security 2: Tokens and OAuth2
 
-[Chapter 10](../10-spring-security-1-fundamentals/README.md) authenticated people with a password and remembered them with a session cookie. That works for one browser talking to one server. Modern systems have more parties: a mobile app, a single-page app, twenty microservices, a partner's backend, and an identity provider such as Keycloak, Okta, Entra ID or Google that owns the user accounts. They need a way to prove identity **without sharing passwords and without shared sessions**. That way is **tokens**, and the standard for handing them out is **OAuth 2.0** with **OpenID Connect** on top.
+[Chapter 10](../10-spring-security-1-fundamentals/README.md) authenticated people with a password and remembered them with a session cookie. That works for one browser talking to one server. Modern systems have more parties: a mobile app, a **single-page app** (SPA: a web app that loads one page and then updates it with JavaScript instead of fetching new pages), twenty **microservices** (small, separately deployed services that together form one system), a partner's backend, and an **identity provider** (IdP: the system that stores user accounts and checks logins) such as Keycloak, Okta, Entra ID or Google that owns the user accounts. They need a way to prove identity **without sharing passwords and without shared sessions**. That way is **tokens**, and the standard for handing them out is **OAuth 2.0** with **OpenID Connect** on top.
 
 This chapter explains the ideas from zero and then proves Spring's behaviour with tests. The signing keys are generated locally, so **no external identity provider is needed** to run anything.
 
@@ -26,9 +26,9 @@ All code lives in [`code/`](code/) — three Spring Boot **4.1.1** projects plus
 | [`oauth2-login-client`](code/oauth2-login-client/) | OAuth2/OIDC login configuration. The redirect to the provider, `state`/`nonce`/PKCE, and `oidcLogin()` tests |
 | [`crypto-basics`](code/crypto-basics/) | plain JDK: Base64 vs SHA-256 vs AES-GCM vs Ed25519 signatures, an X25519 key exchange, and TOTP checked against the RFC 6238 test vectors (§11.18) |
 
-Every output block is real `mvn -q -B -ntp verify` output (log lines trimmed as `...`). Timestamps and random values change on each run.
+Every output block is real `mvn -q -B -ntp verify` output (`mvn` is Maven, the Java build tool; `verify` compiles the code and runs all tests) (log lines trimmed as `...`). Timestamps and random values change on each run.
 
-> **Prerequisites.** The filter chain, 401 vs 403, authorities and CSRF: [Chapter 10](../10-spring-security-1-fundamentals/README.md). Browser storage, cookies and XSS: JavaScript handbook [Chapter 14](../../../javascript/chapters/14-browser-apis-and-security/README.md). Gateways and BFFs as architecture patterns: [API Gateway](../../../microservices-patterns/chapters/03-api-gateway/README.md), [Backend for Frontend](../../../microservices-patterns/chapters/04-bff/README.md).
+> **Prerequisites.** The filter chain, 401 vs 403, authorities and CSRF (cross-site request forgery: another site tricking your browser into sending a request that carries your cookies): [Chapter 10](../10-spring-security-1-fundamentals/README.md). Browser storage, cookies and XSS (cross-site scripting: an attacker getting their JavaScript to run inside your page): JavaScript handbook [Chapter 14](../../../javascript/chapters/14-browser-apis-and-security/README.md). Gateways and BFFs (Backend for Frontend, §11.12) as architecture patterns: [API Gateway](../../../microservices-patterns/chapters/03-api-gateway/README.md), [Backend for Frontend](../../../microservices-patterns/chapters/04-bff/README.md).
 
 ---
 
@@ -36,14 +36,14 @@ Every output block is real `mvn -q -B -ntp verify` output (log lines trimmed as 
 
 ### What it is
 
-A **bearer token** is a string that grants access to whoever *bears* (holds) it, like a cinema ticket. The server does not ask who you are, only whether the ticket is valid. It travels in a header:
+A **bearer token** is a string that grants access to whoever *bears* (holds) it, like a cinema ticket. The server does not ask who you are, only whether the ticket is valid. It travels in an HTTP **header** (a `Name: value` line sent before the request body):
 
 ```http
 GET /api/messages HTTP/1.1
 Authorization: Bearer eyJraWQiOiJkZW1vLWtleS0xIiwidH...
 ```
 
-A **JWT (JSON Web Token, RFC 7519)** is the most common token format. It is three Base64URL-encoded parts joined by dots, `header.payload.signature`. Here is a token our `/token` endpoint issued, decoded:
+A **JWT (JSON Web Token, RFC 7519)** is the most common token format. An **RFC** ("Request for Comments") is a numbered document that defines an internet standard. A JWT is three **Base64URL**-encoded parts joined by dots (Base64URL turns any bytes into letters, digits, `-` and `_` so they are safe in URLs and headers; it is reversible by anyone), `header.payload.signature`. Here is a token our `/token` **endpoint** (a URL path the server answers) issued, decoded:
 
 ```text
 token (3 base64url parts) : eyJraWQiOiJkZW1vLWtleS0xIiwidH... length=670
@@ -64,33 +64,33 @@ The registered claims you will meet everywhere:
 | `iss` (issuer) | who created the token | yes, if you configure an issuer |
 | `sub` (subject) | who the token is about (user or client id) | becomes `Authentication#getName()` |
 | `aud` (audience) | which API(s) the token is meant for | no, you add it (property `audiences` or a validator) |
-| `exp` / `nbf` / `iat` | expires at / not before / issued at (epoch seconds) | `exp` and `nbf` yes, with 60 s clock skew |
+| `exp` / `nbf` / `iat` | expires at / not before / issued at (epoch seconds: seconds since 1 Jan 1970 UTC) | `exp` and `nbf` yes, with 60 s clock skew (allowed gap between server clocks) |
 | `jti` | unique token id | no, useful for revocation lists |
 | `scope` / `scp` | granted OAuth scopes (space-separated string or list) | mapped to `SCOPE_x` authorities |
 
 ### Signing: symmetric vs asymmetric
 
-| | HMAC (`HS256`) | RSA / EC (`RS256`, `ES256`, `PS256`) |
+| | HMAC (`HS256`, a hash keyed with a shared secret) | RSA / EC (`RS256`, `ES256`, `PS256`; public-key algorithms, EC = elliptic curve) |
 |---|---|---|
 | Keys | one shared secret signs *and* verifies | the **private** key signs, the **public** key verifies |
 | Who can mint tokens | everybody who can verify | only the key owner |
 | Fits | one service issuing tokens to itself | an identity provider and many APIs (the normal case) |
 
-Resource servers download the issuer's public keys as a **JWK Set** (JSON Web Key Set, JWKS) from a URL such as `https://idp.example.com/.well-known/jwks.json`. The `kid` in the token header says which key to use. That is how keys can **rotate** (§11.13).
+Resource servers download the issuer's public keys as a **JWK Set** (JSON Web Key Set, JWKS) from a URL such as `https://idp.example.com/.well-known/jwks.json`. The `kid` in the token header says which key to use. That is how keys can **rotate** (be replaced by new keys from time to time, §11.13).
 
 **JWS vs JWE.** A signed JWT is a **JWS** (JSON Web Signature). An *encrypted* JWT is a **JWE**, which is rare in APIs. Never put secrets or personal data you would not show the user into a normal JWT, because anyone holding it can decode the payload.
 
 ### Why tokens
 
-- **No server-side session.** Any instance can verify the signature locally, so APIs scale horizontally without a shared session store.
+- **No server-side session.** Any instance can verify the signature locally, so APIs **scale horizontally** (handle more load by adding more copies of the service) without a shared session store (a database or cache that all copies would otherwise read login sessions from).
 - **Many parties.** The identity provider issues and the APIs only verify. APIs never see passwords.
 - **Delegation.** A token can carry *limited* rights (scopes), for example "read calendar" but not "delete account".
 
 ### Trade-offs
 
-- **Revocation is hard.** A self-contained JWT stays valid until `exp`, even after logout or a password change. Keep access tokens short-lived (minutes) and use refresh tokens (§11.11), or opaque tokens (§11.7).
+- **Revocation is hard.** **Revocation** means cancelling a token before it expires. A self-contained JWT stays valid until `exp`, even after logout or a password change. Keep access tokens short-lived (minutes) and use refresh tokens (§11.11), or **opaque tokens** (random strings that mean nothing by themselves, §11.7).
 - **Size.** Our small token is 670 bytes and is sent on every request. Big claim sets make headers heavy.
-- **Theft = access.** A bearer token works for anyone. Always use HTTPS, short lifetimes and safe storage (§11.12).
+- **Theft = access.** A bearer token works for anyone. Always use HTTPS (HTTP encrypted with TLS, so nobody on the network can read the token; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), short lifetimes and safe storage (§11.12).
 
 ### Self-check
 
@@ -157,7 +157,7 @@ OAuth 2.0 = delegated authorization with access tokens. OIDC adds login with ID 
 
 ### What it is
 
-A **resource server** is an API that accepts access tokens. With `spring-boot-starter-security-oauth2-resource-server` (Boot 4's name; the old `spring-boot-starter-oauth2-resource-server` is deprecated), one DSL call adds a `BearerTokenAuthenticationFilter` to the chain:
+A **resource server** is an API that accepts access tokens. With `spring-boot-starter-security-oauth2-resource-server` (a **starter** is one dependency that pulls in a feature's libraries plus its auto-configuration; this is Boot 4's name; the old `spring-boot-starter-oauth2-resource-server` is deprecated), one **DSL** call (domain-specific language: here, the chain of fluent `http.xxx(...)` configuration methods) adds a `BearerTokenAuthenticationFilter` to the **filter chain** (the ordered list of security filters every request passes through, Chapter 10):
 
 ```java
 http.oauth2ResourceServer(rs -> rs.jwt(Customizer.withDefaults()));
@@ -175,7 +175,7 @@ spring.security.oauth2.resourceserver.jwt.jws-algorithms=RS256
 # alternatives: jwk-set-uri=... (no discovery) or public-key-location=classpath:key.pub (static key)
 ```
 
-In our project there is no IdP, so we declare the `JwtDecoder` bean ourselves with a locally generated key pair. A `JwtDecoder` bean always takes precedence over the properties.
+In our project there is no IdP, so we declare the `JwtDecoder` **bean** (an object that Spring creates, wires and manages for us) ourselves with a locally generated **key pair** (a private key that signs and a matching public key that verifies). A `JwtDecoder` bean always takes precedence over the properties.
 
 ```java
 @Bean
@@ -236,9 +236,9 @@ sequenceDiagram
 ```
 
 1. `BearerTokenAuthenticationFilter` takes the token from `Authorization: Bearer ...`. Form parameters and query strings are off by default, because tokens in URLs leak into logs.
-2. `JwtAuthenticationProvider` calls the **`JwtDecoder`**. Nimbus parses the token, rejects algorithms it wasn't configured for (the classic `alg: none` trick fails here), and **verifies the signature**.
+2. `JwtAuthenticationProvider` calls the **`JwtDecoder`**. Nimbus (the open-source JWT library Spring uses underneath) parses the token, rejects algorithms it wasn't configured for (the classic `alg: none` trick fails here), and **verifies the signature**.
 3. **Validators** run: `JwtTimestampValidator` (`exp`/`nbf` with 60 s clock skew), the issuer validator if configured, your own (audience), and in Spring Security 7 a `JwtTypeValidator` that accepts `typ` = `JWT` or no `typ` at all. All `JwtValidators.createDefault...()` methods include it now.
-4. A **`JwtAuthenticationConverter`** turns claims into authorities (§11.5) and builds a `JwtAuthenticationToken`. Controllers can take `@AuthenticationPrincipal Jwt jwt`.
+4. A **`JwtAuthenticationConverter`** turns claims into authorities (§11.5) and builds a `JwtAuthenticationToken`. Controllers can take `@AuthenticationPrincipal Jwt jwt` (the **principal** is the identity of whoever is logged in).
 5. Any failure → **401** with a `WWW-Authenticate: Bearer error="invalid_token"` header (RFC 6750). A valid token without the needed authority → **403** with `error="insufficient_scope"`.
 
 ### Proved: status codes with real tokens
@@ -260,7 +260,7 @@ The `resource_metadata` parameter points to the **OAuth 2.0 Protected Resource M
 GET /.well-known/oauth-protected-resource -> 200 {"resource":"http://localhost","bearer_methods_supported":["header"],"tls_client_certificate_bound_access_tokens":true}
 ```
 
-With a real issuer configured, the document also lists `authorization_servers`. Customise it with `oauth2ResourceServer(rs -> rs.protectedResourceMetadata(...))`. The Model Context Protocol's authorization spec, for example, relies on this discovery step.
+With a real issuer configured, the document also lists `authorization_servers`. Customise it with `oauth2ResourceServer(rs -> rs.protectedResourceMetadata(...))`. The Model Context Protocol's authorization spec (MCP: a standard way for AI assistants to call external tools and data sources), for example, relies on this discovery step.
 
 ### Proved: every validation rule
 
@@ -298,7 +298,7 @@ What to take away:
 
 - **Skipping the audience check.** Set `spring.security.oauth2.resourceserver.jwt.audiences` or add a validator.
 - **Replacing** the validators with only your own. `decoder.setJwtValidator(audienceCheck)` alone drops the expiry check! Always combine with `JwtValidators.createDefault...()`, as above.
-- Putting the resource server behind session-based security (`IF_REQUIRED`), so a session cookie quietly becomes a second way in. Use `STATELESS` and disable CSRF only on the token chain.
+- Putting the resource server behind session-based security (`IF_REQUIRED`), so a session cookie quietly becomes a second way in. Use `STATELESS` (no server-side session is ever created; every request must bring its own token) and disable CSRF only on the token chain.
 - Logging full tokens. Log `jti` or `sub` instead.
 
 ### TL;DR
@@ -323,7 +323,7 @@ JwtEncoder jwtEncoder(KeyPair keys) {
 // also: withKeyPair(ECPublicKey, ECPrivateKey) for ES256, withSecretKey(SecretKey) for HS256
 ```
 
-Our `/token` endpoint is protected by HTTP Basic (its own chain, `@Order(1)`). It turns the logged-in user's authorities into claims:
+Our `/token` endpoint is protected by HTTP Basic (the client sends username and password, Base64-encoded, in the `Authorization` header; its own chain, `@Order(1)`). It turns the logged-in user's authorities into claims:
 
 ```java
 @PostMapping("/token")
@@ -353,7 +353,7 @@ Note the `FACTOR_` filter. After password login, Spring Security 7 adds `FACTOR_
 |---|---|---|
 | tests, demos, this book | ideal: no infrastructure | overkill |
 | one internal service issuing short tokens to its own clients | acceptable | better long-term |
-| users from several apps, SSO, social login, MFA, consent, refresh-token rotation, revocation | **no**, you would be re-writing an IdP | **yes**: Keycloak, a cloud IdP, or Spring Authorization Server (§11.14) |
+| users from several apps, SSO (single sign-on), social login ("Sign in with Google"), MFA (multi-factor authentication), consent, refresh-token rotation, revocation | **no**, you would be re-writing an IdP | **yes**: Keycloak, a cloud IdP, or Spring Authorization Server (§11.14) |
 
 Writing your own login-and-token server means owning password storage, lockout, MFA, key rotation, refresh tokens and revocation forever. Use an existing authorization server unless the need is truly tiny.
 
@@ -427,7 +427,7 @@ Default: `scope` → `SCOPE_x`. Anything else (roles, groups) needs a custom con
 | Approach | How | Proves |
 |---|---|---|
 | **Real tokens** | mint with `JwtEncoder` (or call `/token`), send `Authorization: Bearer ...` | decoder, validators, converter *and* rules. Everything in §11.3 was tested this way |
-| **`jwt()` post-processor** | `mvc.get().uri(..).with(jwt()...)` | only the **rules**. Decoding and validation are skipped, and a ready-made `JwtAuthenticationToken` is placed in the context |
+| **`jwt()` post-processor** (a test helper that adjusts the request before it is sent) | `mvc.get().uri(..).with(jwt()...)` | only the **rules**. Decoding and validation are skipped, and a ready-made `JwtAuthenticationToken` is placed in the context |
 
 Use real tokens for a handful of tests around the decoder configuration (issuer, audience, expiry). Use `jwt()` for the many rule tests, since it is faster and needs no keys.
 
@@ -471,7 +471,7 @@ Test the decoder with real, locally signed tokens. Test rules with `jwt()`, and 
 
 ### What it is
 
-An **opaque token** is a random string with no readable content (`tok-alice-7f3a`). The resource server cannot verify it alone. It asks the authorization server's **introspection endpoint** (RFC 7662) "is this token active, and for whom?" on every request (with caching, if you add it):
+An **opaque token** is a random string with no readable content (`tok-alice-7f3a`). The resource server cannot verify it alone. It asks the authorization server's **introspection endpoint** (RFC 7662) "is this token active, and for whom?" on every request (with **caching**, i.e. remembering recent answers for a while, if you add it):
 
 ```text
 POST /oauth2/introspect   token=tok-alice-7f3a   (client authenticates with its own id/secret)
@@ -528,11 +528,11 @@ The principal is an `OAuth2AuthenticatedPrincipal` (not a `Jwt`), and the last l
 |---|---|---|
 | Validation | local, just a signature check | network call to the IdP per request (or per cache period) |
 | Revocation | only when it expires (or via a deny-list) | **immediate**: the IdP answers `active: false` |
-| Latency / IdP load | minimal | higher, and the IdP must be highly available |
+| Latency (time per request) / IdP load | minimal | higher, and the IdP must be highly available (almost never down) |
 | Privacy | claims readable by any holder | nothing readable |
 | Typical use | APIs inside your platform | high-risk operations, tokens handed to third parties |
 
-A common hybrid is **opaque tokens outside, JWTs inside**: the API gateway introspects the opaque token and forwards a short-lived JWT to internal services (the "phantom token" pattern).
+A common hybrid is **opaque tokens outside, JWTs inside**: the **API gateway** (the single entry point that sits in front of all your services and routes requests to them) introspects the opaque token and forwards a short-lived JWT to internal services (the "phantom token" pattern).
 
 ### TL;DR
 
@@ -544,9 +544,9 @@ Opaque tokens are meaningless strings that the API checks with the IdP (RFC 7662
 
 ### What it is
 
-A **multi-tenant** API serves several customers ("tenants"), each with its *own* identity provider or realm, and so its own issuer and keys. The token's `iss` claim tells you which tenant it claims to come from. The API must pick **that tenant's keys** to verify it, and reject issuers it does not trust.
+A **multi-tenant** API serves several customers ("tenants"), each with its *own* identity provider or **realm** (Keycloak's word for a separate set of users, clients and keys), and so its own issuer and keys. The token's `iss` claim tells you which tenant it claims to come from. The API must pick **that tenant's keys** to verify it, and reject issuers it does not trust.
 
-Spring's `JwtIssuerAuthenticationManagerResolver` reads `iss` *without trusting it yet*, looks up an `AuthenticationManager` for that issuer, and lets that manager verify the signature with the issuer's keys:
+Spring's `JwtIssuerAuthenticationManagerResolver` reads `iss` *without trusting it yet*, looks up an `AuthenticationManager` (the Spring Security component that decides whether a credential is valid, Chapter 10) for that issuer, and lets that manager verify the signature with the issuer's keys:
 
 ```java
 Map<String, AuthenticationManager> managers = new ConcurrentHashMap<>();
@@ -589,7 +589,7 @@ Several issuers → `JwtIssuerAuthenticationManagerResolver` with an allow-list.
 
 ### What it is
 
-**OAuth2 login** lets users sign in to *your web app* with an account at an identity provider (Google, GitHub, Keycloak, your company's Entra ID). Your app is the **client**. It never sees the password. It receives an **authorization code**, exchanges it for tokens *server-side*, and creates a normal session for the browser. This is the **authorization-code flow**, and with OIDC it also yields an ID token.
+**OAuth2 login** lets users sign in to *your web app* with an account at an identity provider (Google, GitHub, Keycloak, your company's Entra ID). Your app is the **client**. It never sees the password. It receives an **authorization code** (a short-lived, single-use code that can be swapped for tokens), exchanges it for tokens *server-side*, and creates a normal session for the browser. This is the **authorization-code flow**, and with OIDC it also yields an ID token.
 
 ### How it works
 
@@ -622,8 +622,8 @@ The protective parameters:
 | Parameter | Protects against | How |
 |---|---|---|
 | **`state`** | CSRF on the callback: an attacker making your browser finish *their* login | random value stored in the session and compared on return |
-| **`nonce`** (OIDC) | replay of an old ID token | random value that must come back inside the ID token |
-| **PKCE** (`code_challenge` + `code_verifier`, RFC 7636) | a stolen authorization code | the app sends `SHA-256(verifier)` first, and only the holder of the verifier can redeem the code |
+| **`nonce`** (OIDC; "number used once") | **replay** (an attacker re-sending a captured valid message) of an old ID token | random value that must come back inside the ID token |
+| **PKCE** (`code_challenge` + `code_verifier`, RFC 7636) | a stolen authorization code | the app sends `SHA-256(verifier)` (a one-way hash, §11.18) first, and only the holder of the verifier can redeem the code |
 | exact **`redirect_uri`** | codes sent to an attacker's site | the IdP only redirects to pre-registered URIs |
 | code exchange on the **back channel** | tokens exposed to the browser | tokens travel server-to-server, and the browser only gets a session cookie |
 
@@ -664,7 +664,7 @@ String profile(@AuthenticationPrincipal OidcUser user) {
 
 ### What we can run without an IdP
 
-Steps 1–4 of the diagram (everything before the browser leaves our app) and the callback's `state` check run for real. The user signing in at the IdP and the code exchange are not run, since there is no IdP. The `oidcLogin()` post-processor then simulates a finished login:
+Steps 1–4 of the diagram (everything before the browser leaves our app; a **302** is an HTTP redirect telling the browser to go to another URL) and the callback's `state` check run for real. The user signing in at the IdP and the code exchange are not run, since there is no IdP. The `oidcLogin()` post-processor then simulates a finished login:
 
 ```text
 1. GET /profile (anonymous)       -> 302 /oauth2/authorization/demo-idp
@@ -682,13 +682,13 @@ Steps 1–4 of the diagram (everything before the browser leaves our app) and th
 oidcLogin() GET /profile -> 200 hello Jane Doe <jane@example.com>, sub=248289761001, issuer=https://idp.example.test
 ```
 
-- The authorization request contains `state`, `nonce` **and PKCE** (`code_challenge`, `S256`) even though this client has a secret. Spring Security 7 uses PKCE for confidential clients too. If an old IdP can't handle it, turn it off for that registration by building it with `.clientSettings(ClientRegistration.ClientSettings.builder().requireProofKey(false).build())`.
+- The authorization request contains `state`, `nonce` **and PKCE** (`code_challenge`, `S256`) even though this client has a secret. Spring Security 7 uses PKCE (Proof Key for Code Exchange) for **confidential clients** too (clients that run on a server and can keep a secret; browser and mobile apps are *public* clients that cannot). If an old IdP can't handle it, turn it off for that registration by building it with `.clientSettings(ClientRegistration.ClientSettings.builder().requireProofKey(false).build())`.
 - A callback whose `state` was never issued to this browser session is refused (`/login?error`). This is the CSRF protection of the login flow.
 - After a real login the principal is an **`OidcUser`** (ID-token claims + userinfo). The tokens are stored server-side as an `OAuth2AuthorizedClient`, and the browser only holds the session cookie. So OAuth2 login is **session-based**: keep CSRF protection on (Chapter 10).
 
 ### OAuth2 vs OIDC login
 
-With the `openid` scope Spring performs **OIDC** login: it validates the ID token and builds an `OidcUser`. Without it (for example GitHub, which is plain OAuth2) Spring calls the provider's user-info endpoint and builds an `OAuth2User` from the JSON. Mapping external users to *your* accounts (first login = sign-up, linking by verified e-mail, local roles) is your job. Do it in a custom `OidcUserService`/`OAuth2UserService`, or in a listener for the login success event.
+With the `openid` scope Spring performs **OIDC** login: it validates the ID token and builds an `OidcUser`. Without it (for example GitHub, which is plain OAuth2) Spring calls the provider's user-info endpoint and builds an `OAuth2User` from the JSON. Mapping external users to *your* accounts (first login = sign-up, linking by verified e-mail, local roles) is your job. Do it in a custom `OidcUserService`/`OAuth2UserService`, or in a **listener** (a method Spring calls when a given event is published) for the login success event.
 
 ### TL;DR
 
@@ -704,8 +704,8 @@ Your service often has to call *another* protected API. There are two cases:
 
 | Case | Whose token? | Grant |
 |---|---|---|
-| a nightly job calls the reports API | the **service's own** identity | **client credentials**: the service authenticates with its client id + secret (or a private-key JWT / mTLS) and gets an access token |
-| a user's request fans out to downstream APIs | the **user's** identity | **token relay**: forward the user's access token, or better, exchange it (RFC 8693) for one aimed at the downstream API |
+| a nightly job calls the reports API | the **service's own** identity | **client credentials**: the service authenticates with its client id + secret (or a private-key JWT / mTLS, mutual TLS where both sides show a certificate) and gets an access token |
+| a user's request fans out to **downstream** APIs (the services your service calls in turn) | the **user's** identity | **token relay**: forward the user's access token, or better, exchange it (RFC 8693) for one aimed at the downstream API |
 
 ### How it looks in Spring (not run: needs a token endpoint)
 
@@ -733,7 +733,7 @@ String csv = reportsClient.get().uri("/daily")
         .retrieve().body(String.class);
 ```
 
-With **HTTP interfaces** ([Chapter 6](../06-rest-clients-and-http-interfaces/README.md)), Spring Security 7 lets you put `@ClientRegistrationId` on the whole interface. Register an `OAuth2RestClientHttpServiceGroupConfigurer` bean so the HTTP service clients get the interceptor:
+With **HTTP interfaces** ([Chapter 6](../06-rest-clients-and-http-interfaces/README.md); a Java interface whose annotated methods Spring turns into HTTP calls), Spring Security 7 lets you put `@ClientRegistrationId` on the whole interface. Register an `OAuth2RestClientHttpServiceGroupConfigurer` bean so the HTTP service clients get the interceptor:
 
 ```java
 @HttpExchange("/reports")
@@ -748,7 +748,7 @@ OAuth2RestClientHttpServiceGroupConfigurer securityConfigurer(OAuth2AuthorizedCl
 }
 ```
 
-The interceptor asks the manager for a token each time. The manager returns the cached one while it is valid, and requests or refreshes one when needed. You never parse expiry yourself.
+The **interceptor** (code that runs around every outgoing request and can change it, here by adding the `Authorization` header) asks the manager for a token each time. The manager returns the cached one while it is valid, and requests or refreshes one when needed. You never parse expiry yourself.
 
 **Token relay.** In a resource server, the incoming token is available as `JwtAuthenticationToken#getToken().getTokenValue()`, and an interceptor can copy it to outgoing calls. In **Spring Cloud Gateway**, the `TokenRelay` filter does this for logged-in users ([Chapter 16](../16-spring-cloud-and-microservices/README.md)). Forwarding the same token to every service means every service must accept the same audience. **Token exchange** (supported by Spring Security's OAuth2 client since 6.3) gets a new, narrower token per downstream API instead.
 
@@ -768,7 +768,7 @@ Short-lived access tokens limit damage, but users shouldn't have to log in every
 |---|---|
 | access token 5–15 min, refresh token hours/days | a stolen access token is soon useless |
 | **refresh-token rotation**: every use returns a *new* refresh token and invalidates the old one | a stolen refresh token used twice is detected, and the IdP revokes the whole family |
-| bind refresh tokens to the client (secret, DPoP or mTLS) | a stolen token alone is not enough |
+| bind refresh tokens to the client (secret, DPoP, i.e. proof that the caller holds a private key, or mTLS) | a stolen token alone is not enough |
 | never give refresh tokens to browser JavaScript | XSS could steal a long-lived credential (§11.12) |
 
 **In Spring**, the resource server never sees refresh tokens. The **client side** handles them: the `OAuth2AuthorizedClientManager` behind `oauth2Login` and the interceptor above refreshes an expired access token automatically when a refresh token is present.
@@ -776,7 +776,7 @@ Short-lived access tokens limit damage, but users shouldn't have to log in every
 ### Revocation and logout
 
 - **Revoking** a token (RFC 7009) tells the IdP it's dead. Opaque tokens stop working at once. JWTs keep working until `exp`, unless your APIs check a deny-list of `jti` values (usually not worth the cost if lifetimes are short).
-- **Logging out** of your app (`POST /logout`) ends *your* session but not the user's session at the IdP. The next "Sign in with ..." logs them straight back in. For single logout, configure **OIDC RP-initiated logout** so Spring also redirects to the IdP's `end_session_endpoint`:
+- **Logging out** of your app (`POST /logout`) ends *your* session but not the user's session at the IdP. The next "Sign in with ..." logs them straight back in. For single logout, configure **OIDC RP-initiated logout** (RP = relying party, the app that relies on the IdP for login) so Spring also redirects to the IdP's `end_session_endpoint`:
 
 ```java
 http.logout(l -> l.logoutSuccessHandler(new OidcClientInitiatedLogoutSuccessHandler(clientRegistrationRepository)));
@@ -811,7 +811,7 @@ flowchart LR
 3. The BFF forwards API calls with the bearer token (token relay, §11.10). Spring Cloud Gateway with `TokenRelay` is a common BFF.
 4. Because the SPA now uses cookies, **CSRF protection is required**. Use `csrf.spa()` ([10.8](../10-spring-security-1-fundamentals/README.md#108-csrf-protection)).
 
-The IETF draft *OAuth 2.0 for Browser-Based Applications* recommends this architecture as the most secure option. See also the [BFF pattern notes](../../../microservices-patterns/chapters/04-bff/README.md).
+The IETF (Internet Engineering Task Force, the body that publishes RFCs) draft *OAuth 2.0 for Browser-Based Applications* recommends this architecture as the most secure option. See also the [BFF pattern notes](../../../microservices-patterns/chapters/04-bff/README.md).
 
 | Where tokens live | XSS steals tokens? | CSRF risk | Complexity |
 |---|---|---|---|
@@ -831,12 +831,12 @@ Passwords are covered in [10.5](../10-spring-security-1-fundamentals/README.md#1
 
 | Secret | Where it lives | Rules |
 |---|---|---|
-| **JWT signing private key** | the authorization server only: a vault, KMS or HSM | never in Git, never in a resource server. Resource servers get *public* keys from the JWKS URL |
-| **Client secret** (confidential clients) | environment variable / secret manager, injected as `${...}` like `${DEMO_IDP_SECRET}` above | rotate it, and prefer `private_key_jwt` or mTLS client authentication for high-value clients |
-| **Refresh tokens** stored by a BFF | server-side session or database, encrypted at rest | never sent to the browser |
+| **JWT signing private key** | the authorization server only: a vault (a secret store), KMS (key management service) or HSM (hardware security module) | never in Git, never in a resource server. Resource servers get *public* keys from the JWKS URL |
+| **Client secret** (confidential clients) | environment variable (a named value set outside the program by the OS or platform) / secret manager, injected as `${...}` like `${DEMO_IDP_SECRET}` above | rotate it, and prefer `private_key_jwt` or mTLS client authentication for high-value clients |
+| **Refresh tokens** stored by a BFF | server-side session or database, encrypted at rest (encrypted while stored on disk) | never sent to the browser |
 | **HMAC secret** (if you use HS256) | secret manager | at least 256 bits of randomness. Everyone who can verify can also forge |
 
-**Key rotation** without downtime:
+**Key rotation** without **downtime** (time when the service is unavailable):
 
 1. Publish the *new* public key in the JWKS next to the old one (a different `kid`).
 2. Wait longer than the verifiers' JWKS cache time. `NimbusJwtDecoder` caches the JWK Set and re-fetches it when it meets an unknown `kid`.
@@ -851,22 +851,22 @@ Our demo generates a fresh key pair at every start. Every issued token becomes i
 
 If you need your own identity provider, **Spring Authorization Server** implements OAuth 2.1 and OpenID Connect 1.0 on top of Spring Security: authorization code + PKCE, client credentials, refresh tokens, device authorization, token exchange, introspection, revocation, JWKS and discovery endpoints, and dynamic client registration. Since **Spring Security 7.0 it ships as part of Spring Security** (module `spring-security-oauth2-authorization-server`). Boot 4 provides `spring-boot-starter-security-oauth2-authorization-server`, configured under `spring.security.oauth2.authorizationserver.*`. PKCE is required by default for authorization-code clients.
 
-Choose it when you want the identity provider inside your Spring codebase, customised in Java. Choose Keycloak or a cloud IdP when you want an off-the-shelf product with admin UI, federation and user management included. Either way, *your APIs* look the same: resource servers configured with an `issuer-uri`. Running an authorization server needs a user store, persistent client and authorization storage (JDBC), and key management, so it is beyond this chapter's runnable examples.
+Choose it when you want the identity provider inside your Spring codebase, customised in Java. Choose Keycloak or a cloud IdP when you want an off-the-shelf product with admin UI, federation and user management included. Either way, *your APIs* look the same: resource servers configured with an `issuer-uri`. Running an authorization server needs a user store, persistent client and authorization storage (JDBC, Java's standard database API), and key management, so it is beyond this chapter's runnable examples.
 
 ---
 
 ## 11.15 Rate limiting and brute-force protection
 
-Spring Security does **not** include rate limiting. Yet login and token endpoints are exactly what attackers hammer: password guessing, credential stuffing, and making you pay for slow bcrypt/Argon2 checks ([10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder)). Common layers:
+Spring Security does **not** include **rate limiting** (capping how many requests a client may make per time window; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)). Yet login and token endpoints are exactly what attackers hammer: password guessing, **credential stuffing** (trying username/password pairs leaked from other sites), and making you pay for slow bcrypt/Argon2 (deliberately slow password-hashing algorithms) checks ([10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder)). Common layers:
 
 | Layer | Tool | Limits |
 |---|---|---|
-| edge | API gateway / WAF / CDN, Spring Cloud Gateway `RequestRateLimiter` (Redis token bucket) | requests per IP / client / API key |
-| application | Bucket4j (token bucket, local or distributed via Redis/JCache) in a servlet filter | per user or per endpoint rules |
-| login logic | count failures per account *and* per IP (listen to `AuthenticationFailureBadCredentialsEvent`), add delays, CAPTCHA or MFA after N failures | brute force on one account |
+| edge | API gateway / WAF (web application firewall) / CDN (content delivery network), Spring Cloud Gateway `RequestRateLimiter` (Redis, an in-memory data store; token bucket algorithm) | requests per IP / client / API key |
+| application | Bucket4j (token bucket, local or distributed via Redis/JCache) in a servlet filter (code that runs before every HTTP request reaches the app) | per user or per endpoint rules |
+| login logic | count failures per account *and* per IP (listen to `AuthenticationFailureBadCredentialsEvent`), add delays, CAPTCHA (a human-or-bot challenge) or MFA after N failures | brute force on one account |
 | identity provider | Keycloak/cloud IdPs have brute-force detection built in | when login happens at the IdP |
 
-Avoid hard **account lockout** after a few failures. It lets anyone lock out any user. Prefer progressive delays and step-up checks. Framework 7's `@ConcurrencyLimit` ([Chapter 4](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit)) caps *concurrent* executions, not requests per second, so it is not a rate limiter. Algorithms (token bucket, sliding window) are explained in [System Design Patterns — Rate Limiting](../../../system-design-patterns/modules/08-api-and-edge/README.md#rate-limiting).
+Avoid hard **account lockout** after a few failures. It lets anyone lock out any user. Prefer progressive delays and step-up checks (asking for an extra factor only when something looks risky). Framework 7's `@ConcurrencyLimit` ([Chapter 4](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit)) caps *concurrent* executions, not requests per second, so it is not a rate limiter. Algorithms (token bucket, sliding window) are explained in [System Design Patterns — Rate Limiting](../../../system-design-patterns/modules/08-api-and-edge/README.md#rate-limiting).
 
 ---
 
@@ -905,7 +905,7 @@ Follow-ups:
 ## 11.18 Security fundamentals beyond Spring
 
 ### What it is
-Everything in this chapter and the last one rests on a handful of cryptographic building blocks: hashes, symmetric and asymmetric keys, signatures, key exchange. Spring hides them behind `PasswordEncoder`, `JwtDecoder` and `https://` URLs, but interviews (and incident calls) expect you to know what they do. This section explains them from zero, shows each one with the plain JDK in [`code/crypto-basics`](code/crypto-basics/), and then covers the protocols built from them: TLS, SSH keys, one-time codes, passkeys and single sign-on.
+Everything in this chapter and the last one rests on a handful of cryptographic building blocks: hashes, symmetric and asymmetric keys, signatures, key exchange. Spring hides them behind `PasswordEncoder`, `JwtDecoder` and `https://` URLs, but interviews (and incident calls) expect you to know what they do. This section explains them from zero, shows each one with the plain JDK (Java Development Kit: the compiler plus standard library) in [`code/crypto-basics`](code/crypto-basics/), and then covers the protocols built from them: TLS, SSH keys, one-time codes, passkeys and single sign-on.
 
 Analogy: a **hash** is a fingerprint (identifies, cannot be turned back into the person); **symmetric encryption** is a padlock where sender and receiver hold copies of the same key; **asymmetric encryption** is a mailbox with a public slot anyone can post into and a private key only the owner has; a **signature** is a wax seal only one ring can make but everyone can check.
 
@@ -914,7 +914,7 @@ Analogy: a **hash** is a fingerprint (identifies, cannot be turned back into the
 | | Purpose | Key? | Reversible? | Example | Wrong use |
 |---|---|---|---|---|---|
 | **Encoding** | change representation so bytes survive a channel | no | yes, by anyone | Base64, URL encoding, UTF-8 | "hiding" a password in Base64 |
-| **Hashing** | fixed-size fingerprint; detect change; store passwords | no (HMAC adds one) | **no** | SHA-256, BLAKE3; for passwords bcrypt/Argon2 ([10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder)) | fast SHA-256 for passwords (GPU-crackable) |
+| **Hashing** | fixed-size fingerprint; detect change; store passwords | no (HMAC adds one) | **no** | SHA-256, BLAKE3; for passwords bcrypt/Argon2 ([10.5](../10-spring-security-1-fundamentals/README.md#105-password-storage-hashing-with-delegatingpasswordencoder)) | fast SHA-256 for passwords (GPU-crackable: graphics cards can try billions of guesses per second) |
 | **Encryption** | confidentiality: only key holders can read | yes | yes, with the key | AES-GCM, ChaCha20-Poly1305, RSA-OAEP | encrypting passwords (then someone can decrypt them) |
 | **Tokenisation** | replace sensitive data with a random stand-in; the real value lives in a secured vault | vault lookup | only via the vault | card number → `tok_8f3a…` in payment systems | — |
 
@@ -929,12 +929,12 @@ An **HMAC** (hash-based message authentication code) is a hash mixed with a secr
 | Problem | how do both sides get the key safely? | who does this public key really belong to? |
 | Algorithms | AES-GCM, ChaCha20-Poly1305 | RSA, elliptic curves (ECDH/X25519 for key exchange, ECDSA/Ed25519 for signatures) |
 
-Real systems are **hybrid**: asymmetric crypto agrees or protects a random symmetric key, and the bulk data goes through AES. **Authenticated encryption** modes (GCM, Poly1305) add a tag, so any tampering makes decryption fail rather than returning garbage — the demo proves it.
+Real systems are **hybrid**: asymmetric crypto agrees or protects a random symmetric key, and the bulk data goes through AES (Advanced Encryption Standard, the standard fast symmetric cipher). **Authenticated encryption** modes (GCM, Poly1305) add a tag, so any tampering makes decryption fail rather than returning garbage — the demo proves it.
 
 ### Digital signatures and certificates
 A **digital signature** is computed with the private key over a hash of the message; anyone with the public key can verify that (1) the holder of that private key signed it and (2) not one bit changed. That is exactly how an RS256/ES256 JWT is trusted (§11.1).
 
-A **certificate** (X.509) is a signed statement "this public key belongs to `api.example.com`", signed by a **certificate authority (CA)**. Browsers and the JDK ship a list of trusted root CAs; a server sends its certificate plus intermediates, and the client checks the **chain** up to a trusted root, the name, and the validity dates.
+A **certificate** (X.509) is a signed statement "this public key belongs to `api.example.com`", signed by a **certificate authority (CA)**, an organisation that browsers and operating systems trust to vouch for keys. Browsers and the JDK ship a list of trusted root CAs; a server sends its certificate plus intermediates, and the client checks the **chain** up to a trusted root, the name, and the validity dates.
 
 ### The TLS 1.3 handshake
 [HTML book §1.4](../../../html-css/chapters/01-how-the-web-works/README.md#14-connections-tcp-tls-and-the-http-versions) says what TLS gives (confidentiality, integrity, server authentication). Here is how, in one round trip (RFC 8446):
@@ -952,10 +952,10 @@ sequenceDiagram
   C->>S: application data (HTTP) encrypted with AES-GCM or ChaCha20
 ```
 
-Key ideas: the **key exchange** (ECDHE) gives both sides a secret nobody on the wire can compute; the **signature** in `CertificateVerify` proves the server owns the certificate's private key; the keys are **ephemeral**, so recording traffic today and stealing the server key later reveals nothing (**forward secrecy**). **mTLS** (mutual TLS) adds a client certificate so the server authenticates the client too — common between services (§11.10). In Spring Boot, TLS is configured with SSL bundles (`server.ssl.bundle`), usually terminated at a load balancer or ingress instead.
+Key ideas: the **key exchange** (ECDHE) gives both sides a secret nobody on the wire can compute; the **signature** in `CertificateVerify` proves the server owns the certificate's private key; the keys are **ephemeral**, so recording traffic today and stealing the server key later reveals nothing (**forward secrecy**). **mTLS** (mutual TLS) adds a client certificate so the server authenticates the client too — common between services (§11.10). In Spring Boot, TLS is configured with SSL bundles (`server.ssl.bundle`), usually terminated at a **load balancer** (a component that spreads incoming traffic over several servers) or **ingress** (the Kubernetes entry point for outside traffic) instead; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
 
 ### SSH keys
-SSH logs you into servers and Git hosts. `ssh-keygen -t ed25519` creates a key pair; you put the **public** key in the server's `~/.ssh/authorized_keys` (or your GitHub settings). On login the server sends a challenge, your client **signs** it with the private key, and the server verifies with the stored public key — no password crosses the wire. The first time you connect, SSH shows the **server's** host-key fingerprint; accepting it stores it in `known_hosts`, and a later mismatch warns of a possible man-in-the-middle. Protect the private key with a passphrase and `ssh-agent`; never copy it between machines.
+SSH logs you into servers and Git hosts. `ssh-keygen -t ed25519` creates a key pair; you put the **public** key in the server's `~/.ssh/authorized_keys` (or your GitHub settings). On login the server sends a challenge, your client **signs** it with the private key, and the server verifies with the stored public key — no password crosses the wire. The first time you connect, SSH shows the **server's** host-key fingerprint; accepting it stores it in `known_hosts`, and a later mismatch warns of a possible **man-in-the-middle** (an attacker sitting between you and the server, reading or changing traffic). Protect the private key with a passphrase and `ssh-agent`; never copy it between machines.
 
 ### TOTP: the six digits in an authenticator app
 **TOTP** (time-based one-time password, RFC 6238) builds on **HOTP** (RFC 4226):
@@ -975,10 +975,10 @@ int binary = ((h[offset] & 0x7f) << 24) | ((h[offset + 1] & 0xff) << 16)
 return String.format("%0" + digits + "d", binary % (int) Math.pow(10, digits));
 ```
 
-TOTP is phishable (a fake site can ask for the code and replay it within 30 s) and depends on a shared secret stored on the server. That is what passkeys fix.
+TOTP is phishable (**phishing** = a fake look-alike site tricking you into typing secrets; a fake site can ask for the code and replay it within 30 s) and depends on a shared secret stored on the server. That is what passkeys fix.
 
 ### Passkeys (WebAuthn / FIDO2)
-A **passkey** is a key pair created by your device (phone, laptop, security key) **for one website**. Registration: the browser's WebAuthn API asks the device's **authenticator** to create a key pair scoped to the site's domain (the **relying party ID**); the site stores only the public key. Login: the site sends a random challenge; the authenticator checks you (fingerprint, face, PIN), **signs** the challenge together with the origin, and the site verifies with the stored public key.
+A **passkey** is a key pair created by your device (phone, laptop, security key) **for one website**. Registration: the browser's WebAuthn API asks the device's **authenticator** to create a key pair scoped to the site's domain (the **relying party ID**); the site stores only the public key. Login: the site sends a random challenge; the authenticator checks you (fingerprint, face, PIN), **signs** the challenge together with the **origin** (scheme + domain + port, such as `https://shop.example.com`), and the site verifies with the stored public key.
 
 Why it is stronger than passwords + TOTP: nothing secret is stored on the server (a database leak gives attackers only public keys), and the signature covers the origin, so a look-alike phishing domain gets a signature that is useless on the real site. Synced passkeys (iCloud Keychain, Google Password Manager) survive losing a phone. Spring Security supports them since 6.4 with `http.webAuthn(w -> w.rpName("Shop").rpId("shop.example.com").allowedOrigins("https://shop.example.com"))` (module `spring-security-webauthn` in 7.x), and records a `FACTOR_WEBAUTHN` authority for multi-factor rules ([10.4](../10-spring-security-1-fundamentals/README.md#104-authentication-users-providers-form-login-and-basic)).
 
@@ -987,7 +987,7 @@ Why it is stronger than passwords + TOTP: nothing secret is stored on the server
 
 | | **SAML 2.0** (2005) | **OpenID Connect** (2014, on OAuth 2.0) |
 |---|---|---|
-| Token | signed **XML assertion** | signed **JWT** ID token (§11.2) |
+| Token | signed **XML assertion** (XML: a tag-based text format) | signed **JWT** ID token (§11.2) |
 | Transport | browser POSTs/redirects the assertion to the app | authorization-code flow + PKCE, back-channel token call |
 | Fits | enterprise web apps, older corporate IdPs (AD FS) | web, SPA/BFF, mobile, APIs; also gives access tokens |
 | Spring | `saml2Login()` (`spring-security-saml2-service-provider`) | `oauth2Login()` (§11.9) |
@@ -995,7 +995,7 @@ Why it is stronger than passwords + TOTP: nothing secret is stored on the server
 Both rely on the same trick: the IdP **signs** a statement about the user, and the app verifies the signature with the IdP's published key or certificate. For new systems pick OIDC; add SAML when an enterprise customer's IdP only speaks SAML (Keycloak, Okta and Entra ID speak both and can bridge).
 
 ### Seeing it: [`code/crypto-basics`](code/crypto-basics/)
-Plain JDK 25, no Spring beans. `mvn -q -B -ntp verify` runs 13 JUnit tests (RFC vectors, AES-GCM tamper detection, signatures, X25519 agreement); then `java -cp target/classes handbook.security.CryptoBasicsDemo` prints:
+Plain JDK 25, no Spring beans. `mvn -q -B -ntp verify` runs 13 JUnit (the standard Java test framework) tests (RFC vectors, AES-GCM tamper detection, signatures, X25519 agreement); then `java -cp target/classes handbook.security.CryptoBasicsDemo` prints:
 
 ```text
 encode  Base64      : cGF5IGJvYiAxMDA=  -> decodes back to: pay bob 100
@@ -1017,13 +1017,13 @@ The four `TOTP t=` codes are exactly the SHA-1 column of RFC 6238 Appendix B. Ke
 ### Common mistakes
 - Calling Base64 "encryption" → it is encoding; anyone can decode it.
 - Hashing passwords with plain SHA-256 or MD5 → use a slow, salted password hash (bcrypt, Argon2, PBKDF2).
-- Reusing an AES-GCM IV (nonce) with the same key → breaks confidentiality and integrity; use a random 12-byte IV per message.
+- Reusing an AES-GCM IV (initialisation vector: a per-message nonce) with the same key → breaks confidentiality and integrity; use a random 12-byte IV per message.
 - Rolling your own crypto or protocol → use the JDK, TLS, and vetted libraries; your job is choosing parameters and managing keys.
 - Disabling certificate checks ("trust all") to make a test pass → it removes the *authentication* half of TLS in production too.
 - Comparing codes or MACs with `equals` → use a constant-time comparison (`MessageDigest.isEqual`) to avoid timing leaks.
 
 ### In the interview
-**30-second answer — how HTTPS works:** "TLS 1.3 does an ephemeral Diffie-Hellman key exchange in the first round trip, so client and server derive the same session keys without sending them. The server proves its identity by signing the handshake with the private key matching its certificate, and the client checks the certificate chain up to a trusted CA and the hostname. After that, data is encrypted and integrity-protected with a fast symmetric cipher such as AES-GCM. Ephemeral keys give forward secrecy."
+**30-second answer — how HTTPS works:** "TLS 1.3 does an ephemeral Diffie-Hellman key exchange (a method for two parties to agree on a shared secret over an open network) in the first round trip, so client and server derive the same session keys without sending them. The server proves its identity by signing the handshake with the private key matching its certificate, and the client checks the certificate chain up to a trusted CA and the hostname. After that, data is encrypted and integrity-protected with a fast symmetric cipher such as AES-GCM. Ephemeral keys give forward secrecy."
 
 - *Hashing vs encryption?* → Hashing is one-way and keyless (fingerprints, password storage); encryption is reversible with a key (confidentiality).
 - *Why both symmetric and asymmetric?* → Asymmetric solves key distribution and identity but is slow; symmetric is fast. TLS uses the first to set up the second.

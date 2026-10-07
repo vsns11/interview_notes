@@ -1,6 +1,8 @@
 # Chapter 1 — The Spring Ecosystem and Your First App
 
-Spring is the most widely used framework for building server-side Java applications: web APIs, back-office systems, batch jobs, message consumers. This chapter explains what Spring and Spring Boot actually are, where they came from, which versions are current, and then walks you through building, running, packaging and testing a first REST API with **Spring Boot 4.1.1** on **Java 25**.
+Spring is the most widely used framework for building server-side Java applications (programs that run on a server and answer other programs, rather than apps on your own screen): web APIs, back-office systems, batch jobs (programs that process a large pile of data in one run, often at night), message consumers (programs that react to messages arriving on a queue).
+
+> **Key term — API / REST API:** An **API** (Application Programming Interface) is the set of operations one program offers to other programs. A **web API** offers them over HTTP, the protocol browsers use. A **REST API** is a web API in a common style: each thing (an order, a user) has a URL, and you act on it with standard HTTP methods such as `GET` (read) and `POST` (create), usually exchanging JSON. See [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) for HTTP basics. This chapter explains what Spring and Spring Boot actually are, where they came from, which versions are current, and then walks you through building, running, packaging and testing a first REST API with **Spring Boot 4.1.1** on **Java 25**.
 
 You only need basic Java for this book. When a Java feature matters (records, annotations, lambdas, Maven), this book links to the [Java Handbook](../../../java/chapters/01-java-and-the-jvm/README.md) instead of teaching it again.
 
@@ -26,7 +28,7 @@ All runnable code is in [`code/hello-boot/`](code/hello-boot/): a Maven project 
 ### What it is
 A **library** is code you call (for example, a JSON parser). A **framework** is code that calls *you*: it owns the program's structure and plugs your classes into it at the right moments. This reversal is called **Inversion of Control (IoC)** — "don't call us, we'll call you".
 
-**Spring Framework** is an open-source Java framework whose core is an **IoC container**: an object that creates your application's objects, connects them to each other, configures them, and manages their whole life. Objects managed by the container are called **beans**. Around that core, Spring offers modules for web applications (Spring MVC, WebFlux), data access (JDBC, transactions), messaging, testing, scheduling and more.
+**Spring Framework** is an open-source (its source code is public and free to use) Java framework whose core is an **IoC container**: an object that creates your application's objects, connects them to each other, configures them, and manages their whole life. Objects managed by the container are called **beans**. Around that core, Spring offers modules for web applications (Spring MVC — the classic web framework where each request gets its own thread; WebFlux — a non-blocking alternative), data access (**JDBC** — Java Database Connectivity, Java's standard low-level API for talking to SQL databases; and **transactions** — groups of database changes that succeed or fail as one unit), messaging, testing, scheduling and more.
 
 Analogy: building a restaurant yourself means hiring every cook, buying every oven, and telling each cook where the ovens are. With Spring you write a list — "I need a cook who needs an oven" — and a manager (the container) hires them, hands each cook an oven, opens the doors in the morning and closes up at night.
 
@@ -51,13 +53,13 @@ This causes three problems:
 
 Spring's answer is **Dependency Injection (DI)**: a class *declares* what it needs (usually as constructor parameters) and the container *supplies* it. The class depends on an interface; the container picks the implementation. Chapter 2 covers DI in depth; the design principle behind it is the Dependency Inversion Principle — see [LLD §4.10](../../../lld/chapters/04-solid-principles/README.md) and the Hollywood Principle in [LLD Chapter 5](../../../lld/chapters/05-design-principles/README.md).
 
-Beyond DI, Spring gives you ready-made, battle-tested answers for the plumbing every server application needs: HTTP request handling, JSON conversion, database transactions, security, scheduling, caching, and consistent exception types.
+Beyond DI, Spring gives you ready-made, battle-tested answers for the plumbing every server application needs: HTTP request handling, JSON conversion (**JSON** is a plain-text data format like `{"name":"Ada"}`, the usual way web APIs exchange data), database transactions, security, scheduling, caching, and consistent exception types.
 
 ### How it works (bird's-eye view)
-1. You write ordinary Java classes (often called POJOs — "Plain Old Java Objects") and mark the ones Spring should manage, for example with `@Service`.
+1. You write ordinary Java classes (often called POJOs — "Plain Old Java Objects") and mark the ones Spring should manage, for example with `@Service` (an **annotation**: a `@`-label on a class or method that tools and frameworks can read at runtime).
 2. At startup the container reads that **configuration metadata** (annotations, `@Bean` methods, or, in old projects, XML).
 3. It creates each bean, injecting the other beans it needs.
-4. It may wrap beans in **proxies** to add behaviour such as transactions or security (Chapter 4).
+4. It may wrap beans in **proxies** (stand-in objects that sit in front of the real object, intercept calls, and pass them on) to add behaviour such as transactions or security (Chapter 4).
 5. Your application runs; the container calls your code when HTTP requests, messages or timers arrive.
 6. At shutdown the container calls clean-up callbacks and destroys the beans.
 
@@ -85,26 +87,26 @@ Spring is a framework built around an IoC container that creates and wires your 
 |---|---|---|
 | **Starters** | One dependency per capability (`spring-boot-starter-webmvc`) that brings a tested set of libraries. | §1.7 |
 | **Dependency management** | Boot picks compatible versions of ~hundreds of libraries, so your `pom.xml` has no `<version>` tags. | §1.6 |
-| **Auto-configuration** | Boot looks at your classpath and settings and creates sensible beans for you (a web server, a JSON mapper, a `DataSource`...). Your own beans always win. | Chapter 3 |
-| **Embedded server** | Tomcat (or Jetty) runs *inside* your app. No separate server to install; you run `java -jar app.jar`. | §1.9 |
-| **Externalized configuration** | Settings come from `application.properties`/`.yaml`, environment variables, command-line arguments... with a clear precedence order. | Chapter 3 |
-| **Production features** | Health checks, metrics, tracing, structured logging, graceful shutdown (Actuator). | Chapter 15 |
-| **Testing support** | Slices like `@WebMvcTest`, `@SpringBootTest`, test starters. | Chapter 12 |
+| **Auto-configuration** | Boot looks at your classpath (the jars your app includes, §1.6) and settings and creates sensible beans for you (a web server, a JSON mapper, a `DataSource` — an object that hands out database connections...). Your own beans always win. | Chapter 3 |
+| **Embedded server** | Tomcat (or Jetty) — a web server that receives HTTP requests — runs *inside* your app. No separate server to install; you run `java -jar app.jar`. | §1.9 |
+| **Externalized configuration** | Settings come from `application.properties`/`.yaml`, environment variables (named values set by the operating system or container, e.g. `SERVER_PORT=9090`), command-line arguments... with a clear precedence order. | Chapter 3 |
+| **Production features** | Health checks ("is the app OK?" URLs), metrics (numbers like request counts), tracing (following one request across services), structured logging, graceful shutdown (Actuator). | Chapter 15 |
+| **Testing support** | Slices (tests that start only one layer of the app) like `@WebMvcTest`, `@SpringBootTest`, test starters. | Chapter 12 |
 
 Analogy: Spring Framework is a professional kitchen full of equipment. Spring Boot is the same kitchen delivered pre-assembled, with the ovens already connected and a sensible default menu — you can still move any piece of equipment.
 
 ### Why it matters
-Before Boot (2014), a Spring web app needed a WAR file, an external Tomcat, XML or Java configuration for the `DispatcherServlet`, a view resolver, a JSON converter, a data source, and a careful choice of library versions that worked together. Boot reduced that to a generated project and a `main` method, while keeping every default overridable.
+Before Boot (2014), a Spring web app needed a WAR file (Web Application Archive — a zip of your app that you copy into a separately installed server), an external Tomcat, XML or Java configuration for the `DispatcherServlet` (Spring MVC's central request dispatcher, Chapter 5), a view resolver (maps a view name to an HTML template), a JSON converter, a data source, and a careful choice of library versions that worked together. Boot reduced that to a generated project and a `main` method, while keeping every default overridable.
 
 ### Spring vs Spring Boot
 
 | Question | Spring Framework | Spring Boot |
 |---|---|---|
-| What is it? | The core framework: IoC container, MVC, transactions... | An opinionated layer that configures Spring for you |
+| What is it? | The core framework: IoC container, MVC, transactions... | An opinionated (it makes sensible default choices for you) layer that configures Spring for you |
 | Can you use one without the other? | Yes — plain Spring works without Boot | No — Boot always uses Spring Framework |
 | Configuration | You declare the infrastructure beans yourself | Auto-configured; you override only what you need |
 | Server | Deploy a WAR to an external server (traditional) | Embedded server inside an executable jar |
-| Versions | You choose each library version | Managed by Boot's BOM |
+| Versions | You choose each library version | Managed by Boot's BOM (version list, §1.6) |
 | Typical use today | Libraries, special setups | Almost every new application |
 
 ### Common mistakes
@@ -113,10 +115,10 @@ Before Boot (2014), a Spring web app needed a WAR file, an external Tomcat, XML 
 
 ### In the interview
 **Q: What is the difference between Spring and Spring Boot?**
-*30-second answer:* Spring Framework provides the IoC container and modules like MVC and transactions. Spring Boot sits on top: it adds starters for dependency sets, a managed version BOM, auto-configuration that creates beans based on the classpath and properties, an embedded server so the app runs as a plain jar, externalized configuration and production features like Actuator. Boot removes boilerplate; it does not replace Spring.
+*30-second answer:* Spring Framework provides the IoC container and modules like MVC and transactions. Spring Boot sits on top: it adds starters for dependency sets, a managed version BOM, auto-configuration that creates beans based on the classpath and properties, an embedded server so the app runs as a plain jar, externalized configuration and production features like Actuator. Boot removes boilerplate (repetitive setup code that is the same in every project); it does not replace Spring.
 
 - *Follow-up: Can you override what Boot configures?* Yes. Auto-configured beans are usually guarded by `@ConditionalOnMissingBean`, so defining your own bean of that type makes Boot back off; many settings are also just properties.
-- *Follow-up: Does Boot make the app slower?* Startup does some extra condition evaluation, but the runtime code path is the same Spring code. Boot also offers AOT processing and native images for faster startup (Chapter 15).
+- *Follow-up: Does Boot make the app slower?* Startup does some extra condition evaluation, but the runtime code path is the same Spring code. Boot also offers AOT (ahead-of-time: doing work at build time instead of at startup) processing and native images (the app compiled into a stand-alone machine-code executable that needs no JVM — the Java Virtual Machine, the program that normally runs compiled Java code) for faster startup (Chapter 15).
 
 ### TL;DR
 Spring Boot = Spring Framework + starters + managed versions + auto-configuration + embedded server + externalized config + production features.
@@ -129,18 +131,18 @@ Spring Boot = Spring Framework + starters + managed versions + auto-configuratio
 
 | Project | What it gives you | Chapter |
 |---|---|---|
-| **Spring Framework** | IoC container, AOP, MVC, WebFlux, JDBC, transactions, testing | 2, 4, 5, 7, 13 |
+| **Spring Framework** | IoC container, AOP (Aspect-Oriented Programming — adding cross-cutting behaviour such as logging around methods, Chapter 4), MVC, WebFlux, JDBC, transactions, testing | 2, 4, 5, 7, 13 |
 | **Spring Boot** | Starters, auto-configuration, embedded servers, Actuator | 1, 3, 12, 15 |
-| **Spring Data** | Repository interfaces for JPA, JDBC, MongoDB, Redis, R2DBC... | 8, 9 |
-| **Spring Security** | Authentication, authorization, OAuth2, JWT | 10, 11 |
-| **Spring Cloud** | Config server, service discovery, gateway, load balancing | 16 |
-| **Spring for Apache Kafka / Spring AMQP** | Messaging with Kafka and RabbitMQ | 14 |
+| **Spring Data** | Repository interfaces (you declare the data-access methods; Spring writes the code) for JPA, JDBC, MongoDB, Redis, R2DBC... | 8, 9 |
+| **Spring Security** | Authentication (who are you?), authorization (what may you do?), OAuth2 (a standard for delegated login/access), JWT (a signed token carrying user claims) | 10, 11 |
+| **Spring Cloud** | Config server, service discovery (services finding each other's addresses), gateway (single entry point in front of many services), load balancing (spreading requests over several copies) | 16 |
+| **Spring for Apache Kafka / Spring AMQP** | Messaging with Kafka and RabbitMQ (message brokers: servers that store and forward messages between programs) | 14 |
 | **Spring Batch** | Large, restartable batch jobs | — (mentioned in 14) |
 | **Spring Integration** | Enterprise integration patterns (channels, adapters) | — |
-| **Spring Session** | Store HTTP sessions in Redis or a database | 10 |
-| **Spring for GraphQL** | GraphQL servers on Spring | — |
-| **Spring Modulith** | Structure a monolith into verified modules | 16 |
-| **Spring AI** | LLM chat clients, embeddings, RAG, tool calling | 17 |
+| **Spring Session** | Store HTTP sessions (per-user server-side state across requests) in Redis or a database | 10 |
+| **Spring for GraphQL** | GraphQL (an API query language where the client picks the fields it wants) servers on Spring | — |
+| **Spring Modulith** | Structure a monolith (one app deployed as a single unit) into verified modules | 16 |
+| **Spring AI** | LLM (large language model) chat clients, embeddings (text as number vectors), RAG (retrieval-augmented generation), tool calling | 17 |
 
 ```mermaid
 flowchart TB
@@ -160,7 +162,7 @@ flowchart TB
     C --> F
 ```
 
-**Real-world stack example.** A typical online-shop order service is: Spring Boot + Spring MVC (REST API) + Spring Data JPA (PostgreSQL) + Spring Security (JWT) + Spring for Apache Kafka (publish "order placed" events) + Actuator/Micrometer (metrics). This book builds each of those layers.
+**Real-world stack example.** A typical online-shop order service (one small, independently deployed app in a larger system) is: Spring Boot + Spring MVC (REST API) + Spring Data JPA (PostgreSQL, a popular open-source SQL database) + Spring Security (JWT) + Spring for Apache Kafka (publish "order placed" events) + Actuator/Micrometer (Micrometer is the metrics library Spring uses). This book builds each of those layers.
 
 ---
 
@@ -170,16 +172,16 @@ flowchart TB
 
 | Year | Release | What changed (in one line) |
 |---|---|---|
-| 2002 | Rod Johnson's book *Expert One-on-One J2EE Design and Development* | Showed a lighter alternative to EJB; its sample code became Spring |
+| 2002 | Rod Johnson's book *Expert One-on-One J2EE Design and Development* | Showed a lighter alternative to EJB (Enterprise JavaBeans, the heavyweight component model of J2EE — the old name of enterprise Java); its sample code became Spring |
 | 2004 | Spring Framework 1.0 | IoC container, AOP, transaction abstraction, XML configuration |
 | 2007 | Spring 2.5 | Annotation-driven config: `@Autowired`, `@Component`, `@Controller` |
-| 2009 | Spring 3.0 | Java 5 baseline, `@Configuration`/`@Bean` Java config, SpEL, REST support in MVC |
+| 2009 | Spring 3.0 | Java 5 baseline, `@Configuration`/`@Bean` Java config, SpEL (Spring Expression Language, small `#{...}` expressions), REST support in MVC |
 | 2013 | Spring 4.0 | Java 8 support, `@Conditional` (the foundation of auto-configuration) |
 | 2014 | Spring Boot 1.0 | Starters, auto-configuration, embedded servers |
-| 2017–18 | Spring 5.0 / Boot 2.0 | Java 8 baseline, reactive stack (WebFlux) |
-| 2022 | Spring 6.0 / Boot 3.0 | **Java 17 baseline**, `javax.*` → `jakarta.*`, AOT and GraalVM native images |
-| Nov 2025 | **Spring Framework 7.0** (13 Nov) / **Spring Boot 4.0** (20 Nov) | Jakarta EE 11, JSpecify null-safety, modular Boot jars, Jackson 3, API versioning, HTTP service clients, JUnit 6 |
-| Jun 2026 | Spring Boot 4.1.0 (10 Jun) | gRPC support, Jackson config updates, observability updates |
+| 2017–18 | Spring 5.0 / Boot 2.0 | Java 8 baseline (minimum supported version), reactive stack (WebFlux; non-blocking, stream-based code) |
+| 2022 | Spring 6.0 / Boot 3.0 | **Java 17 baseline**, `javax.*` → `jakarta.*`, AOT and GraalVM (a JDK that can compile Java to native executables) native images |
+| Nov 2025 | **Spring Framework 7.0** (13 Nov) / **Spring Boot 4.0** (20 Nov) | Jakarta EE 11 (the standard enterprise Java APIs), JSpecify null-safety (annotations marking what may be `null`), modular Boot jars, Jackson 3, API versioning, HTTP service clients, JUnit 6 |
+| Jun 2026 | Spring Boot 4.1.0 (10 Jun) | gRPC (a fast binary remote-call protocol from Google) support, Jackson config updates, observability updates |
 | Aug 2026 | Spring Boot 4.1.1 (20 Aug) | Bug fixes and dependency upgrades — **the version used in this book** |
 
 ### The current generation — what Boot 4.1.1 gives you
@@ -188,17 +190,17 @@ The versions below come from Boot 4.1.1's dependency BOM (`spring-boot-dependenc
 
 | Component | Version in Boot 4.1.1 | Notes |
 |---|---|---|
-| Java | **17 minimum**, 25 recommended | Framework 7 keeps the Java 17 baseline; this book uses Java 25 (LTS) — see [Java Ch. 17](../../../java/chapters/17-modern-java-17-to-25/README.md) |
+| Java | **17 minimum**, 25 recommended | Framework 7 keeps the Java 17 baseline; this book uses Java 25 (LTS — long-term support release) — see [Java Ch. 17](../../../java/chapters/17-modern-java-17-to-25/README.md) |
 | Spring Framework | 7.0.9 | |
-| Jakarta EE | 11 (Servlet 6.1, JPA 3.2, Bean Validation 3.1) | |
+| Jakarta EE | 11 (Servlet 6.1 — the Java web-server API; JPA 3.2 — the Java object/database mapping API; Bean Validation 3.1 — rules like `@NotNull`) | |
 | Tomcat / Jetty | 11.0.24 / 12.1.12 | Undertow is no longer supported (it lacks Servlet 6.1) |
 | Jackson | 3.1.5 (`tools.jackson` packages) | Jackson 2 still available via a separate module, deprecated |
-| Hibernate ORM / Validator | 7.4.5 / 9.1.3 | |
+| Hibernate ORM (object-relational mapper: maps Java objects to database tables) / Validator | 7.4.5 / 9.1.3 | |
 | Spring Security | 7.1.1 | |
-| Spring Data | 2026.0.1 release train | |
+| Spring Data | 2026.0.1 release train (a named set of modules released together) | |
 | JUnit Jupiter | 6.0.3 | JUnit 4 support is deprecated in Framework 7 |
-| Mockito / AssertJ | 5.23.0 / 3.27.7 | |
-| Kotlin | 2.3.21 (2.2 minimum) | |
+| Mockito (fake objects for tests) / AssertJ (readable test assertions) | 5.23.0 / 3.27.7 | |
+| Kotlin (a JVM language) | 2.3.21 (2.2 minimum) | |
 | GraalVM (native images) | 25+ | |
 
 ### `javax` → `jakarta`
@@ -206,7 +208,7 @@ Java EE was handed to the Eclipse Foundation in 2017 and renamed **Jakarta EE**;
 
 ### How versions relate
 - **Boot pins everything.** You choose one number — the Boot version — and the BOM chooses compatible versions of Spring Framework, Spring Data, Security, Tomcat, Jackson, Hibernate, JUnit, etc.
-- **Release cadence.** Boot ships a new minor version (4.0, 4.1, ...) roughly every six months, and patch releases (4.1.1, 4.1.2) regularly in between.
+- **Release cadence.** Boot ships a new minor version (4.0, 4.1, ... — new features, no breaking changes) roughly every six months, and patch releases (4.1.1, 4.1.2 — bug fixes only) regularly in between.
 - **Support.** Each Boot minor line gets roughly 13 months of free open-source support, then commercial support. Stay on a supported minor; check the "Support" section at spring.io/projects/spring-boot before planning an upgrade.
 - **Version names.** `-M1`, `-M2` are milestones, `-RC1` release candidates, a plain `4.1.1` is GA (generally available). `-SNAPSHOT` versions are nightly builds — never use them in production.
 
@@ -228,18 +230,18 @@ This book uses Spring Boot 4.1.1 → Spring Framework 7.0.9, Jakarta EE 11, Tomc
 ## 1.5 Creating a project with start.spring.io
 
 ### What it is
-**Spring Initializr** (at **start.spring.io**) is a web service that generates a ready-to-build Spring Boot project as a zip. IntelliJ IDEA, VS Code (Spring Boot Extension Pack) and Eclipse (Spring Tools) all call the same service from their "New project" wizards.
+**Spring Initializr** (at **start.spring.io**) is a web service that generates a ready-to-build Spring Boot project as a zip. IntelliJ IDEA (an IDE — Integrated Development Environment, i.e. a code editor with build, run and debug tools), VS Code (Spring Boot Extension Pack) and Eclipse (Spring Tools) all call the same service from their "New project" wizards.
 
 ### How it works
 1. Open start.spring.io.
-2. **Project**: *Gradle - Groovy* (the site's default), *Gradle - Kotlin*, or *Maven*. This book uses Maven.
+2. **Project**: *Gradle - Groovy* (the site's default), *Gradle - Kotlin*, or *Maven*. These are **build tools**: programs that download your dependencies (libraries your code uses), compile, test and package the project. This book uses Maven.
 3. **Language**: Java (Kotlin and Groovy are also offered).
 4. **Spring Boot**: pick the latest GA version without a suffix — **4.1.1** at the time of writing. Avoid `SNAPSHOT` and `M`/`RC` versions.
 5. **Project metadata**: *Group* (`com.example`, usually your reversed domain), *Artifact* (`hello-boot`, also the jar name), *Package name* (`com.example.hello` — your main class goes here), *Packaging* (`Jar` — use `War` only for deploying to an external server), *Java* (17, 21, 25 or 27; this book uses 25).
 6. **Dependencies**: search and add. For the first app: *Spring Web* (id `web`) and *Spring Boot DevTools* (id `devtools`).
 7. Click **Generate**, unzip, and open the folder in your IDE.
 
-You can do the same from a terminal (the service has a small HTTP API):
+You can do the same from a terminal (the service has a small HTTP API) with `curl`, a command-line program that sends HTTP requests:
 
 ```bash
 curl https://start.spring.io/starter.zip \
@@ -330,12 +332,12 @@ This is the standard Maven layout (`src/main/java`, `src/main/resources`, `src/t
 </build>
 ```
 
-1. **`spring-boot-starter-parent`** — a parent POM that (a) imports the dependency BOM (**Bill of Materials**: a POM that lists tested versions for hundreds of libraries), (b) sets UTF-8 encoding, (c) compiles with `-parameters` (so Spring can read constructor parameter names), and (d) pre-configures plugins (surefire for tests, resources filtering, the Boot plugin).
+1. **`spring-boot-starter-parent`** — a parent POM (Project Object Model, Maven's name for a `pom.xml`; a child POM inherits settings from its parent) that (a) imports the dependency BOM (**Bill of Materials**: a POM that lists tested versions for hundreds of libraries), (b) sets UTF-8 encoding, (c) compiles with `-parameters` (so Spring can read constructor parameter names), and (d) pre-configures plugins (add-ons that give Maven extra build steps: surefire for running tests, resources filtering, the Boot plugin).
 2. **`java.version`** — the parent turns this into `maven.compiler.release`, so `javac --release 25` is used.
 3. **The web starter** — no `<version>`: the parent manages it.
 4. **DevTools** — `runtime` scope + `optional` keeps it out of other projects that depend on yours; the Boot plugin also leaves it out of the packaged jar by default.
 5. **The test starter** — only on the test classpath.
-6. **`spring-boot-maven-plugin`** — adds goals such as `spring-boot:run`, and during `package` it **repackages** the normal jar into an executable "fat jar" (§1.9).
+6. **`spring-boot-maven-plugin`** — adds goals (named Maven tasks) such as `spring-boot:run`, and during `package` it **repackages** the normal jar (a zip of compiled classes) into an executable "fat jar" — one jar that also contains all its dependency jars (§1.9).
 
 **If you cannot use the parent** (your company has its own parent POM), import the BOM instead:
 
@@ -452,7 +454,7 @@ Rules of thumb for Boot 4:
 ### Common mistakes
 - Adding both `spring-boot-starter-webmvc` and `spring-boot-starter-webflux` and being surprised the app is a *servlet* app. When both are present, Boot chooses Spring MVC.
 - Using `spring-boot-starter-test` alone and then finding `@WebMvcTest` missing in Boot 4 — add `spring-boot-starter-webmvc-test`.
-- Excluding a transitive library by hand to "slim down" and breaking auto-configuration. Use the starter meant for the job (e.g. exclude `spring-boot-starter-tomcat` and add `spring-boot-starter-jetty` to switch servers).
+- Excluding a transitive library (one you get indirectly, because a dependency of yours depends on it) by hand to "slim down" and breaking auto-configuration. Use the starter meant for the job (e.g. exclude `spring-boot-starter-tomcat` and add `spring-boot-starter-jetty` to switch servers).
 
 ### Self-check
 1. What code does a starter contain? → Essentially none; it's a curated dependency list.
@@ -497,7 +499,7 @@ It is a shortcut for three annotations:
 3. Prints the banner.
 4. Creates the right `ApplicationContext` (the IoC container; for a servlet app a web-server-aware one).
 5. Registers bean definitions: your scanned classes plus auto-configurations whose conditions pass.
-6. **Refreshes** the context: creates all singleton beans, and for a web app starts the embedded Tomcat.
+6. **Refreshes** the context: creates all singleton beans (beans with exactly one shared instance — the default), and for a web app starts the embedded Tomcat.
 7. Runs any `CommandLineRunner`/`ApplicationRunner` beans (code you want to run once at startup).
 8. Returns the running context; the JVM keeps running while Tomcat's threads are alive.
 
@@ -522,7 +524,7 @@ sequenceDiagram
 Put it in the **root package** of your code (`com.example.hello`) and every other class in that package or below (`com.example.hello.orders`, `com.example.hello.web`...). Component scanning starts from the main class's package, so a class in `com.example.other` is silently **not** a bean.
 
 ### Common mistakes
-- Main class in a sub-package (`com.example.hello.app`) while controllers live in `com.example.hello.web` → endpoints return 404 because the controllers were never scanned.
+- Main class in a sub-package (`com.example.hello.app`) while controllers live in `com.example.hello.web` → endpoints return 404 (the HTTP status code for "not found") because the controllers were never scanned.
 - Placing the main class in the *default* (unnamed) package — Boot warns and scanning every jar on the classpath breaks startup.
 - Writing logic in `main` after `run(...)` expecting it to run "before the server starts". Use a `CommandLineRunner` or an event listener (Chapter 2).
 
@@ -545,7 +547,7 @@ It combines `@SpringBootConfiguration` (this class is configuration), `@EnableAu
 |---|---|---|
 | IDE | Run `HelloApplication.main` | Daily development, debugging with breakpoints |
 | Maven plugin | `./mvnw spring-boot:run` (or `mvn spring-boot:run`) | Terminal development; picks up `src/main/resources` directly |
-| Executable jar | `./mvnw package` then `java -jar target/hello-boot-0.0.1-SNAPSHOT.jar` | Production, containers, CI |
+| Executable jar | `./mvnw package` then `java -jar target/hello-boot-0.0.1-SNAPSHOT.jar` | Production, containers, CI (continuous integration: a server that builds and tests every change) |
 
 Pass settings on the command line in either form:
 
@@ -582,22 +584,22 @@ INFO 91361 --- [hello-boot] [main] c.e.hello.HelloApplication : Started HelloApp
 |---|---|
 | `91361` | Process ID |
 | `[hello-boot]` | `spring.application.name` from `application.properties` |
-| `[main]` | Thread name |
+| `[main]` | Thread name (a thread is one independent path of execution inside the process) |
 | `No active profile set...` | No profile chosen, so only `application.properties` applies (profiles: Chapter 3) |
 | `Tomcat initialized/started on port ...` | The embedded server is listening |
 | `Started HelloApplication in 0.728 seconds` | The context is fully refreshed and ready |
 
-When the first request arrives you also see `Initializing Spring DispatcherServlet 'dispatcherServlet'` — the front controller of Spring MVC is created lazily on the first request (Chapter 5). Pressing Ctrl+C (or `kill <pid>`) shows:
+When the first request arrives you also see `Initializing Spring DispatcherServlet 'dispatcherServlet'` — the front controller (one object that receives every request and routes it) of Spring MVC is created lazily (only when first needed) on the first request (Chapter 5). Pressing Ctrl+C (or `kill <pid>`) shows:
 
 ```
 INFO ... [ionShutdownHook] o.s.boot.tomcat.GracefulShutdown : Commencing graceful shutdown. Waiting for active requests to complete
 INFO ... [tomcat-shutdown] o.s.boot.tomcat.GracefulShutdown : Graceful shutdown complete
 ```
 
-**Graceful shutdown** is on by default: the server stops accepting new requests and lets in-flight ones finish (up to `spring.lifecycle.timeout-per-shutdown-phase`, default 30 s) before the context closes (Chapter 15).
+**Graceful shutdown** is on by default: the server stops accepting new requests and lets in-flight ones (already being processed) finish (up to `spring.lifecycle.timeout-per-shutdown-phase`, default 30 s) before the context closes (Chapter 15).
 
 ### Inside the executable jar
-`mvn package` produced a 19.9 MB jar. Its layout (from `unzip -l`) and manifest:
+`mvn package` produced a 19.9 MB jar. Its layout (from `unzip -l`) and manifest (`MANIFEST.MF`, a small text file inside a jar that tells Java which class to start):
 
 ```
 META-INF/MANIFEST.MF
@@ -615,7 +617,7 @@ Spring-Boot-Classes: BOOT-INF/classes/
 Spring-Boot-Lib: BOOT-INF/lib/
 ```
 
-A plain JVM cannot load classes from jars *nested* inside a jar. So `java -jar` starts Boot's **`JarLauncher`** (the `Main-Class`), which sets up a class loader able to read `BOOT-INF/lib/*.jar`, then calls your **`Start-Class`**. `layers.idx` groups files into layers (dependencies change rarely, your classes often) so Docker images can cache them — see Chapter 15. General jar packaging is covered in [Java §18.12](../../../java/chapters/18-testing-build-and-tooling/README.md).
+A plain JVM cannot load classes from jars *nested* inside a jar. So `java -jar` starts Boot's **`JarLauncher`** (the `Main-Class`), which sets up a class loader (the JVM component that finds and loads `.class` files) able to read `BOOT-INF/lib/*.jar`, then calls your **`Start-Class`**. `layers.idx` groups files into layers (dependencies change rarely, your classes often) so Docker images (packaged, runnable snapshots of an app plus its OS files, run as **containers**) can cache them — see Chapter 15. General jar packaging is covered in [Java §18.12](../../../java/chapters/18-testing-build-and-tooling/README.md).
 
 ### Common mistakes
 - `Web server failed to start. Port 8080 was already in use.` Another process (often a previous run) holds the port. Stop it or set `server.port`. `server.port=0` picks a random free port.
@@ -637,7 +639,7 @@ A plain JVM cannot load classes from jars *nested* inside a jar. So `java -jar` 
 | Feature | What it does |
 |---|---|
 | **Automatic restart** | When compiled classes change on the classpath, the application restarts in about a second. |
-| **Development property defaults** | Turns off caches that get in the way while developing (template caching, static-resource caching), enables the H2 console, etc. |
+| **Development property defaults** | Turns off caches that get in the way while developing (template caching, static-resource caching), enables the H2 console (web UI for H2, a small in-memory database), etc. |
 | **Global settings** | Personal settings in `~/.config/spring-boot/spring-boot-devtools.properties` apply to all your apps. |
 | **Remote DevTools** | Opt-in restart of a remote app over HTTP; a security risk — only on trusted networks. |
 | **LiveReload** | Browser auto-refresh; **disabled by default since Boot 4.0 and deprecated in 4.1** (no replacement). |
@@ -656,7 +658,7 @@ DevTools considers an app "in production" — and disables itself — when it is
 ### Common mistakes
 - Expecting restarts after *editing* a `.java` file without compiling — DevTools watches compiled classes. Enable "build project automatically" in your IDE.
 - Shipping DevTools to production by removing `<optional>true</optional>` or configuring the plugin to include it.
-- Confusing restart with hot-swapping: restart re-creates the whole context, so in-memory state (sessions, caches) is lost. For true class reloading, tools like JRebel exist.
+- Confusing restart with hot-swapping (replacing a class's code inside the running JVM without restarting): restart re-creates the whole context, so in-memory state (sessions, caches) is lost. For true class reloading, tools like JRebel exist.
 
 ### TL;DR
 DevTools restarts the app quickly when compiled classes change (two class loaders), applies developer-friendly defaults, and switches itself off for packaged jars and tests.
@@ -672,7 +674,7 @@ DevTools restarts the app quickly when compiled classes change (two class loader
 // Greeting.java — the response body
 public record Greeting(String message, int length) {}
 ```
-A **record** is a compact immutable data class (Java 16 — see [Java §6.8](../../../java/chapters/06-oop-inheritance-interfaces-and-more/README.md)). Jackson 3 serializes its components as JSON fields.
+A **record** is a compact immutable data class (Java 16 — see [Java §6.8](../../../java/chapters/06-oop-inheritance-interfaces-and-more/README.md)). Jackson 3 (the JSON library) serializes (converts an object into text or bytes for sending) its components as JSON fields.
 
 ```java
 // GreetingService.java
@@ -710,8 +712,8 @@ What each piece does:
 | `@RestController` | `@Controller` + `@ResponseBody`: the return value becomes the response body (converted to JSON), not a view name. |
 | Constructor parameter | Spring sees `HelloController` needs a `GreetingService` and passes the singleton bean. No `@Autowired` needed with a single constructor (Chapter 2). |
 | `@GetMapping("/hello")` | Maps HTTP GET requests for path `/hello` to this method. |
-| `@RequestParam(defaultValue = "World")` | Reads the query parameter `name`; if absent, uses `"World"`. |
-| Return type `Greeting` | Jackson (auto-configured by Boot) writes it as JSON with `Content-Type: application/json`. |
+| `@RequestParam(defaultValue = "World")` | Reads the query parameter `name` (the `?name=Ada` part of the URL); if absent, uses `"World"`. |
+| Return type `Greeting` | Jackson (auto-configured by Boot) writes it as JSON with `Content-Type: application/json` (the HTTP header naming the body's format). |
 
 ### Calling it
 With the jar running on port 18081:
@@ -729,7 +731,7 @@ $ curl -s localhost:18081/nope
 {"timestamp":"2026-09-28T23:24:50.396Z","status":404,"error":"Not Found","path":"/nope"}
 ```
 
-The last response comes from Boot's default error handling (`/error` endpoint). Chapter 5 replaces it with RFC 9457 `ProblemDetail` responses.
+The last response comes from Boot's default error handling (`/error` endpoint). Chapter 5 replaces it with RFC 9457 `ProblemDetail` responses (an RFC is a published internet standard; RFC 9457 defines a JSON shape for error responses).
 
 ### What happened during a request
 ```mermaid
@@ -759,7 +761,7 @@ sequenceDiagram
 
 ## 1.12 Testing the first app
 
-Spring Boot tests are ordinary JUnit tests with extra annotations that start (part of) the Spring container. Two styles cover most needs; Chapter 12 goes much deeper. JUnit basics are in [Java §18.4](../../../java/chapters/18-testing-build-and-tooling/README.md).
+Spring Boot tests are ordinary JUnit tests (JUnit is Java's standard unit-testing framework) with extra annotations that start (part of) the Spring container. Two styles cover most needs; Chapter 12 goes much deeper. JUnit basics are in [Java §18.4](../../../java/chapters/18-testing-build-and-tooling/README.md).
 
 ### Test 1 — a web *slice* with `MockMvcTester`
 
@@ -791,7 +793,7 @@ class HelloControllerTest {
 }
 ```
 
-- **`@WebMvcTest`** starts a *slice*: only MVC infrastructure, controllers, JSON and filters — no services, repositories or web server. That is why `GreetingService` is added with `@Import` (the more common alternative is mocking it with `@MockitoBean`, Chapter 12).
+- **`@WebMvcTest`** starts a *slice*: only MVC infrastructure, controllers, JSON and filters — no services, repositories or web server. That is why `GreetingService` is added with `@Import` (the more common alternative is mocking it — replacing it with a fake whose answers the test scripts — with `@MockitoBean`, Chapter 12).
 - **`MockMvcTester`** sends requests straight to the `DispatcherServlet` in memory and offers AssertJ assertions such as `hasStatusOk()` and `bodyJson().extractingPath(...)` (a JSONPath expression; `$` is the document root).
 
 ### Test 2 — the whole app on a real port with `RestTestClient`
@@ -820,7 +822,7 @@ class HelloApplicationTests {
 
 - **`@SpringBootTest`** starts the full application context, like `main` does. With `RANDOM_PORT` it also starts Tomcat on a free port, so the test makes real HTTP calls.
 - **`RestTestClient`** (new in Spring Framework 7) is a fluent test client for blocking apps; `@AutoConfigureRestTestClient` (from the `spring-boot-resttestclient` module, included by the webmvc test starter) binds it to the running server.
-- Test class names must end in `Test`, `Tests` or `TestCase` for Maven Surefire to run them by default — a class named `*IT` is only run by the Failsafe plugin, which this project does not configure.
+- Test class names must end in `Test`, `Tests` or `TestCase` for Maven Surefire (the plugin that runs unit tests) to run them by default — a class named `*IT` (integration test) is only run by the Failsafe plugin, which this project does not configure.
 
 ### Output
 `mvn -q -B -ntp verify` (Spring banners and log lines removed):
@@ -839,7 +841,7 @@ GET /hello          -> 200 {"message":"Hello, World!","length":13}
 | Starts | Web layer only, no server | Whole app + real Tomcat |
 | Speed | Fast | Slower |
 | Catches | Mapping, JSON, validation, controller logic | Everything incl. filters, server config, real HTTP |
-| Use for | Most controller tests | A few end-to-end "smoke" tests |
+| Use for | Most controller tests | A few end-to-end "smoke" tests (quick checks that the whole app starts and basically works) |
 
 ### Self-check
 1. Why did `HelloControllerTest` need `@Import(GreetingService.class)`? → `@WebMvcTest` does not scan `@Service` classes.

@@ -1,6 +1,6 @@
 # Chapter 15 — Observability and Production
 
-Everything so far has been about making the application *work*. This chapter is about keeping it working once real users depend on it: knowing whether it is healthy, how fast it is, which request failed and why, shutting it down without dropping requests, and starting it quickly in containers. Spring Boot's answer is a set of "production-ready features": **Actuator** (management endpoints), **Micrometer** (metrics and the Observation API), **Micrometer Tracing + OpenTelemetry** (distributed tracing), **structured logging**, graceful shutdown, virtual threads, and faster startup with AOT caches and native images.
+Everything so far has been about making the application *work*. This chapter is about keeping it working once real users depend on it: knowing whether it is healthy, how fast it is, which request failed and why, shutting it down without dropping requests, and starting it quickly in **containers** (isolated, lightweight packages that hold an app plus everything it needs to run, started by Docker or Kubernetes). Spring Boot's answer is a set of "production-ready features": **Actuator** (management endpoints), **Micrometer** (metrics and the Observation API), **Micrometer Tracing + OpenTelemetry** (distributed tracing: following one request across several services), **structured logging**, graceful shutdown (finishing in-flight requests before stopping), virtual threads, and faster startup with AOT (ahead-of-time) caches and native images (§15.11).
 
 **What you'll learn**
 
@@ -22,7 +22,7 @@ The code lives in two Spring Boot 4.1.1 / Framework 7.0 projects on Java 25:
 - [`code/observability-demo/`](code/observability-demo/) — Actuator, health, metrics, Prometheus, tracing, structured logs (8 tests).
 - [`code/production-runtime/`](code/production-runtime/) — graceful shutdown and virtual threads (4 tests), plus [`code/aot-cache-demo.sh`](code/aot-cache-demo.sh) for the startup comparison.
 
-Outputs are real `mvn -q verify` output; Spring's log noise is trimmed as `...`.
+Outputs are real `mvn -q verify` output (Maven building the projects and running their tests); Spring's log noise is trimmed as `...`.
 
 > **Prerequisites.** Configuration properties and profiles: [Chapter 3](../03-configuration-and-auto-configuration/README.md). Security filter chains: [Chapter 10](../10-spring-security-1-fundamentals/README.md). `RestClient`: [Chapter 6](../06-rest-clients-and-http-interfaces/README.md). `@ConcurrencyLimit`: [4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit). The system-design view of health checks and tracing is in [Operating in Production](../../../system-design-patterns/modules/09-operating-in-production/README.md).
 
@@ -32,17 +32,17 @@ Outputs are real `mvn -q verify` output; Spring's log noise is trimmed as `...`.
 
 ### What it is
 
-**Observability** is how well you can understand what a running system is doing from the outside, using the data it emits — without attaching a debugger or adding new code. The data comes in three kinds, often called the **three pillars**:
+**Observability** is how well you can understand what a running system is doing from the outside, using the data it emits — without attaching a debugger (a tool that pauses a program so you can inspect it step by step) or adding new code. The data comes in three kinds, often called the **three pillars**:
 
 | Pillar | What it is | Answers | Spring tool |
 |---|---|---|---|
-| **Logs** | timestamped text or JSON events | "what exactly happened in this request?" | SLF4J + Logback, structured logging |
+| **Logs** | timestamped text or JSON events | "what exactly happened in this request?" | SLF4J + Logback (Java's standard logging API and Boot's default implementation of it), structured logging |
 | **Metrics** | numbers aggregated over time (counts, durations, gauges) | "how many, how fast, how full — right now and as a trend?" | Micrometer `MeterRegistry` |
-| **Traces** | the path of one request through many services, as a tree of timed **spans** | "where did this slow request spend its time?" | Micrometer Tracing + OpenTelemetry |
+| **Traces** | the path of one request through many services, as a tree of timed **spans** (one span = one timed step of work, §15.7) | "where did this slow request spend its time?" | Micrometer Tracing + OpenTelemetry |
 
 Analogy: a hospital patient. The **metrics** are the monitor showing heart rate and blood pressure over time; the **logs** are the nurse's notes; the **trace** is the record of which departments the patient visited, in what order, and how long each took. You need all three: the monitor tells you *something* is wrong, the visit record tells you *where*, the notes tell you *what*.
 
-**Monitoring** is the older, narrower idea: watching known metrics and alerting on thresholds. Observability adds the ability to ask new questions (e.g. "which customer's requests are slow?") from rich, correlated data.
+**Monitoring** is the older, narrower idea: watching known metrics and alerting (sending a notification to a person) on thresholds (limits such as "error rate above 1%"). Observability adds the ability to ask new questions (e.g. "which customer's requests are slow?") from rich, correlated data.
 
 ### How Spring wires it together
 
@@ -65,7 +65,7 @@ flowchart LR
     P --> G["Grafana dashboards and alerts"]
 ```
 
-- **Micrometer** is a vendor-neutral facade for metrics ("SLF4J for metrics"): you write to a `MeterRegistry`, and a registry implementation (Prometheus, OTLP, Datadog, ...) formats and ships the numbers.
+- **Micrometer** is a vendor-neutral **facade** (a single API in front of many interchangeable implementations) for metrics ("SLF4J for metrics"): you write to a `MeterRegistry`, and a registry implementation (Prometheus — the popular open-source metrics database, OTLP, Datadog, ...) formats and ships the numbers.
 - **Micrometer Observation** is one API that produces *both* a metric and a span for a piece of work.
 - **Micrometer Tracing** is a facade over a tracer. Boot 4 supports two: **OpenTelemetry** (`spring-boot-starter-opentelemetry`) and **Brave** with Zipkin (`spring-boot-starter-zipkin`).
 - The tracer puts the current `traceId` and `spanId` into the logging **MDC** (Mapped Diagnostic Context, a per-thread map that log patterns can print), so every log line is linked to its trace.
@@ -73,7 +73,7 @@ flowchart LR
 ### Real-world examples
 
 - Grafana's "LGTM" stack (Loki for logs, Grafana, Tempo for traces, Mimir/Prometheus for metrics) is a common open-source destination for exactly these three outputs.
-- The OpenTelemetry Collector is widely deployed as a sidecar or agent that receives OTLP (the OpenTelemetry protocol) and forwards to any backend, so apps don't hard-code the vendor.
+- The OpenTelemetry Collector is widely deployed as a **sidecar** (a helper container that runs next to the app container in the same pod) or agent that receives OTLP (the OpenTelemetry protocol) and forwards to any **backend** (the storage and UI system where the data ends up), so apps don't hard-code the vendor.
 
 ### Self-check
 
@@ -87,9 +87,9 @@ flowchart LR
 
 ### What it is
 
-**Actuator** adds **management endpoints** to your application: small built-in HTTP (or JMX) APIs for operators — health, metrics, info, loggers, environment, thread dumps and more. Add `spring-boot-starter-actuator` and they appear under `/actuator`.
+**Actuator** adds **management endpoints** to your application: small built-in HTTP (or JMX — Java Management Extensions, the JVM's older built-in management protocol) APIs for operators (the people and tools that run the app in production) — health, metrics, info, loggers, environment, thread dumps (a snapshot of what every thread is doing) and more. Add `spring-boot-starter-actuator` and they appear under `/actuator`.
 
-Analogy: the dashboard and service port of a car. Drivers (users) never see it; mechanics (operators, Kubernetes, Prometheus) plug into it.
+Analogy: the dashboard and service port of a car. Drivers (users) never see it; mechanics (operators, Kubernetes — the platform that runs and restarts containers, Prometheus) plug into it.
 
 ### The endpoints
 
@@ -102,7 +102,7 @@ Analogy: the dashboard and service port of a car. Drivers (users) never see it; 
 | `loggers` | view and **change** log levels at runtime | `POST /actuator/loggers/com.acme` `{"configuredLevel":"DEBUG"}` |
 | `env`, `configprops` | resolved properties, `@ConfigurationProperties` beans | values masked by default (`show-values=never`) |
 | `beans`, `conditions`, `mappings` | beans, auto-configuration report, request mappings | great for debugging ([Chapter 3](../03-configuration-and-auto-configuration/README.md)) |
-| `threaddump`, `heapdump` | JVM thread dump, heap dump file | heap dumps can contain secrets — protect them |
+| `threaddump`, `heapdump` | JVM thread dump, heap dump file (a copy of every object in memory) | heap dumps can contain secrets — protect them |
 | `httpexchanges` | recent requests/responses | needs an `HttpExchangeRepository` bean |
 | `scheduledtasks`, `caches`, `flyway`, `liquibase`, `quartz`, `sessions` | feature-specific | appear when the feature is present |
 | `startup` | startup steps and their duration | needs `BufferingApplicationStartup` |
@@ -131,11 +131,11 @@ management.server.port=8081
 management.endpoints.web.base-path=/manage          # default /actuator
 ```
 
-A separate **management port** is common in Kubernetes: the public ingress only routes to 8080, while probes and Prometheus reach 8081 inside the cluster.
+A separate **management port** is common in Kubernetes: the public **ingress** (Kubernetes' entry point for traffic from outside the cluster) only routes to 8080, while probes and Prometheus reach 8081 inside the cluster.
 
 ### Securing actuator endpoints
 
-If Spring Security is on the classpath, you decide who can call what with `EndpointRequest` matchers. In Boot 4 the class moved to `org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest` (it was `org.springframework.boot.actuate.autoconfigure.security.servlet` in Boot 3).
+If Spring Security is on the classpath (the set of libraries the app loads), you decide who can call what with `EndpointRequest` matchers. In Boot 4 the class moved to `org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest` (it was `org.springframework.boot.actuate.autoconfigure.security.servlet` in Boot 3).
 
 ```java
 @Bean
@@ -182,7 +182,7 @@ Auto-configured indicators appear when their technology is present: `ping`, `dis
 
 ### Why it matters
 
-Load balancers and orchestrators make decisions from these answers: take an instance out of rotation, restart a container, stop a rolling deployment. A wrong health design can **cause** outages: if every instance reports DOWN because one optional dependency is slow, the platform removes all of them.
+**Load balancers** (components that spread requests over instances) and **orchestrators** (platforms such as Kubernetes that start, stop and move containers) make decisions from these answers: take an instance out of rotation (stop sending it requests), restart a container, stop a **rolling deployment** (replacing instances with the new version a few at a time). See [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md). A wrong health design can **cause** outages (periods when the service is unavailable): if every instance reports DOWN because one optional dependency is slow, the platform removes all of them.
 
 ### Liveness vs readiness
 
@@ -190,7 +190,7 @@ Kubernetes asks two different questions:
 
 | Probe | Question | On failure Kubernetes... | Should include |
 |---|---|---|---|
-| **Liveness** | "Is this process broken beyond repair?" | **restarts** the container | only internal state (deadlock, corrupted state) — never external systems |
+| **Liveness** | "Is this process broken beyond repair?" | **restarts** the container | only internal state (deadlock — threads stuck waiting for each other forever, corrupted state) — never external systems |
 | **Readiness** | "Can this instance serve traffic right now?" | **stops routing** traffic to it (no restart) | warming up, shutting down, and — carefully — dependencies it cannot work without |
 | Startup (K8s only) | "Has it finished starting?" | holds off the other probes | usually point it at the liveness endpoint with a larger threshold |
 
@@ -306,11 +306,11 @@ startupProbe:
 
 ### Trade-offs
 
-Putting a dependency in **readiness** protects users from an instance that cannot serve — but if *all* instances share that dependency, all become unready at once and the service disappears entirely, even for requests that don't need it. Include a dependency in readiness only if the instance is truly useless without it; otherwise stay ready and **degrade** (fallbacks, cached data, circuit breakers — [Chapter 16](../16-spring-cloud-and-microservices/README.md)).
+Putting a dependency in **readiness** protects users from an instance that cannot serve — but if *all* instances share that dependency, all become unready at once and the service disappears entirely, even for requests that don't need it. Include a dependency in readiness only if the instance is truly useless without it; otherwise stay ready and **degrade** (keep working with reduced features: fallbacks, cached data, circuit breakers — guards that stop calling a failing service for a while, [Chapter 16](../16-spring-cloud-and-microservices/README.md)).
 
 ### Common mistakes
 
-- Database check in **liveness** → a DB blip restarts every pod, making recovery slower (a "restart storm").
+- Database check in **liveness** → a DB blip restarts every pod (a **pod** is Kubernetes' unit for one running instance), making recovery slower (a "restart storm").
 - Slow indicators (calling a remote API synchronously on every probe) → probe timeouts → false failures.
 - Same thresholds for liveness and readiness → a slow start gets the container killed; use a startup probe.
 - `show-details=always` on a public port → leaks infrastructure details.
@@ -344,7 +344,7 @@ Putting a dependency in **readiness** protects users from an instance that canno
 | `git` | branch, commit id and time | present when `git.properties` exists (`git-commit-id-maven-plugin`) |
 | `env` | every `info.*` property | `management.info.env.enabled=true` |
 | `java` | JVM and runtime vendor/version | `management.info.java.enabled=true` |
-| `os`, `process` | OS name/version, PID, CPUs, memory | `management.info.os.enabled`, `management.info.process.enabled` |
+| `os`, `process` | OS name/version, PID (process id), CPUs, memory | `management.info.os.enabled`, `management.info.process.enabled` |
 | custom | anything | an `InfoContributor` bean |
 
 ```xml
@@ -380,7 +380,7 @@ A **metric** is a number measured repeatedly over time. Micrometer records metri
 | Meter | Measures | Example | Prometheus output |
 |---|---|---|---|
 | `Counter` | a count that only increases | orders placed, errors | `name_total` |
-| `Timer` | count + total time + max of short events | request latency | `name_seconds_count`, `_sum`, `_max` (+ buckets if histogram on) |
+| `Timer` | count + total time + max of short events | request latency | `name_seconds_count`, `_sum`, `_max` (+ buckets if histogram on: counts of values per range, e.g. "under 100 ms") |
 | `Gauge` | a current value sampled when read | queue size, pool usage | `name` |
 | `DistributionSummary` | distribution of non-time values | payload size | `name_count`, `_sum`, `_max` |
 | `LongTaskTimer` | tasks *currently* running and for how long | a batch job in progress | `name_active_count`, `_duration_sum` |
@@ -459,14 +459,14 @@ What to notice:
 
 ### Cardinality — the one rule that matters
 
-**Cardinality** = the number of distinct tag-value combinations. Each one is a separate time series stored by the monitoring system. Tags must have a **small, bounded** set of values (HTTP method, status, region, result). Never tag with user ids, order ids, emails, full URLs or timestamps — a million users means a million series, which can crash Prometheus or explode a SaaS bill. Put such values in **traces or logs** instead.
+**Cardinality** = the number of distinct tag-value combinations. Each one is a separate time series stored by the monitoring system. Tags must have a **small, bounded** set of values (HTTP method, status, region, result). Never tag with user ids, order ids, emails, full URLs or timestamps — a million users means a million series, which can crash Prometheus or explode a SaaS (software-as-a-service, i.e. a hosted, pay-per-use monitoring product) bill. Put such values in **traces or logs** instead.
 
 ### Common mistakes
 
 - High-cardinality tags (see above).
 - Creating a new `Timer.builder(...).register(...)` in a hot loop is fine (it returns the cached meter), but building meters with *dynamic names* is not — use tags.
-- Averages for latency. Use percentiles (p95, p99) from histograms; averages hide the slow tail that users feel.
-- Gauges on objects that get garbage-collected: `registry.gauge(name, obj, fn)` holds a **weak** reference; if nothing else holds `obj`, the gauge reports `NaN`.
+- Averages for latency. Use percentiles (p95, p99: the time that 95% / 99% of requests stay under; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) from histograms; averages hide the slow tail that users feel.
+- Gauges on objects that get garbage-collected (freed automatically by the JVM once nothing uses them): `registry.gauge(name, obj, fn)` holds a **weak** reference (one that does not stop the object being freed); if nothing else holds `obj`, the gauge reports `NaN`.
 
 ### Self-check
 
@@ -492,7 +492,7 @@ Observation.createNotStarted("order.lookup", observationRegistry)
 - **Low-cardinality key values** become metric tags *and* span attributes.
 - **High-cardinality key values** go only to spans (safe for ids).
 
-`@Observed(name = "order.lookup", contextualName = "order-lookup")` on a bean method does the same through an aspect. It needs the AspectJ starter (`spring-boot-starter-aspectj` in Boot 4) and, since Boot 3.2, the property:
+`@Observed(name = "order.lookup", contextualName = "order-lookup")` on a bean method does the same through an aspect (AOP code that runs around annotated methods, [Chapter 4](../04-aop-and-proxies/README.md)). It needs the AspectJ starter (`spring-boot-starter-aspectj` in Boot 4) and, since Boot 3.2, the property:
 
 ```properties
 management.observations.annotations.enabled=true   # also activates @Timed, @Counted, @NewSpan
@@ -536,7 +536,7 @@ Analogy: a parcel tracking number. Every depot that handles the parcel scans the
 
 1. A request arrives without trace headers → the server observation starts a **root span** with a new 128-bit trace id.
 2. The trace context is stored in the current thread and copied into the log MDC (`traceId`, `spanId`).
-3. An outgoing call through an instrumented client (Boot's `RestClient.Builder`, `WebClient.Builder`, `RestTemplateBuilder`, Kafka templates...) creates a **client span** and injects the context into headers — by default the **W3C Trace Context** header `traceparent: 00-<traceId>-<spanId>-01`.
+3. An outgoing call through an instrumented client (Boot's `RestClient.Builder`, `WebClient.Builder`, `RestTemplateBuilder`, Kafka templates...) creates a **client span** and injects the context into headers — by default the **W3C Trace Context** header (a web standard from the W3C, the body behind HTML and CSS) `traceparent: 00-<traceId>-<spanId>-01`.
 4. The downstream service reads the header and continues the same trace with a child span.
 5. Finished spans go to a **span processor** → **exporter** (OTLP to a collector, Zipkin, ...). Boot batches them (`BatchSpanProcessor`).
 6. The backend (Tempo, Jaeger, Zipkin) stitches spans by trace id into a timeline.
@@ -634,7 +634,7 @@ flowchart TD
 | Sampling 100% | every request traceable | CPU, network and storage cost at scale |
 | Head sampling (e.g. 10%, Boot default) | cheap, simple | the rare failing request is often not sampled |
 | Tail sampling in the OTel Collector | keep all errors/slow traces, drop the rest | collector must buffer whole traces |
-| OTel **Java agent** instead of Micrometer | zero code, instruments many libraries | a second instrumentation layer; version coupling with the JVM agent |
+| OTel **Java agent** (a jar attached at JVM start that instruments classes automatically) instead of Micrometer | zero code, instruments many libraries | a second instrumentation layer; version coupling with the JVM agent |
 
 ### Common mistakes
 
@@ -648,7 +648,7 @@ flowchart TD
 **Q: How does distributed tracing work in Spring Boot?**
 30-second answer: Micrometer Observation instruments incoming and outgoing calls; Micrometer Tracing with the OpenTelemetry (or Brave) bridge turns observations into spans. A trace id is created at the edge, propagated in the W3C `traceparent` header by instrumented clients, and put in the log MDC. Spans are batched and exported via OTLP to a collector and viewed in Tempo/Jaeger/Zipkin. Sampling defaults to 10%.
 
-- *Follow-up: why is my trace broken between two services?* → The client isn't instrumented (created with `new`), a proxy strips headers, the propagation format differs (W3C vs B3), or async code lost the context.
+- *Follow-up: why is my trace broken between two services?* → The client isn't instrumented (created with `new`), a proxy strips headers, the propagation format differs (W3C vs B3, Zipkin's older header format), or async code lost the context.
 - *Follow-up: logs vs traces?* → Traces show timing and causality across services; logs give detail within one; the shared trace id links them.
 
 ### Self-check
@@ -666,7 +666,7 @@ flowchart TD
 
 ### What it is
 
-**Structured logging** writes each event as a machine-readable record (JSON) instead of a formatted line. Log platforms (Elasticsearch/Kibana, Loki, Graylog, Datadog, Cloud Logging) can then filter on fields — `log.level:ERROR AND service.name:orders AND traceId:...` — instead of parsing text with regexes. Built into Boot since **3.4**.
+**Structured logging** writes each event as a machine-readable record (JSON) instead of a formatted line. Log platforms (Elasticsearch/Kibana, Loki, Graylog, Datadog, Cloud Logging) can then filter on fields — `log.level:ERROR AND service.name:orders AND traceId:...` — instead of parsing text with regexes (regular expressions: text-matching patterns). Built into Boot since **3.4**.
 
 ```properties
 logging.structured.format.console=ecs        # ecs | logstash | gelf
@@ -704,7 +704,7 @@ For full control implement `StructuredLogFormatter<ILoggingEvent>` and name the 
 
 **When not to use it:** local development in a terminal — JSON is hard for humans to read. A common setup is plain text by default and JSON in the `prod` profile (`application-prod.properties`), or JSON to a file and text to the console.
 
-**Common mistakes:** logging secrets or personal data (JSON makes them *easier* to search — mask them); multi-line stack traces in text logs that the shipper splits into many events (JSON keeps them in one field); logging at DEBUG in production for hot paths (cost and noise). The demo also shows a practical catch: the logging system is global to the JVM, so the structured-logging test runs last ([`junit-platform.properties`](code/observability-demo/src/test/resources/junit-platform.properties) orders the classes).
+**Common mistakes:** logging secrets or personal data (JSON makes them *easier* to search — mask them); multi-line stack traces in text logs that the shipper (the agent that collects log output and sends it to the log platform) splits into many events (JSON keeps them in one field); logging at DEBUG in production for hot paths (cost and noise). The demo also shows a practical catch: the logging system is global to the JVM, so the structured-logging test runs last ([`junit-platform.properties`](code/observability-demo/src/test/resources/junit-platform.properties) orders the classes).
 
 ---
 
@@ -712,7 +712,7 @@ For full control implement `StructuredLogFormatter<ILoggingEvent>` and name the 
 
 ### What it is
 
-When an instance is stopped (a deployment, scale-down, node drain), requests that are **in flight** should finish instead of failing. **Graceful shutdown** stops accepting new connections, waits for active requests up to a timeout, then stops. It is the **default since Boot 3.4** for Tomcat, Jetty and Reactor Netty (`server.shutdown=graceful`); `server.shutdown=immediate` turns it off.
+When an instance is stopped (a deployment, scale-down, node drain — moving everything off a machine before maintenance), requests that are **in flight** should finish instead of failing. **Graceful shutdown** stops accepting new connections, waits for active requests up to a timeout, then stops. It is the **default since Boot 3.4** for Tomcat, Jetty and Reactor Netty (`server.shutdown=graceful`); `server.shutdown=immediate` turns it off.
 
 ```properties
 spring.lifecycle.timeout-per-shutdown-phase=10s   # default 30s
@@ -790,7 +790,7 @@ default                              -> platform thread: Thread[#108,http-nio-au
 
 **Caveats.**
 
-- Your **bottleneck moves**: 10,000 concurrent requests now reach the database pool (10 connections by default) or a downstream API. Limit concurrency explicitly — `@ConcurrencyLimit` ([4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit)), pool sizes, bulkheads.
+- Your **bottleneck** (the one slowest part that limits the whole system) **moves**: 10,000 concurrent requests now reach the database pool (10 connections by default) or a downstream API. Limit concurrency explicitly — `@ConcurrencyLimit` ([4.7](../04-aop-and-proxies/README.md#47-framework-7-core-resilience-retryable-and-concurrencylimit)), pool sizes, bulkheads.
 - Pinning: before JDK 24, blocking inside `synchronized` pinned the carrier thread; JDK 24 (JEP 491) removed that for `synchronized`. Native calls can still pin.
 - Virtual threads are daemon threads: an app whose only work is `@Scheduled` tasks may exit; set `spring.main.keep-alive=true`.
 - CPU-bound work gains nothing. Virtual threads vs reactive: see [Chapter 13](../13-reactive-and-webflux/README.md).
@@ -801,15 +801,15 @@ default                              -> platform thread: Thread[#108,http-nio-au
 
 ### The problem it solves
 
-A typical Boot app takes 1–5 s to start on the JVM (class loading, reflection, bean creation, JIT warm-up). That matters for autoscaling, serverless (scale-to-zero) and fast rollbacks. Options, from least to most invasive:
+A typical Boot app takes 1–5 s to start on the JVM (class loading, reflection, bean creation, JIT warm-up). That matters for autoscaling (adding and removing instances automatically with load), serverless (scale-to-zero: no instance runs until a request arrives) and fast rollbacks (returning to the previous version). Options, from least to most invasive:
 
 | Technique | What it does | Startup gain | Cost |
 |---|---|---|---|
 | **Extracted jar** | run from unpacked `lib/` instead of nested jars | small | a build step |
-| **CDS** (Class Data Sharing; application classes since JDK 10, dynamic archives since JDK 13) | archive of parsed classes from a training run | ~20–40% | training run, same JDK/classpath |
+| **CDS** (Class Data Sharing; application classes since JDK 10, dynamic archives since JDK 13) | archive of parsed classes from a training run (a short run of the app whose only purpose is to record what it loads) | ~20–40% | training run, same JDK/classpath |
 | **JDK AOT cache** (JEP 483 in JDK 24, simpler flags JEP 514 and method profiles JEP 515 in JDK 25) | caches classes *loaded and linked* (plus profiles) from a training run | often ~2× | training run; cache tied to the JDK build and exact jars |
 | **Spring AOT** on the JVM | generates bean-definition code at build time (`spring-boot:process-aot`), run with `-Dspring.aot.enabled=true` | modest | profiles/conditions fixed at build time |
-| **GraalVM native image** | compiles the whole app ahead of time to a native executable | ~50–100× (tens of ms) | long builds, closed-world limits, reflection hints, lower peak throughput without PGO (profile-guided optimisation) |
+| **GraalVM native image** | compiles the whole app ahead of time to a native executable | ~50–100× (tens of ms) | long builds, closed-world limits, reflection hints, lower peak throughput (maximum requests per second) without PGO (profile-guided optimisation) |
 
 ### Measured: AOT cache on JDK 25
 
@@ -844,9 +844,9 @@ mvn -Pnative native:compile          # -> target/<artifactId>, a native executab
 mvn -Pnative spring-boot:build-image # same, inside a container image (needs Docker)
 ```
 
-Plus the `org.graalvm.buildtools:native-maven-plugin` in the POM. The build runs Spring AOT, then GraalVM analyses everything reachable from `main` (**closed world**): classes not seen at build time cannot be loaded later; reflection, resources, proxies and serialization need **hints** (Spring generates most; add your own with `RuntimeHintsRegistrar` or `@RegisterReflectionForBinding`). Profiles and `@ConditionalOnProperty` are evaluated at build time. Test the native build in CI (`mvn -PnativeTest test`) because some libraries fail only there.
+Plus the `org.graalvm.buildtools:native-maven-plugin` in the POM (`pom.xml`, Maven's project file). The build runs Spring AOT, then GraalVM analyses everything reachable from `main` (**closed world**): classes not seen at build time cannot be loaded later; reflection, resources, proxies and serialization need **hints** (Spring generates most; add your own with `RuntimeHintsRegistrar` or `@RegisterReflectionForBinding`). Profiles and `@ConditionalOnProperty` are evaluated at build time. Test the native build in CI (`mvn -PnativeTest test`) because some libraries fail only there.
 
-**Choose native** for CLIs, functions, scale-to-zero services and memory-tight deployments. **Stay on the JVM** (with the AOT cache) for long-running, throughput-heavy services, where the JIT's peak performance and easy debugging win.
+**Choose native** for CLIs (command-line tools), functions (small serverless handlers), scale-to-zero services and memory-tight deployments. **Stay on the JVM** (with the AOT cache) for long-running, throughput-heavy services, where the JIT's peak performance and easy debugging win.
 
 ### Container images (not run — Docker is not running here)
 
@@ -858,7 +858,7 @@ mvn spring-boot:build-image -Dspring-boot.build-image.imageName=acme/orders:1.0
 #   <env><BP_JVM_AOTCACHE_ENABLED>true</BP_JVM_AOTCACHE_ENABLED></env>   (or BP_JVM_CDS_ENABLED)
 ```
 
-Or a layered Dockerfile — dependencies change rarely, so they go in their own layer and are cached between builds:
+Or a layered Dockerfile (the recipe file Docker builds an image from; each instruction creates a cached layer) — dependencies change rarely, so they go in their own layer and are cached between builds:
 
 ```dockerfile
 FROM eclipse-temurin:25-jre AS build
@@ -877,13 +877,13 @@ USER 1000
 ENTRYPOINT ["java", "-XX:AOTCache=app.aot", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]
 ```
 
-`-XX:MaxRAMPercentage` sizes the heap from the container's memory limit; running as a non-root user is a basic hardening step.
+`-XX:MaxRAMPercentage` sizes the heap from the container's memory limit; running as a non-root user (not the all-powerful administrator account) is a basic hardening (reducing attack surface) step.
 
 ### Self-check
 
 1. What does `-Dspring.context.exit=onRefresh` do? → Starts the app until the context is refreshed, then exits — used for AOT cache / CDS training runs.
 2. AOT cache vs native image? → AOT cache keeps the JVM and JIT, speeds startup by reusing loaded/linked classes; native image compiles to a standalone executable with much faster startup but closed-world constraints.
-3. Why extract the jar first? → The AOT cache/CDS need a plain classpath of jars; nested jars in the fat jar are not cache-friendly.
+3. Why extract the jar first? → The AOT cache/CDS need a plain classpath of jars; nested jars in the fat jar (the single jar Boot builds, with all dependency jars packed inside) are not cache-friendly.
 
 ---
 
@@ -893,7 +893,7 @@ ENTRYPOINT ["java", "-XX:AOTCache=app.aot", "-XX:MaxRAMPercentage=75", "-jar", "
 |---|---|
 | Actuator exposure | expose only what you use (`health,info,prometheus`); protect the rest with `EndpointRequest`; consider `management.server.port` |
 | Health | probes (on by default in Boot 4) wired to Kubernetes; custom indicators fast; no dependencies in liveness |
-| Metrics | Prometheus or OTLP registry; common tags (`application`, `region`); histograms for latency SLOs; bounded tag values |
+| Metrics | Prometheus or OTLP registry; common tags (`application`, `region`); histograms for latency SLOs (service level objectives: targets such as "p99 under 300 ms"); bounded tag values |
 | Tracing | `spring-boot-starter-opentelemetry`; sampling rate chosen consciously; OTLP endpoint to a collector |
 | Logging | structured JSON in prod profile; levels INFO/WARN; no secrets or personal data; change levels at runtime via `/actuator/loggers` |
 | Shutdown | graceful (default) + `timeout-per-shutdown-phase` < K8s grace period; `preStop` delay |
@@ -916,7 +916,7 @@ ENTRYPOINT ["java", "-XX:AOTCache=app.aot", "-XX:MaxRAMPercentage=75", "-jar", "
 | `@Observed` does nothing | property or AspectJ starter missing, or self-invocation | `management.observations.annotations.enabled=true`, `spring-boot-starter-aspectj`, call through the proxy |
 | Prometheus memory explodes | high-cardinality tags | remove ids from tags |
 | Pods restart during DB outage | DB in liveness | keep liveness internal |
-| 502s during deployments | no `preStop` delay, grace timeout too short | `preStop` sleep, align timeouts |
+| 502s (Bad Gateway: the proxy got no valid answer from the app) during deployments | no `preStop` delay, grace timeout too short | `preStop` sleep, align timeouts |
 | Secrets visible in `/actuator/env` | `show-values=always` | leave the default `never`, secure the endpoint |
 
 ---
@@ -928,15 +928,15 @@ Management endpoints (health, info, metrics, prometheus, loggers, env, ...). Onl
 
 - *Follow-up: how would you change a log level in production without redeploying?* → `POST /actuator/loggers/<logger>` with `{"configuredLevel":"DEBUG"}` (protected endpoint).
 
-**Q: Counter, Gauge, Timer — when to use which?** → Counter for events that accumulate (rate via PromQL `rate()`), Gauge for current values (queue depth), Timer for durations (count/sum/max/histogram → latency percentiles). Keep tags low-cardinality.
+**Q: Counter, Gauge, Timer — when to use which?** → Counter for events that accumulate (rate via PromQL, Prometheus's query language, `rate()`), Gauge for current values (queue depth), Timer for durations (count/sum/max/histogram → latency percentiles). Keep tags low-cardinality.
 
 **Q: What does the Observation API add over plain Micrometer metrics?** → Instrument once, get metrics *and* traces (and custom handlers); Spring's own instrumentation uses it; `@Observed` for methods.
 
 **Q: How does a trace id get from service A to B?** → The instrumented HTTP client injects `traceparent`; B's server observation extracts it and creates a child span; both log the same trace id via MDC.
 
-**Q: How do you do zero-downtime deployments with Spring Boot on Kubernetes?** → Readiness probe (Boot marks ready after startup), graceful shutdown (default), `preStop` delay, grace period longer than the drain timeout, rolling update with `maxUnavailable: 0`. See [blue-green and canary](../../../system-design-patterns/modules/09-operating-in-production/README.md).
+**Q: How do you do zero-downtime deployments (releasing a new version without any moment of unavailability) with Spring Boot on Kubernetes?** → Readiness probe (Boot marks ready after startup), graceful shutdown (default), `preStop` delay, grace period longer than the drain timeout, rolling update with `maxUnavailable: 0`. See [blue-green and canary](../../../system-design-patterns/modules/09-operating-in-production/README.md).
 
-**Q: How would you speed up startup?** → Lazy init where safe, fewer auto-configurations, extracted jar + CDS/AOT cache (JDK 25: `-XX:AOTCacheOutput` training, `-XX:AOTCache`), Spring AOT, or GraalVM native image — trading build complexity and closed-world limits for startup.
+**Q: How would you speed up startup?** → Lazy init (create beans only when first used) where safe, fewer auto-configurations, extracted jar + CDS/AOT cache (JDK 25: `-XX:AOTCacheOutput` training, `-XX:AOTCache`), Spring AOT, or GraalVM native image — trading build complexity and closed-world limits for startup.
 
 **Q: Virtual threads in Spring Boot?** → `spring.threads.virtual.enabled=true` (Java 21+, Boot 3.2+); great for blocking I/O; move concurrency limits to explicit places (pools, `@ConcurrencyLimit`).
 
