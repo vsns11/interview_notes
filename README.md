@@ -4,6 +4,12 @@ Personal study handbooks for software-engineering interviews, from beginner to i
 
 > **PDFs** sit next to their sources: each book's combined Handbook is in its folder, the per-chapter PDFs are in each chapter folder, and the Interview Edition is in `interview/`. The same PDFs are also on the [Releases](../../releases) page.
 
+## New to system design? Start here
+
+**[System Design Fundamentals](system-design-patterns/modules/00-system-design-fundamentals/README.md)** teaches every basic concept from zero: latency and throughput, percentiles, availability and SLAs, scaling, DNS, TCP/UDP, HTTP and TLS, REST/gRPC/WebSockets, proxies and API gateways, load balancers (every type and algorithm), CDNs, databases, ACID, indexes, replication, sharding, consistent hashing, caching, queues and streams, consistency models, CAP, consensus, microservices, resilience, rate limiting, Kubernetes, observability, disaster recovery and security, plus a 300-term glossary. The same primer is Chapter 0a of the DDIA notes and Chapter 1 of the Microservices notes.
+
+Every book also defines each technical term where it is first used, has a glossary chapter, and its Capstones PDF ends with a **Concepts you need** appendix listing every term the projects use.
+
 ## Books
 
 | Book | Folder | Interview Edition | Capstones |
