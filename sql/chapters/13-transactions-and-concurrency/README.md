@@ -1,6 +1,6 @@
 # Chapter 13 — Transactions and Concurrency
 
-A database is rarely used by one person at a time: a shop's stock table takes hundreds of checkouts per second while reports read it. Two things can go wrong — a failure can stop a change **halfway**, and two users working **at the same time** can trip over each other. This chapter covers the two tools against those problems, **transactions** and **concurrency control**, and shows how PostgreSQL really behaves with live sessions running side by side.
+A database is rarely used by one person at a time: a shop's stock table takes hundreds of checkouts per second while reports read it. Two things can go wrong — a failure can stop a change **halfway**, and two users working **at the same time** can trip over each other. This chapter covers the two tools against those problems, **transactions** and **concurrency control**, and shows how PostgreSQL really behaves with live sessions (separate open connections to the database) running side by side.
 
 **What you'll learn**
 
@@ -18,7 +18,7 @@ bash tools_run_sql.sh sql                                  # runs every chapter'
 bash tools_pg.sh psql -d <db> -f sql/chapters/13-transactions-and-concurrency/code/01_commit_and_rollback.sql
 ```
 
-The two-session demos are in [`code/concurrency_demo.py`](code/concurrency_demo.py): connections **A** and **B** send statements in a fixed order; a statement expected to block runs in a background thread while a third *monitor* connection checks `pg_stat_activity` to prove it is waiting on a lock:
+The two-session demos are in [`code/concurrency_demo.py`](code/concurrency_demo.py): connections **A** and **B** send statements in a fixed order; a statement expected to block runs in a background thread (a second line of execution inside the same program) while a third *monitor* connection checks `pg_stat_activity` (a system view listing every connection and what it is doing) to prove it is waiting on a lock:
 
 ```bash
 cd sql/chapters/13-transactions-and-concurrency/code
@@ -65,10 +65,10 @@ The guarantees a transaction gives are summarised by the acronym **ACID** (coine
 
 | Letter | Guarantee | Main mechanism |
 |---|---|---|
-| **A**tomicity | All or nothing — no half-done transfers | Undo information / WAL, shadow copies |
-| **C**onsistency | Valid state → valid state (constraints, invariants hold after commit) | Constraints + correct application logic |
-| **I**solation | Concurrent transactions don't see each other's in-progress work | Locks, MVCC, SSI |
-| **D**urability | Committed means kept, even after a crash or power loss | WAL flushed to disk, replication |
+| **A**tomicity | All or nothing — no half-done transfers | Undo information / WAL (write-ahead log, §13.5), shadow copies (§13.2) |
+| **C**onsistency | Valid state → valid state (constraints, invariants — rules that must always hold — are true after commit) | Constraints + correct application logic |
+| **I**solation | Concurrent transactions don't see each other's in-progress work | Locks, MVCC (multi-version concurrency control, §13.14), SSI (serializable snapshot isolation, §13.8) |
+| **D**urability | Committed means kept, even after a crash or power loss | WAL flushed to disk, replication (live copies on other servers) |
 
 ### Life cycle of a transaction
 
@@ -79,9 +79,9 @@ A transaction moves through a small set of **states**:
 | **Active** | Statements are running; changes are not yet final. |
 | **Partially committed** | Last statement done; results not yet safely on permanent storage. |
 | **Committed** | The commit record is durable; changes are permanent. |
-| **Failed** | An error (constraint, crash, deadlock, cancel) stops normal progress. |
+| **Failed** | An error (constraint, crash, deadlock — two transactions each waiting for the other, §13.11 — cancel) stops normal progress. |
 | **Aborted** | All changes rolled back; the database is as before the transaction. |
-| **Terminated** | Finished (by commit or abort); locks and snapshot released. |
+| **Terminated** | Finished (by commit or abort); locks and snapshot (the frozen view of the data it was reading) released. |
 
 ```mermaid
 stateDiagram-v2
@@ -110,7 +110,7 @@ After an abort the application either **restarts** the transaction (for temporar
 | `ROLLBACK TO SAVEPOINT name` | Undo only the work done after that mark; the transaction stays open. |
 | `RELEASE SAVEPOINT name` | Forget the mark (keep the work). |
 
-**Autocommit.** If you do *not* write `BEGIN`, PostgreSQL (like psql, JDBC and most drivers by default) wraps **each single statement** in its own transaction and commits it immediately. So a lone `UPDATE` is already atomic; you need `BEGIN … COMMIT` only when several statements must succeed or fail together. (Python's `psycopg` is the odd one out: by default it opens a transaction for you and waits for `conn.commit()`.)
+**Autocommit.** If you do *not* write `BEGIN`, PostgreSQL (like psql, JDBC — Java's standard database API — and most drivers, the libraries programs use to talk to a database, by default) wraps **each single statement** in its own transaction and commits it immediately. So a lone `UPDATE` is already atomic; you need `BEGIN … COMMIT` only when several statements must succeed or fail together. (Python's `psycopg`, the usual PostgreSQL driver for Python, is the odd one out: by default it opens a transaction for you and waits for `conn.commit()`.)
 
 [`code/01_commit_and_rollback.sql`](code/01_commit_and_rollback.sql):
 
@@ -186,20 +186,20 @@ The bank total stays 850 (money moved, none created or lost); the session saw it
 | | PostgreSQL | MySQL (InnoDB) | SQL Server | SQLite |
 |---|---|---|---|---|
 | Start | `BEGIN` / `START TRANSACTION` | `START TRANSACTION` / `BEGIN` | `BEGIN TRAN` | `BEGIN [DEFERRED\|IMMEDIATE\|EXCLUSIVE]` |
-| DDL inside a transaction | Transactional (`CREATE TABLE` can be rolled back) | Causes an implicit commit | Mostly transactional | Transactional |
+| DDL (structure changes like `CREATE TABLE`) inside a transaction | Transactional (`CREATE TABLE` can be rolled back) | Causes an implicit commit (silently commits the open transaction) | Mostly transactional | Transactional |
 | After an error mid-transaction | Whole transaction is "aborted" until `ROLLBACK` | Only the failing statement is undone; transaction continues | Depends on `XACT_ABORT` | Only the failing statement is undone |
 
 ### Weaker guarantees some systems offer
 
-Many NoSQL and caching systems trade multi-statement transactions away for speed or scaling and offer smaller building blocks:
+Many NoSQL (non-relational) and caching systems trade multi-statement transactions away for speed or scaling and offer smaller building blocks:
 
 | Guarantee | What it means | Example |
 |---|---|---|
 | **Single-object atomicity** | A write to *one* record/document is all-or-nothing, but nothing spans two records. | A single MongoDB document update; a Cassandra row write. |
-| **Atomic increment** | The server does read-add-write in one indivisible step, so concurrent `+1`s never lose each other. | Redis `INCR`; SQL `UPDATE … SET n = n + 1`. |
-| **Compare-and-set (CAS)** | "Write the new value only if the current value is still what I read." If someone changed it, the write fails and you retry. | Redis `WATCH`/`MULTI`, DynamoDB conditional writes, a SQL `UPDATE … WHERE version = 7` (§13.7). |
+| **Atomic increment** | The server does read-add-write in one indivisible step, so concurrent `+1`s never lose each other. | Redis (a popular in-memory key-value store) `INCR`; SQL `UPDATE … SET n = n + 1`. |
+| **Compare-and-set (CAS)** | "Write the new value only if the current value is still what I read." If someone changed it, the write fails and you retry. | Redis `WATCH`/`MULTI`, DynamoDB (Amazon's managed key-value database) conditional writes, a SQL `UPDATE … WHERE version = 7` (§13.7). |
 
-They protect **one** object only; keeping several records in step (a transfer, an order plus its stock decrement) needs a real transaction — which is why MongoDB (4.0+) and NewSQL systems added multi-document transactions.
+They protect **one** object only; keeping several records in step (a transfer, an order plus its stock decrement) needs a real transaction — which is why MongoDB (4.0+) and NewSQL systems (distributed databases that keep SQL and full transactions) added multi-document transactions.
 
 ### In the interview
 
@@ -237,7 +237,7 @@ Take accounts X = 30 and Y = 100 and a transfer of 10 from X to Y. The debit suc
 
 So the only commit point is the pointer switch: if every write succeeds but the crash comes just before the switch, or a failure happens midway, the transaction is aborted and the untouched original remains current.
 
-It is impractical for real databases: copying the **entire** database per transaction is slow and wastes storage, and it allows only **one** transaction at a time, so it can't scale. (Its descendant *shadow paging* — copy only modified pages — was used in System R and lives on in copy-on-write stores such as LMDB.)
+It is impractical for real databases: copying the **entire** database per transaction is slow and wastes storage, and it allows only **one** transaction at a time, so it can't scale. (Its descendant *shadow paging* — copy only modified pages — was used in System R and lives on in copy-on-write stores — changes always go to fresh copies, never over the original — such as LMDB.)
 
 **2. Logging (how PostgreSQL, MySQL, SQL Server and Oracle do it).** Changes go into in-memory pages, and every change is also described in the **write-ahead log (WAL)** (§13.5). If the transaction aborts or the system crashes before commit, the engine undoes the changes from its log — or, in PostgreSQL, simply marks the transaction ID *aborted* so its row versions are ignored (§13.14).
 
@@ -245,7 +245,7 @@ It is impractical for real databases: copying the **entire** database per transa
 
 ### Code: an error aborts the whole transaction
 
-[`code/02_atomicity_on_error.sql`](code/02_atomicity_on_error.sql) — Chen has 50 and tries to send 80. The credit to Asha runs first and succeeds; then the debit breaks the `CHECK (balance >= 0)` rule:
+[`code/02_atomicity_on_error.sql`](code/02_atomicity_on_error.sql) — Chen has 50 and tries to send 80. The credit to Asha runs first and succeeds; then the debit breaks the `CHECK (balance >= 0)` rule (`\set ON_ERROR_STOP off` is a psql setting that lets the script continue after an error):
 
 ```sql
 \set ON_ERROR_STOP off
@@ -298,7 +298,7 @@ After an error PostgreSQL marks the transaction **aborted** and refuses further 
 
 - Running the two halves of a transfer as two autocommitted statements.
 - Catching the error in application code and carrying on to `COMMIT` — PostgreSQL silently rolls back; MySQL may commit the half that worked.
-- Assuming rollback undoes an email sent or card charged inside the transaction — it undoes only **database** changes; record the action in an *outbox* table and send after commit.
+- Assuming rollback undoes an email sent or card charged inside the transaction — it undoes only **database** changes; record the action in an *outbox* table (a table of pending messages, written in the same transaction and sent by a separate process) and send after commit.
 
 ### In the interview
 
@@ -356,9 +356,9 @@ The temporary 600 at t3 is harmless: nobody else can see it (isolation) and it c
 
 ### Trade-offs and a note on the word "consistency"
 
-The database enforces only rules it knows about. Cross-row invariants ("at least one doctor on call") can't be a simple `CHECK`; the application enforces them and needs strong enough isolation (§13.8). Hence Kleppmann (DDIA) calls C a property of the *application*, with A, I and D as the database's tools for it.
+The database enforces only rules it knows about. Cross-row invariants ("at least one doctor on call") can't be a simple `CHECK`; the application enforces them and needs strong enough isolation (§13.8). Hence Martin Kleppmann (author of DDIA, *Designing Data-Intensive Applications*) calls C a property of the *application*, with A, I and D as the database's tools for it.
 
-Also, **ACID consistency is not CAP consistency.** In CAP, "consistency" means *linearizability* — every read sees the latest write across replicas ([chapter 15](../15-scaling-databases/README.md)). Same word, different idea.
+Also, **ACID consistency is not CAP consistency.** In CAP (the theorem about trade-offs in distributed databases; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), "consistency" means *linearizability* — every read sees the latest write across replicas (copies of the data on other servers; [chapter 15](../15-scaling-databases/README.md)). Same word, different idea.
 
 ### In the interview
 
@@ -450,15 +450,15 @@ That is the *minimum*; real engines often give more, and the standard ignores lo
 | Repeatable Read | no | no | no | **no** (stronger than the standard) | no — aborts with a serialization error | **yes** | one snapshot per transaction (snapshot isolation) |
 | Serializable | no | no | no | no | no | no — aborts one | snapshot isolation + SSI conflict tracking |
 
-Two mechanisms matter. At **Read Committed**, MVCC engines hand readers the last committed version so they never wait, while lock-based engines (SQL Server unless `READ_COMMITTED_SNAPSHOT` is on) make readers wait for the writer. **Serializable** (outcome equals *some* one-at-a-time order) is built with **two-phase locking** (MySQL, SQL Server) or **Serializable Snapshot Isolation (SSI)**, which tracks read/write dependencies and aborts a transaction when needed (PostgreSQL 9.1+) — so always be ready to retry. Read Uncommitted (SQL Server's `NOLOCK` hint) is almost never used.
+Two mechanisms matter. At **Read Committed**, MVCC engines hand readers the last committed version so they never wait, while lock-based engines (SQL Server unless `READ_COMMITTED_SNAPSHOT` is on) make readers wait for the writer. **Serializable** (outcome equals *some* one-at-a-time order) is built with **two-phase locking** (take locks as you go and release none until the end, §13.10; MySQL, SQL Server) or **Serializable Snapshot Isolation (SSI)**, which tracks read/write dependencies and aborts a transaction when needed (PostgreSQL 9.1+) — so always be ready to retry. Read Uncommitted (SQL Server's `NOLOCK` hint) is almost never used.
 
 **Other engines at a glance**
 
 | Engine | Default level | Notes |
 |---|---|---|
 | PostgreSQL | Read Committed | RR = snapshot isolation (no phantoms); Serializable = SSI. |
-| MySQL InnoDB | Repeatable Read | Plain `SELECT` reads a snapshot; locking reads (`FOR UPDATE`, `UPDATE`) read the *latest* row with next-key locks against phantoms. Does **not** abort lost updates at RR — use `FOR UPDATE` or atomic updates. |
-| SQL Server | Read Committed (locking) | Optional `READ_COMMITTED_SNAPSHOT` and `SNAPSHOT` isolation use row versions in tempdb. |
+| MySQL InnoDB | Repeatable Read | Plain `SELECT` reads a snapshot; locking reads (`FOR UPDATE`, `UPDATE`) read the *latest* row with next-key locks (locks on index entries plus the gaps between them, §13.10) against phantoms. Does **not** abort lost updates at RR — use `FOR UPDATE` or atomic updates. |
+| SQL Server | Read Committed (locking) | Optional `READ_COMMITTED_SNAPSHOT` and `SNAPSHOT` isolation use row versions in tempdb (SQL Server's shared scratch database). |
 | Oracle | Read Committed | Its "SERIALIZABLE" is actually snapshot isolation (write skew possible). |
 | SQLite | Serializable | Only one writer at a time for the whole database file; WAL mode lets readers run during a write. |
 
@@ -473,7 +473,7 @@ SHOW transaction_isolation;
 
 | If you need… | Use |
 |---|---|
-| Normal OLTP, single-statement updates (`SET x = x + 1`) | Read Committed |
+| Normal OLTP (online transaction processing: many short reads and writes), single-statement updates (`SET x = x + 1`) | Read Committed |
 | A consistent report or export across many queries | Repeatable Read (often `READ ONLY`) |
 | Read-then-write logic on the same row | `SELECT … FOR UPDATE` at Read Committed, or Repeatable Read + retry |
 | Invariants that span rows (no double booking, at least one on call) | Serializable + retry, or explicit locks |
@@ -503,10 +503,10 @@ SHOW transaction_isolation;
 
 ### How it works
 
-1. **Write-ahead logging (WAL).** A record describing each change must reach the log before the changed data page may be written. At `COMMIT` the database appends a commit record and **flushes** (`fsync`) the log to disk; only then does it answer "COMMIT". Data pages are written later, lazily; after a crash, recovery **replays** the log, redoing committed changes that never reached the data files. (One sequential append is much faster than updating scattered pages.)
-2. **Checkpoints.** Periodically all dirty pages are written to the data files and "everything up to log position X is on disk" is recorded, so recovery replays only the log *after* the latest checkpoint (PostgreSQL: `checkpoint_timeout`, default 5 min, and `max_wal_size`).
+1. **Write-ahead logging (WAL).** A record describing each change must reach the log before the changed data page may be written. At `COMMIT` the database appends a commit record and **flushes** (`fsync` — the operating-system call that forces data out of memory caches onto the physical disk) the log to disk; only then does it answer "COMMIT". Data pages are written later, lazily; after a crash, recovery **replays** the log, redoing committed changes that never reached the data files. (One sequential append is much faster than updating scattered pages.)
+2. **Checkpoints.** Periodically all dirty pages (pages changed in memory but not yet written to the data files) are written to the data files and "everything up to log position X is on disk" is recorded, so recovery replays only the log *after* the latest checkpoint (PostgreSQL: `checkpoint_timeout`, default 5 min, and `max_wal_size`).
 3. **Synchronous disk writes.** A commit is acknowledged only after the log is on stable storage, not just in RAM or the OS cache. PostgreSQL's `synchronous_commit = on` and `fsync = on` (both defaults) guarantee this; `full_page_writes` protects against *torn pages* (a page only partly written when power fails).
-4. **Replication.** Disks die, so the WAL is shipped to other machines (PostgreSQL streaming replication); with *synchronous* replication a commit also waits for a replica ([chapter 15](../15-scaling-databases/README.md)).
+4. **Replication.** Disks die, so the WAL is shipped to other machines (PostgreSQL streaming replication — sending WAL records to replicas continuously as they are written); with *synchronous* replication a commit also waits for a replica ([chapter 15](../15-scaling-databases/README.md)).
 
 ### Code: watching the WAL grow
 
@@ -556,8 +556,8 @@ The 1,000 rows produced about 135 kB of WAL (the exact size can vary slightly by
 ### Common mistakes
 
 - Turning off `fsync` for speed in production — a crash can then **corrupt** the database, not just lose recent commits.
-- Assuming a replica makes a commit durable when replication is asynchronous — the primary can die before shipping it.
-- Disks or cloud volumes that lie about flushes (write cache without battery backup).
+- Assuming a replica makes a commit durable when replication is asynchronous (the primary — the main server that accepts writes — doesn't wait for replicas) — the primary can die before shipping it.
+- Disks or cloud volumes that lie about flushes (a write cache — fast memory on the drive — without battery backup, so its contents vanish on power loss).
 
 ### In the interview
 
@@ -602,7 +602,7 @@ class Monitor:                                 # a third connection that watches
         # FROM pg_stat_activity WHERE pid = %s
 ```
 
-`_exec` returns the rows, the command tag (`UPDATE 1`), or `ERROR <sqlstate>: <message>`. In deadlock messages, it replaces the process IDs with `<A>`/`<B>` so the output is readable.
+`_exec` returns the rows, the command tag (`UPDATE 1`), or `ERROR <sqlstate>: <message>` (SQLSTATE is the standard five-character error code, e.g. `40001`). In deadlock messages, it replaces the process IDs with `<A>`/`<B>` so the output is readable.
 
 ### Dirty read and dirty write — impossible in PostgreSQL
 
@@ -725,7 +725,7 @@ Two tickets sold, stock fell only to **9**, and nothing errored. The fix must ma
   M| SELECT stock FROM products WHERE id = 1  -> 8
 ```
 
-B's `UPDATE` waits for A's row lock; when A commits, PostgreSQL (at Read Committed) **re-reads the newest row version** and applies `stock - 1` to it: 9 → 8. The `pg_locks` line shows the mechanism: B holds its own transaction-ID lock and a *tuple* lock (first in line for the row) and waits (`granted = False`) for a `ShareLock` on **A's transaction ID** — "wake me when A ends". The row lock itself is recorded in the row (its `xmax`), not in a lock table, so locking a million rows needs no million lock entries.
+B's `UPDATE` waits for A's row lock; when A commits, PostgreSQL (at Read Committed) **re-reads the newest row version** and applies `stock - 1` to it: 9 → 8. The `pg_locks` line (a system view of locks held and awaited) shows the mechanism: B holds its own transaction-ID lock and a *tuple* lock (first in line for the row) and waits (`granted = False`) for a `ShareLock` on **A's transaction ID** — "wake me when A ends". The row lock itself is recorded in the row (its `xmax`), not in a lock table, so locking a million rows needs no million lock entries.
 
 *Use when* the new value can be computed in SQL (`n = n + 1`, `balance = balance - 100 WHERE balance >= 100`) — the simplest, fastest fix.
 
@@ -771,7 +771,7 @@ B's snapshot says 10, but the row was changed by a transaction that committed af
 
 ### Fix 4 — optimistic locking with a version column (compare-and-set)
 
-**Compare-and-set (CAS)** means "change the value only if it is still what I read". It holds no lock, so it suits long gaps between read and write (a user editing a form for minutes, several HTTP requests). Add a `version` column and include it in the `WHERE`:
+**Compare-and-set (CAS)** means "change the value only if it is still what I read". It holds no lock, so it suits long gaps between read and write (a user editing a form for minutes, several HTTP requests — separate web requests, each in its own transaction). Add a `version` column and include it in the `WHERE`:
 
 ```text
 === Lost update fix 4: optimistic locking with a version column (compare-and-set) ===
@@ -785,7 +785,7 @@ B's snapshot says 10, but the row was changed by a transaction that committed af
   M| SELECT stock, version FROM products WHERE id = 1  -> (8, 3)
 ```
 
-B's first update matched **0 rows** — the conflict signal (the version is no longer the *expected* 1). B re-reads (9, version 2) and succeeds. The database checks and writes in one atomic step; `UPDATE 0` means "someone else won — reload and retry, or tell the user the record changed". JPA/Hibernate's `@Version`, Rails' `lock_version`, DynamoDB conditional writes and Redis `WATCH`/`MULTI`/`EXEC` are the same idea: no locks (so no deadlocks), great when conflicts are rare, wasteful retries when they are frequent.
+B's first update matched **0 rows** — the conflict signal (the version is no longer the *expected* 1). B re-reads (9, version 2) and succeeds. The database checks and writes in one atomic step; `UPDATE 0` means "someone else won — reload and retry, or tell the user the record changed". JPA/Hibernate's (Java) `@Version`, Rails' (Ruby) `lock_version`, DynamoDB conditional writes and Redis `WATCH`/`MULTI`/`EXEC` are the same idea: no locks (so no deadlocks), great when conflicts are rare, wasteful retries when they are frequent.
 
 ### Comparison
 
@@ -892,7 +892,7 @@ If you know exactly which rows the decision depends on, lock them. Here both tra
   M| SELECT count(*) FROM on_call WHERE shift = 'night' AND on_duty  -> 1
 ```
 
-After waiting, B's `FOR UPDATE` re-checks the rows and returns only Dr Kim. Limitation: `FOR UPDATE` locks only rows that **exist**. If the rule is about the *absence* of rows ("no booking overlaps 10:00–11:00"), there is nothing to lock. Then use Serializable; a constraint (`UNIQUE`, or PostgreSQL's exclusion constraint `EXCLUDE USING gist (room WITH =, during WITH &&)`, which needs the `btree_gist` extension for the `=` part); or *materialize the conflict* — pre-create lockable rows, e.g., one per room per time slot.
+After waiting, B's `FOR UPDATE` re-checks the rows and returns only Dr Kim. Limitation: `FOR UPDATE` locks only rows that **exist**. If the rule is about the *absence* of rows ("no booking overlaps 10:00–11:00"), there is nothing to lock. Then use Serializable; a constraint (`UNIQUE`, or PostgreSQL's exclusion constraint — which forbids any two rows that conflict, here overlapping times for the same room — `EXCLUDE USING gist (room WITH =, during WITH &&)`, which needs the `btree_gist` extension for the `=` part); or *materialize the conflict* — pre-create lockable rows, e.g., one per room per time slot.
 
 ### In the interview
 
@@ -914,7 +914,7 @@ After waiting, B's `FOR UPDATE` re-checks the rows and returns only Dr Kim. Limi
 
 **Concurrency control** is the part of a database that decides how overlapping transactions may interleave so the result stays correct: no anomalies from §13.4 (data integrity), each transaction isolated to the degree its level promises, and as much parallelism as possible (performance).
 
-The formal correctness goal is **serializability**: a concurrent execution (a *schedule*) is correct if its effect equals that of *some* serial order of the same transactions. Two operations **conflict** if they belong to different transactions, touch the same item, and at least one is a write; a schedule is *conflict-serializable* if its conflict graph has no cycle.
+The formal correctness goal is **serializability**: a concurrent execution (a *schedule*) is correct if its effect equals that of *some* serial order of the same transactions. Two operations **conflict** if they belong to different transactions, touch the same item, and at least one is a write; a schedule is *conflict-serializable* if its conflict graph (an arrow T1 → T2 whenever an operation of T1 conflicts with, and comes before, one of T2) has no cycle.
 
 ### The four families
 
@@ -944,9 +944,9 @@ These are combined in practice: PostgreSQL = MVCC for reads + row locks for writ
 | Cost of a conflict | Abort and redo the work | Waiting |
 | Overhead with no conflicts | Very low | Lock management on every access |
 | Deadlocks | None (no waits) | Possible — need detection |
-| Fits | Read-heavy, low-contention, distributed systems, long user think time | Write-heavy, hot rows (a popular product's stock), critical updates where retrying is expensive |
+| Fits | Read-heavy, low-contention (few transactions competing for the same rows), distributed systems, long user think time | Write-heavy, hot rows (a popular product's stock), critical updates where retrying is expensive |
 
-**Real-world examples.** **Git** is optimistic: nobody locks a file, and conflicts surface only at push/merge time. **Google Docs** lets everyone type and reconciles edits as they sync. **Banking** and **ticketing** lean pessimistic on hot rows so a seat is never sold twice; **e-commerce** locks (or atomically decrements) the stock row at purchase.
+**Real-world examples.** **Git** (the version-control tool) is optimistic: nobody locks a file, and conflicts surface only at push/merge time. **Google Docs** lets everyone type and reconciles edits as they sync. **Banking** and **ticketing** lean pessimistic on hot rows so a seat is never sold twice; **e-commerce** locks (or atomically decrements) the stock row at purchase.
 
 ### In the interview
 
@@ -1026,7 +1026,7 @@ Variants you should know:
 | **Rigorous 2PL** | hold **all** locks until commit/abort | Simplest to reason about; serial order = commit order |
 | Conservative 2PL | take every lock before starting | No deadlocks, but you must know the data set in advance |
 
-*Pros:* guaranteed serializability. *Cons:* **deadlocks** (§13.11) and lower throughput under contention — a long reader blocks writers and vice versa. MySQL and SQL Server implement Serializable with (strict) 2PL; it suits strong-isolation domains such as finance.
+*Pros:* guaranteed serializability. *Cons:* **deadlocks** (§13.11) and lower throughput (work completed per second) under contention — a long reader blocks writers and vice versa. MySQL and SQL Server implement Serializable with (strict) 2PL; it suits strong-isolation domains such as finance.
 
 ### Predicate locking and index-range locking
 
@@ -1103,7 +1103,7 @@ These table modes play the role of intention locks: `RowExclusiveLock` (taken by
 
 ### Common mistakes
 
-- An `ALTER TABLE` on a busy table waits for ACCESS EXCLUSIVE — and **every** later query queues behind it. Use `SET lock_timeout = '2s'` for migrations.
+- An `ALTER TABLE` on a busy table waits for ACCESS EXCLUSIVE — and **every** later query queues behind it. Use `SET lock_timeout = '2s'` for migrations (scripted schema changes).
 - Holding locks during slow work (HTTP calls, user input).
 - Relying on the absence of a row without a unique constraint or Serializable (phantoms).
 
@@ -1112,7 +1112,7 @@ These table modes play the role of intention locks: `RowExclusiveLock` (taken by
 **30-second answer:** "S locks for reads, X for writes; only S is compatible with S. Finer granularity means more concurrency and more overhead; intention locks let the manager check table-versus-row conflicts without scanning rows. 2PL (grow then shrink) guarantees serializability, strict 2PL keeps write locks to commit, and next-key locks stop phantoms."
 
 - *Why does strict 2PL hold X locks until commit?* So nobody reads uncommitted data and cascading aborts can't happen.
-- *How does Postgres avoid lock-table explosion for row locks?* Row locks are stored in the tuple header (`xmax` + infomask); waiters wait on the holder's transaction ID.
+- *How does Postgres avoid lock-table explosion for row locks?* Row locks are stored in the tuple header (`xmax` + infomask, a field of status bits); waiters wait on the holder's transaction ID.
 
 ### Self-check
 
@@ -1171,7 +1171,7 @@ Two transfers in opposite directions: A moves 10 from account 1 to 2; B moves 10
 
 How PostgreSQL does it:
 
-1. A waiting backend first sleeps for `deadlock_timeout` (default **1 s**) — most waits end by themselves, and the check is costly.
+1. A waiting backend (the server process serving one connection) first sleeps for `deadlock_timeout` (default **1 s**) — most waits end by themselves, and the check is costly.
 2. Then it inspects the wait-for graph. B's timer fired first (the demo set 200 ms for B, 10 s for A to make the victim predictable); it found the cycle A → B → A and aborted **B** with SQLSTATE **40P01**.
 3. B's locks are released, A's update completes and commits; the application retries B.
 
@@ -1198,7 +1198,7 @@ How PostgreSQL does it:
 
 ### The problem it solves
 
-Many apps keep a **job table** (emails to send, images to resize) served by several workers, each of which must grab jobs **no other worker** holds. With plain `FOR UPDATE` all workers lock the *same* first rows and queue behind each other.
+Many apps keep a **job table** (emails to send, images to resize) served by several workers (processes that pick up and run jobs), each of which must grab jobs **no other worker** holds. With plain `FOR UPDATE` all workers lock the *same* first rows and queue behind each other.
 
 ### The options
 
@@ -1238,11 +1238,11 @@ WHERE id IN (SELECT id FROM jobs
 RETURNING id, payload;
 ```
 
-Two designs: (a) keep the transaction open while processing — a crashed worker's rollback releases its jobs automatically; (b) mark `running` and commit at once, plus a `claimed_at` column and a sweeper that re-queues stuck jobs. A partial index `CREATE INDEX ON jobs (id) WHERE status = 'queued'` keeps the claim fast ([chapter 12](../12-indexes-storage-and-query-performance/README.md)).
+Two designs: (a) keep the transaction open while processing — a crashed worker's rollback releases its jobs automatically; (b) mark `running` and commit at once, plus a `claimed_at` column and a sweeper (a periodic clean-up job) that re-queues stuck jobs. A partial index `CREATE INDEX ON jobs (id) WHERE status = 'queued'` keeps the claim fast ([chapter 12](../12-indexes-storage-and-query-performance/README.md)).
 
 ### When not to use it
 
-`SKIP LOCKED` deliberately hides locked rows, so never use it for reports or business-rule checks. For very high throughput, fan-out or replay, use a broker (Kafka, RabbitMQ, SQS); a Postgres queue shines when jobs must be created in the same transaction as the business data.
+`SKIP LOCKED` deliberately hides locked rows, so never use it for reports or business-rule checks. For very high throughput, fan-out (delivering one message to many consumers) or replay (re-reading old messages), use a message broker — a dedicated queueing service such as Kafka, RabbitMQ or SQS ([System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)); a Postgres queue shines when jobs must be created in the same transaction as the business data.
 
 ### Real-world examples
 
@@ -1310,11 +1310,11 @@ Priya's first attempt relied on a count that a "later" transaction had already r
 |---|---|
 | **No deadlocks** — nobody waits for a lock | **Many rollbacks** under contention; work is thrown away |
 | Guarantees **serializability** by construction | **Starvation** — a long transaction may be restarted again and again because younger ones keep touching its data |
-| Simple conflict rule: compare two numbers | **Overhead** — every read updates RTS (reads become metadata writes); extra care is needed to avoid reading uncommitted values |
+| Simple conflict rule: compare two numbers | **Overhead** — every read updates RTS (reads become metadata writes — writes of bookkeeping data); extra care is needed to avoid reading uncommitted values |
 
 ### Where it is used
 
-Pure TO is mostly a textbook protocol. Its descendant **multiversion timestamp ordering** (versions tagged with timestamps; each read picks the right one) underlies many MVCC systems, and distributed databases rely on timestamps: Google Spanner uses TrueTime, CockroachDB hybrid logical clocks plus MVCC.
+Pure TO is mostly a textbook protocol. Its descendant **multiversion timestamp ordering** (versions tagged with timestamps; each read picks the right one) underlies many MVCC systems, and distributed databases rely on timestamps: Google Spanner uses TrueTime (GPS- and atomic-clock-backed time with a known error bound), CockroachDB hybrid logical clocks (physical time combined with a counter) plus MVCC.
 
 ### In the interview
 
@@ -1342,7 +1342,7 @@ Pure TO is mostly a textbook protocol. Its descendant **multiversion timestamp o
 2. **Snapshots:** when a transaction (Repeatable Read) or statement (Read Committed) starts, the database notes which transactions had committed.
 3. **Visibility:** a version is visible if its creator committed before the snapshot and its deleter is empty, aborted, or not committed as of the snapshot.
 4. **Writes** create new versions; concurrent writers of one row are serialized by a row lock (§13.7), and at Repeatable Read/Serializable a concurrent committed change raises a serialization error.
-5. **Cleanup:** versions no snapshot can see are garbage (PostgreSQL's `VACUUM`, InnoDB's purge thread).
+5. **Cleanup:** versions no snapshot can see are garbage (PostgreSQL's `VACUUM` cleanup command, InnoDB's purge thread — its background cleaner).
 
 ### Worked example — versions of an account
 
@@ -1463,8 +1463,8 @@ While A's transaction 1698 is open, **two versions** exist: A sees its new one (
 
 | Advantages | Costs |
 |---|---|
-| Readers and writers don't block each other | Extra storage for old versions; tables and indexes can **bloat** |
-| Consistent snapshots for reports and backups (`pg_dump` uses one) | Needs garbage collection (autovacuum must keep up) |
+| Readers and writers don't block each other | Extra storage for old versions; tables and indexes can **bloat** (grow with wasted space from dead versions) |
+| Consistent snapshots for reports and backups (`pg_dump` uses one) | Needs garbage collection (autovacuum — the background process that runs `VACUUM` automatically — must keep up) |
 | Cheap rollback in PostgreSQL (mark aborted) | Long-running transactions keep old versions alive for everyone |
 | Basis for snapshot isolation and SSI | Snapshot isolation alone still allows write skew (§13.8) |
 
@@ -1473,7 +1473,7 @@ While A's transaction 1698 is open, **two versions** exist: A sees its new one (
 ### Common mistakes
 
 - Leaving a session "idle in transaction" for hours: vacuum can't remove versions newer than its snapshot, so tables bloat. Set `idle_in_transaction_session_timeout`.
-- Disabling autovacuum: besides bloat, PostgreSQL's 32-bit transaction IDs must be "frozen" by vacuum before they wrap around (~2 billion transactions), or the server stops accepting writes.
+- Disabling autovacuum: besides bloat, PostgreSQL's 32-bit transaction IDs must be "frozen" (marked as old enough to be visible to everyone) by vacuum before they wrap around — run out and restart from zero (~2 billion transactions) — or the server stops accepting writes.
 - Thinking MVCC means "no locks at all" — writes to the same row still lock and wait.
 
 ### Real-world examples
@@ -1501,11 +1501,11 @@ Shoppers browse while prices change, customers view balances during batch postin
 1. Keep transactions **short** — never open across user think time or slow network calls.
 2. Prefer **atomic statements** (`SET n = n - 1 WHERE n > 0`) over read-then-write in code; otherwise `FOR UPDATE`, or a **version column** for long gaps.
 3. Declare every invariant you can as a **constraint** (unique, check, foreign key, exclusion); for cross-row rules use **Serializable + retry** or lock the rows the decision depends on.
-4. **Retry** the whole transaction on SQLSTATE 40001 and 40P01, with backoff and a limit.
+4. **Retry** the whole transaction on SQLSTATE 40001 and 40P01, with backoff (waiting a little longer before each new attempt) and a limit.
 5. Lock rows in a **consistent order**; set `lock_timeout` for migrations and `idle_in_transaction_session_timeout` to protect vacuum.
 6. For consistent multi-query reports use `REPEATABLE READ READ ONLY`.
 
-Deeper theory: [DDIA ch. 7 notes](../../../ddia/chapters/07-transactions/README.md). Thread-level locking in application code: LLD handbook [concurrency concepts](../../../lld/chapters/12-concurrency-concepts/README.md) and [concurrency problems](../../../lld/chapters/13-concurrency-problems/README.md). Distributed transactions and replication: [chapter 15](../15-scaling-databases/README.md); transactions from Python/Java: [chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md). A one-page summary of isolation levels, anomalies and lock choices is in [chapter 20, §20.12](../20-cheatsheet-and-glossary/README.md#2012-transactions-isolation-and-concurrency).
+Deeper theory: [DDIA ch. 7 notes](../../../ddia/chapters/07-transactions/README.md). Thread-level locking in application code: LLD (low-level design) handbook [concurrency concepts](../../../lld/chapters/12-concurrency-concepts/README.md) and [concurrency problems](../../../lld/chapters/13-concurrency-problems/README.md). Distributed transactions and replication: [chapter 15](../15-scaling-databases/README.md); transactions from Python/Java: [chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md). A one-page summary of isolation levels, anomalies and lock choices is in [chapter 20, §20.12](../20-cheatsheet-and-glossary/README.md#2012-transactions-isolation-and-concurrency).
 
 ---
 

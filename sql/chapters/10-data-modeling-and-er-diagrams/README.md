@@ -2,18 +2,18 @@
 
 Up to now the tables in this book were handed to you. In real work nobody hands you tables: somebody describes a business in a few sentences ("we rent bikes to people"), and you must decide what to store, how the pieces connect, and which rules the database should enforce. That decision is **data modeling**, and it matters more than any single query you will write, because any fact left out of the model is a question no SQL, however clever, can ever answer.
 
-This chapter walks the whole path: from a plain-language brief, to a drawing that business people can check (an **ER diagram**), to precise tables with keys and constraints (the **relational model**), to `CREATE TABLE` statements running on PostgreSQL. [Chapter 11](../11-normalization/README.md) then tests those tables for repeated data, and [Chapter 17](../17-schema-design-case-studies/README.md) applies everything to nine full case studies.
+This chapter walks the whole path: from a plain-language brief, to a drawing that business people can check (an **ER diagram**), to precise tables with keys and constraints (the **relational model** — the theory of storing all data as tables of rows and columns, §10.11), to `CREATE TABLE` statements running on PostgreSQL. [Chapter 11](../11-normalization/README.md) then tests those tables for repeated data, and [Chapter 17](../17-schema-design-case-studies/README.md) applies everything to nine full case studies.
 
 **What you'll learn**
 
 1. What a data model is, who reads it, and the three levels it is drawn at (conceptual, logical, physical).
 2. A repeatable seven-step modeling process, and the best practices that separate easy-to-change models from painful ones.
-3. The ER model: entities, the five kinds of attribute, relationships, degree, cardinality, participation, relationship attributes and weak entities — in **Chen notation** and in **crow's-foot notation** (the one `mermaid erDiagram` draws).
+3. The ER model: entities, the five kinds of attribute, relationships, degree, cardinality, participation, relationship attributes and weak entities — in **Chen notation** and in **crow's-foot notation** (the one `mermaid erDiagram` draws — Mermaid is a tool that turns a short text description into a diagram).
 4. A complete worked example: an employee-management ER diagram built step by step.
 5. The relational model: relations, tuples, attributes, domains, `NULL`, the seven kinds of key and the integrity constraints.
 6. The mechanical procedure that turns any ER diagram into tables, and the judgement calls it leaves to you.
 
-All runnable code is in [`code/`](code/): `00_schema.sql` builds a small bike-rental database; `01`–`04` run on a fresh database each (see [Chapter 1](../01-databases-and-the-relational-model/README.md) for the private PostgreSQL 14 server). Every "Output:" block below is real psql output.
+All runnable code is in [`code/`](code/): `00_schema.sql` builds a small bike-rental database; `01`–`04` run on a fresh database each (see [Chapter 1](../01-databases-and-the-relational-model/README.md) for the private PostgreSQL 14 server). Every "Output:" block below is real psql output (psql is PostgreSQL's command-line client).
 
 ---
 
@@ -26,9 +26,9 @@ All runnable code is in [`code/`](code/): `00_schema.sql` builds a small bike-re
 |---|---|---|
 | **Entity** | a *thing* you keep data about (Customer, Bike, Rental) — almost always a noun | a table |
 | **Attribute** | one *fact* about an entity (a customer's email, a bike's frame number) | a column |
-| **Relationship** | a *link* between entities (a customer *rents* a bike) | a foreign key, or a table of its own |
+| **Relationship** | a *link* between entities (a customer *rents* a bike) | a foreign key (a column holding another table's key), or a table of its own |
 
-The result — a **data model** — is a picture of those three things and nothing else. It says nothing about indexes, `VARCHAR` lengths or which database product you will use. Analogy: it is the architect's floor plan, drawn before anyone picks brick suppliers.
+The result — a **data model** — is a picture of those three things and nothing else. It says nothing about indexes (lookup structures that speed up searches), `VARCHAR` lengths or which database product you will use. Analogy: it is the architect's floor plan, drawn before anyone picks brick suppliers.
 
 ### The problem it solves — the question you cannot answer
 A small bike-rental shop says: *"We rent bikes to customers."* That sounds like two tables, `customer` and `bike`. Then the owner asks: *"We own three 'Urban 3' bikes. One came back with a bent wheel — which one, and who had it?"*
@@ -60,7 +60,7 @@ Since non-technical readers must follow it, you describe the model in everyday l
 
 ### What data modeling is *not*
 - **Not writing SQL.** SQL comes last and is nearly mechanical once the model is right (§10.15).
-- **Not performance tuning.** Indexes and query plans come later ([Chapter 12](../12-indexes-storage-and-query-performance/README.md)). Quickly answering the wrong question helps nobody.
+- **Not performance tuning.** Indexes and query plans (the step-by-step strategy the database picks for running a query) come later ([Chapter 12](../12-indexes-storage-and-query-performance/README.md)). Quickly answering the wrong question helps nobody.
 - **Not application code.** Two very different apps can share one model.
 
 ### Why it matters
@@ -81,10 +81,10 @@ The same model is drawn three times, each time with more detail, for a different
 
 | | **Conceptual** | **Logical** | **Physical** |
 |---|---|---|---|
-| Shows | entities and relationships only | + attributes, keys, general types (text/number/date) | + exact types, indexes, partitioning, storage options |
+| Shows | entities and relationships only | + attributes, keys, general types (text/number/date) | + exact types, indexes, partitioning (splitting a big table into pieces), storage options |
 | Detail | low | medium | high |
-| Main audience | business people | designers, developers | DBAs, developers |
-| Tied to a DBMS product? | no | no | **yes** |
+| Main audience | business people | designers, developers | DBAs (database administrators), developers |
+| Tied to a DBMS (database management system, e.g. PostgreSQL) product? | no | no | **yes** |
 | Question it answers | "Is every thing present, and is each link correct?" | "Which facts are recorded, and which keys join the tables?" | "How do we store this well on *this* database?" |
 | Bike-shop example | Customer *rents* Bike; Bike *is of* BikeModel | `rental(rental_id, customer_id → customer, bike_id → bike, out_at, due_at, back_at)` | `CREATE TABLE rental (... timestamp ..., INDEX on customer_id)` |
 
@@ -93,9 +93,9 @@ The same model is drawn three times, each time with more detail, for a different
 ![The three levels of data modeling](img/three-levels.svg)
 
 ### How it works
-1. **Conceptual** — boxes and lines, in the users' own words. Technology-independent: it would be equally valid for a relational database, a document store or a paper ledger.
+1. **Conceptual** — boxes and lines, in the users' own words. Technology-independent: it would be equally valid for a relational database, a document store (a database that keeps JSON-like documents instead of tables) or a paper ledger.
 2. **Logical** — add attributes, primary and foreign keys, and general types. This is where **normalization** happens (removing repeated data — [Chapter 11](../11-normalization/README.md)). Still product-neutral.
-3. **Physical** — rewrite for one DBMS: `bigint` vs `int`, `numeric(6,2)`, `timestamp`, indexes for the known queries, identity columns, partitioning.
+3. **Physical** — rewrite for one DBMS: `bigint` vs `int`, `numeric(6,2)`, `timestamp`, indexes for the known queries, identity columns (keys the database numbers automatically), partitioning.
 
 The physical version of the rental table from `code/00_schema.sql`:
 
@@ -120,13 +120,13 @@ The entity came from the conceptual model, the columns and keys from the logical
 |---|---|
 | PostgreSQL 10+ | `bigint GENERATED ALWAYS AS IDENTITY` (older: `bigserial`) |
 | MySQL | `BIGINT AUTO_INCREMENT` |
-| SQLite | `INTEGER PRIMARY KEY` (becomes the rowid) |
+| SQLite | `INTEGER PRIMARY KEY` (becomes the rowid, SQLite's built-in row number) |
 | SQL Server | `BIGINT IDENTITY(1,1)` |
 
 ### Why bother with three levels
 - **Every reader gets a version pitched at them.** A shop owner reviewing three boxes finds a missing entity; the same person shown `CREATE TABLE` finds nothing.
-- **Mistakes are caught while cheap.** A missing entity costs a conversation at the conceptual level and a migration once two million rows exist.
-- **Technology is isolated.** Switch from MySQL to PostgreSQL and only the physical model is rewritten. This is **data independence** (defined in [Chapter 1](../01-databases-and-the-relational-model/README.md)) applied at design time.
+- **Mistakes are caught while cheap.** A missing entity costs a conversation at the conceptual level and a migration (a script that changes an existing schema and its data) once two million rows exist.
+- **Technology is isolated.** Switch from MySQL to PostgreSQL and only the physical model is rewritten. This is **data independence** (changing how data is stored without rewriting the programs that use it; defined in [Chapter 1](../01-databases-and-the-relational-model/README.md)) applied at design time.
 
 The levels are not a one-way street: working out the logical model often shows the conceptual one was wrong, and you go back. That is cheap precisely because the conceptual drawing is small.
 
@@ -173,19 +173,19 @@ A fixed order of work where every step produces something you can show someone. 
 4. **Draw and review the conceptual model** with the owner, reading it back as sentences. She will correct you ("customers can also *reserve* a bike for tomorrow") — a new entity for the price of one box. Do not continue until the business agrees.
 5. **Design the logical model.** Attributes, primary keys, foreign keys, general types; then normalize.
 6. **Build the physical model.** Exact types, and an index for every question from step 1 (`rental.customer_id`, `rental.bike_id`).
-7. **Validate, implement, refine.** Load realistic volumes (not ten rows — enough rows for slowness to show up), run the step-1 questions, check correctness and speed. After go-live keep watching: a model right for 10 thousand rentals may need a new index at 10 million.
+7. **Validate, implement, refine.** Load realistic volumes (not ten rows — enough rows for slowness to show up), run the step-1 questions, check correctness and speed. After go-live (the launch to real users) keep watching: a model right for 10 thousand rentals may need a new index at 10 million.
 
 ### The loops back are part of the process
 | Trigger | Sends you back to |
 |---|---|
-| Stakeholder review reveals something new (reservations) | step 2 (entities) |
+| Stakeholder (anyone with a say in the system) review reveals something new (reservations) | step 2 (entities) |
 | Normalization splits a table and exposes a hidden link | step 3 (relationships) |
 | Validation finds a slow query | step 6 (index or key choice) |
 
 Looping back is the method working, not failing: every loop costs less than releasing the error.
 
 ### Trade-offs to keep in mind throughout
-- **Normalize vs denormalize** — normalize first; add redundancy back only for a measured slow query ([Chapter 11](../11-normalization/README.md#1116-denormalization--when-and-how-to-break-the-rules)).
+- **Normalize vs denormalize** — normalize first (split tables so each fact is stored once); add redundancy (deliberate duplicate copies) back only for a measured slow query ([Chapter 11](../11-normalization/README.md#1116-denormalization--when-and-how-to-break-the-rules)).
 - **Growth** — rows in three years, not today; it changes key and index choices.
 - **Access control** — mark sensitive data early (emails, payments).
 - **Integrity** — each business rule you collected in step 1 belongs in a constraint, not in an `if` inside the application.
@@ -256,12 +256,12 @@ Two models can both work on day one and differ enormously a year later. The diff
 | Practice | Rule | Why |
 |---|---|---|
 | **Questions first** | Write the list of questions before drawing. | A model is only "correct" relative to the questions it must answer. |
-| **Rules in the database** | Every stated rule → a `PRIMARY KEY`, `FOREIGN KEY`, `NOT NULL`, `UNIQUE` or `CHECK`. | A constraint protects every program that ever connects, including tomorrow's ad-hoc script; an `if` protects only the program it is in. |
-| **One naming convention** | Decide once (`snake_case`, singular *or* plural tables) and never mix. Same thing = same name everywhere (`customer_id`, never `cust_no` elsewhere). Name FKs after their target. | Joins read naturally; nobody has to guess. |
-| **Types on purpose** | Dates as `date`/`timestamp`, never text; money as `numeric`, never `float`/`double`; text sized for real data. Prefer the narrowest type that fits. | Text dates accept "31 February" and sort wrongly; floating point cannot represent most decimals exactly, so totals drift; narrower rows = more rows per page = fewer disk reads. |
+| **Rules in the database** | Every stated rule → a `PRIMARY KEY`, `FOREIGN KEY`, `NOT NULL`, `UNIQUE` or `CHECK`. | A constraint protects every program that ever connects, including tomorrow's ad-hoc (one-off, written for a single task) script; an `if` protects only the program it is in. |
+| **One naming convention** | Decide once (`snake_case` = lower case with underscores, singular *or* plural tables) and never mix. Same thing = same name everywhere (`customer_id`, never `cust_no` elsewhere). Name FKs after their target. | Joins read naturally; nobody has to guess. |
+| **Types on purpose** | Dates as `date`/`timestamp`, never text; money as `numeric`, never `float`/`double`; text sized for real data. Prefer the narrowest type that fits. | Text dates accept "31 February" and sort wrongly; floating point cannot represent most decimals exactly, so totals drift; narrower rows = more rows per page (the fixed-size block the database reads from disk) = fewer disk reads. |
 | **Decide what NULL means** | `NOT NULL` whenever the fact must exist; allow `NULL` only when "missing" is meaningful (`back_at IS NULL` = bike still out). | `NULL` means unknown/not applicable, is not 0 or '' and is not equal to anything (§10.12). |
-| **Keys deliberately** | Surrogate primary key + `UNIQUE` on the natural key (`email`, `frame_no`). Keep keys narrow. | Natural values change; a PK is copied into every FK and index. |
-| **Normalize, then denormalize with evidence** | Default to 3NF; denormalize only after a measured slow query that an index could not fix — and document why. | Redundant copies can disagree ([Chapter 11](../11-normalization/README.md)). |
+| **Keys deliberately** | Surrogate primary key (a generated id with no business meaning) + `UNIQUE` on the natural key (a real-world identifier: `email`, `frame_no`). Keep keys narrow. | Natural values change; a PK is copied into every FK and index. |
+| **Normalize, then denormalize with evidence** | Default to 3NF (third normal form, the usual target of normalization); denormalize only after a measured slow query that an index could not fix — and document why. | Redundant copies can disagree ([Chapter 11](../11-normalization/README.md)). |
 | **Index for real queries** | Index what the requirement questions filter/join on; nothing else. | Every index slows every write and costs disk. |
 | **Design for predictable growth** | Estimate rows in 3 years; don't build tables for imagined requirements. | Speculative tables become the parts nobody understands. |
 | **Document meaning** | For each entity/column: what it means, allowed values, units. | Anyone can see `status` is text; only docs say which 4 values it holds. |
@@ -281,8 +281,8 @@ CHECK (back_at IS NULL OR back_at >= out_at)
 - **Rules only in code** — some other program will break them.
 
 ### Real-world examples
-- **Stripe's API** represents amounts as integers in the smallest currency unit (cents) — the same idea as "never float for money".
-- **ISO country codes** are `char(2)` — "size text for the data" in the wild.
+- **Stripe's API** (the programming interface of the payments company Stripe) represents amounts as integers in the smallest currency unit (cents) — the same idea as "never float for money".
+- **ISO country codes** (the international standard two-letter codes such as `IN`, `GB`) are `char(2)` — "size text for the data" in the wild.
 
 ### TL;DR
 Questions first; constraints in the schema; one naming style; correct types (dates as dates, money as `numeric`); explicit `NOT NULL`; surrogate PK + unique natural key; normalize to 3NF, denormalize with measurements; index only real queries; document meaning.
@@ -511,9 +511,9 @@ Careful: in Chen's `(min,max)` style the pair is usually written next to the ent
 ### In the interview
 **30-second answer:** "Degree counts the entity types involved — one (unary), two (binary) or three (ternary). Cardinality is how many instances link: 1:1, 1:N or M:N. Participation is whether taking part is mandatory. 1:N puts the FK on the many side; M:N needs a junction table; 1:1 is an FK plus UNIQUE; total participation makes the FK NOT NULL."
 
-- *Where does the FK go in a 1:N?* → Many side. *Why not the one side?* → It would need a list in one cell, which violates 1NF.
+- *Where does the FK go in a 1:N?* → Many side. *Why not the one side?* → It would need a list in one cell, which violates 1NF (first normal form: one value per cell).
 - *How do you enforce 1:1 in SQL?* → FK + `UNIQUE` on it (or share the same PK in both tables).
-- *Can you enforce "every department has at least one employee" with a plain FK?* → No; an FK constrains the child side. You need a deferred constraint trigger or application logic.
+- *Can you enforce "every department has at least one employee" with a plain FK?* → No; an FK constrains the child side. You need a deferred constraint trigger (a trigger — code the database runs automatically on a change — whose check waits until commit) or application logic.
 
 ### TL;DR
 Degree = number of entity types; cardinality = max instances per side; participation = min (mandatory or not). 1:N → FK on many side; M:N → junction table; 1:1 → FK + UNIQUE; unary → self-FK; total → NOT NULL.
@@ -749,7 +749,7 @@ erDiagram
 
 ### Design check: does Payroll deserve its own table?
 A 1:1 with total participation on **both** sides usually describes one thing stored in two places. Reasons to keep two tables anyway:
-- **Access control** — salaries can be granted to HR only (`GRANT SELECT ON payroll TO hr`; see [Chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md)).
+- **Access control** — salaries can be granted to HR only (`GRANT` gives a user or role a permission: `GRANT SELECT ON payroll TO hr`; see [Chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md)).
 - **Row width** — the frequently read `employee` row stays narrow.
 - **Optional data** — if many employees had no payroll row, a separate table stores nothing for them instead of several `NULL`s.
 
@@ -765,14 +765,14 @@ Nouns → entities; classify every attribute (key/simple/composite/multivalued/d
 ### What it is
 The ER diagram is a drawing; a database stores **relations** (tables). The **relational model**, published by **Edgar F. Codd in 1970**, says: store all data as tables of values, and let programs *describe* the data they want while the system works out how to fetch it.
 
-Before it, hierarchical and network databases made programs walk stored paths of pointers (employee record → pointer → department record). Reorganize the file and every program walking that path broke.
+Before it, hierarchical and network databases (older designs where records were linked in trees or webs) made programs walk stored paths of pointers (stored disk addresses of other records) (employee record → pointer → department record). Reorganize the file and every program walking that path broke.
 
 ### The three parts of the model
 | Part | Question it answers | Content |
 |---|---|---|
 | **Structure** | What shape is the data? | Only relations: a name, named columns, rows of single values. No nested records, arrays or pointers. |
 | **Integrity** | Which tables are legal? | Keys and constraints declared once on the table; the DBMS refuses any change that breaks them. |
-| **Manipulation** | How do I get data out? | Declarative queries (SQL), built on **relational algebra**: operations (select, project, join, union, difference …) that take relations and return a relation. |
+| **Manipulation** | How do I get data out? | Declarative queries (SQL: you state *what* you want, not how to fetch it), built on **relational algebra**: operations (select, project, join, union, difference …) that take relations and return a relation. |
 
 *Figure — structure, integrity, manipulation (course diagram)*
 
@@ -786,10 +786,10 @@ Before it, hierarchical and network databases made programs walk stored paths of
 ### What you get
 - **One rule reaches every program** — constraints live with the data.
 - **Physical data independence** — queries name *what*, not *how*, so indexes and storage can change without editing queries.
-- **Some logical data independence** — adding a column or hiding a split behind a view does not break existing queries. It is *not* total: renaming a column or shrinking its type still breaks the programs that use it.
+- **Some logical data independence** — adding a column or hiding a split behind a view (a saved query that behaves like a table) does not break existing queries. It is *not* total: renaming a column or shrinking its type still breaks the programs that use it.
 
 ### What it does not promise
-- **Nothing about storage** — files, pages and indexes belong to the storage engine ([Chapter 12](../12-indexes-storage-and-query-performance/README.md)).
+- **Nothing about storage** — files, pages and indexes belong to the storage engine (the part of the DBMS that reads and writes the files) ([Chapter 12](../12-indexes-storage-and-query-performance/README.md)).
 - **Joins are not free** — matching values costs work that grows with table size.
 - **A table is not always an entity** — tables also come from M:N relationships (`works_on`) and multivalued attributes (`employee_phone`).
 
@@ -886,7 +886,7 @@ Key facts to be exact about:
 **30-second answer:** "A superkey uniquely identifies rows; a candidate key is a minimal superkey; the primary key is the candidate I pick — unique and not null; the other candidates are alternate keys and get UNIQUE constraints. A foreign key references a primary or unique key and may be null. My default is a generated surrogate PK, with the natural key kept unique."
 
 - *Is `{id, name}` a candidate key?* → A superkey, not a candidate key: `name` can be dropped.
-- *UUID vs bigint surrogate?* → UUIDs can be generated anywhere without coordination but are 16 bytes vs 8 and random UUIDs scatter B-tree inserts; time-ordered UUIDs (v7) reduce that.
+- *UUID vs bigint surrogate?* → UUIDs can be generated anywhere without coordination but are 16 bytes vs 8 and random UUIDs scatter B-tree (the default, always-sorted index structure) inserts; time-ordered UUIDs (v7) reduce that.
 - *Is an attribute of an alternate key prime?* → Yes — prime means "in any candidate key".
 
 ### TL;DR
@@ -916,15 +916,17 @@ Why entity integrity: a primary key identifies a row, and `NULL` means "unknown"
 ### What happens when a referenced (parent) row is deleted or its key updated
 | Action (`ON DELETE` / `ON UPDATE`) | Effect | Use when |
 |---|---|---|
-| `NO ACTION` (default) | error if children exist; in PostgreSQL the check runs at the end of the statement and can be `DEFERRABLE` to end of transaction | general default |
+| `NO ACTION` (default) | error if children exist; in PostgreSQL the check runs at the end of the statement and can be `DEFERRABLE` (postponed) to the end of the transaction — the group of statements committed together | general default |
 | `RESTRICT` | error immediately, cannot be deferred | you want an immediate refusal |
 | `CASCADE` | delete/update the children too | weak entities, pure child data (phones, order lines) — dangerous elsewhere |
 | `SET NULL` | children's FK becomes `NULL` (column must be nullable) | optional relationships |
 | `SET DEFAULT` | children's FK becomes its default | rare |
 
-Dialect notes: MySQL/InnoDB treats `NO ACTION` as `RESTRICT` and rejects `SET DEFAULT`; SQL Server has no `RESTRICT` keyword (use `NO ACTION`); SQLite enforces FKs only after `PRAGMA foreign_keys = ON`. MySQL enforces `CHECK` only from 8.0.16 (earlier versions parsed and ignored it).
+Dialect notes: MySQL/InnoDB (MySQL's default storage engine) treats `NO ACTION` as `RESTRICT` and rejects `SET DEFAULT`; SQL Server has no `RESTRICT` keyword (use `NO ACTION`); SQLite enforces FKs only after `PRAGMA foreign_keys = ON` (a SQLite settings command). MySQL enforces `CHECK` only from 8.0.16 (earlier versions parsed and ignored it).
 
 ### Running it (`code/03_keys_and_integrity.sql`)
+Each failing statement is wrapped in a `DO` block (a one-off piece of PostgreSQL procedural code) that catches the error and prints it as a `NOTICE` (an informational message), so the script keeps going.
+
 ```sql
 CREATE TABLE room (
   room_id  int PRIMARY KEY,                                    -- entity integrity: unique + NOT NULL
@@ -981,10 +983,10 @@ Because `NULL` is never equal to `NULL`, most databases let a `UNIQUE` column ho
 | PostgreSQL | yes by default; PostgreSQL 15+ can say `UNIQUE NULLS NOT DISTINCT` to allow only one (not run here — our server is 14) |
 | MySQL (InnoDB) | yes |
 | SQLite | yes |
-| SQL Server | **no — only one NULL**; use a filtered unique index `WHERE col IS NOT NULL` for "many" |
+| SQL Server | **no — only one NULL**; use a filtered unique index (one covering only rows that match its `WHERE`) `WHERE col IS NOT NULL` for "many" |
 
 ### Why rules belong in the schema
-1. **They hold for everybody** — web app, mobile backend, nightly import, a hand-typed fix at midnight.
+1. **They hold for everybody** — web app, mobile backend (the server code behind a phone app), nightly import, a hand-typed fix at midnight.
 2. **They cannot drift** — one copy, not one per application.
 3. **They document meaning** — the `CREATE TABLE` tells a reader what the data is.
 

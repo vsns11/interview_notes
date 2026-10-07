@@ -3,7 +3,7 @@
 Real queries grow. A report that needs "order totals, then customer totals, then only the customers above average" quickly turns into three levels of nested subqueries that nobody can read. This chapter gives you the tools SQL has for **naming** a piece of a query so you can build big queries out of small, readable steps:
 
 - a **common table expression (CTE)** names a query for the length of *one* statement;
-- a **recursive CTE** calls itself, which lets plain SQL walk hierarchies (org charts, category trees, bills of materials) and graphs (flight routes, friend networks) and produce sequences;
+- a **recursive CTE** calls itself, which lets plain SQL walk hierarchies (org charts, category trees, bills of materials — parts lists where each part can itself be made of parts) and graphs (networks of connected items: flight routes, friend networks) and produce sequences;
 - a **view** names a query *permanently* in the database, so everyone can reuse it like a table;
 - a **materialized view** also stores the query's *result*, trading freshness for speed.
 
@@ -14,7 +14,7 @@ It also covers `generate_series`, PostgreSQL's quick way to produce rows of numb
 | # | Topic | You will be able to… |
 |---|---|---|
 | 7.1 | CTE basics | write `WITH` queries, chain several CTEs, know when PostgreSQL inlines them |
-| 7.2 | Data-modifying CTEs | archive/move rows in one atomic statement with `RETURNING` |
+| 7.2 | Data-modifying CTEs | archive/move rows in one atomic (all-or-nothing) statement with `RETURNING` |
 | 7.3 | Recursive CTE mechanics | explain anchor, recursive term, working table and termination |
 | 7.4 | Hierarchies | list a tree top-down with depth and path, walk up to the root, total a subtree |
 | 7.5 | Graphs and cycles | traverse a graph without looping forever; use `CYCLE` and `SEARCH` (PostgreSQL 14) |
@@ -30,7 +30,7 @@ It also covers `generate_series`, PostgreSQL's quick way to produce rows of numb
 ## 7.1 Common table expressions (WITH)
 
 ### What it is
-A **common table expression** is a named, temporary result set that you define at the start of a statement with `WITH name AS (query)` and then use in the rest of that statement as if it were a table. It disappears when the statement ends.
+A **common table expression** is a named, temporary result set (the rows a query returns) that you define at the start of a statement with `WITH name AS (query)` and then use in the rest of that statement as if it were a table. It disappears when the statement ends.
 
 Analogy: when you solve a maths problem you write intermediate results on scrap paper ("let *x* = total per customer") and then use *x* in the final answer. A CTE is that scrap paper, with a name.
 
@@ -49,7 +49,7 @@ Without CTEs you nest derived tables (subqueries in `FROM`). Nesting reads *insi
 1. Each `name AS (query)` defines one CTE. Separate several with commas; write `WITH` only once.
 2. A CTE can reference any CTE defined **before** it (and, with `RECURSIVE`, itself — see 7.3).
 3. The final statement (a `SELECT`, `INSERT`, `UPDATE` or `DELETE`) uses the CTEs by name.
-4. The CTE exists only while this one statement runs. Nothing is stored in the catalog.
+4. The CTE exists only while this one statement runs. Nothing is stored in the catalog (the database's internal list of its tables, views and other objects).
 
 **One CTE — employees paid above their department average:**
 ```sql
@@ -160,10 +160,10 @@ Output:
 
 ### How PostgreSQL executes a CTE: inlined or materialized
 A CTE can be run in two ways:
-- **Inlined** — the optimizer pastes the CTE's query into the main query, exactly like a subquery, and optimizes the whole thing together (for example pushing a `WHERE` filter down into it so an index can be used).
+- **Inlined** — the optimizer (the database component that chooses how to run a query) pastes the CTE's query into the main query, exactly like a subquery, and optimizes the whole thing together (for example pushing a `WHERE` filter down into it so an index — a sorted lookup structure that finds rows without reading the whole table — can be used).
 - **Materialized** — the CTE runs once, its rows are stored in a temporary work area, and the main query scans that stored copy. Filters from outside cannot reach inside.
 
-Since **PostgreSQL 12**, a non-recursive, side-effect-free CTE that is referenced **once** is inlined automatically; one referenced two or more times is materialized. You can override the choice with `AS MATERIALIZED` or `AS NOT MATERIALIZED`. (Before version 12 every CTE was materialized — an "optimization fence" that old blog posts still warn about.)
+Since **PostgreSQL 12**, a non-recursive, side-effect-free (it only reads; it changes no data) CTE that is referenced **once** is inlined automatically; one referenced two or more times is materialized. You can override the choice with `AS MATERIALIZED` or `AS NOT MATERIALIZED`. (Before version 12 every CTE was materialized — an "optimization fence" that old blog posts still warn about.)
 
 ```sql
 EXPLAIN (COSTS OFF)
@@ -190,7 +190,7 @@ Output:
      ->  Seq Scan on employees
 (4 rows)
 ```
-The first plan never mentions the CTE: the filter reached the primary-key index. The second copies the whole table into the CTE, then filters. (`EXPLAIN` is covered properly in [chapter 12](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table).)
+The first plan never mentions the CTE: the filter reached the primary-key index. The second copies the whole table into the CTE, then filters. (`EXPLAIN` prints the plan — the steps the database chose; `Seq Scan` means reading the whole table. It is covered properly in [chapter 12](../12-indexes-storage-and-query-performance/README.md#1210-reading-explain-the-four-ways-to-read-a-table).)
 
 `MATERIALIZED` is useful when the CTE is expensive and referenced several times, or when you deliberately want to compute something once (for example a call to a slow function). `NOT MATERIALIZED` is useful when a multiply-referenced CTE is cheap and each use filters it differently.
 
@@ -202,7 +202,7 @@ The first plan never mentions the CTE: the filter reached the primary-key index.
 | `MATERIALIZED` hint | 12+ | no | 3.35+ | no |
 | CTE with `INSERT/UPDATE/DELETE` inside | yes (7.2) | no | no | no (but a CTE can be the *target* of an `UPDATE`/`DELETE`) |
 
-In SQL Server the statement *before* a `WITH` must end with a semicolon, which is why you often see `;WITH` in T-SQL code (SQL Server — not run).
+In SQL Server the statement *before* a `WITH` must end with a semicolon, which is why you often see `;WITH` in T-SQL (SQL Server's SQL dialect) code (SQL Server — not run).
 
 ### Trade-offs
 | | Derived table (subquery in `FROM`) | CTE |
@@ -216,7 +216,7 @@ In SQL Server the statement *before* a `WITH` must end with a semicolon, which i
 ### When not to use it
 - When the query is simple enough to read without it — one level of subquery is fine.
 - When many different statements need the same logic: that is a **view** (7.7).
-- When you need the intermediate result across several statements (for example to index it or look at it twice in a session): use a **temporary table** (7.9).
+- When you need the intermediate result across several statements (for example to index it or look at it twice in a session — one connection's lifetime): use a **temporary table** (a real table that only your session can see and that is dropped automatically when it ends; 7.9).
 
 ### Common mistakes
 - **Writing `WITH` twice** (`WITH a AS (...) WITH b AS (...)`). Use one `WITH` and commas.
@@ -225,13 +225,13 @@ In SQL Server the statement *before* a `WITH` must end with a semicolon, which i
 - **A missing comma between CTEs**, or an extra one after the last CTE.
 
 ### Real-world examples
-Analytics teams write reports as a chain of CTEs (`raw → cleaned → joined → aggregated → final`); dbt encourages exactly this style.
+Analytics teams write reports as a chain of CTEs (`raw → cleaned → joined → aggregated → final`); dbt (a popular tool for building data-transformation pipelines out of SQL files) encourages exactly this style.
 
 ### In the interview
 **30-second answer:** "A CTE is a named subquery declared with `WITH` that exists for one statement. It makes complex queries readable as a sequence of steps, lets you reference the same intermediate result several times, and — with `WITH RECURSIVE` — lets a query refer to itself to walk hierarchies. In PostgreSQL 12 and later a CTE referenced once is inlined, so it costs the same as a subquery; you can force materialization with `AS MATERIALIZED`."
 
 - *Is a CTE faster than a subquery?* → Usually identical, because modern optimizers inline it. It can be slower if it is materialized and a selective outer filter can't be pushed into it; it can be faster if an expensive CTE is materialized once and reused.
-- *CTE vs temporary table?* → A CTE lasts one statement and isn't indexed; a temp table lasts the session (or transaction), can be indexed and analyzed, and can be reused by many statements.
+- *CTE vs temporary table?* → A CTE lasts one statement and isn't indexed; a temp table lasts the session (or transaction), can be indexed and analyzed (have statistics gathered for the optimizer), and can be reused by many statements.
 - *Can you update through a CTE?* → In PostgreSQL the CTE itself can contain `UPDATE/DELETE/INSERT ... RETURNING` (next section).
 
 ### Self-check
@@ -253,7 +253,7 @@ In PostgreSQL a CTE may contain an `INSERT`, `UPDATE` or `DELETE` with a `RETURN
 1. `DELETE ... RETURNING *` (or `UPDATE`/`INSERT ... RETURNING`) inside a CTE produces the affected rows.
 2. Later CTEs or the main statement read those rows by the CTE's name.
 3. Every data-modifying CTE runs **to completion exactly once**, even if nothing reads its output.
-4. All parts of the statement see the **same snapshot** — the data as it was *before* the statement started. They do not see each other's changes, except through `RETURNING`.
+4. All parts of the statement see the **same snapshot** (a frozen picture of the data at one moment) — the data as it was *before* the statement started. They do not see each other's changes, except through `RETURNING`.
 
 **Example — archive cancelled orders and their items:**
 ```sql
@@ -321,7 +321,7 @@ The outer `SELECT` still reads the old price; only `RETURNING` shows the new one
 ### Common mistakes
 - **Modifying the same row twice in one statement** (two CTEs updating the same row). The result is unpredictable; don't do it.
 - **Expecting a later CTE to "see" an earlier change by querying the table.** It won't — read from the earlier CTE's `RETURNING` instead.
-- **Porting to MySQL/SQL Server.** They don't support this; there you use a transaction with separate statements ([chapter 13](../13-transactions-and-concurrency/README.md)).
+- **Porting to MySQL/SQL Server.** They don't support this; there you use a transaction (a group of statements that are committed or undone together) with separate statements ([chapter 13](../13-transactions-and-concurrency/README.md)).
 
 ### TL;DR
 PostgreSQL CTEs can `INSERT/UPDATE/DELETE ... RETURNING`; the statement is atomic and every part sees the pre-statement snapshot. Great for "move rows" and "update and log" in one go.
@@ -381,7 +381,7 @@ Output:
 ```
 Trace: anchor → {1}. Pass 1 reads {1} → {2}. Pass 2 reads {2} → {3} … pass 4 reads {4} → {5}. Pass 5 reads {5}; `5 < 5` is false → no rows → stop.
 
-**Carrying state in several columns.** Each row can hold more than a counter. Here each pass computes the next Fibonacci pair and a running factorial:
+**Carrying state in several columns.** Each row can hold more than a counter. Here each pass computes the next Fibonacci pair (each Fibonacci number is the sum of the two before it) and a running factorial (*n*! = 1 × 2 × … × *n*):
 ```sql
 WITH RECURSIVE fib(i, a, b, fact) AS (
     SELECT 1, 0::bigint, 1::bigint, 1::numeric
@@ -443,7 +443,7 @@ Output:
  3
 (3 rows)
 ```
-And `UNION` instead of `UNION ALL` stops a computation whose state starts repeating. Doubling modulo 7 goes 1 → 2 → 4 → 1 …; the second 1 is a duplicate, so it is discarded and the working table becomes empty:
+And `UNION` instead of `UNION ALL` stops a computation whose state starts repeating. Doubling modulo 7 (keeping only the remainder after dividing by 7) goes 1 → 2 → 4 → 1 …; the second 1 is a duplicate, so it is discarded and the working table becomes empty:
 ```sql
 WITH RECURSIVE mod_cycle(n) AS (
     SELECT 1
@@ -475,7 +475,7 @@ Oracle also supports recursive `WITH` (since 11g R2) and its older proprietary `
 
 ### Common mistakes
 - **No stop condition** → the query runs until it runs out of memory or disk (or, in MySQL/SQL Server, hits the depth limit with an error).
-- **Type mismatch between anchor and recursive term.** The anchor fixes each column's type. A `varchar(40)` column in the anchor followed by `path || ' > ' || name` (which yields `text`) is rejected with *"column has type character varying(40) in non-recursive term but type text overall"*; and `SELECT 1` makes a column `integer`, which a growing factorial soon overflows. Cast in the anchor (`first_name::text`, `1::numeric`).
+- **Type mismatch between anchor and recursive term.** The anchor fixes each column's type. A `varchar(40)` column in the anchor followed by `path || ' > ' || name` (which yields `text`) is rejected with *"column has type character varying(40) in non-recursive term but type text overall"*; and `SELECT 1` makes a column `integer`, which a growing factorial soon overflows (exceeds the largest value the type can hold). Cast in the anchor (`first_name::text`, `1::numeric`).
 - **Thinking the recursive term sees the whole result**: it sees only the previous pass's rows.
 - **Relying on output order.** Without `ORDER BY` the order of a recursive result is not guaranteed. Build a sort key (depth, path, or `SEARCH`, 7.5) and order by it.
 
@@ -595,20 +595,20 @@ Asha has all 14 other employees below her; Vikram has Neha, Rahul, Meera, Li and
 | Model | How | Reads | Writes | Notes |
 |---|---|---|---|---|
 | Adjacency list (this chapter) | `parent_id` column | recursive CTE | trivial (change one pointer) | the default choice |
-| Materialized path | store `'1/2/15'` (or PostgreSQL `ltree`) | `LIKE '1/2/%'`, indexable | moving a subtree rewrites all descendants' paths | great for breadcrumbs |
+| Materialized path | store `'1/2/15'` (or PostgreSQL `ltree`, an extension type for dotted label paths) | `LIKE '1/2/%'`, indexable | moving a subtree rewrites all descendants' paths | great for breadcrumbs |
 | Nested sets | store `lft`/`rgt` numbers | subtree = range query | inserts renumber many rows | read-heavy, rarely-changing trees |
 | Closure table | separate table of every (ancestor, descendant, depth) pair | simple joins | many rows per insert | *SQL Antipatterns* recommends it for heavy tree querying |
 
 ### Common mistakes
 - **Anchoring on the wrong side**: using `manager_id = X` in the anchor lists X's reports but *not X*; use `emp_id = X` if X should be included.
-- **Bad data creating cycles** (A manages B, B manages A). A top-down walk from a real root never reaches such a loop, but a walk that starts inside it runs forever. Protect with a path check (7.5) or a `CHECK`/trigger that prevents cycles.
+- **Bad data creating cycles** (A manages B, B manages A). A top-down walk from a real root never reaches such a loop, but a walk that starts inside it runs forever. Protect with a path check (7.5) or a `CHECK`/trigger (a function the database runs automatically when rows change) that prevents cycles.
 - **Sorting by depth only**, which lists all level-2 rows, then all level-3 rows, losing the "team under manager" layout. Sort by the path.
 
 ### In the interview
 **30-second answer:** "Store the tree as an adjacency list — each row points to its parent. To read a subtree, anchor on the root and recursively join children whose parent is in the previous level, carrying depth and a path for ordering. For ancestors, reverse the join. For totals per node, carry the top node through the recursion and aggregate outside."
 
 - *How would you stop infinite loops if the data could contain a cycle?* → Carry an array of visited ids and add `WHERE NOT e.emp_id = ANY(path)`, or use PostgreSQL 14's `CYCLE` clause.
-- *What if the tree is huge and queried constantly?* → Index `manager_id`; consider a closure table or materialized path (`ltree` with a GiST index) for fast subtree reads.
+- *What if the tree is huge and queried constantly?* → Index `manager_id`; consider a closure table or materialized path (`ltree` with a GiST index — a PostgreSQL index type for data that isn't simply sortable, such as paths or shapes) for fast subtree reads.
 
 ### Self-check
 1. *Which join condition walks down, which walks up?* → Down: `child.manager_id = found.emp_id`; up: `parent.emp_id = found.manager_id`.
@@ -693,13 +693,13 @@ Output:
  Kolkata   |       270 | Mumbai -> Delhi -> Kolkata
 (5 rows)
 ```
-This enumerates *every* simple path, which explodes on big, dense graphs. It is fine for small graphs and interview questions; real route planners use graph algorithms (Dijkstra, A*) in application code or extensions such as pgRouting, or graph databases ([chapter 16](../16-beyond-relational/README.md)).
+This enumerates *every* simple path, which explodes on big, dense graphs. It is fine for small graphs and interview questions; real route planners use graph algorithms (Dijkstra, A* — classic shortest-path methods that never enumerate every path) in application code or extensions such as pgRouting, or graph databases (databases that store nodes and edges directly) ([chapter 16](../16-beyond-relational/README.md)).
 
 ### The CYCLE and SEARCH clauses (PostgreSQL 14+)
 SQL:1999 defines two helper clauses that PostgreSQL implemented in version 14 (the version this book runs):
 
 - `CYCLE col SET is_cycle USING path_col` — PostgreSQL tracks the visited values of `col` for you, marks a row whose `col` value was already seen on its path with `is_cycle = true`, and does not recurse further from it.
-- `SEARCH DEPTH FIRST BY col SET ord` or `SEARCH BREADTH FIRST BY col SET ord` — adds a column `ord` that you `ORDER BY` to get depth-first or breadth-first order.
+- `SEARCH DEPTH FIRST BY col SET ord` or `SEARCH BREADTH FIRST BY col SET ord` — adds a column `ord` that you `ORDER BY` to get depth-first (follow one branch all the way down before the next) or breadth-first (finish each level before going deeper) order.
 
 ```sql
 WITH RECURSIVE trips(city, total_min) AS (
@@ -752,7 +752,7 @@ For breadth-first, `ord` is (level, id): all of level 1 comes before level 2. `D
 3. *Which PostgreSQL version added `CYCLE` and `SEARCH`?* → 14.
 
 ### TL;DR
-Graphs can loop, so carry a visited-path array and refuse to revisit, or use PostgreSQL 14's `CYCLE` clause. Path enumeration is exponential — fine for small graphs, not a route planner.
+Graphs can loop, so carry a visited-path array and refuse to revisit, or use PostgreSQL 14's `CYCLE` clause. Path enumeration is exponential (the work can double with every extra hop) — fine for small graphs, not a route planner.
 
 ---
 
@@ -834,7 +834,7 @@ Output:
   1000 | 2025-01-01 | 2025-03-31 |      49.5
 (1 row)
 ```
-The arithmetic keeps the data deterministic (no `random()`), which is handy for reproducible performance tests ([chapter 12](../12-indexes-storage-and-query-performance/README.md) uses this idea with millions of rows).
+The arithmetic keeps the data deterministic (identical on every run; no `random()`), which is handy for reproducible performance tests ([chapter 12](../12-indexes-storage-and-query-performance/README.md) uses this idea with millions of rows).
 
 ### Dialect notes
 | | Numbers / dates series |
@@ -844,7 +844,7 @@ The arithmetic keeps the data deterministic (no `random()`), which is handy for 
 | SQLite | `generate_series` table-valued function from the `series` extension (built into the `sqlite3` shell) |
 | MySQL 8 | none — use a recursive CTE (7.3) or a permanent "numbers"/"calendar" table |
 
-Many data warehouses keep a permanent **calendar table** (one row per date with flags like `is_weekend`, `fiscal_quarter`) for the same purpose.
+Many data warehouses (databases built for analysing large amounts of historical data) keep a permanent **calendar table** (one row per date with flags like `is_weekend`, `fiscal_quarter`) for the same purpose.
 
 ### TL;DR
 `generate_series` produces rows of numbers or timestamps. Generate the full range, `LEFT JOIN` the facts, `count(col)` — and empty days/months appear as 0.
@@ -868,7 +868,7 @@ Analogy: a view is a saved search in your email client. It doesn't copy emails i
 
 ### How it works
 1. `CREATE VIEW name AS query;` stores the query text (parsed) in the catalog.
-2. When a query mentions the view, PostgreSQL's rewriter replaces the name with the stored query — just like an inlined CTE — and the optimizer plans the combined query.
+2. When a query mentions the view, PostgreSQL's rewriter (a stage that runs before planning and expands views) replaces the name with the stored query — just like an inlined CTE — and the optimizer plans the combined query.
 3. Because nothing is stored, a view is always current and costs exactly as much as its query.
 
 ```sql
@@ -907,7 +907,7 @@ Output:
 
 ### Changing and dropping views
 - `CREATE OR REPLACE VIEW` swaps the definition in place (keeping permissions), but in PostgreSQL the new query must return the **same columns, same names, same types, in the same order**; you may only **add** columns at the end.
-- To remove or reorder columns: `DROP VIEW` and `CREATE VIEW` again (re-granting privileges).
+- To remove or reorder columns: `DROP VIEW` and `CREATE VIEW` again (re-granting privileges — the permissions given with `GRANT`).
 - Objects that depend on each other are tracked: you can't drop a table (or a view) that a view uses unless you add `CASCADE`, which drops the dependent views too.
 
 ```sql
@@ -941,7 +941,7 @@ You can `INSERT`, `UPDATE` and `DELETE` through a view if PostgreSQL can map eac
 - reads from exactly **one** table or updatable view in `FROM`;
 - has no `GROUP BY`, `HAVING`, `DISTINCT`, `LIMIT`/`OFFSET`, window functions, aggregates, `UNION`/`INTERSECT`/`EXCEPT`, or `WITH` at top level.
 
-Computed columns in such a view are simply read-only; plain columns can be written. For anything more complex you write an `INSTEAD OF` trigger ([chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md)).
+Computed columns in such a view are simply read-only; plain columns can be written. For anything more complex you write an `INSTEAD OF` trigger (a trigger is a function the database runs automatically on a change; `INSTEAD OF` runs it in place of the write; [chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md)).
 
 ```sql
 CREATE VIEW furniture AS
@@ -1033,7 +1033,7 @@ In PostgreSQL a view accesses its base tables with the privileges of the **view'
 - `WITH (security_barrier)` stops a cleverly written user function in the caller's `WHERE` from peeking at rows the view's own `WHERE` is meant to hide (the optimizer otherwise may evaluate the cheap user function first).
 - PostgreSQL 15 added `WITH (security_invoker = true)` to make a view use the *caller's* privileges instead (PostgreSQL 15 — not run here on 14).
 
-Roles, `GRANT` and row-level security are in [chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md).
+Roles, `GRANT` and row-level security (rules that limit which rows each user may see) are in [chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md).
 
 ### Dialect notes
 | | PostgreSQL | MySQL | SQLite | SQL Server |
@@ -1055,7 +1055,7 @@ Roles, `GRANT` and row-level security are in [chapter 14](../14-advanced-sql-and
 - Adding `ORDER BY` inside a view and relying on it: order is only guaranteed by the **outer** query's `ORDER BY`.
 
 ### Real-world examples
-- Reporting layers: BI tools (Metabase, Tableau, Power BI) are pointed at views rather than raw tables.
+- Reporting layers: BI (business-intelligence) tools (Metabase, Tableau, Power BI) are pointed at views rather than raw tables.
 - Backward compatibility: after splitting `users` into `accounts` and `profiles`, a `users` view joins them so old code keeps working.
 - PostgreSQL's own `information_schema` is a set of views over the system catalogs.
 
@@ -1088,7 +1088,7 @@ Analogy: a printed report on your desk. Reading it is instant, but it doesn't ch
 ### How it works
 1. `CREATE MATERIALIZED VIEW name AS query;` runs the query once and stores the rows (add `WITH NO DATA` to create it empty; it can't be queried until refreshed).
 2. Queries read the stored rows. They can use indexes you create on the materialized view.
-3. `REFRESH MATERIALIZED VIEW name;` re-runs the query and replaces the contents. This takes a strong lock: **reads are blocked** during the refresh.
+3. `REFRESH MATERIALIZED VIEW name;` re-runs the query and replaces the contents. This takes a strong lock (a hold on the object that makes other sessions wait): **reads are blocked** during the refresh.
 4. `REFRESH MATERIALIZED VIEW CONCURRENTLY name;` builds the new result separately and applies only the differences, so readers are not blocked. It requires a **unique index** on the materialized view (plain columns, no `WHERE`) and is slower overall.
 
 ```sql
@@ -1160,7 +1160,7 @@ HINT:  Create a unique index with no WHERE clause on one or more columns of the 
 | Write overhead | none | none at write time; refresh cost later | on every write |
 | Effort | trivial | trivial + schedule refreshes | most code, most bugs |
 
-PostgreSQL has **no automatic or incremental refresh**: each refresh recomputes the whole query. You schedule it (cron, the `pg_cron` extension, your job scheduler) or trigger it after batch loads. Oracle supports incremental "fast refresh"; SQL Server's indexed views are updated automatically on every write (with many restrictions); MySQL has no materialized views.
+PostgreSQL has **no automatic or incremental refresh**: each refresh recomputes the whole query. You schedule it (cron, the classic Unix scheduler that runs commands on a timetable; the `pg_cron` extension; your job scheduler) or trigger it after batch loads (bulk imports of new data). Oracle supports incremental "fast refresh"; SQL Server's indexed views are updated automatically on every write (with many restrictions); MySQL has no materialized views.
 
 ### When to use / not use
 - **Use** for dashboards and reports over large data that can be minutes or hours old, expensive aggregations read far more often than the data changes, and precomputed search/lookup data.
@@ -1174,8 +1174,8 @@ PostgreSQL has **no automatic or incremental refresh**: each refresh recomputes 
 ### In the interview
 **30-second answer:** "A view stores a query; a materialized view stores the query's result. Materialized views make expensive aggregations fast to read and can be indexed, but they're stale until refreshed. In PostgreSQL refresh is manual and full; `CONCURRENTLY` avoids blocking readers but needs a unique index."
 
-- *How would you keep a materialized view fresh?* → Scheduled refresh (e.g. every 5 minutes with pg_cron), or refresh after each ETL batch; if you need real-time, maintain a summary table incrementally instead.
-- *Materialized view vs cache like Redis?* → The materialized view lives in the database, is queryable with SQL and consistent with a point in time; an external cache is faster per key but needs invalidation logic ([chapter 15](../15-scaling-databases/README.md)).
+- *How would you keep a materialized view fresh?* → Scheduled refresh (e.g. every 5 minutes with pg_cron), or refresh after each ETL batch (Extract-Transform-Load: a job that copies and reshapes data into the database); if you need real-time, maintain a summary table incrementally instead.
+- *Materialized view vs cache like Redis?* → The materialized view lives in the database, is queryable with SQL and consistent with a point in time; an external cache (a fast copy of hot data kept outside the database — Redis is an in-memory key-value store) is faster per key but needs invalidation logic (removing or updating cached copies when the real data changes; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) and [chapter 15](../15-scaling-databases/README.md)).
 
 ### Self-check
 1. *Does a materialized view reflect an insert automatically in PostgreSQL?* → No; only after `REFRESH`.

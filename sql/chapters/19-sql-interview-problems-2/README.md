@@ -2,15 +2,15 @@
 
 The previous chapter practised the basics (filters, grouping, joins, anti-joins, simple ratios). This chapter covers the medium and hard problems: ranking inside groups, running sums, streaks in ordered data, rows into columns (even when the columns are unknown), tables as small graphs, date buckets, and strings built from rows.
 
-Each problem has a statement in our own words, a self-contained file in [`code/`](code/) (tables, a tiny invented sample, the solution and often an alternative), the real `psql` output (`(null)` marks NULL), why it works, and the trap or alternative worth mentioning. All 41 files run on PostgreSQL 14 with `bash tools_run_sql.sh sql '19-*'`.
+Each problem has a statement in our own words, a self-contained file in [`code/`](code/) (tables, a tiny invented sample, the solution and often an alternative), the real `psql` (PostgreSQL's command-line client) output (`(null)` marks NULL, SQL's "missing/unknown" value), why it works, and the trap or alternative worth mentioning. All 41 files run on PostgreSQL 14 with `bash tools_run_sql.sh sql '19-*'`.
 
 **What you'll learn**
 
 - The patterns behind most medium/hard questions, with a template for each (19.11).
-- `ROW_NUMBER` vs `RANK` vs `DENSE_RANK`, and why ties change the answer.
+- `ROW_NUMBER` vs `RANK` vs `DENSE_RANK` (**window functions** — functions that compute over a set of related rows without collapsing them — that number rows), and why ties change the answer.
 - The *gaps-and-islands* trick (`value - ROW_NUMBER()`) for streaks and "N in a row".
-- Static pivots with `FILTER`, dynamic pivots with PL/pgSQL + `format()`, and unpivot via JSON.
-- PostgreSQL traps: integer division, division by zero, `NOT IN` with NULLs, `COUNT(*)` after a `LEFT JOIN`.
+- Static pivots (rows turned into columns) with `FILTER`, dynamic pivots with **PL/pgSQL** (PostgreSQL's built-in procedural language, with variables and loops) + `format()` (builds a string from a template), and unpivot (columns turned back into rows) via **JSON** (a text format of nested key/value objects).
+- PostgreSQL traps: **integer division** (`int / int` drops the fraction, so `1/3 = 0`), division by zero, `NOT IN` with NULLs, `COUNT(*)` after a `LEFT JOIN`.
 
 Background you may want open: [window functions](../08-window-functions/README.md) (ranking, frames, gaps and islands), [subqueries and set operations](../06-subqueries-and-set-operations/README.md), [CTEs](../07-ctes-views-and-recursion/README.md), and the interview method in [Chapter 18](../18-sql-interview-problems-1/README.md).
 
@@ -35,7 +35,7 @@ The Chapter 18 method still applies; three habits matter most here:
 
 | Habit | What it means in practice |
 |---|---|
-| Build in layers | One CTE per idea ("one row per user-day", then "rank within the day", then "keep rank 1"); run each layer before adding the next. |
+| Build in layers | One **CTE** (common table expression — a named sub-query in a `WITH` clause) per idea ("one row per user-day", then "rank within the day", then "keep rank 1"); run each layer before adding the next. |
 | Say the tie rule out loud | "If two invoices have the same total, which one wins?" decides between `ROW_NUMBER`, `RANK` and `DENSE_RANK`. |
 | Hunt the empty case | Players with no wins, orders with no deliveries, days with no visits: decide whether they appear with 0, with NULL, or not at all. |
 
@@ -85,7 +85,7 @@ Output:
 (1 row)
 ```
 
-**Why it works.** The inner join pairs each person with their review; `WHERE r.score > 8` keeps the high ones. Anyone without a review row disappears in the join, which is what "has a rating above 8" means.
+**Why it works.** The **inner join** (keeps only rows that have a match on both sides) pairs each person with their review; `WHERE r.score > 8` keeps the high ones. Anyone without a review row disappears in the join, which is what "has a rating above 8" means.
 
 **Edge case.** Dana's score is NULL: `NULL > 8` and `NOT (NULL > 8)` are both *unknown*, so she lands in neither bucket (2 + 1 ≠ 4). "Everyone not above 8" needs `OR score IS NULL`.
 
@@ -119,7 +119,7 @@ Output:
 (3 rows)
 ```
 
-**Why it works.** The `LEFT JOIN` keeps post 12 even though it has no likes; its join columns come back as NULL. `count(l.liker_id)` counts only non-NULL values, so the padded row contributes 0.
+**Why it works.** The `LEFT JOIN` (an **outer join**: keeps every row of the left table, matched or not) keeps post 12 even though it has no likes; its join columns come back as NULL (a **NULL-padded** row). `count(l.liker_id)` counts only non-NULL values, so the padded row contributes 0.
 
 **Common mistake.** `count(*)` counts the NULL-padded row too, so post 12 would show 1 (the file runs it; the same trap as [Chapter 18, P12](../18-sql-interview-problems-1/README.md)). After an outer join, count a column from the *optional* side.
 
@@ -158,7 +158,7 @@ Output:
 (4 rows)
 ```
 
-**Why it works.** "Every A with every B" is a `CROSS JOIN` — it builds the full grid of 2 × 2 pairs first. The `LEFT JOIN` then attaches marks where they exist, and `avg()` of only NULLs is NULL, which is exactly the "no marks" answer (Omar/Stats).
+**Why it works.** "Every A with every B" is a `CROSS JOIN` (every row of one table paired with every row of the other) — it builds the full grid of 2 × 2 pairs first. The `LEFT JOIN` then attaches marks where they exist, and `avg()` of only NULLs is NULL, which is exactly the "no marks" answer (Omar/Stats).
 
 **Alternative.** If the question only wants modules the learner actually took, drop the cross join and group the `marks` table directly. Always ask which one is meant.
 
@@ -170,7 +170,7 @@ The ranking family. The three ranking functions differ only on ties:
 |---|---|---|---|
 | 95, 95, 90 | 1, 2, 3 | 1, 1, 3 | 1, 1, 2 |
 
-Use `ROW_NUMBER` when exactly one row must win, `RANK` when "all tied for first" should be kept, and `DENSE_RANK` when the question says "top N *distinct* values". PostgreSQL's `DISTINCT ON` is a compact shortcut for "first row per group".
+Use `ROW_NUMBER` when exactly one row must win, `RANK` when "all tied for first" should be kept, and `DENSE_RANK` when the question says "top N *distinct* values". PostgreSQL's `DISTINCT ON (cols)` is a compact shortcut for "first row per group": it keeps the first row of each group of equal `cols` values, in `ORDER BY` order.
 
 ### 19.3.1 Second-fastest lap time
 
@@ -210,7 +210,7 @@ Output (both formulations give 61; after the `DELETE` the answer is a NULL row):
 (1 row)
 ```
 
-**Why it works.** Same idea as [Chapter 18, P39](../18-sql-interview-problems-1/README.md): `DISTINCT` collapses the two 58s, `OFFSET 1 LIMIT 1` takes the next value, and the scalar-subquery wrapper turns "no row" into one NULL row.
+**Why it works.** Same idea as [Chapter 18, P39](../18-sql-interview-problems-1/README.md): `DISTINCT` collapses the two 58s, `OFFSET 1 LIMIT 1` takes the next value, and the **scalar-subquery** wrapper (a sub-query used as a single value) turns "no row" into one NULL row.
 
 **Alternatives.** `min(seconds) WHERE seconds > (SELECT min(seconds) …)` (also in the file) works only for N = 2. `DENSE_RANK` handles any N (`dr = N`), and wrapping it in `max(...) FILTER (...)` again turns "no row" into NULL.
 
@@ -265,7 +265,7 @@ Output (all queries return these rows):
 
 **Why it works.** `DENSE_RANK` gives Ann and Bob rank 1, Cal rank 2, Dee rank 3, so four pupils appear for Maths — ties don't use up places. History has only two pupils, so both appear.
 
-**Alternative.** The correlated version keeps a row if fewer than three distinct scores in its subject beat it: portable, but O(n²) per group. With `RANK`, Dee would get rank 4 and vanish — a common wrong answer.
+**Alternative.** The **correlated** version (its sub-query refers to the outer row, so it re-runs for each row) keeps a row if fewer than three distinct scores in its subject beat it: **portable** (works on any SQL database), but O(n²) per group (work grows with the square of the row count). With `RANK`, Dee would get rank 4 and vanish — a common wrong answer.
 
 ### 19.3.3 One home office per employee
 
@@ -432,7 +432,7 @@ Output:
 (1 row)
 ```
 
-**Why it works.** Two window aggregates put each test's max and min on every row, so `at_extreme` is true when a pupil matches either. Grouping per pupil and keeping `NOT bool_or(at_extreme)` means "no test where they were extreme". The inner join to `marked` drops Fin, who sat nothing.
+**Why it works.** Two window aggregates put each test's max and min on every row, so `at_extreme` is true when a pupil matches either. Grouping per pupil and keeping `NOT bool_or(at_extreme)` (`bool_or` is true if any value in the group is true) means "no test where they were extreme". The inner join to `marked` drops Fin, who sat nothing.
 
 **Alternative.** Mark extremes with `RANK() ... DESC = 1 OR RANK() ... ASC = 1` and exclude those pupils — with `NOT EXISTS`, not `NOT IN`, which returns nothing if the subquery yields a NULL.
 
@@ -477,7 +477,7 @@ Output:
 
 **Why it works.** `DISTINCT ON` finds each user's first session kind (user 102 started as a streamer, so is out). Joining back and counting with `FILTER (WHERE kind = 'streamer')` gives the streams; `HAVING ... > 0` drops user 104, who never streamed.
 
-**Alternative.** `first_value(kind) OVER (PARTITION BY user_id ORDER BY started_at)` puts the first kind on every row (the file prints it: viewer, streamer, viewer, viewer).
+**Alternative.** `first_value(kind) OVER (PARTITION BY user_id ORDER BY started_at)` (the value from the first row of the window) puts the first kind on every row (the file prints it: viewer, streamer, viewer, viewer).
 
 ### 19.3.8 First year on loan (keep the ties)
 
@@ -568,7 +568,7 @@ Output:
 
 ## 19.4 Running totals and row-to-row comparisons
 
-A running total is `SUM(...) OVER (PARTITION BY group ORDER BY time)`; "compared with last time" is `LAG`. Chapter 8 explains frames in depth ([§8.7](../08-window-functions/README.md)).
+A running total is `SUM(...) OVER (PARTITION BY group ORDER BY time)`; "compared with last time" is `LAG` (a window function returning a value from the previous row; `LEAD` returns the next row's). Chapter 8 explains **frames** (the range of rows a window function looks at for each row) in depth ([§8.7](../08-window-functions/README.md)).
 
 ### 19.4.1 Running total per team
 
@@ -880,7 +880,7 @@ Output:
 (3 rows)
 ```
 
-**Why it works.** `CROSS JOIN LATERAL (VALUES ...)` unpivots the medal columns into one row per (contest, coder, kind). Rule 1 is an island on `contest_id - row_number()` per coder; rule 2 is `GROUP BY ... HAVING count(*) >= 3` on golds; `IN (... UNION ...)` combines them. Mia medals in 51–53, Oz in 53–56, Pat has three golds; Ned's medals (51, 52, 54, 55) break at 53.
+**Why it works.** `CROSS JOIN LATERAL (VALUES ...)` (`VALUES` builds a small inline table; `LATERAL` lets it refer to columns of the current row `c`) unpivots the medal columns into one row per (contest, coder, kind). Rule 1 is an island on `contest_id - row_number()` per coder; rule 2 is `GROUP BY ... HAVING count(*) >= 3` on golds; `IN (... UNION ...)` combines them. Mia medals in 51–53, Oz in 53–56, Pat has three golds; Ned's medals (51, 52, 54, 55) break at 53.
 
 **Edge case.** A coder cannot win two medals in the same contest here; if they could, deduplicate `(coder_id, contest_id)` before numbering, or the island arithmetic breaks.
 
@@ -991,7 +991,7 @@ Output:
 
 ## 19.6 Pivot and unpivot (static and dynamic)
 
-*Pivot* = turn distinct values of a column into separate columns; *unpivot* = the reverse. SQL needs the output columns fixed when a query is planned, so a pivot whose columns depend on the data requires **dynamic SQL**: a query that writes another query.
+*Pivot* = turn distinct values of a column into separate columns; *unpivot* = the reverse. SQL needs the output columns fixed when a query is planned, so a pivot whose columns depend on the data requires **dynamic SQL**: a query that writes another query, which is then executed.
 
 ### 19.6.1 Names by region, side by side
 
@@ -1099,11 +1099,11 @@ Output (first call, then after `central` appears; Approach B and the `crosstab` 
 
 **Why it works.**
 
-1. `string_agg(format(...), ', ' ORDER BY store)` builds the column list, e.g. `max(price) FILTER (WHERE store = 'east') AS east, ...`. `%L` quotes a literal and `%I` quotes an identifier, so a store named `O'Neil's` or `Store 1` cannot break the SQL or inject code.
+1. (A **procedure** is a named block of code stored in the database and run with `CALL`; a **view** is a saved query you can `SELECT` from like a table.) `string_agg(format(...), ', ' ORDER BY store)` builds the column list, e.g. `max(price) FILTER (WHERE store = 'east') AS east, ...`. `%L` quotes a **literal** (a data value such as `'east'`) and `%I` quotes an **identifier** (a name such as a column), so a store named `O'Neil's` or `Store 1` cannot break the SQL or inject code (**SQL injection**: data that sneaks extra SQL commands into a query).
 2. `EXECUTE` runs the generated `CREATE VIEW`. A PL/pgSQL function must declare its result columns in advance — exactly what we don't know — so the procedure publishes a view that a plain `SELECT *` reads.
 3. When `central` appears, calling the procedure again rebuilds the view with a new column. `DROP VIEW` first, because `CREATE OR REPLACE VIEW` can only *append* columns, not insert one in the middle. On an empty table `string_agg` returns NULL and the generated `SELECT product_id,  FROM …` is invalid, so real code should check for that first.
 
-**Alternatives.** In `psql`, `\gexec` runs each value the previous query returns as SQL — the quickest ad-hoc dynamic pivot. `crosstab()` (extension `tablefunc`, in the file) still needs the output columns spelled out in `AS ct(...)`. In MySQL the equivalent is `GROUP_CONCAT` to build the column list plus `PREPARE`/`EXECUTE` (watch `group_concat_max_len`); SQL Server has `PIVOT` plus `sp_executesql`.
+**Alternatives.** In `psql`, `\gexec` runs each value the previous query returns as SQL — the quickest ad-hoc dynamic pivot. `crosstab()` (from the `tablefunc` **extension** — an optional add-on package for PostgreSQL — in the file) still needs the output columns spelled out in `AS ct(...)`. In MySQL the equivalent is `GROUP_CONCAT` to build the column list plus `PREPARE`/`EXECUTE` (watch `group_concat_max_len`); SQL Server has `PIVOT` plus `sp_executesql`.
 
 ### 19.6.3 Dynamic unpivot: store columns back to rows
 
@@ -1163,13 +1163,13 @@ Output (all queries return these rows):
 **Why it works.**
 
 - **Approach A** needs no dynamic SQL: `to_jsonb(g)` turns the row into `{"product_id":1,"east":null,...}`, `- 'product_id'` drops that key, and `jsonb_each_text` explodes the rest into (key, value) text pairs (hence `::int`). New columns are picked up automatically.
-- **Approach B** reads column names from `information_schema.columns`, generates one `SELECT ... WHERE col IS NOT NULL` per column, joins them with `UNION ALL`, and `EXECUTE`s the result.
+- **Approach B** reads column names from `information_schema.columns` (the standard **catalog** views where a database describes its own tables and columns), generates one `SELECT ... WHERE col IS NOT NULL` per column, joins them with `UNION ALL`, and `EXECUTE`s the result.
 
-**Edge case.** With a fixed, known set of columns, the simplest unpivot is `CROSS JOIN LATERAL (VALUES ('east', east), ('north', north), ('west', west)) AS v(store, price)` — as used for medals in 19.5.4. Use `UNION ALL`, not `UNION`: `UNION` would wrongly merge identical rows and costs a sort.
+**Edge case.** With a fixed, known set of columns, the simplest unpivot is `CROSS JOIN LATERAL (VALUES ('east', east), ('north', north), ('west', west)) AS v(store, price)` — as used for medals in 19.5.4. Use `UNION ALL` (stack results, keeping duplicates), not `UNION` (stack and remove duplicates): `UNION` would wrongly merge identical rows and costs a sort.
 
 ## 19.7 Self-joins, "both directions" and graph-like questions
 
-Friendship, calls and matches store a *pair* in one row, but the question asks about *each person*. The standard move is to "unfold" the pair with `UNION ALL` (or `UNION`) so each participant gets their own row, then aggregate normally. Relational division ("took *all* courses") also lives here.
+Friendship, calls and matches store a *pair* in one row, but the question asks about *each person*. The standard move is to "unfold" the pair with `UNION ALL` (or `UNION`) so each participant gets their own row, then aggregate normally. Relational division ("took *all* courses"; defined in 19.7.6) also lives here.
 
 ### 19.7.1 Page suggestions from friends' likes
 
@@ -1217,7 +1217,7 @@ Output (all queries return these rows):
 
 **Why it works.** A friendship may be stored as (1, x) or (x, 1), so `my_friends` looks both ways (2, 3, 4). Joining likes to friends gives candidates; `NOT EXISTS` drops page 77, which user 1 already likes, and `DISTINCT` collapses page 88 (liked by two friends).
 
-**Alternative.** `EXCEPT` expresses "their pages minus my pages" directly and also removes duplicates. Avoid `page_id NOT IN (SELECT ...)` if the subquery column can be NULL — one NULL makes the whole condition unknown and returns nothing.
+**Alternative.** `EXCEPT` (set difference: rows in the first result that are not in the second) expresses "their pages minus my pages" directly and also removes duplicates. Avoid `page_id NOT IN (SELECT ...)` if the subquery column can be NULL — one NULL makes the whole condition unknown and returns nothing.
 
 ### 19.7.2 Popularity percentage
 
@@ -1347,7 +1347,7 @@ Output:
 
 **Why it works.** `per_club` rewrites each match twice, once from each club's point of view (goals for, goals against), so one `CASE` scores every row. `LEFT JOIN` from `clubs` plus `coalesce(..., 0)` keeps Wanderers, who played nothing.
 
-**Alternative.** Joining with `ON club_id = home OR club_id = away` and a bigger `CASE` (which side is the club?) also works, but `OR` joins use indexes poorly. Unfolding first is cleaner and extends to goal difference.
+**Alternative.** Joining with `ON club_id = home OR club_id = away` and a bigger `CASE` (which side is the club?) also works, but `OR` joins use **indexes** (sorted lookup structures for finding rows fast) poorly. Unfolding first is cleaner and extends to goal difference.
 
 ### 19.7.5 Departments with two above-average earners
 
@@ -1459,11 +1459,11 @@ Output:
 
 **Why it works.** Two window counts label each shop at once: how many shops share its 2024 revenue, and how many share its location. Keep `same_rev > 1 AND same_spot = 1`: shops 1 and 2 (shop 4 shares revenue but also shares a location with shop 3). 120.50 + 140.25 = 260.75.
 
-**Edge case.** Equality on floating-point columns is fragile (0.1 + 0.2 ≠ 0.3 in binary floats), so values compared for equality belong in `numeric`. Grouping twice with `HAVING` and joining back gives the same answer in more steps.
+**Edge case.** Equality on **floating-point** columns (approximate binary number types such as `float`) is fragile (0.1 + 0.2 ≠ 0.3 in binary floats), so values compared for equality belong in `numeric`. Grouping twice with `HAVING` and joining back gives the same answer in more steps.
 
 ## 19.8 Date bucketing and retention
 
-Group by a *derived* date — the first day a user appeared, the calendar month, the booking day — and measure what happens inside each bucket. `generate_series` fills missing buckets.
+Group by a *derived* date — the first day a user appeared, the calendar month, the booking day — and measure what happens inside each bucket. `generate_series` (produces a sequence of numbers or dates) fills missing buckets. A **cohort** is a group of users who started in the same period; **retention** is the share of a cohort that comes back later.
 
 ### 19.8.1 Day-1 retention
 
@@ -1510,13 +1510,13 @@ Output (all queries return these rows):
 (2 rows)
 ```
 
-**Why it works.** `firsts` gives each player one install day. `EXISTS` is true when a play exists on `install_day + 1`; averaging the boolean cast to int gives the fraction retained. Player 2 returned on 4 March, not the next day, so does not count.
+**Why it works.** `firsts` gives each player one install day. `EXISTS` is true when a play exists on `install_day + 1`; averaging the boolean **cast** (type conversion, written `::int`) to int gives the fraction retained (true → 1, false → 0). Player 2 returned on 4 March, not the next day, so does not count.
 
 **Alternative.** A `LEFT JOIN` to the next-day row and `count(p.player_id) / count(*)` does the same (the primary key on (player, day) guarantees at most one match). Note the `::numeric` cast — without it the integer division returns 0.
 
 ### 19.8.2 Transactions per visit histogram
 
-**Problem.** Bank visits (customer, day) and transactions (customer, day, amount; duplicates allowed; every transaction happens on a visit day). Build a histogram: for each number k from 0 up to the largest per-visit count, how many visits had exactly k transactions. Include k values with zero visits.
+**Problem.** Bank visits (customer, day) and transactions (customer, day, amount; duplicates allowed; every transaction happens on a visit day). Build a **histogram** (a count of how many items fall into each value or range): for each number k from 0 up to the largest per-visit count, how many visits had exactly k transactions. Include k values with zero visits.
 
 [`code/33_transactions_per_visit.sql`](code/33_transactions_per_visit.sql)
 
@@ -1556,7 +1556,7 @@ Output:
 
 **Why it works.** `per_visit` counts each visit's transactions (`count(t.txn_day)` makes visits with none count 0 after the `LEFT JOIN`). `generate_series(0, max)` produces every k, including 2, which no visit has; a `LEFT JOIN` then counts matching visits, giving 0 for the empty bucket.
 
-**Alternative.** Without `generate_series` (e.g. MySQL), use a recursive CTE counting from 0 to the max, or `ROW_NUMBER()` over any big-enough table.
+**Alternative.** Without `generate_series` (e.g. MySQL), use a **recursive CTE** (one that repeatedly feeds its own output back in) counting from 0 to the max, or `ROW_NUMBER()` over any big-enough table.
 
 ### 19.8.3 Titles borrowed per day
 
@@ -1720,7 +1720,7 @@ Output:
 
 **Why it works.** `LEFT JOIN` keeps order 4, which has no attempts. For it, `count(a.order_id)` is 0; `nullif(0, 0)` turns the divisor into NULL, the division yields NULL instead of an error, and `coalesce(..., 0)` applies the "no attempts = 0" rule. Customer 100 averages (0.5 + 1.0) / 2 = 0.75.
 
-**Dialect trap.** In a MySQL `SELECT`, `x / 0` yields NULL (plus a warning under the default SQL mode; strict mode turns it into an error only inside `INSERT`/`UPDATE`), so `IFNULL(x / 0, 0)` "works" there. PostgreSQL raises `division by zero` and aborts the query — `NULLIF(divisor, 0)` is the portable guard.
+**Dialect trap.** In a MySQL `SELECT`, `x / 0` yields NULL (plus a warning under the default **SQL mode** — MySQL's setting for how strictly it treats questionable data; strict mode turns it into an error only inside `INSERT`/`UPDATE`), so `IFNULL(x / 0, 0)` "works" there. PostgreSQL raises `division by zero` and aborts the query — `NULLIF(divisor, 0)` is the portable guard.
 
 ### 19.9.3 Share of members who borrowed each book
 
@@ -1758,7 +1758,7 @@ Output:
 
 ## 19.10 String building and expression evaluation
 
-Some questions treat SQL as a small interpreter: evaluate stored comparisons, render a formula, or validate shapes. The tools are `CASE`, `||` concatenation, `format()` and `string_agg`.
+Some questions treat SQL as a small **interpreter** (a program that reads and evaluates expressions): evaluate stored comparisons, render a formula, or validate shapes. The tools are `CASE`, `||` **concatenation** (joining strings end to end), `format()` and `string_agg` (an aggregate that joins a group's values into one string).
 
 ### 19.10.1 Evaluate stored comparisons
 

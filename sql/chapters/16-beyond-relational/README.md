@@ -1,6 +1,6 @@
 # Chapter 16 — Beyond Relational: NoSQL, NewSQL and Specialised Databases
 
-Relational databases are the right default for most applications. They offer a flexible query language, joins, constraints and ACID transactions. But some workloads fit tables awkwardly. Examples include a product catalogue where every item has different attributes, a session cache that needs sub-millisecond reads, billions of sensor readings per day, "friends of friends who like jazz", or "every restaurant within 2 km". A whole family of databases grew up around those shapes of data. This chapter tours them, shows how much of each you can already do **inside PostgreSQL**, and ends with a decision table for choosing.
+Relational databases are the right default for most applications. They offer a flexible query language, joins, constraints and **ACID** transactions (Atomic, Consistent, Isolated, Durable — a transaction either fully happens or not at all, and once committed it survives crashes; Chapter 13). But some workloads fit tables awkwardly. Examples include a product catalogue where every item has different attributes, a **session cache** (fast storage for logged-in users' temporary state) that needs sub-millisecond reads, billions of sensor readings per day, "friends of friends who like jazz", or "every restaurant within 2 km". A whole family of databases grew up around those shapes of data. This chapter tours them, shows how much of each you can already do **inside PostgreSQL**, and ends with a decision table for choosing.
 
 **What you'll learn**
 
@@ -28,7 +28,7 @@ All SQL runs on the book's private PostgreSQL 14 (`bash tools_run_sql.sh sql`); 
 
 ### What it is
 
-**NoSQL** ("Not only SQL") is an umbrella term for databases that **don't use the relational table model** as their primary model. The term caught on around 2009. They trade some relational features, usually joins, a fixed schema, and sometimes multi-row transactions, for **flexible data models, easy horizontal scaling, and speed on specific access patterns**.
+**NoSQL** ("Not only SQL") is an umbrella term for databases that **don't use the relational table model** as their primary model. The term caught on around 2009. They trade some relational features, usually joins, a fixed **schema** (the declared list of tables, columns and types), and sometimes multi-row transactions, for **flexible data models, easy horizontal scaling, and speed on specific access patterns**.
 
 ### The problem it solves
 
@@ -36,19 +36,19 @@ In the 2000s, web companies hit limits with the relational setups of the time:
 
 | Pain with relational (as typically deployed then) | NoSQL answer |
 |---|---|
-| **Rigid schema**: every row has the same columns, and changing them means migrations | **Flexible/dynamic schema**: each record carries its own fields (JSON/BSON documents, dynamic columns) |
+| **Rigid schema**: every row has the same columns, and changing them means **migrations** (scripted schema changes applied to a live database) | **Flexible/dynamic schema**: each record carries its own fields (JSON — a text format of nested key/value objects and lists — or BSON documents, dynamic columns) |
 | **Scale-up only**: one bigger server, which gets expensive and eventually hits a ceiling | **Scale-out built in**: automatic sharding and replication across cheap nodes |
-| **Joins and transactions get slow** at huge volume | Data **stored the way it's read** (denormalised/aggregated), so there are no joins in the hot path |
+| **Joins and transactions get slow** at huge volume | Data **stored the way it's read** (denormalised — deliberately duplicated — or pre-aggregated), so there are no joins in the **hot path** (the code run on every request) |
 
-*Example.* An online marketplace sells laptops (RAM, CPU, warranty), T-shirts (size, material) and books (authors, pages). In a relational schema that means sparse columns, an entity-attribute-value table, or one table per category. In a document store, each product is simply a document with whatever fields it has (16.3).
+*Example.* An online marketplace sells laptops (RAM, CPU, warranty), T-shirts (size, material) and books (authors, pages). In a relational schema that means **sparse columns** (many columns that are empty for most rows), an **entity-attribute-value** table (one row per `(item, attribute name, value)` triple), or one table per category. In a document store, each product is simply a document with whatever fields it has (16.3).
 
-Modern relational systems have closed much of this gap: Postgres has JSONB, partitioning, logical replication, and Citus for scale-out. That's why this chapter shows the Postgres equivalent of each model.
+Modern relational systems have closed much of this gap: Postgres has JSONB (a binary, indexable JSON column type, 16.3), partitioning, logical replication, and **Citus** (an extension that spreads Postgres tables across many servers) for scale-out. That's why this chapter shows the Postgres equivalent of each model.
 
 ### CAP and NoSQL
 
-Recall CAP (15.7). During a network partition a distributed store must choose **consistency** or **availability**:
+Recall CAP (15.7; also summarised in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)). During a **network partition** (some nodes can't reach others) a distributed store must choose **consistency** or **availability**:
 
-- **CP** stores refuse or delay requests on the minority side to stay consistent. Examples: **HBase**, MongoDB (with majority write/read concern), etcd.
+- **CP** stores refuse or delay requests on the minority side to stay consistent. Examples: **HBase**, MongoDB (with majority write/read concern — the setting for how many replicas must confirm a write or agree on a read), etcd.
 - **AP** stores keep answering and reconcile later. Examples: **Cassandra**, Riak, CouchDB, DynamoDB reads (eventually consistent unless you request a strongly consistent read).
 
 Many NoSQL systems make this **tunable per request**, such as Cassandra's `ONE` vs `QUORUM`.
@@ -58,8 +58,8 @@ Many NoSQL systems make this **tunable per request**, such as Cassandra's `ONE` 
 Many AP-leaning NoSQL systems describe their guarantees as **BASE**:
 
 - **Basically Available**: the system answers almost every request, even during partial failures, though the answer may not be the newest. *Example:* a Cassandra read at consistency `ONE` succeeds as long as one replica is up.
-- **Soft state**: replicas may be temporarily out of sync, and the state can change without new input as updates propagate. *Example:* asynchronous replication in a MongoDB replica set, where a secondary can lag the primary.
-- **Eventual consistency**: if writes stop, all replicas converge (15.6). *Example:* a Cassandra write that reached only some replicas is spread by hinted handoff, read repair and anti-entropy.
+- **Soft state**: replicas may be temporarily out of sync, and the state can change without new input as updates propagate. *Example:* asynchronous replication in a MongoDB **replica set** (a group of servers holding the same data: one **primary** takes writes, **secondaries** copy it), where a secondary can lag the primary.
+- **Eventual consistency**: if writes stop, all replicas converge (15.6). *Example:* a Cassandra write that reached only some replicas is spread by hinted handoff (another node holds the write until the missing replica returns), read repair (a reader fixes stale copies it notices) and anti-entropy (background comparison and syncing of replicas).
 
 BASE is essentially the **AP** choice from CAP, packaged as a design philosophy. It suits social feeds, activity streams and metrics, where being up matters more than every reader seeing the very latest value.
 
@@ -68,11 +68,11 @@ BASE is essentially the **AP** choice from CAP, packaged as a design philosophy.
 | Atomicity | All-or-nothing, including multi-row transactions | Often per single record/document only |
 | Consistency | Constraints hold after every commit, and reads see committed data | Replicas may briefly disagree and converge later |
 | Isolation | Concurrent transactions don't interfere (per isolation level) | Weaker, and concurrent writes may conflict and need resolution |
-| Durability | Committed = on disk (WAL) | Configurable (write concern, replication factor, fsync policy) |
+| Durability | Committed = on disk (WAL) | Configurable (write concern, replication factor = number of copies, fsync policy = how often data is forced to disk) |
 | Availability focus | Consistency first during failures | Availability first |
 | Scaling | Traditionally vertical plus read replicas | Horizontal by design |
 
-**Correction to a common myth:** the line has blurred. MongoDB has supported multi-document ACID transactions since 4.0 (2018). DynamoDB has had `TransactWriteItems` since 2018. Cassandra has lightweight transactions (Paxos-based compare-and-set). Meanwhile Postgres stores schemaless JSON. Treat ACID vs BASE as a **spectrum of defaults**, not a hard divide.
+**Correction to a common myth:** the line has blurred. MongoDB has supported multi-document ACID transactions since 4.0 (2018). DynamoDB has had `TransactWriteItems` since 2018. Cassandra has lightweight transactions (Paxos-based **compare-and-set** — "set the value to X only if it is still Y", done atomically; Paxos is a consensus protocol, 15.8). Meanwhile Postgres stores schemaless JSON. Treat ACID vs BASE as a **spectrum of defaults**, not a hard divide.
 
 ### The four NoSQL families
 
@@ -82,8 +82,8 @@ BASE is essentially the **AP** choice from CAP, packaged as a design philosophy.
 
 | Family | Data model | Great at | Examples |
 |---|---|---|---|
-| **Key-value** | Opaque value looked up by a unique key | Caching, sessions, counters, leaderboards | Redis, Riak KV, Memcached, DynamoDB (also a document store) |
-| **Document** | JSON-like documents grouped into collections | Catalogues, CMS content, user profiles | MongoDB, CouchDB, Firestore |
+| **Key-value** | Opaque (not interpreted by the database) value looked up by a unique key | Caching, sessions, counters, leaderboards | Redis, Riak KV, Memcached, DynamoDB (also a document store) |
+| **Document** | JSON-like documents grouped into collections | Catalogues, CMS (content management system) content, user profiles | MongoDB, CouchDB, Firestore |
 | **Column-family / wide-column** | Rows with a partition key, columns grouped into families, sorted within a partition | Huge write volumes, time-series, logs | Cassandra, HBase, ScyllaDB, Bigtable |
 | **Graph** | Nodes and edges, both with properties | Relationships: social, fraud rings, recommendations | Neo4j, Amazon Neptune, ArangoDB |
 
@@ -112,7 +112,7 @@ NoSQL = flexible models + scale-out + access-pattern-specific speed, often with 
 
 ### What it is
 
-The simplest database: a giant, distributed **dictionary**. Each **key** is unique (a string or number), and the **value** is whatever you store: text, a number, JSON, or a binary blob. The database doesn't interpret the value. You `GET key`, `SET key value` and `DELETE key`, and there are no joins and usually no queries by value.
+The simplest database: a giant, distributed **dictionary**. Each **key** is unique (a string or number), and the **value** is whatever you store: text, a number, JSON, or a binary **blob** (raw bytes such as an image). The database doesn't interpret the value. You `GET key`, `SET key value` and `DELETE key`, and there are no joins and usually no queries by value.
 
 ```
 session:9f2c      -> {"user_id": 42, "cart": ["LAP-13"], "expires": "..."}
@@ -126,7 +126,7 @@ Key-value stores fit when you need very fast access by a known identifier, when 
 
 ### Popular systems
 
-**Redis** ("Remote Dictionary Server") keeps everything **in memory** and answers in well under a millisecond. Values can be rich **data structures**: strings, hashes, lists, sets, **sorted sets**, streams, bitmaps and HyperLogLogs. It also offers pub/sub messaging, Lua scripting, key expiry (**TTL**) and **eviction policies** such as LRU/LFU when memory is full. Persistence is optional, via RDB snapshots and/or an append-only file (AOF). Redis Cluster shards keys over 16,384 hash slots.
+**Redis** ("Remote Dictionary Server") keeps everything **in memory** and answers in well under a millisecond. Values can be rich **data structures**: strings, hashes (small field→value maps), lists, sets, **sorted sets** (members kept ordered by a numeric score), streams, bitmaps and HyperLogLogs (a tiny structure that estimates how many distinct items it has seen). It also offers **pub/sub** messaging (publishers send to a channel; every subscriber to it receives the message), **Lua** scripting (small scripts run inside the server), key expiry (**TTL**, time to live — the key deletes itself after a set time) and **eviction policies** (rules for which keys to throw out) such as **LRU** (least recently used) / **LFU** (least frequently used) when memory is full. **Persistence** (saving data to disk so it survives a restart) is optional, via RDB snapshots and/or an append-only file (AOF). Redis Cluster shards keys over 16,384 hash slots (fixed buckets each key is hashed into; 16.11).
 
 ```
 # Redis (not run)
@@ -137,7 +137,7 @@ ZADD steps 12050 ana 8300 bo 15010 cy     # sorted set = leaderboard
 ZREVRANGE steps 0 2 WITHSCORES            # top 3
 ```
 
-**Riak KV** is a Dynamo-style **distributed** key-value store: leaderless replication, consistent hashing, tunable N/R/W quorums, and **eventual consistency**, with sibling values for conflicts. It was built for high availability and survives node failures without failover. Riak's original company (Basho) closed in 2017, and the code lives on as open source.
+**Riak KV** is a Dynamo-style (modelled on Amazon's Dynamo paper) **distributed** key-value store: leaderless replication, consistent hashing, tunable N/R/W quorums (N copies, W must confirm a write, R are asked on a read — 15.5), and **eventual consistency**, with sibling values for conflicts. It was built for high availability and survives node failures without failover. Riak's original company (Basho) closed in 2017, and the code lives on as open source.
 
 ### Use cases
 
@@ -146,20 +146,20 @@ ZREVRANGE steps 0 2 WITHSCORES            # top 3
 | **Caching** | A weather app caches the latest forecast per city. A shop caches product pages in Redis to spare the database. | Read by key, expiry built in |
 | **Session storage** | Logged-in user state for a web app | Tiny, per-user, high-churn data |
 | **Real-time data** | Live stock prices or ride locations updated many times a second | In-memory speed |
-| **Counters and rate limits** | "100 requests per minute per API key" | Atomic `INCR` with a TTL |
+| **Counters and rate limits** (caps on how often a client may call) | "100 requests per minute per API key" | Atomic `INCR` with a TTL |
 | **Leaderboards** | A fitness app ranks users by daily steps | Sorted sets keep order as scores change |
 
 ### Performance: strengths and limits
 
 | Strengths | Limits |
 |---|---|
-| O(1) lookups by key, very high throughput | **No ad-hoc queries**: filtering, joins and secondary lookups must be built in the app or with extra keys |
+| O(1) lookups by key (constant time, however big the data), very high **throughput** (operations per second) | **No ad-hoc queries** (one-off questions not planned in advance): filtering, joins and secondary lookups must be built in the app or with extra keys |
 | Easy to shard (hash the key) and replicate | **Poor fit for relationships** between items |
 | Values can be anything | In-memory stores are **bounded by RAM** (and RAM is expensive) |
 
 ### The same pattern in Postgres
 
-`code/02_key_value_style.sql` builds a KV table with TTL, UPSERT "put", and a leaderboard:
+`code/02_key_value_style.sql` builds a KV table with TTL, **UPSERT** (insert, or update if the key already exists) "put", and a leaderboard:
 
 ```sql
 CREATE UNLOGGED TABLE kv (            -- UNLOGGED: no WAL, fast, emptied after a crash (cache-like)
@@ -202,8 +202,8 @@ Cleanup is `DELETE FROM kv WHERE expires_at <= now() RETURNING k`, which evicts 
 
 ### Common mistakes
 
-- Using a cache as the source of truth without persistence, then losing data on restart.
-- Huge values (MBs) or "hot keys" that one shard must serve alone.
+- Using a cache as the **source of truth** (the authoritative copy every other copy derives from) without persistence, then losing data on restart.
+- Huge values (MBs) or "hot keys" (single keys getting a large share of all traffic) that one shard must serve alone.
 - Forgetting TTLs, so memory fills and eviction starts dropping useful keys.
 
 ### In the interview
@@ -211,7 +211,7 @@ Cleanup is `DELETE FROM kv WHERE expires_at <= now() RETURNING k`, which evicts 
 **30-second answer:** "A key-value store is a distributed hash map: O(1) get/put by key, easy to shard and replicate, no queries by value. Redis adds in-memory speed and data structures like sorted sets. I use it for caching, sessions, counters, rate limiting and leaderboards, with a TTL on keys, and keep the durable truth in a primary database."
 
 - *How would you build a rate limiter?* `INCR key` with `EXPIRE` for a fixed window, or a sorted set of timestamps for a sliding window.
-- *Cache invalidation strategy?* Cache-aside with TTLs, and delete or refresh the key on writes. See the [caching patterns](../../../system-design-patterns/modules/04-caching/README.md).
+- *Cache invalidation strategy?* **Cache-aside** (the app checks the cache, and on a miss reads the database and fills the cache) with TTLs, and delete or refresh the key on writes. See the [caching patterns](../../../system-design-patterns/modules/04-caching/README.md).
 
 ### Self-check
 
@@ -251,8 +251,8 @@ The second document has a field the first lacks, and that's allowed.
 
 ### Popular systems
 
-- **MongoDB**: BSON documents, a rich query language and secondary indexes, **aggregation pipelines** (`$match` → `$group` → `$sort`, similar to SQL's `WHERE`/`GROUP BY`), replica sets (single-leader, 15.5), sharding, and multi-document transactions since 4.0.
-- **CouchDB**: JSON over a **RESTful HTTP API**, multi-leader **replication and sync** designed for occasionally connected devices (PouchDB in the browser syncs with it), and MVCC document revisions for conflict detection.
+- **MongoDB**: BSON documents, a rich query language and **secondary indexes** (indexes on fields other than the primary id), **aggregation pipelines** (`$match` → `$group` → `$sort`, similar to SQL's `WHERE`/`GROUP BY`), replica sets (single-leader, 15.5), sharding, and multi-document transactions since 4.0.
+- **CouchDB**: JSON over a **RESTful HTTP API** (resources addressed by URLs and manipulated with standard web verbs such as GET, PUT and DELETE), multi-leader **replication and sync** designed for occasionally connected devices (PouchDB in the browser syncs with it), and **MVCC** (multi-version concurrency control — keeping several versions of a record) document revisions for conflict detection.
 
 ```js
 // MongoDB shell (not run)
@@ -289,7 +289,7 @@ db.products.createIndex({ type: 1, price: 1 })
 
 ### A document store inside Postgres: JSONB
 
-PostgreSQL's **`jsonb`** type stores parsed, binary JSON. It supports operators, indexing and SQL/JSON path queries. `code/01_jsonb_document_store.sql` builds a mini product catalogue:
+PostgreSQL's **`jsonb`** type stores parsed, binary JSON. It supports operators, indexing and **SQL/JSON path** queries (a mini-language like `$.authors[*]` for navigating inside a JSON value). `code/01_jsonb_document_store.sql` builds a mini product catalogue:
 
 ```sql
 CREATE TABLE products (
@@ -393,7 +393,7 @@ EXPLAIN (COSTS OFF) SELECT doc->>'sku' FROM products WHERE (doc->>'price')::nume
          Index Cond: (((doc ->> 'price'::text))::numeric > '503'::numeric)
 ```
 
-The **GIN** index (Chapter 12) covers containment queries on any key. `jsonb_path_ops` is smaller and faster for `@>` but doesn't support `?`, while the default `jsonb_ops` supports both. An **expression B-tree** serves range and sort queries on one field.
+The **GIN** index (generalised inverted index, Chapter 12 — it maps each key/value inside the documents to the rows containing it) covers containment queries on any key. (A **Bitmap Index Scan** collects matching row locations from the index; the **Bitmap Heap Scan** then fetches those rows from the table.) `jsonb_path_ops` is smaller and faster for `@>` but doesn't support `?`, while the default `jsonb_ops` supports both. An **expression B-tree** (a normal sorted index built on the result of an expression rather than a plain column) serves range and sort queries on one field.
 
 **Guard rails that document databases often lack.** A `CHECK` constraint can enforce required keys and types:
 
@@ -461,7 +461,7 @@ SELECT ts, cpu_pct FROM metrics WHERE server_id = 'S1' AND day = '2024-12-06' LI
 
 ### Why they fit time-series and write-heavy data
 
-- **Sequential writes**: most use **LSM trees**. Writes go to an in-memory table plus a commit log, then are flushed as immutable sorted files (SSTables) that are merged in the background (compaction). Writes are appends, so throughput is very high.
+- **Sequential writes**: most use **LSM trees** (log-structured merge trees). Writes go to an in-memory table plus a commit log, then are flushed as **immutable** (never modified after writing) sorted files (**SSTables**, sorted string tables) that are merged in the background (**compaction**). Writes are appends, so throughput is very high.
 - **Partitioning by time range**: a partition key such as `(sensor, day)` spreads load and keeps each day's data together.
 - **Flexible columns**: a new metric is just a new column, with no schema migration for the existing rows.
 
@@ -478,10 +478,10 @@ SELECT ts, cpu_pct FROM metrics WHERE server_id = 'S1' AND day = '2024-12-06' LI
 | | **Cassandra** (wide-column) | **HBase** (column-family) |
 |---|---|---|
 | Origin | Facebook (2008), combining Dynamo's distribution with Bigtable's data model | Apache clone of Google Bigtable, on Hadoop |
-| Architecture | Leaderless ring, every node equal | Master + RegionServers, data in **HDFS** |
+| Architecture | Leaderless ring, every node equal | Master + RegionServers, data in **HDFS** (Hadoop's distributed file system, 16.9) |
 | Scaling unit | Token ranges on the ring | **Regions** (key ranges) that split automatically as they grow |
 | Consistency | **Tunable** per query (`ONE`, `QUORUM`, `ALL`), AP by default | **Strong** per-row consistency (CP) |
-| Query | CQL (SQL-like, no joins) | Java API, get/put/scan by row key, or SQL through Apache Phoenix |
+| Query | CQL (Cassandra Query Language: SQL-like, no joins) | Java API, get/put/scan by row key, or SQL through Apache Phoenix |
 | Typical use | User activity feeds, messaging, IoT at global scale | Big-data random read/write next to Hadoop and Spark jobs, e.g. transaction histories for fraud analysis |
 
 ### Use cases
@@ -491,7 +491,7 @@ SELECT ts, cpu_pct FROM metrics WHERE server_id = 'S1' AND day = '2024-12-06' LI
 - **Activity and recommendation data**: every view and purchase per user, fed into recommenders.
 - **Real-time analytics**: counters and recent windows for dashboards and alerts, such as price movements.
 
-**Limits:** you must design tables **per query** (the same data is often written to several tables), there are no joins, secondary indexes are limited and ad-hoc queries are hard, and deletes create **tombstones** that slow reads until compaction.
+**Limits:** you must design tables **per query** (the same data is often written to several tables), there are no joins, secondary indexes are limited and ad-hoc queries are hard, and deletes create **tombstones** (markers saying "this was deleted", since immutable files can't be edited) that slow reads until compaction.
 
 ### The same idea in Postgres
 
@@ -584,7 +584,7 @@ Query languages: **Cypher/openCypher** (Neo4j, Neptune, Memgraph), **Gremlin** (
 
 1. **Social networks**: mutual friends, degrees of separation, "people you may know".
 2. **Recommendations**: nodes for users, products and categories, and edges for bought, liked and similar-to. "Customers who bought this also bought…" becomes a two-hop traversal.
-3. **Fraud detection**: accounts sharing devices, addresses or cards form rings that are easy to spot as connected components.
+3. **Fraud detection**: accounts sharing devices, addresses or cards form rings that are easy to spot as **connected components** (groups of nodes all reachable from one another).
 4. **Network/IT dependency maps and knowledge graphs.**
 
 ### Scaling limits
@@ -595,7 +595,7 @@ Query languages: **Cypher/openCypher** (Neo4j, Neptune, Memgraph), **Gremlin** (
 
 ### Graph queries in Postgres
 
-`code/03_graph_in_sql.sql` models seven people and symmetric `knows` edges, then walks the graph with recursive CTEs ([Chapter 7](../07-ctes-views-and-recursion/README.md)):
+`code/03_graph_in_sql.sql` models seven people and symmetric `knows` edges, then walks the graph with recursive **CTEs** (common table expressions — named sub-queries in a `WITH` clause; a recursive one repeatedly feeds its output back in) ([Chapter 7](../07-ctes-views-and-recursion/README.md)):
 
 ```sql
 -- 2 hops: friend-of-friend suggestions for Ava
@@ -663,7 +663,7 @@ Graphs make relationships first-class. Use one when the questions are "how is X 
 
 ### What it is
 
-An **in-memory database (IMDB)** keeps its primary copy of the data in **RAM** rather than on disk. RAM access takes about 100 nanoseconds, while an SSD read takes tens to hundreds of microseconds. The engine can use data structures designed for memory (hash tables, skip lists, compact column vectors) instead of disk pages and buffer management.
+An **in-memory database (IMDB)** keeps its primary copy of the data in **RAM** rather than on disk. RAM access takes about 100 **nanoseconds** (billionths of a second), while an SSD read takes tens to hundreds of **microseconds** (millionths of a second). The engine can use data structures designed for memory (**hash tables** — arrays indexed by a key's hash for near-instant lookup; **skip lists** — sorted linked lists with "express lanes" for fast search; compact column vectors) instead of disk pages and buffer management.
 
 ![In-memory database architecture](img/in-memory.svg)
 
@@ -686,17 +686,17 @@ An **in-memory database (IMDB)** keeps its primary copy of the data in **RAM** r
 
 ### Limitations
 
-- **Volatility**: without persistence you lose data on restart, and with it you add I/O and recovery time.
+- **Volatility**: without persistence you lose data on restart, and with it you add **I/O** (input/output — reading and writing disk or network) and recovery time.
 - **Cost**: RAM costs far more per GB than disk, so large datasets are expensive.
 - **Scaling**: adding capacity means adding RAM on more nodes, and data size is bounded by total cluster memory.
 
 ### Real systems
 
-- **SAP HANA**: an in-memory, **column-oriented** database that runs **OLTP and OLAP on the same data** (sometimes called HTAP, hybrid transactional/analytical processing). *Example:* a retailer analyses today's sales in real time and adjusts stock orders the same afternoon.
-- **SingleStore** (called **MemSQL** until 2020): distributed SQL with in-memory row storage plus disk-based columnstore tables, and MySQL-wire-compatible ANSI SQL. *Example:* a bank ingests millions of card transactions a day and scores each one for fraud in real time.
+- **SAP HANA**: an in-memory, **column-oriented** database that runs **OLTP and OLAP on the same data** (OLTP = online transaction processing, many small reads/writes like placing orders; OLAP = online analytical processing, big scans and aggregates for reports) (sometimes called HTAP, hybrid transactional/analytical processing). *Example:* a retailer analyses today's sales in real time and adjusts stock orders the same afternoon.
+- **SingleStore** (called **MemSQL** until 2020): distributed SQL with in-memory row storage plus disk-based columnstore tables, and MySQL-wire-compatible (speaks MySQL's network protocol, so MySQL drivers work) **ANSI SQL** (the standard SQL language). *Example:* a bank ingests millions of card transactions a day and scores each one for fraud in real time.
 - **Redis** (16.2), **Memcached** (a cache only, no persistence), and **VoltDB** (in-memory NewSQL).
 
-**Postgres note:** Postgres is not an IMDB, but with enough `shared_buffers` and OS cache, its hot data is served from memory anyway. `UNLOGGED` tables (16.2) skip the WAL for cache-like data. The on-disk WAL is what lets it survive a crash.
+**Postgres note:** Postgres is not an IMDB, but with enough `shared_buffers` (Postgres's own in-memory page cache) and OS cache, its hot data is served from memory anyway. `UNLOGGED` tables (16.2) skip the WAL for cache-like data. The on-disk WAL is what lets it survive a crash.
 
 ### In the interview
 
@@ -732,15 +732,15 @@ NewSQL aims to offer **both**: SQL and ACID *at* horizontal scale.
 
 1. **Automatic sharding.** Tables are split into ranges (CockroachDB calls them *ranges*, TiDB *regions*, Spanner *splits*) that move between nodes automatically as they grow or get hot. *Example:* a ride-hailing app's trips spread across nodes, so one busy city doesn't slow the others.
 2. **Consensus-based replication.** Each shard is a **Raft** (CockroachDB, TiDB, YugabyteDB) or **Paxos** (Spanner) group of usually 3 or 5 replicas. A write commits once a majority stores it, so the loss of a minority loses nothing and needs no manual failover (15.8).
-3. **Distributed transactions.** Transactions spanning shards use **2PC whose coordinator state is itself replicated by consensus**, which avoids 2PC's blocking problem (15.9). They provide serializable isolation, the default in CockroachDB and Spanner.
-4. **Clock handling for global consistency.** **Google Spanner** uses **TrueTime**, GPS- and atomic-clock-backed time with a known uncertainty bound. It waits out that uncertainty before acknowledging a commit ("commit wait"), which gives externally consistent (linearizable) transactions worldwide. CockroachDB uses **hybrid logical clocks** on ordinary servers, with an uncertainty interval and retries.
+3. **Distributed transactions.** Transactions spanning shards use **2PC whose coordinator state is itself replicated by consensus**, which avoids 2PC's blocking problem (15.9). They provide **serializable** isolation (concurrent transactions behave as if run one after another), the default in CockroachDB and Spanner.
+4. **Clock handling for global consistency.** **Google Spanner** uses **TrueTime**, GPS- and atomic-clock-backed time with a known uncertainty bound. It waits out that uncertainty before acknowledging a commit ("commit wait"), which gives externally consistent (**linearizable** — every reader sees commits in real-time order) transactions worldwide. CockroachDB uses **hybrid logical clocks** (timestamps combining the machine's physical clock with a counter that keeps causally related events ordered) on ordinary servers, with an uncertainty interval and retries.
 5. **SQL front end**: familiar SQL, and often a wire-compatible protocol (CockroachDB and YugabyteDB speak PostgreSQL's protocol, TiDB speaks MySQL's).
 
 ### Examples
 
 | System | Notes |
 |---|---|
-| **Google Spanner** (paper 2012, Cloud Spanner service 2017) | Global, Paxos + TrueTime, strict serializability. *Use:* a global shop keeping stock counts correct across regions during a flash sale. |
+| **Google Spanner** (paper 2012, Cloud Spanner service 2017) | Global, Paxos + TrueTime, strict serializability (serializable + linearizable). *Use:* a global shop keeping stock counts correct across regions during a flash sale. |
 | **CockroachDB** | Postgres-compatible, Raft per range, serializable by default, survives zone or region loss. *Use:* a fintech processing payments across several data centres. |
 | **TiDB** | MySQL-compatible, TiKV storage (Raft), with an optional columnar replica (TiFlash) for HTAP. |
 | **YugabyteDB** | Reuses PostgreSQL's query layer on a Raft-replicated distributed store. |
@@ -756,7 +756,7 @@ Where it fits: global apps that need correct transactions (payments, inventory, 
 | Schema | Defined up front (JSON columns add flexibility) | Dynamic | Defined up front, with JSON support |
 | Scaling | Vertical + read replicas, manual sharding | Horizontal, built in | Horizontal, built in |
 | Consistency | Strong, ACID | Often eventual/tunable (BASE) | Strong, ACID (serializable) |
-| Typical use | ERP, banking, most business apps | Caches, feeds, IoT, catalogues | Global transactional apps, high-scale OLTP |
+| Typical use | ERP (enterprise resource planning: finance, stock, HR systems), banking, most business apps | Caches, feeds, IoT, catalogues | Global transactional apps, high-scale OLTP |
 | Examples | PostgreSQL, MySQL, SQL Server | Redis, MongoDB, Cassandra, Neo4j | Spanner, CockroachDB, TiDB, YugabyteDB |
 
 ### In the interview
@@ -787,8 +787,8 @@ A **time-series database (TSDB)** is optimised for **sequences of timestamped me
 #### How they index and store temporal data
 
 - **Time-partitioned storage**: data lives in chunks per hour, day or week, so "last 7 days" touches only 7 chunks, and dropping old data drops whole chunks. *Example:* smart-home sensor readings stored one partition per day.
-- **B-trees and LSM trees**: B-trees serve range scans. **LSM trees** make high-rate appends cheap (InfluxDB's engine, Cassandra and others).
-- **Compression**: consecutive timestamps and values are similar, so encodings like delta, delta-of-delta and XOR floats (Facebook's **Gorilla** paper, 2015) shrink data by around 10×. Columnar layouts help too.
+- **B-trees and LSM trees**: B-trees serve range scans. **LSM trees** make high-rate appends cheap (InfluxDB's engine, Cassandra and others; see 16.4).
+- **Compression**: consecutive timestamps and values are similar, so encodings like **delta** (store the difference from the previous value), delta-of-delta and XOR floats (Facebook's **Gorilla** paper, 2015) shrink data by around 10×. Columnar layouts help too.
 
 #### Features
 
@@ -872,7 +872,7 @@ A **spatial database** stores and queries **geometry and geography**: where thin
 
 Ordinary B-trees order values along one dimension and can't answer "near this point" in 2-D. Spatial indexes can:
 
-- **R-tree**: groups nearby objects into nested **bounding rectangles**. A query descends only into the rectangles that overlap the search area. *Example:* "stores within 10 km" checks a few boxes instead of every store. PostgreSQL's **GiST** index implements R-tree-style indexing for geometric types and PostGIS.
+- **R-tree**: groups nearby objects into nested **bounding rectangles**. A query descends only into the rectangles that overlap the search area. *Example:* "stores within 10 km" checks a few boxes instead of every store. PostgreSQL's **GiST** index (generalised search tree — a framework for tree indexes over non-sortable data) implements R-tree-style indexing for geometric types and PostGIS.
 - **Quadtree**: recursively splits 2-D space into **four quadrants** until each cell holds few points. It is good for points and uneven density (Postgres's SP-GiST supports quadtrees).
 - **Geohash**: encodes latitude/longitude as a short **string** whose shared prefix means nearby. That lets spatial lookups run on a plain key-value store or B-tree (e.g. `u09tv` is a cell covering central Paris). Edge cases at cell borders mean you also check neighbouring cells. Related grid systems are Uber's **H3** (hexagons) and Google's **S2**.
 
@@ -932,7 +932,7 @@ EXPLAIN (COSTS OFF) SELECT id FROM store ORDER BY loc <-> point(2, 2) LIMIT 3;
 
 The last plan is **KNN search through the GiST index**: the index returns points in distance order, so `LIMIT 3` stops after three, with no full sort.
 
-For real latitude/longitude on the curved Earth, use PostGIS:
+For real latitude/longitude on the curved Earth, use PostGIS (`4326` below is the id of **WGS 84**, the coordinate system GPS uses):
 
 ```sql
 -- PostGIS (not run)
@@ -977,8 +977,8 @@ Time-series: partition by time, compress, retain, downsample. Spatial: R-tree/Gi
 
 **Big data** is data too large, too fast or too varied for one traditional database server to store and process in reasonable time. The classic **3 Vs**:
 
-- **Volume**: terabytes to petabytes and beyond.
-- **Velocity**: data arrives continuously and fast (clickstreams, sensors) and must be processed quickly.
+- **Volume**: terabytes to petabytes (1 TB = 1,000 GB; 1 PB = 1,000 TB) and beyond.
+- **Velocity**: data arrives continuously and fast (**clickstreams** — logs of every user click — and sensors) and must be processed quickly.
 - **Variety**: structured tables, semi-structured JSON and logs, unstructured text, images and video.
 
 (Veracity and value are often added as extra Vs.) The challenges are **storage** at that size, **processing** in acceptable time, and **scaling** as it grows. The answer is the same as in Chapter 15: **spread storage and computation over many machines and run in parallel**, moving computation to where the data is.
@@ -1014,7 +1014,7 @@ Each key ends up at exactly one reducer, which is why the totals are complete. I
 
 **Spark** is a general-purpose distributed engine built to fix MapReduce's slowness:
 
-- **In-memory processing**: intermediate results stay in RAM from one step to the next (originally as **RDDs**, resilient distributed datasets that can be recomputed from their lineage if a node fails, and today mostly as **DataFrames**). That makes iterative jobs such as machine learning and multi-stage queries much faster.
+- **In-memory processing**: intermediate results stay in RAM from one step to the next (originally as **RDDs**, resilient distributed datasets that can be recomputed from their **lineage** (the recorded chain of steps that produced them) if a node fails, and today mostly as **DataFrames** — distributed tables with named columns). That makes iterative jobs such as machine learning and multi-stage queries much faster.
 - **Many workloads in one engine**: batch processing, **Structured Streaming**, machine learning (MLlib) and graph processing (GraphX).
 - **APIs** in Python (PySpark), Scala, Java, R, and SQL.
 
@@ -1024,18 +1024,18 @@ Each key ends up at exactly one reducer, which is why the totals are complete. I
 
 | Tool | What it is |
 |---|---|
-| **Apache Hive** | A data warehouse over HDFS. HiveQL queries are compiled into distributed jobs (originally MapReduce, later Tez or Spark). Good for large batch queries on structured files. |
-| **Presto / Trino** | Distributed SQL query engines (Presto from Facebook, 2012, and Trino is its fork) for **fast, interactive** queries that can **federate** many sources: HDFS/S3 files, MySQL, Postgres, Kafka… |
+| **Apache Hive** | A **data warehouse** (a database built for analytics over large historical data) over HDFS. HiveQL queries are compiled into distributed jobs (originally MapReduce, later Tez or Spark). Good for large batch queries on structured files. |
+| **Presto / Trino** | Distributed SQL query engines (Presto from Facebook, 2012, and Trino is its fork) for **fast, interactive** queries that can **federate** (query several separate systems as if one) many sources: HDFS/S3 (Amazon's object storage) files, MySQL, Postgres, Kafka… |
 | **Spark SQL** | SQL and DataFrames on Spark, sharing one optimiser with the other Spark APIs |
 
-*Example:* a retailer uses Trino to join in-store sales (in Postgres) with online clickstream data (Parquet on S3) in one query.
+*Example:* a retailer uses Trino to join in-store sales (in Postgres) with online clickstream data (**Parquet** — a compressed, column-oriented file format — on S3) in one query.
 
 ### Real-time: Kafka and Flink
 
-- **Apache Kafka** is a distributed, replicated, append-only **log**, used as a message broker. **Producers** append events to **topics** (split into partitions), and **consumers** read at their own pace and can replay. *Example:* a logistics company streams GPS pings from delivery vans through Kafka to live dashboards.
-- **Apache Flink** is a **stream processor**: low-latency, **event-driven**, **stateful** computations (windows, joins, pattern detection) with **event-time** handling and **exactly-once** state through distributed checkpoints (15.9). *Example:* a trading platform flags unusual trade patterns within milliseconds.
+- **Apache Kafka** is a distributed, replicated, append-only **log**, used as a **message broker** (middleware that passes messages from senders to receivers). **Producers** append events to **topics** (named streams, split into partitions), and **consumers** read at their own pace and can replay. *Example:* a logistics company streams GPS pings from delivery vans through Kafka to live dashboards.
+- **Apache Flink** is a **stream processor**: low-latency, **event-driven**, **stateful** computations (windows, joins, pattern detection) with **event-time** handling (using when an event actually happened, not when it arrived) and **exactly-once** state (each event affects results once, even after failures and retries) through distributed checkpoints (15.9). *Example:* a trading platform flags unusual trade patterns within milliseconds.
 
-A common architecture streams events into Kafka, processes them in Flink or Spark Streaming for real-time views, and lands them in a data lake or warehouse for batch analysis with Spark, Hive or Trino. Change data capture (CDC) from Postgres into Kafka (for example with Debezium) feeds the same pipeline from your OLTP database ([Batch and streaming patterns](../../../system-design-patterns/modules/10-batch-and-streaming/README.md)).
+A common architecture streams events into Kafka, processes them in Flink or Spark Streaming for real-time views, and lands them in a **data lake** (cheap storage of raw files in any format, usually on object storage) or warehouse for **batch** analysis (processing large accumulated chunks at once) with Spark, Hive or Trino. **Change data capture (CDC)** — reading the database's change log and publishing every insert/update/delete as an event — from Postgres into Kafka (for example with Debezium, an open-source CDC tool) feeds the same pipeline from your OLTP database ([Batch and streaming patterns](../../../system-design-patterns/modules/10-batch-and-streaming/README.md)).
 
 ### Applications
 
@@ -1079,7 +1079,7 @@ Start from the **access patterns and guarantees you need**, not from fashion. Fo
 | Metrics and IoT with retention and downsampling | **TimescaleDB**, InfluxDB, Prometheus | Time chunks, compression, continuous aggregates | Range partitions + `date_bin` + BRIN |
 | Maps, "near me", zones | **PostGIS**, BigQuery GIS, Redis GEO | Spatial types + R-tree indexes | Built-in `point`/`box` + GiST (planar only) |
 | SQL + ACID beyond one node, multi-region strong consistency | **CockroachDB, Spanner, YugabyteDB, TiDB** | Consensus-replicated shards | Citus for scale-out Postgres |
-| Ad-hoc analytics over billions of rows | **Columnar warehouse**: BigQuery, Snowflake, Redshift, ClickHouse | Column storage, vectorised scans | Read replicas and summary tables |
+| Ad-hoc analytics over billions of rows | **Columnar warehouse**: BigQuery, Snowflake, Redshift, ClickHouse | Column storage, vectorised scans (processing batches of values per CPU instruction) | Read replicas and summary tables |
 | Petabyte batch and stream processing | **Spark, Trino, Kafka + Flink** | Distributed compute over a data lake | CDC out of Postgres into these |
 | Full-text search with relevance ranking and facets | **Elasticsearch / OpenSearch** | Inverted indexes, scoring | `tsvector` + GIN full-text search (Chapter 14) |
 
@@ -1089,7 +1089,7 @@ Start from the **access patterns and guarantees you need**, not from fashion. Fo
 2. What consistency does each piece of data need (15.6)? Money needs strong consistency, and like counts can be eventual.
 3. What's the read/write ratio and the peak throughput? How big will the data be in 3 years?
 4. Single region or multi-region? What RPO/RTO (15.10)?
-5. What can the team operate? Each extra database adds backups, monitoring, upgrades and on-call load.
+5. What can the team operate? Each extra database adds backups, monitoring, upgrades and **on-call** load (engineers on rota to respond to outages).
 
 **Polyglot persistence.** Large systems commonly use several stores, each for what it does best. For example: Postgres for orders and payments, Redis for sessions and caching, Elasticsearch for product search, Kafka + a warehouse for analytics, and all of it fed by CDC from the primary database so there's **one source of truth**. See the database-design case studies in [Chapter 17](../17-schema-design-case-studies/README.md).
 
@@ -1109,15 +1109,15 @@ Start from the **access patterns and guarantees you need**, not from fashion. Fo
 Two non-relational systems sit next to almost every production relational database: a **search engine** for text search and log analytics, and **Redis** for caching and fast data structures. §16.2 and §16.10 said *when* to use them; this section opens them up so you can explain *how* they work and where they fail.
 
 ### Search engines: what it is
-**Elasticsearch** (and its open-source fork **OpenSearch**, created by AWS in 2021 after Elastic changed its licence) is a distributed search and analytics engine built on the **Apache Lucene** library. You send it JSON documents; it makes every field searchable within about a second and answers relevance-ranked full-text queries, filters and aggregations over billions of documents. Solr is an older Lucene-based alternative.
+**Elasticsearch** (and its open-source **fork** — an independent copy of a project's code that is developed separately — **OpenSearch**, created by AWS in 2021 after Elastic changed its licence) is a distributed search and analytics engine built on the **Apache Lucene** library. You send it JSON documents; it makes every field searchable within about a second and answers relevance-ranked full-text queries, filters and aggregations over billions of documents. Solr is an older Lucene-based alternative.
 
 ### The problem it solves
-`WHERE description LIKE '%running shoe%'` cannot use a B-tree index (the pattern starts with `%`), so it scans every row, does not match "shoes" or "Running", and returns rows in no useful order. Users expect typo tolerance, stemming ("running" finds "run"), relevance ranking and facets ("Brand: Nike (42)"). PostgreSQL's `tsvector` + GIN ([14.6](../14-advanced-sql-and-using-sql-from-code/README.md#146-full-text-search)) covers the basics inside the database; a dedicated engine takes over when search is a core feature or the data is huge.
+`WHERE description LIKE '%running shoe%'` cannot use a B-tree index (the pattern starts with `%`), so it scans every row, does not match "shoes" or "Running", and returns rows in no useful order. Users expect typo tolerance, **stemming** (reducing words to a root, so "running" finds "run"), **relevance ranking** (best matches first) and **facets** (per-category match counts such as "Brand: Nike (42)"). PostgreSQL's `tsvector` + GIN ([14.6](../14-advanced-sql-and-using-sql-from-code/README.md#146-full-text-search)) covers the basics inside the database; a dedicated engine takes over when search is a core feature or the data is huge.
 
 ### How it works — the inverted index
 A B-tree maps *row → values*; an **inverted index** maps each **term → the list of documents containing it** (the **posting list**), like the index at the back of a book.
 
-1. **Analysis.** At index time an **analyzer** turns text into terms: *character filters* (strip HTML), a *tokenizer* (split on word boundaries), then *token filters* (lowercase, remove stop words such as "the", **stem** "running" → "run", add synonyms). The same analyzer runs on the query, so "Running SHOES" and "running shoe" meet on the same terms. A `text` field is analysed; a `keyword` field is stored whole for exact filters, sorting and aggregations.
+1. **Analysis.** At index time an **analyzer** turns text into terms: *character filters* (strip HTML), a *tokenizer* (split on word boundaries into **tokens**, i.e. individual words), then *token filters* (lowercase, remove **stop words** — very common words that carry little meaning — such as "the", **stem** "running" → "run", add synonyms). The same analyzer runs on the query, so "Running SHOES" and "running shoe" meet on the same terms. A `text` field is analysed; a `keyword` field is stored whole for exact filters, sorting and aggregations.
 2. **Matching.** A query for `run AND trail` intersects two sorted posting lists — fast even for millions of entries.
 3. **Scoring.** Matches are ranked with **BM25** (the default since Elasticsearch 5): a term counts more if it is frequent in *this* document (term frequency, with diminishing returns), rare across *all* documents (inverse document frequency), and the document is short (length normalisation).
 
@@ -1145,9 +1145,9 @@ merged top 3: [(1, 2.123), (3, 1.391), (2, 0.578)]
 The toy stemmer turns "hiking" into `hik`; real stemmers (Porter, Snowball) and dictionary-based lemmatisers do better, but the idea is the same. Notice doc 4 ("Trail mix snack") matches `trail` yet loses to documents that match more, rarer terms.
 
 ### How it works — shards, replicas and near-real-time search
-- An **index** (like a table) is split into **primary shards**, each a complete Lucene index. A document goes to `shard = hash(_routing or _id) % number_of_primary_shards`, so the primary shard count is fixed at creation (changing it means `_split`, `_shrink` or reindexing).
+- An **index** (like a table) is split into **primary shards**, each a complete Lucene index. A document goes to `shard = hash(_routing or _id) % number_of_primary_shards` (`%` is the remainder after division), so the primary shard count is fixed at creation (changing it means `_split`, `_shrink` or reindexing).
 - Each primary has **replica shards** on other nodes for failover and extra read capacity. Writes go to the primary, which forwards them to the in-sync replicas.
-- A search is **scatter-gather**: the coordinating node sends the query to one copy of every shard (*query phase*: each returns its top-N ids and scores), merges them, then fetches the winning documents (*fetch phase*). Deep pagination (`from: 10000`) is expensive because every shard must return 10,000+ hits; use `search_after` instead.
+- A search is **scatter-gather**: the coordinating node sends the query to one copy of every shard (*query phase*: each returns its top-N ids and scores), merges them, then fetches the winning documents (*fetch phase*). Deep **pagination** (fetching results page by page, here starting at hit 10,000) is expensive because every shard must return 10,000+ hits; use `search_after` instead.
 - Lucene writes new documents into small, **immutable segments**. A **refresh** (every 1 second by default) opens the latest segment for search — hence **near-real-time**: a document is searchable about a second after indexing, not instantly. A **translog** (write-ahead log) makes acknowledged writes durable before the next Lucene commit (**flush**), and background **merges** combine small segments and purge deleted documents.
 
 ```mermaid
@@ -1170,7 +1170,7 @@ flowchart LR
 **ELK** = **Elasticsearch** (store and search) + **Logstash** (ingest pipelines: parse, enrich, route) + **Kibana** (dashboards and search UI). Lightweight shippers (**Beats**, now largely **Elastic Agent**) were added, and Elastic calls the whole set the **Elastic Stack**. The typical log pipeline: applications write JSON logs → an agent ships them (often via Kafka as a buffer) → ingest parsing → time-based indices (`logs-2026.09.28`) with **index lifecycle management** moving old indices to cheaper nodes and deleting them after the retention period. OpenSearch offers the same shape (OpenSearch Dashboards instead of Kibana). Loki and ClickHouse are popular cheaper alternatives for logs.
 
 ### When to pair it with a database — and when not
-Keep the **relational database as the source of truth** and treat the search index as a derived, rebuildable view. Feed it by **change data capture** (e.g. Debezium reading the Postgres WAL → Kafka → an indexer) or an outbox table, not by dual writes from the application, which drift apart when one write fails.
+Keep the **relational database as the source of truth** and treat the search index as a derived, rebuildable view. Feed it by **change data capture** (e.g. Debezium reading the Postgres WAL — its write-ahead log of changes — → Kafka → an indexer) or an **outbox table** (the app writes the event into a table in the same transaction as the data, and a separate process forwards it), not by **dual writes** (the app writing to both systems itself) from the application, which drift apart when one write fails.
 
 ```mermaid
 flowchart LR
@@ -1184,25 +1184,25 @@ flowchart LR
 Do **not** use Elasticsearch as the primary store for money or orders: no multi-document transactions, no joins, eventual visibility (refresh), and mapping changes need reindexing. Stay with Postgres full-text search while the data fits one database and relevance needs are simple.
 
 ### Redis internals: what it is
-§16.2 introduced **Redis** as an in-memory key-value store with rich data structures. (Redis moved to source-available licences in 2024 and added the AGPLv3 option in 2025; the Linux Foundation's **Valkey** fork keeps the BSD licence. The internals below apply to both.)
+§16.2 introduced **Redis** as an in-memory key-value store with rich data structures. (Redis moved to **source-available** licences (code you can read but with restrictions on use) in 2024 and added the AGPLv3 open-source option in 2025; the Linux Foundation's **Valkey** fork keeps the BSD licence. The internals below apply to both.)
 
 ### How it works — one thread, an event loop
-Redis executes all commands on **one main thread**. It uses **I/O multiplexing** (`epoll` on Linux, `kqueue` on macOS/BSD) to watch thousands of client sockets at once and runs each ready command to completion, one at a time.
+Redis executes all commands on **one main thread** (a thread is one independent sequence of execution inside a program). It uses **I/O multiplexing** (`epoll` on Linux, `kqueue` on macOS/BSD — operating-system calls that report which of many connections have data ready) to watch thousands of client **sockets** (open network connections) at once and runs each ready command to completion, one at a time.
 
-- **Why it is fast anyway:** data is in RAM, commands are O(1) or O(log n) on compact structures, and there are no locks or context switches. A single instance handles on the order of 100,000+ simple operations per second.
+- **Why it is fast anyway:** data is in RAM, commands are O(1) or O(log n) on compact structures, and there are no **locks** (mechanisms that stop two threads touching the same data at once) or **context switches** (the CPU pausing one thread to run another). A single instance handles on the order of 100,000+ simple operations per second.
 - **Why every command is atomic:** nothing else runs in the middle of `INCR` or a Lua script / `MULTI`–`EXEC` block.
-- **The catch:** one slow command blocks *everyone*. `KEYS *`, `HGETALL` on a hash with millions of fields, `DEL` of a huge key or a long Lua script stall all clients. Use `SCAN`, `UNLINK` (frees memory in a background thread) and keep keys small. Since Redis 6, optional **I/O threads** parallelise reading and writing sockets, but command execution stays single-threaded.
+- **The catch:** one slow command blocks *everyone*. `KEYS *`, `HGETALL` on a hash with millions of fields, `DEL` of a huge key or a long Lua script stall all clients. Use `SCAN` (iterates keys in small batches), `UNLINK` (frees memory in a background thread) and keep keys small. Since Redis 6, optional **I/O threads** parallelise reading and writing sockets, but command execution stays single-threaded.
 - **Expiry** is lazy (checked when a key is touched) plus an active background sampler that deletes a portion of expired keys each cycle.
 
 ### How it works — data structures and encodings
-Each type switches internal encoding by size to save memory: small hashes, lists and sorted sets use a compact **listpack** (one contiguous block), then convert to a **hash table**, **quicklist** (linked list of listpacks) or **skip list + hash table** as they grow. The sorted set's skip list gives O(log n) insert, rank and range — why it is the classic leaderboard structure (§16.2). Sets of small integers use an **intset**. `OBJECT ENCODING key` shows which one a key uses.
+Each type switches internal encoding by size to save memory: small hashes, lists and sorted sets use a compact **listpack** (one contiguous block), then convert to a **hash table**, **quicklist** (linked list — items chained by pointers — of listpacks) or **skip list + hash table** as they grow. The sorted set's skip list gives O(log n) insert, rank and range — why it is the classic leaderboard structure (§16.2). Sets of small integers use an **intset**. `OBJECT ENCODING key` shows which one a key uses.
 
 ### How it works — persistence: RDB and AOF
 
 | | **RDB snapshot** | **AOF (append-only file)** |
 |---|---|---|
 | What | point-in-time binary dump of the whole dataset | log of every write command |
-| How | `fork()`; the child writes the snapshot while the parent keeps serving; the OS copies memory pages only when they change (**copy-on-write**) | appended on each write; `fsync` policy `always`, `everysec` (default) or `no`; rewritten in the background to stay compact |
+| How | `fork()` (the OS call that clones a running process); the child writes the snapshot while the parent keeps serving; the OS copies memory pages only when they change (**copy-on-write**) | appended on each write; `fsync` policy `always`, `everysec` (default) or `no`; rewritten in the background to stay compact |
 | Data loss on crash | everything since the last snapshot (minutes) | about 1 second with `everysec` |
 | Restart speed | fast load | slower replay (hybrid AOF with an RDB preamble helps) |
 
@@ -1211,7 +1211,7 @@ Most deployments enable both, or run Redis as a pure cache with persistence off.
 ### How it works — replication, Sentinel and Cluster
 - **Replication** is asynchronous primary → replicas. A replica does a full sync (RDB transfer) once, then streams commands; after a short disconnect it resumes from the primary's **replication backlog** (`PSYNC`). Asynchronous means an acknowledged write can be lost if the primary dies before replicating it (`WAIT` reduces, not removes, that window).
 - **Sentinel** monitors primaries and promotes a replica on failure (high availability without sharding).
-- **Redis Cluster** shards data over **16,384 hash slots**: `slot = CRC16(key) mod 16384`, and each primary owns a range of slots. Clients cache the slot map; a request to the wrong node gets a `MOVED` redirect (or `ASK` during slot migration). Multi-key commands work only when all keys are in one slot — force that with a **hash tag**: `{user:42}:cart` and `{user:42}:profile` hash only the part in braces. Nodes gossip to detect failures and promote replicas.
+- **Redis Cluster** shards data over **16,384 hash slots**: `slot = CRC16(key) mod 16384` (CRC16 is a fast 16-bit checksum function used here as a hash), and each primary owns a range of slots. Clients cache the slot map; a request to the wrong node gets a `MOVED` redirect (or `ASK` during slot migration). Multi-key commands work only when all keys are in one slot — force that with a **hash tag**: `{user:42}:cart` and `{user:42}:profile` hash only the part in braces. Nodes **gossip** (each periodically swaps status with a few random peers, so news spreads through the cluster) to detect failures and promote replicas.
 
 ```mermaid
 flowchart LR
@@ -1224,7 +1224,7 @@ flowchart LR
 ```
 
 ### How it works — eviction when memory is full
-With `maxmemory` set, `maxmemory-policy` decides what to drop: `noeviction` (the default: writes fail with an error), `allkeys-lru` / `allkeys-lfu` (the usual cache choice), `volatile-lru` / `volatile-lfu` / `volatile-ttl` (only keys with a TTL), or `allkeys-random` / `volatile-random`. LRU and LFU are **approximated** by sampling a few keys (`maxmemory-samples`, default 5) and evicting the best candidate, which avoids the memory cost of a full LRU list. Memcached, by contrast, is multi-threaded, strings-only, has no persistence or replication, and uses a slab allocator with per-slab LRU — simpler and good for a pure cache, but without Redis's data structures.
+With `maxmemory` set, `maxmemory-policy` decides what to drop: `noeviction` (the default: writes fail with an error), `allkeys-lru` / `allkeys-lfu` (the usual cache choice), `volatile-lru` / `volatile-lfu` / `volatile-ttl` (only keys with a TTL), or `allkeys-random` / `volatile-random`. LRU and LFU are **approximated** by sampling a few keys (`maxmemory-samples`, default 5) and evicting the best candidate, which avoids the memory cost of a full LRU list. Memcached, by contrast, is multi-threaded, strings-only, has no persistence or replication, and uses a **slab allocator** (memory pre-split into fixed-size chunks grouped by size class) with per-slab LRU — simpler and good for a pure cache, but without Redis's data structures.
 
 ### Trade-offs
 
@@ -1237,7 +1237,7 @@ With `maxmemory` set, `maxmemory-policy` decides what to drop: `noeviction` (the
 
 ### Common mistakes
 - **Dual writes** to Postgres and Elasticsearch from the app → use CDC or an outbox so the index can always be rebuilt.
-- **Too many small shards** (thousands of tiny indices) → each shard costs heap and file handles; aim for shards of roughly 10–50 GB.
+- **Too many small shards** (thousands of tiny indices) → each shard costs **heap** (the memory Elasticsearch's Java runtime keeps objects in) and **file handles** (OS slots for open files); aim for shards of roughly 10–50 GB.
 - **Expecting read-your-writes from search** → a new document appears after the next refresh; read it back by id from the database, or use `refresh=wait_for` sparingly.
 - **`KEYS *` or giant keys in production Redis** → blocks the single thread; use `SCAN`, split big keys, `UNLINK`.
 - **No `maxmemory` / `noeviction` on a cache** → writes start failing when memory fills; pick an eviction policy.

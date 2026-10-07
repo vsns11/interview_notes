@@ -2,7 +2,7 @@
 
 [Chapter 10](../10-data-modeling-and-er-diagrams/README.md) turned a business description into tables. This chapter asks the next question: **does each fact live in exactly one place?** When it doesn't, the table can contradict itself — a customer with two cities, a doctor with two specialties — and some facts cannot be stored or are lost by accident. **Normalization** is the precise, rule-based way to find such tables and split them safely.
 
-Normalization is often taught as vague advice ("avoid redundancy"). Here it is built on one exact tool, the **functional dependency**, so that "is this table in 3NF?" has a checkable yes/no answer. A small Python program ([`code/fd_tools.py`](code/fd_tools.py)) computes closures, candidate keys and normal-form violations, and every worked answer in the chapter was verified with it. The SQL files show the anomalies happening on PostgreSQL and disappearing after decomposition.
+Normalization is often taught as vague advice ("avoid redundancy"). Here it is built on one exact tool, the **functional dependency**, so that "is this table in 3NF?" (third normal form, §11.9) has a checkable yes/no answer. A small Python program ([`code/fd_tools.py`](code/fd_tools.py)) computes closures (everything a set of columns determines, §11.4), candidate keys (minimal column sets that identify a row) and normal-form violations, and every worked answer in the chapter was verified with it. The SQL files show the anomalies (the insert/update/delete failures of §11.6) happening on PostgreSQL and disappearing after decomposition (splitting one table into several).
 
 **What you'll learn**
 
@@ -96,7 +96,7 @@ Notes worth being precise about:
 - **Full vs partial only makes sense for composite determinants.** With a one-column key there is no "part", so a partial dependency is impossible.
 - **The two conditions on "transitive" matter.** Without "Y is not a superkey" every table would be full of transitive dependencies (the key determines itself determines everything).
 - **Partial and transitive can overlap:** `order_id -> customer_city` is partial (order_id is part of the key) *and* transitive (via customer_id).
-- **Multivalued dependencies** are a different kind of constraint (sets of values, not single values); every FD is also an MVD, not vice versa. §11.12 treats them.
+- **Multivalued dependencies** are a different kind of constraint (sets of values, not single values); every FD is also an MVD (multivalued dependency), not vice versa. §11.12 treats them.
 
 ### Self-check
 1. `{order_id, product_id} -> order_id` — which type? → Trivial.
@@ -239,7 +239,7 @@ So there are **three** candidate keys: `{A,C}`, `{B,C}`, `{C,D}`. Prime attribut
 **30-second answer:** "To test whether X is a key, compute X⁺: start with X and repeatedly add the right side of any FD whose left side is fully contained, until nothing changes. If X⁺ is the whole relation, X is a superkey; if no smaller subset is, it's a candidate key. Attributes that never appear on a right-hand side must be in every key, which is where I start."
 
 - *How do you check whether an FD is implied?* → Compute the closure of its left side and see if the right side is inside.
-- *Complexity?* → A naive loop is O(|F|² · |attrs|) per closure; finding all keys can be exponential in the worst case (a relation can have exponentially many keys), but class-sized problems are tiny.
+- *Complexity?* → In big-O notation (how the work grows as the input grows), a naive loop is O(|F|² · |attrs|) per closure; finding all keys can be exponential (doubling with every extra attribute) in the worst case (a relation can have exponentially many keys), but class-sized problems are tiny.
 
 ### TL;DR
 X⁺ = everything X determines (fire only FDs whose whole LHS is present; loop until stable). Superkey ⟺ X⁺ = all attributes; candidate key = minimal superkey; X -> Y implied ⟺ Y ⊆ X⁺. Never-on-the-right attributes are in every key.
@@ -324,7 +324,7 @@ NOTICE:  refused: null value in column "order_id" of relation "order_line_wide" 
 ```
 
 ### What normalization does
-**Normalization** splits a table along its functional dependencies so that **every fact has exactly one home** — "Nadia lives in Lisbon" in one row of a `customer` table. One row to update, nothing unrelated to delete, and every fact can be inserted on its own. It does this with **decomposition** (replacing a table by projections of it) that must be **lossless** (§11.10).
+**Normalization** splits a table along its functional dependencies so that **every fact has exactly one home** — "Nadia lives in Lisbon" in one row of a `customer` table. One row to update, nothing unrelated to delete, and every fact can be inserted on its own. It does this with **decomposition** (replacing a table by projections of it — a *projection* is a table made of some of its columns, duplicates removed) that must be **lossless** (§11.10).
 
 ### The ladder of normal forms
 Each **normal form** is a named test a table passes or fails. Each assumes the previous one and is stricter:
@@ -342,7 +342,7 @@ Each **normal form** is a named test a table passes or fails. Each assumes the p
 
 ![The normal forms in order](img/nf-ladder.svg)
 
-(There are also domain-key NF and 6NF — used in temporal databases and some data-warehouse styles — which are beyond everyday design.)
+(There are also domain-key NF and 6NF — used in temporal databases (which record how values change over time) and some data-warehouse (a database built for analysis and reporting rather than day-to-day transactions) styles — which are beyond everyday design.)
 
 **You do not always climb to the top.** Each step removes redundancy and usually adds a join. **3NF is where most practical designs stop**: it removes the redundancy behind the worst anomalies and always has a safe decomposition (§11.14). Climbing higher is something you choose on purpose when a particular problem demands it. Putting redundancy back on purpose is **denormalization** (§11.16).
 
@@ -377,7 +377,7 @@ vol_id | name  | languages
 1. **One row per value** in the same table (the key becomes `(vol_id, language)`). This reaches 1NF — but copies the other columns onto every new row.
 2. **A separate table** for the repeating fact — `volunteer(vol_id, name)` + `volunteer_language(vol_id, language)`. This is what 2NF would produce from route 1 anyway (the name depends only on `vol_id`), and it is what [§10.6](../10-data-modeling-and-er-diagrams/README.md#106-entities-and-the-five-kinds-of-attribute) predicted for a multivalued attribute.
 
-`code/03_first_normal_form.sql` repairs both kinds of violation in SQL:
+`code/03_first_normal_form.sql` repairs both kinds of violation in SQL (*unpivoting* turns several columns into rows; `CROSS JOIN LATERAL` lets the `VALUES` list read the current row's columns):
 ```sql
 -- a list in one cell -> one row per value (string_to_table: PostgreSQL 14+)
 CREATE TABLE volunteer_language AS
@@ -434,7 +434,7 @@ Also: a normalization step splits tables or rows but **never drops a column**. I
 
 ### Borderline cases
 - **Structured text** (a whole address in one column) — a 1NF problem only if your application queries the parts.
-- **JSON / arrays** — strictly non-atomic. PostgreSQL has first-class `jsonb` and arrays with indexes ([Chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md)); storing a document *on purpose* (sparse attributes, payloads you never filter on) is a legitimate design. The question is: do you search, join or constrain on what is inside? If yes, it belongs in rows.
+- **JSON / arrays** — JSON is a text format for nested data (`{"key": [1, 2]}`); both are strictly non-atomic. PostgreSQL has first-class `jsonb` (JSON stored in a parsed binary form) and arrays with indexes ([Chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md)); storing a document *on purpose* (sparse attributes — ones most rows don't have — or payloads you never filter on) is a legitimate design. The question is: do you search, join or constrain on what is inside? If yes, it belongs in rows.
 
 ### Common mistakes
 - Comma-separated ids in a column ("tag_ids = '3,7,9'") — the *SQL Antipatterns* book calls this **Jaywalking**; you cannot join on it or enforce FKs.
@@ -608,7 +608,7 @@ Output:
 ```
 
 ### Dependency preservation — strongly desirable
-Every original FD should still be checkable **inside a single table** (so a `PRIMARY KEY`/`UNIQUE` constraint enforces it), or be implied by FDs that are. If not, enforcing the rule needs a join — a trigger or application code. §11.11 shows a split that is lossless but not dependency-preserving.
+Every original FD should still be checkable **inside a single table** (so a `PRIMARY KEY`/`UNIQUE` constraint enforces it), or be implied by FDs that are. If not, enforcing the rule needs a join — a trigger (code the database runs automatically on every change) or application code. §11.11 shows a split that is lossless but not dependency-preserving.
 
 ### The running example decomposed in PostgreSQL (`code/02_decompose_and_fix.sql`)
 ```sql
@@ -721,7 +721,7 @@ Output:
 ```
 Ali now has two cardiologists, which the business forbids. **General result:** you can always split a table into **3NF** pieces that are both lossless and dependency-preserving; for **BCNF** that is not guaranteed. This is why practitioners usually stop at 3NF and move to BCNF only when the redundancy actually hurts.
 
-**A practical middle way** (also in `05_bcnf.sql`): keep the 3NF table (so `{patient, specialty}` stays its PK) and add a master `doctor_specialty` table plus a **composite foreign key** `(doctor, specialty) → doctor_specialty(doctor, specialty) ON UPDATE CASCADE`. The copies can no longer disagree, and one update propagates:
+**A practical middle way** (also in `05_bcnf.sql`): keep the 3NF table (so `{patient, specialty}` stays its PK) and add a master (single authoritative) `doctor_specialty` table plus a **composite foreign key** `(doctor, specialty) → doctor_specialty(doctor, specialty) ON UPDATE CASCADE`. The copies can no longer disagree, and one update propagates:
 ```
 NOTICE:  refused: insert or update on table "visit_3nf" violates foreign key constraint "visit_3nf_doctor_specialty_fkey"
  patient |    specialty    | doctor  
@@ -1009,16 +1009,18 @@ Q4 R(A,B,C)  A->B, B->A, A->C    keys: {A}, {B}           highest NF: BCNF
 | Writes | touch one row; cannot disagree | touch several places; can drift if not maintained |
 | Reads | may need joins / aggregation | fewer joins; precomputed answers |
 | Storage | smaller | larger |
-| Best for | OLTP (many small writes) | read-heavy, reporting, analytics (OLAP) |
+| Best for | OLTP (online transaction processing: many small writes) | read-heavy, reporting, analytics (OLAP, online analytical processing) |
 
 ### Common techniques
 | Technique | Example | Keeping it correct |
 |---|---|---|
 | **Stored summary / counter column** | `orders.item_count`, a post's `like_count` | trigger in the same transaction, or batch recompute |
-| **Materialized view** | nightly sales-by-product report | `REFRESH MATERIALIZED VIEW` (stale in between; `CONCURRENTLY` needs a unique index) |
+| **Materialized view** (a query result saved as a table) | nightly sales-by-product report | `REFRESH MATERIALIZED VIEW` (stale — out of date — in between; `CONCURRENTLY`, which refreshes without blocking readers, needs a unique index) |
 | **Duplicated column to avoid a join** | copying `customer_name` onto `orders` for a list page | trigger or application code on every change — the riskiest option |
 | **Pre-joined / wide tables** | star-schema dimensions in a data warehouse (Kimball-style dimensional modeling) | rebuilt by ETL, not updated in place |
 | **Caches outside the DB** | Redis copy of a product page | expiry / invalidation (see the system-design notes) |
+
+> **Key terms — star schema, ETL, cache:** a **star schema** is the classic data-warehouse layout: one long, narrow *fact* table of events (sales) surrounded by wide *dimension* tables describing them (product, store, date) — Ralph Kimball popularised this "dimensional modeling". **ETL** (extract, transform, load) is the batch job that copies data out of the operational database, reshapes it and loads it into the warehouse. A **cache** is a fast copy of data kept closer to the reader (Redis is a popular in-memory one); *expiry* and *invalidation* are how stale copies get thrown away. More in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
 
 ### Running it (`code/07_denormalization.sql`)
 ```sql
@@ -1066,7 +1068,7 @@ Output:
  Mug    |    13 |   84.50
 (2 rows)
 ```
-Two lessons: the trigger keeps the counter exact (but adds a write to every item change and a row lock on the order); the materialized view is cheap to read but **stale until refreshed**.
+Two lessons: the trigger keeps the counter exact (but adds a write to every item change and a row lock on the order — other transactions changing that order must wait); the materialized view is cheap to read but **stale until refreshed**.
 
 **Not everything that looks redundant is.** `price_paid` looks like a copy of `list_price`, but the FD is `{order_id, product_id} -> price_paid` — the price *on that day* — a different fact from today's list price. In the running example we assumed `product_id -> list_price`; in a real shop you would store both. Always ask: *is this the same fact, or a snapshot of it?*
 
@@ -1081,9 +1083,9 @@ Two lessons: the trigger keeps the counter exact (but adds a write to every item
 - "Because joins are slow" in general — joins on indexed keys are what relational databases are built for ([Chapter 12](../12-indexes-storage-and-query-performance/README.md)).
 
 ### Real-world examples
-- **Data warehouses** (Snowflake, BigQuery, Redshift) routinely use denormalized star schemas: facts in a narrow table, wide dimension tables — because data is loaded in batches and read by many analytical queries.
+- **Data warehouses** (Snowflake, BigQuery, Redshift — cloud warehouse services) routinely use denormalized star schemas: facts in a narrow table, wide dimension tables — because data is loaded in batches and read by many analytical queries.
 - **Social feeds** keep counters (likes, followers) as stored columns rather than `COUNT(*)` on every page view.
-- Wide-column and document stores ([Chapter 16](../16-beyond-relational/README.md)) are designed around query-shaped, denormalized data.
+- Wide-column and document stores (non-relational "NoSQL" databases; [Chapter 16](../16-beyond-relational/README.md)) are designed around query-shaped, denormalized data.
 
 ### In the interview
 **30-second answer:** "I normalize to 3NF by default so every fact has one home. I denormalize only for a measured read bottleneck that indexing didn't solve — typically a counter column maintained by a trigger, a materialized view for reports, or a star schema for analytics — and I make sure the redundant copy has a single, enforced maintenance path."

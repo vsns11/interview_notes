@@ -1,6 +1,6 @@
 # Chapter 14 — Advanced SQL and Using SQL from Code
 
-So far every query in this book has been typed into `psql` by a person. Real systems are different: the database runs **code of its own** (functions, procedures, triggers), stores **semi-structured data** (JSON, arrays, searchable text), protects data **per user and per row**, and — most of all — is driven by **application programs** written in Python, Java and other languages. This chapter covers those "last mile" skills.
+So far every query in this book has been typed into `psql` (PostgreSQL's command-line client) by a person. Real systems are different: the database runs **code of its own** (functions, procedures, triggers), stores **semi-structured data** — data whose shape varies from row to row (JSON, a text format for nested data; arrays; searchable text) — protects data **per user and per row**, and — most of all — is driven by **application programs** written in Python, Java and other languages. This chapter covers those "last mile" skills.
 
 **What you'll learn**
 
@@ -36,20 +36,20 @@ PostgreSQL lets you write the body in several **procedural languages**:
 
 | Language | What the body looks like | Use it for |
 |---|---|---|
-| `sql` | One or more plain SQL statements; the last one's result is returned | Short calculations and reusable queries; the planner can often *inline* them into the calling query |
+| `sql` | One or more plain SQL statements; the last one's result is returned | Short calculations and reusable queries; the planner (the part of the database that decides how to run a query) can often *inline* them — paste their body into the calling query |
 | `plpgsql` | PL/pgSQL: SQL plus variables, `IF`, loops, error handling | Logic with branches, loops, or several steps |
-| `plpython3u`, `plperl`, … | Other languages (extensions, often "untrusted" = superuser only) | Rare; needs the extension installed |
+| `plpython3u`, `plperl`, … | Other languages (extensions, often "untrusted" = superuser — an all-powerful admin role — only) | Rare; needs the extension installed |
 
 ### Why it matters
 
 - **One definition of a rule.** "Line total = quantity × price × (1 − discount)" written once, used by every report and every application.
-- **Fewer round trips.** A multi-step operation runs next to the data instead of sending many statements over the network.
+- **Fewer round trips** (a request to the server and its reply). A multi-step operation runs next to the data instead of sending many statements over the network.
 - **Reusable query building blocks.** A function that returns a table can be joined like a table.
 
 ### How it works
 
-1. `CREATE FUNCTION name(args) RETURNS type LANGUAGE … AS $$ body $$` stores the function in the catalog (`pg_proc`).
-2. `$$ … $$` is **dollar quoting**: a way to write a string literal without escaping the single quotes inside the body.
+1. `CREATE FUNCTION name(args) RETURNS type LANGUAGE … AS $$ body $$` stores the function in the catalog (PostgreSQL's internal tables describing every object; here `pg_proc`).
+2. `$$ … $$` is **dollar quoting**: a way to write a string literal without escaping (marking as "literal, not special") the single quotes inside the body.
 3. Each argument can have a `DEFAULT`; callers may pass arguments by position or by name (`p_limit => 1`).
 4. A **volatility** label tells the planner how the function behaves — it affects optimisation and whether the function may be used in an index:
 
@@ -112,9 +112,9 @@ Output:
            5 | Ethan      | silver
 ```
 
-What each part does: `DECLARE` lists local variables; `SELECT … INTO v_spent` stores a query result in a variable; `RAISE EXCEPTION … USING ERRCODE` aborts with a chosen SQLSTATE code; `%` in the message is replaced by the next argument. `RAISE NOTICE` (used below) only prints a message.
+What each part does: `DECLARE` lists local variables; `SELECT … INTO v_spent` stores a query result in a variable; `RAISE EXCEPTION … USING ERRCODE` aborts with a chosen SQLSTATE code (the standard five-character error code); `%` in the message is replaced by the next argument. `RAISE NOTICE` (used below) only prints a message.
 
-**Catching errors.** A `BEGIN … EXCEPTION WHEN no_data_found THEN … END` block catches errors raised inside it (`SQLERRM` holds the message): the file's `safe_tier(999)` returns `unknown (customer 999 does not exist)` instead of failing. An `EXCEPTION` block silently creates a **savepoint** on entry, so it costs a little — don't wrap every statement in one.
+**Catching errors.** A `BEGIN … EXCEPTION WHEN no_data_found THEN … END` block catches errors raised inside it (`SQLERRM` holds the message): the file's `safe_tier(999)` returns `unknown (customer 999 does not exist)` instead of failing. An `EXCEPTION` block silently creates a **savepoint** (a marker inside a transaction that you can roll back to) on entry, so it costs a little — don't wrap every statement in one.
 
 **Set-returning functions.** `RETURNS TABLE (...)` makes a function usable in `FROM`, like a parameterised view:
 
@@ -144,14 +144,14 @@ In PL/pgSQL, a set-returning function can instead loop (`FOR r IN SELECT … LOO
 
 | | PostgreSQL | MySQL | SQL Server | SQLite |
 |---|---|---|---|---|
-| Stored functions | `CREATE FUNCTION`, many languages | `CREATE FUNCTION` (SQL/PSM style) | `CREATE FUNCTION` (T-SQL), scalar and table-valued | None in SQL; register functions from the host language (e.g. Python's `conn.create_function`) |
+| Stored functions | `CREATE FUNCTION`, many languages | `CREATE FUNCTION` (SQL/PSM style) | `CREATE FUNCTION` (T-SQL, SQL Server's dialect), scalar and table-valued | None in SQL; register functions from the host language (the language of the program using SQLite) (e.g. Python's `conn.create_function`) |
 | Replace | `CREATE OR REPLACE FUNCTION` | `DROP` then `CREATE` | `CREATE OR ALTER` | — |
 | Error raising | `RAISE EXCEPTION` | `SIGNAL SQLSTATE` | `THROW` | `RAISE()` only inside triggers |
 
 ### Common mistakes
 
 - **Wrong volatility**: a function that reads tables marked `IMMUTABLE` can return stale results; a pure calculation left `VOLATILE` blocks optimisations.
-- **Hiding row-by-row loops in functions.** Calling a query-running function once per row of a million-row table runs a million queries; a set-based `JOIN` is usually far faster.
+- **Hiding row-by-row loops in functions.** Calling a query-running function once per row of a million-row table runs a million queries; a set-based (one statement over all rows at once) `JOIN` is usually far faster.
 - **Name clashes** between PL/pgSQL variables and column names (`WHERE customer_id = customer_id`). Prefix parameters (`p_`) and variables (`v_`).
 
 ### In the interview
@@ -188,7 +188,7 @@ A **stored procedure** is like a function that *does* something rather than *com
 
 ### Why it matters
 
-Long batch jobs (archive a year of orders, back-fill a column) should commit in **chunks**: a single giant transaction holds locks for a long time, keeps old row versions alive (blocking vacuum — see [Chapter 13](../13-transactions-and-concurrency/README.md)), and loses all its work if it fails at the end.
+Long batch jobs (archive a year of orders, back-fill a column) should commit in **chunks**: a single giant transaction holds locks for a long time, keeps old row versions alive (blocking vacuum, PostgreSQL's clean-up of dead row versions — see [Chapter 13](../13-transactions-and-concurrency/README.md)), and loses all its work if it fails at the end.
 
 ### Example — archiving in committed batches
 
@@ -252,26 +252,26 @@ NOTICE:  batch of 2 committed
 NOTICE:  caught: invalid transaction termination
 ```
 
-The first `NOTICE` prints before the `COMMIT` fails — the message is misleading, which is why the file rolls everything back. Many drivers open a transaction automatically (see 14.10), so a procedure that commits must be called in **auto-commit** mode.
+The first `NOTICE` prints before the `COMMIT` fails — the message is misleading, which is why the file rolls everything back. Many drivers (the libraries programs use to talk to a database) open a transaction automatically (see 14.10), so a procedure that commits must be called in **auto-commit** mode (each statement committed on its own).
 
 ### Dialect differences
 
 | | Syntax | Transaction control inside |
 |---|---|---|
 | PostgreSQL 11+ | `CREATE PROCEDURE … ; CALL p()` | Yes, if not called inside a transaction block |
-| MySQL | `CREATE PROCEDURE` (the `mysql` client needs `DELIMITER //` to change the statement terminator); `CALL p()` | Yes |
+| MySQL | `CREATE PROCEDURE` (the `mysql` client needs `DELIMITER //` to change the statement terminator — the character that ends a statement, normally `;`); `CALL p()` | Yes |
 | SQL Server | `CREATE PROCEDURE`; `EXEC p` | Yes; can also return result sets directly |
 | SQLite | No stored procedures | — |
 
 ### When not to use it
 
-Stored procedures tie logic to one database product, are harder to unit-test, version and deploy than application code, and scale only as far as the database server. A common, balanced rule: **integrity rules and data-heavy batch work in the database; business workflows in the application.**
+Stored procedures tie logic to one database product, are harder to unit-test (check with small automated tests), version and deploy (release to servers) than application code, and scale only as far as the database server. A common, balanced rule: **integrity rules and data-heavy batch work in the database; business workflows in the application.**
 
 ### Self-check
 
 1. How do you get a value back from a procedure? → An `INOUT` (or, from PG 14, `OUT`) parameter.
 2. Why does `COMMIT` in a procedure sometimes fail? → The caller is already inside a transaction block.
-3. Why commit in batches? → Shorter locks, less bloat, and completed work survives a later failure.
+3. Why commit in batches? → Shorter locks, less bloat (wasted space from dead row versions), and completed work survives a later failure.
 
 ### TL;DR
 
@@ -307,7 +307,7 @@ flowchart LR
 
 ### Why it matters
 
-Triggers enforce behaviour **no matter which application, script or person** changes the data: an `updated_at` stamp, an audit trail, a denormalised counter kept in sync, a rule a `CHECK` constraint cannot express because it needs another table.
+Triggers enforce behaviour **no matter which application, script or person** changes the data: an `updated_at` stamp, an audit trail (a record of who changed what, when), a denormalised counter (a stored copy of a count, kept for fast reads) kept in sync, a rule a `CHECK` constraint cannot express because it needs another table.
 
 ### Example 1 — `updated_at`
 
@@ -454,7 +454,7 @@ UPDATE products SET unit_price = unit_price * 1.10 WHERE category = 'Furniture';
 
 ### When not to use it
 
-- For **business workflows** (send an email, call a payment API) — triggers run inside the transaction and must be fast; put a row in an *outbox* table instead and let a worker act on it.
+- For **business workflows** (send an email, call a payment API — the interface another service exposes to programs) — triggers run inside the transaction and must be fast; put a row in an *outbox* table (a table of pending messages) instead and let a worker (a background process) act on it.
 - When a **constraint** can do the job (`CHECK`, `FOREIGN KEY`, `UNIQUE`, generated column) — constraints are declarative, faster and visible in the schema.
 - When the logic surprises people: "invisible" side effects are the most common complaint about triggers.
 
@@ -466,11 +466,11 @@ UPDATE products SET unit_price = unit_price * 1.10 WHERE category = 'Furniture';
 
 ### Real-world examples
 
-Compliance audit trails (who changed a salary, when), `updated_at` columns used by sync jobs, and the **transactional outbox** pattern for reliable event publishing.
+Compliance audit trails (who changed a salary, when), `updated_at` columns used by sync jobs, and the **transactional outbox** pattern for reliable event publishing (telling other systems that something changed).
 
 ### In the interview
 
-**30-second answer:** "A trigger runs a function automatically on INSERT/UPDATE/DELETE, before or after, per row or per statement. I use them for cross-cutting data rules — audit logs, timestamps, integrity checks a constraint can't express — and avoid them for business workflows because they're invisible and slow down writes."
+**30-second answer:** "A trigger runs a function automatically on INSERT/UPDATE/DELETE, before or after, per row or per statement. I use them for cross-cutting (applying everywhere, regardless of which code writes) data rules — audit logs, timestamps, integrity checks a constraint can't express — and avoid them for business workflows because they're invisible and slow down writes."
 
 - *BEFORE vs AFTER?* → BEFORE can modify or reject the row; AFTER sees the final row (after constraints) and is for reactions like auditing.
 - *Does a trigger's work roll back with the statement?* → Yes, it runs in the same transaction.
@@ -499,7 +499,7 @@ Triggers = automatic functions on data events. Great for audit logs, `updated_at
 | Storage | The exact text you sent | Parsed into a binary tree |
 | Duplicate keys, whitespace, key order | Kept as written | Last duplicate wins; whitespace removed; keys reordered |
 | Speed | Fast to store, re-parsed on every read | Slightly slower to store, fast to query |
-| Operators & indexing | Few | Containment `@>`, key-exists `?`, GIN indexes, SQL/JSON path |
+| Operators & indexing | Few | Containment `@>`, key-exists `?`, GIN (inverted) indexes, SQL/JSON path |
 
 Use **`jsonb`** unless you must keep the original text byte-for-byte.
 
@@ -515,7 +515,7 @@ SELECT '{"b":1, "a":2, "a":3}'::json AS as_json, '{"b":1, "a":2, "a":3}'::jsonb 
 
 ### Why it matters
 
-Some data really is **semi-structured**: product specifications differ by category (a laptop has RAM, a desk has a height range), webhook payloads change shape, user preferences grow new keys. A `jsonb` column stores that without a new column (or a new table) for every attribute — while the stable, important fields stay in normal, typed, constrained columns. For whole-document databases see [Chapter 16](../16-beyond-relational/README.md).
+Some data really is **semi-structured**: product specifications differ by category (a laptop has RAM, a desk has a height range), webhook payloads (data another service pushes to your app over HTTP) change shape, user preferences grow new keys. A `jsonb` column stores that without a new column (or a new table) for every attribute — while the stable, important fields stay in normal, typed, constrained columns. For whole-document databases see [Chapter 16](../16-beyond-relational/README.md).
 
 ### How it works — operators
 
@@ -619,7 +619,7 @@ The GIN index is *not* used for `specs ->> 'brand' = 'Nimbus'` — write the fil
 
 ### When not to use it
 
-When fields are known, always present, filtered or joined on, or need constraints (`NOT NULL`, foreign keys) — make them **real columns**. Stuffing everything into one JSON blob is the "EAV / schemaless" antipattern: no types, no constraints, poor statistics, awkward queries.
+When fields are known, always present, filtered or joined on, or need constraints (`NOT NULL`, foreign keys) — make them **real columns**. Stuffing everything into one JSON blob is the "EAV / schemaless" antipattern (EAV = entity–attribute–value, storing every attribute as a generic key/value pair): no types, no constraints, poor statistics, awkward queries.
 
 ### Common mistakes
 
@@ -703,7 +703,7 @@ GROUP  BY tag HAVING count(*) > 1 ORDER BY products DESC, tag;
  wireless |        2 | {"Noise-Cancelling Headphones","Wireless Mouse"}
 ```
 
-**Arrays as a parameter.** Application code often needs "rows whose id is in this list". Instead of building `IN (3, 5, 7)` as a string (injection risk, a new statement per list length), pass **one array parameter**: `WHERE product_id = ANY ($1)`. The file shows it with `PREPARE by_ids(int[])` / `EXECUTE by_ids('{3,5,7}')`, which returns USB-C Hub, Standing Desk and Noise-Cancelling Headphones. A GIN index on `tags` serves `@>`, `&&` and `<@` (the plan in the file shows `Bitmap Index Scan on products_tags_gin`).
+**Arrays as a parameter.** Application code often needs "rows whose id is in this list". Instead of building `IN (3, 5, 7)` as a string (injection risk — see 14.9 — a new statement per list length), pass **one array parameter**: `WHERE product_id = ANY ($1)`. The file shows it with `PREPARE by_ids(int[])` / `EXECUTE by_ids('{3,5,7}')` (a server-side prepared statement: parsed once, run with different values), which returns USB-C Hub, Standing Desk and Noise-Cancelling Headphones. A GIN index on `tags` serves `@>`, `&&` and `<@` (the plan in the file shows `Bitmap Index Scan on products_tags_gin`).
 
 ### When not to use it
 
@@ -740,7 +740,7 @@ Key terms:
 
 ### Why it matters
 
-`LIKE '%word%'` has three problems: no stemming (searching "returning" misses "returned"), no ranking, and a leading `%` cannot use a B-tree index, so every row is scanned. FTS solves all three and is often enough to postpone running a separate search engine such as Elasticsearch/OpenSearch.
+`LIKE '%word%'` has three problems: no stemming (searching "returning" misses "returned"), no ranking, and a leading `%` cannot use a B-tree index, so every row is scanned. FTS solves all three and is often enough to postpone running a separate search engine such as Elasticsearch/OpenSearch (dedicated search servers).
 
 ### How it works
 
@@ -773,7 +773,7 @@ SELECT to_tsquery('english', 'shipping & chair')                          AS q1,
 
 ### Example — a help-centre search
 
-The search vector is a **generated column** (PostgreSQL 12+) so it can never go stale; `setweight` marks title words `A` (most important) and body words `B`, which `ts_rank` rewards:
+The search vector is a **generated column** (computed automatically from other columns on every write; PostgreSQL 12+) so it can never go stale; `setweight` marks title words `A` (most important) and body words `B`, which `ts_rank` rewards:
 
 ```sql
 CREATE TABLE help_articles (
@@ -836,12 +836,12 @@ With `CREATE INDEX … USING gin (search)` the plan becomes `Bitmap Index Scan o
 
 | | PostgreSQL FTS | Dedicated engine (Elasticsearch / OpenSearch / Solr) |
 |---|---|---|
-| Setup | None — same database, same transaction | Separate cluster, sync pipeline |
-| Freshness | Immediately consistent | Near-real-time, eventually consistent |
-| Features | Stemming, ranking, phrases, prefixes, weights | Fuzzy/typo tolerance, facets, synonyms at scale, relevance tuning, distributed scoring |
+| Setup | None — same database, same transaction | Separate cluster (group of servers), sync pipeline (a job copying data across) |
+| Freshness | Immediately consistent | Near-real-time, eventually consistent (copies catch up after a short delay) |
+| Features | Stemming, ranking, phrases, prefixes, weights | Fuzzy/typo tolerance, facets (match counts per category, shown as filters), synonyms at scale, relevance tuning, distributed scoring |
 | Best for | Up to millions of documents, app-level search | Very large corpora, search-centric products |
 
-Typo tolerance in Postgres needs the `pg_trgm` extension (trigram similarity), which is not installed on the book's server. Other databases: MySQL `FULLTEXT` indexes with `MATCH … AGAINST`, SQL Server full-text catalogs with `CONTAINS` / `FREETEXT`, SQLite's `FTS5` virtual tables.
+Typo tolerance in Postgres needs the `pg_trgm` extension (trigram similarity — comparing 3-character chunks of text), which is not installed on the book's server. Other databases: MySQL `FULLTEXT` indexes with `MATCH … AGAINST`, SQL Server full-text catalogs with `CONTAINS` / `FREETEXT`, SQLite's `FTS5` virtual tables.
 
 ### Common mistakes
 
@@ -899,7 +899,7 @@ GROUP  BY category ORDER BY category;
 
 ### `crosstab` (tablefunc extension)
 
-PostgreSQL's `tablefunc` extension provides `crosstab(source_sql, category_sql)`, which pivots a three-column query (row id, category, value). It is **not installed on the book's server** (Homebrew's build here ships without it), so this is not run:
+PostgreSQL's `tablefunc` extension provides `crosstab(source_sql, category_sql)`, which pivots a three-column query (row id, category, value). It is **not installed on the book's server** (Homebrew's — a macOS package manager — build here ships without it), so this is not run:
 
 ```sql
 -- (PostgreSQL with contrib — not run)
@@ -979,7 +979,7 @@ Pivot with conditional aggregates, unpivot with `LATERAL (VALUES …)`; dynamic 
 
 ### Why it matters
 
-The **principle of least privilege**: every account gets only what it needs. If the reporting tool's password leaks, the attacker can read reports — not delete orders. If the web app has an injection bug (14.9), a read-only role limits the damage. RLS pushes tenant isolation ("customer A never sees customer B's data") into the database, so one forgotten `WHERE tenant_id = …` in the app can't leak data.
+The **principle of least privilege**: every account gets only what it needs. If the reporting tool's password leaks, the attacker can read reports — not delete orders. If the web app has an injection bug (14.9), a read-only role limits the damage. RLS pushes tenant isolation (a *tenant* is one customer organisation sharing the app: "customer A never sees customer B's data") into the database, so one forgotten `WHERE tenant_id = …` in the app can't leak data.
 
 ### Example — groups, grants, column privileges
 
@@ -995,7 +995,7 @@ GRANT SELECT, INSERT, UPDATE ON orders TO ch14_app;
 GRANT SELECT (customer_id, first_name, city, country) ON customers TO ch14_reporting;  -- column-level
 ```
 
-Querying `information_schema.role_table_grants` confirms: `ch14_app` has INSERT, SELECT, UPDATE on `orders`; `ch14_reporting` has SELECT on `orders` and `order_items`. (Column-level grants appear in `information_schema.column_privileges`, not in this table-level view.)
+Querying `information_schema.role_table_grants` (`information_schema` is the SQL-standard set of catalog views) confirms: `ch14_app` has INSERT, SELECT, UPDATE on `orders`; `ch14_reporting` has SELECT on `orders` and `order_items`. (Column-level grants appear in `information_schema.column_privileges`, not in this table-level view.)
 
 `SET ROLE` lets a superuser act as another role for testing — the same checks apply as if that role had logged in:
 
@@ -1009,7 +1009,7 @@ RESET ROLE;
 REVOKE SELECT ON order_items FROM ch14_reporting;   -- analyst now denied on order_items too
 ```
 
-(The failing statements are wrapped in `DO` blocks in the file so the script continues.) The analyst had no direct grants: privileges were **inherited** from the group, so revoking from the group affected every member at once — grant to groups, not to individuals.
+(The failing statements are wrapped in `DO` blocks — one-off anonymous PL/pgSQL code — in the file so the script continues; `PERFORM` is PL/pgSQL's way to run a query and discard its result.) The analyst had no direct grants: privileges were **inherited** from the group, so revoking from the group affected every member at once — grant to groups, not to individuals.
 
 ### Example — row-level security: each sales rep sees only their orders
 
@@ -1062,7 +1062,7 @@ NOTICE:  priya: new row violates row-level security policy for table "orders"
 
 ### Multi-tenant isolation with a session setting
 
-SaaS apps usually connect as **one** application role and tell the database which tenant the current request belongs to:
+SaaS (software as a service: one hosted app shared by many customer organisations) apps usually connect as **one** application role and tell the database which tenant the current request belongs to:
 
 ```sql
 ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
@@ -1075,14 +1075,14 @@ SET app.tenant = 'globex';  SELECT * FROM notes;          -- only globex's note
 RESET app.tenant;           SELECT count(*) FROM notes;   -- 0: no tenant, no rows
 ```
 
-The app runs `SET LOCAL app.tenant = …` at the start of each transaction (`SET LOCAL` resets at commit — important with connection pools, 14.12, where the next request reuses the connection).
+The app runs `SET LOCAL app.tenant = …` at the start of each transaction (`SET LOCAL` resets at commit — important with connection pools (sets of reusable open connections), 14.12, where the next request reuses the connection).
 
 ### Common mistakes
 
 - **Testing RLS as a superuser or the table owner** — both bypass it, so "it works" proves nothing. Test with `SET ROLE`, and use `ALTER TABLE … FORCE ROW LEVEL SECURITY` if the owner must be filtered too.
 - Letting the application connect as a superuser or the table owner "because it's easier".
 - Forgetting that new tables aren't covered by old grants — use `ALTER DEFAULT PRIVILEGES … GRANT …` for future tables.
-- Leaving the `PUBLIC` pseudo-role with rights you didn't intend (in PG ≤ 14, everyone can `CREATE` in the `public` schema; PG 15 removed that default).
+- Leaving the `PUBLIC` pseudo-role (an implicit role every user belongs to) with rights you didn't intend (in PG ≤ 14, everyone can `CREATE` in the `public` schema; PG 15 removed that default).
 
 ### Dialect differences
 
@@ -1090,7 +1090,7 @@ The app runs `SET LOCAL app.tenant = …` at the start of each transaction (`SET
 |---|---|---|
 | PostgreSQL | Roles (users = roles with `LOGIN`) | `CREATE POLICY` (9.5+) |
 | MySQL 8.0 | Users + roles | None built in — use views or app logic |
-| SQL Server 2016+ | Logins, users, roles | Security policies with inline predicate functions |
+| SQL Server 2016+ | Logins, users, roles | Security policies with inline predicate functions (functions returning a true/false filter) |
 | Oracle | Users, roles | Virtual Private Database (VPD) |
 | SQLite | No users — file-system permissions only | None |
 
@@ -1116,7 +1116,7 @@ Roles + `GRANT`/`REVOKE` for what each account may do; RLS policies for which ro
 
 ### What it is
 
-**SQL injection** happens when user input is pasted into the *text* of a SQL statement, so specially crafted input changes the statement's meaning. It has been in the OWASP Top 10 list of web risks since the list began, and has caused many real breaches (for example the 2015 TalkTalk breach in the UK and the 2023 MOVEit Transfer attacks).
+**SQL injection** happens when user input is pasted into the *text* of a SQL statement, so specially crafted input changes the statement's meaning. It has been in the OWASP (Open Worldwide Application Security Project) Top 10 list of web risks since the list began, and has caused many real breaches (for example the 2015 TalkTalk breach in the UK and the 2023 MOVEit Transfer attacks).
 
 Suppose the code builds:
 
@@ -1170,7 +1170,7 @@ $$;
 SELECT count(*) AS rows_leaked FROM find_customers_good($$nobody' OR '1'='1$$);   -- 0
 ```
 
-**Identifiers can't be parameters.** Placeholders stand for *values*, never for table or column names. When a name must be dynamic, check it against an **allow-list** and quote it with `format('%I')` (identifier) — use `%L` for a literal:
+**Identifiers can't be parameters.** Placeholders stand for *values*, never for table or column names. When a name must be dynamic, check it against an **allow-list** (a fixed list of permitted names) and quote it with `format('%I')` (identifier) — use `%L` for a literal:
 
 ```sql
 SELECT format('SELECT * FROM %I WHERE name = %L', 'Order Items', $$O'Brien$$);
@@ -1188,14 +1188,14 @@ The client-side versions of this demo (Python f-string vs `%s`, Java string conc
 | Query | Parameters for every value; allow-list + `%I`/`quote_ident` for identifiers |
 | Account | Least-privilege database role (14.8) — injection can't drop tables the role can't touch |
 | Data | RLS for tenant isolation |
-| Code | Linters/static analysis that flag string-built SQL; code review |
+| Code | Linters/static analysis (tools that inspect code without running it) that flag string-built SQL; code review |
 | Errors | Don't show raw database errors to users (they help attackers map the schema) |
 
-**Escaping by hand** (doubling quotes yourself) is fragile — encodings and edge cases have broken it repeatedly. Use parameters.
+**Escaping by hand** (doubling quotes yourself) is fragile — encodings (the byte representation of characters) and edge cases have broken it repeatedly. Use parameters.
 
 ### In the interview
 
-**30-second answer:** "Injection is user input interpreted as SQL because it was concatenated into the query. The fix is parameterized queries — values travel separately and can't change the parse tree. For dynamic identifiers use an allow-list and identifier quoting. Add least privilege so a bug has limited blast radius. ORMs parameterize by default, but raw-SQL escape hatches in ORMs are still injectable."
+**30-second answer:** "Injection is user input interpreted as SQL because it was concatenated into the query. The fix is parameterized queries — values travel separately and can't change the parse tree (the server's structured reading of the statement). For dynamic identifiers use an allow-list and identifier quoting. Add least privilege so a bug has limited blast radius (the amount of damage it can do). ORMs (object-relational mappers — libraries that generate SQL from code objects, 14.13) parameterize by default, but raw-SQL escape hatches (helpers for writing your own SQL) in ORMs are still injectable."
 
 - *Do prepared statements help performance too?* → Yes — the server can reuse the parsed/planned statement across executions.
 - *Is `LIKE ?` safe?* → From injection yes, but `%` and `_` in the input still act as wildcards; escape them if they should be literal.
@@ -1210,14 +1210,14 @@ Never build SQL from input strings; bind values as parameters, allow-list identi
 
 ### Drivers and the DB-API
 
-Python talks to databases through **drivers** that follow the **DB-API 2.0** standard (PEP 249): `connect()` → a **connection** (a session with the server) → **cursors** (objects that run statements and hold results) → `execute()`, `fetchone()`, `fetchall()`, `commit()`, `rollback()`. Two drivers are shown here:
+Python talks to databases through **drivers** that follow the **DB-API 2.0** standard (PEP 249 — a PEP is a Python Enhancement Proposal, an official design document): `connect()` → a **connection** (a session with the server) → **cursors** (objects that run statements and hold results) → `execute()`, `fetchone()`, `fetchall()`, `commit()`, `rollback()`. Two drivers are shown here:
 
 | | `psycopg` (version 3) | `sqlite3` |
 |---|---|---|
-| Database | PostgreSQL server | SQLite file or in-memory DB, in-process |
-| Install | `pip install "psycopg[binary]"` (already in `.venv-books`) | Built into Python |
+| Database | PostgreSQL server | SQLite file or in-memory DB, in-process (runs inside your program, no separate server) |
+| Install | `pip install "psycopg[binary]"` (pip is Python's package installer; already in `.venv-books`, the book's virtual environment) | Built into Python |
 | Placeholder | `%s` or `%(name)s` (*never* Python `%` formatting) | `?` or `:name` |
-| Transactions | Implicit `BEGIN` unless `autocommit=True`; `with conn.transaction():` blocks | Implicit transaction before DML; `with conn:` commits/rolls back |
+| Transactions | Implicit `BEGIN` unless `autocommit=True`; `with conn.transaction():` blocks | Implicit transaction before DML (data-changing statements: `INSERT`, `UPDATE`, `DELETE`); `with conn:` commits/rolls back |
 
 See also the Python book's standard-library tour for `sqlite3` basics ([Python ch. 14](../../../python/chapters/14-standard-library-tour/README.md)).
 
@@ -1303,9 +1303,9 @@ Notes on what the output shows:
 
 - **Type mapping**: SQL `NULL` → `None`, `numeric` → `Decimal` (exact, never `float` for money), `date` → `datetime.date`.
 - **Transactions**: the 10 % furniture discount was rolled back together with the failing update — the desk still costs 499.00. Exceptions are typed by SQLSTATE (`psycopg.errors.CheckViolation`, `UniqueViolation`, …).
-- **Bulk loading speed**, fastest last: one `execute` per row → `executemany` (psycopg 3 pipelines it) → `COPY`.
+- **Bulk loading speed**, fastest last: one `execute` per row → `executemany` (psycopg 3 pipelines it — sends many statements without waiting for each reply) → `COPY` (PostgreSQL's bulk-load command).
 - **Server-side cursor** (`conn.cursor(name=…)`): the result stays on the server and is fetched in chunks of `itersize`, so a 10-million-row export doesn't need 10 million rows in memory.
-- **Default transaction trap**: without `autocommit=True`, psycopg sends `BEGIN` before your first statement and nothing is saved until `conn.commit()` (or leaving `with psycopg.connect(...)` normally). A forgotten commit, or a connection left "idle in transaction", is a classic bug.
+- **Default transaction trap**: without `autocommit=True`, psycopg sends `BEGIN` before your first statement and nothing is saved until `conn.commit()` (or leaving `with psycopg.connect(...)` normally). A forgotten commit, or a connection left "idle in transaction" (connected, with a transaction open, doing nothing), is a classic bug.
 
 ### Example — sqlite3
 
@@ -1346,7 +1346,7 @@ sqlite 3.53.4 | brands: ['Clicko', 'Nimbus']
 
 ### What it is
 
-**JDBC** (Java Database Connectivity) is Java's standard database API in `java.sql`. A vendor **driver** jar implements it; for PostgreSQL that's `org.postgresql:postgresql` (version 42.7.13 here, from Maven Central). The core types:
+**JDBC** (Java Database Connectivity) is Java's standard database API in `java.sql`. A vendor **driver** jar (a packaged Java library file) implements it; for PostgreSQL that's `org.postgresql:postgresql` (version 42.7.13 here, from Maven Central, the main public repository of Java libraries). The core types:
 
 | Type | Role |
 |---|---|
@@ -1356,9 +1356,9 @@ sqlite 3.53.4 | brands: ['Clicko', 'Nimbus']
 | `ResultSet` | A cursor over rows; `next()` + typed getters |
 | `SQLException` | Errors, with `getSQLState()` (e.g. `23514` = check violation) |
 
-Resources are closed with **try-with-resources** so connections are never leaked. For the Java language side see the Java book ([ch. 8 exceptions](../../../java/chapters/08-exceptions/README.md), [ch. 18 tooling & JDBC](../../../java/chapters/18-testing-build-and-tooling/README.md)).
+Resources are closed with **try-with-resources** (Java syntax that closes objects automatically at the end of a block) so connections are never leaked. For the Java language side see the Java book ([ch. 8 exceptions](../../../java/chapters/08-exceptions/README.md), [ch. 18 tooling & JDBC](../../../java/chapters/18-testing-build-and-tooling/README.md)).
 
-**Running it.** The jar lives in `.java-books/lib/`. Because the book's private server listens only on a Unix socket (`/tmp/.s.PGSQL.5544`), the URL adds the `junixsocket` socket factory (two more jars in the same folder); against a normal server the URL is just `jdbc:postgresql://localhost:5544/ch_14_jdbc`. The `java` launcher can compile and run a single source file in one step (source-file mode, Java 11+; the book targets Java 25):
+**Running it.** The jar lives in `.java-books/lib/`. Because the book's private server listens only on a Unix socket (`/tmp/.s.PGSQL.5544`), the URL adds the `junixsocket` socket factory (a plug-in that lets Java connect through a Unix socket — a same-machine connection without networking; two more jars in the same folder); against a normal server the URL is just `jdbc:postgresql://localhost:5544/ch_14_jdbc`. The `java` launcher can compile and run a single source file in one step (source-file mode, Java 11+; the book targets Java 25):
 
 ```bash
 java --enable-native-access=ALL-UNNAMED -cp '.java-books/lib/*' \
@@ -1446,7 +1446,7 @@ The last block used `UPDATE … RETURNING name, unit_price` with `executeQuery()
 
 ### What it is
 
-Opening a PostgreSQL connection is expensive: a network handshake, TLS, authentication, and — PostgreSQL uses a **process per connection** — forking a new server process that allocates its own memory. That costs milliseconds, while a simple indexed query takes well under one. A **connection pool** opens a few connections once and **lends** them to requests, like a library lending books instead of printing a new copy for each reader.
+Opening a PostgreSQL connection is expensive: a network handshake (the opening back-and-forth that sets up a connection), TLS (the encryption layer for network traffic; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), authentication (checking who you are), and — PostgreSQL uses a **process per connection** — forking (the operating system copying a process to create) a new server process that allocates its own memory. That costs milliseconds, while a simple indexed query takes well under one. A **connection pool** opens a few connections once and **lends** them to requests, like a library lending books instead of printing a new copy for each reader.
 
 ```mermaid
 flowchart LR
@@ -1470,20 +1470,20 @@ The last section of `psycopg_demo.py` shows the difference with a 15-line `TinyP
 
 | Where | Examples | Notes |
 |---|---|---|
-| In the application | HikariCP (Java; Spring Boot's default), `psycopg_pool`, SQLAlchemy's pool, node-postgres `Pool` | Per process; total = processes × pool size |
-| External proxy | PgBouncer, pgcat, Amazon RDS Proxy | Shares a small set of server connections among many app processes |
+| In the application | HikariCP (Java; Spring Boot's — a popular Java web framework — default), `psycopg_pool`, SQLAlchemy's pool, node-postgres `Pool` | Per process; total = processes × pool size |
+| External proxy (a separate program sitting between the apps and the database) | PgBouncer, pgcat, Amazon RDS Proxy | Shares a small set of server connections among many app processes |
 
-PgBouncer's **transaction mode** gives a server connection to a client only for the length of one transaction — very efficient, but session features (plain `SET`, session advisory locks, `LISTEN`) don't carry across transactions; use `SET LOCAL` (as in 14.8).
+PgBouncer's **transaction mode** gives a server connection to a client only for the length of one transaction — very efficient, but session features (plain `SET`, session advisory locks — application-defined locks on a number — and `LISTEN`, PostgreSQL's notification subscription) don't carry across transactions; use `SET LOCAL` (as in 14.8).
 
 ### Sizing
 
-More connections is **not** faster: past a point, processes compete for CPU cores and disk, and each costs memory (`max_connections` defaults to 100). A widely quoted starting point from the HikariCP project is roughly *(CPU cores × 2) + effective disk spindles*, then measure. Watch the pool's **wait time** — if requests queue, look for slow queries before raising the size.
+More connections is **not** faster: past a point, processes compete for CPU cores and disk, and each costs memory (`max_connections` defaults to 100). A widely quoted starting point from the HikariCP project is roughly *(CPU cores × 2) + effective disk spindles* (the number of physical disks working in parallel), then measure. Watch the pool's **wait time** — if requests queue, look for slow queries before raising the size.
 
 ### Common mistakes
 
 - Holding a connection during slow non-database work (calling an external API mid-transaction).
 - Session state leaking between borrowers (`SET` without `LOCAL`, temp tables, open transactions).
-- Every microservice replica with a pool of 50 → thousands of connections; use an external pooler.
+- Every microservice replica (one running copy of a small, separately deployed service) with a pool of 50 → thousands of connections; use an external pooler.
 
 ### Self-check
 
@@ -1502,13 +1502,13 @@ An **ORM** (Object-Relational Mapper) maps tables to classes and rows to objects
 
 | | ORM | Raw SQL / query builder |
 |---|---|---|
-| CRUD code | Very little | More boilerplate |
+| CRUD (create, read, update, delete) code | Very little | More boilerplate (repetitive setup code) |
 | Safety | Parameterized by default | Parameterized if you do it (always do) |
 | Complex queries (windows, CTEs, pivots, JSONB, FTS) | Awkward or impossible → raw-SQL escape hatch | Full power of the database |
 | Performance visibility | SQL hidden; easy to generate N+1 or huge joins | You see and tune every query |
 | Portability | Easier to switch databases | Tied to a dialect (usually fine) |
-| Learning curve | ORM concepts (sessions, lazy loading, dirty checking) *plus* SQL | SQL |
-| Schema changes | Often paired with migrations (Alembic, Flyway, Liquibase — these work without an ORM too) | Same migration tools |
+| Learning curve | ORM concepts (sessions, lazy loading, dirty checking — the ORM tracking which objects changed) *plus* SQL | SQL |
+| Schema changes | Often paired with migrations (versioned schema-change scripts: Alembic, Flyway, Liquibase — these work without an ORM too) | Same migration tools |
 
 ### The N+1 query problem
 
@@ -1529,14 +1529,14 @@ Spot it by logging SQL in development and counting queries per request. (Indexin
 ### When to use which
 
 - **ORM**: CRUD-heavy business apps, many simple entities, teams that value productivity — while still reading the SQL it generates.
-- **Raw SQL / builder**: reporting, analytics, bulk jobs, anything using window functions, CTEs, JSONB or FTS, and hot paths that need tuning.
+- **Raw SQL / builder**: reporting, analytics, bulk jobs, anything using window functions, CTEs, JSONB or FTS, and hot paths (the most frequently run code) that need tuning.
 - **Most real systems mix both**: ORM for everyday writes, hand-written SQL for the hard 10 %.
 
 ### In the interview
 
 **30-second answer:** "ORMs speed up CRUD and parameterize by default, but hide the SQL, which invites N+1 queries and inefficient joins. I use an ORM for simple entity work, drop to SQL or a query builder for reporting and performance-critical paths, log generated SQL, and fix N+1 with eager or batched loading."
 
-- *How do you detect N+1?* → Count queries per request in logs/APM; a request running the same query shape 100 times is the tell.
+- *How do you detect N+1?* → Count queries per request in logs/APM (application performance monitoring tools); a request running the same query shape 100 times is the tell.
 - *Are ORMs immune to injection?* → Their generated queries are, but raw-SQL helpers with string concatenation are not.
 
 ### Self-check

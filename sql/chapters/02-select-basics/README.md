@@ -1,6 +1,6 @@
 # Chapter 2 — SELECT Basics: Reading, Filtering, Sorting and Paging
 
-Reading data is most of what anyone does with SQL. This chapter teaches the single-table `SELECT` statement completely: choosing columns, computing new ones, filtering rows with `WHERE`, the operators you can use there, the peculiar but essential rules of `NULL`, removing duplicates with `DISTINCT`, sorting with `ORDER BY`, and returning one page of results with `LIMIT`/`OFFSET` or the standard `FETCH`. Joins, grouping and subqueries build on exactly these pieces in chapters 4–6.
+Reading data is most of what anyone does with SQL. This chapter teaches the single-table `SELECT` statement completely: choosing columns, computing new ones, filtering rows with `WHERE`, the operators you can use there, the peculiar but essential rules of `NULL`, removing duplicates with `DISTINCT`, sorting with `ORDER BY`, and returning one page of results with `LIMIT`/`OFFSET` or the standard `FETCH`. Joins (combining tables), grouping and subqueries (queries nested inside another query) build on exactly these pieces in chapters 4–6.
 
 **What you'll learn**
 
@@ -55,7 +55,7 @@ Output:
           9 | Gift Card                   | (null)      |      50.00 | f
 (9 rows)
 ```
-(`f`/`t` are how psql prints boolean false/true.)
+(`f`/`t` are how psql prints boolean false/true; a **boolean** is a true/false value.)
 
 **Chosen columns** — list them after `SELECT`, in the order you want:
 ```sql
@@ -74,7 +74,7 @@ Output (first rows):
 ```
 
 ### Expressions and column aliases
-The `SELECT` list can hold any **expression** — arithmetic, function calls, constants — not just column names. An **alias** (`AS new_name`) names the output column. Use double quotes if the alias has spaces or capitals you want to keep.
+The `SELECT` list can hold any **expression** — arithmetic, function calls (a *function* is a named built-in operation, such as `round(x, 2)`, that takes inputs and returns a value), constants — not just column names. An **alias** (`AS new_name`) names the output column. Use double quotes if the alias has spaces or capitals you want to keep.
 
 ```sql
 SELECT name,
@@ -94,7 +94,7 @@ Output:
  USB-C Hub      |      49.50 |        58.4100 | per unit |         58.4100
 (3 rows)
 ```
-The table is not changed — computed columns exist only in the result. (Rounding to 2 decimals is `round(x, 2)`, chapter 3.)
+(GST is India's 18 % goods-and-services sales tax, hence `* 1.18`.) The table is not changed — computed columns exist only in the result. (Rounding to 2 decimals is `round(x, 2)`, chapter 3.)
 
 **Table aliases** give a table a short name, which you'll need constantly once queries involve several tables. The `AS` keyword is optional for both kinds of alias, but writing it for column aliases avoids confusing bugs (see *Common mistakes*).
 ```sql
@@ -111,7 +111,7 @@ Output:
 (2 rows)
 ```
 
-**SELECT without FROM** — PostgreSQL (and MySQL, SQLite, SQL Server) let you evaluate expressions directly, which makes psql a handy calculator. Oracle required `FROM dual` until version 23ai made `FROM` optional.
+**SELECT without FROM** — PostgreSQL (and MySQL, SQLite, SQL Server) let you evaluate expressions directly, which makes psql a handy calculator. Oracle required `FROM dual` (a built-in one-row dummy table) until version 23ai made `FROM` optional. Below, `now()` returns the current date and time, and `::date` **casts** it — converts it to another type, here a plain date.
 ```sql
 SELECT 2 + 3 AS five, now()::date >= DATE '2025-01-01' AS after_2025;
 ```
@@ -124,9 +124,9 @@ Output:
 ```
 
 ### Common mistakes
-- **`SELECT *` in application code.** It returns columns you don't need (more I/O and network), and code breaks or silently changes when someone adds a column. Name the columns. `SELECT *` is fine for exploring in psql.
+- **`SELECT *` in application code.** It returns columns you don't need (more I/O — disk input/output — and network traffic), and code breaks or silently changes when someone adds a column. Name the columns. `SELECT *` is fine for exploring in psql.
 - **A missing comma turns a column into an alias.** `SELECT first_name last_name FROM employees` returns *one* column named `last_name` containing first names. Writing `AS` for every alias makes this mistake visible.
-- **Quoting aliases with single quotes.** `'total'` is a string literal; aliases use double quotes: `"Total"`.
+- **Quoting aliases with single quotes.** `'total'` is a string literal (a fixed text value typed into the query); aliases use double quotes: `"Total"`.
 
 ### Self-check
 1. *What does `SELECT *` return for a table with 5 columns?* → All 5 columns in table-definition order.
@@ -167,7 +167,7 @@ Output:
  Noise-Cancelling Headphones | Electronics |     199.95
 (3 rows)
 ```
-Comparisons work on numbers, text and dates alike. Date literals are written as strings in ISO format `'YYYY-MM-DD'`, which PostgreSQL converts to the column's type:
+Comparisons work on numbers, text and dates alike. Date literals are written as strings in ISO format `'YYYY-MM-DD'` (the international standard date layout: year, month, day), which PostgreSQL converts to the column's type:
 ```sql
 SELECT first_name, hire_date FROM employees WHERE hire_date >= '2023-01-01' ORDER BY hire_date;
 ```
@@ -247,7 +247,7 @@ In PostgreSQL, text comparison with `=` is **case-sensitive**: `'Mumbai' = 'mumb
 --------------
             1
 ```
-MySQL's default collations are case-*insensitive*, so the same query there returns 2 — a real portability trap. In PostgreSQL, compare `lower(city) = 'mumbai'` or use `ILIKE` (2.4).
+MySQL's default collations (the rules a database uses to compare and sort text, see 2.7) are case-*insensitive*, so the same query there returns 2 — a real portability trap (code that behaves differently when moved to another database). In PostgreSQL, compare `lower(city) = 'mumbai'` or use `ILIKE` (2.4).
 
 ### Common mistakes
 - Mixing `AND` and `OR` without parentheses. Rule of thumb: whenever both appear, add parentheses.
@@ -309,7 +309,7 @@ Output:
         14 |     20
 (1 row)
 ```
-**Integer division truncates toward zero** in PostgreSQL, SQL Server and SQLite: `7 / 2` is `3`, and `-7 / 2` is `-3`. If either side is a decimal (`2.0`) or cast to `numeric`, you get the fraction. MySQL is the odd one out: `/` always returns a decimal (`7 / 2` = `3.5000`), and `DIV` does integer division. This is one of the most common "my average is wrong" bugs when moving between databases.
+**Integer division truncates toward zero** (simply drops the fractional part) in PostgreSQL, SQL Server and SQLite: `7 / 2` is `3`, and `-7 / 2` is `-3`. If either side is a decimal (`2.0`) or cast to `numeric` (PostgreSQL's exact-decimal number type), you get the fraction. MySQL is the odd one out: `/` always returns a decimal (`7 / 2` = `3.5000`), and `DIV` does integer division. This is one of the most common "my average is wrong" bugs when moving between databases.
 
 Operators work on columns row by row — for example the value of each order line:
 ```sql
@@ -358,7 +358,7 @@ Output:
 In MySQL `||` means logical OR by default; use `CONCAT()` there. SQL Server uses `+` or `CONCAT()`. Chapter 3 covers `concat()` and how each treats `NULL`.
 
 ### Compound assignment operators
-Some SQL dialects have shorthand assignment operators, e.g. SQL Server's T-SQL: `SET @x += 3` (add and assign), also `-=`, `*=`, `/=`, `%=`. They apply to **procedural variables** (and T-SQL's `UPDATE … SET col += 1`). They are **not** part of standard SQL and PostgreSQL does not support them in SQL statements — write `SET col = col + 1` in an `UPDATE`, or `x := x + 3` inside a PL/pgSQL function (chapter 14).
+Some SQL dialects have shorthand assignment operators, e.g. SQL Server's T-SQL: `SET @x += 3` (add and assign), also `-=`, `*=`, `/=`, `%=`. They apply to **procedural variables** (named values inside step-by-step code such as a stored procedure, rather than columns — plus T-SQL's `UPDATE … SET col += 1`). They are **not** part of standard SQL and PostgreSQL does not support them in SQL statements — write `SET col = col + 1` in an `UPDATE`, or `x := x + 3` inside a PL/pgSQL function (PL/pgSQL is PostgreSQL's built-in programming language for functions; chapter 14).
 
 | Dialect | Add-and-assign |
 |---|---|
@@ -382,7 +382,7 @@ Some SQL dialects have shorthand assignment operators, e.g. SQL Server's T-SQL: 
 | 11 | `AND` |
 | 12 | `OR` |
 
-Because unary minus binds tighter than `^`, `SELECT -2 ^ 2` returns `4` in PostgreSQL, not `-4`. When in doubt, add parentheses — they cost nothing and document intent.
+(*Unary* operators take one operand, like the `-` in `-5`; *binary* ones take two, like `a - b`.) Because unary minus binds tighter than `^`, `SELECT -2 ^ 2` returns `4` in PostgreSQL, not `-4`. When in doubt, add parentheses — they cost nothing and document intent.
 
 ### Self-check
 1. *`SELECT 9 / 4` in PostgreSQL?* → `2` (integer division). `9 / 4.0` → `2.25`.
@@ -520,7 +520,7 @@ Output:
 ```
 Portable alternative: `lower(email) LIKE 'neha%'`.
 
-**Matching a literal `%` or `_`** — escape it. PostgreSQL's default escape character is backslash; `ESCAPE` chooses another:
+**Matching a literal `%` or `_`** — escape it. An **escape character** is a marker that means "treat the next character as plain text, not as a wildcard". PostgreSQL's default escape character is backslash; `ESCAPE` chooses another:
 ```sql
 SELECT label FROM (VALUES ('10% off'), ('100 off'), ('10_off')) AS t(label)
 WHERE label LIKE '10\%%' ORDER BY label;
@@ -542,7 +542,7 @@ Output:
 (`VALUES (…), (…) AS t(label)` builds a tiny inline table — handy for experiments.)
 
 ### Regular expressions (PostgreSQL)
-For richer patterns PostgreSQL offers POSIX regular expressions: `~` (case-sensitive match), `~*` (case-insensitive), `!~` and `!~*` (no match). Names made of a capitalised word, a space, then another capital:
+For richer patterns PostgreSQL offers POSIX regular expressions. A **regular expression** (regex) is a mini-language for describing text patterns — `^` means "start of text", `[A-Z]` "one capital letter", `+` "one or more of the previous"; POSIX is the Unix standard that fixes this syntax. The operators are `~` (case-sensitive match), `~*` (case-insensitive), `!~` and `!~*` (no match). Names made of a capitalised word, a space, then another capital:
 ```sql
 SELECT name FROM products WHERE name ~ '^[A-Z][a-z]+ [A-Z]' ORDER BY name;
 ```
@@ -562,12 +562,12 @@ Output:
 `USB-C Hub` fails (`S` isn't lower case) and `Noise-Cancelling…` fails (hyphen, not space). The standard's `SIMILAR TO` also exists but is rarely used.
 
 ### Performance note
-`LIKE 'abc%'` (a fixed prefix) can use a B-tree index (in PostgreSQL the index needs the `text_pattern_ops` operator class unless the database uses the `C` collation); `LIKE '%abc'` with a leading wildcard cannot, and scans every row. Chapter 12 shows trigram (`pg_trgm`) indexes for "contains" searches.
+`LIKE 'abc%'` (a fixed prefix) can use a B-tree index — an **index** is a sorted lookup structure kept beside the table so the database can jump to matching rows instead of reading them all, and a **B-tree** is the default, ordered kind (in PostgreSQL the index needs the `text_pattern_ops` operator class — a setting that tells the index how to compare values — unless the database uses the `C` collation, i.e. plain byte-by-byte comparison); `LIKE '%abc'` with a leading wildcard cannot, and scans every row. Chapter 12 shows trigram (`pg_trgm`) indexes for "contains" searches (a *trigram* is every 3-character slice of the text).
 
 ### Dialect notes
 | Feature | PostgreSQL | MySQL | SQLite | SQL Server |
 |---|---|---|---|---|
-| `LIKE` case-sensitivity | sensitive | depends on collation (default insensitive) | insensitive for ASCII by default | depends on collation (default insensitive) |
+| `LIKE` case-sensitivity | sensitive | depends on collation (default insensitive) | insensitive for ASCII (plain English letters) by default | depends on collation (default insensitive) |
 | Case-insensitive LIKE | `ILIKE` | `LIKE` (default) | `LIKE` | `LIKE` (default) |
 | Regex | `~`, `~*` | `REGEXP` / `RLIKE` | `REGEXP` only when a `regexp()` function is loaded (the `sqlite3` shell includes one) | none built in (SQL Server 2025 adds `REGEXP_LIKE`) |
 
@@ -832,7 +832,7 @@ Output:
  USA     | New York
 (7 rows)
 ```
-`Mumbai` and `mumbai` are different strings, so both survive — `DISTINCT` removes only **exact** duplicates. Dirty data needs cleaning first. Our customer Anita Shah was entered twice with differently formatted emails:
+`Mumbai` and `mumbai` are different strings, so both survive — `DISTINCT` removes only **exact** duplicates. Dirty data needs cleaning first (`trim` removes spaces at the start and end of a string; `lower` turns it into lower case). Our customer Anita Shah was entered twice with differently formatted emails:
 ```sql
 SELECT DISTINCT first_name, last_name, email FROM customers WHERE last_name = 'Shah';
 SELECT DISTINCT first_name, last_name, lower(trim(email)) AS email FROM customers WHERE last_name = 'Shah';
@@ -850,7 +850,7 @@ Output:
  Anita      | Shah      | anita.shah@mail.example
 (1 row)
 ```
-**Counting distinct values** uses `count(DISTINCT expr)`, which ignores NULLs (chapter 4 covers aggregates):
+**Counting distinct values** uses `count(DISTINCT expr)`, which ignores NULLs (chapter 4 covers aggregates — functions such as `count` and `sum` that combine many rows into one value):
 ```sql
 SELECT count(*) AS rows, count(city) AS with_city, count(DISTINCT city) AS distinct_cities,
        count(DISTINCT lower(city)) AS distinct_cities_ci
@@ -883,12 +883,12 @@ Output:
        5 | Li         |  64000.00
 (5 rows)
 ```
-Other databases solve "first row per group" with window functions (`ROW_NUMBER()`, chapter 8).
+Other databases solve "first row per group" with window functions (functions that look at related rows without merging them into one, such as `ROW_NUMBER()` — chapter 8).
 
 ### Trade-offs and when not to use it
-- `DISTINCT` needs a sort or hash of the whole result — cheap here, expensive on millions of rows.
+- `DISTINCT` needs a sort or hash of the whole result (hashing turns each row into a number used to bucket equal rows together) — cheap here, expensive on millions of rows.
 - **Don't use `DISTINCT` to hide a bad join.** If a join produces duplicates you didn't expect, the join condition is probably wrong (chapter 5 calls this *fan-out*); `DISTINCT` masks the symptom and can hide real duplicates too.
-- If you need counts per value, you want `GROUP BY` (chapter 4), not `DISTINCT`.
+- If you need counts per value, you want `GROUP BY` (which gathers rows with equal values into groups, chapter 4), not `DISTINCT`.
 
 ### Self-check
 1. *Does `SELECT DISTINCT a, b` make `a` unique?* → No; it makes each `(a, b)` pair unique.
@@ -939,7 +939,7 @@ Output:
  Rohan      |  30000.00
 (15 rows)
 ```
-Meera and Rahul tie; their relative order is **not guaranteed** and may differ on another run. Add a **tie-breaker** column whenever order matters (especially for paging).
+Meera and Rahul tie; their relative order is **not guaranteed** and may differ on another run. Add a **tie-breaker** column whenever order matters (especially for paging), so the order is **deterministic** — the same every run.
 
 **Several sort keys** — the second key only matters within ties of the first, and each key has its own direction:
 ```sql
@@ -1102,7 +1102,7 @@ Output:
  New York
 (9 rows)
 ```
-A database created with a language collation such as `en_US.UTF-8` would sort `mumbai` next to `Mumbai` without help. You can also choose per query: `ORDER BY city COLLATE "en-x-icu"` (needs ICU support).
+A database created with a language collation such as `en_US.UTF-8` would sort `mumbai` next to `Mumbai` without help. You can also choose per query: `ORDER BY city COLLATE "en-x-icu"` (needs ICU support — ICU, International Components for Unicode, is a library of language-aware text rules).
 
 ### Common mistakes
 - Relying on insertion order or "it always came back sorted" — without `ORDER BY` there is no order.
@@ -1223,7 +1223,7 @@ With an index on the key, every page costs the same no matter how deep. The trad
 - Paging on a non-unique sort key — rows at page boundaries repeat or vanish. Add a unique tie-breaker.
 
 ### In the interview
-**30-second answer:** "`ORDER BY` plus `LIMIT n OFFSET m`, or the standard `OFFSET … FETCH`. For deep pages OFFSET is O(offset) and unstable under inserts, so I'd use keyset pagination — `WHERE (sort_key, id) > (:last_key, :last_id) ORDER BY sort_key, id LIMIT n` — backed by an index."
+**30-second answer:** "`ORDER BY` plus `LIMIT n OFFSET m`, or the standard `OFFSET … FETCH`. For deep pages OFFSET is O(offset) ("Big-O" notation: its work grows in proportion to the offset) and unstable under inserts, so I'd use keyset pagination — `WHERE (sort_key, id) > (:last_key, :last_id) ORDER BY sort_key, id LIMIT n` — backed by an index." (`:last_key` and `:last_id` are placeholders the application fills with the last row it showed.)
 
 - *How do you get the top 3 including ties?* → `FETCH FIRST 3 ROWS WITH TIES`, or `DENSE_RANK()` (chapter 8).
 - *SQL Server equivalent of LIMIT?* → `TOP (n)` or `OFFSET … FETCH`.
@@ -1270,7 +1270,7 @@ LINE 1: ...e, unit_price * 1.18 AS gross FROM products WHERE gross > 50...
  Standing Desk |  588.8200
 (2 rows)
 ```
-This is the *logical* order that defines the meaning; the optimizer may physically do things differently (e.g. use an index to read rows already sorted) as long as the result is the same.
+This is the *logical* order that defines the meaning; the optimizer (the database component that chooses how to run a query) may physically do things differently (e.g. use an index to read rows already sorted) as long as the result is the same.
 
 ### Self-check
 1. *Why does `WHERE gross > 500` fail?* → `WHERE` is evaluated before the `SELECT` list defines `gross`.

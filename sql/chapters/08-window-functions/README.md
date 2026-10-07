@@ -2,7 +2,7 @@
 
 `GROUP BY` answers "what is the total per department?" but throws away the individual rows to do it. Very often you need both at once: *each* employee **and** their department's average; *each* day's sales **and** the running total so far; *each* order **and** the previous order by the same customer. **Window functions** do exactly that. They compute a value across a set of related rows — the *window* — while keeping every row in the result.
 
-They replace awkward self-joins and correlated subqueries, and they sit behind many SQL interview questions (top-N per group, running totals, second-highest salary, streaks, month-over-month growth).
+They replace awkward self-joins (a table joined to itself) and correlated subqueries (subqueries re-run for every outer row), and they sit behind many SQL interview questions (top-N per group, running totals, second-highest salary, streaks, month-over-month growth).
 
 **What you'll learn**
 
@@ -15,8 +15,8 @@ They replace awkward self-joins and correlated subqueries, and they sit behind m
 | 8.5 | Ranking | use `ROW_NUMBER`, `RANK`, `DENSE_RANK`, `NTILE`, `PERCENT_RANK`, `CUME_DIST` and handle ties |
 | 8.6 | Value functions | compare rows with `LAG`/`LEAD`, `FIRST_VALUE`/`LAST_VALUE`/`NTH_VALUE` |
 | 8.7 | Running & moving calculations | running totals, moving averages, cumulative share, growth % |
-| 8.8 | Top-N per group & dedup | the most-asked window pattern, plus "keep the latest row" |
-| 8.9 | Gaps and islands | find streaks, missing ranges and sessions |
+| 8.8 | Top-N per group & dedup (de-duplication: removing extra copies) | the most-asked window pattern, plus "keep the latest row" |
+| 8.9 | Gaps and islands | find streaks, missing ranges and sessions (bursts of activity separated by idle time) |
 | 8.10 | Named windows, `FILTER`, evaluation order, performance | write tidy window queries and know how they execute |
 
 **Setup.** The `company` sample database from [chapter 1](../01-databases-and-the-relational-model/README.md#111-the-sample-database) plus two small tables added in [`code/00_schema.sql`](code/00_schema.sql):
@@ -239,7 +239,7 @@ Output:
 ```
 - `default_range`: Arjun and Sara are peers, so both see 68 000 + 68 000.
 - `rows_frame`: `ROWS` counts physical rows, so the total grows one row at a time — but which tied row comes "first" is **not defined**; next time Sara could get 68 000.
-- `unique_order`: adding a tie-breaker (`emp_id`) makes the order unique, so there are no peers and every frame type gives the same, **deterministic** result. This is the best fix.
+- `unique_order`: adding a tie-breaker (`emp_id`) makes the order unique, so there are no peers and every frame type gives the same, **deterministic** (identical on every run) result. This is the best fix.
 
 | `OVER (...)` contains | Default window for aggregates |
 |---|---|
@@ -540,7 +540,7 @@ Output:
 (13 rows)
 ```
 
-**`ntile` for quartiles.** Bucket everyone into four salary quartiles, then summarise each bucket (window in a subquery, `GROUP BY` outside):
+**`ntile` for quartiles.** Bucket everyone into four salary quartiles (the four equal-sized quarters of the sorted values), then summarise each bucket (window in a subquery, `GROUP BY` outside):
 ```sql
 SELECT quartile, count(*) AS people, min(salary), max(salary)
 FROM (SELECT salary, ntile(4) OVER (ORDER BY salary) AS quartile FROM employees) t
@@ -557,12 +557,12 @@ Output:
         4 |      3 | 150000.00 | 250000.00
 (4 rows)
 ```
-Note that 68 000 and 98 000 appear in two buckets each: `ntile` fills buckets by row count and **splits ties**. If tied values must stay together, compute buckets from `percent_rank` or `cume_dist` instead (or use `percentile_cont`, an ordered-set aggregate, for exact quartile boundaries — [chapter 4](../04-aggregation/README.md)).
+Note that 68 000 and 98 000 appear in two buckets each: `ntile` fills buckets by row count and **splits ties**. If tied values must stay together, compute buckets from `percent_rank` or `cume_dist` instead (or use `percentile_cont`, an ordered-set aggregate — an aggregate that reads its input in sorted order, like a median — for exact quartile boundaries — [chapter 4](../04-aggregation/README.md)).
 
 ### Which ranking function? (the question interviewers love)
 | Question | Use |
 |---|---|
-| "Exactly one row per …" / pagination / dedup | `row_number()` with a unique tie-breaker |
+| "Exactly one row per …" / pagination (splitting results into pages) / dedup | `row_number()` with a unique tie-breaker |
 | "Top 3 places, ties share a place, next place skips" (sports) | `rank()` |
 | "The 2nd highest *distinct* salary" / "top 3 salary levels" | `dense_rank()` |
 | "Top 10 %" | `percent_rank() <= 0.1` or `cume_dist() <= 0.1` (depending on how ties should count) |
@@ -668,7 +668,7 @@ Fix: extend the frame to `UNBOUNDED FOLLOWING`, or use `first_value` with the or
 
 `first_value(first_name) OVER (PARTITION BY dept_id ORDER BY salary DESC)` puts each department's top earner beside every employee — handy for "gap to the leader" columns (the file shows it).
 
-**Time between events** — days between a customer's consecutive orders (a standard retention metric):
+**Time between events** — days between a customer's consecutive orders (a standard retention metric, i.e. a measure of how often customers come back):
 ```sql
 SELECT customer_id, order_id, placed_at::date AS placed,
        placed_at::date - lag(placed_at::date) OVER (PARTITION BY customer_id ORDER BY placed_at) AS days_since_prev
@@ -691,7 +691,7 @@ Output:
 Subtracting two `date`s gives an integer number of days in PostgreSQL.
 
 ### Dialect notes
-- `IGNORE NULLS` (e.g. `lag(x) IGNORE NULLS OVER (...)`, "the last non-null value") is in the SQL standard and supported by Oracle, SQL Server 2022, BigQuery and Snowflake. PostgreSQL gains it in **version 19** (in beta as of September 2026); PostgreSQL 14–18 and MySQL lack it. There, emulate it with a running `count(x)` as a group key and `first_value` within each group, or a correlated subquery.
+- `IGNORE NULLS` (e.g. `lag(x) IGNORE NULLS OVER (...)`, "the last non-null value") is in the SQL standard and supported by Oracle, SQL Server 2022, BigQuery and Snowflake (two cloud data-warehouse products). PostgreSQL gains it in **version 19** (in beta as of September 2026); PostgreSQL 14–18 and MySQL lack it. There, emulate it with a running `count(x)` as a group key and `first_value` within each group, or a correlated subquery.
 - `nth_value(...) FROM LAST` (counting from the end of the frame) exists in Oracle and a few warehouses, not in PostgreSQL, MySQL or SQL Server.
 
 ### Common mistakes
@@ -785,7 +785,7 @@ Output:
  2025-06-01 | 1516.60 |         7403.62
 (6 rows)
 ```
-`sum(sum(...))` looks odd but is correct. It's often clearer to aggregate in a CTE first and apply windows in the outer query — as here for **month-over-month growth**:
+`sum(sum(...))` looks odd but is correct. It's often clearer to aggregate in a CTE (Common Table Expression — a named subquery written with `WITH`, [chapter 7](../07-ctes-views-and-recursion/README.md)) first and apply windows in the outer query — as here for **month-over-month growth**:
 ```sql
 WITH monthly AS (
     SELECT date_trunc('month', o.placed_at)::date AS month,
@@ -937,14 +937,14 @@ Output:
             8
 (1 row)
 ```
-To actually delete: `DELETE FROM customers WHERE customer_id IN (SELECT customer_id FROM dups WHERE rn > 1)` (after re-pointing that customer's orders — [chapter 9](../09-ddl-dml-and-constraints/README.md) covers `DELETE` and foreign keys).
+To actually delete: `DELETE FROM customers WHERE customer_id IN (SELECT customer_id FROM dups WHERE rn > 1)` (after re-pointing that customer's orders — [chapter 9](../09-ddl-dml-and-constraints/README.md) covers `DELETE` and foreign keys — columns whose values must match a key in another table).
 
 ### Alternatives
 | Approach | Top-1 | Top-N | Notes |
 |---|---|---|---|
 | Window + filter (above) | yes | yes | portable, flexible about ties |
 | `DISTINCT ON (group) ... ORDER BY group, measure DESC` | yes | no | PostgreSQL only, concise |
-| `LATERAL (... ORDER BY ... LIMIT N)` per group ([ch. 6](../06-subqueries-and-set-operations/README.md#67-lateral-subqueries)) | yes | yes | fastest when an index on (group, measure) exists and groups are few |
+| `LATERAL (... ORDER BY ... LIMIT N)` per group ([ch. 6](../06-subqueries-and-set-operations/README.md#67-lateral-subqueries)) | yes | yes | fastest when an index (sorted lookup structure) on (group, measure) exists and groups are few |
 | Correlated subquery `WHERE salary = (SELECT max(...) ...)` | yes (with ties) | awkward | classic pre-window approach |
 | `QUALIFY rn <= N` | yes | yes | filter on windows without a subquery — Snowflake, BigQuery, DuckDB, Teradata; **not** PostgreSQL / MySQL / SQL Server |
 
@@ -1108,7 +1108,7 @@ Output:
 The first event has no previous one: `lag` is `NULL`, the comparison is `NULL` (not true), so the `CASE` falls to `ELSE 1` — a new session, as intended. Group by `(user_id, session_no)` to get session start, end and length. (`VALUES` as a CTE creates inline sample rows; the first row's `TIMESTAMP` literal sets the column type.)
 
 ### Real-world examples
-App streaks and contribution graphs, web-analytics sessions (30 minutes of inactivity is a common cut-off), periods when CPU stayed above 90 %, missing cheque or invoice numbers.
+App streaks and contribution graphs, web-analytics sessions (30 minutes of inactivity is a common cut-off), periods when CPU (the processor) load stayed above 90 %, missing cheque or invoice numbers.
 
 ### In the interview
 **30-second answer:** "For consecutive dates or integers, subtract `row_number()` from the value; the difference is constant within each run, so grouping by it gives the islands with `min`, `max`, `count`. For general rules, flag each row that starts a new island using `lag`, then a running `sum` of the flags gives an island id. Gaps come from `lead(value) - value > 1`."
@@ -1192,7 +1192,7 @@ Consequences:
 - `LIMIT` runs last, so `row_number() ... LIMIT 5` numbers *all* rows first.
 
 ### Performance
-PostgreSQL evaluates windows with a **WindowAgg** node that reads rows sorted by the `PARTITION BY` + `ORDER BY` keys:
+PostgreSQL evaluates windows with a **WindowAgg** node (one step in the execution plan that `EXPLAIN` prints) that reads rows sorted by the `PARTITION BY` + `ORDER BY` keys:
 ```sql
 EXPLAIN (COSTS OFF)
 SELECT store, day, sum(amount) OVER (PARTITION BY store ORDER BY day)
@@ -1218,10 +1218,10 @@ Output:
          ->  Seq Scan on employees
 (4 rows)
 ```
-- In the first plan the primary key `(store, day)` already delivers rows in the needed order, so there's **no sort**. In the second, PostgreSQL must sort by `dept_id, salary DESC`.
+- In the first plan the primary key `(store, day)` (the columns that uniquely identify each row, which PostgreSQL backs with an index) already delivers rows in the needed order, so there's **no sort**. In the second, PostgreSQL must sort by `dept_id, salary DESC`.
 - **Index tip:** an index on `(partition columns, order columns)` can remove the sort — e.g. `CREATE INDEX ON employees (dept_id, salary DESC)` ([chapter 12](../12-indexes-storage-and-query-performance/README.md#1211-composite-indexes-and-column-order)).
 - Windows with **different** `PARTITION BY`/`ORDER BY` need separate sorts; windows sharing the same definition are computed in one pass — another reason to reuse a named window.
-- Sliding frames with `sum`/`count`/`avg` are computed incrementally, but `min`/`max` over a moving frame (and frames with `EXCLUDE`) may need re-scanning the frame, which gets expensive for large frames.
+- Sliding frames with `sum`/`count`/`avg` are computed incrementally (by adjusting the previous row's result rather than starting over), but `min`/`max` over a moving frame (and frames with `EXCLUDE`) may need re-scanning the frame, which gets expensive for large frames.
 - A window over millions of rows sorts all of them; filter in `WHERE` first when the logic allows.
 
 ---

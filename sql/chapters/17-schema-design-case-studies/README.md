@@ -6,9 +6,9 @@ Chapters 10–16 gave you the tools one at a time: modeling, normalization, inde
 
 1. A repeatable eight-step template for any schema-design question, plus the mapping rules and judgement calls every case reuses.
 2. Nine classic business systems — hospital, hotel, bank, photo-sharing (Instagram), e-commerce, food delivery, library, ticket booking, warehouse inventory.
-3. Four large-scale product designs — Quora, TikTok, Airbnb, Snapchat — where the relational core meets caches, object storage and NoSQL.
+3. Four large-scale product designs — Quora, TikTok, Airbnb, Snapchat — where the relational core meets caches (fast in-memory copies of hot data), **object storage** (services such as Amazon S3 that store whole files by key) and NoSQL (non-relational databases, Chapter 16).
 4. Four of the designs built for real on PostgreSQL (e-commerce, ticket booking with seat-hold concurrency, library, Instagram feed) with seed data and real output.
-5. The modeling patterns that keep coming back — junction tables, status enums, soft deletes, audit columns, polymorphic associations, denormalized counters — compared in one table at the end.
+5. The modeling patterns that keep coming back — junction tables, status enums, soft deletes, audit columns, polymorphic associations, denormalized counters (each is defined where it first appears below) — compared in one table at the end.
 
 **How to run the examples.** All code is in [`code/`](code/). [`00_schema.sql`](code/00_schema.sql) creates four PostgreSQL schemas — `shop`, `tix`, `lib`, `insta` — with small invented data; files `01`–`04` each run on a fresh copy:
 
@@ -29,14 +29,14 @@ A **schema-design case study** is a short, structured answer to "what tables wou
 
 ### How it works
 
-1. **Requirements.** List what users do (functional) and the numbers and guarantees that matter (non-functional: reads vs writes, consistency, retention). Then **write down the 5–6 questions the system must answer** ("which rooms are free between two dates?") — they drive the tables *and* the indexes. Ask; don't assume.
-2. **Entities and relationships.** Nouns that you store several facts about, with several instances, become entities; verbs become relationships. For each relationship decide cardinality (1:1, 1:N, M:N) **and participation** (total = every row must take part; partial = optional). Say each one aloud as a sentence.
-3. **ER diagram.** Draw it (here with `erDiagram` crow's-foot notation). The diagram is where a reviewer spots a missing entity fastest.
-4. **Key tables (DDL).** Map entities to tables: primary keys, foreign keys, `NOT NULL`, `UNIQUE`, `CHECK`. An M:N relationship becomes a **junction table** (a table whose primary key is the pair of foreign keys). Aim for 3NF, then denormalize on purpose.
+1. **Requirements.** List what users do (functional) and the numbers and guarantees that matter (non-functional: reads vs writes, consistency, **retention** — how long data must be kept). Then **write down the 5–6 questions the system must answer** ("which rooms are free between two dates?") — they drive the tables *and* the indexes. Ask; don't assume.
+2. **Entities and relationships.** Nouns that you store several facts about, with several instances, become entities; verbs become relationships. For each relationship decide **cardinality** (how many rows on each side can be linked: 1:1 one-to-one, 1:N one-to-many, M:N many-to-many) **and participation** (total = every row must take part; partial = optional). Say each one aloud as a sentence.
+3. **ER diagram.** Draw it — an **entity-relationship diagram** shows tables as boxes and relationships as lines (here with `erDiagram` **crow's-foot notation**, where a three-pronged "foot" on a line end means "many" and a bar means "one"). The diagram is where a reviewer spots a missing entity fastest.
+4. **Key tables (DDL).** **DDL** (data definition language) is the `CREATE`/`ALTER` part of SQL. Map entities to tables: **primary keys** (the column(s) that uniquely identify a row), **foreign keys** (columns that must match a primary key in another table), `NOT NULL`, `UNIQUE`, `CHECK`. An M:N relationship becomes a **junction table** (a table whose primary key is the pair of foreign keys). Aim for **3NF** (third normal form: every non-key column depends on the key, the whole key and nothing but the key — Chapter 11), then **denormalize** (deliberately store a duplicate or derived value for speed) on purpose.
 5. **Key queries.** Write the 3–5 queries the product runs most. They validate the schema: if a core question needs six joins and a `DISTINCT`, the model is probably wrong.
-6. **Indexes.** One index per hot access path, usually a composite index that matches the query's `WHERE` + `ORDER BY` (see [Chapter 12](../12-indexes-storage-and-query-performance/README.md)).
-7. **Design review.** Check the tables against 1NF → BCNF ([Chapter 11](../11-normalization/README.md)), name every deliberate redundancy, and list what the design *cannot* do yet (no history, an unenforced rule). Volunteering the limits reads as judgement, not as a mistake.
-8. **Scaling notes.** Which table grows fastest, what to partition or shard it by, what to cache, what to move to another store, and where strict consistency is required.
+6. **Indexes.** One index per hot access path, usually a **composite index** (an index on several columns, in a chosen order) that matches the query's `WHERE` + `ORDER BY` (see [Chapter 12](../12-indexes-storage-and-query-performance/README.md)).
+7. **Design review.** Check the tables against 1NF → BCNF (the ladder of **normal forms**, rules that remove redundant storage of facts — [Chapter 11](../11-normalization/README.md)), name every deliberate redundancy, and list what the design *cannot* do yet (no history, an unenforced rule). Volunteering the limits reads as judgement, not as a mistake.
+8. **Scaling notes.** Which table grows fastest, what to **partition** (split into pieces inside one database) or **shard** (split across several database servers) it by, what to cache, what to move to another store, and where strict consistency is required.
 
 ```mermaid
 flowchart LR
@@ -65,7 +65,7 @@ These mapping rules ([Chapter 10 §10.15](../10-data-modeling-and-er-diagrams/RE
 | Times that order events | `timestamptz`, not `date` — two postings on one day still need an order |
 | Codes with letters or leading zeros (policy, passport, room "204B") | `text`/`varchar`, never `int` |
 | Table named `user`, `order`, `group`, `like`, `transaction`, `show` | Reserved (or keyword) in some dialects — rename (`app_user`, `customer_order`, `screening`) rather than quote forever |
-| Passwords | Store a slow salted hash (`password_hash`), never the password |
+| Passwords | Store a slow salted hash (a one-way scramble of the password plus a random per-user value, `password_hash`), never the password |
 | One entity doing two jobs | Split **type** from **instance**: `titles`/`copies`, `room_types`/`rooms`, `seats`/`show_seats` |
 | Only current state stored | Keep history rows (loans, bookings, status events, ledger) — "when did…?" needs them |
 | A value that must not change later | Snapshot it (price paid, address shipped to, fine charged) |
@@ -75,8 +75,8 @@ These mapping rules ([Chapter 10 §10.15](../10-data-modeling-and-er-diagrams/RE
 
 **30-second answer:** "I'll clarify the main use cases and scale, pick the entities and relationships, sketch the ER diagram, turn it into tables with keys and constraints, check it against the top queries, add indexes for those queries, and finish with what I'd partition, cache or move to another store as it grows."
 
-- *How do you know the design is right?* — Every core query is simple and index-friendly, every business rule that must never be broken is a constraint or runs inside one transaction, and no fact is stored twice without a reason.
-- *When do you denormalize?* — When a measured hot read needs it (a feed, a counter), and only with a plan to keep the copy correct (same transaction, trigger, or a periodic reconciliation job).
+- *How do you know the design is right?* — Every core query is simple and index-friendly, every business rule that must never be broken is a **constraint** (a rule the database itself enforces) or runs inside one **transaction** (a group of statements that succeed or fail together), and no fact is stored twice without a reason.
+- *When do you denormalize?* — When a measured hot read needs it (a feed, a counter), and only with a plan to keep the copy correct (same transaction, **trigger** — code the database runs automatically on insert/update/delete — or a periodic **reconciliation** job that recomputes the value and flags differences).
 
 ---
 
@@ -89,7 +89,7 @@ These mapping rules ([Chapter 10 §10.15](../10-data-modeling-and-er-diagrams/RE
 - Record **admissions** to a **room/bed** (in-patients), with admit and discharge dates.
 - Keep **medical records** (diagnosis, treatment, written by a doctor), **prescriptions** listing one or more **medicines** from a catalogue, and **lab tests** with results.
 - Produce **bills** per visit/admission with line items and payments.
-- Non-functional: records are legally retained for years and must be auditable; access is strictly role-based.
+- Non-functional: records are legally retained for years and must be **auditable** (every change traceable to who and when); access is strictly **role-based** (permissions depend on the user's role, e.g. doctor or clerk).
 - Questions to answer: a doctor's appointments tomorrow, a patient's full history, free rooms now, what a patient still owes, the medicines on a prescription.
 
 ### Entities and relationships
@@ -147,7 +147,7 @@ CREATE TABLE admissions (
 CREATE UNIQUE INDEX one_patient_per_bed ON admissions (bed_id) WHERE discharged_at IS NULL;
 ```
 
-The **exclusion constraint** (`EXCLUDE USING gist … WITH &&`) is PostgreSQL's way of saying "no two rows may have overlapping ranges for the same doctor" — a rule a plain `UNIQUE` cannot express. MySQL and SQL Server have no equivalent; there you lock the doctor's row (`SELECT … FOR UPDATE`) and check for overlaps inside the booking transaction ([Chapter 13](../13-transactions-and-concurrency/README.md)).
+(`tstzrange` is a time-range type — a start and end timestamp in one value; `&&` means "overlaps".) The **exclusion constraint** (`EXCLUDE USING gist … WITH &&`) is PostgreSQL's way of saying "no two rows may have overlapping ranges for the same doctor" — a rule a plain `UNIQUE` cannot express. MySQL and SQL Server have no equivalent; there you **lock** the doctor's row (`SELECT … FOR UPDATE` — read rows and lock them so other transactions must wait before changing them until you finish) and check for overlaps inside the booking transaction ([Chapter 13](../13-transactions-and-concurrency/README.md)).
 
 ### Key queries
 
@@ -158,18 +158,18 @@ The **exclusion constraint** (`EXCLUDE USING gist … WITH &&`) is PostgreSQL's 
 
 ### Indexes
 
-The exclusion constraint's GiST index serves schedule lookups; `admissions (patient_id)`, `medical_records (patient_id, created_at DESC)`, and the partial unique index above for bed occupancy.
+The exclusion constraint's **GiST** index (a Postgres index type that handles ranges and geometry, Chapter 12) serves schedule lookups; `admissions (patient_id)`, `medical_records (patient_id, created_at DESC)`, and the partial unique index above for bed occupancy.
 
 ### Design review
 
-- **Normal forms.** The phone and junction tables have no non-key columns, so 2NF holds; `department_name` stays in `departments` (copying it onto patients would be a transitive dependency, breaking 3NF); the extra candidate keys (`email`, `(provider, policy_no)`) keep BCNF.
+- **Normal forms.** The phone and junction tables have no non-key columns, so 2NF holds; `department_name` stays in `departments` (copying it onto patients would be a **transitive dependency** — a column depending on another non-key column rather than on the key — breaking 3NF); the extra **candidate keys** (other columns that could also uniquely identify a row) (`email`, `(provider, policy_no)`) keep BCNF.
 - **Room occupancy.** The simplest model is `rooms.patient_id UNIQUE` (a 1:1 "occupies"), but it only knows who is in the room *now*. The `admissions` table with a partial unique index keeps the same rule *and* the history.
 - **Dose per medicine.** If dose sat on `prescriptions`, every medicine on one prescription would share it; it belongs to the pairing.
 - **Still missing:** who cancelled an appointment and when (status history), and a patient's department over time.
 
 ### Scaling notes
 
-A hospital's volume is modest — one well-tuned PostgreSQL primary with a replica for reports is plenty. The hard requirements are **integrity and audit**: append-only record tables (corrections are new rows that reference the old one), `created_by`/`created_at` on every clinical row, row-level security for role-based access ([Chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md)), and encrypted backups with point-in-time recovery ([Chapter 15 §15.9](../15-scaling-databases/README.md)). Large files (scans, X-rays) go to object storage; the table keeps only the key.
+A hospital's volume is modest — one well-tuned PostgreSQL **primary** (the one server that accepts writes) with a **replica** (a read-only copy kept in sync) for reports is plenty. The hard requirements are **integrity and audit**: append-only record tables (corrections are new rows that reference the old one), `created_by`/`created_at` on every clinical row, **row-level security** (database rules that filter which rows each user may see) for role-based access ([Chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md)), and encrypted backups with **point-in-time recovery** (restoring the database as it was at any chosen moment) ([Chapter 15 §15.9](../15-scaling-databases/README.md)). Large files (scans, X-rays) go to object storage; the table keeps only the key.
 
 ---
 
@@ -266,7 +266,7 @@ Other hot queries: today's arrivals and departures per hotel, a guest's upcoming
 
 ### Scaling notes
 
-Search traffic is 100–1,000× booking traffic. Serve search from replicas or a search index (Elasticsearch/OpenSearch) and a cache of inventory, but make the **booking** transaction hit the primary and re-check the inventory row under lock — search results may be a few seconds stale, bookings may not. Partition `reservations` by `check_in` month; shard by `hotel_id` if one cluster is not enough, since nearly every transaction touches a single hotel.
+Search traffic is 100–1,000× booking traffic. Serve search from replicas or a search index (Elasticsearch/OpenSearch, search engines covered in Chapter 16) and a cache of inventory, but make the **booking** transaction hit the primary and re-check the inventory row under lock — search results may be a few seconds stale, bookings may not. Partition `reservations` by `check_in` month; shard by `hotel_id` if one cluster is not enough, since nearly every transaction touches a single hotel.
 
 ---
 
@@ -279,7 +279,7 @@ Search traffic is 100–1,000× booking traffic. Serve search from replicas or a
 - A full, immutable history of every money movement; statements per month.
 - **Branches** (each publishing several phone numbers) with their **employees**; **cards**, where one card can reach several accounts; **loans** with repayments.
 - Questions: the balance now, last month's activity, a customer's accounts, what is still owed on a loan, which accounts a card reaches, who works at a branch.
-- Non-functional: strict consistency (ACID), auditability, regulatory retention.
+- Non-functional: strict consistency (**ACID** — atomic, consistent, isolated, durable transactions, Chapter 13), auditability, regulatory retention.
 
 ### Entities and relationships
 
@@ -332,7 +332,7 @@ CREATE TABLE ledger_entries (
 );
 ```
 
-Money is `numeric`, never `float` (binary floating point cannot represent 0.10 exactly). The ledger is **append-only**: revoke `UPDATE` and `DELETE` on it; a mistake is fixed with a reversing transfer.
+Money is `numeric`, never `float` (binary floating point cannot represent 0.10 exactly). `idempotency_key` makes the transfer **idempotent** — repeating the same request (e.g. after a network timeout) has the same effect as sending it once; a `uuid` is a 128-bit random id the client generates. The ledger is **append-only** (rows are only ever added, never changed or deleted): revoke `UPDATE` and `DELETE` on it; a mistake is fixed with a reversing transfer.
 
 ### Key queries
 
@@ -353,7 +353,7 @@ Others: a monthly statement (`WHERE account_id = $1 AND created_at` in the month
 
 ### Indexes
 
-`ledger_entries (account_id, entry_id DESC)` for statements, `account_owners (customer_id)`, and the unique `idempotency_key`. The junction `card_accounts` has PK `(card_id, account_id)`, which already answers "which accounts can this card reach"; the reverse question needs an extra index on `account_id`, because an index is usable only from its leading column.
+(A **deadlock**, mentioned in the code comment above, is two transactions each waiting for a lock the other holds, so neither can proceed; the database kills one.) `ledger_entries (account_id, entry_id DESC)` for statements, `account_owners (customer_id)`, and the unique `idempotency_key`. The junction `card_accounts` has PK `(card_id, account_id)`, which already answers "which accounts can this card reach"; the reverse question needs an extra index on `account_id`, because an index is usable only from its leading column.
 
 ### Design review
 
@@ -364,7 +364,7 @@ Others: a monthly statement (`WHERE account_id = $1 AND created_at` in the month
 
 ### Scaling notes
 
-Correctness beats throughput: synchronous replication to a standby so a failover loses no committed money ([Chapter 15 §15.5](../15-scaling-databases/README.md)), `SERIALIZABLE` or explicit row locks for balance checks, and range partitioning of the ledger by month for archiving. When one node is not enough, shard by account (or customer); a transfer between shards then needs a saga or two-phase commit — which is why many banks keep the core ledger on a single, very large, vertically scaled database or a distributed SQL system (Spanner, CockroachDB).
+Correctness beats **throughput** (work done per second): **synchronous replication** (a commit waits until a copy on another server has it) to a **standby** (a replica ready to take over) so a **failover** (switching to the standby when the primary dies) loses no committed money ([Chapter 15 §15.5](../15-scaling-databases/README.md)), `SERIALIZABLE` (the strictest isolation level: transactions behave as if run one at a time) or explicit row locks for balance checks, and range partitioning of the ledger by month for archiving. When one node is not enough, shard by account (or customer); a transfer between shards then needs a **saga** (a chain of local steps, each with a compensating "undo" step) or **two-phase commit** (a coordinator asks every server to prepare, then tells all to commit — Chapter 15 §15.9) — which is why many banks keep the core ledger on a single, very large, **vertically scaled** (made bigger rather than multiplied) database or a distributed SQL system (Spanner, CockroachDB).
 
 ---
 
@@ -466,7 +466,7 @@ Output:
     1001 | bo       | Sunrise run #running | 2026-05-01 06:10:00+00
 ```
 
-Page 2 uses **keyset pagination**: "continue after the last `(created_at, post_id)` I showed" instead of `OFFSET`, so it stays fast on page 500 and never repeats or skips a post when new ones arrive (see [Chapter 12](../12-indexes-storage-and-query-performance/README.md)). `post_id` breaks ties between posts with the same timestamp.
+Page 2 uses **keyset pagination** (`OFFSET n` would skip the first n rows by reading and discarding them): "continue after the last `(created_at, post_id)` I showed" instead of `OFFSET`, so it stays fast on page 500 and never repeats or skips a post when new ones arrive (see [Chapter 12](../12-indexes-storage-and-query-performance/README.md)). `post_id` breaks ties between posts with the same timestamp.
 
 A like must insert the row **and** bump the counter together, and a double tap must not count twice:
 
@@ -495,7 +495,7 @@ Output:
 (0 rows)
 ```
 
-[`04_instagram.sql`](code/04_instagram.sql) also finds mutual follows (a self-join of `follows` with the columns swapped), prints the comment thread under a post indented by depth with a recursive CTE over `parent_id` (the technique of [Chapter 7](../07-ctes-views-and-recursion/README.md)), and ranks hashtags by posts in the last three days. The file's last query is a **reconciliation check** that recounts likes and lists posts whose cached `like_count` disagrees (it returns 0 rows). Every denormalized counter deserves one.
+(`ON CONFLICT DO NOTHING` silently skips an insert that would violate a unique key; the **CTE** — `WITH ins AS (…)`, a named sub-query — returns a row only if the insert happened.) [`04_instagram.sql`](code/04_instagram.sql) also finds mutual follows (a **self-join** — a table joined to itself — of `follows` with the columns swapped), prints the comment thread under a post indented by depth with a recursive CTE over `parent_id` (the technique of [Chapter 7](../07-ctes-views-and-recursion/README.md)), and ranks hashtags by posts in the last three days. The file's last query is a **reconciliation check** that recounts likes and lists posts whose cached `like_count` disagrees (it returns 0 rows). Every denormalized counter deserves one.
 
 ### Indexes
 
@@ -513,10 +513,10 @@ The classic defect in a social schema is writing follow and like as 1:N: both ar
 
 ### Scaling notes
 
-- **Media** lives in object storage (S3-like) behind a CDN; rows keep keys only.
+- **Media** lives in object storage (S3-like) behind a **CDN** (content delivery network — servers around the world that cache files close to users; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)); rows keep keys only.
 - **Feed:** fan-out on read is fine for small follow counts. At scale, **fan-out on write** pushes each new post id into every follower's precomputed feed list (often Redis or a wide-column store); celebrities with millions of followers are handled by fan-out on read, merged at request time — the classic hybrid ([Chapter 16](../16-beyond-relational/README.md)).
-- **Counters** are the hottest rows: a viral post turns `UPDATE posts SET like_count = …` into a lock queue. Batch increments in a cache and flush periodically, or keep sharded counter rows and sum them.
-- **Sharding** by `user_id` keeps a user's posts, likes-given and follows together; ids come from a generator that embeds time (Snowflake-style) so they sort by creation without a central sequence ([Chapter 15 §15.3](../15-scaling-databases/README.md)).
+- **Counters** are the hottest rows: a viral post turns `UPDATE posts SET like_count = …` into a lock queue (**lock contention**: many transactions waiting for the same row). Batch increments in a cache and flush periodically, or keep sharded counter rows and sum them.
+- **Sharding** by `user_id` keeps a user's posts, likes-given and follows together; ids come from a generator that embeds time (Snowflake-style — Twitter's scheme of timestamp + machine id + counter) so they sort by creation without a central sequence ([Chapter 15 §15.3](../15-scaling-databases/README.md)).
 
 ---
 
@@ -524,7 +524,7 @@ The classic defect in a social schema is writing follow and like as 1:N: both ar
 
 ### Requirements
 
-- **Customers** register, keep several **addresses**, browse **products** organized in a **category tree**, and read/write **reviews** (one per customer per product).
+- **Customers** register, keep several **addresses**, browse **products** (each identified by a **SKU**, stock-keeping unit — the shop's product code) organized in a **category tree**, and read/write **reviews** (one per customer per product).
 - A customer places an **order** of several products; each **order item** records quantity and the price *at purchase time*.
 - Stock is decremented on purchase and may never go negative. Orders move through `pending → paid → shipped → delivered` (or `cancelled`); **payments** attach to orders.
 - Discontinued products disappear from the shop but old orders still show them.
@@ -598,8 +598,8 @@ CREATE INDEX ON products (category_id) WHERE deleted_at IS NULL;   -- partial: l
 Three decisions worth saying out loud in an interview:
 
 - **Price snapshot.** `order_items.unit_price` copies the price when the order is placed. It is not a normalization violation: the price *paid* is a different fact from the price *now*.
-- **Soft delete.** Deleting a product row would break the foreign keys of old orders (or cascade away history). `deleted_at` hides it from the shop instead; the partial index keeps the live catalogue lookups small.
-- **Status enum.** A PostgreSQL `ENUM` (or a `CHECK … IN (…)`, or a lookup table) limits `status` to known values. Enums are compact but adding a value needs `ALTER TYPE`; a lookup table is the most flexible (MySQL has inline `ENUM`; SQL Server and SQLite use `CHECK`).
+- **Soft delete.** Deleting a product row would break the foreign keys of old orders (or **cascade** — automatically delete — the history with it). `deleted_at` hides it from the shop instead; the **partial index** (an index over only the rows matching a `WHERE`) keeps the live catalogue lookups small.
+- **Status enum.** A PostgreSQL `ENUM` (a custom type allowing only a fixed list of values; or a `CHECK … IN (…)`, or a **lookup table** — a small table of allowed values referenced by a foreign key) limits `status` to known values. Enums are compact but adding a value needs `ALTER TYPE`; a lookup table is the most flexible (MySQL has inline `ENUM`; SQL Server and SQLite use `CHECK`).
 
 ### Key queries
 
@@ -639,7 +639,7 @@ Output:
         5 | 207.99
 ```
 
-(`\gset` is a psql command that stores the returned `order_id` in a variable; application code would read it from the `RETURNING` result.) Because the `UPDATE` both checks and decrements stock in one statement, two concurrent checkouts for the last unit cannot both succeed: the second one waits for the first's row lock, then re-checks `stock >= qty` on the new value ([Chapter 13 §13.7](../13-transactions-and-concurrency/README.md)). The `CHECK (stock >= 0)` is the last line of defence:
+(`\gset` is a psql command that stores the returned `order_id` in a variable; application code would read it from the `RETURNING` result.) Because the `UPDATE` both checks and decrements stock in one statement, two concurrent checkouts for the last unit cannot both succeed: the second one waits for the first's **row lock** (released when the first transaction commits or rolls back — `ROLLBACK` undoes everything since `BEGIN`), then re-checks `stock >= qty` on the new value ([Chapter 13 §13.7](../13-transactions-and-concurrency/README.md)). The `CHECK (stock >= 0)` is the last line of defence:
 
 ```
 psql:01_ecommerce.sql:35: ERROR:  new row for relation "products" violates check constraint "products_stock_check"
@@ -661,7 +661,7 @@ A best-seller report still counts the soft-deleted earbuds (2 units, 19.98), bec
 
 ### Scaling notes
 
-The catalogue is read-mostly: cache it and serve it from replicas or a search index. Carts are short-lived and high-churn — a key-value store with expiry fits them well. Orders and payments stay relational and ACID; partition `orders` by `placed_at` month for archiving and shard by `customer_id` when a single primary is saturated. For flash sales, a single hot `stock` row becomes the bottleneck — pre-split inventory into several rows (buckets) or reserve stock in a fast counter and settle in the database.
+The catalogue is read-mostly: cache it and serve it from replicas or a search index. Carts are short-lived and **high-churn** (created and discarded constantly) — a **key-value store** (a database that just maps a key to a value, like Redis) with expiry fits them well. Orders and payments stay relational and ACID; partition `orders` by `placed_at` month for archiving and shard by `customer_id` when a single primary is saturated. For flash sales, a single **hot** (very frequently updated) `stock` row becomes the **bottleneck** (the one part that limits overall speed) — pre-split inventory into several rows (buckets) or reserve stock in a fast counter and settle in the database.
 
 ---
 
@@ -722,11 +722,11 @@ CREATE TABLE order_status_events (                    -- append-only history
 -- order_lines (order_id, line_no, item_id, quantity, unit_price snapshot, options jsonb snapshot)
 ```
 
-The pairing of a **current-status column** with an **append-only event table** is a pattern worth remembering: the column answers "what state is it in?" with no join, the events answer "when did each step happen?" (for SLAs, disputes, and delivery-time analytics).
+The pairing of a **current-status column** with an **append-only event table** is a pattern worth remembering: the column answers "what state is it in?" with no join, the events answer "when did each step happen?" (for **SLAs** — service-level agreements, promised targets such as "delivered within 40 minutes" — disputes, and delivery-time analytics).
 
 ### Key queries
 
-1. Open restaurants within 5 km that serve "pizza" — needs a geospatial index (PostGIS `geography` + GiST; see [Chapter 16 §16.8](../16-beyond-relational/README.md)).
+1. Open restaurants within 5 km that serve "pizza" — needs a **geospatial** index (one that understands map coordinates; PostGIS, Postgres's geography extension, `geography` + GiST; see [Chapter 16 §16.8](../16-beyond-relational/README.md)).
 2. A restaurant's live queue: `WHERE restaurant_id = $1 AND status IN ('placed','accepted','preparing') ORDER BY placed_at`.
 3. Nearest available courier for an order (geo query over the couriers' latest positions).
 4. Average prep time per restaurant: time between the `accepted` and `picked_up` events.
@@ -741,7 +741,7 @@ A stored line subtotal and a stored `restaurants.rating` (instead of `avg()` ove
 
 ### Scaling notes
 
-Courier locations are high-frequency, short-lived writes — keep them in an in-memory store with geo support (Redis `GEOADD`/`GEOSEARCH`) and write only trip summaries to PostgreSQL. Shard orders by city/region: almost no order crosses a city. Menus are read-heavy and cacheable.
+Courier locations are high-frequency, short-lived writes — keep them in an **in-memory store** (a database that keeps data in RAM for speed) with geo support (Redis `GEOADD`/`GEOSEARCH`) and write only trip summaries to PostgreSQL. Shard orders by city/region: almost no order crosses a city. Menus are read-heavy and cacheable.
 
 ---
 
@@ -749,7 +749,7 @@ Courier locations are high-frequency, short-lived writes — keep them in an in-
 
 ### Requirements
 
-- The catalogue lists **titles** (identified by ISBN) with one or more **authors** in a fixed order; the library owns several physical **copies** of a title across **branches**.
+- The catalogue lists **titles** (identified by **ISBN**, the international book number) with one or more **authors** in a fixed order; the library owns several physical **copies** of a title across **branches**.
 - **Members** borrow copies (**loans**) for a fixed period; each member has a maximum number of open loans.
 - A copy can be on at most one open loan. Late returns incur a **fine** per day.
 - Members place **holds** (reservations) on a title when no copy is free; holds are served first-come, first-served.
@@ -812,9 +812,9 @@ CREATE TABLE holds (
 
 *Figure — the course's library model: Book and Book_Copy at the centre, with loans pointing at copies and reservations at books (course diagram)*
 
-The tell-tale pair of foreign keys: **`loans.copy_id` but `holds.isbn`** — members borrow one physical object but reserve a title. A copy's `copy_id` plays the role of its barcode. The schema also has `fines (loan_id PRIMARY KEY REFERENCES loans, amount, paid_on)`: using the loan id as the key makes it 1:1 (at most one fine per loan), and the amount is **stored** although it looks derived, because a later change of the daily rate must not rewrite old fines. The course version gives books a surrogate `book_id` with `isbn UNIQUE` (shorter FKs, and some items have no ISBN) and a `category` table; authors live in a junction table rather than a comma-separated `authors` column, which would break 1NF and turn "books by this author" into a text search.
+The tell-tale pair of foreign keys: **`loans.copy_id` but `holds.isbn`** — members borrow one physical object but reserve a title. A copy's `copy_id` plays the role of its barcode. The schema also has `fines (loan_id PRIMARY KEY REFERENCES loans, amount, paid_on)`: using the loan id as the key makes it 1:1 (at most one fine per loan), and the amount is **stored** although it looks derived, because a later change of the daily rate must not rewrite old fines. The course version gives books a **surrogate** `book_id` (an artificial id with no business meaning, as opposed to a **natural key** such as the ISBN) with `isbn UNIQUE` (shorter FKs, and some items have no ISBN) and a `category` table; authors live in a junction table rather than a comma-separated `authors` column, which would break 1NF and turn "books by this author" into a text search.
 
-Note what is **not** stored: a copy's "available" flag. Availability is derived from "no open loan and not withdrawn", so it can never disagree with the loans table. The **partial unique index** is the star: it enforces a rule about *some* rows (open loans) that a plain `UNIQUE` cannot, and it doubles as the index for "is this copy out?". (SQLite and PostgreSQL support partial indexes; SQL Server calls them *filtered* indexes; MySQL has neither — there you would use a generated column that is non-NULL only for open loans and put a unique index on it.)
+Note what is **not** stored: a copy's "available" flag. Availability is derived from "no open loan and not withdrawn", so it can never disagree with the loans table. The **partial unique index** is the star: it enforces a rule about *some* rows (open loans) that a plain `UNIQUE` cannot, and it doubles as the index for "is this copy out?". (SQLite and PostgreSQL support partial indexes; SQL Server calls them *filtered* indexes; MySQL has neither — there you would use a **generated column** (a column computed automatically from others) that is non-NULL only for open loans and put a unique index on it.)
 
 ### Key queries
 
@@ -867,7 +867,7 @@ WHERE (SELECT count(*) FROM loans WHERE member_id = 2 AND returned_on IS NULL)
 RETURNING loan_id, copy_id, member_id, due_on;
 ```
 
-Output: `7 | 102 | 2 | 2026-05-24`. Under concurrency two check-outs by the same member could both see "1 open loan"; lock the member row first (`SELECT … FROM members WHERE member_id = 2 FOR UPDATE`) to serialize them ([Chapter 13 §13.8](../13-transactions-and-concurrency/README.md) explains this write-skew shape). The hold queue is a window function — `row_number() OVER (PARTITION BY isbn ORDER BY placed_at)` — giving Eva position 1 and Omar position 2 for *Joins at Scale*.
+Output: `7 | 102 | 2 | 2026-05-24`. Under concurrency two check-outs by the same member could both see "1 open loan"; lock the member row first (`SELECT … FROM members WHERE member_id = 2 FOR UPDATE`) to serialize them (make them run one after the other; [Chapter 13 §13.8](../13-transactions-and-concurrency/README.md) explains this **write-skew** shape — two transactions each read the same state, then both write based on it). The hold queue is a **window function** (a function that computes over a set of related rows without collapsing them, Chapter 8) — `row_number() OVER (PARTITION BY isbn ORDER BY placed_at)` — giving Eva position 1 and Omar position 2 for *Joins at Scale*.
 
 ### Indexes
 
@@ -879,7 +879,7 @@ Loans are a *history* table — a `current_member_id` column on copies would ans
 
 ### Scaling notes
 
-A library is small — a single PostgreSQL instance serves a city's whole network. Historical loans can be partitioned by year. The only real concurrency hot spot is the popular new release with a long hold queue; handling "copy returned → offer to the next hold → expire after 3 days" as a small state machine in one transaction keeps it correct.
+A library is small — a single PostgreSQL instance serves a city's whole network. Historical loans can be partitioned by year. The only real concurrency hot spot is the popular new release with a long hold queue; handling "copy returned → offer to the next hold → expire after 3 days" as a small **state machine** (a fixed set of states with allowed transitions between them) in one transaction keeps it correct.
 
 ---
 
@@ -988,11 +988,11 @@ RETURNING seat_id, status, booking_id;
 COMMIT;
 ```
 
-The file continues with "any two free premium seats" using `FOR UPDATE SKIP LOCKED` (many buyers each get *different* seats without waiting on each other — the pattern of [Chapter 13 §13.12](../13-transactions-and-concurrency/README.md)), an expiry sweep that frees stale holds, a failed attempt to mark a seat sold without a booking (`violates check constraint "sold_needs_booking"`), and occupancy per show with `count(*) FILTER (…)` (show 10: 2 sold of 12, revenue 400.00).
+The file continues with "any two free premium seats" using `FOR UPDATE SKIP LOCKED` (lock matching rows but skip any another transaction already has locked) (many buyers each get *different* seats without waiting on each other — the pattern of [Chapter 13 §13.12](../13-transactions-and-concurrency/README.md)), an expiry sweep that frees stale holds, a failed attempt to mark a seat sold without a booking (`violates check constraint "sold_needs_booking"`), and occupancy per show with `count(*) FILTER (…)` (show 10: 2 sold of 12, revenue 400.00).
 
 ### Proof on two live sessions
 
-Does the guarded update really stop two *simultaneous* buyers? [`05_seat_race.sql`](code/05_seat_race.sql) opens two real connections, A and B, with PostgreSQL's `dblink` extension, and runs the same hold on seat 9 in both, at the default `READ COMMITTED` level:
+Does the guarded update really stop two *simultaneous* buyers? [`05_seat_race.sql`](code/05_seat_race.sql) opens two real connections, A and B, with PostgreSQL's `dblink` extension (which lets one session open and run queries on another connection), and runs the same hold on seat 9 in both, at the default `READ COMMITTED` **isolation level** (each statement sees only data committed before it started):
 
 ```
 --- A: holds seat 9 (C1) but has not committed yet
@@ -1020,7 +1020,7 @@ How it works:
 3. When A commits, PostgreSQL re-evaluates B's `WHERE` clause against the **newest** version of the row. `status = 'free'` is now false, so B updates zero rows.
 4. The application sees 0 rows returned and tells user 2 "seat taken".
 
-No `SELECT` then `UPDATE` (which *would* race), no application lock, no `SERIALIZABLE` needed. The alternatives: optimistic locking with a `version` column (good when contention is low), or a unique constraint on a separate `seat_holds (show_id, seat_id)` table (insert-to-claim).
+No `SELECT` then `UPDATE` (which *would* race), no application lock, no `SERIALIZABLE` needed. The alternatives: **optimistic locking** with a `version` column (don't lock; at write time check the version is unchanged and retry if it isn't — good when contention is low), or a unique constraint on a separate `seat_holds (show_id, seat_id)` table (insert-to-claim).
 
 ### Indexes
 
@@ -1030,7 +1030,7 @@ Two rules remain outside these tables: someone must generate the `show_seats` ro
 
 ### Scaling notes
 
-The whole problem is a **burst of contention on a small set of rows** (a big concert's on-sale minute). Rows per show are few, so the database can hold them, but connections cannot: put a **virtual waiting room / queue** in front, let only N users into seat selection at a time, and keep holds short. Shows are independent, so shard by `show_id` (or event); a hot show can even get a dedicated shard. Cache the seat map (it may be a second stale) but never the hold itself.
+The whole problem is a **burst of contention on a small set of rows** (a big concert's on-sale minute). Rows per show are few, so the database can hold them, but connections cannot: put a **virtual waiting room / queue** in front (a holding page that admits users in batches), let only N users into seat selection at a time, and keep holds short. Shows are independent, so shard by `show_id` (or event); a hot show can even get a dedicated shard. Cache the seat map (it may be a second stale) but never the hold itself.
 
 ---
 
@@ -1041,8 +1041,8 @@ The whole problem is a **burst of contention on a small set of rows** (a big con
 - **Products** (SKUs) are stored in several **warehouses**, each divided into **bin locations** (aisle-rack-shelf).
 - Track **stock on hand** per SKU per location, plus **reserved** quantity for open orders.
 - Goods arrive via **purchase orders** from **suppliers** (receipts), leave via **shipments** for sales orders, and move between locations (**transfers**); every movement is recorded.
-- Support **batches/lots** with expiry dates (first-expired, first-out) and reorder alerts when stock falls below a **reorder point**.
-- Each supplier has its own SKU and lead time for a product; purchase orders have numbered lines.
+- Support **batches/lots** (groups of units made together, sharing an expiry date) with expiry dates (first-expired, first-out) and reorder alerts when stock falls below a **reorder point**.
+- Each supplier has its own SKU and **lead time** (days from ordering to delivery) for a product; purchase orders have numbered lines.
 - Questions: total stock of a SKU and its bin locations; a bin's movements over the past week; the cause of a count mismatch; the quickest supplier for a SKU; open purchase-order quantities.
 
 ### Entities and relationships
@@ -1092,7 +1092,7 @@ This is the same **ledger + cached balance** design as the bank ([§17.3](#173-b
 
 *Figure — the course's warehouse model: Stock_Movement records what happened, Stock_Balance is the running total beside it (course diagram)*
 
-The course variant records one row per bin with a **signed** `quantity_change` (+50 received, −3 picked) instead of from/to columns — one table for every movement type, and a transfer becomes two rows. Its other tables: `product_suppliers (product_id, supplier_id, supplier_sku, lead_time_days, unit_cost)` — attributes of the *pairing*, so putting `supplier_name` there would be a 2NF partial dependency; and `purchase_order_lines (po_id, line_no, …)`, a **weak entity** whose key includes its parent's, with `ON DELETE CASCADE`. `unit_cost` appears on both: the agreed price now versus the price paid on that order. A movement's cause is stored as `reference_type` + `reference_id` — a polymorphic reference no FK can check (see §17.14). Whether `on_hand` may drop below zero is a business choice — a few operations like negative stock as an alarm for an unrecorded delivery — so choose deliberately and document it.
+The course variant records one row per bin with a **signed** `quantity_change` (+50 received, −3 picked) instead of from/to columns — one table for every movement type, and a transfer becomes two rows. Its other tables: `product_suppliers (product_id, supplier_id, supplier_sku, lead_time_days, unit_cost)` — attributes of the *pairing*, so putting `supplier_name` there would be a 2NF **partial dependency** (a column depending on only part of a composite key); and `purchase_order_lines (po_id, line_no, …)`, a **weak entity** whose key includes its parent's, with `ON DELETE CASCADE`. `unit_cost` appears on both: the agreed price now versus the price paid on that order. A movement's cause is stored as `reference_type` + `reference_id` — a polymorphic reference no FK can check (see §17.14). Whether `on_hand` may drop below zero is a business choice — a few operations like negative stock as an alarm for an unrecorded delivery — so choose deliberately and document it.
 
 ### Key queries
 
@@ -1115,11 +1115,11 @@ The last four cases are large consumer products. The relational core looks like 
 
 At this scale the template gains three steps before the tables:
 
-1. **Non-functional targets** — high availability, low latency (a few hundred ms), horizontal scalability, and *where eventual consistency is acceptable* (vote and view counts) versus where it is not (money, bookings, identity).
+1. **Non-functional targets** — **high availability** (the service is almost always up), low **latency** (the time one request takes; here a few hundred ms), **horizontal scalability** (growing by adding machines), and *where **eventual consistency** (copies may briefly disagree but converge) is acceptable* (vote and view counts) versus where it is not (money, bookings, identity).
 2. **A back-of-the-envelope storage estimate** — users × bytes per row, items per day × size. Multiply carefully (1 KB × 10 million = 10 GB, not 10 TB); the usual result is that rows are small and **media dominates** by orders of magnitude, which is why media goes to object storage.
-3. **A high-level architecture** — clients → load balancer → API gateway (routing, authentication) → a few microservices (user, content, search …), each owning its data store, with a message queue (Kafka, RabbitMQ) for asynchronous work such as search indexing, notifications and video processing.
+3. **A high-level architecture** — clients → **load balancer** (spreads incoming requests over many servers) → **API gateway** (the single entry point that handles routing and authentication) → a few **microservices** (small, separately deployed services: user, content, search …), each owning its data store, with a **message queue** (Kafka, RabbitMQ — a buffer where one service leaves tasks for another to process later) for **asynchronous** work (done in the background, not while the user waits) such as search indexing, notifications and video processing.
 
-After the schema come **sharding** (pick the key that keeps a request on one shard; use consistent hashing so adding a shard moves little data) and **replication** (primary–replica with automatic failover for the relational part, leaderless multi-node replication for Cassandra-style stores, replicas in several regions) — the mechanics are in [Chapter 15](../15-scaling-databases/README.md).
+After the schema come **sharding** (pick the key that keeps a request on one shard; use **consistent hashing** (a key-to-shard mapping where adding a shard moves only a small share of keys, §15.3) so adding a shard moves little data) and **replication** (primary–replica with automatic failover for the relational part, **leaderless** multi-node replication (any replica accepts writes) for Cassandra-style stores, replicas in several regions) — the mechanics are in [Chapter 15](../15-scaling-databases/README.md).
 
 ## 17.10 Quora (questions and answers)
 
@@ -1198,7 +1198,7 @@ These two tables show the two ways to model a **polymorphic association** (one r
 
 **The document alternative.** The course stores each question as one MongoDB-style document with its answers (and their comments) **embedded**, so a question page is a single read; a mirrored user document carries follower counts and followed topics. Embedding is denormalization: great for "show this question", awkward for "all answers by this user" or for a question with 10,000 answers (MongoDB caps a document at 16 MB) — the usual compromise embeds the top answers and keeps the rest in their own collection.
 
-**Sharding.** By `user_id`, a user's content is local but celebrity users become hot spots; by `question_id` (hashed), load spreads evenly but a user's timeline needs a scatter-gather across shards. The recommended mix: question data sharded by a hash of `question_id`, user data (profiles, follows) by a hash of `user_id`, consistent hashing, and a shard-manager service that maps keys to shards.
+**Sharding.** By `user_id`, a user's content is local but celebrity users become **hot spots** (shards overloaded by one popular key); by `question_id` (hashed), load spreads evenly but a user's timeline needs a **scatter-gather** (send the query to every shard and merge the answers) across shards. The recommended mix: question data sharded by a hash of `question_id`, user data (profiles, follows) by a hash of `user_id`, consistent hashing, and a shard-manager service that maps keys to shards.
 
 ### Which store for which data
 
@@ -1220,7 +1220,7 @@ These two tables show the two ways to model a **polymorphic association** (one r
 - The main surface is a recommendation-driven **"For You" feed**, fed by **watch events** (what was watched, for how long, skipped, replayed).
 - Real-time **notifications** (new follower, like, comment); **trending** videos and hashtags; videos grouped into **categories** (dance, comedy).
 - Scale: billions of video views per day; view and watch events vastly outnumber everything else.
-- Estimate: with generous assumptions (1 B daily users each uploading 2 videos of 50 MB) raw video is 1 B × 2 × 50 MB = **100 PB a day**, against about 4 TB of metadata (2 B videos × 2 KB) and about 2 TB of comments (2 B × 1 KB). Video bytes outweigh the metadata and comments by more than 10,000 to 1, so they live in object storage with lifecycle rules, never in a database.
+- Estimate: with generous assumptions (1 B daily users each uploading 2 videos of 50 MB) raw video is 1 B × 2 × 50 MB = **100 PB a day**, against about 4 TB of metadata (2 B videos × 2 KB) and about 2 TB of comments (2 B × 1 KB). Video bytes outweigh the metadata and comments by more than 10,000 to 1, so they live in object storage with **lifecycle rules** (automatic policies that move old files to cheaper storage or delete them), never in a database.
 
 ### Entities and relationships
 
@@ -1263,7 +1263,7 @@ CREATE TABLE video_stats (                        -- hot counters kept apart fro
 
 *Figure — the course's TikTok schema: users, followers and categories relational; videos, interactions and user activity in Cassandra (course diagram)*
 
-In the course design the high-volume tables live in **Cassandra**, modeled around the query rather than the entity. A correct CQL sketch (Cassandra has no `ENUM` type, and counter columns must sit in a table of their own):
+In the course design the high-volume tables live in **Cassandra**, modeled around the query rather than the entity. A correct **CQL** (Cassandra Query Language) sketch (Cassandra has no `ENUM` type, and **counter** columns — special columns that can only be incremented or decremented — must sit in a table of their own; a `timeuuid` is a unique id that embeds a timestamp):
 
 ```sql
 -- CQL (Cassandra) — not run
@@ -1284,13 +1284,13 @@ CREATE TABLE user_activity (
 
 Relational tables keep what needs strong consistency (accounts, follows, categories); Cassandra keeps what needs write throughput and can be eventually consistent. The same idea appears relationally below.
 
-Splitting `video_stats` from `videos` is a **vertical partition**: the counters change constantly, the video metadata almost never, so separating them keeps metadata rows and their cache entries stable. Watch events are **not** a table in the primary database at all — they are an event stream.
+(`video_renditions` holds **transcoded** copies — the same video re-encoded at several resolutions and **bitrates**, i.e. data per second, for different devices and connections.) Splitting `video_stats` from `videos` is a **vertical partition** (splitting a table's columns into two tables sharing a key): the counters change constantly, the video metadata almost never, so separating them keeps metadata rows and their cache entries stable. Watch events are **not** a table in the primary database at all — they are an **event stream** (an append-only, ordered flow of records, e.g. in Kafka, consumed by other systems).
 
 ### Key queries
 
 1. A creator's profile grid: `videos WHERE creator_id = $1 AND status = 'public' ORDER BY video_id DESC` (time-ordered ids sort by upload time).
 2. Videos using a sound (the "use this sound" page).
-3. Trending hashtags in the last hour — computed by the stream processor, not by SQL over billions of rows.
+3. Trending hashtags in the last hour — computed by the **stream processor** (a system that computes results continuously as events arrive), not by SQL over billions of rows.
 4. For You feed — candidate generation and ranking by a recommendation service; the database only fetches metadata for the chosen ids.
 
 ### Indexes
@@ -1305,8 +1305,8 @@ Splitting `video_stats` from `videos` is a **vertical partition**: the counters 
 | Video files and renditions | Object storage + CDN (edge caches near viewers) |
 | Views, watch time, skips | Event log (Kafka) → stream processing → analytics warehouse / wide-column store |
 | Counters | In-memory counters, flushed periodically; displayed counts may lag a little |
-| Recommendation features, embeddings | Feature store + vector index (FAISS library, Milvus) fed by training pipelines |
-| Notifications, processing jobs | Message queue → notification and transcoding workers |
+| Recommendation features, embeddings (lists of numbers that represent an item so similar items are close) | Feature store (a database of precomputed model inputs) + vector index (finds nearest embeddings; FAISS library, Milvus) fed by training pipelines |
+| Notifications, processing jobs | Message queue → notification and transcoding **workers** (background processes that take jobs from the queue) |
 
 ---
 
@@ -1317,7 +1317,7 @@ Splitting `video_stats` from `videos` is a **vertical partition**: the counters 
 - **Hosts** publish **listings** (address, geo-location, capacity, amenities, photos, house rules) with a **calendar** of availability and nightly prices.
 - **Guests** search by location, dates and guests; filter by price and amenities; then **book** (instant or on host approval).
 - No listing may be booked twice for overlapping nights.
-- **Payments** (charge the guest, pay out the host later, refunds and deposits through an external payment gateway), **reviews** in both directions after a stay, and **messaging** between guest and host. Hosts accept or decline booking requests.
+- **Payments** (charge the guest, pay out the host later, refunds and deposits through an external **payment gateway** — a third-party service that processes card payments), **reviews** in both directions after a stay, and **messaging** between guest and host. Hosts accept or decline booking requests.
 - Estimate (per day: 1 M listings created or updated with ~5 KB of data and 10 photos of ~1 MB; 10 M reservations and 10 M payments at 1 KB; 5 M reviews at 0.5 KB): photos ≈ **10 TB/day**, while reservations, payments and reviews together are only ≈ 22 GB/day — the transactional core is small enough for a relational cluster.
 
 ### Entities and relationships
@@ -1458,7 +1458,7 @@ CREATE TABLE snap_recipients (
 -- stories (story_id, user_id, media_key, created_at, expires_at = created_at + 24 h, set on insert)
 ```
 
-(`expires_at` cannot be a `GENERATED … STORED` column: `timestamptz + interval` depends on the session time zone, so PostgreSQL rejects it as not immutable.)
+(`expires_at` cannot be a `GENERATED … STORED` column: `timestamptz + interval` depends on the session time zone, so PostgreSQL rejects it as not **immutable** — a generated column's expression must always give the same output for the same input.)
 
 ![Snapchat schema](img/snapchat-schema.svg)
 
@@ -1481,14 +1481,14 @@ The **canonical pair** trick (`user_low < user_high`) stores a symmetric relatio
 
 ### Scaling notes and stores
 
-Ephemeral data is a poor fit for row-by-row `DELETE` at this volume (dead tuples, vacuum, index bloat). Two better tools: **time partitions** (partition `snaps` by day and `DROP` whole partitions — instant and bloat-free, [Chapter 15 §15.2](../15-scaling-databases/README.md)) or a store with native **TTL** (time-to-live), such as Cassandra/ScyllaDB or DynamoDB, where rows expire by themselves. Snap's 2017 IPO filing disclosed five-year cloud commitments of $2 billion with Google Cloud and $1 billion with AWS — at this scale, managed cloud databases are the usual choice rather than self-run servers.
+**Ephemeral** (short-lived) data is a poor fit for row-by-row `DELETE` at this volume (**dead tuples** — deleted row versions still occupying space — **vacuum**, Postgres's clean-up process for them, and **index bloat**, indexes swollen with entries for dead rows). Two better tools: **time partitions** (partition `snaps` by day and `DROP` whole partitions — instant and bloat-free, [Chapter 15 §15.2](../15-scaling-databases/README.md)) or a store with native **TTL** (time-to-live), such as Cassandra/ScyllaDB or DynamoDB, where rows expire by themselves. Snap's 2017 **IPO** (initial public offering — first sale of shares on the stock market) filing disclosed five-year cloud commitments of $2 billion with Google Cloud and $1 billion with AWS — at this scale, managed cloud databases are the usual choice rather than self-run servers.
 
 | Data | Store |
 |---|---|
 | Accounts, friend graph | Relational or key-value, sharded by user |
 | Snaps, recipients, chat messages | Wide-column / key-value with TTL, partitioned by recipient or chat |
 | Media | Encrypted object storage + CDN, lifecycle rules delete it |
-| Presence ("online now"), typing indicators | In-memory store |
+| Presence ("online now" status), typing indicators | In-memory store |
 | User search | Search engine index |
 
 Partitioning happens at three levels: **horizontal** (rows split by `user_id` or `snap_id` — users by range or consistent hashing, trying to keep friend lookups on one shard; Cassandra hashes its partition keys itself), **vertical** (user data and media data in separate stores), and **functional** (each microservice — user, media, messaging, search — owns its data).

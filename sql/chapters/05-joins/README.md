@@ -5,7 +5,7 @@ A well-designed relational database splits information into many narrow tables: 
 **What you'll learn**
 
 - What a join really is: a **Cartesian product** (every row paired with every row) filtered by a **join condition**, and `CROSS JOIN`.
-- `INNER JOIN` and the three **outer joins** — `LEFT`, `RIGHT` and `FULL` — with Venn-style pictures *and* row-by-row result tables that show exactly which rows come back and where `NULL` padding appears.
+- `INNER JOIN` and the three **outer joins** — `LEFT`, `RIGHT` and `FULL` — with Venn-style pictures (overlapping-circle diagrams) *and* row-by-row result tables that show exactly which rows come back and where `NULL` padding appears.
 - **Self joins** (a table joined to itself: managers, pairs, sequences).
 - **Semi-joins** and **anti-joins** ("customers who ordered" / "customers who never ordered") and the three ways to write them.
 - Join pitfalls: **fan-out** (rows multiplying), `ON` vs `WHERE` in outer joins, `NULL` keys, `COUNT(*)` after an outer join.
@@ -34,6 +34,8 @@ erDiagram
 ```
 
 *Figure 5.1 — The sample schema's foreign keys: every line is a join path.*
+
+A **foreign key** is a column whose values must match the **primary key** (the column that uniquely identifies each row, never `NULL`) of another table — `employees.dept_id` must be an existing `departments.dept_id`. Foreign keys are the natural paths along which tables are joined.
 
 The quirks that make joins interesting: **Asha (CEO) and Rohan (intern) have no department**, the **Research** department has **no employees**, two customers (Hana, Ivan) **never ordered**, one product (Desk Lamp) was **never sold**, and online orders have **no sales rep**.
 
@@ -135,7 +137,7 @@ Output:
 
 | Style | Example | Notes |
 |---|---|---|
-| Explicit (ANSI SQL-92) | `FROM a JOIN b ON a.k = b.k` | Join condition sits next to the join; required for outer joins. **Use this.** |
+| Explicit (ANSI SQL-92, the 1992 SQL standard) | `FROM a JOIN b ON a.k = b.k` | Join condition sits next to the join; required for outer joins. **Use this.** |
 | Implicit (comma) | `FROM a, b WHERE a.k = b.k` | Older style; easy to forget a condition in a long `WHERE`; can't express outer joins in standard SQL. |
 
 A few vocabulary words used below: an **equi-join** uses only `=` in its condition; a **non-equi join** uses other operators (`<`, `BETWEEN` …); the **join key** is the column(s) compared; **left** and **right** table simply mean "written before" and "written after" the `JOIN` keyword.
@@ -421,7 +423,7 @@ Output:
 
 Only 8 of the 14 orders appear — the 6 online orders have `sales_rep_id = NULL` and the inner join to `employees` dropped them. That may or may not be what you want; §5.10 fixes it with a `LEFT JOIN`.
 
-A **many-to-many** relationship (employees ↔ projects) goes through a **junction table** (`employee_projects`), so you join through it:
+A **many-to-many** relationship (employees ↔ projects: one employee works on many projects, one project has many employees) goes through a **junction table** (`employee_projects`, whose rows each link one employee to one project), so you join through it:
 
 ```sql
 SELECT p.name AS project, d.name AS dept, e.first_name, ep.role, ep.hours
@@ -503,7 +505,7 @@ Other common non-equi joins: matching a value to a range (`ON s.amount BETWEEN b
 
 - *Q: Is `JOIN` the same as `INNER JOIN`?* — Yes.
 - *Q: `ON` vs `WHERE` for an inner join?* — Same result; put the relationship in `ON` for readability. For outer joins they differ.
-- *Q: Why did my row count go up after a join?* — One-to-many: each left row repeats once per matching right row.
+- *Q: Why did my row count go up after a join?* — One-to-many (one left row relates to many right rows): each left row repeats once per matching right row.
 
 ### Self-check
 
@@ -771,7 +773,7 @@ In general: `full = inner + unmatched left + unmatched right`, `left = inner + u
 
 ### Real-world use: reconciliation
 
-`FULL JOIN` shines when **comparing two lists** where each side may have entries the other lacks: planned vs actual, yesterday's snapshot vs today's, the bank statement vs the ledger.
+`FULL JOIN` shines in **reconciliation** — checking that two records of the same facts agree — i.e. **comparing two lists** where each side may have entries the other lacks: planned vs actual, yesterday's snapshot vs today's, the bank statement vs the ledger.
 
 ```sql
 CREATE TABLE planned (emp_id int, hours int);
@@ -809,13 +811,13 @@ Output:
 | SQLite | supported since 3.39.0 |
 | MySQL / MariaDB | **not supported** — emulate: `SELECT … FROM a LEFT JOIN b ON … UNION SELECT … FROM a RIGHT JOIN b ON …` (or `UNION ALL` with the right-join half filtered to `WHERE a.key IS NULL` to avoid removing genuine duplicates) |
 
-PostgreSQL restricts `FULL JOIN` conditions to ones it can run as a merge or hash join (in practice: at least one equality between the two sides); an arbitrary condition such as `ON a.x < b.y` alone gives an error.
+PostgreSQL restricts `FULL JOIN` conditions to ones it can run as a merge or hash join (two of the physical join algorithms described in §5.10) (in practice: at least one equality between the two sides); an arbitrary condition such as `ON a.x < b.y` alone gives an error.
 
 ### In the interview
 
 **30-second answer.** "A full outer join returns every row from both tables, matching where it can and padding the other side with `NULL`s where it can't. It's used to reconcile two datasets. MySQL lacks it, so you emulate it with a `LEFT JOIN` `UNION` a `RIGHT JOIN`."
 
-- *Q: How do you find rows that are in exactly one of two tables?* — `FULL JOIN … WHERE a.pk IS NULL OR b.pk IS NULL` (or two anti-joins, or `EXCEPT` both ways — Chapter 6).
+- *Q: How do you find rows that are in exactly one of two tables?* — `FULL JOIN … WHERE a.pk IS NULL OR b.pk IS NULL` (or two anti-joins, or `EXCEPT` — "rows in the first result but not the second" — both ways; Chapter 6).
 
 ### Self-check
 
@@ -927,7 +929,7 @@ ORDER BY a.salary;
 (2 rows)
 ```
 
-Go up **two** levels with a second self join (for arbitrary depth, use a recursive CTE — [Chapter 7](../07-ctes-views-and-recursion/README.md)):
+Go up **two** levels with a second self join (for arbitrary depth, use a recursive CTE — a CTE, Common Table Expression, is a named subquery written with `WITH`, and a *recursive* one keeps joining to its own previous output until nothing new is found; [Chapter 7](../07-ctes-views-and-recursion/README.md)):
 
 ```sql
 SELECT e.first_name AS employee, m.first_name AS manager, g.first_name AS grand_manager
@@ -966,7 +968,7 @@ ORDER BY a.customer_id, a.order_id;
 (1 row)
 ```
 
-Many "compare with the previous row" problems (consecutive days, streaks) are solved either with a self join like this or, more efficiently, with `LAG`/`LEAD` window functions ([Chapter 8](../08-window-functions/README.md)).
+Many "compare with the previous row" problems (consecutive days, streaks) are solved either with a self join like this or, more efficiently, with `LAG`/`LEAD` window functions (functions that read a value from the previous / next row without collapsing rows; [Chapter 8](../08-window-functions/README.md)).
 
 ### Common mistakes
 
@@ -1001,7 +1003,7 @@ Two very common questions aren't really about *combining* columns at all:
 - **Semi-join** — "rows of A that **have at least one** match in B" (customers who have ordered). Each A row is returned **at most once**, and no columns of B are needed.
 - **Anti-join** — "rows of A that have **no** match in B" (customers who never ordered).
 
-SQL has no `SEMI JOIN` keyword; you write them with `EXISTS`/`IN` (semi) and `NOT EXISTS`/`LEFT JOIN … IS NULL`/`NOT IN` (anti). The query planner recognises these shapes and runs them with special *semi-join* and *anti-join* algorithms.
+SQL has no `SEMI JOIN` keyword; you write them with `EXISTS`/`IN` (semi) and `NOT EXISTS`/`LEFT JOIN … IS NULL`/`NOT IN` (anti). The query planner (the database component that decides how to execute a query) recognises these shapes and runs them with special *semi-join* and *anti-join* algorithms.
 
 ### Semi-join: EXISTS vs a plain JOIN
 
@@ -1088,11 +1090,11 @@ Output (identical for all three here):
 
 | Form | NULL-safe? | Notes |
 |---|---|---|
-| `NOT EXISTS (correlated subquery)` | **Yes** | Clearest intent; PostgreSQL plans it as an anti join. **Recommended.** |
+| `NOT EXISTS (correlated subquery)` (a subquery that refers to the outer row) | **Yes** | Clearest intent; PostgreSQL plans it as an anti join. **Recommended.** |
 | `LEFT JOIN … WHERE b.pk IS NULL` | Yes, if you test a never-NULL column (the PK) | Also planned as an anti join; handy when you want other columns from the join. |
 | `NOT IN (subquery)` | **No** | If the subquery returns even one `NULL`, the result is **empty** — see [Chapter 6](../06-subqueries-and-set-operations/README.md#62-multi-row-subqueries-in-and-not-in). Also often planned less efficiently. |
 
-The plan shows PostgreSQL executing `NOT EXISTS` as a **Hash Anti Join**:
+The plan (printed by `EXPLAIN`, which shows the strategy the database chose; `Seq Scan` means reading the whole table) shows PostgreSQL executing `NOT EXISTS` as a **Hash Anti Join**:
 
 ```sql
 EXPLAIN (COSTS OFF)
@@ -1174,7 +1176,7 @@ GROUP BY d.name;
 (1 row)
 ```
 
-The real payroll is 523,000. **Fix:** aggregate each child table separately (in a derived table or CTE), so each has one row per department, *then* join:
+The real payroll is 523,000. **Fix:** aggregate each child table separately (in a derived table — a subquery used in `FROM` — or a CTE), so each has one row per department, *then* join:
 
 ```sql
 SELECT d.name, e.payroll, p.projects
@@ -1298,7 +1300,7 @@ Research has no employees, but `count(*)` says 1 — it counted the padded row. 
 ### Other pitfalls, briefly
 
 - **Joining on the wrong columns** — e.g. `ON e.emp_id = d.dept_id` "works" (both are integers) and returns nonsense. Foreign keys document the correct paths.
-- **Type mismatches** — joining `text` to `integer` fails in PostgreSQL; casting inside the condition (`ON a.code::int = b.id`) prevents index use on `a.code`.
+- **Type mismatches** — joining `text` to `integer` fails in PostgreSQL; casting inside the condition (`ON a.code::int = b.id`) prevents index use on `a.code` (an **index** is a sorted lookup structure kept beside a table so rows can be found by value without reading everything).
 - **Duplicated keys in a lookup table** — if the "one" side isn't actually unique, every match fans out. Check with `GROUP BY key HAVING count(*) > 1`.
 
 ### Self-check
@@ -1373,7 +1375,7 @@ SELECT count(*) AS using_rows   FROM projects JOIN departments USING (dept_id);
 (1 row)
 ```
 
-`projects` and `departments` share `dept_id` — but also `name` and `budget`. `NATURAL JOIN` required all three to be equal, so no row matched. Schemas change over time (someone adds `created_at` to both tables), and a `NATURAL JOIN` changes meaning silently. **Name your join columns.**
+`projects` and `departments` share `dept_id` — but also `name` and `budget`. `NATURAL JOIN` required all three to be equal, so no row matched. Schemas (the table definitions) change over time (someone adds `created_at` to both tables), and a `NATURAL JOIN` changes meaning silently. **Name your join columns.**
 
 | | `ON` | `USING` | `NATURAL` |
 |---|---|---|---|
@@ -1448,12 +1450,12 @@ Rules for multi-table joins:
 
 ### How databases execute joins
 
-The logical definition (filtered Cartesian product) is not how joins run. The planner picks one of three physical algorithms per join, based on table sizes, indexes and statistics — you'll see them in `EXPLAIN` ([Chapter 12](../12-indexes-storage-and-query-performance/README.md)):
+The logical definition (filtered Cartesian product) is not how joins run. The planner picks one of three physical algorithms per join, based on table sizes, indexes and statistics (stored summaries of how many rows a table has and how its values are spread) — you'll see them in `EXPLAIN` ([Chapter 12](../12-indexes-storage-and-query-performance/README.md)):
 
 | Algorithm | How it works | Good when | Cost (roughly) |
 |---|---|---|---|
 | **Nested loop** | For each outer row, look up matching inner rows (ideally through an index) | Outer side small, index on the inner join key; also the only option for non-equi joins | *outer rows × cost of one lookup* |
-| **Hash join** | Build a hash table on the smaller input's key, then probe it with each row of the other | Equi-joins of large unsorted inputs | *O(n + m)*, needs memory for the hash table |
+| **Hash join** | Build a hash table (a lookup structure that finds a key in about one step) on the smaller input's key, then probe it with each row of the other | Equi-joins of large unsorted inputs | *O(n + m)* (work grows with the total size of both inputs), needs memory for the hash table |
 | **Merge join** | Sort both inputs by the key (or read them in index order), then walk them together | Inputs already sorted / indexed; very large inputs | *O(n + m)* after sorting |
 
 Practical consequence: **index your foreign-key columns** (`orders.customer_id`, `order_items.product_id` …). PostgreSQL indexes primary keys automatically but **not** foreign keys, and nested-loop joins from a parent to its children depend on those indexes.

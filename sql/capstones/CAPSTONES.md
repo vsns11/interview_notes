@@ -7410,3 +7410,509 @@ SELECT datname, age(datfrozenxid) FROM pg_database ORDER BY 2 DESC;
 
 ### TL;DR
 Sample PostgreSQL's statistics views into a separate history, turn counters into rates, alert on the leading signals (XID age, held-back cleanup, dead tuples, slot WAL, lock chains), and prove every alert with a reproducible incident.
+
+## Appendix: Concepts you need
+
+Every technical term, acronym, tool and library name used in the 40 briefs, in alphabetical order and in plain English, with the projects that use it. Terms from system design (latency, caching, replication, consensus, sharding and so on) are explained in more depth in [System Design Fundamentals](../../system-design-patterns/modules/00-system-design-fundamentals/README.md), and the chapter links point to where this book teaches the idea. The [glossary in Chapter 20](../chapters/20-cheatsheet-and-glossary/README.md#2020-glossary-az) gives the short form of every term in the chapters themselves.
+
+### 0–9
+
+- **1NF (first normal form)** — Every cell holds one atomic value and there are no repeating groups such as `author1, author2`. A comma-separated list in one cell breaks it. Used in project 1. ([Ch 11](../chapters/11-normalization/README.md))
+- **2PC (two-phase commit)** — A protocol for committing one transaction on several nodes: every node first prepares (promises it can commit), then all commit or all abort. Used in project 28. ([Ch 15](../chapters/15-scaling-databases/README.md))
+
+### A
+
+- **ACCESS EXCLUSIVE lock** — PostgreSQL's strongest table lock, taken by most `ALTER TABLE` forms. It blocks every other query on the table, even plain `SELECT`s. Used in projects 27, 31, 40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **ACID** — Atomicity, consistency, isolation, durability: the four guarantees a database transaction gives. Used in project 11. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Advisory lock** — A lock on a number your application chooses (`pg_advisory_xact_lock(id)`), not on a row. Useful to serialize work that no single row represents. Used in projects 20, 31. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Aggregate function** — A function that turns many rows into one value, such as `count`, `sum`, `avg`, `min` or `max`. Used in projects 1–6, 8, 12, 18, 22, 24, 27, 29, 30, 34, 39. ([Ch 4](../chapters/04-aggregation/README.md))
+- **Alerting** — Automatically notifying a person when a monitored value crosses a threshold, such as replication lag above 30 seconds. Used in projects 8, 11, 27, 29, 36, 40.
+- **amcheck** — A PostgreSQL extension that verifies the internal structure of indexes and tables, used to prove a restored backup is not corrupt. Used in project 36.
+- **ANALYZE** — The command that samples a table and refreshes the statistics the planner uses to estimate row counts. Used in projects 2, 13, 16, 17, 19, 23, 30. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Anti-join** — Returns rows of one table that have no match in another, written with `NOT EXISTS`. "Unread books" is an anti-join. Used in projects 1, 5–7, 23. ([Ch 5](../chapters/05-joins/README.md), [Ch 6](../chapters/06-subqueries-and-set-operations/README.md))
+- **Apache AGE / openCypher** — A PostgreSQL extension that adds graph storage and Cypher-style graph queries. Used in project 33. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **API** — Application programming interface: the set of calls one program offers to another, for example a REST service. Used in projects 11, 35.
+- **Append-only table** — A table that only ever receives new rows and is never updated or deleted, such as an audit log or a ledger. Used in projects 15, 22, 26, 34, 39. ([Ch 17](../chapters/17-schema-design-case-studies/README.md))
+- **Approximate nearest neighbour (ANN)** — Finding vectors close to a query vector through an index that is fast but may miss a few true neighbours. Used in project 38.
+- **archive_command / archive_timeout** — Settings that copy each finished WAL file to an archive, and force a new file after a set time on quiet servers so the archive never falls far behind. Used in project 36. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md), [Ch 15](../chapters/15-scaling-databases/README.md))
+- **Array** — A PostgreSQL column type that holds an ordered list of values, such as `text[]`. Used in projects 1, 15, 33. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **At-least-once delivery** — Every message or job is processed, but possibly more than once after a crash, so the handler must be idempotent. Used in projects 14, 29.
+- **Atomicity** — A transaction's changes happen completely or not at all. Used in projects 1, 11, 13, 20, 24. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **AT TIME ZONE** — Converts between an absolute instant (`timestamptz`) and the local wall-clock time of a named zone. Used in projects 5, 7, 9, 12. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **Audit log** — A table recording who changed what and when, with old and new values, usually filled by triggers. Used in projects 3, 15, 16, 24, 32, 39. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **auto_explain** — A PostgreSQL module that logs the execution plan of every query slower than a threshold. Used in project 30. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Autovacuum** — PostgreSQL's background worker that runs VACUUM and ANALYZE automatically as rows change. Tuned per table with settings like `autovacuum_vacuum_scale_factor`. Used in projects 14, 40. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md), [Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+
+### B
+
+- **Backfill** — Filling in values for existing rows after adding a column, usually in small batches so locks stay short. Used in projects 28, 31, 35. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Backoff (exponential, with jitter)** — Waiting longer after each failed retry (1 s, 2 s, 4 s …) and adding a random amount, so many clients do not retry at the same moment. Used in projects 14, 26, 31.
+- **Base62** — Writing numbers with 62 symbols (0–9, a–z, A–Z), giving short codes such as URL-shortener keys. Used in project 22.
+- **Base backup** — A physical copy of a running server's data directory, taken with `pg_basebackup`, which WAL replay can roll forward. Used in project 36. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md), [Ch 15](../chapters/15-scaling-databases/README.md))
+- **Batch processing** — Doing work in groups of rows (for example 1,000 at a time) instead of one by one, or one huge statement. Used in projects 4, 10, 14, 15, 17, 20, 22, 25, 27, 30, 31, 34.
+- **Bayesian average** — An average pulled toward the overall mean when there are few votes, so an item with two 5-star ratings does not top the chart. Used in project 2.
+- **BI (business intelligence)** — Dashboards and reporting tools that business users run against a database or warehouse. Used in projects 12, 34. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **bigint** — A 64-bit integer type, the usual choice for ids. Used in projects 1, 13, 20, 26, 31. ([Ch 3](../chapters/03-functions-and-expressions/README.md), [Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Billing anchor** — The date from which all of a subscription's billing periods are counted. Used in project 24.
+- **Bitemporal table** — A table that records two time ranges for each fact: when it was true in the real world (valid time) and when the database recorded it (transaction time). Used in project 32.
+- **Bloat** — Space wasted in tables and indexes by dead row versions and half-empty pages. Used in projects 14, 19, 27, 30, 35, 40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **BM25** — The standard relevance-scoring formula of search engines, rewarding rare query words that appear often in a short document. Used in project 17. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **Bounding box** — The smallest rectangle around a shape. Spatial indexes compare boxes first, then check the exact shapes. Used in project 23. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **BRIN index** — A tiny index storing the minimum and maximum value per range of table pages. Very effective on huge tables whose rows arrive in time order. Used in projects 5, 18, 22, 27, 34. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **btree_gist** — An extension that lets GiST indexes handle plain types like integers, so an exclusion constraint can mix `=` with range overlap. Used in projects 13, 32. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **B-tree index** — PostgreSQL's default index: a shallow sorted tree that finds a key or a range in a few page reads. Used in projects 5, 13, 17, 19, 21–23, 27, 32, 33. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **BUFFERS (EXPLAIN option)** — Adds to a plan how many pages each step found in memory (hit) and read from disk (read). Used in projects 2, 17, 23, 30. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **BYPASSRLS / FORCE ROW LEVEL SECURITY** — A role attribute that ignores row-level security, and a table setting that applies policies even to the table owner. Used in project 16. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+
+### C
+
+- **Cache** — A fast copy of often-read data kept in memory so the slower source is asked less often. Used in projects 22, 26, 30, 35, 40.
+- **Cache hit ratio** — The share of page reads served from shared buffers instead of disk. Used in project 40. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Calendar table** — A table (or `generate_series`) with one row per date, joined to the data so that empty days still show up. Used in projects 7–9, 12, 13, 18. ([Ch 7](../chapters/07-ctes-views-and-recursion/README.md))
+- **Cardinality estimate** — The planner's guess of how many rows each plan step will produce. Bad guesses lead to bad plans. Used in projects 19, 30. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **CDC (change data capture)** — Streaming every committed row change out of a database, usually by reading its log, into other systems. Used in projects 29, 34. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **CDN (content delivery network)** — Servers spread around the world that cache content close to users. Used in project 22.
+- **Chaos testing** — Deliberately causing failures (killing processes, cutting the network) to check that a system copes. Used in projects 26, 36.
+- **CHECK constraint** — A rule checked on every row written, such as `CHECK (rating BETWEEN 1 AND 5)`. Used in projects 1, 3, 6, 7, 11, 16, 19, 23, 31. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Checkpoint** — In PostgreSQL, the moment all changed pages are flushed to disk so crash recovery can start from there. In event processing, the saved position a consumer has reached. Used in projects 39, 40. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Checksum** — A small value computed from data so later corruption can be detected. PostgreSQL can keep data checksums on every page. Used in projects 1, 36, 37.
+- **Check-then-act** — Reading a value and acting on it later. Without a lock or constraint, another session can change the value in between. Used in projects 1, 8. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Chunk** — A piece of a long document (or a batch of rows) handled separately, such as one embedding per paragraph. Used in projects 17, 27, 38.
+- **CI (continuous integration)** — An automated system that runs the tests on every code change. Used in project 28.
+- **Citus** — A PostgreSQL extension that shards tables across several worker servers and routes or fans out queries for you. Used in projects 16, 28. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **CLI (command-line interface)** — A program you use by typing commands in a terminal. Used in project 1.
+- **clock_timestamp() vs now()** — `now()` returns the start time of the current transaction and stays fixed. `clock_timestamp()` returns the real current time on every call. Used in projects 9, 14, 20, 23, 24, 27, 32, 35. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **Closure table** — A table storing every ancestor–descendant pair of a tree or graph, so subtree queries need no recursion. Reads get cheap and writes get heavier. Used in project 33. ([Ch 7](../chapters/07-ctes-views-and-recursion/README.md))
+- **COALESCE** — Returns its first non-NULL argument, for example `coalesce(amount, 0)`. Used in projects 3–6, 38. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **Cohort** — A group of users who started in the same period (such as a signup week), followed over time. Used in project 18. ([Ch 19](../chapters/19-sql-interview-problems-2/README.md))
+- **Co-location** — Placing rows of different tables that share a shard key on the same node, so joins on that key stay local. Used in project 28. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Columnar storage** — Storing each column's values together instead of each row's. Analytical scans read only the needed columns and compress well. Used in projects 12, 28, 34. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md), [Ch 16](../chapters/16-beyond-relational/README.md))
+- **Commit / rollback** — `COMMIT` makes a transaction's changes permanent; `ROLLBACK` throws them away. Used in projects 1, 3, 8, 11, 13–16, 20, 26, 28, 29, 31, 32, 34–37, 39. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Composite foreign key** — A foreign key over several columns, such as `(tenant_id, project_id)`, which also prevents rows pointing across tenants. Used in project 16. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Composite index** — An index on several columns. It helps queries that filter on a leftmost prefix of those columns; put equality columns first. Used in projects 5, 25, 27, 30. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Compute on read** — Deriving a value (a streak, a grade) from stored facts each time it is asked for, instead of storing it and keeping it up to date. Used in projects 3, 9.
+- **Concurrency** — Several sessions working at the same time, which can interfere unless the database isolates them. Used in projects 3, 8, 11–15, 20–22, 24, 26, 27, 29–32, 35–37, 39, 40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Concurrent refresh** — `REFRESH MATERIALIZED VIEW CONCURRENTLY` rebuilds a materialized view while readers keep using the old contents. It needs a unique index. Used in projects 12, 15, 21, 27, 31. ([Ch 7](../chapters/07-ctes-views-and-recursion/README.md))
+- **Conditional aggregation** — Aggregating only rows that meet a condition, with `count(*) FILTER (WHERE …)` or `sum(CASE …)`. Used in projects 3, 6, 8, 10, 18. ([Ch 4](../chapters/04-aggregation/README.md))
+- **Connection pooling** — Reusing a small set of open database connections for many clients, with an in-app pool or PgBouncer. Used in projects 14–16, 28, 30, 35. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Consensus store (etcd)** — A small replicated key-value store whose nodes agree by majority (Raft). Patroni keeps the leader key in it. Used in project 37. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Consistent hashing** — Placing keys and nodes on a hash ring so that adding a node moves only a small share of keys. Used in project 28. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Constraint** — A rule the database enforces on every write, such as `NOT NULL`, `UNIQUE`, a foreign key or `CHECK`. Used in projects 1, 3, 4, 6, 7, 9–11, 13–16, 19–22, 24, 26, 28, 31, 32, 36, 39. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Constraint trigger** — A trigger that can be deferred to commit time, used for rules that span several rows. Used in projects 3, 26, 32. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Containment operator @>** — Tests whether the left `jsonb` value (or array or range) contains the right one. GIN indexes support it. Used in projects 19, 27, 32. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **\copy (psql)** — psql's client-side `COPY`: it reads a file on your machine and streams it to the server, so it needs no superuser rights. Used in projects 1, 2, 5, 10. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Cosine distance** — A distance between vectors based on the angle between them. pgvector writes it `<=>`. Used in project 38.
+- **Counter vs gauge** — A counter only grows (total commits), so you need differences between samples to get a rate. A gauge is a current value (open connections). Used in project 40.
+- **CPU** — The processor. Sorting, hashing and evaluating expressions cost CPU time. Used in projects 19, 27, 28, 40. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **CQRS** — Command query responsibility segregation: one model handles writes (commands), separate read models handle queries. Used in project 39.
+- **Credit note** — A document that corrects or refunds part of an issued invoice, because invoices themselves are never edited. Used in project 24.
+- **cron / pg_cron** — A scheduler that runs commands at set times. `pg_cron` is a PostgreSQL extension that schedules SQL inside the database. Used in projects 8, 14, 20, 21, 27.
+- **Crosstab / tablefunc** — The `tablefunc` extension's `crosstab` function, which pivots rows into columns. Used in projects 8, 18. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **CSV** — Comma-separated values: a plain-text table file with one row per line. Used in projects 1, 2, 4–6, 10, 33.
+- **CTE (common table expression)** — A named subquery written with `WITH name AS (…)` and used by the statement that follows. Used in projects 2, 5, 7–9, 12, 18, 19, 21, 30, 33, 38. ([Ch 7](../chapters/07-ctes-views-and-recursion/README.md))
+- **cube / earthdistance** — Older PostgreSQL extensions for simple distance-on-Earth queries without PostGIS. Used in project 23.
+- **current_setting / set_config** — Functions to read and set a session variable such as `app.tenant_id`. With `true`, `set_config` lasts only until the transaction ends. Used in projects 15, 16. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Cursor (pagination)** — The value of the last item on a page, sent back by the client to fetch the next page. Used in project 25. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+
+### D
+
+- **Data-quality rule** — A stored check (often a SQL predicate) that flags rows breaking an expectation, such as a ZIP code with letters. Used in project 10.
+- **Data warehouse** — A database designed for analysis, loaded from operational systems and tuned for large scans and aggregates. Used in projects 11, 12, 29, 34, 39. ([Ch 11](../chapters/11-normalization/README.md), [Ch 16](../chapters/16-beyond-relational/README.md))
+- **daterange / tstzrange** — PostgreSQL range types of dates or of timestamps with time zone. `[)` bounds include the start and exclude the end. Used in projects 7, 13, 32, 34. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md), [Ch 17](../chapters/17-schema-design-case-studies/README.md))
+- **date_trunc** — Rounds a timestamp down to the start of its hour, day, week, month or year. Used in projects 2, 4, 5, 9, 18, 27. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **DAU / WAU / MAU** — Daily, weekly and monthly active users: distinct users active in the period. Used in project 18.
+- **dbt** — A tool that manages warehouse transformations as version-controlled SQL `SELECT` models. Used in project 34.
+- **DDL / DML** — Data definition language (`CREATE`, `ALTER`, `DROP`) changes structure. Data manipulation language (`INSERT`, `UPDATE`, `DELETE`) changes rows. Used in projects 1, 3, 4, 6, 7, 10, 11, 13–16, 19–22, 24, 26, 31, 32, 36. ([Ch 1](../chapters/01-databases-and-the-relational-model/README.md), [Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Deadlock** — Two transactions each wait for a lock the other holds. PostgreSQL aborts one with SQLSTATE `40P01`. Used in projects 11, 26. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Dead tuple** — An old row version left behind by an update or delete, invisible to every transaction and waiting for VACUUM. Used in projects 14, 22, 27, 31, 40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Debezium** — An open-source CDC tool that reads a database's change log and publishes each row change to Kafka. Used in project 29.
+- **Decimal / numeric** — An exact decimal type with chosen precision and scale, such as `numeric(12,2)`. The right type for money. Used in projects 2–4, 6, 19, 24, 26, 27. ([Ch 3](../chapters/03-functions-and-expressions/README.md), [Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Declarative partitioning** — PostgreSQL's built-in partitioning: `PARTITION BY RANGE (ts)` creates a parent table whose rows live in child tables. Used in project 27. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Deduplication** — Removing duplicate rows or events, keeping one of each. Used in projects 19, 29, 33, 40. ([Ch 8](../chapters/08-window-functions/README.md))
+- **Deferrable constraint** — A constraint checked at `COMMIT` rather than after each statement (`DEFERRABLE INITIALLY DEFERRED`). Used in projects 3, 26. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Denormalization** — Deliberately storing a copy or a precomputed value (such as `like_count`) to speed up reads, with a way to keep it correct. Used in projects 11, 25, 34. ([Ch 11](../chapters/11-normalization/README.md))
+- **dense_rank / rank / row_number** — Ranking window functions. On a tie for second place they give 2, 2, 3 / 2, 2, 4 / 2, 3, 4. Used in projects 3, 4, 9, 12, 21, 38. ([Ch 8](../chapters/08-window-functions/README.md))
+- **Derived data** — Values computed from stored facts (totals, percentages, streaks) rather than stored as facts themselves. Used in projects 3, 9, 26, 39. ([Ch 10](../chapters/10-data-modeling-and-er-diagrams/README.md))
+- **DETACH PARTITION … CONCURRENTLY** — Removes a partition from its parent without blocking queries on the parent (PostgreSQL 14+). Used in projects 15, 27. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Dijkstra's algorithm** — Finds the cheapest path in a weighted graph by always expanding the closest unvisited node, which needs a priority queue. Used in project 33.
+- **Dimension table** — A warehouse table of descriptive context (customer, product, date) that fact rows point to. Used in projects 10, 34, 38.
+- **Disaster recovery** — Being able to restore service and data after losing a server, a site or the data itself. Used in projects 30, 36. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **DISTINCT ON** — PostgreSQL's way to keep the first row of each group, decided by `ORDER BY`. Used in project 4. ([Ch 2](../chapters/02-select-basics/README.md))
+- **Distribution column** — In Citus, the shard key column (such as `tenant_id`) whose hash decides which shard stores a row. Used in project 28. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **DNS** — The Domain Name System, which turns host names into IP addresses. Changing a DNS record is one way to redirect clients after failover. Used in project 35.
+- **DO block** — An anonymous PL/pgSQL code block run once with `DO $$ … $$`, handy for tests and scripts. Used in project 1. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Docker / Docker Compose** — Tools that run software in isolated containers. Compose starts a group of containers from one file. Used in projects 28, 29, 35, 37.
+- **Double-entry bookkeeping** — Recording every money movement as equal debits and credits, so all entries of a transaction sum to zero. Used in project 26. ([Ch 17](../chapters/17-schema-design-case-studies/README.md))
+- **Double NOT EXISTS** — Relational division written as "there is no required item that this candidate lacks". Used in project 6. ([Ch 6](../chapters/06-subqueries-and-set-operations/README.md), [Ch 19](../chapters/19-sql-interview-problems-2/README.md))
+- **Downsampling** — Replacing detailed old measurements with coarser summaries, such as one row per minute instead of per second. Used in project 27. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **Drill (recovery drill)** — A rehearsal of a failure, such as restoring a backup or killing the primary, to prove the plan works and to time it. Used in project 36.
+- **Dual-write problem** — An application writing to two systems (database and message broker) separately. If one write fails, they disagree. Used in projects 29, 31. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **Dunning** — Retrying a failed payment on a schedule and reminding the customer, before finally cancelling. Used in project 24.
+- **Durability** — Once committed, a transaction's changes survive a crash. Used in projects 22, 36, 37. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Dynamic SQL** — SQL text built at run time and run with `EXECUTE`. Identifiers go through `format('%I')` and values through `%L` or parameters. Used in project 10. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md), [Ch 19](../chapters/19-sql-interview-problems-2/README.md))
+
+### E
+
+- **EAV (entity-attribute-value)** — A table with one row per (entity, attribute, value), the flexible but hard-to-query alternative to columns or `jsonb`. Used in project 19.
+- **ELT** — Extract, load, transform: load raw data into the warehouse first, then transform it there with SQL. Used in project 34.
+- **Embedding** — A list of numbers (a vector) that represents the meaning of a text or image, so similar items have nearby vectors. Used in project 38.
+- **Empty divisor** — In relational division, a set with no members. "Has every required item" is then trivially true, which you must decide is right or not. Used in project 6.
+- **Enum** — A fixed list of allowed values, as a PostgreSQL `enum` type or as `text` with a `CHECK (status IN (…))`. Used in projects 3, 19, 33. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **ER diagram** — A diagram of entities, their attributes and the relationships between them. Used in projects 1, 5, 7, 11, 34. ([Ch 10](../chapters/10-data-modeling-and-er-diagrams/README.md))
+- **ETL** — Extract, transform, load: reshape data before loading it into the warehouse. Used in project 34. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **EvalPlanQual re-check** — When an `UPDATE` waits for a row lock, PostgreSQL re-checks its `WHERE` clause against the newest row version before updating. Used in project 11. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Event sourcing** — Storing every change as an immutable event and deriving current state by replaying the events. Used in project 39.
+- **Exactly-once** — Each message affects the result one time only. In practice built from at-least-once delivery plus idempotent handling. Used in projects 14, 26, 29, 39. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **EXCEPT** — Set operation returning rows of the first query not found in the second. Running it both ways compares two results in tests. Used in projects 1, 3, 4, 6, 12. ([Ch 6](../chapters/06-subqueries-and-set-operations/README.md))
+- **Exclusion constraint** — A PostgreSQL constraint that forbids two rows conflicting under given operators, such as same room and overlapping dates. Used in projects 7, 13, 32. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md), [Ch 17](../chapters/17-schema-design-case-studies/README.md))
+- **Expand / contract migration** — Changing a schema without downtime in phases: add the new structure, copy and dual-write, switch readers, then remove the old structure. Used in project 31.
+- **EXPLAIN (ANALYZE, BUFFERS)** — Runs a query and shows its plan with real row counts, timings and page reads for every step. Used in projects 2, 5, 13, 16, 17, 19, 23, 27, 28, 30, 32, 33. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Exported snapshot** — A snapshot one session publishes so another can read exactly the same data, used to line up an initial copy with a replication slot. Used in project 29.
+- **Expression index** — An index on the result of an expression, such as `lower(email)` or `(attrs->>'ram_gb')::int`. Used in projects 6, 19, 30. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Extended statistics** — Statistics on combinations of columns or on expressions (`CREATE STATISTICS`) that improve estimates for correlated columns. Used in projects 19, 30. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Extension (PostgreSQL)** — An add-on package installed with `CREATE EXTENSION`, such as PostGIS, pg_trgm or pgvector. Used in projects 1, 4, 8, 13, 15, 17, 18, 21–23, 27, 28, 30, 33, 34, 38. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+
+### F
+
+- **Facet counts** — Counts per attribute value within the current search results (12 red, 5 blue), shown as filters. Used in projects 17, 19. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **Fact table** — A warehouse table of measurable events (sales lines), each pointing to dimension tables. Used in project 34. ([Ch 11](../chapters/11-normalization/README.md))
+- **Fail closed** — When a required setting is missing, refuse access (return no rows) instead of allowing everything. Used in project 16.
+- **Failover / switchover** — Failover promotes a standby after the primary fails. Switchover is a planned, clean swap of roles. Used in projects 28, 29, 35, 37. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Failure domain** — A set of components that fail together, such as one host, rack or data centre. Used in project 37.
+- **Fan-out (join)** — Rows multiplying when one row joins to several matching rows, which inflates counts and sums. Used in projects 1, 2, 5, 6, 14, 25, 30. ([Ch 5](../chapters/05-joins/README.md))
+- **Fan-out on write / on read** — Feed designs: copy each new post into every follower's timeline when posted, or assemble the timeline when it is read. A hybrid does both. Used in project 25. ([Ch 17](../chapters/17-schema-design-case-studies/README.md))
+- **Fencing** — Making sure an old primary can no longer accept writes after a new one is promoted. Used in project 37. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Fingerprint** — A hash of a row's content used to recognise duplicates, for example on repeated imports. Used in project 4.
+- **Foreign data wrapper (postgres_fdw, file_fdw)** — An extension that lets PostgreSQL query another database or a file as if it were a local table. Used in projects 10, 34. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Foreign key** — A column whose values must match a key of another table, such as `loan.book_id` referencing `book`. Used in projects 1, 5, 10, 16, 19, 28, 30–32, 34. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **format() with %I and %L** — Builds SQL text safely: `%I` quotes an identifier and `%L` quotes a literal value. Used in project 10. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Freezing** — VACUUM marking old row versions as visible to everyone so their transaction ids can be reused safely. Used in project 40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Frontier** — In a recursive query, the rows produced by the previous step, which the next step expands from. Used in project 33. ([Ch 7](../chapters/07-ctes-views-and-recursion/README.md))
+- **FULL JOIN** — Returns all rows from both sides, with NULLs where one side has no match. Used in projects 5, 38. ([Ch 5](../chapters/05-joins/README.md))
+- **Full-text search** — Searching documents by words, with stemming and relevance ranking. In PostgreSQL: `tsvector @@ tsquery`. Used in projects 17, 29, 38. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Functional dependency** — `X → Y`: rows with the same X always have the same Y. Normalization is based on these. Used in project 10. ([Ch 11](../chapters/11-normalization/README.md))
+
+### G
+
+- **Gaps and islands** — Problems about runs of consecutive values (streaks). Grouping by `value − row_number()` puts each run in one group. Used in project 9. ([Ch 8](../chapters/08-window-functions/README.md))
+- **Generated column** — A column computed from other columns of the row (`GENERATED ALWAYS AS (expr) STORED`). Used in project 17. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **generate_series** — A function that returns a series of numbers or timestamps as rows, used to create test data and calendars. Used in projects 3, 5, 7–9, 24, 30. ([Ch 7](../chapters/07-ctes-views-and-recursion/README.md))
+- **Generic vs custom plan** — A prepared statement first plans for each set of parameters (custom plans), then may switch to one generic plan for all values, which can be slow for skewed data. Used in project 30. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **geography vs geometry** — PostGIS types: `geography` works on the Earth's surface in metres; `geometry` works on a flat plane in the units of its coordinate system. Used in project 23. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **\gexec (psql)** — A psql command that runs every value of the previous query's result as a SQL statement, used to execute generated SQL. Used in project 10.
+- **GIN index** — An inverted index mapping each element (word, `jsonb` key, array item, trigram) to the rows containing it. Used in projects 17, 19, 27, 38. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **GIN jsonb_ops vs jsonb_path_ops** — Two GIN operator classes for `jsonb`: the default supports more operators; `jsonb_path_ops` supports only containment but is smaller and faster. Used in project 19. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md), [Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **GiST index** — A balanced tree of bounding boxes for overlap and nearest-neighbour searches on ranges, shapes and points. Used in projects 13, 17, 22, 23, 32, 34. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Grafana / Metabase** — Dashboard tools that chart query results from PostgreSQL and other sources. Used in projects 12, 40.
+- **Grain** — What exactly one row of a fact table represents, such as "one order line". Used in project 34.
+- **greatest()** — Returns the largest of its arguments, ignoring NULLs in PostgreSQL. Used in projects 6, 21. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **GROUP BY** — Groups rows that share values so aggregates are computed per group. Used in projects 2, 4–6, 9, 10, 12, 17–19, 22, 27. ([Ch 4](../chapters/04-aggregation/README.md))
+
+### H
+
+- **HA (high availability)** — Keeping a service running through failures, usually with standbys and automatic failover. Used in projects 36, 37. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Half-open range [a, b)** — A range that includes its start and excludes its end, so back-to-back ranges never overlap. Used in projects 13, 32. ([Ch 2](../chapters/02-select-basics/README.md), [Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **HAProxy** — A proxy that sends client connections to whichever server a health check says is the current primary. Used in project 37.
+- **Hash / hashing** — Turning a value into a fixed-size number. Used to pick a shard or partition, build hash indexes and spot duplicate rows. Used in projects 2, 22, 25, 27, 28, 30, 34, 38. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md), [Ch 15](../chapters/15-scaling-databases/README.md))
+- **Hash index** — An index on a hash of the key. Equality lookups only, and it cannot enforce `UNIQUE`. Used in project 22. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **HAVING** — Filters groups after aggregation, for example `HAVING count(*) >= 5`. Used in projects 2, 6, 10. ([Ch 4](../chapters/04-aggregation/README.md))
+- **Health check** — A small probe (such as a REST call to Patroni) that tells a proxy which node is healthy and which is the primary. Used in projects 35, 37.
+- **Heartbeat** — A regular "I am alive" signal. When heartbeats stop, the node is assumed dead. Used in projects 14, 36. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Histogram** — Counts of values grouped into buckets (0–9, 10–19 …). `width_bucket` assigns the bucket. Used in projects 3, 21, 27.
+- **HNSW index** — Hierarchical navigable small world: a layered graph of neighbouring vectors that finds approximate nearest neighbours quickly. Used in project 38.
+- **Hold (reservation)** — A temporary claim on an item (a seat) that expires unless confirmed. Used in project 20.
+- **Hot row** — A single row that almost every transaction must update (a popular product's stock), so they all queue on its lock. Used in projects 8, 11, 20, 22, 25, 26, 28. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Hot standby** — A replica that replays the primary's WAL and also answers read-only queries. Used in projects 35, 40. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **HOT update** — Heap-only tuple update: when no indexed column changes and the page has room, PostgreSQL updates without touching any index. Used in projects 30, 40. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **HyperLogLog** — An algorithm that estimates distinct counts using very little memory, with a small known error. The `hll` extension. Used in projects 18, 22.
+- **HypoPG** — An extension that creates hypothetical indexes so `EXPLAIN` shows whether the planner would use them, without building them. Used in project 30.
+
+### I
+
+- **Idempotency key** — A unique id the client sends with a request, so a retried request returns the first result instead of acting twice. Used in projects 11, 14, 20, 24, 26.
+- **Idempotent** — Having the same effect whether it runs once or many times, which makes retries and re-runs safe. Used in projects 4, 8, 10, 11, 14, 20, 24, 26, 27, 29, 34, 39.
+- **Identity column** — A column whose values the database generates: `bigint GENERATED ALWAYS AS IDENTITY`. Used in project 1. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **idle_in_transaction_session_timeout** — A setting that ends sessions that sit inside an open transaction doing nothing, which would otherwise hold locks and block vacuum. Used in project 14. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Incremental backup** — A backup of only the blocks changed since an earlier backup (PostgreSQL 17+ with `pg_combinebackup`). Used in project 36. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Index** — A separate structure that finds rows by key without reading the whole table. Speeds reads, slows writes. Used in projects 1, 2, 5–7, 9, 10, 12–14, 16–23, 25–36, 38–40. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Index-only scan** — Answering a query from the index alone, without visiting the table, when the index holds every needed column. Used in project 21. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **information_schema** — The SQL-standard views that describe tables, columns and constraints. Used in project 10. ([Ch 1](../chapters/01-databases-and-the-relational-model/README.md))
+- **INSERT … SELECT** — Inserting the rows a query returns, the usual way to move cleaned data from a staging table into the real tables. Used in projects 1, 2, 4, 8, 10, 15, 20, 27. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Interval** — A length of time, such as `interval '15 minutes'`. `make_interval(months => n)` builds one from numbers. Used in projects 5, 7, 8, 12–14, 23, 24, 27, 37, 40. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **Inverted index** — An index from each word or element to the rows or documents that contain it. GIN is PostgreSQL's version. Used in project 17. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md), [Ch 16](../chapters/16-beyond-relational/README.md))
+- **Isolation level** — How much concurrent transactions can see of each other: Read Committed (PostgreSQL's default), Repeatable Read or Serializable. Used in projects 3, 8, 11, 13, 16, 20, 26, 28, 29, 35, 38. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **ISO week** — Week numbering where weeks start on Monday and week 1 contains the first Thursday of the year. Used in projects 5, 8, 9, 12, 18, 21. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **IVFFlat** — A pgvector index that clusters vectors into lists and searches only the closest lists. Faster to build than HNSW, usually lower recall. Used in project 38.
+
+### J
+
+- **JDBC** — Java's standard API for talking to databases through a driver. Used in project 14. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **JOIN** — Combining rows of two tables that match on a condition, such as `ON o.customer_id = c.id`. Used in projects 3–6, 9, 18, 23, 33, 34, 38. ([Ch 5](../chapters/05-joins/README.md))
+- **Join algorithms (nested loop, hash, merge)** — The three ways PostgreSQL runs a join: probe the inner side per outer row, build a hash table, or merge two sorted inputs. Used in projects 19, 30, 33. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **jsonb_each** — Expands a `jsonb` object into one row per key–value pair. Handy for comparing old and new rows in an audit trigger. Used in projects 15, 19. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **JSON / jsonb** — JSON is a text format for nested data. `jsonb` is PostgreSQL's binary, indexable JSON type. Used in projects 14, 15, 18–20, 27, 29, 30, 39. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **JSON_TABLE** — A SQL-standard function that turns JSON into rows and columns (PostgreSQL 17+). Used in project 19. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Junction table** — A table that links two others in a many-to-many relationship, such as `book_author`. Used in projects 1, 2. ([Ch 10](../chapters/10-data-modeling-and-er-diagrams/README.md))
+
+### K
+
+- **Kafka** — Apache Kafka: a distributed, replicated log used to stream events between systems. Used in projects 14, 29. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **Keyset (seek) pagination** — Fetching the next page with `WHERE (created_at, id) < (last values) ORDER BY … LIMIT n` instead of `OFFSET`, so every page is equally fast. Used in projects 25, 30. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Key-value store** — A database that maps keys to values with simple get and put operations. Used in projects 15, 37. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **KNN operator <->** — The distance operator used in `ORDER BY location <-> point LIMIT 10`, which lets a GiST index return the nearest rows first. Used in projects 23, 38. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **Kubernetes** — A system that runs and restarts containers across a cluster of machines. Used in project 37.
+
+### L
+
+- **lag() / lead()** — Window functions that return a value from the previous or the next row. Used in projects 3, 4, 7, 9, 12, 20, 29, 31, 35, 39, 40. ([Ch 8](../chapters/08-window-functions/README.md))
+- **Latency** — How long one operation takes, from request to response. Used in projects 14, 17, 20–22, 25, 27–29, 31, 35, 37, 38.
+- **LATERAL join** — A subquery in `FROM` that can use columns of the tables to its left, running once per left row. Used in projects 3, 4, 23, 25. ([Ch 6](../chapters/06-subqueries-and-set-operations/README.md))
+- **Lazy expiry** — Treating expired holds as free when they are read, instead of relying on a cleanup job to delete them first. Used in project 20.
+- **Leaderboard** — A ranked list of players or items by score, usually with each player's position. Used in projects 9, 21.
+- **Leader key / leader election** — Choosing which node acts as primary. Patroni holds a leader key with a TTL in etcd; whoever holds the key is the leader. Used in project 37. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Lease** — A claim that expires automatically unless renewed, such as a job's `lease_until` or a leader key's TTL. Used in project 14. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **LEFT JOIN** — Returns every row of the left table, with matching right rows or NULLs. Used in projects 3–6, 9. ([Ch 5](../chapters/05-joins/README.md))
+- **libpq / target_session_attrs** — libpq is PostgreSQL's client library. Its `target_session_attrs` connection option picks a writable primary or a read-only standby from a host list. Used in projects 35, 37. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **LIMIT / OFFSET** — Return at most n rows, after skipping k. Deep `OFFSET` gets slower and slower because skipped rows are still read. Used in projects 2–5, 8, 9, 12, 14, 17, 18, 20, 21, 23, 25, 30, 38. ([Ch 2](../chapters/02-select-basics/README.md), [Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **LISTEN / NOTIFY** — PostgreSQL's built-in messaging: a session sends `NOTIFY channel` and listening sessions are woken, for example to pick up new jobs. Used in projects 14, 39.
+- **Load balancer** — A component that spreads incoming connections or requests over several servers. Used in project 35.
+- **Lock** — A marker that stops other transactions from changing (or sometimes reading) a row or table until it is released. Used in projects 3, 4, 8, 11, 13, 14, 20, 22, 24–31, 39, 40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Lock contention** — Transactions queueing for the same lock, which limits throughput. Used in projects 8, 13, 20. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Lock queue** — Waiting lock requests on one table. A waiting `ALTER TABLE` blocks every later query behind it. Used in project 31. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **lock_timeout / statement_timeout** — Settings that cancel a statement that waits too long for a lock, or runs too long in total. Used in projects 27, 31, 33. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Logical decoding** — Turning WAL into a stream of row-level changes (insert, update, delete) that other programs can consume. Used in projects 15, 29. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Logical replication slot** — A server-side bookmark of how far a consumer has read the change stream. WAL is kept until the consumer confirms, so an abandoned slot fills the disk. Used in projects 29, 40. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Logical vs physical backup** — A logical backup (`pg_dump`) stores the SQL to rebuild objects. A physical backup copies the data files themselves. Used in projects 19, 36. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **LSN (log sequence number)** — A position in the WAL, used to measure replication lag and to say exactly where recovery or a consumer stopped. Used in projects 29, 35. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md), [Ch 15](../chapters/15-scaling-databases/README.md))
+- **ltree** — A PostgreSQL extension that stores tree paths like `a.b.c` with operators for ancestors and descendants. Used in project 33.
+
+### M
+
+- **make_interval** — Builds an interval from numeric parts, such as `make_interval(months => 3)`. Used in projects 7, 24. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **Materialized view** — A stored query result that must be refreshed to show new data. Used in projects 2, 3, 12, 21, 34. ([Ch 7](../chapters/07-ctes-views-and-recursion/README.md))
+- **matplotlib** — A Python library for drawing charts. Used in projects 2, 12, 18.
+- **max_slot_wal_keep_size** — A limit on how much WAL a replication slot may hold back, so a dead consumer cannot fill the disk. Used in project 29. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Median / percentile** — The median is the middle value. `percentile_cont(0.95) WITHIN GROUP (ORDER BY x)` gives the 95th percentile. Used in projects 5, 10, 12, 18, 21, 25, 27, 30. ([Ch 4](../chapters/04-aggregation/README.md))
+- **MERGE** — A standard statement that inserts, updates or deletes target rows based on a source (PostgreSQL 15+). Used in projects 4, 11, 24, 34. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Mergeable aggregate** — An aggregate whose partial results can be combined later (sum, count, min, max). An average or a percentile cannot be merged directly. Used in project 27.
+- **Message broker** — A server that receives messages from producers and hands them to consumers, such as Kafka or RabbitMQ. Used in projects 14, 29.
+- **Migration (schema)** — A versioned script that changes the schema, applied in order and recorded in a table like `schema_migrations`. Used in projects 15, 16, 19, 28, 31.
+- **MovieLens** — A public dataset of movie ratings published by the GroupLens research lab. Used in project 2.
+- **MRR (monthly recurring revenue)** — The subscription revenue a business expects every month. Used in project 24.
+- **Multirange / range_agg** — A multirange is a set of non-overlapping ranges. `range_agg` merges many ranges into one (PostgreSQL 14+). Used in projects 13, 32.
+- **Multi-tenant** — One database or schema serving many customers (tenants), with each tenant's rows kept apart, usually by a `tenant_id` column. Used in projects 16, 28, 38. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **MVCC** — Multiversion concurrency control: updates create new row versions, so readers see a consistent snapshot and never block writers. Used in projects 14, 19, 22, 30, 39, 40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+
+### N
+
+- **Natural key** — A key taken from the real-world data, such as an ISBN or email. Used in projects 1, 34. ([Ch 10](../chapters/10-data-modeling-and-er-diagrams/README.md))
+- **Network partition** — A network failure that splits servers into groups that cannot reach each other, while each group keeps running. Used in project 37. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Noisy neighbour** — One busy tenant using so much of a shared server that other tenants slow down. Used in projects 15, 16.
+- **Normalization** — Organising tables so each fact is stored once, which prevents update anomalies. Used in projects 1, 2, 5, 10, 17, 30, 34. ([Ch 11](../chapters/11-normalization/README.md))
+- **NOT VALID constraint** — A constraint added without checking existing rows (only new writes are checked). `VALIDATE CONSTRAINT` checks the old rows later with a weaker lock. Used in project 31. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **NULL** — A marker for a missing or unknown value. Comparisons with NULL are unknown, never true. Used in projects 1–6, 10, 15, 16, 18, 19, 30, 31, 34. ([Ch 2](../chapters/02-select-basics/README.md))
+- **NULLIF** — Returns NULL when its two arguments are equal, otherwise the first: `a / NULLIF(b, 0)` avoids division by zero. Used in projects 3, 10. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+
+### O
+
+- **OLAP / OLTP** — OLAP is analytical work (big scans and aggregates). OLTP is transactional work (many small reads and writes). Used in project 34. ([Ch 11](../chapters/11-normalization/README.md), [Ch 16](../chapters/16-beyond-relational/README.md))
+- **ON CONFLICT (upsert)** — `INSERT … ON CONFLICT DO NOTHING` skips duplicates. `DO UPDATE` updates the existing row instead. Used in projects 4, 8–10, 21, 22, 24, 27, 39. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **OpenSearch / Elasticsearch** — Distributed search engines that index documents for full-text search and analytics. Used in project 17. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **OpenStreetMap** — A free, community-made map of the world whose data can be downloaded and loaded into PostGIS. Used in project 23.
+- **Optimistic concurrency** — Doing work without locks and checking at write time that nobody changed the data (for example an expected version number), retrying if they did. Used in project 39. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **ORDER BY** — Sorts the result. Without it, row order is not guaranteed. Used in projects 2–5, 8, 9, 11–14, 17, 21, 23, 25, 29, 30, 38, 40. ([Ch 2](../chapters/02-select-basics/README.md))
+- **Outbox (transactional outbox)** — Writing an event row to an outbox table in the same transaction as the data change, then publishing it from there. Avoids the dual-write problem. Used in projects 29, 39. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **Overlap operator &&** — Tests whether two ranges, arrays or boxes share any part. Used in projects 7, 13, 32. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+
+### P
+
+- **p95 / p99 latency** — The time within which 95 % (or 99 %) of requests finish. It shows the slow tail that an average hides. Used in projects 11, 14, 17, 20, 27–29, 31, 38. ([Ch 4](../chapters/04-aggregation/README.md))
+- **Partial exclusion constraint** — An exclusion constraint with a `WHERE` clause, so only some rows (such as current versions) must not overlap. Used in project 32.
+- **Partial index** — An index that covers only the rows matching its `WHERE` clause, such as open jobs. Used in projects 1, 7, 14, 20, 30, 38. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Partial unique index** — A unique index over only the rows matching a `WHERE` clause, such as one open loan per book. Used in projects 1, 7. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Partitioning** — Splitting one large table into smaller child tables by range, list or hash, inside one server. Used in projects 5, 10, 14, 15, 22, 27, 34, 40. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Partition pruning** — The planner skipping partitions that cannot contain matching rows. Used in projects 27, 34. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Patroni** — A tool that manages a PostgreSQL high-availability cluster: it watches the primary and runs automatic failover using a consensus store. Used in project 37. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Peers** — Rows with equal `ORDER BY` values in a window. A `RANGE` frame treats them as one. Used in project 12. ([Ch 8](../chapters/08-window-functions/README.md))
+- **percent_rank / cume_dist / ntile** — Window functions that place a row within its partition as a fraction (0 to 1) or a bucket number. Used in projects 5, 12, 21, 25, 27. ([Ch 8](../chapters/08-window-functions/README.md))
+- **PERIOD / WITHOUT OVERLAPS** — SQL temporal syntax (PostgreSQL 18+) for keys and foreign keys over a time range that must not overlap. Used in projects 13, 32.
+- **pgBackRest** — A widely used backup tool for PostgreSQL with full, differential and incremental backups and parallel restore. Used in project 36.
+- **pgbench** — PostgreSQL's benchmarking tool. It runs a script from many concurrent clients and reports throughput and latency. Used in projects 11, 13, 15, 20, 22, 28.
+- **PgBouncer** — A lightweight connection pooler between applications and PostgreSQL. In transaction mode, session settings do not survive between transactions. Used in projects 16, 35, 37. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **pg_dump / pg_restore** — Tools to export a logical backup of a database and to load it back. Used in projects 19, 36. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **pgoutput / test_decoding** — Logical decoding plugins that turn WAL into a readable stream of row changes. Used in project 29.
+- **pg_repack** — An extension and tool that rebuilds a bloated table or index online, without the long exclusive lock of `VACUUM FULL`. Used in projects 30, 31, 40.
+- **pg_rewind** — Re-synchronises a failed old primary with the new primary by copying only changed blocks, so it can rejoin as a standby. Used in project 37. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **pg_stat_activity** — A view with one row per server process: its query, state, wait event and how long it has been running. Used in projects 14, 30, 31, 40. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md), [Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **pg_stat_statements** — An extension that records statistics for every distinct query: calls, total and mean time, rows. Used in projects 30, 40. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **pg_stat_* views** — PostgreSQL's built-in statistics views (`pg_stat_user_tables`, `pg_stat_replication`, `pg_stat_io` …), the raw material for monitoring. Used in projects 14, 29–31, 35, 36, 40. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **pg_trgm (trigrams)** — An extension that splits text into three-character pieces, enabling fuzzy matching with `similarity()` and fast `ILIKE '%x%'` through GIN or GiST. Used in projects 1, 17. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md), [Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **pg_upgrade** — PostgreSQL's tool for moving a cluster to a new major version in place. Used in project 36.
+- **pgvector** — A PostgreSQL extension that adds a `vector` type, distance operators and approximate nearest-neighbour indexes. Used in project 38.
+- **pg_waldump** — A tool that prints the records inside WAL files in readable form. Used in project 36.
+- **PITR (point-in-time recovery)** — Restoring a base backup and replaying archived WAL up to a chosen moment, such as just before a bad `DELETE`. Used in projects 34, 36. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md), [Ch 15](../chapters/15-scaling-databases/README.md))
+- **Pivot** — Turning row values into columns, such as one column per week, usually with `FILTER` or `CASE`. Used in project 18. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md), [Ch 19](../chapters/19-sql-interview-problems-2/README.md))
+- **PL/pgSQL** — PostgreSQL's procedural language for functions, procedures and triggers, with variables, loops and exception handling. Used in projects 8, 10, 11, 13, 15, 33. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Policy (RLS)** — A row-level security rule. `USING` filters which rows can be read; `WITH CHECK` filters which rows can be written. Used in project 16. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Post-filtering** — Applying `WHERE` conditions after an index has returned candidates, which can leave too few results. Used in project 38.
+- **PostGIS** — A PostgreSQL extension for geographic data: point and shape types, distance functions such as `ST_DWithin`, and spatial indexes. Used in project 23. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **PostgreSQL** — The open-source relational database used by every project in this book (runnable examples use version 14). Used in all 40 projects. ([Ch 1](../chapters/01-databases-and-the-relational-model/README.md))
+- **Power-law distribution** — A few items have most of the activity (a few accounts have most followers) and most items have very little. Used in project 25.
+- **Predicate lock** — A lock on the rows a query read (or could read), used by Serializable isolation to detect conflicts. Used in project 26. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Prepared statement** — A statement parsed once and run many times with different parameters. Used in project 30. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Primary key** — The column or columns that uniquely identify each row; unique and never NULL. Used in projects 1, 2, 6, 9, 13, 15, 25, 28, 31, 32, 34. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Primary / standby (replica)** — The primary accepts writes. Standbys (replicas) replay its WAL and can serve reads. Used in projects 22, 26, 28, 29, 31, 35–37, 40. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Projection (read model)** — A table built by processing events, kept for fast reads in an event-sourced system. Used in project 39.
+- **Proration** — Charging or crediting only the used fraction of a billing period after a plan change. Used in project 24.
+- **psql** — PostgreSQL's command-line client. `\copy` and `\gexec` are among its meta-commands. Used in projects 1, 8, 10, 14, 15. ([Ch 1](../chapters/01-databases-and-the-relational-model/README.md))
+- **psycopg** — The standard PostgreSQL driver for Python. Used in projects 1, 14, 29. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Publication / subscription** — PostgreSQL logical replication objects: a publication lists the tables to send; a subscription on another server receives them. Used in project 29. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Public datasets (MovieLens, Citi Bike, NYC open data)** — Free real-world data used to give the projects realistic size and messiness. Used in projects 5, 6, 10.
+- **Python** — A general-purpose programming language, used in the briefs for small load, test and client scripts. Used in projects 1, 2, 8, 12, 14, 20, 26, 28–30, 35, 38, 40. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+
+### Q
+
+- **QPS (queries per second)** — How many queries or requests a system handles each second. Used in projects 11, 14, 21, 22, 26, 27, 29, 31, 39, 40.
+- **Quarantine table** — A table that keeps rejected rows together with the rules they broke, so bad data is never silently lost. Used in project 10.
+- **Query plan** — The steps (scans, joins, sorts) the database chose to run a query, shown by `EXPLAIN`. Used in projects 2, 5, 13, 16, 17, 19, 23, 27, 28, 30, 32, 33, 36. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+
+### R
+
+- **Race condition** — A bug where the result depends on the timing of concurrent sessions, such as two bookings both seeing one free place. Used in projects 1, 3, 8, 11, 13, 20, 24. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Raft** — A consensus algorithm: nodes elect a leader that replicates a log to a majority. Used in project 37. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **RAG (retrieval-augmented generation)** — Feeding documents found by search into a language model so its answer is based on them. Used in project 38.
+- **RAM** — The computer's main memory: much faster than disk, but limited and lost on power-off. Used in projects 19, 38.
+- **random()** — Returns a random number between 0 and 1, used with `generate_series` to create test data. Used in project 3. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **Range type** — A PostgreSQL type holding an interval of values (`daterange`, `tstzrange`) with operators for overlap and containment. Used in projects 7, 13, 32, 34. ([Ch 17](../chapters/17-schema-design-case-studies/README.md))
+- **Read replica** — A copy of the database that serves read queries, kept up to date by replication. Used in projects 22, 35. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Read-your-writes** — A user always sees their own committed changes, even when later reads go to a replica. Used in project 35. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Rebalancing** — Moving data between nodes when nodes are added or removed, so each holds a fair share. Used in project 28. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Recall@k** — Of the true k nearest results, the fraction an approximate index actually returned. Used in project 38.
+- **Reciprocal rank fusion (RRF)** — Merging several ranked lists by summing `1 / (k + rank)` for each item, a simple way to combine keyword and vector search. Used in project 38.
+- **Reconciliation** — Comparing computed totals with an independent source (a bank statement) to prove they agree. Used in projects 4, 11, 22, 24, 26, 34. ([Ch 11](../chapters/11-normalization/README.md), [Ch 17](../chapters/17-schema-design-case-studies/README.md))
+- **Recovery conflict** — On a hot standby, WAL replay wants to remove row versions a running query still needs, so the query is cancelled or replay waits. Used in project 35.
+- **Recovery target** — Where PITR stops replaying: a time, a transaction id, a named restore point or an LSN (`recovery_target_time` …). Used in project 36.
+- **Recursive CTE** — A CTE that refers to itself, used to walk trees and graphs (`WITH RECURSIVE`). Used in projects 9, 33. ([Ch 7](../chapters/07-ctes-views-and-recursion/README.md))
+- **Redis** — An in-memory key-value store, often used as a cache, counter store or queue. Used in projects 14, 21. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **Reference table** — In Citus, a small table copied in full to every node so joins with it stay local. Used in project 28.
+- **REFRESH MATERIALIZED VIEW** — Recomputes a materialized view. With `CONCURRENTLY` readers are not blocked, but a unique index is required. Used in projects 12, 21. ([Ch 7](../chapters/07-ctes-views-and-recursion/README.md))
+- **regexp_split_to_table** — Splits a string on a regular expression into one row per piece. Used in project 2. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **Regular expression** — A pattern language for text, used in PostgreSQL with `~`, `regexp_replace` and `regexp_split_to_table`. Used in project 2. ([Ch 2](../chapters/02-select-basics/README.md))
+- **Relational division** — Finding rows related to every member of another set, such as recipes whose every ingredient is in the pantry. Used in projects 3, 6, 12. ([Ch 19](../chapters/19-sql-interview-problems-2/README.md))
+- **Replication** — Keeping copies of the same data on several servers. Used in projects 28, 29, 31, 35–37, 40. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Replication lag** — How far a replica is behind the primary, in bytes of WAL or in seconds. Used in projects 29, 31, 35, 40. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **REST API** — A web interface where resources are addressed by URLs and handled with HTTP methods (GET, PUT …). Used in project 37.
+- **Retention** — In analytics, the share of a cohort still active N periods later. In operations, how long data or backups are kept before deletion. Used in projects 18, 22, 27, 36, 40. ([Ch 19](../chapters/19-sql-interview-problems-2/README.md))
+- **Reversal (ledger)** — Correcting a posted entry by posting an equal and opposite entry, never by editing the original. Used in project 26.
+- **REVOKE / GRANT** — Commands that remove or give privileges, such as `REVOKE UPDATE, DELETE` on an audit table. Used in projects 15, 26. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Role** — A PostgreSQL user or group that owns objects and holds privileges. Used in projects 15, 16, 26, 32. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **ROLLUP / CUBE / GROUPING SETS** — `GROUP BY` extensions that add subtotal and grand-total rows in one query. Used in project 12. ([Ch 4](../chapters/04-aggregation/README.md))
+- **Rollup table** — A pre-aggregated table (per day, per link, per minute) maintained so reports do not scan raw data. Used in projects 9, 12, 16, 18, 22, 27. ([Ch 4](../chapters/04-aggregation/README.md), [Ch 7](../chapters/07-ctes-views-and-recursion/README.md))
+- **Row comparison (row value)** — Comparing several columns as one value, left to right: `(score, achieved_at) > (x, t)`. Used in projects 21, 25. ([Ch 6](../chapters/06-subqueries-and-set-operations/README.md), [Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Row-level security (RLS)** — Policies that limit which rows a role can read or write, enforced by the database on every query. Used in projects 16, 38. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Row-level trigger** — A trigger that runs once for each affected row (`FOR EACH ROW`) and can see `OLD` and `NEW`. Used in project 15. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Row lock (FOR UPDATE)** — `SELECT … FOR UPDATE` locks the selected rows until the transaction ends, so others must wait to change them. Used in projects 3, 8, 11, 14, 15, 20, 24, 26, 29. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **RPO / RTO** — Recovery point objective: how much recent data you may lose. Recovery time objective: how long recovery may take. Used in project 36. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md), [Ch 15](../chapters/15-scaling-databases/README.md))
+- **Runbook** — A written, step-by-step procedure for operators to follow during an incident. Used in projects 36, 40.
+- **Running sum** — A cumulative total up to the current row: `sum(x) OVER (ORDER BY day)`. Used in projects 4, 9, 12. ([Ch 8](../chapters/08-window-functions/README.md))
+
+### S
+
+- **SaaS** — Software as a service: an application sold as a hosted subscription rather than installed by each customer. Used in projects 16, 24, 28.
+- **Sampling** — Looking at a subset of rows, or recording a measurement at regular intervals. Used in projects 2, 7, 19, 21, 22, 27, 30, 40.
+- **Savepoint** — A marker inside a transaction that you can roll back to without abandoning the whole transaction. Used in project 35. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **SCD (slowly changing dimension)** — How a warehouse handles changing descriptive data: type 1 overwrites the old value; type 2 adds a new row with validity dates and keeps history. Used in project 34.
+- **Schema** — The structure of a database: its tables, columns, types and constraints. Used in projects 1–7, 9–11, 13, 16, 19, 20, 24–31, 34, 39, 40. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md), [Ch 10](../chapters/10-data-modeling-and-er-diagrams/README.md))
+- **SECURITY DEFINER** — A function that runs with the privileges of its owner instead of its caller, so it can write to tables the caller cannot touch. Used in project 15. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **security_invoker view** — A view that checks permissions and RLS as the querying user rather than the view's owner (PostgreSQL 15+). Used in project 16. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Seed data** — A small, known set of rows loaded into a new database for development and tests. Used in projects 1, 6.
+- **SELECT** — The statement that reads data, made of clauses such as `FROM`, `WHERE`, `GROUP BY` and `ORDER BY`. Used in projects 1–6, 8–31, 33–35, 38, 40. ([Ch 2](../chapters/02-select-basics/README.md))
+- **Sequence** — A database object that hands out increasing numbers, used behind identity columns. Used in projects 22, 39. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **Sequential scan vs index scan** — A sequential scan reads the whole table. An index scan walks an index and fetches only the matching rows. Used in projects 2, 16, 17, 22, 23, 33, 38. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Serializable / SSI** — The strictest isolation level. PostgreSQL implements it as serializable snapshot isolation, aborting one transaction with `40001` when a conflict could break serial order. Used in projects 3, 8, 11, 13, 26. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Serialization failure (40001)** — The SQLSTATE PostgreSQL raises when it aborts a transaction to keep isolation. The client must retry the whole transaction. Used in projects 8, 26. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Sharding** — Splitting data across several servers by a shard key, so each holds part of it. Used in projects 16, 22, 25–28. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **shared_buffers** — PostgreSQL's main memory cache of table and index pages. Used in project 40. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **similarity()** — A pg_trgm function that scores how alike two strings are, from 0 to 1. Used in projects 1, 17, 38. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Skew** — Unevenness: one value, tenant or key with far more rows than the rest, which upsets estimates and shard balance. Clock skew means two machines' clocks disagree. Used in projects 2, 16, 21, 28, 30, 32. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md), [Ch 15](../chapters/15-scaling-databases/README.md))
+- **SKIP LOCKED** — A locking option that skips rows already locked by others, so many workers can take different jobs at once. Used in projects 14, 20, 24, 25, 29. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **SKU** — Stock-keeping unit: one sellable product variant, such as a T-shirt in one size and colour. Used in projects 11, 39.
+- **Snapshot** — The set of committed data a transaction can see. In event sourcing, also a saved state that avoids replaying every event. Used in projects 5, 11, 15, 16, 26, 29, 34, 36, 39, 40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Split brain** — Two nodes both acting as primary and accepting writes, so the data diverges. Used in project 37. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **SQL injection** — An attack that sneaks SQL into a query through user input. Parameterized queries prevent it. Used in projects 1, 10, 29, 35. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **SQLSTATE** — The standard five-character error code, such as `23505` (unique violation), `23P01` (exclusion violation) or `40001` (serialization failure). Used in projects 1, 8, 11, 13, 26, 39. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **SRID 4326** — The id of the WGS 84 coordinate system (longitude and latitude, as used by GPS). Used in project 23.
+- **Staging table** — A loose landing table, often all `text` columns, where raw input is loaded before being cleaned and moved into the real tables. Used in projects 1, 2, 4, 5, 10, 14, 19, 29, 31, 34.
+- **Staleness (stale data)** — How out of date a copy or a precomputed result is. A staleness budget says how old it may be, such as a leaderboard refreshed every 60 seconds. Used in projects 2, 3, 21, 25, 30, 35, 38.
+- **Star schema** — A warehouse design with a central fact table joined to surrounding dimension tables. Used in project 34. ([Ch 11](../chapters/11-normalization/README.md))
+- **State machine** — A set of allowed status values and allowed moves between them (pending → paid → shipped), enforced in one place. Used in project 11. ([Ch 17](../chapters/17-schema-design-case-studies/README.md))
+- **Statement-level trigger with transition tables** — A trigger that runs once per statement and sees all changed rows at once through `REFERENCING NEW TABLE AS …`. Used in project 15. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Statistics (planner)** — Per-column summaries (distinct counts, common values, histograms) collected by ANALYZE and used to estimate row counts. Used in projects 2, 19, 30, 36, 40. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **stddev** — Standard deviation: how spread out values are around their average. `stddev_samp` in PostgreSQL. Used in project 2. ([Ch 4](../chapters/04-aggregation/README.md))
+- **ST_DWithin / ST_Covers** — PostGIS functions: "are these within a distance" (index-assisted) and "does this area fully contain that point". Used in project 23.
+- **Stemming** — Reducing words to a root form (running → run) so a search matches every form. Used in project 17. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Streaming replication** — PostgreSQL's physical replication: standbys receive and replay WAL continuously. Used in projects 29, 35, 37. ([Ch 15](../chapters/15-scaling-databases/README.md))
+- **Stream (of events)** — An ordered sequence of events. In event sourcing, the events of one entity (one product's stock history), numbered 1, 2, 3 … Used in projects 14, 29, 39.
+- **Subquery** — A query nested inside another statement, in `WHERE`, `FROM` or `SELECT`. Used in projects 1–6, 12, 23, 25, 30. ([Ch 6](../chapters/06-subqueries-and-set-operations/README.md))
+- **Subtransaction** — A nested unit inside a transaction, created by a savepoint or a PL/pgSQL `EXCEPTION` block, that can be rolled back alone. Used in projects 13, 35. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md), [Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Superuser** — A role that bypasses all permission checks, including row-level security. Used in projects 1, 10, 16, 26. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Surrogate key** — A meaningless generated id used as the primary key, such as an identity column. Used in projects 1, 5, 34. ([Ch 10](../chapters/10-data-modeling-and-er-diagrams/README.md))
+- **synchronous_commit / synchronous replication** — With synchronous replication a commit waits until a standby confirms it (`remote_write`, `on` or `remote_apply` set how far). No data loss, slower commits. Used in projects 22, 35, 37. ([Ch 15](../chapters/15-scaling-databases/README.md))
+
+### T
+
+- **Tenant isolation** — Giving a large or noisy tenant its own shard or node so it cannot slow the others. Used in projects 16, 28, 38.
+- **text_pattern_ops** — An index operator class that compares text byte by byte, so a B-tree can serve `LIKE 'abc%'` under any collation. Used in project 17. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Throughput** — How much work a system completes per unit of time, such as transactions or jobs per second. Used in projects 14, 15, 28, 35, 39.
+- **Timeline** — In PostgreSQL recovery, a numbered branch of WAL history that starts after PITR or a promotion, so old and new histories never mix. In a social app, a user's feed of posts. Used in projects 25, 32, 36, 37.
+- **Time-ordered id** — An id that sorts by creation time (such as UUIDv7 or a Snowflake-style 64-bit id), handy as a pagination cursor and kind to B-tree indexes. Used in project 25. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **TimescaleDB** — A PostgreSQL extension for time-series data: automatic time partitioning, compression and continuous aggregates. Used in project 27. ([Ch 16](../chapters/16-beyond-relational/README.md))
+- **Time zone / timestamptz** — `timestamptz` stores an absolute instant and shows it in the session's time zone. Store instants as `timestamptz` and convert for display. Used in projects 2, 5, 7–9, 12, 15, 18, 23. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **Top-N per group** — The best N rows inside each group, usually `row_number()` or `rank()` in a subquery, filtered outside. Used in projects 12, 17, 21, 25. ([Ch 8](../chapters/08-window-functions/README.md))
+- **Transaction** — A group of statements that succeed or fail together (`BEGIN … COMMIT`). Used in projects 1, 3, 4, 8, 10, 11, 13–17, 20, 22–26, 28–32, 34–40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Transaction ID wraparound** — PostgreSQL's 32-bit transaction ids run in a circle. Old rows must be frozen in time, or the server stops accepting writes to protect data. Used in project 40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Transaction-local setting** — A setting made with `set_config(name, value, true)` or `SET LOCAL` that disappears at commit, which keeps it safe with connection pooling. Used in projects 15, 16. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **Transaction time (recorded time)** — When the database knew a fact, as opposed to when the fact was true. Used in project 32.
+- **Trigger** — A function the database runs automatically before or after rows are inserted, updated or deleted. Used in projects 3, 7, 14, 15, 17, 19, 26, 29, 31–33, 36, 37, 40. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **ts_headline / ts_rank / ts_rank_cd** — Full-text helpers: show matching words highlighted in a snippet, and score how well a document matches a query. Used in projects 17, 38. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **tsvector / tsquery** — Full-text search types: a document as a list of normalised words, and a search condition matched against it with `@@`. Used in projects 17, 38. ([Ch 14](../chapters/14-advanced-sql-and-using-sql-from-code/README.md))
+- **TTL (time to live)** — How long a key or claim stays valid before it expires automatically. Used in projects 22, 37. ([Ch 16](../chapters/16-beyond-relational/README.md))
+
+### U
+
+- **unaccent** — An extension that strips accents (é → e) so searches match with or without them. Used in project 17.
+- **UNION vs UNION ALL** — `UNION` combines two results and removes duplicates; `UNION ALL` keeps them all and is cheaper. Used in project 33. ([Ch 6](../chapters/06-subqueries-and-set-operations/README.md))
+- **UNIQUE constraint** — Forbids duplicate values in a column or set of columns. NULLs do not count as duplicates unless `NULLS NOT DISTINCT` (15+). Used in projects 1, 4–8, 11, 13, 16, 22, 24, 32, 39. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **UNLOGGED table** — A table whose changes skip the WAL: faster writes, but emptied after a crash and not replicated. Used in project 22.
+- **Upcasting** — Converting old versions of stored events into the current shape when they are read. Used in project 39.
+- **Upsert** — Insert a row, or update it if it already exists: `INSERT … ON CONFLICT DO UPDATE`. Used in projects 4, 10, 11, 21, 22, 24, 27, 34. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+- **UTC** — Coordinated Universal Time, the zone-free reference clock in which instants are usually stored. Used in projects 5, 7, 9, 12, 18. ([Ch 3](../chapters/03-functions-and-expressions/README.md))
+- **UUID** — A 128-bit identifier that can be generated anywhere without coordination (`gen_random_uuid()`). UUIDv7 starts with a timestamp. Used in projects 16, 25. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md))
+
+### V
+
+- **VACUUM** — PostgreSQL maintenance that removes dead row versions and freezes old ones. `VACUUM FULL` rewrites the table under an exclusive lock. Used in projects 14, 30, 35, 40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **Valid time** — When a fact was true in the real world, as opposed to when it was recorded. Used in projects 32, 34.
+- **Vector** — A list of numbers. In pgvector, the `vector(n)` column type that stores embeddings. Used in projects 17, 38.
+- **View** — A named stored query that behaves like a table but holds no data of its own. Used in projects 1–3, 6–9, 12, 14–16, 18, 21, 22, 28, 30–34, 40. ([Ch 7](../chapters/07-ctes-views-and-recursion/README.md))
+- **Virtual waiting room** — Holding buyers in a queue and letting them in batches, to protect a hot sale from overload. Used in project 20.
+
+### W
+
+- **Waitlist ordering** — Promoting waiting people in a fair, fixed order, such as `ORDER BY booked_at, booking_id`, where the id breaks ties. Used in project 8.
+- **WAL archiving** — Copying each completed 16 MB WAL segment to separate storage so it can be replayed during PITR. Used in project 36. ([Ch 9](../chapters/09-ddl-dml-and-constraints/README.md), [Ch 15](../chapters/15-scaling-databases/README.md))
+- **WAL (write-ahead log)** — PostgreSQL's log of every change, written before the data files. It powers crash recovery, replication, PITR and CDC. Used in projects 15, 19, 22, 27, 29, 35–37, 40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md), [Ch 15](../chapters/15-scaling-databases/README.md))
+- **Watermark** — The highest value (such as `updated_at`) already loaded, so the next incremental load starts after it. Used in project 34.
+- **Window frame (ROWS / RANGE)** — The rows a window function sees around the current row, such as `ROWS BETWEEN 6 PRECEDING AND CURRENT ROW` for a 7-day moving average. Used in projects 4, 12. ([Ch 8](../chapters/08-window-functions/README.md))
+- **Window function** — A function computed over rows related to the current row (`OVER (…)`) without collapsing them into one. Used in projects 3, 4, 9, 12, 18, 20, 21, 27, 34, 38, 40. ([Ch 8](../chapters/08-window-functions/README.md))
+- **work_mem** — The memory one sort or hash operation may use before spilling to disk. Used in projects 2, 30, 38. ([Ch 12](../chapters/12-indexes-storage-and-query-performance/README.md))
+- **Write skew** — Two transactions read the same data, then each writes a different row, together breaking a rule both checked. Used in project 26. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+
+### X
+
+- **XID (transaction id)** — The 32-bit number PostgreSQL gives each writing transaction, stored in row versions to decide visibility. Used in project 40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+- **xmin horizon** — The oldest transaction that any session, replication slot or standby still needs. VACUUM cannot remove row versions newer than it. Used in projects 39, 40. ([Ch 13](../chapters/13-transactions-and-concurrency/README.md))
+
+### Z
+
+- **ZIP code** — A US postal code. Stored as text, because leading zeros matter. Used in project 10.

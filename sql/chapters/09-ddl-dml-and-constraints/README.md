@@ -5,9 +5,9 @@ So far the book has only *read* data. This chapter is about creating the structu
 - **DDL — Data Definition Language**: statements that define structure: `CREATE`, `ALTER`, `DROP`, `TRUNCATE` (and `CREATE INDEX`).
 - **Keys and constraints**: rules attached to tables — primary and foreign keys, `UNIQUE`, `CHECK`, `NOT NULL`, `DEFAULT` — enforced on every change, whichever application writes.
 - **DML — Data Manipulation Language**: statements that change rows: `INSERT`, `UPDATE`, `DELETE`, plus PostgreSQL's "insert or update" (`ON CONFLICT`) and `RETURNING`.
-- **Backup and restore**: copying a database and getting data back after a mistake — run for real with `pg_dump` and `pg_restore`.
+- **Backup and restore**: copying a database and getting data back after a mistake — run for real with `pg_dump` and `pg_restore` (PostgreSQL's command-line programs that write a database out to a file and load it back in).
 
-Designing tables (entities, relationships, normal forms) is [chapter 10](../10-data-modeling-and-er-diagrams/README.md) and [chapter 11](../11-normalization/README.md); here we focus on the statements.
+Designing tables (entities, relationships, normal forms — sets of rules for keeping each fact in only one place) is [chapter 10](../10-data-modeling-and-er-diagrams/README.md) and [chapter 11](../11-normalization/README.md); here we focus on the statements.
 
 **What you'll learn**
 
@@ -42,14 +42,14 @@ Every column has a **data type** saying what kind of value it holds (whole numbe
 | | `integer` / `int` (4 bytes) | about ±2.1 billion | counts, most ids | same |
 | | `bigint` (8 bytes) | about ±9.2 × 10¹⁸ | large ids, populations, byte counts | same |
 | Exact decimal | `numeric(p, s)` / `decimal(p, s)` | *p* digits in total, *s* after the point | **money**, anything that must add up exactly | same |
-| Approximate | `real`, `double precision` | binary floating point | measurements, science, ML features | `FLOAT`/`DOUBLE`; SQL Server `float` |
+| Approximate | `real`, `double precision` | binary floating point (fast but approximate) | measurements, science, ML (machine-learning) features | `FLOAT`/`DOUBLE`; SQL Server `float` |
 | Fixed text | `char(n)` | exactly *n* characters, padded with spaces | fixed codes (rarely worth it) | same |
-| Variable text | `varchar(n)` | up to *n* characters | text with a real maximum length | SQL Server: `nvarchar(n)` for Unicode |
+| Variable text | `varchar(n)` | up to *n* characters | text with a real maximum length | SQL Server: `nvarchar(n)` for Unicode (text in any alphabet) |
 | | `text` | any length | most text in PostgreSQL | MySQL `TEXT` has limits and index restrictions |
 | Date / time | `date` | a calendar day | birthdays, due dates | same |
 | | `time` | time of day | opening hours | same |
 | | `timestamp` | date + time, **no** time zone | local "wall clock" times | MySQL `DATETIME` |
-| | `timestamptz` | an exact instant (stored in UTC, shown in the session's time zone) | event times, created_at | MySQL `TIMESTAMP` (converted to UTC); SQL Server `datetimeoffset` |
+| | `timestamptz` | an exact instant (stored in UTC — the world's reference clock — shown in the session's time zone; a *session* is your current connection) | event times, created_at | MySQL `TIMESTAMP` (converted to UTC); SQL Server `datetimeoffset` |
 | Year only | (none) — use `smallint` + `CHECK`, or `date` | | | MySQL has `YEAR` |
 | Boolean | `boolean` | true / false / NULL | flags | MySQL `BOOLEAN` = `TINYINT(1)`; SQL Server `bit` |
 | Other useful | `uuid`, `jsonb`, arrays, `inet`, ranges | | see [chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md) | |
@@ -93,7 +93,7 @@ Output:
 ```
 What happened:
 - `price` 19.999 was **rounded** to 2 decimal places → 20.00.
-- `ratio`: 0.1 + 0.2 in binary floating point is not exactly 0.3 (the file also shows `0.1::numeric + 0.2::numeric = 0.3` is true, the `float8` version false). That's why money is never stored in `float`.
+- `ratio`: 0.1 + 0.2 in binary floating point is not exactly 0.3 (`0.1::float8` is PostgreSQL's shorthand for a **cast** — converting a value to another type, here an 8-byte float) (the file also shows `0.1::numeric + 0.2::numeric = 0.3` is true, the `float8` version false). That's why money is never stored in `float`.
 - `code` is stored padded to 5 characters (5 bytes), but PostgreSQL ignores a `char`'s trailing spaces, so `length` says 2 — confusing; prefer `text`/`varchar`.
 - `created_tz`: 10:00 in India (+05:30) was stored as an instant and shown in the session time zone (UTC) as 04:30.
 **What the types reject:**
@@ -114,7 +114,7 @@ ERROR:  date/time field value out of range: "2025-02-30"
 ERROR:  new row for relation "type_demo" violates check constraint "type_demo_birth_year_check"
 ...
 ```
-`numeric(10,2)` allows 10 digits of which 2 are after the point, so at most 8 before it (< 10⁸). MySQL in non-strict mode would silently truncate some of these values instead of failing; PostgreSQL always errors.
+`numeric(10,2)` allows 10 digits of which 2 are after the point, so at most 8 before it (< 10⁸). MySQL in non-strict mode (a lenient setting that turns many errors into warnings) would silently truncate some of these values instead of failing; PostgreSQL always errors.
 
 ### How to choose
 1. **Money** → `numeric(p, s)` (or integer cents), never `float`. **Ids/counts** → `integer`, or `bigint` if it could ever pass 2 billion.
@@ -134,7 +134,7 @@ Money in `float` (rounding errors); dates as `text` (`'03/04/2025'` — March or
 
 | Statement | Creates |
 |---|---|
-| `CREATE DATABASE name;` | a new, separate database on the server |
+| `CREATE DATABASE name;` | a new, separate database on the server (the running database program) |
 | `CREATE SCHEMA name;` | a namespace **inside** a database (like a folder); tables are then `schema.table` |
 | `CREATE TABLE name (...);` | a table: columns, types, constraints |
 | `CREATE TABLE name AS SELECT ...;` | a table filled with a query's result |
@@ -150,9 +150,11 @@ CREATE TABLE [IF NOT EXISTS] [schema.]table_name (
     [table constraints]                              -- e.g. PRIMARY KEY (a, b)
 );
 ```
+Square brackets in a syntax outline like this mark optional parts — you don't type the brackets.
+
 1. The name must be unique within its schema (default `public`); each column gets a name, a type and optionally constraints (9.3) and a `DEFAULT`.
 2. Multi-column constraints go after the columns.
-3. `IF NOT EXISTS` turns "already exists" into a notice — handy in setup scripts, but it does **not** check that the existing table has the same columns.
+3. `IF NOT EXISTS` turns "already exists" into a notice (an informational message, not an error) — handy in setup scripts, but it does **not** check that the existing table has the same columns.
 
 ```sql
 -- code/02_create.sql
@@ -202,16 +204,18 @@ Output:
 ```sql
 CREATE TABLE school.products_copy (LIKE products INCLUDING ALL);   -- 0 rows, same columns/constraints
 ```
-**Temporary tables** (`CREATE TEMP TABLE scratch (id int, note text);`) live in a private per-session schema (the file's catalog query shows a `pg_temp_N` schema and `relpersistence = 't'` instead of `'p'`) and vanish when the session ends — or at transaction end with `ON COMMIT DROP`. Use them for multi-step processing inside one session ([7.9](../07-ctes-views-and-recursion/README.md#79-choosing-the-right-tool)).
+**Temporary tables** (`CREATE TEMP TABLE scratch (id int, note text);`) live in a private per-session schema (the file's catalog query — the **catalog** is PostgreSQL's set of internal tables describing every object — shows a `pg_temp_N` schema and `relpersistence = 't'` instead of `'p'`) and vanish when the session ends — or at transaction end with `ON COMMIT DROP`. Use them for multi-step processing inside one session ([7.9](../07-ctes-views-and-recursion/README.md#79-choosing-the-right-tool)).
+
+> **Key term — transaction:** a group of statements the database treats as one unit: either all of them take effect or none do. You start one with `BEGIN`, make it permanent with `COMMIT`, or undo everything since `BEGIN` with `ROLLBACK`. Without `BEGIN`, PostgreSQL wraps each statement in its own tiny transaction. Transactions are covered in depth in [chapter 13](../13-transactions-and-concurrency/README.md).
 
 ### Dialect notes
 | | PostgreSQL | MySQL | SQL Server | SQLite |
 |---|---|---|---|---|
 | Database vs schema | database contains schemas | "schema" = "database" (synonyms) | database contains schemas (`dbo` default) | one file = one database |
-| Switch database | reconnect (`\c db` in psql) | `USE db;` | `USE db;` | open another file / `ATTACH` |
+| Switch database | reconnect (`\c db` in psql, PostgreSQL's command-line client) | `USE db;` | `USE db;` | open another file / `ATTACH` |
 | `CREATE TABLE IF NOT EXISTS` | yes | yes | no (check `OBJECT_ID` first) | yes |
 | Temporary table | `CREATE TEMP TABLE` | `CREATE TEMPORARY TABLE` | `CREATE TABLE #name` | `CREATE TEMP TABLE` |
-| `CREATE DATABASE` inside a transaction | not allowed | implicit commit | not allowed | n/a |
+| `CREATE DATABASE` inside a transaction | not allowed | implicit commit (silently ends the open transaction first) | not allowed | n/a |
 
 ---
 
@@ -242,7 +246,7 @@ Keys and their theory (functional dependencies) are developed further in [chapte
 | `NOT NULL` | a value is required | `col type NOT NULL` |
 | `DEFAULT` | value used when an `INSERT` omits the column (not a check, but declared alongside) | `col type DEFAULT expr` |
 | `UNIQUE` | no two rows share the value(s); NULLs don't count as equal | `col type UNIQUE` / `UNIQUE (a, b)` |
-| `PRIMARY KEY` | `UNIQUE` + `NOT NULL`; one per table; creates a unique index | `col type PRIMARY KEY` / `PRIMARY KEY (a, b)` |
+| `PRIMARY KEY` | `UNIQUE` + `NOT NULL`; one per table; creates a unique index (a lookup structure, 9.7) | `col type PRIMARY KEY` / `PRIMARY KEY (a, b)` |
 | `CHECK` | a boolean expression must not be false | `CHECK (price >= 0)` / `CHECK (end_date >= start_date)` |
 | `FOREIGN KEY` | value must exist in the referenced key (or be NULL) | `col type REFERENCES other(col)` / `FOREIGN KEY (a) REFERENCES other(x)` |
 | `EXCLUDE` (PostgreSQL) | no two rows may "conflict" by an operator (e.g. overlapping bookings of one room) | see [chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md) |
@@ -299,8 +303,8 @@ ERROR:  new row for relation "members" violates check constraint "left_after_joi
 ...
 ```
 Two subtle rules:
-- **`CHECK` passes when its expression is NULL.** A check fails only when the expression is *false*; `NULL` ("unknown") is accepted. That's why `left_after_joined` explicitly allows `left_on IS NULL`, and why a column that must be present also needs `NOT NULL`. (Three-valued logic: [chapter 2](../02-select-basics/README.md).)
-- **`UNIQUE` allows several NULLs** in PostgreSQL, MySQL, SQLite and Oracle, because NULL is not equal to NULL. SQL Server allows only **one** NULL in a unique constraint (use a filtered unique index for "unique when present"). PostgreSQL 15 added `UNIQUE NULLS NOT DISTINCT` to treat NULLs as equal (PostgreSQL 15 — not run).
+- **`CHECK` passes when its expression is NULL.** A check fails only when the expression is *false*; `NULL` ("unknown") is accepted. That's why `left_after_joined` explicitly allows `left_on IS NULL`, and why a column that must be present also needs `NOT NULL`. (Three-valued logic — every condition is true, false or unknown: [chapter 2](../02-select-basics/README.md).)
+- **`UNIQUE` allows several NULLs** in PostgreSQL, MySQL, SQLite and Oracle, because NULL is not equal to NULL. SQL Server allows only **one** NULL in a unique constraint (use a filtered unique index — an index over only the rows matching a `WHERE` — for "unique when present"). PostgreSQL 15 added `UNIQUE NULLS NOT DISTINCT` to treat NULLs as equal (PostgreSQL 15 — not run).
 
 ### Foreign keys and referential actions
 A foreign key keeps **referential integrity**: a child row can't point to a parent that doesn't exist. The interesting question is what happens when the *parent* is deleted or its key changes. You choose with `ON DELETE` / `ON UPDATE`:
@@ -383,6 +387,8 @@ COMMIT;                             -- checked here: both exist
 Both rows are committed. (`UNIQUE`, `PRIMARY KEY`, `REFERENCES` and `EXCLUDE` can be deferrable in PostgreSQL; `CHECK` and `NOT NULL` cannot.)
 
 ### Dialect notes
+InnoDB is MySQL's default **storage engine** (the component that actually stores and reads rows); SQLite's `PRAGMA` is its command for changing settings.
+
 | | PostgreSQL | MySQL (InnoDB) | SQL Server | SQLite |
 |---|---|---|---|---|
 | `CHECK` enforced | yes | since 8.0.16 (parsed but ignored before) | yes | yes |
@@ -392,7 +398,7 @@ Both rows are committed. (`UNIQUE`, `PRIMARY KEY`, `REFERENCES` and `EXCLUDE` ca
 | Deferrable constraints | yes | no | no | FKs only |
 
 ### When not to rely on constraints alone
-Constraints check single rows (and FK existence). Multi-row rules ("at most 5 members per club") need triggers, `EXCLUDE` constraints or careful transactions ([chapter 13](../13-transactions-and-concurrency/README.md), [chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md)).
+Constraints check single rows (and FK existence). Multi-row rules ("at most 5 members per club") need triggers (functions the database runs automatically when rows are inserted, updated or deleted), `EXCLUDE` constraints or careful transactions ([chapter 13](../13-transactions-and-concurrency/README.md), [chapter 14](../14-advanced-sql-and-using-sql-from-code/README.md)).
 
 ### Common mistakes
 - **No index on the FK column**: in PostgreSQL each parent delete then scans the whole child table.
@@ -403,7 +409,7 @@ Constraints check single rows (and FK existence). Multi-row rules ("at most 5 me
 ### In the interview
 **30-second answer:** "A candidate key is a minimal set of columns that identifies a row; the primary key is the chosen one — unique, not null, one per table; the rest are alternate keys enforced with `UNIQUE` (NULLs allowed). A composite key combines columns. A foreign key references another table's key, and `ON DELETE CASCADE / SET NULL / RESTRICT` decides what happens to children. `CHECK`, `NOT NULL` and `DEFAULT` complete the set."
 
-- *Primary key vs unique key?* → PK: one per table, never NULL, the row's identity (often the clustered index in SQL Server/MySQL). UNIQUE: many per table, NULLs allowed.
+- *Primary key vs unique key?* → PK: one per table, never NULL, the row's identity (often the clustered index — the one that stores the rows themselves in key order, 9.7 — in SQL Server/MySQL). UNIQUE: many per table, NULLs allowed.
 - *Natural or surrogate PK?* → Usually a surrogate (`bigint` identity or UUID) for stability, plus `UNIQUE` on the natural key to keep the business rule.
 
 ### Self-check
@@ -424,7 +430,7 @@ Most tables use a generated **surrogate key**. PostgreSQL generates numbers with
 | `GENERATED ALWAYS AS IDENTITY` | database always generates the value; supplying one is an error (unless `OVERRIDING SYSTEM VALUE`) |
 | `GENERATED BY DEFAULT AS IDENTITY` | generated when you don't supply one; you may supply your own |
 | `serial` / `bigserial` | older PostgreSQL shorthand: integer column + sequence + `DEFAULT nextval(...)` |
-| `uuid DEFAULT gen_random_uuid()` | random 128-bit id (built in since PostgreSQL 13) |
+| `uuid DEFAULT gen_random_uuid()` | random 128-bit id — a UUID, *universally unique identifier* (built in since PostgreSQL 13) |
 | `GENERATED ALWAYS AS (expr) STORED` | a **generated column**: computed from other columns on every write (PostgreSQL 12+) |
 
 ```sql
@@ -480,7 +486,7 @@ Output:
         99 | Manual id      |    1.00
 (5 rows)
 ```
-Number 4 went to the rolled-back insert and is never reused: sequences are deliberately **not** transactional, so concurrent inserts never wait for each other. Never assume ids are gap-free (for legal invoice numbers, generate them separately under a lock).
+Number 4 went to the rolled-back insert and is never reused: sequences are deliberately **not** transactional (a rollback doesn't undo them), so concurrent inserts (inserts running at the same moment in different sessions) never wait for each other. Never assume ids are gap-free (for legal invoice numbers, generate them separately under a lock — a **lock** is a claim on a row or table that makes other sessions wait until you finish).
 
 **Why identity beats `serial`:** `serial` is just a default, so a manual id doesn't advance the sequence and a later generated one collides:
 ```sql
@@ -504,7 +510,7 @@ SELECT nextval('invoice_no') AS first, nextval('invoice_no') AS second, currval(
 ```
 `currval` returns the last value *this session* got from `nextval`.
 
-**UUIDs:** `key_id uuid PRIMARY KEY DEFAULT gen_random_uuid()` gives 128-bit ids (36 characters as text). They can be generated anywhere (even in the app) without coordination and don't reveal row counts, but take 16 bytes (vs 8 for `bigint`) and random values scatter index inserts. Time-ordered UUIDv7 reduces that; PostgreSQL 18 adds a built-in `uuidv7()` (not run here).
+**UUIDs:** `key_id uuid PRIMARY KEY DEFAULT gen_random_uuid()` gives 128-bit ids (36 characters as text). They can be generated anywhere (even in the app) without coordination and don't reveal row counts, but take 16 bytes (vs 8 for `bigint`) and random values scatter index inserts. Time-ordered UUIDv7 (a UUID whose first bits are a timestamp, so new ids sort roughly by creation time) reduces that; PostgreSQL 18 adds a built-in `uuidv7()` (not run here).
 
 ### Dialect notes
 | | Auto-increment syntax |
@@ -512,7 +518,7 @@ SELECT nextval('invoice_no') AS first, nextval('invoice_no') AS second, currval(
 | PostgreSQL | `GENERATED {ALWAYS \| BY DEFAULT} AS IDENTITY` (10+), `serial` (legacy) |
 | MySQL | `AUTO_INCREMENT` |
 | SQL Server | `IDENTITY(1,1)`; `SEQUENCE` objects since 2012 |
-| SQLite | `INTEGER PRIMARY KEY` (alias of the rowid); `AUTOINCREMENT` prevents reuse of deleted ids |
+| SQLite | `INTEGER PRIMARY KEY` (alias of the rowid, SQLite's hidden row number); `AUTOINCREMENT` prevents reuse of deleted ids |
 | Oracle | identity columns since 12c; sequences |
 
 Generated columns: PostgreSQL 12–17 `STORED` only; PostgreSQL 18 adds `VIRTUAL` (computed on read) and makes it the default when neither keyword is given (not run); MySQL 5.7+ supports both; SQL Server has "computed columns" (optionally `PERSISTED`).
@@ -553,7 +559,7 @@ Output:
   3 | Yuki       | Tanaka    | (null) | US
 (3 rows)
 ```
-Existing rows get NULL, or the default if there is one. Since PostgreSQL 11, adding a column with a constant default is instant (no table rewrite).
+Existing rows get NULL, or the default if there is one. Since PostgreSQL 11, adding a column with a constant default is instant (no table rewrite — copying every row into a new file).
 
 ```sql
 ALTER TABLE staff RENAME COLUMN first_name TO given_name;
@@ -568,9 +574,9 @@ Output:
 ERROR:  column "last_name" cannot be cast automatically to type integer
 HINT:  You might need to specify "USING last_name::integer".
 ```
-`USING` tells PostgreSQL how to compute the new value from the old one; without it only automatic (implicit/assignment) casts are allowed.
+`USING` tells PostgreSQL how to compute the new value from the old one; without it only automatic (implicit/assignment) casts — the conversions PostgreSQL considers safe to apply on its own — are allowed.
 
-**Adding `NOT NULL` to a column that has NULLs fails** — `ALTER TABLE team ADD COLUMN email text NOT NULL;` gives *ERROR: column "email" of relation "team" contains null values*. Add, backfill, then constrain:
+**Adding `NOT NULL` to a column that has NULLs fails** — `ALTER TABLE team ADD COLUMN email text NOT NULL;` gives *ERROR: column "email" of relation "team" contains null values*. Add, backfill (fill in values for the existing rows), then constrain:
 ```sql
 ALTER TABLE team ADD COLUMN email text;
 UPDATE team SET email = lower(given_name) || '@corp.example';
@@ -591,7 +597,7 @@ Output:
 ERROR:  check constraint "salary_positive" of relation "team" is violated by some row
 ERROR:  check constraint "salary_positive" of relation "team" is violated by some row
 ```
-(`UNIQUE`/`PRIMARY KEY` can't be `NOT VALID`; build a unique index `CONCURRENTLY` and then `ADD CONSTRAINT … UNIQUE USING INDEX` instead.)
+(`UNIQUE`/`PRIMARY KEY` can't be `NOT VALID`; build a unique index `CONCURRENTLY` (without blocking writes, 9.7) and then `ADD CONSTRAINT … UNIQUE USING INDEX` instead.)
 
 **Several changes in one statement** (one lock, one pass):
 ```sql
@@ -614,7 +620,7 @@ Output:
 Note the primary key is still called `staff_pkey`: renaming a table doesn't rename its constraints or indexes.
 
 ### Locks and production safety
-Most `ALTER TABLE` forms take an **ACCESS EXCLUSIVE** lock — no reads or writes until it finishes. Metadata-only changes (nullable column, constant default, rename, drop column — which only hides it) hold it briefly; **type changes that rewrite the table** can hold it for minutes. Production practice: set `lock_timeout`, use `NOT VALID` + `VALIDATE` and `CREATE INDEX CONCURRENTLY`, and "expand → migrate → contract" (add the new column, backfill in batches, switch the app, drop the old one). Locks: [chapter 13](../13-transactions-and-concurrency/README.md).
+Most `ALTER TABLE` forms take an **ACCESS EXCLUSIVE** lock — no reads or writes until it finishes. Metadata-only changes (edits to the table's description in the catalog that don't touch its rows: nullable column, constant default, rename, drop column — which only hides it) hold it briefly; **type changes that rewrite the table** can hold it for minutes. Production (the live system real users depend on) practice: set `lock_timeout` (so a statement gives up instead of waiting indefinitely for a lock), use `NOT VALID` + `VALIDATE` and `CREATE INDEX CONCURRENTLY`, and "expand → migrate → contract" (add the new column, backfill in batches — chunks of a few thousand rows at a time — switch the app, drop the old one). Locks: [chapter 13](../13-transactions-and-concurrency/README.md).
 
 ### Dialect notes
 | Task | PostgreSQL | MySQL | SQL Server |
@@ -714,8 +720,8 @@ NOTICE:  drop cascades to 2 other objects
 | Kind | DML | DDL | DDL |
 | Removes | chosen rows (or all) | all rows | rows **and** the table |
 | `WHERE` possible | yes | no | no |
-| Speed on big tables | slow: row by row, all logged | fast: releases the data files | fast |
-| Space returned to the OS | usually not: dead rows are reused after `VACUUM`, the file rarely shrinks | yes | yes |
+| Speed on big tables | slow: row by row, all logged (each change written to the transaction log) | fast: releases the data files | fast |
+| Space returned to the OS | usually not: dead rows (old, deleted versions) are reused after `VACUUM` (PostgreSQL's cleanup process), the file rarely shrinks | yes | yes |
 | Row-level `ON DELETE` triggers | fire | don't fire (PostgreSQL has `ON TRUNCATE` triggers) | n/a |
 | FK checks | per row (or cascades) | refused if referenced, unless `CASCADE` | refused if referenced, unless `CASCADE` |
 | Identity / auto-increment | continues | PostgreSQL: continues unless `RESTART IDENTITY`; MySQL & SQL Server: reset | gone |
@@ -725,16 +731,16 @@ NOTICE:  drop cascades to 2 other objects
 "Can `TRUNCATE`/`DROP` be undone?" therefore depends on the database — in MySQL the only way back is a backup (9.12); Oracle can undo a `DROP TABLE` from its recycle bin (`FLASHBACK TABLE t TO BEFORE DROP`, if enabled) but not a `TRUNCATE`. SQLite has no `TRUNCATE`; `DELETE FROM t` without `WHERE` is optimized to do the same job.
 
 ### Common mistakes
-- Running `DROP`/`TRUNCATE` on the wrong connection (production instead of dev) — make production visually distinct and use reviewed migrations.
+- Running `DROP`/`TRUNCATE` on the wrong connection (production instead of dev) — make production visually distinct and use reviewed migrations (versioned, checked-in scripts that change the schema step by step).
 - `… CASCADE` without reading what it cascades to — try it inside `BEGIN … ROLLBACK` first, as above.
 - `DELETE` to empty a 100-million-row table (hours, huge log) when `TRUNCATE` takes a second.
-- Expecting `TRUNCATE` to be invisible to concurrent transactions: it isn't MVCC-safe — a transaction with an older snapshot that reads the table afterwards sees it empty.
+- Expecting `TRUNCATE` to be invisible to concurrent transactions: it isn't MVCC-safe (MVCC, *multi-version concurrency control*, lets each transaction read a **snapshot** — a frozen, consistent view of the data as of one moment; [chapter 13](../13-transactions-and-concurrency/README.md)) — a transaction with an older snapshot that reads the table afterwards sees it empty.
 
 ### In the interview
 **30-second answer:** "`DELETE` is DML: selected rows, one at a time, fires triggers, keeps the table. `TRUNCATE` is DDL: all rows at once by deallocating storage — much faster, no `WHERE`, no delete triggers, often resets identity; rollback-able in PostgreSQL and SQL Server, not in MySQL/Oracle. `DROP` removes the table itself."
 
 ### Self-check
-1. *Empty a staging table quickly and reset its ids in PostgreSQL?* → `TRUNCATE staging RESTART IDENTITY;`
+1. *Empty a staging table (a scratch table where incoming data lands before processing) quickly and reset its ids in PostgreSQL?* → `TRUNCATE staging RESTART IDENTITY;`
 2. *Can you `TRUNCATE` a table that other tables reference by FK?* → Only with `CASCADE` (or truncating them in the same statement).
 3. *What does `DROP TABLE orders CASCADE` do to `order_items`?* → Drops the FK constraint on it; the table and rows remain.
 
@@ -742,7 +748,7 @@ NOTICE:  drop cascades to 2 other objects
 
 ## 9.7 Indexes (in brief)
 
-An **index** is a separate data structure (by default a B-tree) that finds rows by column values without reading the whole table — like a book's index sending you straight to the page. This section shows only the DDL; how indexes work, their kinds, `EXPLAIN`, and when they help or hurt are in [chapter 12](../12-indexes-storage-and-query-performance/README.md#124-what-an-index-is).
+An **index** is a separate data structure (by default a B-tree — a balanced, always-sorted tree of keys) that finds rows by column values without reading the whole table — like a book's index sending you straight to the page. This section shows only the DDL; how indexes work, their kinds, `EXPLAIN` (the command that shows how the database plans to run a query), and when they help or hurt are in [chapter 12](../12-indexes-storage-and-query-performance/README.md#124-what-an-index-is).
 
 ```sql
 -- code/07_indexes_brief.sql
@@ -759,7 +765,7 @@ DETAIL:  Key (lower(TRIM(BOTH FROM email)))=(anita.shah@mail.example) is duplica
 ```
 The sample data really has a duplicate customer (chapter 1's Anita Shah, entered twice with different capitalisation) — the index found it. After cleaning (`UPDATE customers SET email = NULL WHERE customer_id = 8`) the same statement succeeds.
 
-Primary keys and unique constraints create their indexes automatically — `pg_indexes` lists `employees_pkey` and `employees_email_key` next to the ones created above. Other index DDL: `DROP INDEX [IF EXISTS] name;`, and `CREATE INDEX CONCURRENTLY …` / `DROP INDEX CONCURRENTLY …`, which avoid blocking writes on a live table (slower, and not allowed inside a transaction block).
+Primary keys and unique constraints create their indexes automatically — `pg_indexes` (a catalog view listing every index) lists `employees_pkey` and `employees_email_key` next to the ones created above. Other index DDL: `DROP INDEX [IF EXISTS] name;`, and `CREATE INDEX CONCURRENTLY …` / `DROP INDEX CONCURRENTLY …`, which avoid blocking writes on a live table (slower, and not allowed inside a transaction block).
 
 ### Clustered vs non-clustered
 | | Clustered index | Non-clustered (secondary) index |
@@ -773,7 +779,7 @@ Primary keys and unique constraints create their indexes automatically — `pg_i
 ```sql
 CLUSTER orders USING idx_orders_customer_placed;   -- one-time physical re-ordering in PostgreSQL
 ```
-A clustered index makes range scans on its key fast (neighbouring keys are neighbouring rows) but makes the choice of key important: a random key (like a random UUID) causes page splits on insert.
+A clustered index makes range scans (reading every key between two values) on its key fast (neighbouring keys are neighbouring rows) but makes the choice of key important: a random key (like a random UUID) causes page splits on insert (a full storage page — the fixed-size block, 8 KB in PostgreSQL, that data is kept in — must be split in two to make room).
 
 **Cost of indexes:** each index must be maintained on every insert and on updates of its columns (and cleaned up after deletes), and takes disk space. Index what queries filter, join and sort on — not every column.
 
@@ -826,7 +832,7 @@ Output (of the `RETURNING`):
           5 | Pune | 2025-06-01 09:00:00
 (1 row)
 ```
-`RETURNING` hands back generated values (ids, defaults) in the same round trip — no second query, no race.
+`RETURNING` hands back generated values (ids, defaults) in the same round trip (one request to the server and its reply) — no second query, no race (a **race condition** is a bug whose outcome depends on the timing of concurrent sessions).
 
 **`INSERT … SELECT`** copies rows produced by any query:
 ```sql
@@ -860,7 +866,7 @@ DETAIL:  Failing row contains (9, Bad, Row, -1, Pune, 2025-06-01 09:00:00).
        7
 (1 row)
 ```
-- In standard SQL (PostgreSQL, SQLite, SQL Server by default, Oracle) **double quotes name identifiers**; strings use single quotes. MySQL accepts double-quoted strings by default, so MySQL-style code often breaks elsewhere.
+- In standard SQL (PostgreSQL, SQLite, SQL Server by default, Oracle) **double quotes name identifiers** (names of tables, columns and other objects); strings use single quotes. MySQL accepts double-quoted strings by default, so MySQL-style code often breaks elsewhere.
 - The multi-row insert failed as a whole — the valid 'Ok' row was not kept (but it consumed identity values 8 and 9: more gaps).
 
 **Bulk loading:** multi-row `VALUES` or `INSERT … SELECT` beats one statement per row; for millions of rows use `COPY table FROM file` (psql: `\copy` for a client file), MySQL `LOAD DATA INFILE`, SQL Server `BULK INSERT`/`bcp`.
@@ -964,7 +970,7 @@ Output:
  ...
 (4 rows)
 ```
-Make sure each target row matches **at most one** row of the `FROM` source; if it matches several, PostgreSQL uses one of them unpredictably. That's why the example aggregates first. The portable alternative is a correlated scalar subquery in `SET`:
+Make sure each target row matches **at most one** row of the `FROM` source; if it matches several, PostgreSQL uses one of them unpredictably. That's why the example aggregates first. The portable alternative is a correlated scalar subquery (a subquery that returns one value and is re-run for each outer row) in `SET`:
 ```sql
 UPDATE departments d
 SET budget = (SELECT coalesce(sum(salary), 0) * 1.5 FROM employees e WHERE e.dept_id = d.dept_id)
@@ -1087,11 +1093,11 @@ Output:
 | | Hard delete | Soft delete |
 |---|---|---|
 | Undo / audit | only from backups or audit tables | trivial: clear `deleted_at` |
-| Queries | simple | every query must filter (use a view, or row-level security) |
-| Unique constraints | simple | a deleted row still blocks its email — use a partial unique index `WHERE deleted_at IS NULL` |
+| Queries | simple | every query must filter (use a view, or row-level security — per-user rules that hide rows) |
+| Unique constraints | simple | a deleted row still blocks its email — use a partial unique index (PostgreSQL's filtered index) `WHERE deleted_at IS NULL` |
 | Privacy law ("right to be forgotten") | satisfied | must still purge eventually |
 
-**Deleting millions of rows**: do it in batches (e.g. `DELETE … WHERE id IN (SELECT id … LIMIT 10000)` repeated) to keep transactions and locks short; for time-based data, partitioned tables let you `DROP` a whole old partition instantly ([chapter 15](../15-scaling-databases/README.md)).
+**Deleting millions of rows**: do it in batches (e.g. `DELETE … WHERE id IN (SELECT id … LIMIT 10000)` repeated) to keep transactions and locks short; for time-based data, partitioned tables (one logical table stored as several physical pieces, e.g. one per month) let you `DROP` a whole old partition instantly ([chapter 15](../15-scaling-databases/README.md)).
 
 ### Dialect notes: UPDATE / DELETE using another table
 | | `UPDATE` | `DELETE` |
@@ -1106,7 +1112,7 @@ Output:
 ## 9.11 Upsert: INSERT … ON CONFLICT, and MERGE
 
 ### What it is
-An **upsert** means "insert this row, or if its key already exists, update (or skip) it". `SELECT`-then-`INSERT`-or-`UPDATE` in application code has a race: two sessions both see "not there" and both insert. PostgreSQL (9.5+) does it atomically with `INSERT … ON CONFLICT`.
+An **upsert** means "insert this row, or if its key already exists, update (or skip) it". `SELECT`-then-`INSERT`-or-`UPDATE` in application code has a race: two sessions both see "not there" and both insert. PostgreSQL (9.5+) does it atomically (as one indivisible step that no other session can slip in between) with `INSERT … ON CONFLICT`.
 
 ### How it works
 ```sql
@@ -1161,7 +1167,7 @@ Output:
  KEYB-4  |   2 | 2025-06-03 08:00:00 | f
 (2 rows)
 ```
-(`xmax <> 0` is a common trick to tell updated from inserted rows; it relies on an internal detail, so don't build business logic on it.)
+(`xmax` is a hidden system column on every PostgreSQL row; `xmax <> 0` is a common trick to tell updated from inserted rows; it relies on an internal detail, so don't build business logic on it.)
 
 **Conditional update — only if the incoming data is newer** (a common rule when syncing from several sources):
 ```sql
@@ -1232,7 +1238,7 @@ Rule of thumb in PostgreSQL: **upserts of single rows/batches → `ON CONFLICT`*
 ## 9.12 Backup and restore
 
 ### What it is
-A **backup** is a copy you can rebuild the database from; a **restore** does the rebuilding. Backups protect against what replication can't: a mistaken `DELETE`/`DROP` (replicas copy it instantly), data-corrupting bugs, ransomware, losing a data centre.
+A **backup** is a copy you can rebuild the database from; a **restore** does the rebuilding. Backups protect against what replication (keeping live copies — **replicas** — of the database on other servers; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) can't: a mistaken `DELETE`/`DROP` (replicas copy it instantly), data-corrupting bugs, ransomware (malware that encrypts your files and demands payment), losing a data centre.
 
 Two terms decide a backup strategy:
 - **RPO — recovery point objective**: how much recent data you can afford to lose (e.g. 5 minutes).
@@ -1242,20 +1248,22 @@ Two terms decide a backup strategy:
 | Kind | What is copied | Tools (PostgreSQL) | Good for | Limits |
 |---|---|---|---|---|
 | **Logical** | SQL / an archive of schema + data | `pg_dump`, `pg_dumpall` | small/medium DBs, single tables, moving across versions | slow for huge DBs; restore rebuilds indexes |
-| **Physical** | the database files themselves | `pg_basebackup`, file-system snapshots, pgBackRest, Barman | large DBs, fast full restore | whole cluster only; same major version |
+| **Physical** | the database files themselves | `pg_basebackup`, file-system snapshots, pgBackRest, Barman | large DBs, fast full restore | whole cluster (in PostgreSQL: one server instance with all its databases) only; same major version (e.g. 16.x) |
 | **Continuous (PITR)** | a base backup **plus** the write-ahead log (WAL) stream | WAL archiving + base backup | restore to *any moment* (just before the bad `DELETE`) | more setup and storage |
+
+> **Key term — WAL and PITR:** the **write-ahead log (WAL)** is a file of every change, written *before* the change is applied to the tables, so the database can replay it after a crash. **Point-in-time recovery (PITR)** restores a **base backup** (a full physical copy) and then replays archived WAL up to any chosen moment — for example one second before a bad `DELETE`.
 
 Other terms: **full** (everything), **differential** (changes since the last full), **incremental** (changes since the last backup of any kind; PostgreSQL 17 added incremental `pg_basebackup`), **hot/online** (taken while the database is in use — all of the above are).
 
 ### pg_dump and pg_restore, for real
-`pg_dump` takes a **consistent** snapshot of one database while others keep reading and writing (it runs inside a single repeatable-read transaction). Formats:
+`pg_dump` takes a **consistent** snapshot of one database while others keep reading and writing (it runs inside a single repeatable-read transaction — an isolation level where the transaction sees the data exactly as it was when it started; [chapter 13](../13-transactions-and-concurrency/README.md)). Formats:
 
 | Format flag | Output | Restore with | Notes |
 |---|---|---|---|
 | `-F p` (plain, default) | a `.sql` script | `psql -f` | readable, editable; replayed statement by statement (`--single-transaction` for all-or-nothing) |
 | `-F c` (custom) | one compressed archive | `pg_restore` | pick objects to restore, reorder, parallel restore (`-j`) |
 | `-F d` (directory) | a folder, one file per table | `pg_restore` | the only format that can **dump** in parallel (`-j`) |
-| `-F t` (tar) | a tar archive | `pg_restore` | like custom, but no compression or parallel restore |
+| `-F t` (tar) | a tar archive (a standard Unix file bundle) | `pg_restore` | like custom, but no compression or parallel restore |
 
 The script does a full round trip on the book's private server, in a temporary directory deleted afterwards:
 ```bash
@@ -1303,22 +1311,22 @@ CREATE TABLE statements in schema-only dump: 1, in data-only dump: 0
 ...
 ```
 What it shows:
-1. A plain dump is just SQL: `CREATE TABLE`s, a `COPY … FROM stdin` block of rows per table, then constraints and indexes (added *after* the data, which is faster).
+1. A plain dump is just SQL: `CREATE TABLE`s, a `COPY … FROM stdin` block of rows per table, then constraints and indexes (added *after* the data, which is faster). `stdin` means *standard input*: the rows follow inline in the same script.
 2. A custom archive has a **table of contents** (`pg_restore -l`); `-t`, `-n` (schema) and `-L` (edited list) choose what to restore.
 3. `-t` restores a table's definition and rows **but not its constraints or indexes** (separate archive entries) — re-add them with `-L` or by re-running the DDL.
 
-Useful options: `--clean --if-exists` (drop objects before recreating), `--create` (create the database itself), `--no-owner` (when restoring as a different user), `-j N` (parallelism). `pg_dump` dumps one database; **roles and tablespaces** are cluster-wide, so also run `pg_dumpall --globals-only`.
+Useful options: `--clean --if-exists` (drop objects before recreating), `--create` (create the database itself), `--no-owner` (when restoring as a different user), `-j N` (parallelism). `pg_dump` dumps one database; **roles and tablespaces** (database users/groups, and named disk locations for data) are cluster-wide, so also run `pg_dumpall --globals-only`.
 
 ### Backup and restore in other databases
 | | Full backup | Restore | Notes |
 |---|---|---|---|
 | PostgreSQL | `pg_dump` (logical), `pg_basebackup` + WAL (physical, PITR) | `pg_restore` / `psql`; restore base backup + replay WAL to a target time | command-line tools, not SQL statements |
-| MySQL | `mysqldump`, MySQL Shell dump utilities (logical); Percona XtraBackup / MySQL Enterprise Backup (physical) | `mysql < dump.sql`; binary logs for point-in-time | |
-| SQL Server | `BACKUP DATABASE db TO DISK = '…\db.bak'` (also `WITH DIFFERENTIAL`, `BACKUP LOG`, `TO URL` for cloud storage) | `RESTORE DATABASE db FROM DISK = '…' [WITH NORECOVERY / RECOVERY, STOPAT = …]` | backup and restore are T-SQL statements; the others mostly use separate tools |
+| MySQL | `mysqldump`, MySQL Shell dump utilities (logical); Percona XtraBackup / MySQL Enterprise Backup (physical) | `mysql < dump.sql`; binary logs (MySQL's log of every change) for point-in-time | |
+| SQL Server | `BACKUP DATABASE db TO DISK = '…\db.bak'` (also `WITH DIFFERENTIAL`, `BACKUP LOG`, `TO URL` for cloud storage) | `RESTORE DATABASE db FROM DISK = '…' [WITH NORECOVERY / RECOVERY, STOPAT = …]` | backup and restore are T-SQL (SQL Server's SQL dialect) statements; the others mostly use separate tools |
 | SQLite | `.backup file` in the shell, `VACUUM INTO 'file'` | copy the file back / `.restore` | the database is one file |
 
 Two corrections to things some tutorials show (SQL Server — not run):
-- `BACKUP DATABASE` has no `WITH SCHEDULE = …` option. Backups are scheduled outside the statement — SQL Server Agent jobs or maintenance plans (elsewhere: cron, systemd timers, a backup tool's scheduler).
+- `BACKUP DATABASE` has no `WITH SCHEDULE = …` option. Backups are scheduled outside the statement — SQL Server Agent jobs or maintenance plans (elsewhere: cron or systemd timers — the standard Linux job schedulers — or a backup tool's scheduler).
 - There is no `RESTORE TABLE`. To recover one table, restore the backup under **another database name** (`RESTORE DATABASE db_old FROM DISK = … WITH MOVE …`) and copy the table across — like our `pg_restore -t` or `shop_copy`.
 
 ### Best practices
@@ -1327,12 +1335,12 @@ Two corrections to things some tutorials show (SQL Server — not run):
 - **Encrypt** backups and restrict who can read them.
 - **Match RPO/RTO**: nightly `pg_dump` alone risks 24 h of loss; PITR gets it to seconds.
 - **Replication is not a backup** — replicas faithfully copy `DROP TABLE` ([chapter 15](../15-scaling-databases/README.md)).
-- Managed databases (Amazon RDS, Cloud SQL, Azure) provide automated snapshots + PITR within a retention window.
+- Managed databases (run for you by a cloud provider: Amazon RDS, Cloud SQL, Azure) provide automated snapshots + PITR within a retention window (how long backups are kept).
 
 ### In the interview
 **30-second answer:** "Logical backups (`pg_dump`) export schema and data — flexible, single tables, portable across versions, slow for huge databases. Physical backups copy the data files; with archived WAL they allow point-in-time recovery. Choose by RPO/RTO, keep 3-2-1 copies, encrypt, test restores — and replication doesn't protect against a bad `DELETE`."
 
-- *Someone ran `DELETE` without `WHERE` at 14:03 — how do you recover?* → PITR: restore the last base backup to a new server and replay WAL up to 14:02:59, then copy the lost rows back (or fail over to it).
+- *Someone ran `DELETE` without `WHERE` at 14:03 — how do you recover?* → PITR: restore the last base backup to a new server and replay WAL up to 14:02:59, then copy the lost rows back (or fail over to it — switch the application to use it).
 - *pg_dump on a busy database — does it block?* → No; it reads a consistent snapshot. It does take light locks that block DDL like `DROP` or `ALTER` on dumped tables while it runs.
 
 ### Self-check

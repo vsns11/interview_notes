@@ -1,6 +1,6 @@
 # Chapter 1 — Databases and the Relational Model
 
-Almost every program you use keeps its facts somewhere: the orders in a shop, the balance in a bank, the messages in a chat app. This chapter explains where those facts live and why the answer is usually "in a relational database". You will see the problems that existed before databases, what a database management system (DBMS) does for you, how a DBMS is built inside, how relational databases compare with NoSQL stores, and what SQL is. The chapter ends with a working PostgreSQL server on your machine and the **sample database** that the next chapters query.
+Almost every program you use keeps its facts somewhere: the orders in a shop, the balance in a bank, the messages in a chat app. This chapter explains where those facts live and why the answer is usually "in a relational database". You will see the problems that existed before databases, what a database management system (DBMS) does for you, how a DBMS is built inside, how relational databases compare with NoSQL stores (databases that keep data in shapes other than tables, covered in 1.8), and what SQL is. The chapter ends with a working PostgreSQL server (PostgreSQL is a free, open-source relational database product; a *server* is a program that runs in the background and answers requests from other programs) on your machine and the **sample database** that the next chapters query.
 
 **What you'll learn**
 
@@ -20,7 +20,7 @@ Almost every program you use keeps its facts somewhere: the orders in a shop, th
 
 All code is in [`code/`](code/). Every output below was pasted from a real run on the book's private PostgreSQL 14 server (section 1.10 shows how to start it).
 
-> **Dialect note.** This book writes PostgreSQL first. Where MySQL, SQLite or SQL Server behave differently, a small table says so. Most of what you learn transfers directly; the differences are mainly in functions (chapter 3), limits/paging (chapter 2) and data types (chapter 9).
+> **Dialect note.** This book writes PostgreSQL first. Where MySQL, SQLite or SQL Server (three other widely used database products, compared in 1.7) behave differently, a small table says so. (Each product speaks its own *dialect* — its version of SQL; see 1.9.) Most of what you learn transfers directly; the differences are mainly in functions (chapter 3), limits/paging (chapter 2) and data types (chapter 9).
 
 ---
 
@@ -42,11 +42,11 @@ As companies added programs and data grew, the same seven problems appeared ever
 | # | Problem | What went wrong | What a DBMS does instead |
 |---|---|---|---|
 | 1 | **Redundancy → inconsistency** | A customer's address is copied into several files; an update reaches one copy, the copies disagree, and nothing notices. | Store each fact once; every program reads the same copy. |
-| 2 | **Data isolation** | Files sit on different machines in different formats (CSV, fixed-width binary); a cross-department question needs custom parsing code. | One store with one self-describing format. |
-| 3 | **No ad-hoc questions** | No query language: "which customers owe more than ₹500?" means days of writing a new program, so many questions are never asked. | A declarative query language (SQL): a new question is a new query. |
-| 4 | **Integrity rules buried in code** | "Marks must be 0–100" lives as an `if` in one program. Any other program writing that file can skip it. | Constraints declared once and enforced for every writer. |
-| 5 | **Unsafe concurrent access** | Two clerks both read "1 copy left" and both save 0: two copies go out, the count dropped once — a **lost update**. Locking the whole file blocks everybody. | Row-level locks and transactions. |
-| 6 | **No crash recovery** | A transfer is two writes; power fails after the first and the money has left one account and reached none. Only an old backup can repair it. | A log that lets the system undo or redo half-finished work. |
+| 2 | **Data isolation** | Files sit on different machines in different formats (CSV = plain text with commas between values; fixed-width binary = raw bytes at set positions); a cross-department question needs custom parsing code. | One store with one self-describing format. |
+| 3 | **No ad-hoc questions** | No query language: "which customers owe more than ₹500?" means days of writing a new program, so many questions are never asked. | A declarative query language (SQL — you state *what* you want, not *how* to get it): a new question is a new query. |
+| 4 | **Integrity rules buried in code** | "Marks must be 0–100" lives as an `if` in one program. Any other program writing that file can skip it. | Constraints (rules declared on the table, such as "0 to 100") declared once and enforced for every writer. |
+| 5 | **Unsafe concurrent access** | Two clerks both read "1 copy left" and both save 0: two copies go out, the count dropped once — a **lost update**. Locking the whole file blocks everybody. | Row-level locks (a marker that makes others wait while one program changes a row) and transactions (all-or-nothing groups of changes, defined in 1.4). |
+| 6 | **No crash recovery** | A transfer is two writes; power fails after the first and the money has left one account and reached none. Only an old backup can repair it. | A log (an append-only diary of every change) that lets the system undo or redo half-finished work. |
 | 7 | **All-or-nothing security** | File permissions cover the whole file. A clerk who needs addresses can also read salaries. | Permissions per table, column and even row. |
 
 ### How the DBMS changed things
@@ -61,13 +61,13 @@ A short timeline helps place the ideas:
 
 | Year | Milestone |
 |---|---|
-| 1960s | Navigational databases: IBM's IMS (hierarchical, a tree of records) and Charles Bachman's IDS / the CODASYL network model. Programs followed stored pointers from record to record. |
+| 1960s | Navigational databases: IBM's IMS (hierarchical, a tree of records) and Charles Bachman's IDS / the CODASYL network model (records linked in a web, not just a tree). Programs followed stored pointers (saved disk addresses of other records) from record to record. |
 | 1970 | Edgar F. Codd (IBM) publishes *A Relational Model of Data for Large Shared Data Banks*. |
 | 1974–79 | IBM's System R and the query language SEQUEL (later renamed SQL); UC Berkeley's Ingres; Oracle ships the first commercial SQL database (1979). |
-| 1986–87 | SQL becomes an ANSI (1986), then ISO (1987) standard. In 1986 UC Berkeley also starts POSTGRES, the ancestor of PostgreSQL. |
-| 2000s | Open-source RDBMSs dominate the web (MySQL, PostgreSQL); SQLite runs inside phones and browsers. |
+| 1986–87 | SQL becomes an ANSI (1986), then ISO (1987) standard (ANSI and ISO are the US and international standards bodies).  In 1986 UC Berkeley also starts POSTGRES, the ancestor of PostgreSQL. |
+| 2000s | Open-source (free, with public source code) RDBMSs (relational DBMSs, see 1.7) dominate the web (MySQL, PostgreSQL); SQLite runs inside phones and browsers. |
 | late 2000s | "NoSQL" systems (key-value, document, wide-column, graph) for web-scale workloads. |
-| 2010s–now | Cloud-managed databases and distributed SQL ("NewSQL"). |
+| 2010s–now | Cloud-managed databases (run for you by a provider such as AWS) and distributed SQL ("NewSQL": relational databases spread over many machines). |
 
 ### Self-check
 1. *Why does storing the same fact in three files lead to wrong answers, not just wasted space?* → Updates reach some copies and not others, so the copies drift apart (inconsistency), and nothing checks that they match.
@@ -93,7 +93,7 @@ Four properties make a pile of data a database:
 ![A database holds the data and its own description, which programs can query](img/inside-a-database.svg)
 *Figure — The catalog sits inside the database next to the data it describes (course diagram).*
 
-You can see self-description in action: PostgreSQL answers questions about its own tables through the standard `information_schema` views and its own `pg_catalog` tables.
+You can see self-description in action: PostgreSQL answers questions about its own tables through the standard `information_schema` views (a **view** is a saved query you can read like a table — chapter 7) and its own `pg_catalog` tables.
 
 ```sql
 -- code/02_catalog_metadata.sql (part)
@@ -129,7 +129,7 @@ Output:
  employees_salary_check    | c    | employees
 (5 rows)
 ```
-The `kind` letters are `p` primary key, `f` foreign key, `u` unique, `c` check. The rules you declared live in the catalog, which is how the DBMS can enforce them for every program.
+The `kind` letters are `p` primary key, `f` foreign key, `u` unique, `c` check. A **constraint** is a rule attached to a table that the DBMS checks on every write: a *primary key* names the column that identifies each row, a *foreign key* says a value must exist in another table (both defined properly in 1.6), *unique* forbids repeats, and a *check* is a yes/no test every row must pass (here: salary must be positive). The rules you declared live in the catalog, which is how the DBMS can enforce them for every program.
 
 ### Database vs DBMS vs database system
 These three are often mixed up — including in interviews.
@@ -141,7 +141,7 @@ These three are often mixed up — including in interviews.
 | **Database system** | DBMS + databases + the applications that use them | PostgreSQL + `company` + the web shop that talks to it |
 
 ### Why it matters
-Databases make large amounts of data fast to find, keep it accurate (integrity rules) and private (access control, encryption), let many users work at once, and feed the reports behind business decisions. A good one is well structured, scalable, reliable through failures, richly queryable and usable from many tools and languages.
+Databases make large amounts of data fast to find, keep it accurate (integrity rules) and private (access control — deciding who may see what; encryption — scrambling data so only key holders can read it), let many users work at once, and feed the reports behind business decisions. A good one is well structured, scalable (able to handle more data and users by adding hardware), reliable through failures, richly queryable and usable from many tools and languages.
 
 ### Real-world examples
 A shop must never lose a paid order; a hospital must never show records to the wrong person; a bank must never lose or double-apply a transfer; a social app must not fall over when millions read the same post. Each requirement maps to a DBMS job in the next section.
@@ -161,11 +161,11 @@ A **DBMS** is the program that stands between applications and stored data. Appl
 | Job | Meaning | In SQL / PostgreSQL |
 |---|---|---|
 | **Define** | Describe tables, columns, types and rules; saved in the catalog | `CREATE TABLE`, `ALTER TABLE` |
-| **Construct** | Physically write the data to storage; you never choose file names or byte offsets | PostgreSQL chooses files under its data directory |
+| **Construct** | Physically write the data to storage; you never choose file names or byte offsets | PostgreSQL chooses files under its data directory (the folder where the server keeps its files) |
 | **Manipulate** | Read, add, change, remove data | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
-| **Share** | Let many users and programs work on the same data at once without corrupting it | transactions, locks, MVCC ([chapter 13](../13-transactions-and-concurrency/README.md)) |
-| **Protect** | *Security* (who may read/write what) and *failure protection* (stay correct after a crash) | `GRANT`/`REVOKE`, the write-ahead log |
-| **Maintain** | Let the schema and storage evolve for years without rewriting applications | add a column, add an index, move to faster disks |
+| **Share** | Let many users and programs work on the same data at once without corrupting it | transactions, locks, MVCC (keeping several versions of a row so readers and writers don't block each other; [chapter 13](../13-transactions-and-concurrency/README.md)) |
+| **Protect** | *Security* (who may read/write what) and *failure protection* (stay correct after a crash) | `GRANT`/`REVOKE`, the write-ahead log (a change diary saved to disk *before* the data itself, used to repair after a crash) |
+| **Maintain** | Let the schema and storage evolve for years without rewriting applications | add a column, add an index (a lookup structure, explained below), move to faster disks |
 
 File processing systems managed the first three poorly and the last three not at all.
 
@@ -182,10 +182,12 @@ File processing systems managed the first three poorly and the last three not at
 
 | Kind | You change… | …and this keeps working | Example |
 |---|---|---|---|
-| **Physical** data independence | how data is stored (indexes, files, disks, page layout) | the tables and every query | add an index; move to SSDs |
+| **Physical** data independence | how data is stored (indexes, files, disks, page layout) | the tables and every query | add an index; move to SSDs (fast flash-memory disks) |
 | **Logical** data independence | the tables (add a column or a table) | applications that don't use the changed part | add `phone` to `employees`; a report reading names is unaffected |
 
-*What does "logical is separate from physical" mean?* The **logical level** is what you query — tables, columns, views. The **physical level** is how the bytes are laid out — data files, 8 kB pages, index trees. SQL names only logical objects, so the DBMS may reorganise the physical side freely and your queries keep their meaning.
+*What does "logical is separate from physical" mean?* The **logical level** is what you query — tables, columns, views. The **physical level** is how the bytes are laid out — data files, 8 kB pages (fixed-size chunks the database reads and writes as one unit), index trees.
+
+> **Key term — index:** An index is an extra, sorted structure the database keeps beside a table so it can find rows by a column's value without reading every row — like the index at the back of a book. It speeds up reads but costs disk space and a little extra work on every insert or update. PostgreSQL's default index is a *B-tree*, a balanced tree that stays sorted as rows change. Chapter 12 covers indexes in depth. SQL names only logical objects, so the DBMS may reorganise the physical side freely and your queries keep their meaning.
 
 The demo below changes both levels and runs the same "application" query each time.
 
@@ -231,7 +233,7 @@ ALTER TABLE
  Rahul      | Verma     | Engineer
 (1 row)
 ```
-`EXPLAIN` shows the **plan** — the method the DBMS chose. Before the index it scans every row (`Seq Scan`); after, it jumps through the index (`Index Scan`). The result and the query text never changed. (`enable_seqscan = off` is a teaching switch only; on a 15-row table the planner would rightly prefer the full scan. Chapter 12 covers plans properly.)
+`EXPLAIN` shows the **plan** — the method the DBMS chose. The **planner** is PostgreSQL's name for the optimizer, the part that picks the plan. Before the index it scans every row (`Seq Scan`); after, it jumps through the index (`Index Scan`). The result and the query text never changed. (`enable_seqscan = off` is a teaching switch only; on a 15-row table the planner would rightly prefer the full scan. Chapter 12 covers plans properly.)
 
 ### Self-check
 1. *Name the six jobs of a DBMS.* → Define, construct, manipulate, share, protect, maintain.
@@ -252,8 +254,8 @@ A DBMS is several cooperating parts, each with one job. Knowing them makes datab
 | **Query processor** | Turn SQL text into results | **Parser** checks syntax and meaning (do these tables/columns exist? may you use them?) and builds an internal tree. **Optimizer** considers alternative plans and picks the cheapest by estimated cost. **Execution engine** runs the plan, asking the storage engine for rows. |
 | **Storage engine** (storage manager) | Store and fetch bytes | Organises data into fixed-size **pages** (blocks) inside files; maintains indexes; may store rows (row store) or columns (column store). Examples: InnoDB in MySQL, WiredTiger in MongoDB, PostgreSQL's heap + index access methods. |
 | **Cache / buffer manager** | Keep hot pages in memory | The **buffer pool** holds recently used pages; a query whose pages are already cached avoids disk reads. |
-| **Transaction manager** | Make groups of operations all-or-nothing and isolated | Begins, commits and rolls back transactions; guarantees ACID ([chapter 13](../13-transactions-and-concurrency/README.md)). |
-| **Lock manager** | Coordinate concurrent access | **Shared (S) locks**: many readers may hold one at once. **Exclusive (X) locks**: one writer, nobody else. Prevents lost updates and dirty reads; must also detect **deadlocks** (two transactions each waiting for the other's lock). |
+| **Transaction manager** | Make groups of operations all-or-nothing and isolated | Begins, commits (makes permanent) and rolls back (cancels) transactions; guarantees ACID (all-or-nothing, rule-preserving, isolated, durable — defined in 1.8; [chapter 13](../13-transactions-and-concurrency/README.md)). |
+| **Lock manager** | Coordinate concurrent access | **Shared (S) locks**: many readers may hold one at once. **Exclusive (X) locks**: one writer, nobody else. Prevents lost updates and dirty reads (seeing another transaction's uncommitted change); must also detect **deadlocks** (two transactions each waiting for the other's lock). |
 | **Recovery manager** | Restore a consistent state after a crash | Writes a **log** of every change *before* applying it; after a crash, **redoes** committed work (roll forward) and **undoes** uncommitted work (roll back). |
 | **Catalog** (data dictionary) | Describe everything | Tables, columns, types, constraints, indexes, views, users and permissions, storage sizes. Every other component reads it. |
 
@@ -287,9 +289,9 @@ The optimizer's candidate plans differ in scan method (full scan or index), join
 ### Real-world example — the same parts in PostgreSQL
 | Generic component | PostgreSQL name |
 |---|---|
-| Parser / optimizer / executor | parser → rewriter → **planner** → executor (each connection gets its own server process) |
+| Parser / optimizer / executor | parser → rewriter → **planner** → executor (each connection gets its own server process, i.e. its own running copy of the server program) |
 | Pages | 8 kB blocks (`SHOW block_size` → `8192`) in files under the data directory |
-| Buffer pool | `shared_buffers` (default `128MB`) plus the operating-system cache |
+| Buffer pool | `shared_buffers` (default `128MB`) plus the operating-system cache (file data the OS itself keeps in spare memory) |
 | Recovery log | **WAL** (write-ahead log) in `pg_wal/` |
 | Lock manager + concurrency | table/row locks **plus MVCC** (multi-version concurrency control: readers see a snapshot and don't block writers) |
 | Catalog | `pg_catalog` tables and the standard `information_schema` views |
@@ -299,7 +301,7 @@ The optimizer's candidate plans differ in scan method (full scan or index), join
 ### Common mistakes
 - Assuming SQL runs "top to bottom as written" — the optimizer may reorder joins and filters as long as the result is the same.
 - Judging a query by its first (cold-cache) run — the second may be served from the buffer pool.
-- Confusing the cache (memory, lost in a crash) with durability (the log on disk).
+- Confusing the cache (a fast in-memory copy, lost in a crash) with durability (the guarantee that committed data survives — provided by the log on disk).
 
 ### In the interview
 **30-second answer:** "A DBMS has a query processor — parser, optimizer, executor — that turns SQL into a plan and runs it; a storage engine that keeps data in fixed-size pages and indexes; a buffer pool that caches pages in memory; a transaction manager and lock manager that give ACID and safe concurrency; a recovery manager that uses a write-ahead log to redo or undo work after a crash; and a catalog that describes everything."
@@ -320,13 +322,13 @@ The optimizer's candidate plans differ in scan method (full scan or index), join
 An **architecture** describes where the database runs relative to its users and how requests travel. The same PostgreSQL can sit in any of these set-ups.
 
 ### Two-tier: client–server
-The client application talks **directly** to the database server: it opens a connection, sends SQL, gets rows back.
+The **client** application (the program asking for data) talks **directly** to the database server: it opens a **connection** (a logged-in, two-way network channel to the server), sends SQL, gets rows back.
 
 ![Clients connect directly to a database server](img/client-server.svg)
 *Figure — Two-tier client–server: many clients, one database server (course diagram).*
 
 - **Good:** simple; fine for small teams and internal tools (a desktop accounting app on an office server, `psql` itself).
-- **Bad:** one server struggles with many client connections; business rules live in every client, so a change means redeploying them all; clients hold database credentials.
+- **Bad:** one server struggles with many client connections; business rules live in every client, so a change means redeploying (reinstalling an updated version of) them all; clients hold database credentials (user name and password).
 
 ### Three-tier
 A middle **application tier** sits between the user interface and the database.
@@ -337,43 +339,43 @@ A middle **application tier** sits between the user interface and the database.
 | Tier | Job | Example |
 |---|---|---|
 | Presentation | User interface | browser page or mobile app |
-| Application (middle tier) | Business rules, validation, coordination, connection pooling | a Java/Python/Node web service |
+| Application (middle tier) | Business rules, validation, coordination, connection pooling (reusing a few open connections for many users) | a Java/Python/Node web service |
 | Data | Storage and queries | PostgreSQL |
 
-- **Good:** tiers scale separately (more app servers behind a load balancer); rules change in one place; the database stays off the internet. **Bad:** more moving parts, a little latency per hop.
+- **Good:** tiers scale separately (more app servers behind a **load balancer** — a component that spreads incoming requests across several servers); rules change in one place; the database stays off the internet. **Bad:** more moving parts, a little **latency** (delay, the time a request takes) per hop (each network trip between tiers). Both terms are explained further in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
 - **Typical use:** almost every web application — shops, ERP (enterprise resource planning) and CRM (customer relationship management) systems.
 
 ### N-tier
-Split further into specialised layers: an authentication service, a payment service, a cache tier (e.g. Redis), a search tier, message queues.
+Split further into specialised layers: an authentication service (checks who a user is), a payment service, a cache tier (e.g. Redis — a fast in-memory store that keeps copies of hot data), a search tier, message queues (buffers where one service drops work for another to pick up later).
 
 ![A layered architecture with several specialised tiers](img/n-tier.svg)
 *Figure — N-tier: extra service, integration and caching layers (course diagram).*
 
-- **Good:** layers scale, deploy and fail independently. **Bad:** harder to operate and debug; more network hops. Microservices are an extreme form.
+- **Good:** layers scale, deploy and fail independently. **Bad:** harder to operate and debug; more network hops. Microservices (an app split into many small, independently deployed services) are an extreme form.
 
 ### Cloud-hosted databases
 The database runs on a cloud provider's infrastructure. Three service models:
 
 | Model | You manage | Provider manages | Example |
 |---|---|---|---|
-| **IaaS** (Infrastructure as a Service) | OS, DBMS install, backups, upgrades | hardware, virtual machines | PostgreSQL you install on an AWS EC2 or Azure VM |
-| **PaaS** / DBaaS (Platform / Database as a Service) | schema, queries, some settings | install, patching, backups, failover | Amazon RDS, Google Cloud SQL, Azure Database for PostgreSQL |
+| **IaaS** (Infrastructure as a Service) | OS, DBMS install, backups, upgrades | hardware, virtual machines (software-simulated computers) | PostgreSQL you install on an AWS EC2 or Azure VM |
+| **PaaS** / DBaaS (Platform / Database as a Service) | schema, queries, some settings | install, patching, backups, failover (switching to a standby copy when the main one dies) | Amazon RDS, Google Cloud SQL, Azure Database for PostgreSQL |
 | **SaaS** (Software as a Service) | only your data inside the app | everything, including the database | Salesforce, Google Workspace |
 
-- **Good:** elastic capacity, less operational work, global reach. **Bad:** depends on the network; cost can grow quietly; data location must satisfy compliance (data-residency) rules.
+- **Good:** elastic capacity (grow or shrink on demand), less operational work, global reach. **Bad:** depends on the network; cost can grow quietly; data location must satisfy compliance (data-residency) rules.
 
 ### Distributed databases
-Data is spread over several machines, often in several regions.
+Data is spread over several machines, often in several regions. Each machine in such a group is called a **node**.
 
 ![Data partitioned and replicated across several nodes](img/distributed.svg)
 *Figure — A distributed database: nodes in different locations, data partitioned and replicated (course diagram).*
 
 - **Partitioning / sharding** — split data into pieces, each on a different node (e.g. customers A–M on node 1, N–Z on node 2).
-- **Replication** — keep copies of the same data on several nodes for availability and read scaling.
+- **Replication** — keep copies (**replicas**) of the same data on several nodes for availability (staying up when a machine fails) and read scaling (spreading reads over the copies). See [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) for more on sharding and replication.
 - **Consistency models** — how quickly all copies agree, from **strong** (every read sees the latest write) to **eventual** (copies converge after a while).
 - **Good:** scales past one machine, survives node failures, puts data near users. **Bad:** much harder to reason about; cross-node queries and transactions pay network costs.
 
-All of this is chapter 15 ([Scaling databases](../15-scaling-databases/README.md)); see also the DDIA notes ([`../../../ddia/`](../../../ddia/)).
+All of this is chapter 15 ([Scaling databases](../15-scaling-databases/README.md)); see also the DDIA notes (DDIA = the book *Designing Data-Intensive Applications*; [`../../../ddia/`](../../../ddia/)).
 
 ### Self-check
 1. *Why is exposing the database directly to thousands of browser clients a bad idea?* → Too many connections, credentials on clients, and business rules duplicated in every client; a middle tier pools connections and centralises rules.
@@ -395,7 +397,7 @@ A common misconception: "relational" does **not** come from relationships betwee
 | **Relation** | table | a named set of rows that all have the same columns |
 | **Tuple** | row, record | one item — one employee, one order |
 | **Attribute** | column, field | one property — a name, a price |
-| **Domain** | data type (+ rules) | the allowed values for a column |
+| **Domain** | data type (+ rules) | the allowed values for a column (a *data type* is the kind of value: integer, text, date…) |
 | **Degree** | number of columns | `departments` has degree 4 |
 | **Cardinality** | number of rows | `departments` has cardinality 6 |
 | **Schema** | table/database definition | the list of tables, columns, types and constraints |
@@ -411,7 +413,7 @@ A common misconception: "relational" does **not** come from relationships betwee
 ### Keys and referential integrity
 - A **primary key (PK)** is a column (or set of columns) whose value identifies exactly one row; it may not repeat and may not be `NULL`. Example: `customers.customer_id`.
 - A **foreign key (FK)** is a column whose values must match a primary (or unique) key in another table. Example: `orders.customer_id` → `customers.customer_id`.
-- **Referential integrity** is the DBMS rule that every foreign-key value points at a real row. Inserting an order for a customer who doesn't exist is rejected. Deleting a customer who still has orders is either refused or cascades to delete the orders too, depending on the `ON DELETE` rule chosen when the table was created ([chapter 9](../09-ddl-dml-and-constraints/README.md)).
+- **Referential integrity** is the DBMS rule that every foreign-key value points at a real row. Inserting an order for a customer who doesn't exist is rejected. Deleting a customer who still has orders is either refused or **cascades** (automatically repeats the delete on the dependent rows) to delete the orders too, depending on the `ON DELETE` rule chosen when the table was created ([chapter 9](../09-ddl-dml-and-constraints/README.md)).
 - **Entity integrity** is the rule that a primary key is never `NULL`.
 
 Here the sample database enforces all of these (errors are deliberate):
@@ -511,11 +513,11 @@ An **RDBMS** is a DBMS that implements the relational model and speaks SQL. Its 
 ### The main products
 | Product | Licence | Known for | Notes for this book |
 |---|---|---|---|
-| **PostgreSQL** | open source (PostgreSQL licence) | standards compliance, correctness, extensibility (JSONB, PostGIS, custom types) | this book's main dialect |
-| **MySQL** (and fork MariaDB) | open source (GPL) + commercial | ubiquity on the web, simple operations | the SQL course's original dialect; differences noted per chapter |
-| **Oracle Database** | commercial | enterprise features, PL/SQL | mentioned where syntax differs notably |
-| **Microsoft SQL Server** | commercial | Microsoft ecosystem integration, T-SQL | differences noted in small tables |
-| **SQLite** | public domain | serverless: a whole database in one file, embedded in apps, phones and browsers | `*.sqlite.sql` examples run in `sqlite3` |
+| **PostgreSQL** | open source (PostgreSQL licence) | standards compliance, correctness, extensibility (JSONB = stored JSON documents, PostGIS = maps and geography, custom types) | this book's main dialect |
+| **MySQL** (and fork MariaDB — a copy that became its own project) | open source (GPL, a licence that keeps derived code open) + commercial | ubiquity on the web, simple operations | the SQL course's original dialect; differences noted per chapter |
+| **Oracle Database** | commercial | enterprise features, PL/SQL (Oracle's procedural programming language) | mentioned where syntax differs notably |
+| **Microsoft SQL Server** | commercial | Microsoft ecosystem integration, T-SQL (Transact-SQL, its SQL dialect) | differences noted in small tables |
+| **SQLite** | public domain | serverless (no separate server program): a whole database in one file, embedded in apps, phones and browsers | `*.sqlite.sql` examples run in `sqlite3` |
 
 ### Self-check
 1. *What makes SQLite different from the others?* → No separate server process; a library that stores the whole database in a single file.
@@ -535,9 +537,9 @@ Picture a food-delivery app. Orders and payments fit tables perfectly. Restauran
 
 | Family | Data shape | Strength | Weakness | Examples | Typical use |
 |---|---|---|---|---|---|
-| **Document** | self-contained JSON/BSON (or XML) documents; documents in one collection may differ in fields | reading/writing one whole object; varied shapes | cross-document joins are limited | MongoDB, Couchbase, CouchDB | catalogs, content, user profiles, menus |
-| **Key-value** | a value stored under a key; mainly `put` and `get` | extremely fast lookups by key | cannot search inside values | Redis, Amazon DynamoDB, Riak | caches, sessions, feature flags |
-| **Wide-column** (column-family) | rows grouped into column families; rows may have different columns; partitioned by key | very high write throughput across many machines | queries must follow the partition key | Apache Cassandra, HBase | time series, event logs, IoT |
+| **Document** | self-contained JSON/BSON (or XML) documents (JSON = text of nested `{"key": value}` pairs; BSON = binary JSON; XML = tag-based text); documents in one collection may differ in fields | reading/writing one whole object; varied shapes | cross-document joins are limited | MongoDB, Couchbase, CouchDB | catalogs, content, user profiles, menus |
+| **Key-value** | a value stored under a key; mainly `put` and `get` | extremely fast lookups by key | cannot search inside values | Redis, Amazon DynamoDB, Riak | caches, sessions (a logged-in user's temporary state), feature flags (on/off switches for app features) |
+| **Wide-column** (column-family) | rows grouped into column families; rows may have different columns; partitioned by key | very high write throughput (writes per second) across many machines | queries must follow the partition key (the column that decides which machine holds a row) | Apache Cassandra, HBase | time series (values recorded over time), event logs, IoT (Internet of Things — sensors and devices) |
 | **Graph** | nodes, edges and properties | multi-hop relationship questions ("friends of friends who…") | not built for bulk aggregation | Neo4j, Amazon Neptune | social networks, recommendations, fraud detection |
 
 Chapter 16 ([Beyond relational](../16-beyond-relational/README.md)) builds each of these in practice.
@@ -556,15 +558,15 @@ Chapter 16 ([Beyond relational](../16-beyond-relational/README.md)) builds each 
 
 | Letter(s) | Meaning |
 |---|---|
-| **Basically Available** | requests still get answers while some nodes are failing, though the data returned may be stale |
+| **Basically Available** | requests still get answers while some nodes are failing, though the data returned may be stale (out of date) |
 | **Soft state** | stored state may keep changing without new writes as replicas catch up |
 | **Eventual consistency** | if writes stop, all replicas converge; until then two readers may see different values |
 
 BASE gives up immediate agreement to stay available — acceptable for a product catalogue, unacceptable for an account balance.
 
 ### Three claims that need care
-1. **"Relational databases only scale vertically."** *False.* **Vertical scaling** = a bigger machine; **horizontal scaling** = more machines. Relational systems scale out with read replicas, partitioning/sharding and distributed SQL (CockroachDB, Google Spanner, YugabyteDB, Citus for PostgreSQL). The real issue is *cost*: cross-machine joins and transactions are expensive, and NoSQL models avoid them by design.
-2. **"NoSQL databases don't support transactions."** *Out of date.* MongoDB has had multi-document ACID transactions since version 4.0 (2018); DynamoDB added transactions in 2018; Cassandra offers lightweight (compare-and-set) transactions per partition. Limits and costs vary, so check the specific product.
+1. **"Relational databases only scale vertically."** *False.* **Vertical scaling** = a bigger machine; **horizontal scaling** = more machines. Relational systems scale out with read replicas (read-only copies that share the query load), partitioning/sharding and distributed SQL (CockroachDB, Google Spanner, YugabyteDB, Citus for PostgreSQL). The real issue is *cost*: cross-machine joins and transactions are expensive, and NoSQL models avoid them by design.
+2. **"NoSQL databases don't support transactions."** *Out of date.* MongoDB has had multi-document ACID transactions since version 4.0 (2018); DynamoDB added transactions in 2018; Cassandra offers lightweight (compare-and-set: "write only if the value is still what I last saw") transactions per partition. Limits and costs vary, so check the specific product.
 3. **"NoSQL databases have no schema."** *Misleading.* The database doesn't *enforce* one, but your code still expects `price` to be a number — the schema has moved into the application. The names: **schema-on-write** (the database checks data as it's written — relational) vs **schema-on-read** (the reader interprets whatever is stored). Schema-on-read makes change cheap and bad data easy.
 
 ### Comparison
@@ -671,7 +673,7 @@ ROLLBACK TO SAVEPOINT before_mistake;  -- undo only the delete
 COMMIT;
 SELECT * FROM suppliers ORDER BY supplier_id;
 ```
-Output (psql echoes a *command tag* such as `INSERT 0 2` after each change — `0` is a legacy OID field, `2` is the number of rows):
+Output (psql echoes a *command tag* such as `INSERT 0 2` after each change — `0` is a legacy OID (object identifier) field, `2` is the number of rows):
 ```
 CREATE TABLE
 INSERT 0 2
@@ -737,7 +739,7 @@ SQL is the declarative, standardised language of relational databases, split int
 ## 1.10 Your private PostgreSQL server and psql
 
 ### What it is
-The book ships a small script, `tools_pg.sh`, in the project root. It runs a **private PostgreSQL 14 server** that belongs only to this book: its data lives in `~/.pg-books-system-design/` (outside the iCloud-synced Documents folder), it listens on port **5544** through a Unix socket in `/tmp`, and it never touches any other PostgreSQL you may have installed (which normally uses port 5432). **psql** is PostgreSQL's command-line client: you type SQL, it prints results.
+The book ships a small script, `tools_pg.sh`, in the project root. It runs a **private PostgreSQL 14 server** that belongs only to this book: its data lives in `~/.pg-books-system-design/` (outside the iCloud-synced Documents folder), it listens on port **5544** (a *port* is a numbered network door a server waits on) through a Unix socket in `/tmp` (a special file programs on the same machine use to talk to each other), and it never touches any other PostgreSQL you may have installed (which normally uses port 5432). **psql** is PostgreSQL's command-line client (a text-only program run in a terminal): you type SQL, it prints results.
 
 ### How it works — step by step
 Run these from the project root (`system_design_notes/`).
@@ -756,7 +758,7 @@ Run these from the project root (`system_design_notes/`).
    ```
    CREATE DATABASE
    ```
-   Asking for `UTF8` explicitly guarantees that accented and non-Latin text (`café`, `मुंबई`) is stored and measured correctly, whatever encoding the server was initialised with; `TEMPLATE template0` is required when the encoding differs from the default template's.
+   An **encoding** is the rule for turning characters into bytes; **UTF-8** is the universal one that covers every language. Asking for `UTF8` explicitly guarantees that accented and non-Latin text (`café`, `मुंबई`) is stored and measured correctly, whatever encoding the server was initialised with; `TEMPLATE template0` is required when the encoding differs from the default template's.
 3. **Load the sample schema** (section 1.11):
    ```bash
    bash tools_pg.sh psql -d company -q -f sql/chapters/01-databases-and-the-relational-model/code/00_schema.sql
@@ -772,7 +774,7 @@ Run these from the project root (`system_design_notes/`).
        15
    (1 row)
    ```
-5. **Open an interactive session**: `bash tools_pg.sh psql -d company`. The prompt `company=#` means "connected to `company` as a superuser" (`=>` for ordinary users). If you press Enter before the `;`, the prompt changes to `company-#` — psql is waiting for the rest of the statement. Type `\q` to leave.
+5. **Open an interactive session**: `bash tools_pg.sh psql -d company`. The prompt `company=#` means "connected to `company` as a superuser" (an account allowed to do everything) (`=>` for ordinary users). If you press Enter before the `;`, the prompt changes to `company-#` — psql is waiting for the rest of the statement. Type `\q` to leave.
 6. **Stop the server** when you're done: `bash tools_pg.sh stop`.
 
 `tools_pg.sh psql` is a thin wrapper around `psql -h /tmp -p 5544 -U postgres -X`: `-h /tmp` uses the socket directory, `-p` the port, `-U` the user, and `-X` skips any personal `~/.psqlrc` so output looks the same for every reader.
@@ -793,7 +795,7 @@ Lines starting with a backslash are **meta-commands**: psql handles them itself 
 | `\pset null '(null)'` | show NULLs visibly instead of as blanks (used throughout this book) |
 | `\timing` | print how long each statement took |
 | `\i file.sql` | run a file of SQL |
-| `\e` | edit the last query in your `$EDITOR` |
+| `\e` | edit the last query in your `$EDITOR` (the environment variable naming your preferred text editor) |
 | `\copy` | import/export CSV from your machine (client side) |
 | `\q` | quit |
 
@@ -946,9 +948,9 @@ erDiagram
 | Table | Rows | What a row is | Notable columns |
 |---|---|---|---|
 | `departments` | 6 | a department | `location` may be NULL, `budget` |
-| `employees` | 15 | a member of staff | `manager_id` → another employee (a self-reference), `commission_pct` only for some sales staff |
+| `employees` | 15 | a member of staff | `manager_id` → another employee (a self-reference: a foreign key pointing at its own table), `commission_pct` only for some sales staff |
 | `projects` | 5 | an internal project owned by a department | `end_date` NULL = still running |
-| `employee_projects` | 13 | "employee X works on project Y" (a many-to-many link) | composite key `(emp_id, project_id)`, `role`, `hours` |
+| `employee_projects` | 13 | "employee X works on project Y" (a many-to-many link) | composite key (a key made of two or more columns together) `(emp_id, project_id)`, `role`, `hours` |
 | `customers` | 10 | a shop customer | `city`, `email` may be NULL |
 | `products` | 9 | a product for sale | `category` may be NULL, `discontinued` |
 | `orders` | 14 | an order header | `placed_at`, `status` ∈ pending / shipped / delivered / cancelled, `shipped_at`, `sales_rep_id` NULL for online orders |
@@ -958,7 +960,7 @@ erDiagram
 | Quirk | Where | Useful for |
 |---|---|---|
 | CEO (Asha) and a new intern (Rohan) have no department | `employees.dept_id` NULL | NULL handling, outer joins |
-| Research department has no employees; Support has no location | `departments` | outer joins, anti-joins, NULL sorting |
+| Research department has no employees; Support has no location | `departments` | outer joins (keep unmatched rows), anti-joins (find rows with *no* match), NULL sorting |
 | Salary ties: Rahul & Meera 98,000; Arjun & Sara 68,000 | `employees.salary` | `DISTINCT`, `WITH TIES`, ranking functions |
 | Missing emails (Meera, Ananya) and commissions | `employees` | `IS NULL`, `COALESCE`, `count(col)` |
 | One email stored in mixed case (`Neha.Gupta@Company.example`) | `employees.email` | case-insensitive matching |

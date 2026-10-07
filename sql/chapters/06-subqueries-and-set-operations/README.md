@@ -7,7 +7,7 @@ Some questions need **the answer to another question first**. "Who earns more th
 - What a subquery (nested query) is, where it can appear, and the three shapes of result it can return: **scalar**, **row**, **table**.
 - **Non-correlated** subqueries (run once) vs **correlated** subqueries (conceptually re-run for every outer row), and how PostgreSQL actually executes them.
 - Multi-row subqueries with `IN`, `EXISTS`, `ANY`/`SOME`/`ALL` — and the famous `NOT IN` + `NULL` trap.
-- **Derived tables** (subqueries in `FROM`), row subqueries, and `LATERAL` for "top-N per group".
+- **Derived tables** (subqueries in `FROM`), row subqueries, and `LATERAL` for "top-N per group" (the first *N* rows inside each group, e.g. the two best-paid people in every department).
 - The set operations `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT` (and their `ALL` forms): rules, `NULL` handling, precedence, sorting, and when to prefer a join or `EXISTS` instead.
 
 **How to run the examples.** All queries are in [`code/`](code/) and ran on the book's private PostgreSQL 14; outputs are real `psql` output, `NULL` shown as `(null)`. Data: the book's `company` database ([`code/00_schema.sql`](code/00_schema.sql); see [Chapter 1](../01-databases-and-the-relational-model/README.md)).
@@ -96,7 +96,7 @@ Output:
 2. It substitutes that value, so the outer query becomes `WHERE salary > 107800`.
 3. It runs the outer query.
 
-Without a subquery you would need two round trips from your application (fetch the average, then send a second query) — and the value could change between them.
+Without a subquery you would need two round trips (a request sent to the database plus its reply) from your application (fetch the average, then send a second query) — and the value could change between them.
 
 A scalar subquery can be used anywhere a single value can, including the `SELECT` list and arithmetic:
 
@@ -146,7 +146,7 @@ Output:
 (1 row)
 ```
 
-The second query reads "the largest salary that is smaller than the largest salary". (For the *N*-th highest in general, window functions such as `DENSE_RANK()` are cleaner — [Chapter 8](../08-window-functions/README.md) — and interview versions are in [Chapter 19](../19-sql-interview-problems-2/README.md).)
+The second query reads "the largest salary that is smaller than the largest salary". (For the *N*-th highest in general, window functions — functions that compute over related rows while keeping every row — such as `DENSE_RANK()` are cleaner — [Chapter 8](../08-window-functions/README.md) — and interview versions are in [Chapter 19](../19-sql-interview-problems-2/README.md).)
 
 ### Scalar subqueries: the two edge cases
 
@@ -174,7 +174,7 @@ WHERE salary = (SELECT salary FROM employees WHERE dept_id = 1);
 ERROR:  more than one row returned by a subquery used as an expression
 ```
 
-This error depends on the **data**, not just the query — it can work in testing and fail in production once a second matching row appears. If more than one row is possible, use `IN` (§6.2), or make the subquery provably single-row (aggregate it, or filter on a unique key).
+This error depends on the **data**, not just the query — it can work in testing and fail in production (the live system real users depend on) once a second matching row appears. If more than one row is possible, use `IN` (§6.2), or make the subquery provably single-row (aggregate it, or filter on a unique key).
 
 ### Common mistakes
 
@@ -220,7 +220,7 @@ Output:
 (6 rows)
 ```
 
-The subquery returns `{2, 3}` (Sales and Marketing are in Mumbai), and the outer query keeps employees whose `dept_id` is in that set. `IN` never produces duplicates in the outer result, even if the list contains a value many times — it's a semi-join ([Chapter 5](../05-joins/README.md#58-semi-joins-and-anti-joins)).
+The subquery returns `{2, 3}` (Sales and Marketing are in Mumbai), and the outer query keeps employees whose `dept_id` is in that set. `IN` never produces duplicates in the outer result, even if the list contains a value many times — it's a semi-join (each outer row is returned at most once if it has any match; [Chapter 5](../05-joins/README.md#58-semi-joins-and-anti-joins)).
 
 The subquery can have its own joins and filters:
 
@@ -273,7 +273,7 @@ Output:
 (3 rows)
 ```
 
-Deep nesting is legal but hard to read; the same question is usually clearer as joins plus `DISTINCT`/`EXISTS`, or as a chain of CTEs ([Chapter 7](../07-ctes-views-and-recursion/README.md)).
+Deep nesting is legal but hard to read; the same question is usually clearer as joins plus `DISTINCT`/`EXISTS`, or as a chain of CTEs (Common Table Expressions — named subqueries written with `WITH`; [Chapter 7](../07-ctes-views-and-recursion/README.md)).
 
 ### The NOT IN trap
 
@@ -332,7 +332,7 @@ Output (both):
 (10 rows)
 ```
 
-Prefer `NOT EXISTS`: it is correct whatever the data, states the intent ("there is no row that…"), and PostgreSQL plans it as an efficient anti join, whereas `NOT IN (subquery)` must stay a filter that checks the whole list (hashed if it fits in memory, otherwise re-scanned per row).
+Prefer `NOT EXISTS`: it is correct whatever the data, states the intent ("there is no row that…"), and PostgreSQL plans it as an efficient anti join (a join that returns only the outer rows with *no* match), whereas `NOT IN (subquery)` must stay a filter that checks the whole list (hashed — loaded into an in-memory hash table, a structure that finds a value in about one step — if it fits in memory, otherwise re-scanned per row).
 
 ### In the interview
 
@@ -452,7 +452,7 @@ GROUP BY c.customer_id, c.first_name
 ORDER BY c.customer_id;
 ```
 
-(Identical output — omitted.) How PostgreSQL executes the subquery version:
+(Identical output — omitted.) How PostgreSQL's optimizer (the component that decides how to run a query) executes the subquery version, as shown by `EXPLAIN` (which prints the chosen plan; `Seq Scan` = read the whole table):
 
 ```sql
 EXPLAIN (COSTS OFF)
@@ -471,12 +471,12 @@ FROM customers c;
 (5 rows)
 ```
 
-`SubPlan 1` under the customers scan means the inner aggregate really **runs once per customer**. With an index on `orders.customer_id` each run is a quick index lookup, and for a page of 20 rows that is perfectly fine. Over a million customers it's a million lookups, where the join version reads `orders` once and aggregates everything with a single hash join.
+`SubPlan 1` under the customers scan means the inner aggregate really **runs once per customer**. With an index on `orders.customer_id` (an **index** is a sorted lookup structure that finds rows by a column's value without reading the whole table) each run is a quick index lookup, and for a page of 20 rows that is perfectly fine. Over a million customers it's a million lookups, where the join version reads `orders` once and aggregates everything with a single hash join (build a hash table from one input, then probe it with each row of the other).
 
 | | Correlated subquery | Join + `GROUP BY` (or derived table) |
 |---|---|---|
 | Readability | Very clear for "per row, look up X" | Clear once you know joins |
-| Execution (PostgreSQL) | `EXISTS`/`IN` forms become semi/anti joins; scalar forms in `SELECT`/`WHERE` run per outer row | Set-based: one pass, hash/merge join |
+| Execution (PostgreSQL) | `EXISTS`/`IN` forms become semi/anti joins; scalar forms in `SELECT`/`WHERE` run per outer row | Set-based (whole tables at once): one pass, hash/merge join |
 | Multiple values from the same lookup | One subquery **per value** (repeated work) | One join gives all columns |
 | Risk | Slow on large outer tables without an index | Fan-out if you join several children (Chapter 5 §5.9) |
 
@@ -749,7 +749,7 @@ SELECT (5 > ALL (SELECT salary FROM employees WHERE dept_id = 6)) AS all_empty,
 (1 row)
 ```
 
-PostgreSQL also accepts an **array** on the right-hand side, which is how application code usually passes a list as one parameter:
+PostgreSQL also accepts an **array** (an ordered list of values held in one value) on the right-hand side, which is how application code usually passes a list as one parameter (a value sent separately from the SQL text, filled into a placeholder):
 
 ```sql
 SELECT name FROM products WHERE product_id = ANY (ARRAY[1, 3, 5]) ORDER BY product_id;
@@ -868,7 +868,7 @@ Output:
 (5 rows)
 ```
 
-Notice the order-total subquery written **twice**. That repetition is exactly what a CTE (`WITH order_totals AS (…)`) removes — [Chapter 7](../07-ctes-views-and-recursion/README.md). Since PostgreSQL 12 a simple CTE that is referenced once is inlined, i.e. executed just like the equivalent derived table; CTEs mainly win on readability and reuse.
+Notice the order-total subquery written **twice**. That repetition is exactly what a CTE (`WITH order_totals AS (…)`) removes — [Chapter 7](../07-ctes-views-and-recursion/README.md). Since PostgreSQL 12 a simple CTE that is referenced once is inlined (pasted into the main query), i.e. executed just like the equivalent derived table; CTEs mainly win on readability and reuse.
 
 ### Row subqueries
 
@@ -1053,7 +1053,7 @@ With an index on `orders (customer_id, placed_at)`, each lateral lookup reads ju
 
 ### What it is
 
-**Set operations** combine the **results of two queries** into one result, by rows, like the operations on sets in mathematics:
+**Set operations** combine the **results of two queries** into one result, by rows, like the operations on sets in mathematics (a *set* is a collection of distinct items; a *Venn picture* draws two sets as overlapping circles):
 
 | Operator | Result | Venn picture |
 |---|---|---|
@@ -1100,7 +1100,7 @@ LINE 1: SELECT emp_id FROM employees UNION SELECT first_name FROM cu...
 
 ### UNION
 
-One contact list from two tables, with a literal column to show where each row came from:
+One contact list from two tables, with a literal column (a fixed value typed into the query, here `'employee'`) to show where each row came from:
 
 ```sql
 SELECT first_name, last_name, 'employee' AS kind FROM employees WHERE dept_id = 3
@@ -1326,7 +1326,7 @@ Output:
 
 Customer cities with no office; office cities with no customers (only Pune).
 
-Because `NULL`s compare equal in set operations, `EXCEPT` is also a handy way to **diff two queries that contain `NULL`s** — for example, check that a refactored query returns exactly the same rows as the old one: `(old EXCEPT new)` and `(new EXCEPT old)` should both be empty. Here Meera's row is removed even though her email is `NULL`:
+Because `NULL`s compare equal in set operations, `EXCEPT` is also a handy way to **diff two queries that contain `NULL`s** — for example, check that a refactored query (rewritten for clarity or speed, meant to behave identically) returns exactly the same rows as the old one: `(old EXCEPT new)` and `(new EXCEPT old)` should both be empty. Here Meera's row is removed even though her email is `NULL`:
 
 ```sql
 SELECT first_name, email FROM employees WHERE dept_id = 1
@@ -1384,7 +1384,7 @@ Output:
 (8 rows)
 ```
 
-(A `LEFT JOIN (SELECT DISTINCT location FROM departments) d ON d.location = c.city WHERE d.location IS NULL` returns the same 8 rows — see the code file.) Two differences from the real operators matter: you must add `DISTINCT` yourself to get set semantics, and `=` does **not** treat `NULL`s as equal. That is why the first query uses `IS NOT DISTINCT FROM` to reproduce `INTERSECT`'s `(null)` row, and why Fatima (no city) appears in the `NOT EXISTS` result although `EXCEPT` would have removed her `NULL` city. In return, the `EXISTS` forms can return any columns of the outer table, not just the compared ones.
+(A `LEFT JOIN (SELECT DISTINCT location FROM departments) d ON d.location = c.city WHERE d.location IS NULL` returns the same 8 rows — see the code file.) Two differences from the real operators matter: you must add `DISTINCT` yourself to get set semantics (no duplicate rows), and `=` does **not** treat `NULL`s as equal. That is why the first query uses `IS NOT DISTINCT FROM` to reproduce `INTERSECT`'s `(null)` row, and why Fatima (no city) appears in the `NOT EXISTS` result although `EXCEPT` would have removed her `NULL` city. In return, the `EXISTS` forms can return any columns of the outer table, not just the compared ones.
 
 ### The ALL variants: bag semantics
 
@@ -1459,7 +1459,7 @@ Check against the table: value 1 is 3 times in `a` and 2 times in `b` → `INTER
 ### Self-check
 
 1. `A = {1,1,2}`, `B = {1}`. What are `A EXCEPT B` and `A EXCEPT ALL B`? → `{2}` and `{1, 2}`.
-2. Which set operator is not commutative? → `EXCEPT`.
+2. Which set operator is not commutative (gives a different answer when its two sides are swapped)? → `EXCEPT`.
 3. Why did `INTERSECT` return a `(null)` city? → Set operations treat two `NULL`s as the same value.
 
 ### TL;DR
