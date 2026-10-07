@@ -7766,3 +7766,478 @@ try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
 
 ### TL;DR
 A host-aware frontier that enforces politeness by construction, virtual-thread workers bounded by a semaphore, robots and retries, compact de-duplication and a clean, resumable shutdown.
+
+## Appendix: Concepts you need
+
+Every technical term, acronym, library and tool that appears in the 40 briefs above, in alphabetical order and in plain English, so you can start any project without stopping to look words up. Each entry lists the projects that use the term and, where this book teaches it, a link to the chapter. Broader system-design ideas (latency, caching, queues, replication, eventual consistency) are explained in depth in [System Design Fundamentals](../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
+
+### A
+- **Abstraction** — Showing callers only what they need (an interface) and hiding how the work is done. Used in project 6. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **Action (state machine)** — A side effect that runs when a transition happens, such as assigning a rider or issuing a refund. Used in project 20. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Active expiry by sampling** — A background task that checks a random handful of keys with TTLs and deletes the expired ones, repeating if many were stale. Used in project 26. ([Ch 13](../chapters/13-concurrency-problems/README.md))
+- **Actor** — Two meanings: in requirements, whoever triggers a use case (customer, rider, system); in concurrency, an object owned by one thread that other threads talk to only by sending it messages. Used in projects 7, 20. ([Ch 1](../chapters/01-lld-interview-approach/README.md), [Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Adapter pattern** — A wrapper that converts a vendor's interface (a bank network, an SMS provider, a card terminal) into the interface your code expects. Used in projects 5, 18, 22, 33, 37. ([Ch 9](../chapters/09-patterns-structural/README.md))
+- **Ageing** — Gradually raising the priority of a request the longer it waits, so it cannot starve. Used in project 11. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Agenda / conflict resolution** — In a rules engine, the list of rules currently able to fire, plus the rule (priority, recency) for choosing which fires first. Used in project 31.
+- **Aggregate** — A cluster of objects changed as one unit through a single root object that enforces all the rules, such as an `Auction` and its bids. Used in projects 17, 20, 24, 37. ([Ch 5](../chapters/05-design-principles/README.md))
+- **Aggregation** — A "has-a" link where the part can exist without the whole (a member and the loans that refer to it). Used in project 3. ([Ch 3](../chapters/03-relationships-and-uml/README.md))
+- **All-or-nothing reservation** — Either every requested item (seats, ingredients, stock lines) is reserved, or none is and nothing changes. Used in projects 9, 12, 26. ([Ch 12](../chapters/12-concurrency-concepts/README.md), [Ch 15](../chapters/15-case-booking-1/README.md))
+- **All-red clearance** — A short period with every traffic light red so the junction empties before the next group gets green. Used in project 7. ([Ch 14](../chapters/14-case-everyday-objects/README.md))
+- **Alpha-beta pruning** — An optimisation of minimax that skips branches which cannot change the final choice. Used in projects 4, 30. ([Ch 17](../chapters/17-case-games/README.md))
+- **Annotation** — A marker like `@Inject` or `@Test` attached to code that tools or frameworks read. Used in projects 1, 8, 15, 16, 23, 26, 35, 36. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **Anti-pattern** — A common solution that looks reasonable but reliably causes trouble, such as a service locator. Used in project 36. ([Ch 8](../chapters/08-patterns-creational/README.md))
+- **Anti-sniping** — Extending an auction's end time when a bid arrives in the last moments, so others can respond. Used in project 24. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **API** — Application Programming Interface: the public methods or endpoints other code is allowed to call. Used in projects 10, 14, 16, 18, 23, 27, 33–35, 39, 40. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **Appender / Layout** — Logging roles: an appender sends a log event somewhere (console, file); a layout turns the event into text or JSON. Used in projects 1, 12, 16. ([Ch 20](../chapters/20-case-components/README.md))
+- **Append-only file (AOF)** — A file of every write command, replayed after a crash to rebuild an in-memory store. Used in project 26.
+- **Append-only log** — A record that only ever grows at the end; nothing is updated or deleted, so history can be replayed. Used in projects 8, 10, 17, 22, 25, 26, 32, 34. ([Ch 20](../chapters/20-case-components/README.md))
+- **Application service** — The class that runs one use case by coordinating domain objects, repositories and rules, without holding business rules itself. Used in projects 3, 10, 19, 21.
+- **ArchUnit** — A Java library that checks architecture rules (which package may call which) as ordinary unit tests. Used in project 37.
+- **ArrayBlockingQueue** — A fixed-capacity, thread-safe queue backed by an array; producers wait when it is full. Used in projects 16, 17, 27, 28. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **AssertJ** — A Java testing library for fluent, readable assertions such as `assertThat(x).isEqualTo(3)`. Used in projects 1–6, 8–26, 28–40. ([Ch 6](../chapters/06-clean-code/README.md))
+- **Async appender** — A logging wrapper that queues events and writes them on a background thread so callers don't wait for I/O. Used in project 16. ([Ch 20](../chapters/20-case-components/README.md))
+- **At-least-once delivery** — A message or job may be delivered more than once but is never lost; the receiver must be idempotent. Used in projects 17, 18, 33, 37. ([Ch 20](../chapters/20-case-components/README.md))
+- **ATM** — Automated teller machine: the cash machine that dispenses money from a bank account. Used in project 5. ([Ch 14](../chapters/14-case-everyday-objects/README.md))
+- **Atomic operation** — A step that completes entirely or not at all, with no other thread able to see it half-done. Used in projects 1, 8–10, 12, 14, 16, 19, 20, 25–27, 29, 31, 37, 38. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Atomic rename / move** — Write to a temporary file and then rename it in one step, so readers see either the old file or the new one, never half of it. Used in project 8.
+- **Atomic variable (AtomicInteger, AtomicLong, AtomicReference)** — Java classes that update a single value safely across threads without locks, using compare-and-set. Used in projects 14, 17, 27, 31, 35, 38. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Authorisation (payment)** — Asking the bank to approve and set aside an amount; the money is actually taken later (capture) or released (void). Used in projects 5, 34, 37. ([Ch 14](../chapters/14-case-everyday-objects/README.md), [Ch 19](../chapters/19-case-platforms-2/README.md))
+- **Authorise vs capture** — Reserving money on a card first, then taking it only when the order is confirmed. Used in projects 34, 37.
+- **Autovacuum** — PostgreSQL's background process that cleans up dead row versions left by updates and deletes. Used in project 33.
+- **Available balance** — Posted balance minus money currently held for pending payments. Used in project 34. ([Ch 14](../chapters/14-case-everyday-objects/README.md))
+- **Awaitility** — A testing helper for asynchronous code that polls until a condition becomes true or a timeout passes. Used in project 17.
+
+### B
+- **Backpressure** — Slowing down or refusing a fast producer when the consumer can't keep up, usually via a bounded queue. Used in projects 16, 17, 27. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Backtracking** — Searching by trying a choice, and undoing it if it leads to a dead end. Used in projects 2, 5.
+- **Batch matching / Hungarian algorithm** — Solving many rider-driver pairings together to minimise the total pickup time, instead of one rider at a time. Used in project 29.
+- **Benchmark (micro-benchmark)** — A controlled timing test of a small piece of code; JMH runs these correctly on the JVM. Used in projects 14–17, 23, 26, 27, 31–33, 35, 36, 38, 39.
+- **BFS / DFS** — Breadth-first search visits neighbours level by level; depth-first search goes down one path before backing up. Used in projects 23, 36, 39, 40.
+- **Bid / ask** — In trading, a buy order (bid) and a sell order (ask); in auctions, a bid is an offer to pay. Used in projects 24, 28. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **Bid increment** — The smallest amount by which a new auction bid must beat the current price. Used in project 24. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **BigDecimal** — Java's exact decimal number type, used for money when cents in a `long` are not enough. Used in projects 1, 10, 22, 31, 39. ([Ch 1](../chapters/01-lld-interview-approach/README.md))
+- **Big-O notation** — Shorthand for how time or memory grows with input size: O(1) constant, O(log n) slow growth, O(n) proportional. Used in projects 1, 3, 4, 6, 8, 11, 13–15, 17, 21, 26, 28, 30, 32, 35, 38.
+- **Binding / key (DI)** — In a DI container, a rule saying which class or factory supplies a requested type (the key). Used in project 36. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **BlockingQueue** — A thread-safe queue whose `put` waits when full and `take` waits when empty; the backbone of producer–consumer. Used in projects 16, 17, 26–28. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Bloom filter** — A compact bit array that answers "definitely not seen" or "maybe seen"; it never misses an item it has seen but may give false positives. Used in project 40. ([Ch 13](../chapters/13-concurrency-problems/README.md))
+- **Bounded queue** — A queue with a maximum size, so it pushes back on producers instead of growing until memory runs out. Used in projects 16, 17, 27. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Build tool (Maven, Gradle)** — Programs that download libraries, compile the code, run the tests and package the result with one command. Used in project 1.
+- **Builder pattern** — Builds an object with many optional fields step by step and validates it once in `build()`. Used in projects 8, 9, 18, 35, 36. ([Ch 8](../chapters/08-patterns-creational/README.md))
+- **Bulkhead** — A cap on concurrent calls to one dependency so it can't use up every thread (named after ship compartments). Used in project 35.
+
+### C
+- **Cache** — A fast store of recently used results so they don't have to be fetched or computed again. Used in projects 12, 15, 16, 21, 22, 25, 26, 34–36, 38–40. ([Ch 20](../chapters/20-case-components/README.md))
+- **Cache stampede (thundering herd)** — Many threads miss the same key at once and all hit the slow loader together. Used in projects 15, 38. ([Ch 20](../chapters/20-case-components/README.md))
+- **Caffeine** — A high-performance Java caching library, used as the benchmark to compare your cache against. Used in project 15. ([Ch 20](../chapters/20-case-components/README.md))
+- **Cancellation** — Stopping a pending task or timer before it runs, via its `Future` or `ScheduledFuture` handle. Used in projects 2, 7, 12, 17, 19–21, 24, 27–29, 33, 34, 37, 40.
+- **CAS (compare-and-set)** — An atomic "change this value only if it still equals what I read"; the building block of lock-free code. Used in projects 14, 27, 29, 35, 38. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **CAS state machine** — A lifecycle whose state field moves only through compare-and-set, so exactly one thread wins each transition. Used in project 27. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Cascading failure** — A slowdown in one service spreading upstream as callers wait, pile up and fail too. Used in project 35.
+- **Category vs instance** — A type of thing that customers choose (a book title, a car category) versus one physical item (a copy, a specific car). Used in projects 3, 19. ([Ch 15](../chapters/15-case-booking-1/README.md))
+- **Chain of Responsibility** — A pattern passing a request along linked handlers, each of which may handle it, pass it on, or stop it. Used in projects 5, 16, 18. ([Ch 10](../chapters/10-patterns-behavioral-1/README.md))
+- **Check-then-act race** — A bug where a thread checks a condition and then acts, but another thread changes things in between. Used in project 9. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Circuit breaker** — A wrapper that stops calling a failing dependency for a while so callers fail fast, then tests recovery with a few trial calls. Used in projects 18, 35.
+- **Class diagram** — A UML picture of classes, their fields and methods, and how they relate. Used in all 40 projects. ([Ch 3](../chapters/03-relationships-and-uml/README.md))
+- **CLI (command-line interface)** — A program driven by typed text commands in a terminal rather than a graphical window. Used in projects 2, 3, 8, 13, 23, 33. ([Ch 21](../chapters/21-case-machine-coding/README.md))
+- **Clock (java.time.Clock)** — Java's injectable source of the current time; tests pass a fixed or adjustable clock to control "now". Used in projects 1, 3, 24, 26, 30. ([Ch 15](../chapters/15-case-booking-1/README.md))
+- **Closed / open / half-open** — The three circuit-breaker states: calls flow normally; calls are rejected; a few trial calls test whether the dependency has recovered. Used in project 35.
+- **Command merging** — Letting consecutive small edits (typing letters) combine into one undo step. Used in project 32.
+- **Command pattern** — Wraps an action as an object with `execute` (and often `undo`), so it can be queued, logged, replayed or undone. Used in projects 4, 8, 23, 26, 28, 30, 32. ([Ch 10](../chapters/10-patterns-behavioral-1/README.md))
+- **Comparator** — An object that decides the order of two values, used to sort or to order a `TreeMap` or priority queue. Used in projects 10, 19, 22, 28.
+- **Compensating action** — A new action that undoes the business effect of an earlier one (a refund, a release, a reversal), used when a real rollback is impossible. Used in projects 5, 12, 25, 37. ([Ch 15](../chapters/15-case-booking-1/README.md))
+- **Compensating entry** — A new ledger line equal and opposite to an earlier one, which cancels it without deleting history. Used in project 25.
+- **CompletableFuture** — A Java future that can be completed by any thread and chained with follow-up steps. Used in projects 10, 15, 35. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Composable predicate** — Small true/false tests that combine with `and`, `or` and `not` into bigger rules. Used in projects 8, 21–23, 35. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Composite edit** — Several edits grouped into one command so a single undo reverses them all. Used in project 32.
+- **Composite pattern** — Lets single objects and groups (trees) share one interface, so `And(Not(...), ...)` or a folder of files is handled uniformly. Used in projects 4, 8, 23, 31, 32, 39. ([Ch 9](../chapters/09-patterns-structural/README.md))
+- **Composition** — A strong "owns" link: the whole creates its parts and they die with it. Used in projects 1, 3, 9, 25, 35. ([Ch 3](../chapters/03-relationships-and-uml/README.md))
+- **Composition over inheritance** — Reusing behaviour by holding and delegating to other objects instead of subclassing. Used in projects 3, 9, 25. ([Ch 5](../chapters/05-design-principles/README.md))
+- **Concurrency** — Several tasks in progress at the same time, often touching shared data. Used in projects 1, 3, 7, 9–29, 31–40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **ConcurrentHashMap** — A thread-safe Java map with atomic helpers such as `compute`, `merge` and `putIfAbsent`. Used in projects 10, 12, 14–16, 20, 25, 29, 36, 37, 40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **ConcurrentLinkedQueue / Deque** — Lock-free thread-safe queues; each `poll()` hands an element to exactly one thread. Used in projects 1, 11, 38. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Conditional update** — Change a record only if it is still in the expected state ("release if still held by hold 42"); otherwise do nothing. Used in projects 12, 29, 37. ([Ch 15](../chapters/15-case-booking-1/README.md))
+- **Conflict matrix** — A table recording which traffic approaches must never be green at the same moment. Used in project 7.
+- **Connection pool** — A set of open database connections that threads borrow and return, because opening a new one is slow. Used in projects 33, 38. ([Ch 8](../chapters/08-patterns-creational/README.md))
+- **Connection timeout** — How long a caller waits for a free pooled connection before giving up with an error. Used in project 38.
+- **Connection validation** — Checking that an idle pooled connection still works before lending it out. Used in project 38. ([Ch 8](../chapters/08-patterns-creational/README.md))
+- **Consumer group** — A set of subscribers that share a topic's messages so each message goes to only one of them. Used in project 17. ([Ch 20](../chapters/20-case-components/README.md))
+- **Context (State pattern)** — The object whose behaviour depends on its current state object, such as the vending machine. Used in project 2. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Core / max pool size** — The threads a pool keeps alive at all times versus the most it may start when the queue is full. Used in projects 27, 38. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Cost function** — A formula that scores each option (distance plus penalties) so the cheapest can be picked. Used in project 11.
+- **Count-based vs time-based window** — Measuring failures over the last N calls versus over the last N seconds. Used in project 35.
+- **CountDownLatch** — A one-time gate that opens when a counter reaches zero; useful to start threads together in tests. Used in projects 9, 10, 27. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Crossed book** — An order book whose best buy price is at or above its best sell price; matching must never leave it that way. Used in project 28. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **CRUD** — Create, read, update, delete: the four basic storage operations. Used in project 8.
+- **CSV** — Comma-separated values: a plain-text table, one row per line. Used in project 39.
+- **Currency** — The unit of money (USD, EUR, INR); amounts in different currencies must never be added directly. Used in projects 1, 5, 10, 13, 34. ([Ch 7](../chapters/07-refactoring/README.md))
+- **Cycle detection** — Finding a loop in links or dependencies (A needs B needs A) before it causes infinite work. Used in projects 6, 7, 10, 23, 26, 31, 36, 39.
+
+### D
+- **Daily cap** — A limit on how much of something (reputation, withdrawals) can be earned or used per day. Used in project 25.
+- **Data over code** — Describing variation (board layouts, rules) as data that the program loads, instead of writing a class for each case. Used in project 6.
+- **Daylight saving time (DST)** — Seasonal clock shifts that make some local times happen twice or not at all. Used in projects 18, 21, 27.
+- **Dead-letter topic / queue** — Where messages or jobs go after too many failed attempts, so someone can inspect them. Used in projects 17, 18, 33. ([Ch 20](../chapters/20-case-components/README.md))
+- **Deadlock** — Threads each holding a lock the other needs, so all wait forever. Used in projects 10, 12, 24, 27, 34, 36, 37. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Debt simplification** — Replacing many IOUs in a group with fewer payments that leave everyone's net balance the same. Used in project 13. ([Ch 20](../chapters/20-case-components/README.md))
+- **Decorator pattern** — A wrapper with the same interface that adds behaviour and delegates the rest, and can be stacked. Used in projects 1, 9, 15, 16, 35, 36. ([Ch 9](../chapters/09-patterns-structural/README.md))
+- **DelayQueue** — A Java blocking queue that releases each item only after its delay has passed. Used in projects 12, 18, 27. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Dependency graph** — A map of what depends on what (cells reading cells, classes needing classes), used to order work and find cycles. Used in projects 36, 39.
+- **Dependency injection (DI)** — Handing an object its collaborators from outside, usually through the constructor, instead of letting it create them. Used in projects 1, 3, 6, 7, 10, 14, 15, 17, 26, 35–38. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Dependency Inversion Principle** — High-level policy depends on interfaces it owns; low-level details implement them. Used in projects 4, 6, 36, 37. ([Ch 4](../chapters/04-solid-principles/README.md))
+- **Deque / ArrayDeque** — A double-ended queue: add or remove at either end; Java's usual stack and queue. Used in projects 1, 4, 14, 26, 28, 32, 39, 40.
+- **Derived balance** — A balance computed from the history of movements (and maybe cached), rather than stored as the only truth. Used in projects 10, 22, 34. ([Ch 21](../chapters/21-case-machine-coding/README.md))
+- **Design pattern** — A named, reusable solution shape for a recurring design problem. Used in projects 1, 2, 4, 5, 7–11, 13–20, 22–27, 29–32, 35–40. ([Ch 8](../chapters/08-patterns-creational/README.md))
+- **Determinism** — The same inputs always produce the same outputs, which makes tests, replays and debugging reliable. Used in projects 1, 6, 7, 11–13, 17, 22, 23, 28, 35, 39, 40. ([Ch 17](../chapters/17-case-games/README.md))
+- **Direct hand-off** — Passing a returned item straight to a thread already waiting for it, instead of putting it back in a shared queue. Used in project 38. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Discrete-tick simulation** — A simulation where time jumps forward in fixed steps, making each run reproducible. Used in projects 11, 28. ([Ch 14](../chapters/14-case-everyday-objects/README.md))
+- **Dispatcher** — The component that decides which worker or vehicle takes each request. Used in projects 11, 29. ([Ch 14](../chapters/14-case-everyday-objects/README.md))
+- **Domain event** — A record that something business-relevant happened (`OrderAccepted`, `VoteCast`) that other parts react to. Used in projects 20, 25. ([Ch 5](../chapters/05-design-principles/README.md))
+- **Double booking** — Two customers confirmed for the same seat, room or time slot; the core bug booking systems must prevent. Used in projects 12, 21. ([Ch 15](../chapters/15-case-booking-1/README.md))
+- **Double-entry bookkeeping** — Every money movement is recorded as matching debits and credits that sum to zero. Used in project 34. ([Ch 21](../chapters/21-case-machine-coding/README.md))
+- **Doubly linked list** — A chain of nodes linked both forwards and backwards, so any node can be unlinked in O(1); sentinels are dummy head and tail nodes. Used in projects 15, 28. ([Ch 20](../chapters/20-case-components/README.md))
+- **Drools / Rete algorithm** — Drools is a well-known Java rules engine; Rete is its classic algorithm that shares condition checks across rules. Used in project 31.
+- **Durability** — The promise that saved data survives a crash or power loss. Used in projects 5, 12, 17, 18, 20, 25, 26, 28, 33, 37.
+- **Dynamic programming** — Solving a problem by building answers to small sub-problems and reusing them. Used in project 2. ([Ch 14](../chapters/14-case-everyday-objects/README.md))
+- **Dynamic proxy** — A class generated at run time (`java.lang.reflect.Proxy`) that implements an interface and forwards each call through one handler. Used in projects 36, 38. ([Ch 9](../chapters/09-patterns-structural/README.md))
+
+### E
+- **Encapsulation** — Keeping data private so only the owning class can change it, and enforcing its rules there. Used in project 1. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **Entity–relationship diagram** — A diagram of database tables (entities) and the keys linking them. Used in projects 33, 34. ([Ch 3](../chapters/03-relationships-and-uml/README.md))
+- **Entry vs transaction (ledger)** — An entry is one debit or credit line on one account; a transaction is the balanced group of entries posted together. Used in projects 10, 25, 34. ([Ch 21](../chapters/21-case-machine-coding/README.md))
+- **Enum** — A Java type with a fixed set of named values, which can carry fields and methods. Used in projects 1, 2, 4, 7–9, 11, 16, 25, 29, 30, 35, 39. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **EnumMap** — A fast Java map whose keys are the values of one enum. Used in project 20. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **equals / hashCode** — The methods that define when two objects count as the same value; equal objects must have equal hash codes. Used in projects 20, 22, 25, 29. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **Error values (spreadsheet)** — Results like `#DIV/0!` or `#REF!` that are treated as values and flow through dependent formulas. Used in project 39.
+- **Escrow** — Holding money apart until a deal is final (coins kept separate from the cash box until the item drops). Used in projects 2, 25. ([Ch 14](../chapters/14-case-everyday-objects/README.md))
+- **ETA** — Estimated time of arrival. Used in project 20.
+- **Event sourcing** — Storing the list of events and rebuilding current state by replaying them. Used in projects 20, 28. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Eventual consistency** — Different parts of the system may disagree for a short time but catch up shortly afterwards. Used in projects 17, 22, 25, 37.
+- **Eviction policy** — The rule a full cache uses to choose which entry to throw out (LRU, LFU). Used in projects 14, 15, 26, 38. ([Ch 20](../chapters/20-case-components/README.md))
+- **Exactly-once** — Each message has its effect exactly one time; in practice achieved by at-least-once delivery plus idempotent handling. Used in projects 17, 18, 33. ([Ch 20](../chapters/20-case-components/README.md))
+- **Exception** — An object thrown to signal an error, which travels up the call stack until code catches it. Used in projects 1, 7, 10, 16, 17, 21, 27, 35, 39. ([Ch 6](../chapters/06-clean-code/README.md))
+- **Exception date** — One occurrence of a repeating event that is skipped or changed. Used in project 21.
+- **ExecutorService** — Java's interface for running submitted tasks on a pool of threads. Used in projects 7, 9, 10, 12, 17, 18, 20, 24, 27, 29, 40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Expiry** — Automatically ending something (a hold, a cache entry, a lease) after a deadline. Used in projects 3, 5, 10, 12, 15, 26, 27, 29, 33, 34, 37, 38. ([Ch 13](../chapters/13-concurrency-problems/README.md), [Ch 15](../chapters/15-case-booking-1/README.md))
+- **Exponential backoff with jitter** — Waiting longer after each retry (doubling) plus a random amount, so retries don't all hit at once. Used in projects 17, 18, 33, 35, 38, 40. ([Ch 6](../chapters/06-clean-code/README.md))
+
+### F
+- **Facade pattern** — One simple class in front of several collaborators, so callers have a single entry point. Used in projects 1, 5, 11, 16, 17, 32, 39. ([Ch 9](../chapters/09-patterns-structural/README.md))
+- **Factory pattern** — A class or method whose job is to create the right object from some input, hiding the concrete class. Used in projects 6, 9, 14, 16, 18, 36, 38. ([Ch 8](../chapters/08-patterns-creational/README.md))
+- **Facts (rules engine)** — The input data that rules are evaluated against, such as a customer and an order. Used in project 31.
+- **Fail fast** — Detect a problem early and report it loudly instead of carrying on with bad data. Used in projects 10, 35. ([Ch 5](../chapters/05-design-principles/README.md))
+- **Fail open / fail closed** — When a safety check's backing store is down: let traffic through (open) or block it (closed). Used in project 14.
+- **Fail safe** — On error, move to a known safe mode (flashing lights) rather than an unknown state. Used in project 7.
+- **Failure-rate and slow-call thresholds** — The percentage of failed or slow calls in the recent window that makes a circuit breaker open. Used in project 35.
+- **Fake vs mock** — Test doubles: a fake is a simple working stand-in; a mock records calls so the test can verify them. Used in projects 1–3, 5, 7, 14, 15, 18, 27, 35, 37, 38. ([Ch 6](../chapters/06-clean-code/README.md))
+- **FEN / PGN** — Standard chess text formats: FEN describes one position on one line; PGN records a whole game. Used in project 30. ([Ch 17](../chapters/17-case-games/README.md))
+- **FIFO** — First in, first out: the oldest waiting item is served first, like a queue. Used in projects 3, 15, 28, 38, 40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **FileChannel / fsync** — Low-level Java file access; `force` (fsync) makes the OS write data to disk so a crash cannot lose it. Used in projects 16, 26, 32.
+- **FileVisitor / walkFileTree** — Java's callback interface for walking a directory tree, with hooks before, during and after each folder. Used in project 23. ([Ch 21](../chapters/21-case-machine-coding/README.md))
+- **Filter chain** — A Chain of Responsibility of filters, each of which can accept, reject or pass an item to the next. Used in project 16. ([Ch 10](../chapters/10-patterns-behavioral-1/README.md))
+- **Finite state machine** — A fixed set of states with the allowed transitions between them, triggered by events. Used in projects 2, 3, 5, 7, 11, 12, 18–20, 24, 27–29, 35, 37, 38. ([Ch 3](../chapters/03-relationships-and-uml/README.md), [Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Fixed rate vs fixed delay** — Scheduling the next run from the previous planned start, or from when the previous run ended. Used in projects 14, 27.
+- **Fixed window counter** — A rate limit that counts requests per clock window; simple but can allow double the limit around a boundary. Used in project 14. ([Ch 20](../chapters/20-case-components/README.md))
+- **Flaky test** — A test that sometimes passes and sometimes fails without any code change, usually because of time or threads. Used in projects 1, 7, 35. ([Ch 6](../chapters/06-clean-code/README.md))
+- **Forward chaining** — Rules fire, change the facts, and those changes may make more rules fire, until nothing changes. Used in project 31.
+- **Frontier** — A web crawler's list of URLs still waiting to be fetched. Used in project 40.
+- **Future / ScheduledFuture** — A handle to a result that may not exist yet; you can wait for it, check it or cancel it. Used in projects 7, 27. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+
+### G
+- **Gap buffer** — A text buffer with an empty gap at the cursor so typing there is O(1). Used in project 32.
+- **Garbage collection** — The JVM automatically freeing memory of objects that nothing refers to any more. Used in projects 15, 28, 30. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Generics** — Type parameters such as `List<T>` that make code reusable and type-safe. Used in projects 15, 36, 38. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **Git** — The version-control tool that records every change; `git diff` shows exactly what was changed. Used in project 1.
+- **Glob** — A filename wildcard pattern such as `*.java`. Used in project 23. ([Ch 21](../chapters/21-case-machine-coding/README.md))
+- **Golden-output test** — A test that runs a script and compares the output with a saved, known-good file. Used in projects 8, 22, 28, 31. ([Ch 7](../chapters/07-refactoring/README.md))
+- **Graceful shutdown** — Stopping a service so that accepted work finishes cleanly before it exits. Used in projects 27, 40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Graph** — Nodes connected by edges, such as cells and the cells they read. Used in projects 13, 36, 39, 40.
+- **Greedy algorithm** — Always take the choice that looks best right now; fast, but not always optimal. Used in projects 2, 5, 13, 22, 29. ([Ch 14](../chapters/14-case-everyday-objects/README.md), [Ch 20](../chapters/20-case-components/README.md))
+- **Guard (state machine)** — A condition that must be true for a transition to happen. Used in projects 2, 20. ([Ch 3](../chapters/03-relationships-and-uml/README.md), [Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **GUI / UI** — User interface (graphical or text): the screens and controls a person uses; kept separate from the domain classes. Used in projects 4, 6, 13, 32, 37, 39.
+
+### H
+- **H2 database** — A small Java database that can run entirely in memory, handy for tests. Used in project 38.
+- **H3 / spatial grid** — Splitting a map into cells so a nearby search only checks a few cells; H3 is Uber's hexagon grid system. Used in project 29. ([Ch 20](../chapters/20-case-components/README.md))
+- **Half-open interval [start, end)** — A time range that includes its start but not its end, so back-to-back bookings don't clash. Used in projects 19, 21. ([Ch 15](../chapters/15-case-booking-1/README.md), [Ch 21](../chapters/21-case-machine-coding/README.md))
+- **Hall call vs car call** — An elevator request from a floor's up/down button versus a floor button pressed inside a car. Used in project 11. ([Ch 14](../chapters/14-case-everyday-objects/README.md))
+- **Hash / hashing** — Turning a value into a number used to place or find it quickly (hash maps, routing, Zobrist keys). Used in projects 4, 15, 17, 26, 28, 30, 34, 40. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **HashMap / hash table** — A key-value store that finds entries in about constant time by hashing the key. Used in projects 3, 10, 12–16, 20, 25, 26, 28, 29, 34, 36, 37, 39, 40. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **Haversine distance** — The formula for the straight-over-the-globe distance between two latitude/longitude points. Used in project 29.
+- **HdrHistogram** — A library (and idea) for recording latencies so that percentiles can be read accurately. Used in project 28.
+- **Heap / priority queue** — A structure that always gives back the smallest (or largest) item first, in O(log n) per operation. Used in projects 7, 13, 15, 29, 40.
+- **Heartbeat** — A periodic "I'm still alive" signal; here it extends a worker's lease on a long job. Used in project 33.
+- **HikariCP** — A popular, fast JDBC connection pool for Java. Used in projects 33, 38. ([Ch 8](../chapters/08-patterns-creational/README.md))
+- **History stack** — Executed commands kept in order so the latest can be undone (and redone). Used in projects 4, 8, 30, 32. ([Ch 10](../chapters/10-patterns-behavioral-1/README.md))
+- **Hold queue** — A first-come, first-served waiting list of members for a book that is currently out. Used in project 3. ([Ch 15](../chapters/15-case-booking-1/README.md))
+- **Hold (temporary claim)** — A temporary, expiring reservation (of seats, stock or money) made before a purchase is confirmed. Used in projects 3, 12, 34. ([Ch 15](../chapters/15-case-booking-1/README.md))
+- **Hot account** — An account touched by most transactions, which forces them to queue on one lock. Used in project 34.
+- **Hot score with decay** — A popularity score divided by something that grows with age, so new active posts rise and old ones sink. Used in projects 15, 25. ([Ch 18](../chapters/18-case-platforms-1/README.md))
+- **HTTP** — The request/response protocol of the web; status codes such as 429 (too many requests) and 503 (unavailable) signal problems. Used in projects 14, 18, 35, 37, 40.
+- **HTTP 429 + Retry-After** — The standard "too many requests" reply, with a header telling the client how long to wait. Used in project 14. ([Ch 20](../chapters/20-case-components/README.md))
+
+### I
+- **iCalendar** — The standard file format for calendar events, which defines recurrence rules (RRULE). Used in project 21.
+- **Idempotency key** — A client-chosen id sent with a request so a retry has the same effect as a single request. Used in projects 10, 18, 33, 34, 37. ([Ch 20](../chapters/20-case-components/README.md), [Ch 21](../chapters/21-case-machine-coding/README.md))
+- **Idempotent** — Doing it twice has the same effect as doing it once. Used in projects 3, 5, 10, 17, 18, 20, 22, 33, 34, 37. ([Ch 20](../chapters/20-case-components/README.md))
+- **Immutability** — An object that never changes after creation, so it is safe to share and easy to reason about. Used in projects 1, 4, 6, 9, 10, 13, 16, 20, 21, 31, 32, 34, 36. ([Ch 2](../chapters/02-oop-fundamentals/README.md), [Ch 5](../chapters/05-design-principles/README.md))
+- **Information Expert** — Give a job to the class that already has the data needed to do it. Used in projects 3, 19. ([Ch 5](../chapters/05-design-principles/README.md))
+- **Inheritance** — A subclass reusing and specialising a parent class; correct only for a true "is-a" relationship. Used in projects 1, 3, 9, 16, 24, 25, 33. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **In-memory** — Kept only in the program's RAM, so it is fast but lost when the process stops. Used in projects 1, 3, 5, 10, 12, 15–18, 25, 26, 33, 34, 37, 38, 40. ([Ch 1](../chapters/01-lld-interview-approach/README.md))
+- **Interface** — A contract of methods that classes promise to implement; the main seam for swapping behaviour. Used in all 40 projects. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **Interpreter pattern** — Represents a small language's grammar as classes, each able to evaluate itself. Used in projects 23, 31, 39. ([Ch 10](../chapters/10-patterns-behavioral-1/README.md))
+- **Interrupt** — A request to a thread to stop; blocking calls react by throwing `InterruptedException`. Used in projects 7, 27. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Invariant** — A fact that must always be true, such as "free + occupied = capacity" or "debits equal credits". Used in projects 1, 2, 7, 10, 12, 13, 15, 19, 29, 34. ([Ch 5](../chapters/05-design-principles/README.md))
+- **Inversion of Control (IoC) container** — A framework that creates and wires your objects and calls your code, instead of your code doing the wiring. Used in projects 28, 36. ([Ch 5](../chapters/05-design-principles/README.md), [Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Inverted index** — A map from each word or tag to the items containing it, used for fast search. Used in projects 3, 25. ([Ch 18](../chapters/18-case-platforms-1/README.md))
+- **IOC / FOK orders** — Immediate-or-cancel fills what it can now and cancels the rest; fill-or-kill trades everything at once or nothing. Used in project 28. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **ISBN** — International Standard Book Number: the id of a book title, shared by all its copies. Used in project 3. ([Ch 15](../chapters/15-case-booking-1/README.md))
+- **Isolation level (READ COMMITTED)** — How much one database transaction can see of others still in progress; READ COMMITTED sees only committed data. Used in project 34.
+
+### J
+- **Jackson** — The most widely used Java library for reading and writing JSON. Used in project 8.
+- **Java 25 / JEP** — The Java version these projects target; a JEP (JDK Enhancement Proposal) is the document that introduces each new Java feature. Used in projects 1–3, 6, 23, 27, 36, 39, 40.
+- **jcstress** — OpenJDK's harness that runs concurrent code millions of times to expose rare race conditions. Used in projects 14, 27, 35, 38. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **JDBC** — Java's standard API for connecting to and querying relational databases. Used in projects 33, 38.
+- **JDK / JVM** — The Java Development Kit (compiler and standard library) and the Java Virtual Machine that runs compiled code. Used in projects 7, 9, 10, 15, 17, 23, 26, 27, 36, 40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **JMH** — OpenJDK's micro-benchmark harness for timing small pieces of Java code without JVM warm-up tricks fooling you. Used in projects 14–17, 26–28, 31, 32, 35, 38.
+- **Journal / write-ahead log** — A durable list of inputs written before they are applied, so the system can replay it after a crash. Used in projects 5, 28.
+- **jqwik** — A property-based testing library for JUnit that generates many random inputs and checks invariants. Used in projects 2, 13, 15, 25, 26, 28, 32, 34, 39.
+- **JSON** — A text format for structured data (objects in braces, lists in brackets). Used in projects 6, 8, 9, 16, 31, 39.
+- **jsoup / HttpClient** — `java.net.http.HttpClient` fetches web pages; jsoup parses HTML to find links. Used in project 40.
+- **JUnit** — The standard Java unit-testing framework. Used in all 40 projects. ([Ch 6](../chapters/06-clean-code/README.md))
+
+### K
+- **Kafka** — A distributed, durable message log; producers append, consumers read by offset. Used in projects 17, 33. ([Ch 20](../chapters/20-case-components/README.md))
+- **Kahn's algorithm** — A way to order a dependency graph: repeatedly take items with no remaining inputs; anything left over is in a cycle. Used in project 39.
+- **Key-hash routing** — Sending every message with the same key to the same consumer, so per-key order is kept. Used in project 17.
+- **K-nearest with a bounded heap** — Keeping only the K best candidates in a small priority queue while scanning many. Used in project 29.
+
+### L
+- **Lambda** — A short anonymous function such as `x -> x * 2`. Used in projects 31, 38. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **Largest remainder method** — Splitting an amount by percentages: round every share down, then give leftover cents to the largest fractions. Used in project 13.
+- **Latency** — How long one operation takes from start to finish. Used in projects 10, 14, 16, 17, 26–28, 33, 35, 40.
+- **Lazy (passive) expiry** — Deleting an expired entry only when someone next reads it. Used in project 26. ([Ch 13](../chapters/13-concurrency-problems/README.md))
+- **Lazy refill** — Computing how many rate-limit tokens were earned since the last call, instead of adding them with a timer. Used in project 14. ([Ch 13](../chapters/13-concurrency-problems/README.md))
+- **Leak / leak detection** — A leak is memory or a resource (a connection, a listener) that is taken but never released; leak detection notices this and logs who took it. Used in projects 12, 24, 27, 37, 38.
+- **Lease (visibility timeout)** — A claim that expires unless renewed, so a crashed worker's job becomes available again. Used in project 33. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **LFU (least frequently used)** — A cache eviction rule that drops the entry used the fewest times. Used in projects 15, 26. ([Ch 20](../chapters/20-case-components/README.md))
+- **Line index** — A list of the offsets where each line starts, used to convert between (line, column) and a position in the text. Used in project 32.
+- **Linearisability** — Concurrent operations behave as if they ran one at a time in some order consistent with real time. Used in project 24.
+- **LISTEN / NOTIFY** — PostgreSQL's built-in messaging that wakes waiting workers without constant polling. Used in project 33.
+- **Little's law** — Average items in a system = arrival rate × time each stays; used to size pools. Used in project 38.
+- **LMAX Disruptor** — A very fast inter-thread messaging library built on a pre-allocated ring buffer. Used in project 28.
+- **Lock** — A tool that lets only one thread at a time into a section of code that touches shared data. Used in projects 1, 7–16, 19–21, 24, 26–29, 31, 33–38. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Lock ordering** — Always taking several locks in one fixed order (such as by id) so threads cannot deadlock. Used in projects 10, 12, 15, 26, 28, 34, 37. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Lock striping** — Using an array of locks, each guarding part of the data chosen by key hash, so unrelated keys don't block each other. Used in project 15. ([Ch 13](../chapters/13-concurrency-problems/README.md))
+- **Logger hierarchy / effective level** — Loggers named like packages inherit their level from the nearest configured parent. Used in project 16. ([Ch 20](../chapters/20-case-components/README.md))
+- **LOOK / SCAN (elevator)** — Elevator scheduling: keep moving one way serving stops; LOOK turns back as soon as nothing is ahead. Used in project 11. ([Ch 14](../chapters/14-case-everyday-objects/README.md))
+- **Lost update** — Two threads read the same value and one write silently overwrites the other. Used in projects 10, 20, 34. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **LRU (least recently used)** — A cache eviction rule that drops the entry unused for the longest time. Used in projects 15, 26. ([Ch 20](../chapters/20-case-components/README.md))
+
+### M
+- **Make / unmake** — Applying a chess move to the board in place and then exactly reversing it, instead of copying the board. Used in project 30.
+- **Manual (fake) scheduler** — A test scheduler you advance by hand, so timed behaviour runs instantly and predictably. Used in project 7.
+- **Market vs limit order** — A market order trades now at any price; a limit order trades only at the given price or better and otherwise waits. Used in project 28. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **Max lifetime with jitter** — Retiring pooled connections after a set age, randomised a little so they do not all expire together. Used in project 38.
+- **MDC (Mapped Diagnostic Context)** — A per-thread map of values (request id, user) copied into every log line. Used in project 16. ([Ch 20](../chapters/20-case-components/README.md))
+- **Memento pattern** — Saving a snapshot of an object's state so it can be restored later, without exposing its internals. Used in projects 30, 32. ([Ch 10](../chapters/10-patterns-behavioral-1/README.md))
+- **Merge intervals** — Sort time ranges by start and combine overlapping ones; the gaps are the free time. Used in project 21.
+- **Mermaid** — A text syntax that renders diagrams (class, state, sequence) from plain text. Used in all 40 projects. ([Ch 3](../chapters/03-relationships-and-uml/README.md))
+- **minFreq** — In an LFU cache, the lowest use count currently present, tracked so the next victim can be found in O(1). Used in project 15.
+- **Minimax** — Game search that picks the move with the best outcome assuming the opponent also plays perfectly. Used in projects 4, 30. ([Ch 17](../chapters/17-case-games/README.md))
+- **Minor units** — Storing money as whole cents (or paise) in an integer to avoid floating-point rounding errors. Used in projects 1, 2, 9, 10, 13, 22, 34. ([Ch 1](../chapters/01-lld-interview-approach/README.md))
+- **Mockito** — A Java library for creating mocks and stubs in unit tests. Used in projects 3, 5, 12, 18, 20, 22, 24, 37. ([Ch 6](../chapters/06-clean-code/README.md))
+- **Money value object** — An immutable amount plus currency that refuses to mix currencies and never uses `double`. Used in projects 1, 2, 9, 10, 13, 19, 20, 22, 24, 34, 37. ([Ch 1](../chapters/01-lld-interview-approach/README.md), [Ch 5](../chapters/05-design-principles/README.md))
+- **Monotonic clock** — A clock (`System.nanoTime`) that never goes backwards, used for measuring durations. Used in projects 14, 17, 26.
+- **MULTI / EXEC / DISCARD / WATCH** — Redis-style transactions: queue commands, then run them together (EXEC) or throw them away (DISCARD); WATCH aborts the EXEC if a watched key changed first. Used in project 26.
+- **Mutex** — A lock that lets only one thread into a critical section at a time. Used in project 10. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+
+### N
+- **Net vs pairwise balance** — What one person owes or is owed overall, versus what they owe each specific person. Used in project 13. ([Ch 20](../chapters/20-case-components/README.md))
+- **NP-hard** — A problem with no known fast exact algorithm; large cases need approximations. Used in project 13.
+
+### O
+- **Object Pool pattern** — Reusing a limited set of expensive objects that callers borrow and return. Used in project 38. ([Ch 8](../chapters/08-patterns-creational/README.md))
+- **Observer pattern** — A subject notifies a changing set of registered listeners when something happens. Used in projects 2, 4, 6, 9, 13, 15–18, 20, 24, 25, 28, 32, 35, 37, 39. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Offer id** — A unique id for each job offer to a driver, so a late timeout or reply for an old offer is ignored. Used in project 29.
+- **Offset** — A position number in a log or document; readers keep their own offset to resume or replay. Used in projects 7, 17, 21, 28, 30, 32, 39. ([Ch 20](../chapters/20-case-components/README.md))
+- **O(K) win check** — Checking for a win only along the lines through the last move, instead of scanning the whole board. Used in project 4. ([Ch 17](../chapters/17-case-games/README.md))
+- **Open/Closed Principle** — Add new behaviour by adding classes, not by editing working code. Used in projects 1, 8, 18. ([Ch 4](../chapters/04-solid-principles/README.md))
+- **Operator precedence** — Which operator binds tighter, such as NOT before AND before OR. Used in projects 23, 31, 39. ([Ch 10](../chapters/10-patterns-behavioral-1/README.md))
+- **Optimistic locking** — Read a version number, and save only if it hasn't changed; otherwise retry or report a conflict. Used in projects 3, 20, 26. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Optional** — A Java container that may be empty; returned when "not found" is a normal outcome. Used in projects 1, 10, 14, 15, 34. ([Ch 1](../chapters/01-lld-interview-approach/README.md))
+- **Orchestration vs choreography** — A central coordinator runs each step, versus each module reacting to the previous one's events. Used in projects 12, 19, 29, 37, 38.
+- **Order book** — The waiting buy and sell orders for one stock, sorted by price and then time. Used in project 28. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **Outbox (transactional)** — Writing outgoing events into a table in the same transaction as the data change, then publishing them afterwards. Used in projects 33, 37. ([Ch 5](../chapters/05-design-principles/README.md))
+- **Overbooking** — Accepting more reservations than there are items to serve them. Used in project 19. ([Ch 15](../chapters/15-case-booking-1/README.md), [Ch 16](../chapters/16-case-booking-2/README.md))
+- **Overlap test** — Two half-open ranges overlap exactly when each starts before the other ends. Used in projects 19, 21. ([Ch 21](../chapters/21-case-machine-coding/README.md))
+
+### P
+- **p95 / percentile** — The value that 95% (or 99%) of measurements are below; shows the slow tail, not just the average. Used in projects 10, 11, 28.
+- **Parameterised test** — One test method run against a table of inputs and expected outputs. Used in projects 1, 5, 11, 16, 18, 19, 21, 30. ([Ch 6](../chapters/06-clean-code/README.md))
+- **Partial fill** — An order matched for only part of its quantity, with the rest still open. Used in project 28. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **Partial unique index** — A database uniqueness rule that applies only to rows meeting a condition, such as unfinished jobs. Used in project 33.
+- **Pattern matching for switch** — A `switch` that branches on an object's type and pulls out its fields, checked for completeness on sealed types. Used in projects 2, 20, 23, 31. ([Ch 2](../chapters/02-oop-fundamentals/README.md), [Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Perft** — A chess-engine test that counts every position reachable to a set depth and compares with published totals. Used in project 30.
+- **Per-resource lock** — A separate lock for each item (room, wallet, auction), so work on different items runs in parallel. Used in projects 1, 10, 12, 21, 24. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Persistence** — Saving data so it survives a restart, in a file or database. Used in projects 1–3, 5, 8, 10, 12, 17, 20, 26, 32, 33, 39, 40.
+- **Phase (traffic)** — A group of traffic approaches that can safely be green at the same time. Used in project 7. ([Ch 14](../chapters/14-case-everyday-objects/README.md))
+- **picocli / JLine** — Java libraries for command-line apps: picocli parses arguments, JLine gives a rich interactive terminal. Used in projects 8, 32.
+- **Piece table / rope** — Text-editor structures: a piece table describes the document as slices of an original and an added buffer; a rope is a balanced tree of text chunks. Used in project 32.
+- **PIN** — Personal identification number: the short secret code a card holder types at an ATM. Used in project 5. ([Ch 14](../chapters/14-case-everyday-objects/README.md))
+- **Pinning (virtual threads)** — A virtual thread stuck to its carrier OS thread while blocking, which wastes that thread. Used in project 40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Pipeline** — A fixed sequence of steps, each taking the previous step's output (pricing rules, filters, appenders). Used in projects 9, 18, 19, 28.
+- **Plan before acting** — Work out every step (such as the full set of notes to dispense) before changing anything, so you never stop halfway. Used in project 5.
+- **Policy object** — A small class that holds one business rule (refunds, rounding, lending limits) so it can change independently. Used in projects 1, 3, 11, 15–20, 22, 24, 25, 27, 33, 35. ([Ch 4](../chapters/04-solid-principles/README.md))
+- **Politeness (crawler)** — Limiting how often and how many requests a crawler sends to one site. Used in project 40.
+- **Ports and adapters** — The core defines interfaces (ports); databases, payment providers and UIs plug in through adapters. Used in projects 29, 37. ([Ch 4](../chapters/04-solid-principles/README.md))
+- **POS (point of sale)** — The till where items are scanned, totalled and paid for. Used in project 22. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **PostgreSQL** — A popular open-source relational database. Used in projects 3, 8, 10, 12, 33, 34, 37, 38.
+- **Price-time priority** — Matching the best price first, and among equal prices the earliest order first. Used in project 28. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **Primary key / foreign key** — A column that uniquely identifies each row / a column that refers to another table's primary key. Used in projects 33, 34.
+- **Privilege threshold** — The reputation score a user needs before a site lets them do something (comment, vote down, edit). Used in project 25.
+- **Producer–consumer** — Some threads create work and put it in a queue; others take it out and process it. Used in projects 11, 16, 17, 22, 23, 27, 28, 33, 35, 37. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Promotion engine** — The component that finds applicable discounts on a basket and picks a non-conflicting set. Used in project 22. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **Property-based test** — Tests that generate many random inputs and check that stated rules (properties) always hold. Used in projects 2, 13, 15, 25, 26, 28, 32, 34, 39. ([Ch 6](../chapters/06-clean-code/README.md))
+- **Prototype** — Creating new objects by copying an existing one; in DI, the scope that makes a fresh instance on every request. Used in project 36. ([Ch 8](../chapters/08-patterns-creational/README.md))
+- **Provider<T>** — An injected factory you call to get an instance later or repeatedly, instead of receiving the instance directly. Used in projects 18, 36.
+- **Proxy (automatic) bidding** — The auction bids for you, one step at a time, up to the hidden maximum you set. Used in project 24. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **Proxy pattern** — A stand-in with the same interface that controls access to the real object (here, intercepting `close()` to return a connection). Used in projects 35, 36, 38. ([Ch 9](../chapters/09-patterns-structural/README.md))
+- **Pseudo-legal vs legal move** — A move that follows the piece's movement rules versus one that also doesn't leave your own king in check. Used in project 30. ([Ch 17](../chapters/17-case-games/README.md))
+- **Pub/sub (publish/subscribe)** — Publishers send messages to a topic without knowing who receives them; subscribers listen to topics. Used in projects 17, 20, 26, 33. ([Ch 20](../chapters/20-case-components/README.md))
+
+### Q
+- **Quiet hours** — A do-not-disturb period in the user's own time zone during which non-urgent messages are delayed. Used in project 18.
+
+### R
+- **Race condition** — A bug where the result depends on the unlucky timing of threads touching shared data. Used in projects 7, 9, 10, 12, 14, 16, 20, 26–29, 34, 35, 38. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **RandomGenerator / seeded random** — Java's interface for random numbers; giving it a fixed seed makes the sequence repeat, so tests are reproducible. Used in projects 2, 6, 11, 25, 29, 35, 40. ([Ch 17](../chapters/17-case-games/README.md))
+- **Rate limiter** — Caps how many requests a user or key may make in a period of time. Used in projects 14, 18, 40. ([Ch 13](../chapters/13-concurrency-problems/README.md), [Ch 20](../chapters/20-case-components/README.md))
+- **Read-write lock** — A lock that lets many readers in together but only one writer at a time. Used in project 15. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Reconciliation** — Periodically checking a cached total against the full history and flagging any difference. Used in projects 2, 5, 34. ([Ch 14](../chapters/14-case-everyday-objects/README.md))
+- **Record (Java)** — A compact Java class for immutable data; `equals`, `hashCode` and `toString` are generated. Used in projects 1–6, 8–13, 16, 17, 19, 21–25, 29–32, 34–37, 39, 40. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **Recurrence rule (RRULE)** — The iCalendar syntax for repeating events, such as "every Tuesday until June". Used in projects 8, 21, 33.
+- **Recursive-descent parser** — A parser with one method per grammar rule, each calling the others. Used in projects 23, 31, 39. ([Ch 10](../chapters/10-patterns-behavioral-1/README.md), [Ch 21](../chapters/21-case-machine-coding/README.md))
+- **Redis** — A fast shared in-memory key-value store, often used for caches, counters and rate limits. Used in projects 12, 14, 15, 26. ([Ch 20](../chapters/20-case-components/README.md))
+- **ReentrantLock** — Java's explicit lock with try-lock, timeouts and fairness options. Used in projects 10, 12, 15, 24, 36, 40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Reflection** — Code inspecting and calling classes, constructors and methods at run time. Used in projects 31, 36, 38. ([Ch 8](../chapters/08-patterns-creational/README.md))
+- **Refraction (rules engine)** — A rule does not fire again for the same unchanged facts, which prevents endless loops. Used in project 31.
+- **Rejection policy** — What a thread pool does when its queue and threads are full: throw, run in the caller, or drop. Used in project 27. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Relative vs absolute reference** — A spreadsheet reference that shifts when a formula is copied (`A1`) versus one that stays fixed (`$A$1`). Used in project 39.
+- **Reorder point** — The stock level at which a new purchase order should be raised. Used in project 22. ([Ch 21](../chapters/21-case-machine-coding/README.md))
+- **Replica** — A copy of data kept on another machine for safety or extra read capacity. Used in projects 17, 26, 28.
+- **Repository pattern** — A collection-like interface that hides how objects are stored (memory now, database later). Used in projects 1, 3, 8, 10, 12, 13, 19–21, 24, 29, 33, 34, 36. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Reservation vs rental** — A promise of something in future (a car category, seats) versus actually using a specific item. Used in projects 1, 9, 12, 19, 29, 37. ([Ch 15](../chapters/15-case-booking-1/README.md), [Ch 16](../chapters/16-case-booking-2/README.md))
+- **Reserve price** — The hidden minimum a seller will accept in an auction. Used in project 24. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **Retry** — Trying a failed operation again; only safe when it is idempotent and the failure was temporary. Used in projects 3, 5, 10, 14, 16–18, 20, 22, 33–35, 37, 40. ([Ch 6](../chapters/06-clean-code/README.md))
+- **Retry amplification** — Retries at several layers multiply load: 3 retries at each of 3 layers can turn one call into 64. Used in project 35.
+- **Reversal** — A new transaction with the opposite entries of an earlier one, undoing it without deleting history. Used in projects 5, 34. ([Ch 21](../chapters/21-case-machine-coding/README.md))
+- **Ring buffer** — A fixed-size circular array where new items overwrite the oldest. Used in projects 17, 28, 35. ([Ch 20](../chapters/20-case-components/README.md))
+- **Ring expansion** — Searching map cells outward in growing rings around a point until enough candidates are found. Used in project 29.
+- **robots.txt** — A file on a website saying which paths crawlers may fetch. Used in project 40.
+- **Rounding policy** — The stated rule for where and how fractions of a cent are rounded, so totals are predictable. Used in projects 1, 10, 13, 22, 39. ([Ch 20](../chapters/20-case-components/README.md))
+- **Rounding remainder** — The cents left over after dividing an amount with integer maths, which must be handed out by a fixed rule. Used in project 13. ([Ch 20](../chapters/20-case-components/README.md))
+
+### S
+- **Saga** — A multi-step business process made of local steps, each with a compensating action if a later step fails. Used in projects 34, 37.
+- **Sandboxing by construction** — Making a rule language safe simply by implementing only the operations it is allowed to perform. Used in project 31.
+- **ScheduledExecutorService** — Java's thread pool that runs tasks after a delay or repeatedly. Used in projects 7, 10, 12, 20, 24, 27, 29. ([Ch 13](../chapters/13-concurrency-problems/README.md))
+- **Scope (DI)** — How long an injected instance lives: one for the whole container (singleton) or a new one each time (prototype). Used in project 36. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Scoped values / structured concurrency** — Newer Java features: scoped values share read-only data with called code and child tasks; structured concurrency treats a group of subtasks as one unit that is cancelled and awaited together. Used in projects 23, 27, 36, 39, 40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Sealed interface / class** — A type that lists all its permitted subtypes, so the compiler can check a `switch` covers every case. Used in projects 1, 2, 4, 5, 8, 10, 12, 17, 18, 20, 21, 23–26, 28, 31, 39, 40. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Seat hold** — A temporary, expiring claim on seats while the customer pays. Used in project 12. ([Ch 15](../chapters/15-case-booking-1/README.md))
+- **Second-price (Vickrey) auction** — The winner pays roughly the second-highest bid (plus one step) rather than their own maximum. Used in project 24.
+- **Semaphore** — A counter of permits; each user takes one and gives it back, capping how many run at once. Used in projects 14, 27, 33, 35, 38, 40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Separation of concerns** — Each part of the program handles one kind of job (storage, rules, display). Used in projects 3, 4. ([Ch 4](../chapters/04-solid-principles/README.md), [Ch 5](../chapters/05-design-principles/README.md))
+- **Sequencer** — The component that gives every incoming command a global order number before it is processed. Used in project 28.
+- **Service locator** — An anti-pattern where a class fetches its dependencies from a global registry, hiding what it needs. Used in project 36. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Sharding** — Splitting data into independent parts, each with its own lock or server, so they can work in parallel. Used in projects 10, 12, 24, 26, 34. ([Ch 20](../chapters/20-case-components/README.md))
+- **Short-circuit evaluation** — AND stops at the first false and OR at the first true, skipping the rest. Used in projects 23, 35.
+- **Simulation** — Running the system against generated events (cars, passengers, games) to measure behaviour. Used in projects 6, 7, 11, 29.
+- **Single Responsibility Principle** — A class should have one reason to change. Used in projects 1, 13. ([Ch 4](../chapters/04-solid-principles/README.md))
+- **Single-flight loading** — Letting only one thread load a missing key while the others wait for that same result. Used in project 15. ([Ch 13](../chapters/13-concurrency-problems/README.md))
+- **Single-threaded executor** — A pool of exactly one thread that runs submitted tasks one after another, so the state it owns needs no locks. Used in project 7. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Singleton** — A class with exactly one instance; in DI, the scope where the container shares one instance. Used in projects 16, 36. ([Ch 8](../chapters/08-patterns-creational/README.md))
+- **Single-writer principle** — Only one thread ever changes a piece of state; others send it requests, so no locks are needed on that state. Used in projects 7, 11, 26, 28. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **SKU** — Stock-keeping unit: one sellable product variant tracked in inventory. Used in projects 22, 37. ([Ch 21](../chapters/21-case-machine-coding/README.md))
+- **Sliding window (log / counter)** — Rate limits over the last N seconds: either storing each request time (exact) or weighting the previous window's count (cheap). Used in projects 14, 35. ([Ch 20](../chapters/20-case-components/README.md))
+- **Snapshot** — A full copy of state at one moment, used to restore it or to shorten replay after a crash. Used in projects 14, 16, 20, 22, 26, 30–32, 34, 35, 37, 40. ([Ch 10](../chapters/10-patterns-behavioral-1/README.md))
+- **Soft delete** — Marking a record as deleted instead of removing it, which keeps ids stable and makes undo easy. Used in project 8.
+- **Specification pattern** — Business rules as small objects with `isSatisfiedBy` that combine with and/or/not. Used in projects 8, 23, 31. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Spider trap** — An endless set of URLs (calendars, session ids) that can keep a crawler busy forever. Used in project 40.
+- **Split strategy** — One class per way of dividing an expense (equal, exact amounts, percentages). Used in project 13. ([Ch 20](../chapters/20-case-components/README.md))
+- **SQL / SELECT … FOR UPDATE** — SQL is the database query language; `SELECT … FOR UPDATE` locks the selected rows until the transaction ends, and `SKIP LOCKED` skips rows others have locked. Used in projects 10, 12, 33, 34. ([Ch 12](../chapters/12-concurrency-concepts/README.md), [Ch 15](../chapters/15-case-booking-1/README.md))
+- **SQS** — Amazon Simple Queue Service: a managed message queue whose "visibility timeout" works like a lease. Used in project 33.
+- **Square attacked test** — Checking whether any enemy piece could capture on a square, used to decide if a king is in check. Used in project 30. ([Ch 17](../chapters/17-case-games/README.md))
+- **Stack trace** — The list of method calls active when an exception was thrown or a resource was taken; shows where it came from. Used in projects 9, 16, 38. ([Ch 6](../chapters/06-clean-code/README.md))
+- **Starvation** — A request or thread that waits indefinitely while others keep being served. Used in projects 1, 7, 11, 17, 18, 27. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **State pattern** — Each state is an object implementing the same interface; the owning object delegates to its current state. Used in projects 2, 5, 7, 11, 12, 17, 20, 24, 29, 35. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Strategy pattern** — Interchangeable implementations of one interface, chosen at run time (pricing, allocation, splitting). Used in all 40 projects. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Stream (Java)** — A pipeline over a collection (`filter`, `map`, `collect`) that describes the result rather than the loop. Used in projects 26, 28, 34, 39. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+- **Super type token** — A trick (`new TypeLiteral<List<String>>() {}`) that keeps a generic type visible at run time despite erasure. Used in project 36.
+- **Surge multiplier** — A price factor that rises where demand outstrips available drivers. Used in project 29. ([Ch 20](../chapters/20-case-components/README.md))
+- **Sweep line** — Sort start and end events by time and walk through them with a running count to find overlaps or the peak. Used in projects 19, 21.
+- **Swing / JTable** — Java's built-in desktop GUI toolkit; `JTable` is its grid component. Used in projects 32, 39.
+- **Symlink cycle** — A symbolic link that points back to a parent folder, which would make a tree walk loop forever. Used in project 23.
+- **synchronized** — The Java keyword that lets only one thread at a time run a block or method guarded by the same object. Used in projects 1, 7, 9, 10, 14, 15, 35, 40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **SynchronousQueue** — A queue with no capacity: each hand-over waits until a giver and a taker meet. Used in project 38. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+
+### T
+- **Table bloat** — Dead row versions that pile up in a database table after many updates and deletes until cleaned up. Used in project 33.
+- **Template engine** — A tool that fills placeholders such as `{{name}}` in a message template. Used in project 18.
+- **Template Method pattern** — A base class fixes the steps of an algorithm and lets subclasses fill in some of them. Used in projects 9, 18. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Test double** — Any stand-in for a real collaborator in a test (fake, stub, mock). Used in projects 3, 4, 6. ([Ch 6](../chapters/06-clean-code/README.md))
+- **Testcontainers** — A Java library that starts real services (such as PostgreSQL) in throwaway containers for tests. Used in projects 33, 34, 37, 38. ([Ch 6](../chapters/06-clean-code/README.md))
+- **Thread** — An independent path of execution inside a program; threads share the program's memory. Used in projects 1, 4, 6, 7, 9–12, 14–18, 20, 21, 23, 24, 26–29, 31, 33–36, 38, 40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Thread pool** — A fixed set of reusable worker threads fed from a queue of tasks. Used in projects 7, 27, 38. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **ThreadLocal** — A variable with a separate value for each thread, such as the current request id. Used in projects 18, 27, 38. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Thread-safe** — Works correctly even when many threads use it at the same time. Used in projects 11, 14, 15, 26, 35, 36. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Thread-starvation deadlock** — Tasks in a full pool wait for other tasks stuck in the queue behind them, so nothing progresses. Used in project 27. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Three-colour DFS** — Depth-first search that marks nodes unvisited, in progress or done; reaching an in-progress node means a cycle. Used in project 36.
+- **Threefold repetition** — A chess draw when the same position, with the same side to move and rights, occurs three times. Used in project 30. ([Ch 17](../chapters/17-case-games/README.md))
+- **Tick size** — The smallest allowed price step; prices are stored as whole ticks in a `long`. Used in project 28. ([Ch 19](../chapters/19-case-platforms-2/README.md))
+- **Time limiter / timeout** — A maximum time to wait for a call or resource before giving up. Used in projects 4, 5, 10, 12, 14, 17, 18, 20, 22, 27, 29, 31, 33, 35, 37, 38, 40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Time zone (ZoneId, ZonedDateTime, Instant)** — `Instant` is an absolute moment (UTC); `ZonedDateTime` is a local date-time in a `ZoneId` with its daylight-saving rules. Used in projects 1, 8, 12, 18, 19, 21, 24, 25, 27, 33, 34, 40.
+- **Time-dependent supply** — Stock that changes on future dates, such as cars arriving at a branch from one-way rentals. Used in project 19.
+- **Timeout ambiguity** — After a timeout you cannot tell whether the other side did the work, so you must check or reverse instead of simply retrying. Used in project 5.
+- **Token bucket** — A rate limit where tokens refill at a steady rate up to a cap and each request spends one; allows short bursts. Used in project 14. ([Ch 13](../chapters/13-concurrency-problems/README.md), [Ch 20](../chapters/20-case-components/README.md))
+- **Topic** — A named stream of messages that publishers write to and subscribers read from. Used in project 17. ([Ch 20](../chapters/20-case-components/README.md))
+- **Topological order** — An ordering where each item comes after everything it depends on. Used in projects 36, 39.
+- **Total order** — Every operation is placed in one single sequence, so everyone agrees which came first. Used in project 24.
+- **Transaction (database)** — A group of changes that succeed or fail together; in a ledger, a balanced set of entries posted at once. Used in projects 2, 3, 5, 9, 10, 12, 13, 19, 21, 22, 26, 33, 34, 36–38. ([Ch 12](../chapters/12-concurrency-concepts/README.md), [Ch 21](../chapters/21-case-machine-coding/README.md))
+- **Transient vs permanent failure** — A temporary error worth retrying (timeout, HTTP 503) versus one that will never succeed (an invalid phone number). Used in projects 17, 18, 35. ([Ch 6](../chapters/06-clean-code/README.md))
+- **Transition table** — A data table listing, for each state and event, the next state, its guard and its actions. Used in projects 2, 20. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **Transitive dependents** — Everything affected by a change directly or through a chain of dependencies. Used in project 39.
+- **TreeMap / TreeSet** — Sorted Java map and set; they answer "nearest lower/higher key" and range questions in O(log n). Used in projects 1, 11, 19, 21, 28.
+- **TTL (time to live)** — How long an entry stays valid before it is treated as gone. Used in projects 12, 14, 15, 26. ([Ch 13](../chapters/13-concurrency-problems/README.md))
+- **Two-phase (commit / locking)** — Doing a change in two steps, first preparing or reserving everything, then committing, so it can be abandoned cleanly in between. Used in projects 26, 34, 37.
+- **Type erasure** — Java drops generic type arguments after compiling, so `List<String>` and `List<Integer>` look the same at run time. Used in project 36. ([Ch 2](../chapters/02-oop-fundamentals/README.md))
+
+### U
+- **UCI** — Universal Chess Interface: the text protocol chess engines and chess GUIs use to talk. Used in project 30.
+- **UML** — Unified Modeling Language: standard diagrams (class, sequence, state) for describing designs. Used in projects 1, 3, 19, 25. ([Ch 3](../chapters/03-relationships-and-uml/README.md))
+- **Undo / redo** — Reversing the last change and re-applying it, usually with a history stack of commands. Used in projects 4, 5, 8, 25, 30, 32, 37, 39. ([Ch 10](../chapters/10-patterns-behavioral-1/README.md))
+- **Unit test** — A fast test of one small piece of code in isolation. Used in projects 1, 2, 6, 8, 10, 37, 40. ([Ch 6](../chapters/06-clean-code/README.md))
+- **URL** — A web address; a URI is the more general name for such identifiers. Used in projects 38, 40.
+- **URL normalisation** — Rewriting URLs into one standard form (lowercase host, no fragment) so duplicates are detected. Used in project 40.
+- **UTF-16 surrogate pair** — Two Java `char` values that together encode one character, such as most emoji. Used in project 32.
+
+### V
+- **Value object** — A small immutable object defined only by its values (money, a date range), usually a record. Used in projects 1, 3, 4, 9, 10, 19, 21. ([Ch 5](../chapters/05-design-principles/README.md))
+- **Version (optimistic)** — A counter stored with a record and increased on every change, used to detect conflicting updates. Used in projects 3, 20, 26, 31. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Virtual threads** — Very lightweight JVM-managed threads, cheap enough to create one per task, ideal for blocking I/O. Used in projects 1, 4, 10, 12, 17, 18, 20, 23, 26, 27, 29, 33, 38, 40. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Visitor pattern** — Adds new operations over a fixed set of node classes without changing those classes. Used in projects 23, 31, 39. ([Ch 11](../chapters/11-patterns-behavioral-2/README.md))
+- **volatile** — A Java field modifier that makes writes visible to all threads at once; it does not make compound updates atomic. Used in projects 16, 27, 39. ([Ch 12](../chapters/12-concurrency-concepts/README.md))
+- **Volatile function (spreadsheet)** — A formula such as `NOW()` or `RAND()` that must be recalculated on every change. Used in project 39.
+
+### W
+- **W-TinyLFU** — Caffeine's eviction policy: a small LRU window plus a frequency filter that decides what may enter the main cache. Used in project 15.
+
+### X
+- **XOR** — Exclusive or: a bit operation that flips bits; applying the same XOR twice cancels out. Used in project 30.
+
+### Y
+- **YAML** — A human-friendly text format for configuration files. Used in projects 9, 16.
+
+### Z
+- **Zobrist hashing** — A chess position fingerprint built by XOR-ing random numbers per piece and square, updated in O(1) per move. Used in project 30.
