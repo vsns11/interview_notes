@@ -9,22 +9,22 @@ The chapter opens with a list of what goes wrong in real data systems:
 
 - The database software or its hardware can die at any moment, even halfway through writing something.
 - The application itself can crash in the middle of a sequence of steps.
-- The network can drop, cutting the app off from the database, or one database node off from another.
-- Several clients can write at the same moment and clobber each other's changes.
+- The network can drop, cutting the app off from the database, or one database node (one machine in a multi-machine database) off from another.
+- Several clients (programs or users talking to the database) can write at the same moment and clobber each other's changes.
 - A client can read data that is only half-updated and therefore makes no sense.
 - Race conditions between clients can produce strange bugs.
 
-Building fault-tolerance by hand for all of this is hard work that needs careful thought and lots of testing. A **transaction** packages a group of reads and writes into one logical unit. Either the whole unit **commits** (succeeds) or it **aborts** / **rolls back** (fails, and nothing it did survives). If it fails, the app can just try again. This removes the nightmare of **partial failure** — some steps done, some not.
+Building fault-tolerance (the ability to keep working correctly when parts fail) by hand for all of this is hard work that needs careful thought and lots of testing. A **transaction** packages a group of reads and writes into one logical unit. Either the whole unit **commits** (succeeds) or it **aborts** / **rolls back** (fails, and nothing it did survives). If it fails, the app can just try again. This removes the nightmare of **partial failure** — some steps done, some not.
 
 Key framing points from the book:
 
 - Nobody discovered transactions in nature; engineers *designed* them to make programming against a database simpler. The guarantees they give are called **safety guarantees**: the database handles certain faults and concurrency problems so the app does not have to.
-- Not every app needs them. Sometimes you deliberately weaken or drop transactions to get more speed or availability, and some safety properties can be had without transactions at all.
+- Not every app needs them. Sometimes you deliberately weaken or drop transactions to get more speed or availability (the system staying up and answering requests), and some safety properties can be had without transactions at all.
 - To decide whether you need them, you must know exactly what they guarantee and what they cost. The details are subtle.
-- The chapter spends most of its time on **concurrency control**: the race conditions that can happen and the isolation levels (read committed, snapshot isolation, serializability) that guard against them.
-- Everything here applies to single-node and distributed databases alike; Chapter 8 then covers problems unique to distributed systems.
+- The chapter spends most of its time on **concurrency control** (the rules that stop operations running at the same time from corrupting each other's work): the race conditions that can happen and the isolation levels (read committed, snapshot isolation, serializability) that guard against them.
+- Everything here applies to single-node and distributed databases (ones spread over several machines) alike; Chapter 8 then covers problems unique to distributed systems.
 
-The chapter's epigraph (from the Google Spanner paper, 2012) argues that it is better to let programmers deal with performance problems caused by *too many* transactions than to make them constantly work around *not having* transactions.
+The chapter's epigraph (from the paper describing Google Spanner, Google's globally distributed database, 2012) argues that it is better to let programmers deal with performance problems caused by *too many* transactions than to make them constantly work around *not having* transactions.
 
 **Everyday analogy:** a transaction is like a bank teller processing a transfer on paper. The teller does not hand you a receipt until both the withdrawal from one account and the deposit into the other are written in the ledger. If the phone rings halfway through and the teller forgets, the half-finished entry is crossed out, and you simply start over. Meanwhile, other customers are not allowed to peek at the ledger while it shows a half-done transfer.
 
@@ -93,13 +93,13 @@ The chapter's epigraph (from the Google Spanner paper, 2012) argues that it is b
 
 ## The Slippery Concept of a Transaction
 
-Nearly every relational database today, and some non-relational ones, support transactions. Their style goes back to **IBM System R** in **1975**, the first SQL database. Although the internals have evolved, the transaction support you find in **MySQL, PostgreSQL, Oracle and SQL Server** looks remarkably like System R's, even 40 years later.
+Nearly every relational database today, and some non-relational ones, support transactions. Their style goes back to **IBM System R** in **1975**, the first SQL (Structured Query Language, the standard database query language) database. Although the internals have evolved, the transaction support you find in **MySQL, PostgreSQL, Oracle and SQL Server** looks remarkably like System R's, even 40 years later.
 
-In the late 2000s, **NoSQL** (non-relational) databases became popular. They offered new data models (Chapter 2) and shipped with replication (Chapter 5) and partitioning (Chapter 6) built in. The biggest casualty was transactions: many of these systems dropped them entirely or used the word "transaction" for something much weaker than before.
+In the late 2000s, **NoSQL** (non-relational) databases became popular. They offered new data models (Chapter 2) and shipped with replication (keeping copies on several machines; Chapter 5) and partitioning (splitting data across machines; Chapter 6) built in. The biggest casualty was transactions: many of these systems dropped them entirely or used the word "transaction" for something much weaker than before.
 
 Two exaggerated opinions grew out of this:
 
-- "Transactions kill scalability; any big system must give them up for speed and availability."
+- "Transactions kill scalability (the ability to grow by adding machines); any big system must give them up for speed and availability."
 - "Serious apps with valuable data *must* have transactions" (a line favoured by some database vendors).
 
 The book calls both views hype. Like any design choice, transactions have benefits and limits, and you need to know the details to weigh them.
@@ -116,12 +116,12 @@ The book calls both views hype. Like any design choice, transactions have benefi
 
 *What it is.* In general, "atomic" means "cannot be split into smaller pieces". But the word means slightly different things in different fields:
 
-- In **multi-threaded programming**, an atomic operation means no other thread can observe it half-done; you only ever see the state before or after.
+- In **multi-threaded programming** (one program running several *threads*, i.e. independent streams of execution, at once), an atomic operation means no other thread can observe it half-done; you only ever see the state before or after.
 - In **ACID**, atomicity is **not** about concurrency at all (that is the "I", isolation). ACID atomicity is about **what happens when a fault strikes after only some of a client's writes have been applied**.
 
 *How it works.*
 1. A client groups several writes into a transaction.
-2. Partway through, something goes wrong — the process crashes, the network drops, the disk fills up, or an integrity constraint is violated.
+2. Partway through, something goes wrong — the process (running program) crashes, the network drops, the disk fills up, or an integrity constraint (a data rule the database enforces, such as "this ID must be unique") is violated.
 3. Because the transaction cannot commit, the database aborts it and **discards or undoes every write it already made**.
 
 *Why it matters.* Without atomicity, after an error you cannot tell which changes landed and which did not. Retrying could apply the same change twice (duplicates or wrong data). With atomicity, an aborted transaction is guaranteed to have changed nothing, so retrying is safe.
@@ -134,14 +134,14 @@ The word "consistency" is badly overloaded. The book lists at least four meaning
 
 | Where | What "consistency" means there |
 |---|---|
-| Replication (Chapter 5) | Replica consistency, and *eventual consistency* in asynchronously replicated systems. |
-| Partitioning (Chapter 6) | *Consistent hashing*, a technique some systems use for rebalancing. |
-| CAP theorem (Chapter 9) | Linearizability. |
+| Replication (Chapter 5) | Replica consistency, and *eventual consistency* (copies agree once updates stop) in asynchronously replicated systems. |
+| Partitioning (Chapter 6) | *Consistent hashing*, a technique some systems use for rebalancing (moving data between machines). |
+| CAP theorem (Chapter 9; the claim that during a network failure a system must choose between consistency and availability) | Linearizability (every read sees the latest write, as if there were one copy). |
 | ACID | The database being in an application-defined "good state". |
 
 *ACID consistency explained.* You have **invariants** — facts about your data that must always be true. Example from the book: in an accounting system, total credits and debits across all accounts must balance. If each transaction starts from a valid state and its writes keep things valid, the invariants always hold.
 
-*The catch.* Only the **application** knows what the invariants are, so it is the app's job to write transactions that preserve them. The database cannot stop you writing data that breaks your own rules. A few rule types *can* be enforced by the database itself — **foreign key constraints** and **uniqueness constraints** — but in general the app decides what counts as valid; the database just stores it.
+*The catch.* Only the **application** knows what the invariants are, so it is the app's job to write transactions that preserve them. The database cannot stop you writing data that breaks your own rules. A few rule types *can* be enforced by the database itself — **foreign key constraints** (a referenced row must exist) and **uniqueness constraints** (no two rows may share a value) — but in general the app decides what counts as valid; the database just stores it.
 
 So A, I and D are **guarantees the database provides**, while consistency is a **property of the application** (which relies on A and I to achieve it). The "C" does not really belong in ACID.
 
@@ -179,7 +179,7 @@ sequenceDiagram
 *What it is.* A database should be a safe place to keep data. **Durability** promises that once a transaction has committed, its data will not be forgotten, even if hardware fails or the database crashes.
 
 *How it is achieved.*
-- **Single-node database:** the data has been written to **non-volatile storage** (hard drive or SSD), usually together with a **write-ahead log** (see Chapter 3) so the on-disk structures can be recovered if they get corrupted.
+- **Single-node database:** the data has been written to **non-volatile storage** (storage that keeps data without power: hard drive or SSD, a solid-state flash drive), usually together with a **write-ahead log** (see Chapter 3) so the on-disk structures can be recovered if they get corrupted.
 - **Replicated database:** the data has been copied to **some number of nodes**.
 - In both cases, the database must **wait** until those writes or copies finish before it tells the client "committed".
 
@@ -188,11 +188,11 @@ sequenceDiagram
 > **Replication and Durability (sidebar).** Durability used to mean writing to archive tape, then to disk/SSD, and more recently to replicas. None is perfect:
 > - Data on the disk of a dead machine is safe but *unreachable* until the machine is fixed or the disk moved; replicated systems can stay available.
 > - A **correlated fault** — say, a power outage, or a bug that makes all nodes crash when fed one particular input — can take out all replicas at once and wipe anything held only in memory — so disk writes still matter even for in-memory databases.
-> - With **asynchronous replication**, recent writes can be lost if the leader fails.
-> - On sudden power loss, **SSDs** have been shown to sometimes break their promises; even `fsync` is not guaranteed to work correctly. Disk **firmware has bugs** too.
-> - Tricky interplay between the storage engine and the **filesystem** can produce hard-to-find bugs and corrupted files after a crash.
+> - With **asynchronous replication** (the main copy confirms a write before the other copies have received it), recent writes can be lost if the leader (the copy that accepts writes) fails.
+> - On sudden power loss, **SSDs** have been shown to sometimes break their promises; even `fsync` (the system call that forces buffered data out to the physical disk) is not guaranteed to work correctly. Disk **firmware** (the software built into the drive) **has bugs** too.
+> - Tricky interplay between the storage engine and the **filesystem** (the operating-system layer that organises files on a disk) can produce hard-to-find bugs and corrupted files after a crash.
 > - Data on disk can **silently rot**. If it went unnoticed for a while, replicas and recent backups may be corrupt too, so you may need an older historical backup.
-> - One study found that **30% to 80% of SSDs** develop at least one bad block in their **first four years**. Magnetic disks have fewer bad sectors but fail completely more often than SSDs.
+> - One study found that **30% to 80% of SSDs** develop at least one bad block (a storage area that can no longer hold data reliably) in their **first four years**. Magnetic disks have fewer bad sectors (their equivalent of bad blocks) but fail completely more often than SSDs.
 > - An **unpowered** SSD may begin to lose data after **a few weeks**; how fast depends on temperature.
 >
 > Takeaway: there are no absolute guarantees, only risk-reduction techniques — disk writes, replication to remote machines, and backups — which should be combined. Treat theoretical "guarantees" sceptically.
@@ -216,7 +216,7 @@ WHERE owner_id = 7 AND is_read = false;
 - `FROM messages` — look in the messages table.
 - `WHERE owner_id = 7 AND is_read = false` — only this user's unread messages.
 
-With lots of mail this can be too slow, so you might **denormalize**: keep an `unread_count` field that you increment when a message arrives and decrement when one is read. Now two things must change together.
+With lots of mail this can be too slow, so you might **denormalize** (store a redundant, precomputed copy): keep an `unread_count` field that you increment when a message arrives and decrement when one is read. Now two things must change together.
 
 *Figure 7-2 — isolation violated.* User 1 inserts a new email and then increments the counter. Between those two writes, User 2 reads: the mailbox shows the new unread email, but the counter still says 0. That is a **dirty read** (reading uncommitted data). Isolation would guarantee User 2 sees both changes or neither.
 
@@ -252,15 +252,15 @@ sequenceDiagram
     Note over DB: Mailbox and counter stay in sync
 ```
 
-*How does the database know which operations belong together?* In relational databases it is usually tied to the client's **TCP connection**: on a given connection, everything between `BEGIN TRANSACTION` and `COMMIT` is one transaction.
+*How does the database know which operations belong together?* In relational databases it is usually tied to the client's **TCP connection** (the network connection between client and database; TCP is the protocol that delivers bytes reliably and in order): on a given connection, everything between `BEGIN TRANSACTION` and `COMMIT` is one transaction.
 
-> **Footnote:** tying transactions to a TCP connection is not ideal. If the connection breaks, the transaction must abort. If it breaks *after* the client asked to commit but *before* the server confirmed, the client cannot tell whether it committed. A transaction manager can fix this with a unique **transaction ID** that is independent of the connection (revisited in Chapter 12, "The End-to-End Argument for Databases").
+> **Footnote:** tying transactions to a TCP connection is not ideal. If the connection breaks, the transaction must abort. If it breaks *after* the client asked to commit but *before* the server confirmed, the client cannot tell whether it committed. A transaction manager (the component that tracks and coordinates transactions) can fix this with a unique **transaction ID** that is independent of the connection (revisited in Chapter 12, "The End-to-End Argument for Databases").
 
 Many **non-relational** databases have no way to group operations like this. Even a **multi-put** (update several keys in one call) may lack transaction semantics: some keys may be written while others fail, so you end up half-updated.
 
 #### Single-object writes
 
-Atomicity and isolation matter even for **one** object. Imagine writing a **20 KB JSON document**:
+Atomicity and isolation matter even for **one** object. Imagine writing a **20 KB JSON document** (JSON is a text format for nested data records):
 
 - The network drops after **10 KB** — does the database store a broken half-document?
 - Power fails while overwriting the old value on disk — do you get old and new bytes spliced together?
@@ -268,7 +268,7 @@ Atomicity and isolation matter even for **one** object. Imagine writing a **20 K
 
 Because those outcomes would be baffling, storage engines almost always provide **atomicity and isolation for a single object** (such as one key-value pair) on one node:
 - **Atomicity** via a **log for crash recovery** (see Chapter 3).
-- **Isolation** via a **lock on each object**, so only one thread touches it at a time.
+- **Isolation** via a **lock on each object** (a lock is a reservation: whoever holds it has the object, others must wait), so only one thread touches it at a time.
 
 Some databases go further with **more complex single-object atomic operations**:
 - An **increment** operation, which avoids the read-modify-write cycle of Figure 7-1.
@@ -284,9 +284,9 @@ Many distributed datastores dropped multi-object transactions because they are *
 
 Could every app get by with just key-value, single-object operations? Sometimes yes, but often several objects must change together:
 
-1. **Foreign keys / graph edges.** In relational models, rows point to rows in other tables; in graph models, vertices have edges to other vertices. When inserting several records that reference each other, the references must be correct, or the data stops making sense.
-2. **Denormalized documents.** In a document model, fields that change together are often in one document, so no multi-object transaction is needed for that. But document databases without joins push you toward denormalization, and updating denormalized copies (like Figure 7-2) means touching several documents at once. Transactions keep those copies in sync.
-3. **Secondary indexes.** Almost every database except pure key-value stores has them, and they must be updated whenever a value changes. From a transaction's viewpoint an index is a separate object, so without isolation a record might appear in one index but not yet in another.
+1. **Foreign keys / graph edges.** In relational models, rows point to rows in other tables (via a *foreign key*, a column holding another row's ID); in graph models, vertices have edges to other vertices. When inserting several records that reference each other, the references must be correct, or the data stops making sense.
+2. **Denormalized documents.** In a document model, fields that change together are often in one document, so no multi-object transaction is needed for that. But document databases without joins (queries that combine records from several tables or collections) push you toward denormalization, and updating denormalized copies (like Figure 7-2) means touching several documents at once. Transactions keep those copies in sync.
+3. **Secondary indexes** (extra lookup structures for finding records by fields other than the main key). Almost every database except pure key-value stores has them, and they must be updated whenever a value changes. From a transaction's viewpoint an index is a separate object, so without isolation a record might appear in one index but not yet in another.
 
 You *can* build these apps without transactions, but error handling gets much harder without atomicity, and missing isolation causes concurrency bugs (discussed next; Chapter 12 explores alternatives).
 
@@ -294,17 +294,17 @@ You *can* build these apps without transactions, but error handling gets much ha
 
 *Philosophy.* A key feature of transactions is that they **can be aborted and safely retried**. ACID databases would rather abandon a transaction completely than leave it half done and risk breaking atomicity, isolation or durability.
 
-*Not everyone follows it.* Databases with **leaderless replication** (Chapter 5) work on a **"best effort"** basis: the database does what it can, and if it hits an error it will not undo what already happened. Recovery is the application's job.
+*Not everyone follows it.* Databases with **leaderless replication** (any copy accepts writes; Chapter 5) work on a **"best effort"** (try, but promise nothing) basis: the database does what it can, and if it hits an error it will not undo what already happened. Recovery is the application's job.
 
-*Common mistake.* Developers often think only about the happy path. Popular **ORM** (object-relational mapping) frameworks (the book names **ActiveRecord** from Rails, and **Django**) do **not retry** aborted transactions; the error bubbles up as an exception, user input is lost, and the user sees an error page. That wastes the whole point of aborts, which is to allow safe retries.
+*Common mistake.* Developers often think only about the happy path. Popular **ORM** (object-relational mapping) frameworks (the book names **ActiveRecord** from Rails, and **Django**) do **not retry** aborted transactions; the error bubbles up as an exception (a raised error that unwinds the program until something catches it), user input is lost, and the user sees an error page. That wastes the whole point of aborts, which is to allow safe retries.
 
-*Retrying is useful but not perfect:*
+*Retrying is useful but not perfect* (retries, backoff and idempotency are also covered in [System Design Fundamentals](../00a-system-design-fundamentals/README.md)):
 
 | Problem with retry | Why / what to do |
 |---|---|
-| The commit actually succeeded, but the acknowledgement was lost on the network | Retrying runs it twice, unless the app has its own **deduplication**. |
-| The error was caused by **overload** | Retrying makes it worse. Limit retries, use **exponential backoff**, and treat overload errors specially. |
-| The error is **permanent** (e.g., constraint violation) | Retrying is pointless. Only retry **transient** errors: deadlock, isolation violation, brief network glitches, failover. |
+| The commit actually succeeded, but the acknowledgement was lost on the network | Retrying runs it twice, unless the app has its own **deduplication** (detecting and ignoring a repeated request). |
+| The error was caused by **overload** | Retrying makes it worse. Limit retries, use **exponential backoff** (wait 1 s, then 2 s, then 4 s, ... between attempts), and treat overload errors specially. |
+| The error is **permanent** (e.g., constraint violation) | Retrying is pointless. Only retry **transient** (temporary) errors: deadlock, isolation violation, brief network glitches, failover (switching to a backup machine). |
 | The transaction has **side effects outside the database** (e.g., sending an email) | Those may happen even if the transaction aborts; you do not want to resend the email on each retry. To make several systems commit or abort together, see **two-phase commit** (Chapter 9). |
 | The **client process dies** while retrying | Whatever it was trying to write is lost. |
 
@@ -314,11 +314,11 @@ You *can* build these apps without transactions, but error handling gets much ha
 
 *Why they are nasty.*
 - They are **hard to find by testing**: they only appear when the timing is unlucky, which may be rare and hard to reproduce.
-- They are **hard to reason about**, especially in big codebases where you do not know what other code touches the same data. With many concurrent users, any value might change under you at any time.
+- They are **hard to reason about**, especially in big codebases (the full body of a project's source code) where you do not know what other code touches the same data. With many concurrent users, any value might change under you at any time.
 
 Databases have long tried to hide this with **transaction isolation**. **Serializable isolation** would let you pretend there is no concurrency at all. But it has a **performance cost**, so many systems instead use **weaker isolation levels** that stop some problems but not all. These are harder to understand and cause subtle bugs, yet they are widely used.
 
-*Real damage.* Weak-isolation bugs have caused **large financial losses** (the book's references include bitcoin stolen from an exchange, e.g. Poloniex in 2014), triggered **investigations by financial auditors**, and **corrupted customer data**. The usual reaction — "use an ACID database for money!" — misses the point, because many popular relational ("ACID") databases also default to weak isolation and would not have prevented those bugs.
+*Real damage.* Weak-isolation bugs have caused **large financial losses** (the book's references include bitcoin stolen from an exchange, e.g. Poloniex in 2014), triggered **investigations by financial auditors** (independent inspectors of a company's accounts), and **corrupted customer data**. The usual reaction — "use an ACID database for money!" — misses the point, because many popular relational ("ACID") databases also default to weak isolation and would not have prevented those bugs.
 
 So instead of trusting labels, you need to **understand the kinds of race conditions** and how to prevent them. The book walks through weak (non-serializable) levels informally with examples; rigorous definitions live in the academic literature.
 
@@ -395,7 +395,7 @@ Read committed is **very popular**: it is the default level in plenty of databas
 3. Only one transaction can hold the lock on a given object; another writer must **wait** until the first finishes.
 4. The database does this **automatically** at read committed and stronger levels.
 
-*Preventing dirty reads — option 1: read locks (rarely used).* Make readers briefly take the same lock and release it right after reading. A read then cannot happen while an uncommitted value exists. **Problem:** one long-running write transaction would force many read-only transactions to wait, hurting their response time. It also harms operability: a slowdown in one part of the app spreads to unrelated parts via lock waits.
+*Preventing dirty reads — option 1: read locks (rarely used).* Make readers briefly take the same lock and release it right after reading. A read then cannot happen while an uncommitted value exists. **Problem:** one long-running write transaction would force many read-only transactions to wait, hurting their response time. It also harms operability (how easy the system is to run): a slowdown in one part of the app spreads to unrelated parts via lock waits.
 
 *Preventing dirty reads — option 2: remember old values (what most databases do).* For every object being written, the database keeps **both the old committed value and the new uncommitted value** set by the lock-holding transaction. While the writer is still running, other readers get the **old** value. Once it commits, readers switch to the **new** value. This is the approach shown in Figure 7-4.
 
@@ -430,7 +430,7 @@ The name for this is **read skew** (also **nonrepeatable read**): if Alice re-re
 For Alice this is temporary — reloading the page shortly after shows consistent balances. But some situations **cannot tolerate** even temporary inconsistency:
 
 - **Backups.** Copying a large database can take **hours** while writes keep arriving. Parts of the backup may be older and parts newer. If you ever restore it, the inconsistencies (like vanished money) become **permanent**.
-- **Analytic queries and integrity checks.** Big scans for analytics (Chapter 3) or periodic checks for corruption give **nonsense** if they see different parts of the database at different moments.
+- **Analytic queries and integrity checks.** Big scans for analytics (Chapter 3; queries that summarise large amounts of data for reports) or periodic checks for corruption give **nonsense** if they see different parts of the database at different moments.
 
 *The fix — snapshot isolation.* Each transaction reads from a **consistent snapshot**: it sees everything that was committed **when the transaction started**. Even if others change data later, the transaction keeps seeing the old data from that point in time.
 
@@ -465,7 +465,7 @@ Storage engines that support snapshot isolation usually implement read committed
 5. **Update:** translated into a **delete plus a create**. In Figure 7-7, transaction 13 takes $100 from account 2, so the table now holds two rows for account 2: the **$500** row with `deleted_by = 13`, and a new **$400** row with `created_by = 13`.
 6. Later, once no transaction can possibly see the deleted data, a **garbage collection** process removes those rows and frees space.
 
-> **Footnote:** PostgreSQL txids are **32-bit**, so they wrap around after about **4 billion** transactions. PostgreSQL's **vacuum** process does cleanup so that the overflow does not affect data.
+> **Footnote:** PostgreSQL txids are **32-bit** (stored in 32 binary digits), so they wrap around (restart from zero) after about **4 billion** transactions. PostgreSQL's **vacuum** process does cleanup so that the overflow does not affect data.
 
 *Figure 7-7 (redrawn): MVCC in PostgreSQL, an update creates a new row version and marks the old one deleted*
 ```mermaid
@@ -506,8 +506,8 @@ A long-running transaction may keep reading versions that others have long since
 
 How do indexes work when there are many versions?
 
-- **Approach 1:** the index points to **all versions** of an object, and an index lookup **filters out** versions invisible to the current transaction. When garbage collection removes an old version, its index entries go too. Many implementation details affect MVCC performance; for example, **PostgreSQL** avoids index updates when the versions of an object fit on the **same page**.
-- **Approach 2 — append-only / copy-on-write B-trees:** used by **CouchDB, Datomic and LMDB**. Pages are never overwritten. Changing a page makes a **new copy**; its parents up to the **root** are copied and updated to point at the new children. Untouched pages are shared and stay immutable. Each write transaction (or batch) produces a **new root**, and each root *is* a consistent snapshot as of when it was made. No txid filtering is needed, because later writes cannot alter an existing tree — they only create new roots. The cost: you need background **compaction and garbage collection**.
+- **Approach 1:** the index points to **all versions** of an object, and an index lookup **filters out** versions invisible to the current transaction. When garbage collection removes an old version, its index entries go too. Many implementation details affect MVCC performance; for example, **PostgreSQL** avoids index updates when the versions of an object fit on the **same page** (the fixed-size block, typically a few KB, that the database reads and writes as a unit).
+- **Approach 2 — append-only / copy-on-write B-trees** (a B-tree is the standard sorted, page-based index structure; Chapter 3): used by **CouchDB, Datomic and LMDB**. Pages are never overwritten. Changing a page makes a **new copy**; its parents up to the **root** are copied and updated to point at the new children. Untouched pages are shared and stay immutable. Each write transaction (or batch) produces a **new root**, and each root *is* a consistent snapshot as of when it was made. No txid filtering is needed, because later writes cannot alter an existing tree — they only create new roots. The cost: you need background **compaction and garbage collection** (rewriting data to reclaim the space of pages nobody references any more).
 
 #### Repeatable read and naming confusion
 
@@ -536,7 +536,7 @@ Read committed and snapshot isolation mostly describe what a **read-only** trans
 *Where it shows up:*
 - Bumping a counter, or changing an account balance.
 - Editing part of a complex value, such as appending an item to a list inside a JSON document (parse, modify, write back).
-- Two people editing a **wiki page** at once, each saving by sending the **whole page**, overwriting whatever is there.
+- Two people editing a **wiki page** (a web page anyone may edit, as on Wikipedia) at once, each saving by sending the **whole page**, overwriting whatever is there.
 
 Since it is so common, there are several solutions.
 
@@ -551,7 +551,7 @@ UPDATE page_views SET hits = hits + 1 WHERE page = '/home';
 - `SET hits = hits + 1` — the database reads and increments in one safe step.
 - `WHERE page = '/home'` — only this page's counter.
 
-This is concurrency-safe in most relational databases. Similarly, **MongoDB** has atomic operations for modifying part of a JSON document, and **Redis** has atomic operations on data structures like **priority queues**. Not everything fits — a wiki edit is arbitrary text editing — but when atomic operations fit, use them.
+This is concurrency-safe in most relational databases. Similarly, **MongoDB** has atomic operations for modifying part of a JSON document, and **Redis** (an in-memory data store) has atomic operations on data structures like **priority queues** (lists that always hand out the highest-priority item first). Not everything fits — a wiki edit is arbitrary text editing — but when atomic operations fit, use them.
 
 > **Footnote:** you *can* express text editing as a stream of atomic mutations, but it is fairly complicated (see "Automatic Conflict Resolution" in Chapter 5).
 
@@ -559,7 +559,7 @@ This is concurrency-safe in most relational databases. Similarly, **MongoDB** ha
 - Grab an **exclusive lock** on the object at read time, so other transactions cannot read it until the update has been applied. This is sometimes called **cursor stability**.
 - Or run all atomic operations on a **single thread**.
 
-*Common pitfall.* **ORM frameworks** make it easy to accidentally write unsafe read-modify-write code instead of using the database's atomic operations. Experts can avoid this, but it is a common source of subtle bugs that tests seldom reveal.
+*Common pitfall.* **ORM frameworks** (libraries that map database rows to objects in your code) make it easy to accidentally write unsafe read-modify-write code instead of using the database's atomic operations. Experts can avoid this, but it is a common source of subtle bugs that tests seldom reveal.
 
 #### Explicit locking
 
@@ -671,7 +671,7 @@ sequenceDiagram
 |---|---|
 | Atomic single-object operations | **No** — several objects are involved. |
 | Automatic lost-update detection in snapshot isolation | **No** — not detected in PostgreSQL repeatable read, MySQL/InnoDB repeatable read, Oracle serializable, or SQL Server snapshot isolation. Only **true serializable** isolation prevents it automatically. |
-| Database constraints | Only if you can express a **multi-object** constraint ("at least one on call"). Most databases lack built-in support, but **triggers** or **materialized views** may work, depending on the database. |
+| Database constraints | Only if you can express a **multi-object** constraint ("at least one on call"). Most databases lack built-in support, but **triggers** (code the database runs automatically on each change) or **materialized views** (stored, auto-updated query results) may work, depending on the database. |
 | Explicitly locking the rows the transaction depends on | **Yes** — the second-best option if serializable is unavailable. |
 
 My own version of the locking fix for an on-call rota:
@@ -719,9 +719,9 @@ Once you know the pattern, you see it everywhere:
   - The `INSERT` adds the booking if nothing overlapped.
   - Two concurrent transactions can both count zero and both insert — a double booking.
 
-  > **Footnote:** PostgreSQL's **range types** make this more elegant, but they are not widely supported elsewhere.
+  > **Footnote:** PostgreSQL's **range types** (a column type holding a start-to-end interval, with built-in overlap checks) make this more elegant, but they are not widely supported elsewhere.
 
-- **Multiplayer game.** The lock in the earlier example stops two players moving the **same** piece, but not moving **two different pieces to the same square**, or other rule-breaking combinations. A unique constraint might help for some rules; otherwise you are exposed to write skew.
+- **Multiplayer game.** The lock in the earlier example stops two players moving the **same** piece, but not moving **two different pieces to the same square**, or other rule-breaking combinations. A unique constraint (a database rule forbidding duplicate values in a column) might help for some rules; otherwise you are exposed to write skew.
 - **Claiming a username.** Two people sign up with the same name at once; each transaction checks it is free and then creates the account. Not safe under snapshot isolation. **Fix:** a **unique constraint** — the second insert violates it and is aborted.
 - **Preventing double-spending.** A service lets users spend money or points and must stop them overspending. One approach: insert a tentative spending item, list all items in the account, and check the total stays positive. With write skew, two spending items inserted concurrently can push the balance negative without either transaction noticing.
 
@@ -759,7 +759,7 @@ The chapter so far has shown race conditions that read committed and snapshot is
 
 - Isolation levels are **hard to understand** and **implemented inconsistently** across databases (e.g., "repeatable read" varies a lot).
 - Looking at app code, it is **hard to tell** whether it is safe at a given level, especially in large apps where you do not know everything running concurrently.
-- There are **no good tools** for detecting race conditions. Static analysis might help in principle, but research has not reached practice. Testing is hard because the problems are **nondeterministic**.
+- There are **no good tools** for detecting race conditions. Static analysis (automatically examining code without running it) might help in principle, but research has not reached practice. Testing is hard because the problems are **nondeterministic** (they may or may not happen on any given run).
 
 This has been true since weak isolation levels appeared in the **1970s**. Researchers' answer has always been: **use serializable isolation**.
 
@@ -779,18 +779,18 @@ This chapter treats them on a single node; Chapter 9 generalises to multiple nod
 
 *Why only recently?* Designers decided a single-threaded transaction loop was feasible only around **2007**. For the previous **30 years**, multi-threading was considered essential for performance. Two things changed:
 
-- **RAM got cheap** enough that for many uses the whole **active dataset fits in memory** (Chapter 3). With no waiting for disk, transactions run much faster.
+- **RAM** (main memory, fast but lost on power-off) **got cheap** enough that for many uses the whole **active dataset fits in memory** (Chapter 3). With no waiting for disk, transactions run much faster.
 - Designers realised **OLTP transactions are usually short**, with only a few reads and writes. Long analytic queries are typically read-only and can run on a **consistent snapshot** (snapshot isolation) **outside** the serial loop.
 
-*Who does it:* **VoltDB/H-Store, Redis and Datomic**. A single-threaded system can sometimes **beat** a concurrent one because it skips locking overhead. But its throughput is capped at **one CPU core**, and transactions must be structured differently to use that thread well.
+*Who does it:* **VoltDB/H-Store, Redis and Datomic**. A single-threaded system can sometimes **beat** a concurrent one because it skips locking overhead. But its throughput (transactions completed per second) is capped at **one CPU core** (a single processing unit of the chip), and transactions must be structured differently to use that thread well.
 
 #### Encapsulating transactions in stored procedures
 
-*History.* Early database designers hoped a transaction could cover a **whole user flow**. Booking a flight, for instance, means searching routes, fares and seats; choosing an itinerary; booking each leg; entering passenger details; paying. Making all that one atomic transaction seemed appealing.
+*History.* Early database designers hoped a transaction could cover a **whole user flow** (every step a user takes to finish a task). Booking a flight, for instance, means searching routes, fares and seats; choosing an itinerary; booking each leg; entering passenger details; paying. Making all that one atomic transaction seemed appealing.
 
-*Problem:* **humans are slow.** If a transaction waits on user input, the database must juggle huge numbers of mostly **idle** concurrent transactions, which most cannot do efficiently. So nearly all OLTP apps keep transactions short and never wait for a user inside one. On the web, a transaction **commits within one HTTP request**; a new request starts a new transaction.
+*Problem:* **humans are slow.** If a transaction waits on user input, the database must juggle huge numbers of mostly **idle** concurrent transactions, which most cannot do efficiently. So nearly all OLTP apps keep transactions short and never wait for a user inside one. On the web, a transaction **commits within one HTTP request** (a single request from a browser or app to the web server and its response); a new request starts a new transaction.
 
-*Still interactive, though.* Even without the human, transactions are usually executed **one statement at a time** in an interactive client/server style: the app sends a query, reads the result, maybe sends another based on it, and so on — lots of **network round trips** between the app server and the database server. If the database allowed only one transaction at a time, it would sit idle much of the time, **waiting** on the app's next query, and throughput would be terrible. That is why such databases must run many transactions concurrently.
+*Still interactive, though.* Even without the human, transactions are usually executed **one statement at a time** in an interactive client/server style: the app sends a query, reads the result, maybe sends another based on it, and so on — lots of **network round trips** (a message sent and its reply received) between the app server and the database server. If the database allowed only one transaction at a time, it would sit idle much of the time, **waiting** on the app's next query, and throughput would be terrible. That is why such databases must run many transactions concurrently.
 
 *The fix.* Single-threaded serial systems **forbid interactive multi-statement transactions**. The app must send the **entire transaction code up front** as a **stored procedure**. If all needed data is in memory, the procedure runs very fast with no network or disk waits.
 
@@ -817,21 +817,21 @@ sequenceDiagram
 
 Stored procedures have existed in relational databases for a long time and were added to the SQL standard as **SQL/PSM** in **1999**. They earned a bad reputation because:
 
-- **Each vendor has its own language** — **Oracle: PL/SQL**, **SQL Server: T-SQL**, **PostgreSQL: PL/pgSQL**, etc. These have not kept pace with general-purpose languages, look dated, and lack good library ecosystems.
-- **Code inside the database is hard to manage**: harder to debug, awkward for version control and deployment, trickier to test, and hard to hook into metrics/monitoring.
+- **Each vendor has its own language** — **Oracle: PL/SQL**, **SQL Server: T-SQL**, **PostgreSQL: PL/pgSQL**, etc. These have not kept pace with general-purpose languages, look dated, and lack good library ecosystems (collections of reusable third-party code).
+- **Code inside the database is hard to manage**: harder to debug, awkward for version control (tools like Git that track every change to code) and deployment (releasing code to production), trickier to test, and hard to hook into metrics/monitoring (measurements and dashboards about a running system).
 - **Databases are more performance-sensitive** than app servers, since one database often serves many app servers. A badly written procedure (heavy on memory or CPU) causes more damage than the same bad code in an app server.
 
 *These can be overcome.* Modern systems use **general-purpose languages**:
 
 | System | Stored procedure language |
 |---|---|
-| VoltDB | Java or Groovy |
-| Datomic | Java or Clojure |
-| Redis | Lua |
+| VoltDB | Java or Groovy (a scripting language that runs on the Java platform) |
+| Datomic | Java or Clojure (a Lisp-style language on the Java platform) |
+| Redis | Lua (a small, embeddable scripting language) |
 
-With stored procedures and **in-memory** data, single-threaded execution works: no I/O waits and no concurrency-control overhead, so throughput on one thread is quite good.
+With stored procedures and **in-memory** data, single-threaded execution works: no I/O waits (time spent waiting for disk or network input/output) and no concurrency-control overhead, so throughput on one thread is quite good.
 
-*Replication with procedures.* **VoltDB** replicates by running the **same stored procedure on each replica** instead of copying the resulting writes. So procedures must be **deterministic** (same result on every node). If a transaction needs the current date/time, it must use special **deterministic APIs**.
+*Replication with procedures.* **VoltDB** replicates by running the **same stored procedure on each replica** instead of copying the resulting writes. So procedures must be **deterministic** (same result on every node). If a transaction needs the current date/time, it must use special **deterministic APIs** (functions guaranteed to return the same value on every replica).
 
 #### Partitioning
 
@@ -840,9 +840,9 @@ With stored procedures and **in-memory** data, single-threaded execution works: 
 *Solution: partition the data* (Chapter 6), which **VoltDB** supports.
 1. Find a partitioning where **each transaction reads and writes within a single partition**.
 2. Give each partition its **own single-threaded transaction processor**, independent of the others.
-3. Assign each CPU core its own partition → throughput **scales linearly** with cores.
+3. Assign each CPU core its own partition → throughput **scales linearly** with cores (double the cores, double the throughput).
 
-*Catch — cross-partition transactions.* A transaction touching several partitions must be **coordinated** across all of them, with the stored procedure running **in lock-step** on each to keep serializability. That overhead makes them **vastly slower**: VoltDB reports a rate of roughly **1,000 writes per second** for cross-partition transactions, which is several orders of magnitude lower than it achieves within one partition, and more machines **do not** increase it.
+*Catch — cross-partition transactions.* A transaction touching several partitions must be **coordinated** across all of them, with the stored procedure running **in lock-step** (every partition advancing together, step by step) on each to keep serializability. That overhead makes them **vastly slower**: VoltDB reports a rate of roughly **1,000 writes per second** for cross-partition transactions, which is several orders of magnitude (factors of 10) lower than it achieves within one partition, and more machines **do not** increase it.
 
 Whether transactions can stay within one partition depends on the **data's structure**. Simple key-value data partitions easily; data with **multiple secondary indexes** tends to need lots of cross-partition coordination (Chapter 6).
 
@@ -892,7 +892,7 @@ So in 2PL, **writers block writers *and* readers, and readers block writers.** S
 - Overhead of acquiring and releasing many locks.
 - More importantly, **reduced concurrency**: whenever two transactions might race in any way, one must **wait** for the other.
 - Traditional relational databases **do not cap transaction duration** (they were designed for interactive apps waiting on humans), so a wait has **no upper bound**. Even with short transactions, a **queue** can form on a popular object, so one transaction may wait for several others.
-- So 2PL databases can have **unstable latencies** and be very slow at **high percentiles** when there is contention. One slow transaction, or one that touches lots of data and grabs many locks, can bring the rest of the system to a **halt** — bad when robust operation matters.
+- So 2PL databases can have **unstable latencies** (response times) and be very slow at **high percentiles** (the slowest few percent of requests, e.g. the 99th percentile) when there is contention. One slow transaction, or one that touches lots of data and grabs many locks, can bring the rest of the system to a **halt** — bad when robust operation matters.
 - **Deadlocks** can happen under lock-based read committed too, but are **much more frequent** under 2PL serializable (depending on access patterns). Each deadlock abort means redoing the work; frequent deadlocks waste a lot of effort.
 
 #### Predicate locks
@@ -937,16 +937,16 @@ Either way, an approximation of the search is attached to an index. Any transact
 
 The picture so far is bleak: serializability implementations that **don't perform well** (2PL) or **don't scale well** (serial execution), versus weak levels that perform well but allow races (lost updates, write skew, phantoms). Must we choose?
 
-Maybe not. **Serializable snapshot isolation (SSI)** is **very promising**: full serializability with only a **small performance penalty** over snapshot isolation. It is fairly new: first published in **2008**, it was the topic of **Michael Cahill's** PhD thesis.
+Maybe not. **Serializable snapshot isolation (SSI)** is **very promising**: full serializability with only a **small performance penalty** over snapshot isolation. It is fairly new: first published in **2008**, it was the topic of **Michael Cahill's** PhD thesis (the long research document written for a doctorate).
 
-*Where it is used:* single-node — the **serializable** level of **PostgreSQL since version 9.1**; distributed — **FoundationDB** uses a similar algorithm. Being young, it is still proving itself in practice, but it may become fast enough to be the **default** in the future.
+*Where it is used:* single-node — the **serializable** level of **PostgreSQL since version 9.1**; distributed — **FoundationDB** (a distributed key-value database) uses a similar algorithm. Being young, it is still proving itself in practice, but it may become fast enough to be the **default** in the future.
 
 #### Pessimistic versus optimistic concurrency control
 
 | | Pessimistic | Optimistic |
 |---|---|---|
 | Idea | If anything *might* go wrong (someone else holds a lock), **wait** until safe | **Carry on**, hoping all is well; at **commit**, check whether isolation was violated and **abort** if so |
-| Analogy | **Mutual exclusion** in multi-threaded programming | "Ask forgiveness, not permission" |
+| Analogy | **Mutual exclusion** (only one thread at a time may enter a protected section, usually via a lock or *mutex*) in multi-threaded programming | "Ask forgiveness, not permission" |
 | Examples | 2PL; serial execution (extremely pessimistic) | SSI |
 | Weakness | Waiting and reduced concurrency | Performs badly under **high contention** — many aborts; retries add load when near max throughput |
 | When it does well | Serial execution: when every transaction is tiny and fast. (For 2PL the book mainly stresses the costs: blocking, unstable latency, deadlocks.) | With **spare capacity** and **low contention**, usually **faster** than pessimistic methods |
@@ -1036,7 +1036,7 @@ sequenceDiagram
 
 #### Performance of serializable snapshot isolation
 
-*Tracking granularity trade-off.* Tracking reads and writes **in detail** lets the database be precise about who must abort, but bookkeeping becomes expensive. **Coarser** tracking is faster but may abort **more transactions than necessary**.
+*Tracking granularity (level of detail) trade-off.* Tracking reads and writes **in detail** lets the database be precise about who must abort, but bookkeeping becomes expensive. **Coarser** tracking is faster but may abort **more transactions than necessary**.
 
 *Smarter analysis.* Sometimes a transaction reading overwritten data is still fine — it can be proven the result is serializable anyway. **PostgreSQL** uses this theory to **reduce unnecessary aborts**.
 

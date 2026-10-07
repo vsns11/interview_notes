@@ -3,21 +3,21 @@
 
 ## Overview
 
-Chapter 8 was a catalogue of everything that breaks in a distributed system: packets get dropped, duplicated, reordered or delayed for an unknown time; clocks drift; processes freeze for garbage collection or crash outright. Chapter 9 asks the constructive follow-up question: **given all of that, how do we build systems that keep working correctly anyway?**
+Chapter 8 was a catalogue of everything that breaks in a distributed system: packets get dropped, duplicated, reordered or delayed for an unknown time; clocks drift; processes freeze for garbage collection (the runtime pausing the program to reclaim unused memory) or crash outright. Chapter 9 asks the constructive follow-up question: **given all of that, how do we build systems that keep working correctly anyway?**
 
 The cheapest answer is "just let the whole service go down and show an error". When that is not acceptable, we need *fault tolerance* — the service keeps behaving correctly even though some parts inside it have failed.
 
 The book's strategy mirrors what it did with transactions in Chapter 7. A transaction lets an application *pretend* that crashes don't happen (atomicity), that nobody else is touching the data at the same time (isolation), and that disks never lose data (durability). The faults still happen; the abstraction just hides them. Chapter 9 hunts for similar **general-purpose abstractions for distributed systems**: guarantees that are implemented once, carefully, and then relied on by many applications.
 
-The single most important such abstraction is **consensus**: getting several nodes to agree on something. A classic use: a single-leader database loses its leader, and the remaining nodes must agree on *one* new leader. If two nodes both think they are leader (**split brain**), both accept writes and data is usually lost. Consensus done correctly prevents that — but doing it correctly despite network faults and crashes turns out to be surprisingly hard.
+The single most important such abstraction is **consensus**: getting several nodes to agree on something. A classic use: a single-leader database (one node, the *leader*, accepts all writes and copies them to *follower* replicas) loses its leader, and the remaining nodes must agree on *one* new leader. If two nodes both think they are leader (**split brain**), both accept writes and data is usually lost. Consensus done correctly prevents that — but doing it correctly despite network faults and crashes turns out to be surprisingly hard.
 
 The chapter builds up to consensus in three steps:
 
-1. **Linearizability** — among the strongest consistency models that real systems offer: replicated data behaves as if there were only one copy. What it buys you and what it costs.
+1. **Linearizability** — among the strongest consistency models (precise promises about what a read may return) that real systems offer: replicated data behaves as if there were only one copy. What it buys you and what it costs.
 2. **Ordering guarantees** — causality, total orders, Lamport timestamps, and **total order broadcast**, which turns out to be deeply linked to both linearizability and consensus.
-3. **Distributed transactions and consensus** — how two-phase commit (2PC) makes a transaction atomic across several nodes, why 2PC is a weak form of consensus, and how real fault-tolerant consensus algorithms (Paxos, Raft, Zab, Viewstamped Replication) and services built on them (ZooKeeper, etcd) work.
+3. **Distributed transactions and consensus** — how two-phase commit (2PC) makes a transaction atomic across several nodes, why 2PC is a weak form of consensus, and how real fault-tolerant consensus algorithms (Paxos, Raft, Zab, Viewstamped Replication — well-known step-by-step protocols for agreement) and services built on them (ZooKeeper, etcd — small, highly reliable coordination databases) work.
 
-Along the way the chapter also explains the *limits* of what is possible — results such as the CAP theorem and the FLP impossibility result — at an intuitive level rather than with formal proofs.
+Along the way the chapter also explains the *limits* of what is possible — results such as the CAP theorem and the FLP impossibility result (both defined in the Key terms table below; see also [System Design Fundamentals](../00a-system-design-fundamentals/README.md)) — at an intuitive level rather than with formal proofs.
 
 > **Opening epigraph.** The chapter opens with a quote from Jay Kreps (2013) asking, roughly, whether it is better to be available but wrong or correct but down. That tension — correctness vs. availability — runs through the entire chapter.
 
@@ -89,7 +89,7 @@ Along the way the chapter also explains the *limits* of what is possible — res
 
 ## Consistency Guarantees
 
-**The problem.** In Chapter 5 ("Problems with Replication Lag") we saw that if you look at two replicas at the same instant you will often see different data, because each write reaches each replica at a slightly different time. This happens with *every* replication style — single-leader, multi-leader and leaderless.
+**The problem.** In Chapter 5 ("Problems with Replication Lag") we saw that if you look at two replicas at the same instant you will often see different data, because each write reaches each replica at a slightly different time. This happens with *every* replication style — single-leader, multi-leader (several nodes accept writes) and leaderless (any replica accepts writes; no leader at all). A **replica** is one copy of the data, kept on its own node.
 
 **Eventual consistency.** Most replicated databases promise at least *eventual consistency*: stop writing, wait some unspecified amount of time, and eventually every read returns the same value. The inconsistency is temporary and heals itself (once any network faults are repaired too). The book suggests **convergence** would be a better name, since what is promised is that replicas converge to one value.
 
@@ -99,7 +99,7 @@ Along the way the chapter also explains the *limits* of what is possible — res
 
 **Stronger models cost something.** The chapter explores *stronger* consistency models. They are easier to program against correctly, but they may perform worse or be less fault-tolerant. Seeing several models lets you pick the one that fits your needs.
 
-> **Consistency models vs. isolation levels.** There is some resemblance to the hierarchy of transaction isolation levels in Chapter 7, and some overlap, but they are largely separate concerns. *Isolation* is about avoiding race conditions between concurrently running transactions. *Distributed consistency* is about coordinating the state of replicas despite delays and faults.
+> **Consistency models vs. isolation levels.** There is some resemblance to the hierarchy of transaction isolation levels in Chapter 7, and some overlap, but they are largely separate concerns. *Isolation* is about avoiding race conditions (bugs where the outcome depends on the unlucky timing of two operations) between concurrently running transactions. *Distributed consistency* is about coordinating the state of replicas despite delays and faults.
 
 **Roadmap of the chapter** (these topics look separate but turn out to be tightly connected):
 
@@ -118,7 +118,7 @@ That illusion is **linearizability** (also called *atomic consistency*, *strong 
 
 In reality there may be many replicas, but the application can ignore them.
 
-**Recency guarantee.** In a linearizable system, the moment one client's write *completes successfully*, every client that reads afterwards must see that value (or a newer one). Reads must never come from a stale cache or lagging replica. So linearizability is best understood as a **recency guarantee**.
+**Recency guarantee.** In a linearizable system, the moment one client's write *completes successfully*, every client that reads afterwards must see that value (or a newer one). Reads must never come from a stale cache (a quick-access copy that may be out of date) or lagging replica. So linearizability is best understood as a **recency guarantee**.
 
 *Figure 9-1 (redrawn): a non-linearizable sports website. The referee's final score reaches follower 1 quickly but follower 2 late; Alice reads follower 1 and announces the result, then Bob reads the lagging follower 2 and is told the game is still on.*
 ```mermaid
@@ -150,11 +150,11 @@ If they had refreshed at *exactly* the same time, getting different answers woul
 
 "Behave as if there is one copy" sounds simple, but pinning down exactly what it means takes care. The book works through timing diagrams.
 
-**Setup.** Three clients read and write the same key `x`. Theory papers call `x` a **register**. In a real system it might be a single key (key-value store), a single row (relational table) or a single document (document database).
+**Setup.** Three clients read and write the same key `x`. Theory papers call `x` a **register**. In a real system it might be a single key (key-value store — a database that maps each key to a value, like a giant dictionary), a single row (relational table — SQL-style rows and columns) or a single document (document database — stores self-contained JSON-like records).
 
 In the diagrams, each operation is a **bar**: the left end is when the client *sent* the request and the right end is when it *received* the response. Because network delays vary, the client doesn't know exactly when the database actually executed the request — only that it happened *somewhere between* sending and receiving.
 
-> **Aside: the imaginary global clock.** These diagrams draw a horizontal time axis as if a perfect global clock existed. Real systems don't have one (Chapter 8), but for *analysing* an algorithm it is fine to pretend such a clock exists, as long as the algorithm itself cannot use it — the algorithm only sees the imperfect local clocks (quartz oscillator plus NTP).
+> **Aside: the imaginary global clock.** These diagrams draw a horizontal time axis as if a perfect global clock existed. Real systems don't have one (Chapter 8), but for *analysing* an algorithm it is fine to pretend such a clock exists, as long as the algorithm itself cannot use it — the algorithm only sees the imperfect local clocks (quartz oscillator plus NTP — the Network Time Protocol that nudges clocks toward a time server).
 
 Operation notation:
 
@@ -280,9 +280,9 @@ sequenceDiagram
 > | Kind of guarantee | *Isolation* property of **transactions** | *Recency* guarantee on reads/writes of a **single register** |
 > | Scope | Transactions that read/write **many** objects | One object at a time; no grouping into transactions |
 > | Promise | Result equals *some* serial order of transactions — which may differ from the real order they ran in | Every operation appears to take effect at one instant between its start and end, respecting real time |
-> | Prevents write skew? | Yes | No, not by itself (unless you add something like materialising conflicts) |
+> | Prevents write skew (two transactions each read, then write different rows, together breaking a rule)? | Yes | No, not by itself (unless you add something like materialising conflicts — creating rows purely so they can be locked) |
 >
-> A database offering **both** is said to provide *strict serializability* (also called *strong one-copy serializability*, strong-1SR). Serializability implemented via **two-phase locking** or **actual serial execution** is typically linearizable too. **Serializable snapshot isolation (SSI) is not**: it reads from a consistent snapshot on purpose (to avoid reader/writer lock contention), and a snapshot by definition excludes writes newer than itself.
+> A database offering **both** is said to provide *strict serializability* (also called *strong one-copy serializability*, strong-1SR). Serializability implemented via **two-phase locking** (transactions take locks and hold them until they finish) or **actual serial execution** (literally running one transaction at a time on one thread) is typically linearizable too. **Serializable snapshot isolation (SSI) is not** (SSI lets transactions run on snapshots and aborts any whose reads turn out to be outdated at commit): it reads from a consistent snapshot on purpose (to avoid reader/writer lock contention), and a snapshot by definition excludes writes newer than itself.
 
 ### Relying on Linearizability
 
@@ -292,13 +292,13 @@ Seeing a football score a few seconds late causes no real harm. So when does lin
 
 A single-leader system must make sure there is really just **one** leader (no split brain). One way to elect a leader is with a **lock**: every node tries to acquire it at startup, and whoever succeeds becomes leader. However the lock is built, it **must be linearizable** — every node has to agree who holds it, or the lock is useless.
 
-- **Coordination services** like **Apache ZooKeeper** and **etcd** are often used for distributed locks and leader election. Internally they use consensus algorithms to provide linearizable operations in a fault-tolerant way.
-- Getting locks and leader election right still has subtle traps — e.g. the *fencing* problem from Chapter 8 ("The leader and the lock"). Libraries such as **Apache Curator** add higher-level recipes on top of ZooKeeper.
+- **Coordination services** like **Apache ZooKeeper** and **etcd** are often used for distributed locks and leader election. Internally they use consensus algorithms to provide linearizable operations in a fault-tolerant way. (A **distributed lock** is a lock that machines, not just threads, compete for; **leader election** is choosing which node is in charge.)
+- Getting locks and leader election right still has subtle traps — e.g. the *fencing* problem from Chapter 8 ("The leader and the lock"). Libraries such as **Apache Curator** (a Java helper library for ZooKeeper) add higher-level recipes on top of ZooKeeper.
 - Still, a linearizable storage service is the foundation all of this is built on.
 
 > **Footnote: ZooKeeper/etcd reads can be stale.** Strictly speaking these systems make *writes* linearizable, but by default a read may be served by any replica and therefore be stale. You can ask for a linearizable read: etcd calls it a **quorum read**; in ZooKeeper you call **`sync()`** before reading.
 
-Locks can also be very fine-grained. **Oracle Real Application Clusters (RAC)** takes out a separate lock for **each disk page**; several database nodes share access to one disk storage system. Because these linearizable locks sit on the critical path of every transaction, RAC deployments usually have a **dedicated cluster interconnect network** just for traffic between database nodes.
+Locks can also be very fine-grained. **Oracle Real Application Clusters (RAC)** (Oracle's multi-server database product) takes out a separate lock for **each disk page** (a fixed-size block, often a few KB, that the database reads and writes as a unit); several database nodes share access to one disk storage system. Because these linearizable locks sit on the critical path (the steps that every transaction must wait for) of every transaction, RAC deployments usually have a **dedicated cluster interconnect network** (a separate fast network) just for traffic between database nodes.
 
 #### Constraints and uniqueness guarantees
 
@@ -309,7 +309,7 @@ Typical uniqueness constraints: a username or email address identifies exactly o
 
 Similar constraints: a bank balance must never go negative; you must not sell more items than are in stock; a flight seat or theatre seat must not be sold to two people at once. All of these need **one up-to-date value that every node agrees on** (the balance, the stock level, the seat's occupant).
 
-In practice some such constraints can be treated *loosely* — an overbooked flight can move passengers and compensate them — and then linearizability may not be needed (Chapter 12, "Timeliness and Integrity"). But a **hard uniqueness constraint**, like those in relational databases, does require linearizability. Other constraints, such as **foreign keys** or **attribute constraints**, can be enforced *without* linearizability.
+In practice some such constraints can be treated *loosely* — an overbooked flight can move passengers and compensate them — and then linearizability may not be needed (Chapter 12, "Timeliness and Integrity"). But a **hard uniqueness constraint**, like those in relational databases, does require linearizability. Other constraints, such as **foreign keys** (a column that must refer to an existing row in another table) or **attribute constraints** (rules on one value, e.g. "age ≥ 0"), can be enforced *without* linearizability.
 
 A small SQL illustration (own example):
 
@@ -332,7 +332,7 @@ INSERT INTO accounts VALUES ('river_otter', 202);  -- session 2
 
 Notice in Figure 9-1 that Bob only *noticed* the stale result because Alice told him out loud. Without that, he'd have refreshed again later and seen the score. The violation was visible only because there was a **second communication channel** (Alice's voice) running alongside the database.
 
-The same thing happens in software. Example: a website where users upload photos, and a background job makes smaller thumbnail versions.
+The same thing happens in software. Example: a website where users upload photos, and a background job (work done later, outside the user's request) makes smaller thumbnail versions.
 
 *Figure 9-5 (redrawn): web server and image resizer communicate through two channels, file storage and a message queue, so the message can outrun the storage's replication.*
 ```mermaid
@@ -347,8 +347,8 @@ flowchart LR
 
 How it works:
 
-1. The web server writes the full photo to the **file storage** service. (The photo isn't put on the queue itself, since brokers are designed around small messages, whereas a photo can be several megabytes.)
-2. Once that write is done, the web server puts a small "please resize photo X" message on the **message queue** (Chapter 11).
+1. The web server writes the full photo to the **file storage** service. (The photo isn't put on the queue itself, since brokers (the servers that run message queues) are designed around small messages, whereas a photo can be several megabytes.)
+2. Once that write is done, the web server puts a small "please resize photo X" message on the **message queue** (a service that holds messages until a consumer picks them up; Chapter 11).
 3. The resizer receives the message and fetches the photo from file storage.
 
 **The race.** If the file storage is linearizable, all is well. If it isn't, the queue (steps 3–4) might be *faster than the storage service's internal replication*. At step 5 the resizer may then get a previous version of the image, or find nothing at all. If it resizes an old version, the full-size and thumbnail images become **permanently inconsistent**.
@@ -363,10 +363,10 @@ Since linearizability means "act as if there is one copy and operations are atom
 
 | Replication method | Linearizable? | Why |
 |---|---|---|
-| **Single-leader** | *Potentially* | Reading from the leader (or from followers updated synchronously) can be linearizable. But not every single-leader database is (e.g. it uses snapshot isolation by design, or has concurrency bugs). It also relies on knowing for sure who the leader is: a node may wrongly believe it is still leader ("The Truth Is Defined by the Majority", Chapter 8), and a delusional leader serving requests will likely break linearizability. With asynchronous replication, failover can even lose committed writes, violating both durability and linearizability. |
+| **Single-leader** | *Potentially* | Reading from the leader (or from followers updated synchronously, i.e. the write waits until they confirm) can be linearizable. But not every single-leader database is (e.g. it uses snapshot isolation by design, or has concurrency bugs). It also relies on knowing for sure who the leader is: a node may wrongly believe it is still leader ("The Truth Is Defined by the Majority", Chapter 8), and a delusional leader serving requests will likely break linearizability. With asynchronous replication (the leader does not wait for followers to confirm), failover (switching to a new leader) can even lose committed writes, violating both durability and linearizability. |
 | **Consensus algorithms** | *Yes* | Some resemble single-leader replication, but include safeguards against split brain and stale replicas, so they can implement linearizable storage safely. **ZooKeeper** and **etcd** work this way. |
 | **Multi-leader** | *No* | Writes are processed concurrently on several nodes and replicated asynchronously, producing conflicting writes that need resolution — conflicts that exist precisely because there's no single copy. |
-| **Leaderless (Dynamo-style)** | *Probably not* | People sometimes claim quorum reads/writes (w + r > n) give "strong consistency", but this isn't quite true. **Last write wins** using time-of-day clock timestamps (as in **Cassandra**) is almost certainly non-linearizable, because clock skew means timestamps may not match the real order. **Sloppy quorums** destroy any chance of linearizability. Even *strict* quorums can behave non-linearizably (next section). |
+| **Leaderless (Dynamo-style, after Amazon's Dynamo design)** | *Probably not* | People sometimes claim quorum reads/writes (w + r > n) give "strong consistency", but this isn't quite true. **Last write wins** using time-of-day clock timestamps (as in **Cassandra**) is almost certainly non-linearizable, because clock skew means timestamps may not match the real order. **Sloppy quorums** (letting writes land on substitute nodes when the usual ones are unreachable) destroy any chance of linearizability. Even *strict* quorums can behave non-linearizably (next section). |
 
 > **Footnote: sharding doesn't break it.** Splitting a single-leader database into partitions, each with its own leader, doesn't affect linearizability, because linearizability is a *single-object* guarantee. Transactions that span partitions are a different matter (covered later in the chapter).
 
@@ -412,13 +412,13 @@ Step by step:
 
 **Can it be fixed?** Yes, at a performance cost:
 
-- A **reader** must perform **read repair synchronously** — push the newest value to stale replicas — *before* returning its result.
+- A **reader** must perform **read repair synchronously** (read repair = when a read spots an out-of-date replica, it writes the newer value back to it) — push the newest value to stale replicas — *before* returning its result.
 - A **writer** must **read the latest state from a quorum** before sending its write.
 
 What real systems do:
 
-- **Riak** does *not* do synchronous read repair, because of the performance penalty.
-- **Cassandra** *does* wait for read repair on quorum reads, but still loses linearizability when several clients write the same key concurrently, because it uses last-write-wins conflict resolution.
+- **Riak** (an open-source Dynamo-style key-value database) does *not* do synchronous read repair, because of the performance penalty.
+- **Cassandra** (a widely used Dynamo-style database) *does* wait for read repair on quorum reads, but still loses linearizability when several clients write the same key concurrently, because it uses last-write-wins conflict resolution.
 - Even with these fixes, only linearizable **reads and writes** can be built this way. A linearizable **compare-and-set** cannot, because CAS requires a consensus algorithm.
 
 **Bottom line:** it is safest to assume a leaderless Dynamo-style system is **not** linearizable.
@@ -459,7 +459,7 @@ This isn't a quirk of single- vs. multi-leader: **any linearizable database** ha
 
 So applications that don't need linearizability tolerate network problems better. This is popularly known as the **CAP theorem**, named by **Eric Brewer in 2000** — although distributed database designers had known the trade-off **since the 1970s**.
 
-**History.** CAP was first offered as a *rule of thumb*, deliberately without precise definitions, to start a conversation about database trade-offs. At the time many distributed databases aimed at linearizability on clusters with **shared storage** (the reference the book cites here is an Oracle RAC book). CAP nudged engineers to explore **shared-nothing** designs better suited to large web services, and deserves credit for that culture shift — witness the wave of new databases from the mid-2000s known as **NoSQL**.
+**History.** CAP was first offered as a *rule of thumb*, deliberately without precise definitions, to start a conversation about database trade-offs. At the time many distributed databases aimed at linearizability on clusters with **shared storage** (all servers attached to one common disk system) (the reference the book cites here is an Oracle RAC book). CAP nudged engineers to explore **shared-nothing** designs (each machine has its own CPU, memory and disk and talks only over the network) better suited to large web services, and deserves credit for that culture shift — witness the wave of new databases from the mid-2000s known as **NoSQL** (non-relational databases such as key-value, document and wide-column stores).
 
 > **The unhelpful CAP theorem** (sidebar). CAP is often stated as "Consistency, Availability, Partition tolerance — pick 2 of 3". That phrasing misleads, because a network partition is a *fault*, not an option you choose: you'll get partitions regardless of your preferences. When the network works, a system can be both linearizable and fully available. Only *when a fault occurs* must you pick one. A better phrasing is **"either Consistent or Available when Partitioned"**. A more reliable network just forces this choice less often. On top of that, discussions of CAP use several contradictory definitions of "availability", and the formal theorem's definition doesn't match everyday usage; many systems called "highly available" don't meet CAP's peculiar definition. Given all this confusion, the book recommends avoiding CAP altogether.
 
@@ -474,15 +474,15 @@ It is silent about network delays, crashed nodes and every other trade-off. So d
 
 #### Linearizability and network delays
 
-Surprisingly few systems are linearizable in practice. Even the **RAM in a modern multi-core CPU isn't linearizable**: if one core writes to a memory address and another core reads that address shortly afterward, the reader is **not guaranteed** to see the new value — unless a **memory barrier (fence)** is used.
+Surprisingly few systems are linearizable in practice. Even the **RAM (main memory) in a modern multi-core CPU (a processor chip with several independent cores) isn't linearizable**: if one core writes to a memory address and another core reads that address shortly afterward, the reader is **not guaranteed** to see the new value — unless a **memory barrier (fence)** is used.
 
-Why? Every CPU core keeps a private memory **cache** plus a **store buffer** (general background, not the book's wording: keeping these copies in sync is the job of *cache coherence*). Memory accesses hit the cache first, and changes reach main memory asynchronously. Cache access is much faster than main memory, so this is essential for performance — but it creates several copies of the data (main memory plus caches) updated asynchronously, so linearizability is lost.
+Why? Every CPU core keeps a private memory **cache** (a small, very fast copy of recently used memory) plus a **store buffer** (a queue of pending writes not yet sent to memory) (general background, not the book's wording: keeping these copies in sync is the job of *cache coherence*). Memory accesses hit the cache first, and changes reach main memory asynchronously. Cache access is much faster than main memory, so this is essential for performance — but it creates several copies of the data (main memory plus caches) updated asynchronously, so linearizability is lost.
 
 Crucially, it makes no sense to justify this with CAP: inside one computer we assume communication is reliable, and we don't expect a core to keep running normally if disconnected from the rest of the machine. **The reason for dropping linearizability here is performance, not fault tolerance.**
 
 Likewise, many distributed databases that forgo linearizability do so chiefly for **speed**, not so much for fault tolerance. **Linearizability is slow — all the time, not just during a network fault.**
 
-Could a cleverer algorithm make it fast? Apparently not. **Attiya and Welch** proved that for linearizability, the **latency of reads and writes can be no smaller than something proportional to how uncertain network delays are**. On networks with highly variable delays (most real networks, Chapter 8) linearizable operations will inevitably be slow. No quicker linearizable algorithm exists, whereas weaker models can run far faster — which is why this trade-off matters for latency-sensitive systems. Chapter 12 discusses ways to avoid linearizability without sacrificing correctness.
+Could a cleverer algorithm make it fast? Apparently not. **Attiya and Welch** proved that for linearizability, the **latency (time taken) of reads and writes can be no smaller than something proportional to how uncertain network delays are**. On networks with highly variable delays (most real networks, Chapter 8) linearizable operations will inevitably be slow. No quicker linearizable algorithm exists, whereas weaker models can run far faster — which is why this trade-off matters for latency-sensitive systems. Chapter 12 discusses ways to avoid linearizability without sacrificing correctness.
 
 ## Ordering Guarantees
 
@@ -490,7 +490,7 @@ A linearizable register acts like a single copy where each operation takes effec
 
 Ordering keeps coming up throughout the book, which hints that it is a fundamental idea. Recap of where it has appeared:
 
-- **Chapter 5 (replication):** in single-leader replication, the leader's main job is fixing the **sequence of writes** in the replication log, i.e. the sequence followers apply them in. Without a single leader, concurrent operations can conflict.
+- **Chapter 5 (replication):** in single-leader replication, the leader's main job is fixing the **sequence of writes** in the replication log (the ordered list of changes the leader sends to followers), i.e. the sequence followers apply them in. Without a single leader, concurrent operations can conflict.
 - **Chapter 7 (serializability):** transactions must behave *as if* executed in some sequential order — either literally running them one at a time, or running them concurrently while preventing serialization conflicts (with locks or aborts).
 - **Chapter 8 (clocks):** timestamps and clocks are another attempt to impose order on a messy world, e.g. deciding which of two writes came later.
 
@@ -503,7 +503,7 @@ One big reason ordering matters is that it **preserves causality** — the idea 
 - **Consistent prefix reads (Chapter 5, Figure 5-5):** an observer of a conversation saw the *answer* before the *question*. That breaks our sense of cause and effect: whoever answered must have seen the question first (unless psychic). There is a **causal dependency** between question and answer.
 - **Multi-leader replication among three leaders (Figure 5-9):** some writes "overtook" others because of network delays, so a replica could see an *update* to a row that didn't yet exist. Causality: a row must be created before it can be updated.
 - **Detecting concurrent writes (Chapter 5):** given operations A and B, exactly one of three things holds — A happened before B, B happened before A, or they are concurrent. This **happens-before** relation *is* causality: if A happened before B, B might have known about A, built on A, or depended on A. If they are concurrent, neither knew about the other.
-- **Snapshot isolation (Chapter 7):** a transaction reads from a "consistent snapshot". *Consistent* here means **respecting causality**: a snapshot that includes an answer has to include the question it answers. Viewing the whole database at a single point in time guarantees this — everything that causally came before that point is visible, nothing that came after is. **Read skew** (non-repeatable reads, Figure 7-6) is precisely reading a state that violates causality.
+- **Snapshot isolation (Chapter 7):** a transaction reads from a "consistent snapshot". *Consistent* here means **respecting causality**: a snapshot that includes an answer has to include the question it answers. Viewing the whole database at a single point in time guarantees this — everything that causally came before that point is visible, nothing that came after is. **Read skew** (non-repeatable reads — seeing parts of the database at different points in time, Figure 7-6) is precisely reading a state that violates causality.
 - **Write skew (Chapter 7, Figure 7-8, the doctors-on-call example):** Alice left the on-call rota because her transaction thought Bob was covering, and Bob did the same thinking Alice was. Going off call was *causally dependent* on observing who was on call. **Serializable snapshot isolation (SSI)** detects write skew by tracking causal dependencies between transactions.
 - **Alice and Bob's football score (Figure 9-1):** Bob getting a stale result *after hearing Alice* is a **causality violation** — Alice's exclamation depended on the score being announced, so after hearing her, Bob should be able to see the score too. The image-resizing example (cross-channel timing dependencies) is the same pattern in disguise.
 
@@ -530,7 +530,7 @@ So by this definition, **a linearizable datastore has no concurrent operations**
 
 Concurrency means the timeline **branches and merges**, and operations on different branches can't be compared. Chapter 5's Figure 5-14 showed this: not a straight line but a tangle of concurrent operations, with arrows showing causal dependencies — the partial order.
 
-> **Git analogy.** Version history in a distributed version control system like **Git** looks just like a causal dependency graph. Commits often follow each other in a straight line, but when several people work at once the history **branches**, and **merge** commits join those concurrent lines back together.
+> **Git analogy.** Version history in a distributed version control system (a tool that records every change to a set of files, with a full copy on each developer's machine) like **Git** looks just like a causal dependency graph. Commits often follow each other in a straight line, but when several people work at once the history **branches**, and **merge** commits join those concurrent lines back together.
 
 #### Linearizability is stronger than causal consistency
 
@@ -565,7 +565,7 @@ Properties of such numbers:
 
 We specifically want a total order **consistent with causality**: if A causally happened before B, A gets a *lower* number than B. Concurrent operations can be ordered arbitrarily. Such an order captures all causal information but also imposes *more* ordering than causality strictly needs.
 
-> **Footnote: a total order that ignores causality is easy but useless.** For instance, give each operation a random UUID and sort UUIDs alphabetically. It's a valid total order, but tells you nothing about what actually happened first or what was concurrent.
+> **Footnote: a total order that ignores causality is easy but useless.** For instance, give each operation a random UUID (a 128-bit randomly generated ID that is practically guaranteed to be unique) and sort UUIDs alphabetically. It's a valid total order, but tells you nothing about what actually happened first or what was concurrent.
 
 **Single-leader case.** The replication log of a single-leader database already defines a total order of writes consistent with causality. The leader just increments a counter per operation, giving each a **monotonically increasing** sequence number. A follower applying writes in log order is always **causally consistent** — even while lagging behind.
 
@@ -582,7 +582,7 @@ All three **perform and scale better** than routing every operation through one 
 | Method | Why causality breaks |
 |---|---|
 | Odd/even (per-node) | Nodes process different numbers of operations per second, so the even counter may lag the odd one (or vice versa). Given an odd- and an even-numbered operation, you can't tell which really came first. |
-| Physical timestamps | **Clock skew** can give a causally later operation a *lower* timestamp (Chapter 8, Figure 8-3). |
+| Physical timestamps | **Clock skew** (two machines' clocks disagreeing) can give a causally later operation a *lower* timestamp (Chapter 8, Figure 8-3). |
 | Block allocator | A causally later operation might get a number from 1–1,000 while the earlier one got a number from 1,001–2,000. |
 
 > **Footnote: Spanner's exception.** Physical timestamps *can* be made causally consistent: **Google's Spanner** estimates how far clocks may be skewed and **deliberately waits for that uncertainty interval to pass** before a write commits, ensuring a causally later transaction gets a larger timestamp (Chapter 8, "Synchronized clocks for global snapshots"). But most clocks can't provide the uncertainty metric this needs.
@@ -685,12 +685,12 @@ On a single CPU core, the total order is just the order the CPU ran the operatio
 
 Single-leader replication gets a total order by picking one node as leader and sequencing everything on **one CPU core** of that node. The hard questions are:
 
-- how to **scale** when throughput exceeds what one leader can handle, and
+- how to **scale** when throughput (operations per second) exceeds what one leader can handle, and
 - how to **fail over** when the leader dies.
 
 In the literature this problem is called **total order broadcast** or **atomic broadcast**.
 
-> **Footnote on naming.** "Atomic broadcast" is the traditional name but confusing: it is unrelated to the A in ACID, and only loosely connected to atomic operations in multithreaded code or to atomic (linearizable) registers. **Total order multicast** is another synonym.
+> **Footnote on naming.** "Atomic broadcast" is the traditional name but confusing: it is unrelated to the A in ACID (Atomicity, Consistency, Isolation, Durability — the classic transaction guarantees), and only loosely connected to atomic operations in multithreaded code or to atomic (linearizable) registers. **Total order multicast** is another synonym.
 
 > **Scope of ordering guarantee** (sidebar). Partitioned databases with one leader per partition often keep order **only within each partition**, so they can't provide consistency guarantees (such as consistent snapshots or foreign-key references) **across** partitions. A total order spanning every partition can be achieved, but only with additional coordination.
 
@@ -705,9 +705,9 @@ A correct algorithm must keep both properties even when nodes or the network are
 
 - **ZooKeeper and etcd implement total order broadcast** — a clue that it is closely tied to consensus.
 - **Database replication:** if every message is a write, and all replicas apply an identical sequence of writes, the replicas stay in step (apart from temporary lag). This is **state machine replication** (revisited in Chapter 11).
-- **Serializable transactions:** as in "Actual Serial Execution" (Chapter 7), if each message is a **deterministic transaction run as a stored procedure**, and every node processes the messages in the same order, all partitions and replicas stay consistent.
+- **Serializable transactions:** as in "Actual Serial Execution" (Chapter 7), if each message is a **deterministic transaction run as a stored procedure** (code stored and executed inside the database itself), and every node processes the messages in the same order, all partitions and replicas stay consistent.
 - **Order is fixed at delivery time.** A node may **not retroactively insert** a message earlier in the order once later messages have been delivered. *This is exactly why it is stronger than ordering by timestamps.*
-- **It's a log.** Think of total order broadcast as building a **log** — the same idea as a replication log, a transaction log, or a write-ahead log — where delivering a message means appending it. Since every node gets identical messages in identical order, every node reads an identical sequence.
+- **It's a log.** Think of total order broadcast as building a **log** — the same idea as a replication log, a transaction log, or a write-ahead log (a file where changes are recorded *before* being applied, so they can be replayed after a crash) — where delivering a message means appending it. Since every node gets identical messages in identical order, every node reads an identical sequence.
 - **Lock service with fencing tokens.** Every lock-acquire request is appended to the log; messages are numbered sequentially in log order; that sequence number, being monotonically increasing, serves as a **fencing token** (Chapter 8). In ZooKeeper this number is the **zxid**.
 
 #### Implementing linearizable storage using total order broadcast
@@ -717,7 +717,7 @@ Linearizability has a total order of operations (Figure 9-4). Is it the same thi
 - Total order broadcast is **asynchronous**: messages are delivered reliably in a fixed order, but there's **no promise about *when***, so one node may lag behind the others.
 - Linearizability promises **recency**: any read sees the most recent write.
 
-> **Footnote: formal relationship.** In formal terms, a plain linearizable read-write register is the *easier* problem. Total order broadcast is equivalent to consensus, and consensus **can't be solved deterministically in the asynchronous crash-stop model** — yet a linearizable read-write register *is* achievable in that same model. But once the register supports atomic operations like **compare-and-set** or **increment-and-get**, it becomes equivalent to consensus. So consensus and linearizable registers are closely related.
+> **Footnote: formal relationship.** In formal terms, a plain linearizable read-write register is the *easier* problem. Total order broadcast is equivalent to consensus, and consensus **can't be solved deterministically in the asynchronous crash-stop model** (no timing guarantees; crashed nodes never return) — yet a linearizable read-write register *is* achievable in that same model. But once the register supports atomic operations like **compare-and-set** or **increment-and-get**, it becomes equivalent to consensus. So consensus and linearizable registers are closely related.
 
 **Building linearizable CAS on top of total order broadcast — the username example.**
 Imagine each possible username has a linearizable register with an atomic CAS, initially `null` (name not taken). To claim a name, run CAS on its register: set it to the user's account ID **only if it is currently `null`**. If several users race, only one CAS succeeds; the rest see a non-null value.
@@ -730,7 +730,7 @@ Implementing that CAS with total order broadcast used as an **append-only log**:
 
 Because every node sees log entries in the same order, when there are concurrent writes all nodes agree which came first. Choosing the first conflicting write as winner and aborting the rest means all nodes agree whether each write committed or aborted. A log can support **serializable multi-object transactions** in a similar way.
 
-> **Footnote: why you must wait in step 2.** If you acknowledge the write as soon as it's queued, without waiting for it to come back, you get something like the memory model of **multi-core x86 processors** — which is **neither linearizable nor sequentially consistent**.
+> **Footnote: why you must wait in step 2.** If you acknowledge the write as soon as it's queued, without waiting for it to come back, you get something like the memory model (the rules for when one core sees another's writes) of **multi-core x86 processors** (the Intel/AMD chip family in most PCs and servers) — which is **neither linearizable nor sequentially consistent**.
 
 Own pseudocode:
 
@@ -821,11 +821,11 @@ The book deliberately puts consensus late, because its subtleties only make sens
 
 Recap from Chapter 7: atomicity gives simple semantics when something fails halfway through a set of writes. A transaction either **commits** (all its writes become durable) or **aborts** (all its writes are rolled back — undone or discarded).
 
-Atomicity stops failed transactions leaving half-finished results and half-updated state lying around. It is particularly important for **multi-object transactions** and for databases with **secondary indexes**: every secondary index is its own data structure, separate from the main data, so a data change must be mirrored in the index. Atomicity keeps the index **consistent with the primary data** (an inconsistent index would be of little use).
+Atomicity stops failed transactions leaving half-finished results and half-updated state lying around. It is particularly important for **multi-object transactions** and for databases with **secondary indexes** (extra lookup structures that let you find rows by a column other than the primary key): every secondary index is its own data structure, separate from the main data, so a data change must be mirrored in the index. Atomicity keeps the index **consistent with the primary data** (an inconsistent index would be of little use).
 
 #### From single-node to distributed atomic commit
 
-**On one node**, atomicity is usually handled by the storage engine:
+**On one node**, atomicity is usually handled by the storage engine (the part of a database that actually stores and retrieves data on disk):
 
 1. The client asks the node to commit.
 2. The node first makes the transaction's writes durable (usually via a **write-ahead log**).
@@ -834,7 +834,7 @@ Atomicity stops failed transactions leaving half-finished results and half-updat
 
 So single-node commit depends on the **order of durable writes: data first, then the commit record**. The decisive instant is when the **commit record has been fully written to disk**: up to then, a crash means abort; after that, the transaction is committed even if the database crashes. Atomicity is ultimately provided by **one device** — the controller of one disk drive on one node.
 
-**On several nodes** — e.g. a transaction touching several objects in a sharded database, or a secondary index that is **term-partitioned** whose entry sits on another node than the primary data — things are harder. Most "NoSQL" distributed datastores **don't support** such distributed transactions, but various clustered relational systems do.
+**On several nodes** — e.g. a transaction touching several objects in a sharded database, or a secondary index that is **term-partitioned** (the index is split by the indexed value, so an entry may live on a different node) whose entry sits on another node than the primary data — things are harder. Most "NoSQL" distributed datastores **don't support** such distributed transactions, but various clustered relational systems do.
 
 Just sending "commit" to every node and letting each commit independently is **not enough**; commit could succeed on some nodes and fail on others:
 
@@ -844,13 +844,13 @@ Just sending "commit" to every node and letting each commit independently is **n
 
 Then the nodes become inconsistent with each other (like Figure 7-3). And a commit, once made on one node, **can't be retracted** if another node later aborts. Therefore **a node may commit only once it is sure all other nodes in the transaction will also commit.**
 
-**Why commits must be irrevocable.** Once committed, data is **visible to other transactions**, and other clients may start relying on it — the foundation of **read committed** isolation. If a committed transaction could later be aborted, every transaction that read its data would be built on data that "never existed" and would need reverting too.
+**Why commits must be irrevocable.** Once committed, data is **visible to other transactions**, and other clients may start relying on it — the foundation of **read committed** isolation (you only ever see data that has been committed). If a committed transaction could later be aborted, every transaction that read its data would be built on data that "never existed" and would need reverting too.
 
 > **Compensating transactions.** The *effects* of a committed transaction can later be undone by another, **compensating transaction**. But to the database that's a separate transaction, so any correctness requirements spanning the two are the **application's** problem.
 
 #### Introduction to two-phase commit
 
-**Two-phase commit (2PC)** achieves atomic commit across multiple nodes: either all commit or all abort. It's a classic algorithm in distributed databases. It's used **internally** by some databases and also exposed to applications as **XA transactions** (supported, for example, by the **Java Transaction API**) or through **WS-AtomicTransaction** in the world of **SOAP** web services.
+**Two-phase commit (2PC)** achieves atomic commit across multiple nodes: either all commit or all abort. It's a classic algorithm in distributed databases. It's used **internally** by some databases and also exposed to applications as **XA transactions** (supported, for example, by the **Java Transaction API**) or through **WS-AtomicTransaction** in the world of **SOAP** web services (an older XML-based standard for services calling each other over a network).
 
 Rather than one commit request, commit/abort happens in **two phases**, which is where the name comes from.
 
@@ -879,7 +879,7 @@ sequenceDiagram
 
 > **Don't confuse 2PC and 2PL** (sidebar). Two-phase **commit** gives **atomic commit** in a distributed database. Two-phase **locking** (Chapter 7) gives **serializable isolation**. They are completely different; best to treat them as unrelated and ignore the unlucky name similarity.
 
-**New component: the coordinator** (also called **transaction manager**). It doesn't exist in single-node transactions. It frequently lives as a **library inside the same application process** that asked for the transaction (for instance inside a **Java EE container**); it may also run as its own process or service. Examples: **Narayana, JOTM, BTM, MSDTC**.
+**New component: the coordinator** (also called **transaction manager**). It doesn't exist in single-node transactions. It frequently lives as a **library inside the same application process** that asked for the transaction (for instance inside a **Java EE container** — an application server that hosts enterprise Java apps); it may also run as its own process or service. Examples: **Narayana, JOTM, BTM, MSDTC**.
 
 **Basic flow:**
 
@@ -999,14 +999,14 @@ In general, nonblocking atomic commit needs a **perfect failure detector**: a re
 
 Distributed transactions — especially 2PC — have a **mixed reputation**. They provide an important safety guarantee that is hard to get otherwise; yet critics say they create operational headaches, ruin performance and over-promise. **Many cloud services deliberately don't offer distributed transactions** because of the operational trouble they bring.
 
-**Performance.** Some implementations are very slow: **MySQL**'s distributed transactions have been reported as **more than 10 times slower** than its single-node transactions. Much of 2PC's inherent cost comes from the **extra disk forcing (`fsync`)** needed for crash recovery, plus **extra network round-trips**.
+**Performance.** Some implementations are very slow: **MySQL**'s distributed transactions have been reported as **more than 10 times slower** than its single-node transactions. Much of 2PC's inherent cost comes from the **extra disk forcing (`fsync` — a system call that makes the OS actually write buffered data to disk)** needed for crash recovery, plus **extra network round-trips**.
 
 Rather than dismiss them, the book examines them, because there are lessons to learn. First, two quite different things get called "distributed transactions":
 
 | | Database-internal distributed transactions | Heterogeneous distributed transactions |
 |---|---|---|
 | Participants | Nodes of **one** distributed database (which replicates/partitions by default), all running the **same software** | **Two or more different technologies** — e.g. databases from different vendors, or non-databases such as **message brokers** |
-| Examples | **VoltDB**, **MySQL Cluster's NDB** storage engine | A database + a message queue in one transaction |
+| Examples | **VoltDB**, **MySQL Cluster's NDB** storage engine (both distributed SQL databases) | A database + a message queue in one transaction |
 | Protocol freedom | Can use any protocol and technology-specific optimisations; no compatibility needed | Must ensure atomic commit across systems that may be totally different internally |
 | How well it works | Often **quite well** | **Much more challenging** |
 
@@ -1027,8 +1027,8 @@ If either the delivery or the database transaction fails, **both abort**, so the
 
 Key facts:
 
-- **XA is not a network protocol** — it's just a **C API** for talking to a transaction coordinator. Other languages have bindings: in **Java EE**, XA is implemented through the **Java Transaction API (JTA)**, supported by many **JDBC** (Java Database Connectivity) database drivers and **JMS** (Java Message Service) message broker drivers.
-- XA assumes the application talks to participant databases/brokers through a **network driver or client library**. A driver with XA support uses the XA API to check whether a given operation belongs to a distributed transaction; if it does, the driver forwards the necessary details to the database server. The driver additionally offers **callbacks** that let the coordinator tell the participant to **prepare, commit or abort**.
+- **XA is not a network protocol** — it's just a **C API** (a set of function calls in the C language) for talking to a transaction coordinator. Other languages have bindings: in **Java EE**, XA is implemented through the **Java Transaction API (JTA)**, supported by many **JDBC** (Java Database Connectivity) database drivers and **JMS** (Java Message Service) message broker drivers.
+- XA assumes the application talks to participant databases/brokers through a **network driver or client library** (the code an app uses to talk to a particular database). A driver with XA support uses the XA API to check whether a given operation belongs to a distributed transaction; if it does, the driver forwards the necessary details to the database server. The driver additionally offers **callbacks** (functions the driver will call when something happens) that let the coordinator tell the participant to **prepare, commit or abort**.
 - The **coordinator implements the XA API**. The standard doesn't say how; in practice it's usually a **library loaded into the application's process** (not a separate service). It tracks the participants, collects their responses after asking them to prepare (via driver callbacks), and keeps a **log on the local disk** of each transaction's commit/abort decision.
 
 **When the application crashes:** if the application process or its machine dies, **the coordinator dies with it**. Participants with prepared-but-uncommitted transactions are stuck **in doubt**. As the coordinator's log lives on that application server's own disk, **the same server has to come back up**, and the coordinator library then reads its log to recover each transaction's outcome. Only then can it use the drivers' XA callbacks to tell participants to commit or abort. **The database server can't contact the coordinator directly** — all communication goes through the client library.
@@ -1037,8 +1037,8 @@ Key facts:
 
 Why fuss about in-doubt transactions — couldn't everything else simply continue? **The problem is locks.**
 
-- Transactions usually take **row-level exclusive locks** on rows they modify (to prevent dirty writes, Chapter 7).
-- With serializable isolation via **two-phase locking**, they also take **shared locks** on rows they read.
+- Transactions usually take **row-level exclusive locks** (only one transaction may hold it) on rows they modify (to prevent dirty writes — overwriting another transaction's not-yet-committed data, Chapter 7).
+- With serializable isolation via **two-phase locking**, they also take **shared locks** (many readers may hold one at once, but no writer) on rows they read.
 - The database **can't release these locks until the transaction commits or aborts** (the shaded area in Figure 9-9).
 
 So with 2PC, a transaction holds its locks **for as long as it is in doubt**. A coordinator that crashes and needs **20 minutes** to restart means 20 minutes of held locks. A coordinator whose log is **completely lost** means the locks are held **forever** — or until an administrator fixes it manually.
@@ -1059,9 +1059,9 @@ The only way out: an **administrator manually decides** to commit or roll back. 
 
 XA solves a real, important problem — keeping several data systems consistent — but brings major operational problems. The crucial realisation: **the coordinator is really a database in its own right** (it stores transaction outcomes), so it deserves the same care as any important database:
 
-1. **Single point of failure.** If the coordinator isn't replicated and runs on one machine, when it fails, other application servers get stuck behind the locks of in-doubt transactions. Surprisingly, **lots of coordinator implementations don't offer high availability out of the box**, or support replication only in a basic way.
-2. **Application servers are no longer stateless.** Many server-side apps follow a **stateless** model (as HTTP favours), with all persistent state in a database, so servers can be added or removed at will. But a coordinator inside the application server changes this: its **logs become crucial durable state** — as important as the databases — since they're needed to recover in-doubt transactions.
-3. **Lowest common denominator.** XA must work with many kinds of systems, so it can't do much. It **can't detect deadlocks across systems** (that would need a standard protocol for exchanging lock-wait information), and it **doesn't work with SSI** (that would need a protocol for identifying conflicts across systems).
+1. **Single point of failure** (one component whose failure takes everything down). If the coordinator isn't replicated and runs on one machine, when it fails, other application servers get stuck behind the locks of in-doubt transactions. Surprisingly, **lots of coordinator implementations don't offer high availability (staying up despite failures) out of the box**, or support replication only in a basic way.
+2. **Application servers are no longer stateless.** Many server-side apps follow a **stateless** model (the server keeps nothing between requests; as HTTP, the web's request/response protocol, favours), with all persistent state in a database, so servers can be added or removed at will. But a coordinator inside the application server changes this: its **logs become crucial durable state** — as important as the databases — since they're needed to recover in-doubt transactions.
+3. **Lowest common denominator.** XA must work with many kinds of systems, so it can't do much. It **can't detect deadlocks** (transactions each waiting for a lock the other holds, forever) **across systems** (that would need a standard protocol for exchanging lock-wait information), and it **doesn't work with SSI** (that would need a protocol for identifying conflicts across systems).
 4. **Failure amplification.** For **database-internal** transactions (not XA) the limits are smaller — e.g. **distributed SSI is possible**. But 2PC still needs **all participants to respond** to commit. A single broken component makes the whole transaction fail. Distributed transactions therefore tend to **amplify failures**, the opposite of fault tolerance.
 
 Does this mean giving up on keeping systems consistent with each other? No — alternative approaches achieve the same without heterogeneous distributed transactions (Chapters 11 and 12). But first, back to consensus.
@@ -1180,25 +1180,25 @@ Consensus algorithms are a **huge breakthrough**: they bring concrete safety (ag
 
 **ZooKeeper** and **etcd** get described as "distributed key-value stores" or as "coordination and configuration services". Their API looks like a database: read and write a key's value, iterate over keys. So why do they bother with consensus, and what makes them different from other databases?
 
-**You rarely use ZooKeeper directly** — it's not a good general-purpose database. You more likely rely on it **indirectly**: **HBase, Hadoop YARN, OpenStack Nova and Kafka** each depend on a ZooKeeper cluster behind the scenes.
+**You rarely use ZooKeeper directly** — it's not a good general-purpose database. You more likely rely on it **indirectly**: **HBase** (a distributed database), **Hadoop YARN** (a cluster resource manager), **OpenStack Nova** (a cloud VM manager) **and Kafka** (a distributed log / message broker) each depend on a ZooKeeper cluster behind the scenes.
 
 **Design:** ZooKeeper and etcd hold **small amounts of data that fit entirely in memory** (still written to disk for durability) — you wouldn't store all your application data there. That data is replicated to all nodes with a **fault-tolerant total order broadcast algorithm** — exactly what database replication needs (same writes, same order, consistent replicas).
 
-ZooKeeper is modelled on **Google's Chubby lock service**. Besides total order broadcast (and thus consensus), it offers features that are especially handy for distributed systems:
+ZooKeeper is modelled on **Google's Chubby lock service** (Google's internal coordination service). Besides total order broadcast (and thus consensus), it offers features that are especially handy for distributed systems:
 
 | Feature | What it gives you |
 |---|---|
 | **Linearizable atomic operations** | With atomic compare-and-set you can build a **lock**: if several nodes try the same operation concurrently, only one succeeds. Consensus guarantees atomicity and linearizability even if nodes fail or the network breaks. A distributed lock is usually a **lease** with an expiry time, so it's released eventually if the client fails. |
 | **Total ordering of operations** | When a lock or lease guards a resource, a **fencing token** (a number that grows every time the lock is taken) prevents clients from clashing after a process pause. ZooKeeper totally orders every operation, assigning each one an ever-increasing **zxid** (transaction ID) and **cversion** (version number). |
-| **Failure detection** | Clients keep a **long-lived session** with ZooKeeper servers and exchange **heartbeats**. Brief connection drops or a ZooKeeper node failure don't end the session; but if heartbeats stop for longer than the **session timeout**, the session is declared dead. A session's locks can optionally be freed automatically on timeout — ZooKeeper calls these **ephemeral nodes**. |
-| **Change notifications** | A client can **watch** locks and values created by others and be told when they change — e.g. learn when a client joins the cluster (from the value it writes) or fails (its session expires, so its ephemeral nodes disappear). This avoids frequent polling. |
+| **Failure detection** | Clients keep a **long-lived session** with ZooKeeper servers and exchange **heartbeats** (small "I'm still alive" messages sent at regular intervals). Brief connection drops or a ZooKeeper node failure don't end the session; but if heartbeats stop for longer than the **session timeout**, the session is declared dead. A session's locks can optionally be freed automatically on timeout — ZooKeeper calls these **ephemeral nodes**. |
+| **Change notifications** | A client can **watch** locks and values created by others and be told when they change — e.g. learn when a client joins the cluster (from the value it writes) or fails (its session expires, so its ephemeral nodes disappear). This avoids frequent polling (repeatedly asking "has it changed yet?"). |
 
 Of these, **only the linearizable atomic operations truly need consensus** — but it's the **combination** that makes ZooKeeper so useful for coordination.
 
 #### Allocating work to nodes
 
-1. **Leader/primary selection.** You run several instances of a process or service and need one to be **leader or primary**; if it fails, another takes over. Useful for single-leader databases, **job schedulers** and similar stateful systems.
-2. **Partition assignment.** You have some partitioned resource — a database, message streams, file storage, a distributed actor system, and so on — and must decide **which partition goes on which node**. When nodes **join**, some partitions move to them to rebalance load (Chapter 6); when nodes **leave or fail**, others take over their work.
+1. **Leader/primary selection.** You run several instances of a process or service and need one to be **leader or primary**; if it fails, another takes over. Useful for single-leader databases, **job schedulers** (systems that decide when and where tasks run) and similar stateful systems.
+2. **Partition assignment.** You have some partitioned resource — a database, message streams, file storage, a distributed actor system (a program built from many small independent "actors" that only talk by messages), and so on — and must decide **which partition goes on which node**. When nodes **join**, some partitions move to them to rebalance load (Chapter 6); when nodes **leave or fail**, others take over their work.
 
 These tasks can be done with careful use of **atomic operations, ephemeral nodes and notifications** in ZooKeeper. Done right, the application **recovers from faults automatically**, without humans. It's not easy, even with libraries like **Apache Curator** that provide higher-level tools over the ZooKeeper client API — but far better than implementing consensus from scratch, which has a **poor track record**.
 
@@ -1228,13 +1228,13 @@ check_leadership()
 
 **Scale.** An application may start on one node and grow to **thousands**. Majority voting across thousands of machines would be hopelessly inefficient. So ZooKeeper runs on a **small fixed set of nodes (typically three or five)**, does its majority votes among them, and serves a potentially huge number of clients. It lets you **"outsource"** coordination work — **consensus, operation ordering, failure detection** — to an external service.
 
-**Slow-changing data.** ZooKeeper data typically changes slowly: facts such as "**node 10.1.1.23 currently leads partition 7**", changing on a scale of **minutes or hours**. It's **not** meant for runtime application state that could change **thousands or even millions of times each second**. To replicate that kind of state between nodes, use other tools such as **Apache BookKeeper**.
+**Slow-changing data.** ZooKeeper data typically changes slowly: facts such as "**node 10.1.1.23 currently leads partition 7**", changing on a scale of **minutes or hours**. It's **not** meant for runtime application state that could change **thousands or even millions of times each second**. To replicate that kind of state between nodes, use other tools such as **Apache BookKeeper** (a replicated log-storage service).
 
 #### Service discovery
 
-ZooKeeper, etcd and **Consul** are also used for **service discovery**: finding which **IP address** to connect to for a given service. In cloud datacenters, **virtual machines come and go** constantly, so you often don't know service IPs in advance. Instead, services **register their network endpoints in a service registry** at startup, where other services can find them.
+ZooKeeper, etcd and **Consul** (HashiCorp's service registry) are also used for **service discovery**: finding which **IP address** (the numeric network address of a machine) to connect to for a given service. In cloud datacenters, **virtual machines come and go** constantly, so you often don't know service IPs in advance. Instead, services **register their network endpoints in a service registry** at startup, where other services can find them.
 
-**Does service discovery need consensus? Less clear.** **DNS** is the traditional way to look up a service's IP. It uses many **layers of caching** for performance and availability. **DNS reads are absolutely not linearizable**, and slightly stale results usually aren't a problem. What matters more is that DNS is **reliably available and robust to network interruptions**.
+**Does service discovery need consensus? Less clear.** **DNS** (the Domain Name System — the internet's phone book that turns names into IP addresses; see [System Design Fundamentals](../00a-system-design-fundamentals/README.md)) is the traditional way to look up a service's IP. It uses many **layers of caching** for performance and availability. **DNS reads are absolutely not linearizable**, and slightly stale results usually aren't a problem. What matters more is that DNS is **reliably available and robust to network interruptions**.
 
 However, **leader election does need consensus**. So if your consensus system already knows the leader, it can sensibly also help other services **find out who the leader is**. To support that, some consensus systems offer **read-only caching replicas**: they asynchronously receive the log of all consensus decisions but **don't vote**, so they can serve reads that **don't need to be linearizable**.
 

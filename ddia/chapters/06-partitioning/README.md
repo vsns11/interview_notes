@@ -3,19 +3,19 @@
 
 ## Overview
 
-Chapter 5 kept whole copies of the data on several nodes. That stops being enough when the dataset is **too big for one machine** or the **query rate is too high** for one machine. The answer is to break the data into **partitions** (also called **sharding**) and spread them over many nodes.
+Chapter 5 kept whole copies of the data on several nodes (a *node* is one machine in the cluster). That stops being enough when the dataset is **too big for one machine** or the **query rate is too high** for one machine. The answer is to break the data into **partitions** (also called **sharding**) and spread them over many nodes. (A short primer on sharding and related ideas is in [System Design Fundamentals](../00a-system-design-fundamentals/README.md).)
 
-This chapter answers: *how do you decide which record lives on which node, how do you keep secondary indexes working, how do you move data around when nodes join or leave, and how does a request find the right node?*
+This chapter answers: *how do you decide which record lives on which node, how do you keep secondary indexes (extra lookup structures for finding records by something other than their main key) working, how do you move data around when nodes join or leave, and how does a request find the right node?*
 
-> **Terminology zoo.** The same idea has many names: a **shard** in MongoDB, Elasticsearch and SolrCloud; HBase says **region**, Bigtable says **tablet**, Cassandra and Riak say **vnode**, and Couchbase says **vBucket**. The book sticks with **partition**, the most established term.
+> **Terminology zoo.** The same idea has many names: a **shard** in MongoDB, Elasticsearch and SolrCloud (the last two are search engines); HBase says **region**, Bigtable says **tablet**, Cassandra and Riak say **vnode**, and Couchbase says **vBucket**. The book sticks with **partition**, the most established term.
 
-> **Not a network partition.** Partitioning here means deliberately splitting a large database into smaller ones. It is unrelated to *network partitions* (netsplits), which are a kind of network fault covered in Chapter 8.
+> **Not a network partition.** Partitioning here means deliberately splitting a large database into smaller ones. It is unrelated to *network partitions* (netsplits: the network breaks so some machines cannot talk to others), which are a kind of network fault covered in Chapter 8.
 
 Key ideas:
 - Usually each record (row, document) belongs to **exactly one** partition. Each partition acts like a small database of its own, though some operations may span several partitions.
-- The main goal is **scalability**. In a shared-nothing cluster (see the Part II introduction), partitions sit on different nodes, so the data is spread over many disks and the queries over many processors.
-- A query that touches one partition can be answered by that partition's node alone, so adding nodes raises throughput. Large, complex queries can in principle be parallelised across nodes, but that is much harder.
-- History: **Teradata** and **Tandem NonStop SQL** led the way with partitioned databases in the 1980s; the idea was later rediscovered by NoSQL stores and by data warehouses built on Hadoop. Some systems target transactions and others analytics; that changes tuning, but the partitioning fundamentals are the same.
+- The main goal is **scalability** (handling more data and traffic by adding machines). In a shared-nothing cluster (machines that share no memory or disk and cooperate only over the network; see the Part II introduction), partitions sit on different nodes, so the data is spread over many disks and the queries over many processors.
+- A query that touches one partition can be answered by that partition's node alone, so adding nodes raises throughput (requests handled per second). Large, complex queries can in principle be parallelised (split into pieces run at the same time) across nodes, but that is much harder.
+- History: **Teradata** and **Tandem NonStop SQL** led the way with partitioned databases in the 1980s; the idea was later rediscovered by NoSQL stores (non-relational databases) and by data warehouses (databases built for analysis) built on Hadoop (an open-source framework for big-data storage and processing). Some systems target transactions (many small interactive reads and writes) and others analytics (big scans to compute reports); that changes tuning, but the partitioning fundamentals are the same.
 
 **Everyday analogy.** A library too big for one room is split across several rooms. You need a rule for which book goes in which room (partitioning scheme), a way to search by topic across rooms (secondary indexes), a plan for moving shelves when a new room opens (rebalancing), and a directory at the entrance telling visitors which room to go to (request routing).
 
@@ -56,9 +56,9 @@ Key ideas:
 
 ## Partitioning and Replication
 
-Partitioning is normally **combined with replication**: every record is in exactly one partition, but that partition is copied onto several nodes for fault tolerance. A node can hold many partitions.
+Partitioning is normally **combined with replication**: every record is in exactly one partition, but that partition is copied onto several nodes for fault tolerance (so losing one machine loses no data). A node can hold many partitions.
 
-With leader–follower replication, each partition has its **leader on one node and followers on others**. Any given node can therefore be leader for some partitions and follower for others.
+With leader–follower replication (one copy, the leader, takes writes and the followers copy it; Chapter 5), each partition has its **leader on one node and followers on others**. Any given node can therefore be leader for some partitions and follower for others.
 
 *Figure 6-1 (redrawn): four nodes, four partitions, each partition with one leader and two followers. Every node leads one partition and follows two others; a client writing to partition 4 goes to its leader on node 4. Arrows are per-partition replication streams.*
 ```mermaid
@@ -100,11 +100,11 @@ Everything from Chapter 5 applies equally to replicating partitions. Since the c
 
 **Goal:** spread data and query load **evenly**. With every node carrying a fair share, 10 nodes could in theory handle 10 times the data and 10 times the read/write throughput of one node (ignoring replication).
 
-If partitioning is unfair, it is **skewed**, and much less effective. In the extreme, all load hits one partition: **9 of 10 nodes sit idle** and the one busy node is your bottleneck. A partition with disproportionately high load is a **hot spot**.
+If partitioning is unfair, it is **skewed**, and much less effective. In the extreme, all load hits one partition: **9 of 10 nodes sit idle** and the one busy node is your bottleneck (the single part limiting the whole system). A partition with disproportionately high load is a **hot spot**.
 
 **Why not assign records to nodes at random?** Data would be spread evenly, but to read a particular item you would not know where it is and would have to **query every node in parallel**.
 
-Better: assume a simple **key-value** model where records are always accessed by primary key. The book compares this to an old paper **encyclopedia**, where entries are sorted by title so you can find one quickly.
+Better: assume a simple **key-value** model where records are always accessed by primary key (the unique identifier of each record). The book compares this to an old paper **encyclopedia**, where entries are sorted by title so you can find one quickly.
 
 ### Partitioning by Key Range
 
@@ -122,7 +122,7 @@ flowchart LR
 
 **Used by:** Bigtable and HBase (Bigtable's open-source counterpart), RethinkDB, and MongoDB before version 2.4.
 
-**Benefit: sorted keys and range scans.** Within each partition, keys can be kept sorted (as in SSTables/LSM-trees, Chapter 3). Range scans become easy, and the key can act as a **concatenated index** to fetch related records in one query. Example: a **sensor network** whose key is the measurement timestamp (year-month-day-hour-minute-second); fetching, say, all readings for one month is a simple range scan.
+**Benefit: sorted keys and range scans.** Within each partition, keys can be kept sorted (as in SSTables/LSM-trees, the sorted-file storage structures of Chapter 3). Range scans become easy, and the key can act as a **concatenated index** to fetch related records in one query. Example: a **sensor network** (many measuring devices reporting readings) whose key is the measurement timestamp (year-month-day-hour-minute-second); fetching, say, all readings for one month is a simple range scan.
 
 **Downside: hot spots from access patterns.** With a timestamp key, partitions correspond to time ranges, e.g. one per day. Since sensors write data as it is measured, **every write goes to today's partition**, which is overloaded while the others idle.
 
@@ -143,9 +143,11 @@ therm-42:2024-03-01T10:00:00   -> partition holding therm-40 .. therm-49
 
 Since key ranges invite skew and hot spots, lots of distributed datastores pick the partition with a **hash function** applied to the key.
 
-**How a good hash helps.** It turns skewed input into a uniform output. A 32-bit hash function given any string produces what looks like a random number in the range 0 to 2^32 − 1; even near-identical strings produce hashes spread evenly over that range.
+> **Key term — hash function:** a function that turns any input (here a key such as a user ID or a string) into a fixed-size number that looks random. The same input always gives the same number, but inputs that are almost identical give completely different numbers. That is exactly what you want for spreading keys evenly: similar keys no longer cluster together.
 
-**Choosing the hash function.** It need not be cryptographically strong: **Cassandra and MongoDB use MD5**, **Voldemort uses the Fowler–Noll–Vo** function. Built-in language hash functions (used for hash tables) may be **unsuitable**: with Java's `Object.hashCode()` or Ruby's `Object#hash`, one process may compute a different hash for a key than another process does.
+**How a good hash helps.** It turns skewed input into a uniform output. A 32-bit hash function (one whose output is a 32-bit number) given any string produces what looks like a random number in the range 0 to 2^32 − 1; even near-identical strings produce hashes spread evenly over that range.
+
+**Choosing the hash function.** It need not be cryptographically strong (secure against attackers deliberately finding collisions): **Cassandra and MongoDB use MD5** (an older hash function, no longer secure for cryptography but fine for spreading data), **Voldemort uses the Fowler–Noll–Vo** function. Built-in language hash functions (used for hash tables, the language's dictionary/map type) may be **unsuitable**: with Java's `Object.hashCode()` or Ruby's `Object#hash`, one process may compute a different hash for a key than another process does.
 
 **How it works:**
 1. Pick a suitable hash function.
@@ -163,9 +165,9 @@ flowchart LR
   K4["2014-04-19 17:08:14"] -->|"hash 62,253"| P7["p7: 57,344 - 65,535"]
 ```
 
-This spreads keys fairly. Boundaries can be **evenly spaced** or **chosen pseudorandomly**; the latter is sometimes called **consistent hashing**.
+This spreads keys fairly. Boundaries can be **evenly spaced** or **chosen pseudorandomly** (by a computer's random-number generator); the latter is sometimes called **consistent hashing**.
 
-> **Consistent Hashing.** Karger et al. defined consistent hashing as a technique for balancing load across caches spread over the internet, such as a **CDN** (content delivery network), using randomly chosen partition boundaries so no central control or distributed consensus is needed. The word "consistent" is unrelated to replica consistency (Chapter 5) or ACID consistency (Chapter 7); it describes a particular approach to rebalancing. As the rebalancing section shows, it works poorly for databases and is rarely used in practice (some databases' docs still say "consistent hashing", often inaccurately). To avoid confusion, the book recommends just saying **hash partitioning**.
+> **Consistent Hashing.** Karger et al. defined consistent hashing as a technique for balancing load across caches spread over the internet, such as a **CDN** (content delivery network: servers around the world that keep copies of web content near users), using randomly chosen partition boundaries so no central control or distributed consensus (getting many machines to agree on a decision; Chapter 9) is needed. The word "consistent" is unrelated to replica consistency (Chapter 5) or ACID consistency (one of the four classic transaction guarantees; Chapter 7); it describes a particular approach to rebalancing. As the rebalancing section shows, it works poorly for databases and is rarely used in practice (some databases' docs still say "consistent hashing", often inaccurately). To avoid confusion, the book recommends just saying **hash partitioning**.
 
 **The cost: no efficient range queries.** Keys that were neighbours are now scattered over all partitions, so sort order is gone.
 - In **MongoDB** with hash-based sharding, any range query goes to **all** partitions.
@@ -175,7 +177,7 @@ This spreads keys fairly. Boundaries can be **evenly spaced** or **chosen pseudo
 
 This suits **one-to-many** data. Example from the book: on a social media site one user posts many updates. With primary key `(user_id, update_timestamp)`, you can fetch all of one user's updates in a time window, sorted by time. Different users live on different partitions, but each user's updates sit together, in time order, on one partition.
 
-A Cassandra-style illustration (CQL, my own table):
+A Cassandra-style illustration (CQL, the Cassandra Query Language, an SQL-like language; my own table):
 
 ```sql
 CREATE TABLE ride_events (
@@ -203,7 +205,7 @@ Today most data systems **cannot compensate for this automatically**, so the app
 
 **Technique: split the hot key.**
 1. For a key known to be very hot, **add a random number to the start or end** of it.
-2. Just a **two-digit decimal** random number spreads writes evenly across **100 different keys**, which can live on different partitions.
+2. Just a **two-digit decimal** (00 to 99) random number spreads writes evenly across **100 different keys**, which can live on different partitions.
 
 **Costs:**
 - **Reads** must now fetch from all 100 keys and combine the results.
@@ -243,7 +245,7 @@ The problem: secondary indexes **do not map neatly onto partitions**. Two main a
 
 **Example from the book: a used-car sales website.** Each listing has a unique **document ID**, and the database is partitioned by it (IDs 0–499 in partition 0, 500–999 in partition 1, etc.). Users filter by **color** and **make**, so you declare secondary indexes on those fields (columns in a relational database). The database then indexes automatically: when a red car is added, its partition adds its ID to the index entry `color:red`.
 
-> **Rolling your own index.** In a pure key-value store you might build a secondary index yourself in application code by mapping values to document IDs. Be very careful: race conditions and partial write failures (some changes saved, others not) can easily leave the index out of sync with the data (see multi-object transactions, Chapter 7).
+> **Rolling your own index.** In a pure key-value store you might build a secondary index yourself in application code by mapping values to document IDs. Be very careful: race conditions (bugs where the result depends on the unlucky timing of two concurrent operations) and partial write failures (some changes saved, others not) can easily leave the index out of sync with the data (see multi-object transactions, Chapter 7).
 
 *Figure 6-4 (redrawn): each partition keeps a primary-key index and its own secondary indexes covering only its own cars, so a search for red cars must scatter to both partitions and gather the results.*
 ```mermaid
@@ -304,7 +306,7 @@ In the book's figure, colors starting **a to r** are in index partition 0 and **
 | Freshness | Updated with the document | Often **asynchronous**; may lag |
 | Examples | MongoDB, Riak, Cassandra, Elasticsearch, SolrCloud, VoltDB | DynamoDB global secondary indexes, Riak search, Oracle data warehouse (choice of local or global) |
 
-**Keeping a global index up to date.** Ideally every write would appear in the index immediately. For a term-partitioned index that would need a **distributed transaction** across all affected index partitions, which not every database supports (Chapters 7 and 9). In practice, global secondary index updates are often **asynchronous**: reading the index right after a write may not show it yet. **Amazon DynamoDB** says its global secondary indexes normally update within **a fraction of a second**, but propagation can take longer during infrastructure faults.
+**Keeping a global index up to date.** Ideally every write would appear in the index immediately. For a term-partitioned index that would need a **distributed transaction** (a set of writes on several machines that must all succeed or all fail together) across all affected index partitions, which not every database supports (Chapters 7 and 9). In practice, global secondary index updates are often **asynchronous** (done in the background after the write is confirmed): reading the index right after a write may not show it yet. **Amazon DynamoDB** says its global secondary indexes normally update within **a fraction of a second**, but propagation (the change spreading to every place it must reach) can take longer during infrastructure faults.
 
 Other users of global term-partitioned indexes: **Riak's search feature**, and the **Oracle data warehouse**, where you can pick between local and global indexing. Chapter 12 returns to implementing term-partitioned secondary indexes.
 
@@ -318,7 +320,7 @@ Things change over time:
 Each requires moving data and requests between nodes. Moving load from one node to another is **rebalancing**. Whatever the partitioning scheme, rebalancing is expected to meet some minimum requirements:
 1. Afterwards, load (storage, reads, writes) is **shared fairly** among nodes.
 2. During it, the database **keeps accepting reads and writes**.
-3. **No more data than necessary** moves, to keep rebalancing fast and limit network and disk I/O.
+3. **No more data than necessary** moves, to keep rebalancing fast and limit network and disk I/O (input/output: data read and written).
 
 ### Strategies for Rebalancing
 
@@ -398,7 +400,7 @@ So key-range databases such as **HBase and RethinkDB** create partitions **dynam
 1. When a partition exceeds a configured size (**10 GB by default in HBase**), it **splits into two**, roughly half the data each.
 2. If heavy deletion makes a partition fall under some threshold, it can **merge** with its neighbouring range.
 3. The book compares this to a **B-tree** at its top level, where full pages are split in two.
-4. Each partition is on one node, and a node can hold many partitions, as with fixed partitioning. After a split, one half can **move to another node** to balance load. In HBase, partition files move via **HDFS**, the underlying distributed filesystem.
+4. Each partition is on one node, and a node can hold many partitions, as with fixed partitioning. After a split, one half can **move to another node** to balance load. In HBase, partition files move via **HDFS** (Hadoop Distributed File System), the underlying distributed filesystem (one that stores files across many machines).
 
 **Advantage:** the number of partitions **adapts to data volume**: few partitions (low overhead) when data is small; with huge data, each partition's size is capped at a configurable maximum.
 
@@ -417,7 +419,7 @@ Compare the approaches:
 - With a fixed node count, partition size grows with the data; adding nodes makes partitions smaller again. Since more data usually means more nodes anyway, partition size stays **fairly stable**.
 - **When a new node joins**, it picks a fixed number of existing partitions **at random**, **splits** each, and takes **one half** of each, leaving the other halves in place.
 - Random choices can make **unfair splits**, but averaged over many partitions (**256 per node by default in Cassandra**) the new node gets a fair share. **Cassandra 3.0** introduced an alternative rebalancing algorithm that avoids unfair splits.
-- Random boundaries require **hash-based partitioning** (boundaries are picked from the hash function's output range). This is the closest match to the **original definition of consistent hashing**. Newer hash functions can do something similar with lower metadata overhead.
+- Random boundaries require **hash-based partitioning** (boundaries are picked from the hash function's output range). This is the closest match to the **original definition of consistent hashing**. Newer hash functions can do something similar with lower metadata (bookkeeping data about where things are) overhead.
 
 | Strategy | Number of partitions | Partition size | Who uses it | Watch out for |
 |---|---|---|---|---|
@@ -428,14 +430,14 @@ Compare the approaches:
 
 ### Operations: Automatic or Manual Rebalancing
 
-Rebalancing ranges from **fully automatic** (the system decides when to move partitions, no admin involved) to **fully manual** (an admin explicitly sets the assignment and it changes only when they reconfigure). In between: **Couchbase, Riak, and Voldemort** generate a **suggested** assignment automatically, but an administrator must **commit** it before it takes effect.
+Rebalancing ranges from **fully automatic** (the system decides when to move partitions, no admin involved) to **fully manual** (an admin explicitly sets the assignment and it changes only when they reconfigure). In between: **Couchbase, Riak, and Voldemort** generate a **suggested** assignment automatically, but an administrator must **commit** (approve and apply) it before it takes effect.
 
 | | Fully automatic | Human in the loop |
 |---|---|---|
 | Convenience | Less routine operational work | Slower |
 | Predictability | Can be unpredictable | Helps avoid operational surprises |
 
-**Why automation can hurt.** Rebalancing is **expensive**: requests are rerouted and lots of data moves. Done carelessly, it can overload the network or nodes and hurt other requests. Worse combined with **automatic failure detection**:
+**Why automation can hurt.** Rebalancing is **expensive**: requests are rerouted and lots of data moves. Done carelessly, it can overload the network or nodes and hurt other requests. Worse combined with **automatic failure detection** (the system deciding by itself that a node has died, usually because it stopped answering in time):
 1. A node is overloaded and temporarily slow.
 2. Other nodes decide it is dead.
 3. They automatically rebalance load away from it.
@@ -445,12 +447,12 @@ So having a **human in the loop** can be good: slower, but safer.
 
 ## Request Routing
 
-With data spread over nodes, how does a client know **which node to contact**? Assignments change as partitions are rebalanced, so something must track them to answer: *to read or write key "foo", which IP address and port do I connect to?*
+With data spread over nodes, how does a client know **which node to contact**? Assignments change as partitions are rebalanced, so something must track them to answer: *to read or write key "foo", which IP address and port do I connect to?* (An IP address identifies a machine on the network; a port number identifies which program on that machine.)
 
 This is an example of **service discovery**, a problem for any networked software, especially highly available software running redundantly on several machines. Many companies have built in-house service discovery tools, and many are open source.
 
 Three high-level approaches:
-1. **Contact any node**, for example through a **round-robin load balancer**. If it owns the partition, it handles the request; otherwise it **forwards** to the right node, gets the reply, and passes it back.
+1. **Contact any node**, for example through a **round-robin load balancer** (a component that hands incoming requests to servers in turn: first, second, third, back to first). If it owns the partition, it handles the request; otherwise it **forwards** to the right node, gets the reply, and passes it back.
 2. **Routing tier**: all requests go first to a routing tier that decides the right node and forwards the request. It handles no requests itself; it is a **partition-aware load balancer**.
 3. **Partition-aware client**: clients know the partitioning and assignment and connect **directly** to the right node.
 
@@ -477,10 +479,10 @@ flowchart TB
 
 **The core difficulty** in all three: how does the routing decision-maker (a node, the routing tier, or the client) **find out** when partitions move to different nodes? All participants must agree, or requests go to the wrong nodes. Distributed consensus protocols exist but are hard to implement correctly (Chapter 9).
 
-**Using a coordination service (ZooKeeper).** Many systems rely on **ZooKeeper** to track cluster metadata:
+**Using a coordination service (ZooKeeper).** Many systems rely on **ZooKeeper** to track cluster metadata (the facts about the cluster itself, such as which node holds what):
 1. Each node **registers** itself in ZooKeeper.
 2. ZooKeeper keeps the **authoritative mapping** of partitions to nodes.
-3. Routing tiers or partition-aware clients **subscribe** to it.
+3. Routing tiers or partition-aware clients **subscribe** to it (ask to be told whenever something changes).
 4. Whenever a partition changes owner or a node is added/removed, ZooKeeper **notifies** the routing tier so it stays current.
 
 *Figure 6-8 (redrawn): the nodes register with ZooKeeper, which holds the authoritative table of key range -> partition -> node -> IP address; the routing tier keeps its copy in sync with ZooKeeper and forwards a client's get "Danube" to node 2.*
@@ -515,17 +517,17 @@ Who does what:
 |---|---|
 | **LinkedIn Espresso** | Uses **Helix** for cluster management (Helix relies on ZooKeeper), with a routing tier as in Figure 6-8 |
 | **HBase, SolrCloud, Kafka** | Use ZooKeeper to track partition assignment |
-| **MongoDB** | Similar architecture, but its own **config server** implementation and **mongos** daemons as the routing tier |
+| **MongoDB** | Similar architecture, but its own **config server** implementation and **mongos** daemons (background server processes) as the routing tier |
 | **Cassandra, Riak** | **Gossip protocol** among nodes spreads cluster-state changes; requests can go to any node, which forwards them (approach 1). More complexity inside the nodes, but no dependency on an external service like ZooKeeper |
 | **Couchbase** | Has no automatic rebalancing, keeping its design simpler; usually configured with a routing tier called **moxi** that learns routing changes from cluster nodes |
 
-**Finding the IP addresses.** Even with a routing tier or random-node approach, clients must find IPs to connect to. These change much less often than partition assignments, so **DNS** is usually good enough.
+**Finding the IP addresses.** Even with a routing tier or random-node approach, clients must find IPs to connect to. These change much less often than partition assignments, so **DNS** (the Domain Name System, which turns names like `db.example.com` into IP addresses) is usually good enough.
 
 ### Parallel Query Execution
 
 So far the focus has been simple queries that read or write **one key** (plus scatter/gather for document-partitioned indexes), which is roughly what most **NoSQL** distributed datastores support.
 
-**Massively parallel processing (MPP)** relational databases, often used for **analytics**, support far richer queries. A typical data warehouse query has several **joins, filters, groupings and aggregations**. The MPP **query optimizer** splits it into **execution stages and partitions**, many of which run **in parallel on different nodes**. Queries that scan large parts of the dataset benefit most.
+**Massively parallel processing (MPP)** relational databases, often used for **analytics**, support far richer queries. A typical data warehouse query has several **joins, filters, groupings and aggregations** (combining tables, dropping rows, bucketing rows by a value, and summarising buckets with sums or counts). The MPP **query optimizer** (the part of the database that plans how to run a query) splits it into **execution stages and partitions**, many of which run **in parallel on different nodes**. Queries that scan large parts of the dataset benefit most.
 
 Fast parallel execution of warehouse queries is a specialised area with much commercial interest given how important analytics is to business. Chapter 10 discusses some techniques.
 
@@ -584,7 +586,7 @@ By design, partitions operate mostly independently, which is what lets a partiti
 2. **Why not just assign records to random nodes?**
    Load would be even, but you would not know where any record lives and would have to query all nodes in parallel for every read.
 
-3. **Scenario: an IoT system keys readings by timestamp in a key-range-partitioned store and one node is overloaded. Why, and what change fixes it?**
+3. **Scenario: an IoT (Internet of Things: networked sensors and devices) system keys readings by timestamp in a key-range-partitioned store and one node is overloaded. Why, and what change fixes it?**
    All current writes fall into the partition for the current time range (e.g. today). Prefix the key with the sensor name so writes spread across partitions; reading many sensors then needs one range query per sensor.
 
 4. **In Cassandra with primary key (user_id, update_timestamp), which queries are efficient?**

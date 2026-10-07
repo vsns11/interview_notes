@@ -3,12 +3,12 @@
 
 ## Overview
 
-**Part I in brief (Foundations of Data Systems).** Chapters 1 to 4 cover ideas that hold for every data system, whether it lives on one machine or across a cluster:
+**Part I in brief (Foundations of Data Systems).** Chapters 1 to 4 cover ideas that hold for every data system, whether it lives on one machine or across a cluster (a group of networked machines acting as one system):
 
 1. **Chapter 1** (this one) sets up vocabulary and a way of thinking: what *reliability*, *scalability* and *maintainability* actually mean, and how to aim for them.
 2. **Chapter 2** compares data models and query languages, which is the most visible difference between databases from a developer's seat.
-3. **Chapter 3** opens up storage engines and how they arrange data on disk; different engines suit different workloads, and the choice can dominate performance.
-4. **Chapter 4** looks at encoding (serialization) formats and how well they cope when requirements change and schemas must evolve.
+3. **Chapter 3** opens up storage engines (the part of a database that physically writes data to disk and reads it back) and how they arrange data on disk; different engines suit different workloads (the mix of reads, writes and queries a system receives), and the choice can dominate performance.
+4. **Chapter 4** looks at encoding (serialization: turning in-memory data into bytes that can be saved or sent) formats and how well they cope when requirements change and schemas (the declared structure of the data: which fields exist and their types) must evolve.
 
 Part II then moves on to problems specific to distributed data.
 
@@ -18,14 +18,14 @@ Part II then moves on to problems specific to distributed data.
 - **Scalability**: have sensible options when load grows.
 - **Maintainability**: let many people keep operating and changing the system productively for years.
 
-**Why it matters.** Most modern apps are *data-intensive*: their pain comes from the volume, complexity, or rate of change of data, not from CPU power. They are assembled from standard parts:
+**Why it matters.** Most modern apps are *data-intensive*: their pain comes from the volume, complexity, or rate of change of data, not from CPU power (the CPU, *central processing unit*, is the chip that executes program instructions). They are assembled from standard parts:
 
 | Need | Building block |
 |---|---|
 | Keep data so it can be found later | Database |
 | Keep the answer to a costly computation so later reads are fast | Cache |
 | Let users search by keyword or filter | Search index |
-| Hand a message to another process to handle asynchronously | Stream processing |
+| Hand a message to another process (a running program) to handle asynchronously (later, without the sender waiting) | Stream processing |
 | Periodically crunch a big pile of accumulated data | Batch processing |
 
 These building blocks are so successful that we barely notice them. But there are many databases, many caching styles, many ways to build search indexes, and so on, each suited to different needs. Picking and combining them well is the real skill.
@@ -83,10 +83,12 @@ These building blocks are so successful that we barely notice them. But there ar
 
 **Why group them anyway?** Two reasons:
 
-1. **The categories are blurring.** Newer tools target a mix of use cases. Redis is a datastore that people also use as a message queue; Apache Kafka is a message queue with durability guarantees similar to a database.
+1. **The categories are blurring.** Newer tools target a mix of use cases. Redis is a datastore (an in-memory key-value store) that people also use as a message queue (a buffer that holds messages until a consumer picks them up); Apache Kafka is a message queue with durability guarantees (once written, data survives crashes) similar to a database.
 2. **One tool is rarely enough.** Many applications have such wide-ranging needs that the work is split into tasks, each handled well by a specific tool, and *your application code* stitches the tools together.
 
-**Example.** Suppose your app has its own caching layer (for example Memcached) and a separate full-text search server (Elasticsearch or Solr) next to the main database. Usually it is the application's job to keep the cache and the search index in step with the database.
+**Example.** Suppose your app has its own caching layer (for example Memcached, a simple in-memory cache) and a separate full-text search server (one that finds documents by any words they contain; Elasticsearch or Solr) next to the main database. Usually it is the application's job to keep the cache and the search index in step with the database.
+
+> **Key term — cache, hit, miss, invalidation:** a **cache** is a fast copy of data that also lives somewhere slower and authoritative (here, the database). A read that finds what it wants in the cache is a **cache hit**; one that does not, and must go to the database, is a **cache miss**. When the underlying data changes, the stale cached copy must be **invalidated** (thrown away) or updated, otherwise readers see old values. Getting this right is famously tricky. See [System Design Fundamentals](../00a-system-design-fundamentals/README.md).
 
 *Figure 1-1 (redrawn): one possible architecture combining several data components behind an application.*
 
@@ -108,7 +110,7 @@ Clients only see the service's API (application programming interface). Behind i
 
 **Questions a designer must face:** How do we keep data correct and complete when parts break? How do we give steady performance when some parts are degraded? How do we handle growing load? What should the API look like?
 
-Many situational factors also shape a design: team skills, legacy dependencies, delivery deadline, the organisation's appetite for risk, regulations. The book focuses on three concerns that matter for nearly all software:
+Many situational factors also shape a design: team skills, legacy dependencies (older systems you must keep working with), delivery deadline, the organisation's appetite for risk, regulations. The book focuses on three concerns that matter for nearly all software:
 
 | Concern | Short definition |
 |---|---|
@@ -145,14 +147,14 @@ Things that can go wrong are **faults**; systems that anticipate and cope with t
 
 ### Hardware Faults
 
-**What they are.** Disks crash, RAM goes bad, the power grid blacks out, someone unplugs the wrong network cable. In a large datacenter these happen constantly.
+**What they are.** Disks crash, RAM (the computer's fast working memory, which loses its contents when power is lost) goes bad, the power grid blacks out, someone unplugs the wrong network cable. In a large datacenter (a building full of servers, power and networking equipment) these happen constantly.
 
 **The numbers.** Hard disks have an MTTF of roughly **10 to 50 years**. With **10,000 disks** in a cluster, you should expect around **one disk to die every day**.
 
 **First response: hardware redundancy.**
 
 1. Put disks in a **RAID** configuration.
-2. Give servers **dual power supplies** and **hot-swappable CPUs**.
+2. Give servers **dual power supplies** and **hot-swappable CPUs** (parts that can be replaced while the machine keeps running).
 3. Give datacenters **batteries and diesel generators** for backup power.
 4. When one part dies, the redundant part takes over while the broken one is replaced.
 
@@ -160,21 +162,21 @@ It cannot fully stop hardware trouble from causing failures, yet it is a well-un
 
 **Why that stopped being enough.**
 
-- Until recently, redundant components made total loss of a single machine rare, and restoring a backup onto a new machine was usually quick enough. Only a few apps truly needed multiple machines for high availability.
+- Until recently, redundant components made total loss of a single machine rare, and restoring a backup (a saved copy of the data) onto a new machine was usually quick enough. Only a few apps truly needed multiple machines for high availability (staying usable nearly all the time, even when parts break).
 - Now data volumes and compute demands mean more apps use **many machines**, which raises the total rate of hardware faults proportionally.
-- On some cloud platforms such as **AWS**, virtual machine instances can vanish without warning, because the platforms favour **flexibility and elasticity** over single-machine reliability.
+- On some cloud platforms such as **AWS** (Amazon Web Services, which rents computing over the internet), virtual machine instances (a *virtual machine* is a software-simulated computer sharing a physical server with others; each running one is an *instance*) can vanish without warning, because the platforms favour **flexibility and elasticity** over single-machine reliability.
 
-**The shift.** Systems increasingly use **software fault tolerance** to survive losing a *whole machine*, instead of or in addition to hardware redundancy. Bonus: operations get easier. A single-server system needs planned downtime to reboot (for example for OS security patches), whereas a system that tolerates node loss can be patched **node by node** with no overall downtime: a **rolling upgrade** (see Chapter 4).
+**The shift.** Systems increasingly use **software fault tolerance** to survive losing a *whole machine*, instead of or in addition to hardware redundancy. Bonus: operations get easier. A single-server system needs planned downtime to reboot (for example for OS security patches, i.e. fixes to the operating system such as Linux or Windows), whereas a system that tolerates node loss can be patched **node by node** with no overall downtime: a **rolling upgrade** (see Chapter 4).
 
 ### Software Errors
 
-**How they differ from hardware faults.** Hardware faults are usually treated as **random and independent**: one disk dying does not make another die (apart from weak correlations such as rack temperature). Many components failing together is unlikely.
+**How they differ from hardware faults.** Hardware faults are usually treated as **random and independent**: one disk dying does not make another die (apart from weak correlations such as rack temperature; a *rack* is the tall metal frame holding a stack of servers). Many components failing together is unlikely.
 
 **Systematic errors** are different: they are harder to predict and are **correlated across nodes**, so they cause far more system failures than independent hardware faults. Examples:
 
-- A bug that crashes *every* instance of an app server when it sees a particular bad input. Real case: the **leap second on June 30, 2012**, which made many applications hang at the same moment because of a **Linux kernel** bug.
-- A runaway process that exhausts something shared, such as memory, CPU time, network bandwidth, or disk space.
-- A dependency that slows down, stops responding, or starts returning corrupted data.
+- A bug that crashes *every* instance of an app server when it sees a particular bad input. Real case: the **leap second on June 30, 2012** (an extra second occasionally added to clocks to keep them aligned with Earth's rotation), which made many applications hang at the same moment because of a **Linux kernel** bug (the *kernel* is the core of the operating system that manages hardware, memory and processes).
+- A runaway process that exhausts something shared, such as memory, CPU time, network bandwidth (how much data the network can carry per second), or disk space.
+- A dependency (another service or library your system relies on) that slows down, stops responding, or starts returning corrupted data.
 - **Cascading failures**: a minor fault in one part causes a fault in a second part, which in turn causes further faults.
 
 **Why they hide.** Such bugs can sit quietly for ages until some unusual combination of circumstances sets them off. The trigger exposes an assumption the software made about its environment that was *usually* true and then, one day, was not.
@@ -185,21 +187,21 @@ It cannot fully stop hardware trouble from causing failures, yet it is a well-un
 2. Test thoroughly.
 3. Isolate processes.
 4. Let processes crash and restart.
-5. Measure, monitor and analyse behaviour in production.
+5. Measure, monitor and analyse behaviour in production (the live system that real users are using).
 6. If the system promises some guarantee, have it **check itself continuously** and alert on discrepancies. Example: a message queue can check that messages in equals messages out.
 
 ### Human Errors
 
-**The problem.** Humans design, build and operate systems, and even well-meaning humans are unreliable. One study of large internet services found **operator configuration errors were the leading cause of outages**, while hardware faults (servers or network) were involved in just **10–25%** of outages.
+**The problem.** Humans design, build and operate systems, and even well-meaning humans are unreliable. One study of large internet services found **operator configuration errors were the leading cause of outages** (periods when a service is unavailable), while hardware faults (servers or network) were involved in just **10–25%** of outages.
 
 **How the best systems cope** (they combine several approaches):
 
 | Approach | What it means in practice |
 |---|---|
 | Design to minimise error opportunities | Good abstractions, APIs and admin interfaces make the right thing easy and the wrong thing hard. But if they are too restrictive, people work around them, so balance is needed. |
-| Decouple mistake-prone places from failure-causing places | Provide full-featured **non-production sandbox** environments with real data where people can experiment without affecting real users. |
-| Test at every level | Unit tests, whole-system integration tests, manual tests. Automated tests are especially good at covering rare corner cases. |
-| Make recovery quick and easy | Fast rollback of configuration changes, **gradual rollouts** of new code so a bug hits only a few users, and tools to **recompute data** if an old computation was wrong. |
+| Decouple mistake-prone places from failure-causing places | Provide full-featured **non-production sandbox** environments (isolated copies of the system where mistakes cannot harm anyone) with real data where people can experiment without affecting real users. |
+| Test at every level | Unit tests (checking one small piece of code alone), whole-system integration tests (checking pieces working together), manual tests. Automated tests are especially good at covering rare corner cases (unusual inputs or situations). |
+| Make recovery quick and easy | Fast rollback (undo back to the previous version) of configuration changes, **gradual rollouts** of new code so a bug hits only a few users, and tools to **recompute data** if an old computation was wrong. |
 | Detailed, clear monitoring | Performance metrics and error rates, called **telemetry** in other engineering fields (a rocket in flight depends on it). Monitoring gives early warnings, checks assumptions, and helps diagnosis. |
 | Good management and training | Important but outside the book's scope. |
 
@@ -208,14 +210,14 @@ It cannot fully stop hardware trouble from causing failures, yet it is a well-un
 Reliability is not only for nuclear plants or air traffic control. Ordinary apps must be reliable too:
 
 - Bugs in business software cost productivity, and wrong reported figures can bring **legal risk**.
-- Outages of **ecommerce** sites cost revenue and reputation.
+- Outages of **ecommerce** (online shopping) sites cost revenue and reputation.
 - Even "noncritical" apps carry responsibility. Picture a parent keeping every photo and video of their children in your photo app. How would they feel if the database were corrupted, and would they even know how to restore a backup?
 
 Sometimes we knowingly trade reliability away, to lower **development cost** (a prototype for an unproven market) or **operational cost** (a service with razor-thin margins). The book's point: do it consciously, knowing where you are cutting corners.
 
 ## Scalability
 
-**What it is.** A system that works today may not work tomorrow. A common reason is **increased load**: perhaps concurrent users grow from 10,000 to 100,000, or from 1 million to 10 million, or data volumes grow a lot.
+**What it is.** A system that works today may not work tomorrow. A common reason is **increased load** (the amount of work being asked of the system): perhaps concurrent users (people using it at the same moment) grow from 10,000 to 100,000, or from 1 million to 10 million, or data volumes grow a lot.
 
 **Scalability** is the word for how well a system can handle growing load.
 
@@ -226,7 +228,7 @@ Sometimes we knowingly trade reliability away, to lower **development cost** (a 
 
 ### Describing Load
 
-**What it is.** Before asking "what if load doubles?" you must describe today's load with a few numbers, the **load parameters**. Which ones depend on your architecture: requests per second to a web server, read/write ratio in a database, simultaneously active users in a chat room, cache hit rate, or something else. Sometimes the average matters; sometimes a few extreme cases are the real bottleneck.
+**What it is.** Before asking "what if load doubles?" you must describe today's load with a few numbers, the **load parameters**. Which ones depend on your architecture: requests per second to a web server (the program that receives HTTP requests from browsers and apps), read/write ratio in a database (how many lookups per update), simultaneously active users in a chat room, cache hit rate (the fraction of reads answered from the cache), or something else. Sometimes the average matters; sometimes a few extreme cases are the real bottleneck (the one part that limits the speed of the whole).
 
 **Worked example: Twitter (data from November 2012).** Two main operations:
 
@@ -237,7 +239,7 @@ Sometimes we knowingly trade reliability away, to lower **development cost** (a 
 
 Handling 12,000 writes per second alone would be fairly easy. The real challenge is **fan-out**: each user follows many people and is followed by many people.
 
-> **Aside: where "fan-out" comes from.** It is borrowed from electronics, where it counts how many logic gate inputs hang off one gate's output (which must supply enough current for all of them). In transaction processing it means how many requests to other services one incoming request causes.
+> **Aside: where "fan-out" comes from.** It is borrowed from electronics, where it counts how many logic gate (a tiny circuit computing AND, OR, NOT and so on) inputs hang off one gate's output (which must supply enough current for all of them). In transaction processing (systems that handle many small, interactive reads and writes, such as orders or payments) it means how many requests to other services one incoming request causes.
 
 **Two ways to implement it:**
 
@@ -247,7 +249,7 @@ Handling 12,000 writes per second alone would be fairly easy. The real challenge
 2. Fetch all tweets from each of those users.
 3. Merge them, sorted by time.
 
-*Figure 1-2 (redrawn): a simple relational schema for a Twitter-style home timeline.*
+*Figure 1-2 (redrawn): a simple relational schema (the set of tables, their columns and how they link) for a Twitter-style home timeline.*
 
 ```mermaid
 erDiagram
@@ -271,7 +273,7 @@ erDiagram
     }
 ```
 
-In SQL, approach 1 is one join-heavy query. Here is an equivalent idea for a different app, a recipe site where you "subscribe" to chefs and see their latest recipes:
+In SQL, approach 1 is one join-heavy query (a *join* combines rows from two tables that share a value, such as a user id). Here is an equivalent idea for a different app, a recipe site where you "subscribe" to chefs and see their latest recipes:
 
 ```sql
 SELECT recipes.*, chefs.display_name      -- the recipe plus who wrote it
@@ -306,7 +308,7 @@ flowchart LR
     E3["Recipient 3 gets home timeline"] --> D3
 ```
 
-**Which is better?** Twitter started with approach 1, but the system could not keep up with timeline reads, so it switched to approach 2. It works better because tweets are published at a rate almost **two orders of magnitude lower** than timelines are read, so it is worth shifting effort to the write path to make the read path cheap.
+**Which is better?** Twitter started with approach 1, but the system could not keep up with timeline reads, so it switched to approach 2. It works better because tweets are published at a rate almost **two orders of magnitude lower** (an *order of magnitude* is a factor of 10, so roughly 100 times lower) than timelines are read, so it is worth shifting effort to the write path to make the read path cheap.
 
 **The downside of approach 2.** Posting becomes expensive. An average tweet reaches about **75 followers**, turning **4.6k tweets/sec into 345k cache writes/sec**. But the average hides huge variation: some users have **over 30 million followers**, so one tweet may trigger over 30 million writes. Twitter aims to deliver tweets within **five seconds**, which makes this hard.
 
@@ -331,14 +333,14 @@ Both need performance numbers.
 
 **Throughput vs response time.**
 
-- In **batch** systems (Hadoop is the book's example), the usual concern is **throughput**: records processed per second, or total time for a job on a dataset of a given size.
-- In **online** systems, **response time** usually matters most: the time from when a client sends a request until the reply arrives.
+- In **batch** systems (Hadoop, an open-source framework for processing huge datasets across a cluster, is the book's example), the usual concern is **throughput**: records processed per second, or total time for a job on a dataset of a given size.
+- In **online** systems (ones where a user or client is waiting for each answer), **response time** usually matters most: the time from when a client sends a request until the reply arrives.
 
 > **Aside: batch running time.** Ideally a batch job takes dataset size divided by throughput. In practice it takes longer because of **skew** (data not evenly spread among workers) and waiting for the slowest task to finish.
 
 > **Latency vs response time.** People often treat them as synonyms, but they differ. **Response time** is what the client experiences: the actual processing time (**service time**) plus network delays and queueing delays. **Latency** is only the time a request spends *waiting* to be handled, when it is latent.
 
-**Response time is a distribution, not a number.** Sending the same request repeatedly still gives slightly different times, and a real system with varied requests varies a lot. Some slow requests are genuinely more expensive (more data). But even identical requests vary because of random extra delays: switching the CPU to a background process (context switch), a dropped packet that TCP must retransmit, a pause for garbage collection, a page fault that forces a disk read, even mechanical vibration in the server rack, and plenty of other causes.
+**Response time is a distribution, not a number.** Sending the same request repeatedly still gives slightly different times, and a real system with varied requests varies a lot. Some slow requests are genuinely more expensive (more data). But even identical requests vary because of random extra delays: switching the CPU to a background process (context switch), a dropped packet (one small unit of network data) that TCP (the protocol that guarantees delivery by resending lost data) must retransmit, a pause for garbage collection (the language runtime stopping to reclaim memory no longer in use), a page fault (the program touches memory that has been moved to disk, so it must be loaded back first) that forces a disk read, even mechanical vibration in the server rack, and plenty of other causes.
 
 *Figure 1-4 (described):* a bar chart of response times for 100 sample requests. Most bars are short, a handful of outliers are much taller, and the chart marks the mean, the median, and the 95th and 99th percentiles, showing how a single average hides the spread while the high percentiles reveal how bad the outliers are.
 
@@ -358,17 +360,17 @@ Both need performance numbers.
 - Amazon observed that **100 ms** more response time cuts sales by **1%**; others report a **1-second** slowdown lowers a customer satisfaction metric by **16%**.
 - But optimising the **99.99th percentile** (1 in 10,000) was judged too costly for too little gain at Amazon. Very high percentiles are dominated by random events you cannot control, and returns diminish.
 
-**SLOs and SLAs.** Percentiles are commonly written into **SLOs (service level objectives)** and **SLAs (service level agreements)**, the contracts stating how fast and how available a service is expected to be. Example SLA: the service counts as "up" if its median response time is below **200 ms** and its p99 below **1 s** (slower is as bad as down), and it must meet that bar for no less than **99.9%** of the time. Clients know what to expect and can claim refunds if it is missed.
+**SLOs and SLAs.** Percentiles are commonly written into **SLOs (service level objectives)** and **SLAs (service level agreements)**, the internal targets and the formal contracts stating how fast and how available a service is expected to be. Example SLA: the service counts as "up" if its median response time is below **200 ms** and its p99 below **1 s** (slower is as bad as down), and it must meet that bar for no less than **99.9%** of the time. Clients know what to expect and can claim refunds if it is missed.
 
-**Queueing delays and head-of-line blocking.** A server can only work on a few things at once (limited by, for example, CPU cores). A few slow requests can hold up everything queued behind them: **head-of-line blocking**. The later requests may be quick to process, yet the client sees a slow response because of waiting. Therefore **measure response time on the client side**.
+**Queueing delays and head-of-line blocking.** A server can only work on a few things at once (limited by, for example, CPU cores, the independent processing units inside a chip). Requests that arrive while it is busy wait in a **queue** (a waiting line, served in order). A few slow requests can hold up everything queued behind them: **head-of-line blocking**. The later requests may be quick to process, yet the client sees a slow response because of waiting. Therefore **measure response time on the client side**.
 
-**Load-testing pitfall.** When generating artificial load, the test client must keep sending requests **regardless of response time**. If it waits for each reply before sending the next, queues stay artificially short and the results are skewed.
+**Load-testing pitfall.** When generating artificial load (load testing: deliberately sending lots of fake traffic to see how a system copes), the test client must keep sending requests **regardless of response time**. If it waits for each reply before sending the next, queues stay artificially short and the results are skewed.
 
 > **Percentiles in practice (sidebar).**
 > - **Tail latency amplification:** when one end-user request calls several backends (even in parallel), it must wait for the *slowest* call. One slow call makes the whole request slow. So even if only a small fraction of backend calls are slow, a larger fraction of user requests end up slow.
-> - **Computing percentiles on dashboards:** e.g. keep a rolling window of the last 10 minutes of response times and, every minute, compute the median and other percentiles and plot them.
-> - The naive way keeps every response time in the window and sorts the list every minute. Cheaper probabilistic algorithms estimate percentiles closely while using very little CPU and memory: **forward decay**, **t-digest**, **HdrHistogram**.
-> - **Never average percentiles** (for example to lower time resolution or merge several machines). It is mathematically meaningless. To combine response-time data correctly, you **add up the histograms**.
+> - **Computing percentiles on dashboards** (screens of live graphs about a system's health): e.g. keep a rolling window (a time span that slides forward, always covering the most recent period) of the last 10 minutes of response times and, every minute, compute the median and other percentiles and plot them.
+> - The naive way keeps every response time in the window and sorts the list every minute. Cheaper probabilistic algorithms (methods that trade a small, bounded error for big savings) estimate percentiles closely while using very little CPU and memory: **forward decay**, **t-digest**, **HdrHistogram**.
+> - **Never average percentiles** (for example to lower time resolution or merge several machines). It is mathematically meaningless. To combine response-time data correctly, you **add up the histograms** (a histogram counts how many measurements fell into each range of values, e.g. 0–10 ms, 10–20 ms).
 
 *Figure 1-5 (redrawn): a web application fans one end-user request out to seven backends (92, 76, 103, 143, 86, 487, 133 ms); the single 487 ms call sets the time for the whole request.*
 
@@ -418,23 +420,23 @@ In practice good architectures mix both pragmatically. For example, a few fairly
 **Elastic vs manual scaling.**
 
 - **Elastic** systems add resources automatically when load rises. Useful when load is highly unpredictable.
-- **Manually scaled** systems rely on a human to analyse capacity and add machines. Simpler, with fewer operational surprises (see "Rebalancing Partitions", Chapter 6).
+- **Manually scaled** systems rely on a human to analyse capacity (how much load the current machines can handle) and add machines. Simpler, with fewer operational surprises (see "Rebalancing Partitions", Chapter 6).
 
 **Stateless vs stateful.** Spreading **stateless** services over many machines is fairly easy. Taking a **stateful** data system from one node to many adds a lot of complexity. So conventional wisdom until recently was: **keep your database on one node (scale up)** until cost or high-availability needs force you to distribute it. As distributed tools and abstractions improve, this may change, and distributed data systems might become the default even for modest data or traffic. The rest of the book examines many distributed data systems for scalability, ease of use and maintainability.
 
-**No magic scaling sauce.** Large-scale architectures are usually very specific to the application; there is no generic, one-size-fits-all scalable design. The problem might be read volume, write volume, data volume, data complexity, response time needs, access patterns, or (usually) a mix of all of these and more.
+**No magic scaling sauce.** Large-scale architectures are usually very specific to the application; there is no generic, one-size-fits-all scalable design. The problem might be read volume, write volume, data volume, data complexity, response time needs, access patterns, or (usually) a mix of all of these and more. (*Access patterns* means which data is read or written, how often, and in what shape.)
 
 **Example of why.** A system for **100,000 requests/sec of 1 kB each** looks very different from one for **3 requests/minute of 2 GB each**, even though both move the same amount of data per second.
 
-**Assumptions matter.** A well-scaling architecture is built on assumptions about which operations are common and which are rare (the load parameters). If those assumptions are wrong, scaling work is wasted at best and harmful at worst. In an **early-stage startup or unproven product**, fast iteration on features usually matters more than scaling for imagined future load.
+**Assumptions matter.** A well-scaling architecture is built on assumptions about which operations are common and which are rare (the load parameters). If those assumptions are wrong, scaling work is wasted at best and harmful at worst. In an **early-stage startup or unproven product**, fast iteration (shipping small changes quickly and learning from them) on features usually matters more than scaling for imagined future load.
 
 Still, even application-specific scalable designs tend to be assembled from **general-purpose building blocks in recurring patterns**, and those blocks and patterns are what the book teaches.
 
 ## Maintainability
 
-**Why it matters.** Most of the cost of software comes **after** initial development: fixing bugs, keeping systems running, investigating failures, moving to new platforms, adapting to new use cases, paying back technical debt, and adding features.
+**Why it matters.** Most of the cost of software comes **after** initial development: fixing bugs, keeping systems running, investigating failures, moving to new platforms, adapting to new use cases, paying back technical debt (shortcuts taken earlier that make later changes harder, like a loan that accrues interest), and adding features.
 
-Many engineers dislike maintaining **legacy systems** (fixing others' mistakes, outdated platforms, systems stretched to do things they were not designed for). Every legacy system is painful in its own way, so general advice is hard. What we *can* do is design so that maintenance hurts less, and avoid creating legacy software ourselves.
+Many engineers dislike maintaining **legacy systems** (old systems still in use, often built by people who have left; fixing others' mistakes, outdated platforms, systems stretched to do things they were not designed for). Every legacy system is painful in its own way, so general advice is hard. What we *can* do is design so that maintenance hurts less, and avoid creating legacy software ourselves.
 
 Three design principles:
 
@@ -456,8 +458,8 @@ One often-quoted view: a strong operations team can frequently compensate for we
 - Tracks down causes of problems such as failures or degraded performance.
 - Keeps platforms and software current, security patches included.
 - Understands how systems affect each other, so a risky change is caught before damage.
-- Anticipates future problems (for example **capacity planning**) and solves them early.
-- Establishes good practices and tools for deployment and configuration management.
+- Anticipates future problems (for example **capacity planning**: forecasting how many machines, disks and so on will be needed) and solves them early.
+- Establishes good practices and tools for deployment (putting new code into production) and configuration management (keeping settings across many machines correct and consistent).
 - Performs complex maintenance, such as migrating an application between platforms.
 - Keeps the system secure as configuration changes.
 - Defines processes that make operations predictable and production stable.
@@ -477,7 +479,7 @@ One often-quoted view: a strong operations team can frequently compensate for we
 
 **The problem.** Small projects can have beautifully simple code, but big projects tend to become complex and hard to understand. Complexity slows everyone down and raises maintenance cost. A project stuck in complexity is called a **big ball of mud**.
 
-**Symptoms of complexity:** a state space that explodes, modules coupled too tightly, dependencies in a tangle, names and terms used inconsistently, performance hacks, special cases to work around problems elsewhere, and more.
+**Symptoms of complexity:** a state space (the set of all situations the system can be in) that explodes, modules coupled too tightly (so changing one forces changes in others), dependencies in a tangle, names and terms used inconsistently, performance hacks, special cases to work around problems elsewhere, and more.
 
 **Why it hurts.** Budgets and schedules overrun. Changes are riskier: when a system is hard to reason about, hidden assumptions, unintended consequences and surprising interactions slip by. Reducing complexity greatly improves maintainability, so **simplicity should be a key goal**.
 
@@ -487,8 +489,8 @@ One often-quoted view: a strong operations team can frequently compensate for we
 
 Examples:
 
-- **High-level programming languages** hide machine code, CPU registers and syscalls. The machine code is still there; you just do not deal with it directly.
-- **SQL** shields you from intricate data structures on disk and in memory, from other clients' concurrent requests, and from inconsistencies left by crashes.
+- **High-level programming languages** hide machine code (the raw instructions a CPU executes), CPU registers (tiny storage slots inside the CPU) and syscalls (requests a program makes to the operating system, such as "open this file"). The machine code is still there; you just do not deal with it directly.
+- **SQL** shields you from intricate data structures on disk and in memory, from other clients' concurrent requests (requests running at the same time), and from inconsistencies left by crashes.
 
 **The catch.** Good abstractions are hard to find. In distributed systems there are many good algorithms, but it is much less clear how to package them into abstractions that keep complexity manageable. The book keeps looking for abstractions that turn parts of large systems into well-defined, reusable components.
 
@@ -496,7 +498,7 @@ Examples:
 
 Requirements almost never stay fixed. You learn new facts, new use cases appear, business priorities shift, users ask for features, new platforms replace old ones, laws and regulations change, and growth forces architectural changes.
 
-- **Agile** working patterns give an organisational framework for change, and the Agile community contributed technical practices like **test-driven development (TDD)** and **refactoring**.
+- **Agile** working patterns (short cycles of building, showing and adjusting, rather than one big up-front plan) give an organisational framework for change, and the Agile community contributed technical practices like **test-driven development (TDD)** (writing a failing test first, then the code that makes it pass) and **refactoring** (restructuring code without changing what it does).
 - Most of those discussions are small-scale (a couple of source files in one app). This book looks for agility at the level of a **whole data system**, possibly many applications and services. Example question: how would you "refactor" Twitter's timeline architecture from approach 1 to approach 2?
 - How easily a data system can be changed depends heavily on its **simplicity and abstractions**: simple, understandable systems are easier to modify.
 
@@ -504,7 +506,7 @@ Because this system-level agility is so important, the book gives it its own nam
 
 ## Summary
 
-- An application must meet **functional requirements** (what it does: store, retrieve, search, process data) and **nonfunctional requirements** (general properties like security, reliability, compliance, scalability, compatibility, maintainability). This chapter focused on three nonfunctional ones.
+- An application must meet **functional requirements** (what it does: store, retrieve, search, process data) and **nonfunctional requirements** (general properties like security, reliability, compliance (meeting laws and regulations), scalability, compatibility, maintainability). This chapter focused on three nonfunctional ones.
 - **Reliability** = working correctly even when faults happen. Faults come from **hardware** (usually random and uncorrelated), **software** (bugs are usually systematic and hard to handle), and **humans** (who will make mistakes). Fault-tolerance techniques can hide some kinds of faults from users.
 - **Scalability** = having strategies to keep performance good as load grows. To discuss it, describe **load** quantitatively (Twitter's home timeline and fan-out) and **performance** quantitatively (response time percentiles). A scalable system lets you add capacity to stay reliable under high load.
 - **Maintainability** is about making life better for the engineers and operators who work on the system. Good abstractions cut complexity and make the system simpler to modify and adapt to new use cases; good operability means clear visibility into health and effective ways to manage it.

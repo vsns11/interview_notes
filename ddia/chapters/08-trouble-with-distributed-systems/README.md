@@ -5,9 +5,9 @@
 
 **The question this chapter answers:** once your software runs on many machines connected by a network, what exactly can go wrong, what can you rely on, and what can you *never* be sure of?
 
-Earlier chapters already dealt with faults: replica failover and replication lag (Chapter 5) and concurrency control in transactions (Chapter 7). The book now says those chapters were still *too optimistic*. This chapter turns pessimism up to the maximum and adopts a Murphy's-law stance: **whatever can fail, will fail** — which, the book notes, experienced operators consider a reasonable assumption.
+Earlier chapters already dealt with faults: replica failover (switching to a backup copy of the data when the main one dies) and replication lag (copies falling a little behind the original) (Chapter 5), and concurrency control in transactions (rules that stop simultaneous operations from trampling each other) (Chapter 7). The book now says those chapters were still *too optimistic*. This chapter turns pessimism up to the maximum and adopts a Murphy's-law stance: **whatever can fail, will fail** — which, the book notes, experienced operators consider a reasonable assumption.
 
-> **Footnote:** the one exception: the chapter assumes faults are **non-Byzantine** (nodes may fail but do not lie). Byzantine faults are discussed near the end.
+> **Footnote:** the one exception: the chapter assumes faults are **non-Byzantine** (nodes may fail but do not lie). A **node** is simply one machine (or one running process) taking part in the system. Byzantine faults are discussed near the end.
 
 Working across many computers is *fundamentally* different from writing software for one computer, mainly because there are so many new ways for things to fail. The chapter is deliberately gloomy; it surveys:
 
@@ -35,7 +35,7 @@ The chapter's epigraph is a joke by Kyle Kingsbury (2013) that rewrites a pop ly
 | Checkpoint | Saving the state of a long computation to durable storage so it can restart from there. |
 | Commodity machines | Ordinary, cheap servers — cheaper per unit of performance but they fail more often. |
 | RDMA | Remote direct memory access — one machine reading another's memory directly; used in supercomputers. |
-| Clos topology | A datacenter network layout that gives high bisection bandwidth. |
+| Clos topology | A datacenter network layout that gives high bisection bandwidth (lots of capacity even when every machine on one half talks to the other half at once). |
 | Rolling upgrade | Restarting nodes one at a time to upgrade software without downtime. |
 | Error-correcting codes | Encoding that lets data survive a channel that occasionally flips bits. |
 | IP / TCP | IP delivers packets unreliably; TCP builds a reliable, ordered stream on top of it. |
@@ -116,7 +116,7 @@ The chapter's epigraph is a joke by Kyle Kingsbury (2013) that rewrites a pop ly
 
 ## Faults and Partial Failures
 
-*On a single computer.* A program on one machine usually behaves predictably: it works or it does not. When a computer seems to be "having a bad day" (often fixed by a reboot), that is mostly bad software. There is no fundamental reason for flakiness: with working hardware, the same operation always gives the same result — it is **deterministic**. If the hardware fails (memory corruption, a loose connector), the typical result is a **total** failure — kernel panic, "blue screen of death", failure to boot. A good single computer is either fully working or fully broken, not in between.
+*On a single computer.* A program on one machine usually behaves predictably: it works or it does not. When a computer seems to be "having a bad day" (often fixed by a reboot), that is mostly bad software. There is no fundamental reason for flakiness: with working hardware, the same operation always gives the same result — it is **deterministic**. If the hardware fails (memory corruption, a loose connector), the typical result is a **total** failure — kernel panic (the operating system's core detecting an unrecoverable error and halting the machine), "blue screen of death", failure to boot. A good single computer is either fully working or fully broken, not in between.
 
 *This is intentional.* Computers are designed to **crash rather than return a wrong answer**, since wrong answers are confusing and hard to handle. They hide messy physics behind an **idealised system model** that looks mathematically perfect: every CPU instruction behaves identically each time, and data written to memory or disk stays intact. This goal of always-correct computation dates back to the **very first digital computer**.
 
@@ -133,7 +133,7 @@ There is a spectrum of philosophies for building large-scale computing:
 | Typical use | Compute-heavy science: **weather forecasting**, **molecular dynamics** (simulating atoms and molecules) | Online internet services |
 | Hardware | **Specialised**, each node quite reliable; communicate via **shared memory** and **RDMA** | **Commodity** machines: same performance for less money (economies of scale), but **higher failure rates** |
 | Network | Special layouts like **multi-dimensional meshes** and **toruses**, which suit known HPC communication patterns | **IP and Ethernet**, arranged in **Clos topologies** for high bisection bandwidth |
-| Other traits | Nodes assumed close together | Loosely defined; **multi-tenant datacenters**, **elastic/on-demand** resources, **metered billing** |
+| Other traits | Nodes assumed close together | Loosely defined; **multi-tenant datacenters** (many customers share hardware), **elastic/on-demand** resources (rent more or fewer machines at any time), **metered billing** (pay for what you use) |
 
 **Traditional enterprise datacenters** sit somewhere in between.
 
@@ -146,11 +146,11 @@ So a supercomputer behaves more like a **single computer** than a distributed sy
 
 *Why internet services must be different.* The book focuses on systems for internet services, which differ from supercomputers in several ways:
 
-- **Online, low latency, always.** Taking the service down to fix a node is unacceptable. By contrast, an offline (batch) job such as a weather simulation can be halted and rerun with little harm.
+- **Online, low latency, always.** (**Latency** = how long one request takes from start to finish; see [System Design Fundamentals](../00a-system-design-fundamentals/README.md).) Taking the service down to fix a node is unacceptable. By contrast, an offline (batch) job such as a weather simulation can be halted and rerun with little harm.
 - **Commodity hardware** fails more often than specialised supercomputer hardware.
 - **Different networks** (IP/Ethernet in Clos topologies vs. meshes/toruses).
 - **Something is always broken.** The bigger the system, the likelier some component is faulty. Once you have **thousands of nodes**, you should simply expect that some part is broken at any given moment. If the error handling is just "give up", a large system may spend most of its time recovering instead of working.
-- **Fault tolerance helps operations.** If the system tolerates failed nodes, you can perform **rolling upgrades** (Chapter 4): nodes restart in turn while the service keeps running. In the cloud, if a VM performs badly you can kill it and request another, hoping it is faster.
+- **Fault tolerance helps operations.** If the system tolerates failed nodes, you can perform **rolling upgrades** (Chapter 4): nodes restart in turn while the service keeps running. In the cloud, if a VM (**virtual machine** — a software-simulated computer, many of which can share one physical server) performs badly you can kill it and request another, hoping it is faster.
 - **Geographic distribution.** To keep data near users for lower latency, communication often crosses the **internet**, which is slower and less reliable than local networks. Supercomputers assume all nodes are close together.
 
 *Consequence.* To make distributed systems work, you must **accept partial failure** and build **fault tolerance into the software** — building a **reliable system from unreliable components**. Perfect reliability is impossible (Chapter 1), so you also need to understand the limits of what you can promise.
@@ -176,7 +176,7 @@ It is unwise to assume faults are rare and hope for the best. Consider a **wide 
 1. The **request was lost** (maybe someone unplugged a cable).
 2. The request is **stuck in a queue** and will arrive later (network or recipient overloaded).
 3. The **remote node failed** (crashed or powered down).
-4. The remote node **temporarily stopped responding** (e.g., a long **garbage collection pause**) but will resume later.
+4. The remote node **temporarily stopped responding** (e.g., a long **garbage collection pause** — the language runtime freezing the program while it reclaims memory that is no longer used) but will resume later.
 5. The remote node **processed the request, but the response was lost** (e.g., a misconfigured switch).
 6. The remote node processed it, but the **response is delayed** (network or your own machine overloaded).
 
@@ -206,17 +206,17 @@ After decades of building networks, you might expect them to be reliable by now.
 
 *Evidence (systematic studies and many anecdotes):* network problems are surprisingly common, even in a datacenter run by a single company.
 - A study of one **medium-sized datacenter** counted roughly **12 network faults a month**: **half** disconnected a **single machine**, **half** disconnected an **entire rack**.
-- A different study looked at how often **load balancers**, **aggregation switches** and **top-of-rack switches** fail. It found that adding **redundant networking gear** reduces faults less than you would hope, because it does not protect against **human error** (e.g., misconfigured switches), a **major cause** of outages.
-- **Public clouds such as EC2** are notorious for frequent **transient network glitches**; well-run private datacenter networks can be more stable.
+- A different study looked at how often **load balancers** (machines that spread incoming requests across many servers), **aggregation switches** (switches that connect many racks together) and **top-of-rack switches** (the switch at the top of each server rack that links its machines) fail. It found that adding **redundant networking gear** reduces faults less than you would hope, because it does not protect against **human error** (e.g., misconfigured switches), a **major cause** of outages.
+- **Public clouds such as EC2** (Amazon's rent-a-virtual-machine service) are notorious for frequent **transient network glitches**; well-run private datacenter networks can be more stable.
 - Nobody is immune: a problem during a **switch software upgrade** triggered a network topology reconfiguration during which packets were delayed for **more than a minute**. (The body text does not name the incident; the book's references include a GitHub downtime post-mortem for it, and the index lists it as split brain caused by a 1-minute packet delay.)
 - **Sharks** may bite **undersea cables** and damage them.
 - A network interface was seen **dropping all inbound packets while sending outbound ones fine** — a link working in one direction says nothing about the other.
 
-> **Network partitions.** A fault that isolates one section of the network from the others is often called a **network partition** or **netsplit**. The book prefers the more general phrase **network fault**, so readers don't mix it up with the partitions (shards) of a database from Chapter 6.
+> **Network partitions.** A fault that isolates one section of the network from the others is often called a **network partition** or **netsplit**. The book prefers the more general phrase **network fault**, so readers don't mix it up with the partitions (shards) of a database from Chapter 6. (Background on partitions, replication and timeouts: [System Design Fundamentals](../00a-system-design-fundamentals/README.md).)
 
 *Your software must handle them.* Even if faults are rare where you run, they *can* happen, so any network communication may fail — no way around it.
 
-Without **defined and tested** handling for network faults, anything at all can go wrong: a cluster may **deadlock** and stay unable to serve requests even after the network recovers, or it may even **delete all your data**. Software in unanticipated situations may do arbitrary unexpected things.
+Without **defined and tested** handling for network faults, anything at all can go wrong: a cluster (a group of machines working as one system) may **deadlock** (get stuck with parts waiting on each other forever) and stay unable to serve requests even after the network recovers, or it may even **delete all your data**. Software in unanticipated situations may do arbitrary unexpected things.
 
 *Handling ≠ tolerating.* If your network is usually reliable, it can be valid to just **show users an error** during network trouble. But you must **know how your software reacts** and make sure it **recovers**. Intentionally **causing** network failures to see how the system copes can be worthwhile — the idea behind **Chaos Monkey** (Chapter 1).
 
@@ -224,14 +224,14 @@ Without **defined and tested** handling for network faults, anything at all can 
 
 Many systems must detect faulty nodes automatically:
 - A **load balancer** must stop sending requests to a dead node (take it **out of rotation**).
-- In **single-leader replication**, if the leader fails, a follower must be **promoted** (Chapter 5).
+- In **single-leader replication** (one node, the leader, takes all writes and copies them to the others, the followers), if the leader fails, a follower must be **promoted** (Chapter 5).
 
 Network uncertainty makes it hard to know whether a node works. Sometimes you **do** get explicit feedback:
 
 | Situation | Feedback you might get | Limitation |
 |---|---|---|
 | Machine reachable, but **no process listening** on the port (e.g., it crashed) | The OS closes/refuses the TCP connection with a **RST** or **FIN** packet | If the node crashed *mid-request*, you cannot know how much it processed |
-| Node **process crashed** (or killed by an admin) but the **OS still runs** | A script can **notify other nodes** so one takes over quickly without waiting for a timeout — **HBase** does this | Needs the OS to be alive |
+| Node **process crashed** (or killed by an admin) but the **OS still runs** | A script can **notify other nodes** so one takes over quickly without waiting for a timeout — **HBase** (an open-source distributed database modelled on Google's Bigtable) does this | Needs the OS to be alive |
 | You can access the **switch management interface** | Query switches for **hardware-level link failures** (e.g., machine powered off) | Not possible over the internet, in a shared datacenter without switch access, or if a network problem blocks the management interface |
 | A **router** is sure the IP is unreachable | It may send an **ICMP Destination Unreachable** packet | Routers have no magic failure detection either |
 
@@ -253,13 +253,13 @@ If a timeout is the only reliable fault detector, **how long should it be?** The
 - If the node is in fact alive and partway through something (the book's example: **sending an email**), a second node taking over may cause it to be **done twice** (discussed later in this chapter and in Chapters 9 and 11).
 - The "dead" node's work is handed to other nodes, loading them and the network further; in a system already under strain this makes matters **worse**. If the "dead" node was only **slow due to overload**, moving its load elsewhere may trigger a **cascading failure**; at worst every node pronounces every other node dead and the whole system halts.
 
-*An imaginary ideal.* Suppose a network guaranteed that every packet is either delivered within time **d** or lost (never later), and every non-failed node handled a request within time **r**. Then every successful request would get a reply within **2d + r**, and no reply by then would prove the network or node was broken. **2d + r** would be a sensible timeout.
+*An imaginary ideal.* Suppose a network guaranteed that every packet is either delivered within time **d** or lost (never later), and every non-failed node handled a request within time **r**. Then every successful request would get a reply within **2d + r** (d to get there, r to process, d to come back), and no reply by then would prove the network or node was broken. **2d + r** would be a sensible timeout.
 
 *Reality.* Most systems have **neither** guarantee:
 - Asynchronous networks have **unbounded delays**: they try to deliver quickly, but there is **no upper limit**.
 - Most servers **cannot guarantee** handling requests within a maximum time (see "Response time guarantees" below).
 
-For failure detection, being fast **most** of the time is not enough: with a low timeout, one **transient spike** in round-trip times can throw the system off balance.
+For failure detection, being fast **most** of the time is not enough: with a low timeout, one **transient spike** in round-trip times (the time for a message to go out and its reply to come back) can throw the system off balance.
 
 #### Network congestion and queueing
 
@@ -267,7 +267,7 @@ Like road travel times, which vary mostly because of **traffic jams**, packet de
 
 1. **Switch queues.** If several nodes send to the **same destination** at once, the switch must queue the packets and feed them onto the destination link **one at a time** (Figure 8-2). On a busy link a packet may wait for a slot — **network congestion**. If the queue **fills up**, the packet is **dropped** and must be resent, even though the network is technically working.
 2. **OS queues.** At the destination, if all **CPU cores are busy**, the OS queues the incoming request until the app can take it — for an arbitrary time depending on load.
-3. **VM pauses.** Under virtualisation, a guest OS is frequently **frozen for tens of milliseconds** so another VM can use the CPU core. Meanwhile the VM cannot read network data, so the **virtual machine monitor buffers** it, adding more variability.
+3. **VM pauses.** Under virtualisation, a guest OS is frequently **frozen for tens of milliseconds** so another VM can use the CPU core. Meanwhile the VM cannot read network data, so the **virtual machine monitor** (the hypervisor — software that runs and schedules the VMs) **buffers** it (holds it temporarily in memory), adding more variability.
 4. **TCP flow control** (also called **congestion avoidance** or **backpressure**): a node limits its own sending rate to avoid overloading a link or the receiver, which means **extra queueing at the sender** before data even enters the network.
 
 *Figure 8-2 (redrawn): ports 1, 2 and 4 all send to port 3, so the switch queue for port 3 fills up*
@@ -291,7 +291,7 @@ flowchart LR
 *Choosing timeouts in practice.*
 1. Choose them **experimentally**: measure the **distribution of round-trip times** over a long period and across many machines to learn the expected variability.
 2. Considering your app's needs, pick a trade-off between **detection delay** and **risk of premature timeouts**.
-3. **Better still:** rather than hard-coding a timeout, the system can **keep measuring response times and how much they vary (jitter)** and **tune the timeout on the fly**. The **Phi Accrual failure detector** does this and is used in **Akka** and **Cassandra**. **TCP retransmission timeouts** work in a similar way.
+3. **Better still:** rather than hard-coding a timeout, the system can **keep measuring response times and how much they vary (jitter)** and **tune the timeout on the fly**. The **Phi Accrual failure detector** does this and is used in **Akka** (a toolkit for building concurrent, message-passing apps on the JVM) and **Cassandra** (a widely used distributed database). **TCP retransmission timeouts** work in a similar way.
 
 ### Synchronous Versus Asynchronous Networks
 
@@ -302,7 +302,7 @@ flowchart LR
 *How it works — a circuit.*
 1. Dialling sets up a **circuit**: a **set, guaranteed slice of bandwidth** is reserved along the **entire route** between the callers.
 2. The circuit stays until the call ends.
-3. Example: **ISDN** operates at a constant **4,000 frames per second**. A call is given **16 bits** in each frame, in each direction. So for the whole call, each side can send exactly **16 bits of audio every 250 microseconds**.
+3. Example: **ISDN** (Integrated Services Digital Network, a digital telephone standard) operates at a constant **4,000 frames per second**. A call is given **16 bits** in each frame, in each direction. So for the whole call, each side can send exactly **16 bits of audio every 250 microseconds**.
 
 This network is **synchronous**: even across several routers, data does not queue, because the call's 16 bits are **already reserved** in the next hop. Since nothing queues, the **worst-case end-to-end latency is a known constant** — a **bounded delay**.
 
@@ -326,27 +326,27 @@ Transferring a file over a circuit would require **guessing a bandwidth**:
 
 So circuits for bursty transfers **waste capacity** and **slow transfers down**. TCP instead **adapts its rate** to the capacity available.
 
-*Hybrids.* There have been attempts at networks supporting both circuit and packet switching, such as **ATM**. **InfiniBand** has similarities: it does **flow control end to end at the link layer**, which cuts down queueing in the network, though link congestion can still cause delays. With careful **quality of service** (QoS: prioritising and scheduling packets) and **admission control** (rate-limiting senders), you can **emulate circuit switching** on packet networks or give **statistically bounded delay**.
+*Hybrids.* There have been attempts at networks supporting both circuit and packet switching, such as **ATM**. **InfiniBand** has similarities: it does **flow control end to end at the link layer** (the lowest networking layer, handling transfers across one physical link), which cuts down queueing in the network, though link congestion can still cause delays. With careful **quality of service** (QoS: prioritising and scheduling packets) and **admission control** (rate-limiting senders), you can **emulate circuit switching** on packet networks or give **statistically bounded delay**.
 
 > **Footnote — ATM.** Asynchronous Transfer Mode competed with Ethernet in the **1980s** but was rarely used except in the **core switches of telephone networks**. Despite the acronym, it is unrelated to cash machines. The book muses that in a parallel universe where the internet ran on something like ATM, video calls would probably be far more reliable.
 
 > **Latency and Resource Utilization (sidebar).** Variable delays come from **dynamic resource partitioning**.
 > - Imagine a cable linking two telephone exchanges with capacity for **10,000 calls at once**. Every circuit switched over it occupies one slot. The wire is split **statically**: even if you are the only caller and **9,999 slots are empty**, your circuit gets the same fixed bandwidth as when the wire is full.
 > - The **internet shares bandwidth dynamically**: senders jostle to get packets onto the wire fast, and switches decide moment by moment which packet goes next. The downside is **queueing**; the upside is **maximum utilisation**. Since the wire has a fixed cost, better utilisation makes each byte **cheaper**.
-> - **CPUs** are similar: sharing a core dynamically among threads means a thread sometimes waits in the OS **run queue** and is paused for varying times, but hardware is used better than with a static CPU-cycle allocation per thread. Better utilisation is also a big reason for **virtual machines**.
+> - **CPUs** are similar: sharing a core dynamically among threads (independent sequences of instructions within a program) means a thread sometimes waits in the OS **run queue** (the list of threads ready to run but waiting for a CPU) and is paused for varying times, but hardware is used better than with a static CPU-cycle allocation per thread. Better utilisation is also a big reason for **virtual machines**.
 > - **Latency guarantees** are possible with **static partitioning** (dedicated hardware, exclusive bandwidth) — at the cost of lower utilisation, i.e., **more expensive**. Multi-tenancy with dynamic partitioning is **cheaper** but has **variable delays**.
 > - So variable network delay is **not a law of nature**, just the outcome of a **cost/benefit trade-off**.
 
 *Current reality.* Such QoS is **not enabled** in multi-tenant datacenters, public clouds, or across the internet. Deployed technology gives **no guarantees** on network delay or reliability; you must **assume congestion, queueing and unbounded delays**. Therefore there is **no "correct" timeout value** — determine it **experimentally**.
 
-> **Footnote — BGP.** Peering agreements between ISPs and routes set up through the **Border Gateway Protocol (BGP)** resemble circuit switching more than IP does; at that level you can buy **dedicated bandwidth**. But internet routing works at the level of **networks**, not individual host connections, and on a **much longer timescale**.
+> **Footnote — BGP.** Peering agreements between ISPs (internet service providers) and routes set up through the **Border Gateway Protocol (BGP)** resemble circuit switching more than IP does; at that level you can buy **dedicated bandwidth**. But internet routing works at the level of **networks**, not individual host connections, and on a **much longer timescale**.
 
 ## Unreliable Clocks
 
 Applications use clocks to answer questions like these (the book's list):
 
 1. Has this request timed out yet?
-2. What is the service's **99th percentile** response time?
+2. What is the service's **99th percentile** response time (the time that 99% of requests beat — only the slowest 1% take longer)?
 3. How many queries per second did it handle on average over the **last five minutes**?
 4. How much time did a visitor spend on the website?
 5. When was this article published?
@@ -359,7 +359,7 @@ Items **1–4 measure durations** (intervals, e.g., from request to response). I
 *Why time is tricky in distributed systems.*
 - **Communication is not instantaneous.** A message is always received *after* it was sent, but because network delay varies, you do not know **how much** after. That makes it hard to determine the **order** of events across machines.
 - **Each machine has its own clock**, a physical device — usually a **quartz crystal oscillator**. These are **not perfectly accurate**, so each machine's time may be a bit fast or slow compared with others.
-- Clocks can be **synchronised to a degree**. The usual tool is the **Network Time Protocol (NTP)**; it corrects a computer's clock using time reported by a group of servers, which in turn get time from a more accurate source such as a **GPS receiver**.
+- Clocks can be **synchronised to a degree**. The usual tool is the **Network Time Protocol (NTP)**; it corrects a computer's clock using time reported by a group of servers, which in turn get time from a more accurate source such as a **GPS receiver** (GPS satellites broadcast very precise time signals).
 
 ### Monotonic Versus Time-of-Day Clocks
 
@@ -369,7 +369,7 @@ Modern computers have at least **two** kinds of clock. Both measure time, but th
 
 *What it is.* A **time-of-day clock** behaves the way you intuitively expect a clock to: it tells you today's date and the current time according to a calendar (**wall-clock time**).
 
-*Examples:* `clock_gettime(CLOCK_REALTIME)` on Linux and `System.currentTimeMillis()` in Java. Both give the number of seconds (or milliseconds) elapsed since the **epoch** — **00:00 UTC on 1 January 1970** in the Gregorian calendar — **ignoring leap seconds**. Some systems use other reference dates.
+*Examples:* `clock_gettime(CLOCK_REALTIME)` on Linux and `System.currentTimeMillis()` in Java. Both give the number of seconds (or milliseconds) elapsed since the **epoch** — **00:00 UTC (Coordinated Universal Time, the world's reference time zone) on 1 January 1970** in the Gregorian calendar — **ignoring leap seconds**. Some systems use other reference dates.
 
 > **Footnote:** the "real-time" in `CLOCK_REALTIME` is unrelated to real-time operating systems (discussed under "Response time guarantees").
 
@@ -390,7 +390,7 @@ Modern computers have at least **two** kinds of clock. Both measure time, but th
 
 *Caveats.*
 - The **absolute value is meaningless** — e.g., nanoseconds since boot. **Never compare** monotonic values **across two computers**.
-- On servers with **multiple CPU sockets**, each CPU may have its own **unsynchronised timer**. The OS compensates to present a monotonic view to threads moving between CPUs, but the book advises treating that guarantee with **some scepticism**.
+- On servers with **multiple CPU sockets** (several physical processor chips on one motherboard), each CPU may have its own **unsynchronised timer**. The OS compensates to present a monotonic view to threads moving between CPUs, but the book advises treating that guarantee with **some scepticism**.
 - **NTP slewing:** if NTP sees the local quartz running fast or slow, it may **adjust the rate** of the monotonic clock. By default NTP allows speeding up or slowing down by **up to 0.05%**, but it **cannot make the monotonic clock jump**.
 - **Resolution** is usually good: **microseconds or finer** on most systems.
 
@@ -417,7 +417,7 @@ Monotonic clocks need no synchronisation, but time-of-day clocks must be set fro
 - **Virtual machines.** The hardware clock is **virtualised**, creating extra problems for accurate timekeeping. When VMs share a CPU core, each VM is **paused for tens of milliseconds** while another runs; to the app this looks like the clock **suddenly jumping forward**.
 - **Devices you don't control** (mobile, embedded): you probably **cannot trust the hardware clock at all**. Certain users **set incorrect dates on purpose**, for instance to dodge time limits in **games**, so the clock may be wildly in the past or future.
 
-*High accuracy is possible, at a price.* The **MiFID II** draft European regulation requires **high-frequency trading funds** to sync clocks **within 100 microseconds of UTC**, so that odd market events like **"flash crashes"** can be investigated and **market manipulation** spotted. That accuracy is reachable with **GPS receivers**, the **Precision Time Protocol (PTP)**, and careful deployment and monitoring — but it takes significant effort and expertise, and many things can go wrong. A misconfigured NTP daemon or a firewall blocking NTP traffic can let drift errors grow large quickly.
+*High accuracy is possible, at a price.* The **MiFID II** draft European regulation requires **high-frequency trading funds** (firms whose computers buy and sell in fractions of a second) to sync clocks **within 100 microseconds of UTC**, so that odd market events like **"flash crashes"** can be investigated and **market manipulation** spotted. That accuracy is reachable with **GPS receivers**, the **Precision Time Protocol (PTP)**, and careful deployment and monitoring — but it takes significant effort and expertise, and many things can go wrong. A misconfigured NTP daemon (a background program that keeps running on the server) or a firewall (a filter that blocks unwanted network traffic) blocking NTP traffic can let drift errors grow large quickly.
 
 ### Relying on Synchronized Clocks
 
@@ -433,7 +433,7 @@ Clocks look simple but hide pitfalls: a day is **not always exactly 86,400 secon
 
 *The tempting mistake.* Relying on clocks to decide the order of events on different nodes — e.g., when two clients write to a distributed database, whose write came first, and which is the latest?
 
-*Figure 8-3* illustrates a risky reliance on time-of-day clocks in a **multi-leader** replicated database (similar to Figure 5-9 in Chapter 5):
+*Figure 8-3* illustrates a risky reliance on time-of-day clocks in a **multi-leader** replicated database (several nodes may each accept writes and then copy them to one another) (similar to Figure 5-9 in Chapter 5):
 1. On **node 1**, **client A** sets `x = 1`.
 2. That write is replicated to **node 3**.
 3. On **node 3**, **client B** increments x, making it `x = 2`.
@@ -462,7 +462,7 @@ sequenceDiagram
     Note over N2: LWW sees 42.004 > 42.003, keeps x = 1, the increment is lost
 ```
 
-*This is last write wins (LWW)*, common in multi-leader setups and in leaderless databases like **Cassandra** and **Riak** (Chapter 5). Some implementations generate timestamps on the **client** instead of the server, but that does not fix LWW's basic problems:
+*This is last write wins (LWW)*, common in multi-leader setups and in leaderless databases (any replica may accept a write; there is no leader at all) like **Cassandra** and **Riak** (Chapter 5). Some implementations generate timestamps on the **client** instead of the server, but that does not fix LWW's basic problems:
 
 - **Writes can mysteriously vanish.** If one node's clock **runs behind**, its writes cannot replace values written earlier by a node whose clock **runs ahead** until enough time to cover the skew has passed. Arbitrary amounts of data can be **silently dropped** with no error reported.
 - **LWW cannot tell sequential from concurrent writes.** In Figure 8-3, B's increment definitely came after A's write; truly concurrent writes are ones where neither writer knew of the other. Telling them apart needs extra **causality tracking** such as **version vectors** (Chapter 5).
@@ -486,15 +486,15 @@ So "keep the most recent value" sounds good, but what counts as "recent" is deci
 
 *Problem:* most systems **don't expose this uncertainty**. The value returned by `clock_gettime()` gives no hint whether its error is **five milliseconds or five years**.
 
-*Exception — Google's TrueTime API in Spanner.* It **explicitly reports** the confidence interval. Asking for the current time returns **two values, `[earliest, latest]`** — the earliest and latest possible timestamps. The clock knows the real time lies somewhere in that range. The interval's width depends partly on **how long since the local quartz clock last synced** with a more accurate source.
+*Exception — Google's TrueTime API (application programming interface — the set of calls a program can make) in Spanner (Google's globally distributed database).* It **explicitly reports** the confidence interval. Asking for the current time returns **two values, `[earliest, latest]`** — the earliest and latest possible timestamps. The clock knows the real time lies somewhere in that range. The interval's width depends partly on **how long since the local quartz clock last synced** with a more accurate source.
 
 #### Synchronized clocks for global snapshots
 
-*Recap.* **Snapshot isolation** (Chapter 7) is valuable when a database has to handle **quick, small read-write transactions** alongside **big, slow read-only ones** (backups, analytics). Read-only transactions see a consistent state at one point in time without locking or interfering with writers.
+*Recap.* **Snapshot isolation** (Chapter 7) — each transaction (a group of reads and writes treated as one all-or-nothing unit) reads from a frozen, consistent copy of the data as of when it started — is valuable when a database has to handle **quick, small read-write transactions** alongside **big, slow read-only ones** (backups, analytics). Read-only transactions see a consistent state at one point in time without locking or interfering with writers.
 
 *How it's usually done:* a **monotonically increasing transaction ID**. A write with a greater ID than the snapshot is **invisible** to the snapshot. On a single node, a **simple counter** suffices.
 
-*The distributed problem.* Across many machines and possibly multiple datacenters, producing one **global, ever-increasing transaction ID** that spans all partitions is difficult, since it requires **coordination**. The IDs must respect **causality**: whenever B reads something A wrote, B's ID has to be **larger** than A's, otherwise the snapshot is inconsistent. With many small, fast transactions, generating IDs becomes an **untenable bottleneck**.
+*The distributed problem.* Across many machines and possibly multiple datacenters, producing one **global, ever-increasing transaction ID** that spans all partitions (shards — the pieces a large dataset is split into across machines) is difficult, since it requires **coordination**. The IDs must respect **causality**: whenever B reads something A wrote, B's ID has to be **larger** than A's, otherwise the snapshot is inconsistent. With many small, fast transactions, generating IDs becomes an **untenable bottleneck**.
 
 > **Footnote — Snowflake.** Distributed sequence generators like **Twitter's Snowflake** produce **approximately** increasing unique IDs scalably (for example, by handing out **ranges of IDs** to different nodes). But they usually **cannot guarantee causally consistent ordering**, because blocks are handed out on a longer timescale than database reads and writes happen.
 
@@ -561,15 +561,15 @@ while (running) {
 
 *Is a 15-second pause realistic? Unfortunately yes.* Causes:
 
-- **Garbage collection.** Many runtimes (e.g., the **JVM**) have a GC that sometimes **stops all threads**. These **"stop-the-world" pauses** have been known to last **several minutes**. Even "concurrent" collectors like **HotSpot JVM's CMS** must stop the world occasionally. Tuning allocation patterns or GC settings can shorten pauses, but for robust guarantees you must **assume the worst**.
+- **Garbage collection.** Many runtimes (e.g., the **JVM** — the Java Virtual Machine that runs Java programs) have a GC that sometimes **stops all threads**. These **"stop-the-world" pauses** have been known to last **several minutes**. Even "concurrent" collectors (which do most of their work while the program keeps running) like **HotSpot JVM's CMS** (Concurrent Mark Sweep collector) must stop the world occasionally. Tuning allocation patterns or GC settings can shorten pauses, but for robust guarantees you must **assume the worst**.
 - **VM suspend/resume.** A VM can be **suspended** (all processes paused, memory saved to disk) and **resumed** at any point, for any length of time. This is used for **live migration** between hosts without reboot; the pause length then depends on how fast processes are writing to memory.
 - **End-user devices** such as laptops can be suspended arbitrarily, e.g., when the **lid is closed**.
-- **Context switches.** When the OS switches to another thread, or the **hypervisor** switches to another VM, the current thread can pause at **any point** in the code. For VMs, CPU time spent in other VMs is **steal time**. Under heavy load (long run queue), the paused thread may wait a while to run again.
-- **Synchronous disk I/O.** A thread may wait on a slow disk. Disk access can happen **unexpectedly** — e.g., the **Java classloader lazily loads class files** on first use, at any time. **I/O pauses and GC pauses can combine**. When what looks like a local disk is really a **network filesystem** or a **network block device** (for example **Amazon's EBS**), I/O latency also inherits **network delay variability**.
+- **Context switches.** When the OS switches to another thread (saving one's state and loading another's), or the **hypervisor** switches to another VM, the current thread can pause at **any point** in the code. For VMs, CPU time spent in other VMs is **steal time**. Under heavy load (long run queue), the paused thread may wait a while to run again.
+- **Synchronous disk I/O.** A thread may wait on a slow disk. Disk access can happen **unexpectedly** — e.g., the **Java classloader lazily loads class files** (reads compiled code from disk only when it is first needed) on first use, at any time. **I/O pauses and GC pauses can combine**. When what looks like a local disk is really a **network filesystem** or a **network block device** (storage on another machine that pretends to be a local disk; for example **Amazon's EBS**, Elastic Block Store), I/O latency also inherits **network delay variability**.
 - **Swapping (paging).** If the OS may swap to disk, a simple memory access can cause a **page fault** requiring a page to be loaded from disk, pausing the thread. Under high memory pressure, another page may need to be swapped out. In extreme cases the OS spends most of its time swapping — **thrashing**. So paging is often **disabled on servers** (preferring to kill a process to free memory over risking thrashing).
 - **SIGSTOP.** A Unix process can be paused with **SIGSTOP** (e.g., **Ctrl-Z** in a shell) until resumed with **SIGCONT**. Even if your environment never uses it, an operations engineer might send it **by accident**.
 
-*The core problem.* All of these can **preempt** a thread at any point and resume it later **without it noticing**. It resembles making multi-threaded code thread-safe on one machine: you can assume **nothing about timing**. On one machine you have good tools — **mutexes, semaphores, atomic counters, lock-free data structures, blocking queues** — but these **don't translate directly** to distributed systems, which have **no shared memory**, only messages over an unreliable network.
+*The core problem.* All of these can **preempt** a thread at any point and resume it later **without it noticing**. It resembles making multi-threaded code thread-safe on one machine: you can assume **nothing about timing**. On one machine you have good tools — **mutexes** (locks letting only one thread into a piece of code at a time), **semaphores** (counters that limit how many threads may proceed), **atomic counters** (numbers updated in one indivisible step), **lock-free data structures** (designed so threads never have to wait on a lock), **blocking queues** (queues that make a thread wait until an item is available) — but these **don't translate directly** to distributed systems, which have **no shared memory**, only messages over an unreliable network.
 
 Every node has to assume it might be **frozen for a long stretch at any instant**, even halfway through a function. While it is frozen, other nodes carry on and may **decide it has died**. On waking, it may have no idea anything happened until it next looks at its clock.
 
@@ -583,11 +583,11 @@ Threads and processes may pause for **unbounded** time in many languages and OSe
 
 *What real-time guarantees require (every layer of the stack):*
 1. A **real-time operating system (RTOS)** that schedules processes with **guaranteed CPU time in specified intervals**.
-2. **Library functions** that document their **worst-case execution times**.
-3. **Dynamic memory allocation** restricted or **forbidden** (real-time garbage collectors exist, but the app must not give the GC too much work).
+2. **Library functions** (reusable pre-written code a program calls) that document their **worst-case execution times**.
+3. **Dynamic memory allocation** (asking for memory while the program runs) restricted or **forbidden** (real-time garbage collectors exist, but the app must not give the GC too much work).
 4. An **enormous amount of testing and measurement** to confirm the guarantees hold.
 
-*Costs.* Lots of extra work, and a sharply limited choice of languages, libraries and tools (most offer no real-time guarantees). So real-time systems are **very expensive**, used mainly in **safety-critical embedded devices**. Also, **"real-time" ≠ "high-performance"**: real-time systems can deliver **less throughput**, because meeting deadlines outranks everything else (compare the Latency and Resource Utilization sidebar).
+*Costs.* Lots of extra work, and a sharply limited choice of languages, libraries and tools (most offer no real-time guarantees). So real-time systems are **very expensive**, used mainly in **safety-critical embedded devices**. Also, **"real-time" ≠ "high-performance"**: real-time systems can deliver **less throughput** (amount of work done per second), because meeting deadlines outranks everything else (compare the Latency and Resource Utilization sidebar).
 
 For most **server-side data systems**, real-time guarantees are **not economical or appropriate**, so these systems must **live with** pauses and clock instability.
 
@@ -601,7 +601,7 @@ You can reduce the harm of pauses **without** real-time scheduling. Language run
 3. It **waits** for outstanding requests to finish.
 4. The node runs GC with **no requests in progress**.
 
-This hides GC pauses from clients and reduces **high-percentile response times**. Some **latency-sensitive financial trading systems** use this approach.
+This hides GC pauses from clients (the programs sending requests) and reduces **high-percentile response times** (the slow tail, such as the 99th percentile). Some **latency-sensitive financial trading systems** use this approach.
 
 *Idea 2 — only collect short-lived objects, and restart.* Use the GC only for **short-lived objects** (fast to collect) and **restart processes periodically**, before enough long-lived objects pile up to need a **full GC**. Restart **one node at a time**, shifting traffic away first, like a **rolling upgrade** (Chapter 4).
 
@@ -701,7 +701,7 @@ sequenceDiagram
     S-->>C1: rejected, 33 is older than 34
 ```
 
-*With ZooKeeper* as the lock service, the transaction ID **`zxid`** or node version **`cversion`** can serve as the fencing token, since both are guaranteed to be **monotonically increasing**.
+*With ZooKeeper* (a popular coordination service that offers locks, leader election and small shared configuration data) as the lock service, the transaction ID **`zxid`** or node version **`cversion`** can serve as the fencing token, since both are guaranteed to be **monotonically increasing**.
 
 *Key requirement:* the **resource itself** must **actively check tokens** and reject older ones. It is **not enough** to rely on clients checking their own lock status. For resources that don't support fencing tokens, you may work around it (e.g., for a file storage service, put the **token in the filename**). But **some check** is needed so requests outside the lock's protection are not processed.
 
@@ -722,26 +722,26 @@ sequenceDiagram
 *Byzantine fault tolerance.* We call a system **Byzantine fault-tolerant** when it still behaves correctly even if some nodes **malfunction and disobey the protocol**, or **malicious attackers** interfere with the network. It matters in specific settings:
 
 - **Aerospace.** **Radiation** can corrupt data in memory or CPU registers, making a computer respond unpredictably. Failure would be catastrophic (an aircraft crashing and killing everyone aboard, or a **rocket crashing into the International Space Station**), so **flight control systems must tolerate Byzantine faults**.
-- **Multiple organisations.** Some participants may **cheat or defraud** others, so a node cannot simply trust another's messages. **Bitcoin and other blockchain peer-to-peer networks** can be viewed as a mechanism letting parties who distrust each other agree on whether a transaction took place, **without a central authority**.
+- **Multiple organisations.** Some participants may **cheat or defraud** others, so a node cannot simply trust another's messages. **Bitcoin and other blockchain peer-to-peer networks** (networks of equal participants with no central server, sharing a tamper-evident ledger of transactions) can be viewed as a mechanism letting parties who distrust each other agree on whether a transaction took place, **without a central authority**.
 
 *Why this book usually ignores them.*
 - In **your own datacenter**, all nodes are controlled by your organisation (so hopefully trustworthy), and **radiation** is low enough that memory corruption isn't a major issue.
 - Byzantine fault-tolerant protocols are **quite complicated**, and fault-tolerant embedded systems need **hardware-level support**. For most server-side data systems, the **cost makes them impractical**.
-- **Web applications** certainly must anticipate arbitrary, even **malicious, behaviour from clients** (e.g., from browsers under users' control). That's why **input validation, sanitisation and output escaping** matter — which guard against attacks like **SQL injection** and **cross-site scripting**. But we don't use Byzantine protocols for that; the **server is the authority** deciding what clients may do. In **peer-to-peer networks** with no central authority, BFT is more relevant.
+- **Web applications** certainly must anticipate arbitrary, even **malicious, behaviour from clients** (e.g., from browsers under users' control). That's why **input validation, sanitisation and output escaping** matter — which guard against attacks like **SQL injection** (smuggling database commands inside user input) and **cross-site scripting** (smuggling malicious script into a web page other users will view). But we don't use Byzantine protocols for that; the **server is the authority** deciding what clients may do. In **peer-to-peer networks** with no central authority, BFT is more relevant.
 - **Software bugs** could count as Byzantine faults, but if **every node runs the same software**, a BFT algorithm can't help. Most BFT algorithms need a **supermajority — more than two-thirds** — of nodes working correctly (with **four nodes, at most one** may malfunction). Using this against bugs would require **four independent implementations** of the same software, hoping the bug is only in one.
-- It would be nice if a protocol protected against **vulnerabilities, security compromises and attacks**, but that's unrealistic too: an attacker who compromises one node can probably compromise **all**, since they run the same software. **Traditional mechanisms** — **authentication, access control, encryption, firewalls**, etc. — remain the main defence.
+- It would be nice if a protocol protected against **vulnerabilities, security compromises and attacks**, but that's unrealistic too: an attacker who compromises one node can probably compromise **all**, since they run the same software. **Traditional mechanisms** — **authentication** (proving who you are), **access control** (deciding what you may do), **encryption** (scrambling data so only key holders can read it), **firewalls**, etc. — remain the main defence.
 
 #### Weak forms of lying
 
 Even assuming honest nodes, it can pay to guard against **weak forms of "lying"** — invalid messages from **hardware issues, software bugs, misconfiguration**. These are not full BFT and would not stop a determined adversary, but they're **simple, pragmatic** steps:
 
-- **Corrupted packets.** Packets occasionally get corrupted by faulty hardware or by bugs in OSes, drivers, routers and so on. **TCP and UDP checksums** usually catch this, but sometimes miss it. Simple fixes suffice, like **checksums in the application-level protocol**.
-- **Input sanitising.** A **public** application must carefully check user input — e.g., values within a **reasonable range**, and **string length limits** to prevent **denial of service** through huge memory allocations. A service that is only reachable **internally**, behind a firewall, may relax these checks, but **basic sanity checks** (e.g., in protocol parsing) are still a good idea.
+- **Corrupted packets.** Packets occasionally get corrupted by faulty hardware or by bugs in OSes, drivers, routers and so on. **TCP and UDP checksums** (small numbers computed from the data so the receiver can detect corruption) usually catch this, but sometimes miss it. Simple fixes suffice, like **checksums in the application-level protocol**.
+- **Input sanitising.** A **public** application must carefully check user input — e.g., values within a **reasonable range**, and **string length limits** to prevent **denial of service** (making a service unusable by overwhelming it) through huge memory allocations. A service that is only reachable **internally**, behind a firewall, may relax these checks, but **basic sanity checks** (e.g., in protocol parsing) are still a good idea.
 - **Multiple NTP servers.** NTP clients can be configured with **several server addresses**. It queries every one, **estimates how wrong each is**, and verifies that **most of them agree** on a time window. As long as most are fine, a misconfigured server reporting wrong time is detected as an **outlier** and excluded. Multiple servers make NTP **more robust** than a single one.
 
 ### System Model and Reality
 
-Many algorithms exist for distributed problems (e.g., **consensus**, Chapter 9). To be useful they must tolerate the faults described in this chapter, and they must be written **without depending too much on specific hardware and software details**. That requires **formalising** the faults we expect, via a **system model** — an abstraction describing **what an algorithm may assume**.
+Many algorithms exist for distributed problems (e.g., **consensus** — getting several nodes to agree on one value — Chapter 9). To be useful they must tolerate the faults described in this chapter, and they must be written **without depending too much on specific hardware and software details**. That requires **formalising** the faults we expect, via a **system model** — an abstraction describing **what an algorithm may assume**.
 
 *Timing assumptions — three common models:*
 
@@ -777,7 +777,7 @@ We call an algorithm **correct within a system model** when its properties hold 
 
 Distinguish two kinds of properties. In the example, **uniqueness** and **monotonic sequence** are **safety** properties; **availability** is a **liveness** property.
 
-*A giveaway:* liveness properties often contain the word **"eventually"**. (Yes — **eventual consistency is a liveness property**.)
+*A giveaway:* liveness properties often contain the word **"eventually"**. (Yes — **eventual consistency** — replicas may disagree for a while but converge if writes stop — **is a liveness property**.)
 
 *Informal definitions:* safety = **nothing bad happens**; liveness = **something good eventually happens**. Don't lean on these too hard, since "good" and "bad" are subjective. The **precise, mathematical** definitions are:
 
@@ -793,7 +793,7 @@ The **partially synchronous model's definition** requires the system to **eventu
 
 System models and safety/liveness properties help reason about correctness, but when implementing, **messy reality bites again**: the model is a **simplification**.
 
-- Crash-recovery algorithms usually assume data in **stable storage survives crashes**. But what if the **disk data is corrupted**, or **wiped** by hardware error or misconfiguration? Or suppose a **firmware bug** makes a server **not detect its own hard drives after rebooting**, although they are properly attached? (The body text does not name this incident; the book's references include a GitHub incident report for it.)
+- Crash-recovery algorithms usually assume data in **stable storage survives crashes**. But what if the **disk data is corrupted**, or **wiped** by hardware error or misconfiguration? Or suppose a **firmware bug** (a bug in the low-level software built into the hardware) makes a server **not detect its own hard drives after rebooting**, although they are properly attached? (The body text does not name this incident; the book's references include a GitHub incident report for it.)
 - **Quorum algorithms** (Chapter 5) depend on every node **retaining the data it said it stored**. If a node can suffer **amnesia** and forget data, the quorum condition breaks, and so does correctness. A new model might assume stable storage **mostly** survives but **sometimes** is lost — but that model is **harder to reason about**.
 
 *Theory vs. implementation.* A theoretical description may simply **assume** certain things don't happen — and in non-Byzantine systems we must make some assumptions. But a real implementation may still need code for the "impossible" case, even if it just prints a rude message and exits with an odd error code — i.e., lets a **human operator** clean up. (The book suggests this may be exactly what separates **computer science** from **software engineering**.)
@@ -825,10 +825,10 @@ Problems covered:
 *Partial failure* is the **defining characteristic** of distributed systems: anything involving other nodes may occasionally fail, randomly slow down, or not respond (and eventually time out). We build **tolerance of partial failures** into software so the whole keeps working even when parts are broken.
 
 - **Detecting faults is hard.** Most systems lack accurate failure detection, so most algorithms rely on **timeouts** — which **can't distinguish network from node failures**, and variable delays sometimes cause **false suspicion** of a crash.
-- **Limping nodes.** A node can be **degraded** rather than dead — e.g., because of a **driver bug**, a **Gigabit network interface** abruptly falling to **1 Kb/s** of throughput. Such a "limping" node can be harder to handle than a cleanly failed one.
+- **Limping nodes.** A node can be **degraded** rather than dead — e.g., because of a **driver bug** (a bug in the software the OS uses to control a hardware device), a **Gigabit network interface** abruptly falling to **1 Kb/s** of throughput. Such a "limping" node can be harder to handle than a cleanly failed one.
 - **Tolerating faults is hard too.** There is **no global variable, shared memory, common knowledge or shared state** between machines. Nodes can't even agree on the **time**. Information flows only over the unreliable network. **Major decisions can't be made safely by one node**, so we need protocols that get a **quorum** to agree.
 - **The shock.** Coming from a single computer's idealised, deterministic world, distributed systems' messy reality is jarring. Conversely, distributed-systems engineers often consider a problem **trivial if it can be solved on one computer** — and one computer can do a lot today. **If staying on one machine lets you keep Pandora's box shut, that is usually the better choice.**
-- **But scalability isn't the only reason to distribute** (Part II introduction): **fault tolerance** and **low latency** (data near users) are equally important and **can't be achieved with one node**.
+- **But scalability** (the ability to handle more load by adding resources) **isn't the only reason to distribute** (Part II introduction): **fault tolerance** and **low latency** (data near users) are equally important and **can't be achieved with one node**.
 - **Unreliability isn't a law of nature.** Hard real-time response guarantees and bounded network delays are **possible**, but **very expensive** and lower hardware utilisation. Outside safety-critical domains, most systems pick **cheap but unreliable** rather than **reliable but costly**.
 - **Supercomputers** assume reliable components and must be **stopped and restarted entirely** on a component failure. **Distributed systems can run forever** without service-level interruption, since faults and maintenance are handled **per node** — at least in theory (in practice, rolling a **bad configuration change to all nodes** still brings a distributed system to its knees).
 - This chapter was all problems; **Chapter 9 moves to solutions** — algorithms designed to cope with them.

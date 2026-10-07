@@ -5,16 +5,16 @@
 
 Every earlier chapter described how data systems work **today**. This last chapter changes tone: Kleppmann looks ahead and argues for how data systems **ought** to be built. Because this is opinion rather than settled fact, he writes in the first person and openly invites the reader to disagree.
 
-The chapter opens with a quotation from Thomas Aquinas that is usually paraphrased as: *a captain whose only goal was to keep the ship safe would never leave port*. The point: a system exists to serve a purpose beyond merely surviving. Reliability, scalability and maintainability (the themes of Chapter 1) are means, not ends. The final goal is applications that are **robust, correct, evolvable, and ultimately good for people**.
+The chapter opens with a quotation from Thomas Aquinas that is usually paraphrased as: *a captain whose only goal was to keep the ship safe would never leave port*. The point: a system exists to serve a purpose beyond merely surviving. Reliability, scalability and maintainability (the themes of Chapter 1: keep working when things break, cope as load grows, stay easy for people to operate and change) are means, not ends. The final goal is applications that are **robust, correct, evolvable, and ultimately good for people**.
 
 The chapter tries to answer four big questions:
 
-1. **Data integration** – No single tool does everything well, so real applications glue several tools together (a database, a search index, a cache, a warehouse...). How do you keep all those copies of the data consistent?
+1. **Data integration** – No single tool does everything well, so real applications glue several tools together (a database; a search index, which finds records by keyword; a cache, a fast copy of frequently read data; a data warehouse for analytics...). How do you keep all those copies of the data consistent?
 2. **Unbundling databases** – A database internally already keeps indexes, views and replicas in sync. Can we take those internal mechanisms "out" of the database and use them to wire an entire organisation's systems together?
-3. **Aiming for correctness** – If we build systems out of asynchronous logs and stream processors instead of big distributed transactions, how can we still be sure data is not lost, duplicated or corrupted?
+3. **Aiming for correctness** – If we build systems out of asynchronous logs (append-only sequences of events that each consumer reads at its own pace) and stream processors (programs that continuously consume and transform such events) instead of big distributed transactions (one transaction that must commit on several separate machines or systems at once), how can we still be sure data is not lost, duplicated or corrupted?
 4. **Doing the right thing** – Data is often about people. What ethical responsibilities do engineers have around prediction, bias, surveillance and privacy?
 
-Why it matters in real systems: almost every company of meaningful size ends up with a "zoo" of data stores fed from one another. The ideas here — a single ordered log as the source of truth, everything else derived from it, idempotent consumers, end-to-end request IDs, auditing — are exactly how many modern event-driven architectures (Kafka + stream processors + many downstream stores) are designed.
+Why it matters in real systems: almost every company of meaningful size ends up with a "zoo" of data stores fed from one another. The ideas here — a single ordered log as the source of truth, everything else derived from it, idempotent consumers, end-to-end request IDs, auditing — are exactly how many modern event-driven architectures (designs where components communicate by publishing and reacting to events — e.g., Kafka, a popular durable, partitioned log, + stream processors + many downstream stores) are designed. If words like cache, replication, partitioning or queue are new to you, the [System Design Fundamentals](../00a-system-design-fundamentals/README.md) primer explains them from scratch.
 
 **Everyday analogy.** Think of a spreadsheet. You type a number into one cell and every formula that depends on it updates by itself. You never write "now please go refresh cell D17". This chapter's dream is a whole company's data infrastructure that behaves like that spreadsheet: change the source record, and every search index, cache, report and recommendation that depends on it updates automatically, correctly, and even if machines crash along the way.
 
@@ -73,7 +73,7 @@ Why it matters in real systems: almost every company of meaningful size ends up 
 
 ## Data Integration
 
-Throughout the book, every problem had several solutions with different trade-offs: log-structured storage vs B-trees vs column storage (Chapter 3), single-leader vs multi-leader vs leaderless replication (Chapter 5), and so on. "Store data and find it again" has no single right answer.
+Throughout the book, every problem had several solutions with different trade-offs: log-structured storage (only ever appends to files) vs B-trees (update fixed-size pages in place) vs column storage (stores each column separately, good for analytics) (Chapter 3), single-leader vs multi-leader vs leaderless replication (one node, several nodes, or any node accepts writes; Chapter 5), and so on. "Store data and find it again" has no single right answer.
 
 Any one software product has to commit to one approach, because making even one code path fast and robust is hard; trying to cover every use case in one product nearly guarantees a mediocre implementation. So even a "general-purpose" database is really tuned for some particular usage pattern.
 
@@ -84,12 +84,12 @@ This creates two challenges:
 
 ### Combining Specialized Tools by Deriving Data
 
-**The classic example:** an OLTP database plus a full-text search index. PostgreSQL has built-in full-text search that is good enough for simple apps, but serious search needs a dedicated information-retrieval tool (e.g., Elasticsearch). Search indexes, on the other hand, make poor durable systems of record. So you need both.
+**The classic example:** an OLTP database (one serving many small, fast reads and writes from users) plus a full-text search index. PostgreSQL has built-in full-text search that is good enough for simple apps, but serious search needs a dedicated information-retrieval tool (e.g., Elasticsearch, a widely used open-source search engine). Search indexes, on the other hand, make poor durable systems of record. So you need both.
 
 And it rarely stops at two. You might also need:
 
 - copies in analytics systems (data warehouses, batch and stream processors),
-- caches or denormalized versions of objects,
+- caches or denormalized versions of objects (copies that deliberately duplicate data so reads need no joins),
 - machine learning, classification, ranking or recommendation systems fed from the data,
 - notifications triggered by changes.
 
@@ -113,21 +113,21 @@ If CDC is the *only* way the index is updated, the index is purely derived from 
 
 **What goes wrong otherwise (dual writes).** If the application writes to both the database and the search index itself, two clients can send conflicting writes concurrently and the two stores may apply them in opposite orders (the book's Figure 11-4 in Chapter 11). Neither store is "in charge" of the order, so they can make contradictory choices and stay inconsistent **forever**.
 
-**The fix is a single ordering authority.** Push all user input through one system that decides the order of all writes; then every other representation can be derived by processing writes in that same order. This is state machine replication again (see "Total Order Broadcast", Chapter 9). Whether that log is a CDC stream or an event-sourcing log matters less than the principle: **decide on a total order once**.
+**The fix is a single ordering authority.** Push all user input through one system that decides the order of all writes; then every other representation can be derived by processing writes in that same order. This is state machine replication again — every replica starts in the same state and applies the same commands in the same order, so all end up identical (see "Total Order Broadcast", Chapter 9). Whether that log is a CDC stream or an event-sourcing log matters less than the principle: **decide on a total order once**.
 
 Updating a derived system from an event log can usually be made **deterministic and idempotent**, which makes recovering from faults fairly easy (replay the log).
 
 #### Derived data versus distributed transactions
 
-The traditional way to keep different systems in agreement is a distributed transaction (atomic commit / two-phase commit, Chapter 9). How do derived-data systems compare?
+The traditional way to keep different systems in agreement is a distributed transaction (atomic commit / two-phase commit, Chapter 9 — a coordinator first asks every participant to prepare, then tells all of them to commit or all of them to abort). How do derived-data systems compare?
 
 | Aspect | Distributed transactions | Log-based derived data (CDC / event sourcing) |
 |---|---|---|
-| How write order is decided | Locks for mutual exclusion (e.g., two-phase locking) | Position in a log |
+| How write order is decided | Locks for mutual exclusion (only one holder at a time; e.g., two-phase locking) | Position in a log |
 | How "exactly once" is achieved | Atomic commit | Deterministic retry + idempotence |
-| Timing guarantee | Usually linearizable, so you can read your own writes | Usually updated asynchronously, so no such timing guarantee by default |
+| Timing guarantee | Usually linearizable (acts like one up-to-date copy), so you can read your own writes | Usually updated asynchronously, so no such timing guarantee by default |
 | Fault behaviour | One failing participant aborts everything, spreading failure | Faults stay local; a slow consumer just falls behind |
-| Practicality across vendors | XA has poor fault tolerance and performance | Much simpler abstraction, works across heterogeneous systems |
+| Practicality across vendors | XA (the standard cross-system 2PC protocol) has poor fault tolerance and performance | Much simpler abstraction, works across heterogeneous systems |
 
 The author's view:
 
@@ -135,18 +135,18 @@ The author's view:
 - XA in particular performs and tolerates faults poorly (Chapter 9), which limits it severely.
 - A better distributed transaction protocol might be possible, but getting everyone to adopt and integrate it would be hard and slow.
 - So, for integrating different systems today, he considers **derived data driven by a log the best bet**.
-- But he rejects telling people "eventual consistency is inevitable, deal with it" without guidance. Guarantees like reading your own writes are valuable. The "Aiming for Correctness" section later looks for a middle ground.
+- But he rejects telling people "eventual consistency is inevitable, deal with it" (eventual consistency: copies may disagree for a while but converge once writes stop) without guidance. Guarantees like reading your own writes are valuable. The "Aiming for Correctness" section later looks for a middle ground.
 
 #### The limits of total ordering
 
-For small systems, building one totally ordered log is easy — any single-leader database already does it. At larger scale, limits appear:
+For small systems, building one totally ordered log is easy — any single-leader database (one node, the leader, accepts all writes and so fixes their order) already does it. At larger scale, limits appear:
 
-1. **Throughput.** A total order usually means every event goes through one leader node. If one machine can't keep up, you partition the log (Chapter 11, "Partitioned Logs"), and then the relative order of events in **different partitions** is undefined.
-2. **Geography.** With several datacenters (e.g., to survive losing a whole datacenter), you typically have a leader per datacenter because synchronous cross-datacenter coordination is too slow (multi-leader replication, Chapter 5). Events that start in different datacenters have no defined order.
-3. **Microservices.** A common design gives each service its own durable state with nothing shared. Events from different services have no defined order between them.
+1. **Throughput** (how many events per second the system can handle). A total order usually means every event goes through one leader node. If one machine can't keep up, you partition the log — split it into independent sub-logs on different machines (Chapter 11, "Partitioned Logs"), and then the relative order of events in **different partitions** is undefined.
+2. **Geography.** With several datacenters (buildings full of servers, often in different regions) — e.g., to survive losing a whole datacenter — you typically have a leader per datacenter because synchronous cross-datacenter coordination is too slow (multi-leader replication, Chapter 5). Events that start in different datacenters have no defined order.
+3. **Microservices** (an application split into many small, independently deployed services). A common design gives each service its own durable state with nothing shared. Events from different services have no defined order between them.
 4. **Client-side state / offline clients.** Apps that update local state instantly (without waiting for the server) or work offline mean clients and servers very likely see events in different orders.
 
-Formally, agreeing on a total order of events is called **total order broadcast**, and it is **equivalent to consensus** (Chapter 9). Most consensus algorithms assume one node can handle the whole event stream and have no way to spread the ordering work over many nodes. Designing consensus that scales past one node's throughput and works well across geographies is **still an open research problem**.
+Formally, agreeing on a total order of events is called **total order broadcast**, and it is **equivalent to consensus** (Chapter 9; consensus means getting several nodes to agree on one decision even when some of them fail). Most consensus algorithms assume one node can handle the whole event stream and have no way to spread the ordering work over many nodes. Designing consensus that scales past one node's throughput and works well across geographies is **still an open research problem**.
 
 #### Ordering events to capture causality
 
@@ -176,28 +176,28 @@ The author's summary of data integration's goal: **every place that needs the da
 
 From Chapters 10 and 11: batch and stream processing share most principles. The fundamental difference is that streams are **unbounded** (never end) while batch inputs are **finite and known in size**. Implementation differences exist but are blurring:
 
-- **Spark** does streaming on top of a batch engine by chopping the stream into **microbatches**.
-- **Apache Flink** does batch on top of a streaming engine.
-- In principle either can emulate the other, though performance differs — e.g., microbatching can be slow for **hopping or sliding windows**.
+- **Spark** (Apache Spark, a widely used cluster computing engine) does streaming on top of a batch engine by chopping the stream into **microbatches** (tiny batches covering, say, one second of events each).
+- **Apache Flink** (an open-source stream processing engine) does batch on top of a streaming engine.
+- In principle either can emulate the other, though performance differs — e.g., microbatching can be slow for **hopping or sliding windows** (fixed-length time windows that overlap, e.g., a 5-minute window starting every minute).
 
 #### Maintaining derived state
 
-Batch processing has a strongly **functional** flavour, even if the code isn't in a functional language:
+Batch processing has a strongly **functional** flavour (in the style of functional programming, built from functions that only turn inputs into outputs), even if the code isn't in a functional language:
 
 - deterministic, pure functions (the result is determined solely by what goes in),
-- no side effects apart from explicit outputs,
-- inputs treated as immutable, outputs as append-only.
+- no side effects (changes to anything outside the function, such as writing a file or calling a service) apart from explicit outputs,
+- inputs treated as immutable (never modified), outputs as append-only (only added to, never overwritten).
 
-Stream processing is similar but adds **managed, fault-tolerant state** to operators (Chapter 11).
+Stream processing is similar but adds **managed, fault-tolerant state** to operators (the individual processing steps of a stream job) (Chapter 11).
 
 Deterministic functions with clear inputs and outputs help fault tolerance (idempotence) **and** make an organisation's dataflows easier to reason about. Be it a cache, a statistical model or a search index, think of it as a **pipeline** deriving one thing from another: state changes in one system flow through functional code and get applied to derived systems.
 
-**Why asynchronous?** You *could* maintain derived systems synchronously, the way a relational database updates secondary indexes in the same transaction as the table write. But asynchrony is what makes log-based systems robust:
+**Why asynchronous?** You *could* maintain derived systems synchronously, the way a relational database updates secondary indexes (extra lookup structures on non-key columns) in the same transaction as the table write. But asynchrony is what makes log-based systems robust:
 
 - A fault in one part stays contained locally.
 - Distributed transactions abort if **any** participant fails, so they amplify failures across the system.
 
-Secondary indexes on partitioned data often cross partition boundaries (Chapter 6): a **term-partitioned** index needs writes to go to several partitions; a **document-partitioned** index needs reads sent to all partitions. That communication between partitions also scales best and is most dependable if the index is updated **asynchronously** (see also "Multi-partition data processing" below).
+Secondary indexes on partitioned data often cross partition boundaries (Chapter 6): a **term-partitioned** (global) index — split up by the indexed value — needs writes to go to several partitions; a **document-partitioned** (local) index — each partition indexes only its own records — needs reads sent to all partitions. That communication between partitions also scales best and is most dependable if the index is updated **asynchronously** (see also "Multi-partition data processing" below).
 
 #### Reprocessing data for application evolution
 
@@ -207,7 +207,7 @@ Both styles are useful for derived data:
 |---|---|
 | Reflects input changes in derived views with low delay | Reprocesses large amounts of accumulated history to create **new** views of existing data |
 
-Reprocessing is a powerful way to **evolve** a system (Chapter 4). Without it, schema evolution is limited to small steps like adding an optional field or a new record type — true for both schema-on-write and schema-on-read. With reprocessing you can restructure a dataset into an **entirely different model** to fit new requirements.
+Reprocessing is a powerful way to **evolve** a system (Chapter 4). Without it, schema evolution (changing the schema — the description of the data's fields and types — over time) is limited to small steps like adding an optional field or a new record type — true for both schema-on-write (structure enforced when data is stored) and schema-on-read (structure interpreted only when data is read). With reprocessing you can restructure a dataset into an **entirely different model** to fit new requirements.
 
 > **Schema migrations on railways (book sidebar).** In 19th-century England, railways used competing track **gauges** (distance between rails), and trains for one gauge couldn't run on another. After a standard gauge was chosen in **1846**, other tracks had to be converted without shutting lines for years. The trick: add a **third rail** to make "dual/mixed gauge" track, so trains of both gauges can run. Once all trains use the standard gauge, remove the extra rail. This lets old and new coexist during a slow migration — but it's expensive, which is why nonstandard gauges survive, e.g., **BART** in the San Francisco Bay Area differs from most of the US.
 
@@ -226,7 +226,7 @@ If batch handles history and streaming handles recent updates, how do you combin
 
 1. Record incoming data as immutable events appended to an ever-growing dataset (like event sourcing).
 2. Derive read-optimised views from those events.
-3. Run **two systems in parallel**: a batch system (e.g., **Hadoop MapReduce**) and a stream system (e.g., **Storm**).
+3. Run **two systems in parallel**: a batch system (e.g., **Hadoop MapReduce**, the classic open-source framework for large batch jobs on a cluster) and a stream system (e.g., **Storm**, an early open-source stream processor).
 4. The stream processor quickly produces an **approximate** update to the view.
 5. Later the batch processor handles the same events and produces a **corrected** view.
 
@@ -234,9 +234,9 @@ Rationale: batch is simpler and less bug-prone; stream processors were considere
 
 It was influential and positive — it popularised deriving views from immutable event streams and reprocessing when needed. But the author lists practical problems:
 
-- **Double implementation.** The same logic must run in both a batch and a stream framework. Libraries like **Summingbird** abstract over both, but you still debug, tune and operate two systems.
-- **Merging outputs.** Stream and batch produce separate outputs that must be merged per user request. Easy for simple aggregations over a tumbling window; much harder for joins, sessionization, or non-time-series output.
-- **Full reprocessing is expensive.** So batch often runs incrementally (e.g., each hour's data at the end of the hour). That brings back stream-like problems — stragglers, windows spanning batch boundaries — and makes the batch layer more complex, defeating its purpose of being simple.
+- **Double implementation.** The same logic must run in both a batch and a stream framework. Libraries like **Summingbird** (from Twitter: write the logic once, run it on both) abstract over both, but you still debug, tune and operate two systems.
+- **Merging outputs.** Stream and batch produce separate outputs that must be merged per user request. Easy for simple aggregations over a tumbling window (fixed, non-overlapping time intervals); much harder for joins, sessionization (grouping a user's events into visits), or non-time-series output.
+- **Full reprocessing is expensive.** So batch often runs incrementally (e.g., each hour's data at the end of the hour). That brings back stream-like problems — stragglers (events that arrive late), windows spanning batch boundaries — and makes the batch layer more complex, defeating its purpose of being simple.
 
 #### Unifying batch and stream processing
 
@@ -244,9 +244,9 @@ Newer work gets lambda's benefits without its downsides by running **both** hist
 
 | Required feature | Why | Example |
 |---|---|---|
-| Replay historical events through the same engine that handles live events | Reprocessing uses the same code path | Log-based brokers can replay messages; some stream processors read input from HDFS |
+| Replay historical events through the same engine that handles live events | Reprocessing uses the same code path | Log-based brokers can replay messages; some stream processors read input from HDFS (Hadoop's distributed file system) |
 | Exactly-once semantics in stream processors | Output equals a fault-free run even if faults happened; like batch, requires discarding partial output of failed tasks | Chapter 11 fault tolerance |
-| Windowing by **event time**, not processing time | Processing time is meaningless when replaying old events | **Apache Beam** API, runnable on **Apache Flink** or **Google Cloud Dataflow** |
+| Windowing by **event time**, not processing time | Processing time is meaningless when replaying old events | **Apache Beam** API (one programming model, many engines), runnable on **Apache Flink** or **Google Cloud Dataflow** |
 
 ---
 
@@ -261,10 +261,10 @@ There are practical differences — e.g., many filesystems struggle with a direc
 | | Unix | Relational databases |
 |---|---|---|
 | Goal | Give programmers a logical but fairly **low-level** abstraction of the hardware | Give programmers a **high-level** abstraction hiding disk data structures, concurrency, crash recovery |
-| Building blocks | Pipes, and files that are plain byte sequences | SQL and transactions |
-| Why it's "simple" | A thin wrapper over hardware | A short declarative query taps huge machinery (optimizer, indexes, join algorithms, concurrency control, replication) without you knowing the details |
+| Building blocks | Pipes (feed one program's output into the next), and files that are plain byte sequences | SQL and transactions |
+| Why it's "simple" | A thin wrapper over hardware | A short declarative query taps huge machinery (optimizer that picks the execution plan, indexes, join algorithms, concurrency control, replication) without you knowing the details |
 
-The tension between them is decades old and unresolved. The author reads the **NoSQL movement** as applying the Unix-style low-level approach to distributed OLTP storage. This section tries to combine the best of both.
+The tension between them is decades old and unresolved. The author reads the **NoSQL movement** (the wave of non-relational databases, such as key-value and document stores, from about 2009) as applying the Unix-style low-level approach to distributed OLTP storage. This section tries to combine the best of both.
 
 ### Composing Data Storage Technologies
 
@@ -281,7 +281,7 @@ Chapters 10 and 11 built the **same kinds of things** outside the database: full
 
 What does `CREATE INDEX` actually do in a relational database?
 
-1. Take a **consistent snapshot** of the table and scan it.
+1. Take a **consistent snapshot** of the table (a view of it frozen at one point in time) and scan it.
 2. Extract the values of the indexed field(s), **sort** them, and write out the index.
 3. Process the **backlog** of writes made since the snapshot (assuming the table wasn't locked, so writes kept arriving).
 4. From then on, keep the index updated whenever a transaction writes to the table.
@@ -292,7 +292,7 @@ This is almost identical to **setting up a new follower replica** (Chapter 5) an
 
 Seen this way, **all the dataflow in an organisation looks like one giant database**. Every batch, stream or ETL job that moves data from one place and format to another behaves like the database subsystem that keeps indexes and materialized views current.
 
-- Batch and stream processors ≈ elaborate **triggers, stored procedures and view-maintenance routines**.
+- Batch and stream processors ≈ elaborate **triggers, stored procedures and view-maintenance routines** (triggers: code the database runs automatically when data changes; stored procedures: application logic stored and run inside the database).
 - The derived systems they maintain ≈ different **index types** (like a relational DB offering B-tree, hash, spatial indexes...).
 - The difference: instead of one integrated product, these "features" are separate software, on different machines, run by different teams.
 
@@ -301,7 +301,7 @@ Starting from "no single data model or storage format suits every access pattern
 | | Federated databases: **unifying reads** | Unbundled databases: **unifying writes** |
 |---|---|---|
 | Idea | One query interface over many storage engines and processing methods (also called a **polystore**) | Reliably plug stores together so every change reaches every place, even with faults |
-| Example | PostgreSQL's **foreign data wrapper** | Change data capture + event logs feeding many stores |
+| Example | PostgreSQL's **foreign data wrapper** (queries outside systems as if they were local tables) | Change data capture + event logs feeding many stores |
 | Specialised access | Apps can still go straight to underlying engines; users combining data use the federated interface | Each store keeps its own API |
 | Tradition it follows | Relational: one integrated system, high-level language, elegant semantics, complicated implementation | Unix: small tools doing one thing well, a uniform low-level API (pipes), composed by a higher-level language (the shell) |
 | Weakness | Doesn't solve synchronising **writes** | Still missing the "shell" (see below) |
@@ -314,7 +314,7 @@ Federation and unbundling are really one goal seen from two angles: building a r
 
 - The traditional answer is distributed transactions across heterogeneous stores — which the author thinks is the **wrong** solution.
 - Transactions **inside** one store or one stream processor are fine. For example, some stream processors use distributed transactions internally to get exactly-once semantics, and that can work well.
-- But when a transaction must span systems built by **different groups of people** (say, a stream processor writing to a key-value store or search index), there's no standard protocol, so integration is hard.
+- But when a transaction must span systems built by **different groups of people** (say, a stream processor writing to a key-value store — a database that looks up values by a unique key — or search index), there's no standard protocol, so integration is hard.
 - An **ordered event log with idempotent consumers** is a much simpler abstraction and far more feasible across heterogeneous systems.
 
 The big win is **loose coupling**, in two senses:
@@ -328,7 +328,7 @@ Unbundling won't **replace** databases:
 
 - Stream processors still need databases to keep state.
 - Batch and stream outputs still need databases to serve queries.
-- Specialised engines still matter — e.g., **MPP data warehouse** query engines are excellent at exploratory analytic queries.
+- Specialised engines still matter — e.g., **MPP data warehouse** (massively parallel processing: one query split across many machines) query engines are excellent at exploratory analytic queries.
 
 Costs of running many pieces:
 
@@ -340,11 +340,11 @@ The aim of unbundling is **breadth, not depth**: not beating a specialist databa
 
 #### What's missing?
 
-Tools for composing systems are improving, but a big piece is absent: the unbundled equivalent of the **Unix shell** — a high-level, declarative language for wiring storage and processing systems together.
+Tools for composing systems are improving, but a big piece is absent: the unbundled equivalent of the **Unix shell** (the command line, where small programs are chained together with pipes) — a high-level, declarative language for wiring storage and processing systems together.
 
 The author's wish: to write something like `mysql | elasticsearch`, the unbundled version of `CREATE INDEX`. It would:
 
-1. Take every document in a MySQL database and index it in an Elasticsearch cluster.
+1. Take every document in a MySQL database (MySQL: a popular open-source relational database) and index it in an Elasticsearch cluster.
 2. Continuously capture every later change to MySQL and apply it to the index automatically — no custom glue code.
 
 Here is an illustrative sketch of what such a declaration might look like (this is imaginary syntax, not a real tool):
@@ -357,7 +357,7 @@ postgres://shop/products  |  opensearch://catalog-index
 #  right side: derived view that can be dropped and rebuilt at any time
 ```
 
-Similarly, it would be great to **declare caches** as materialized views over complex queries — even recursive graph queries and application logic — and have them precomputed and updated automatically. Early research such as **differential dataflow** works in this direction; the author hopes these ideas reach production.
+Similarly, it would be great to **declare caches** as materialized views over complex queries — even recursive graph queries and application logic — and have them precomputed and updated automatically. Early research such as **differential dataflow** (a system that efficiently updates computed results when only a small part of the input changes) works in this direction; the author hopes these ideas reach production.
 
 ### Designing Applications Around Dataflow
 
@@ -377,21 +377,21 @@ Every derived dataset comes from some **transformation function**:
 | Derived dataset | Derivation function |
 |---|---|
 | Secondary index | For each row/document, pick the indexed column values and sort by them (B-tree or SSTable, Chapter 3) |
-| Full-text search index | Natural-language processing — language detection, word segmentation, stemming or lemmatization, spelling correction, synonym detection — then build a lookup structure such as an **inverted index** |
-| Machine learning model | Feature extraction and statistical analysis applied to training data; predictions on new input are derived from input + model (and thus indirectly from training data) |
+| Full-text search index | Natural-language processing — language detection, word segmentation, stemming or lemmatization (reducing words to a base form), spelling correction, synonym detection — then build a lookup structure such as an **inverted index** (word → documents containing it) |
+| Machine learning model | Feature extraction (turning raw data into numeric inputs) and statistical analysis applied to training data; predictions on new input are derived from input + model (and thus indirectly from training data) |
 | Cache | Aggregates data into the shape the UI displays; so the cache logic depends on which fields the UI uses, and UI changes may require redefining and rebuilding the cache |
 
 - The secondary-index function is so common that databases build it in: just say `CREATE INDEX`.
 - Basic full-text features for common languages may be built in, but advanced ones need domain-specific tuning.
 - ML **feature engineering** is notoriously application-specific and needs detailed knowledge of user interaction and deployment.
 
-When the derivation isn't a standard "cookie-cutter" function, you need **custom code**, and that's where databases struggle. Relational DBs offer triggers, stored procedures and user-defined functions to run app code inside the database, but these have been something of an afterthought in database design.
+When the derivation isn't a standard "cookie-cutter" function, you need **custom code**, and that's where databases struggle. Relational DBs offer triggers, stored procedures and user-defined functions (UDFs: custom functions you load into the database) to run app code inside the database, but these have been something of an afterthought in database design.
 
 #### Separation of application code and state
 
-In theory a database could host arbitrary application code, like an OS. In practice databases are a poor fit for modern development needs: managing dependencies and packages, version control, rolling upgrades, evolvability, monitoring and metrics, calls to network services, integration with external systems.
+In theory a database could host arbitrary application code, like an OS. In practice databases are a poor fit for modern development needs: managing dependencies and packages, version control, rolling upgrades (updating servers one at a time with no downtime), evolvability, monitoring and metrics, calls to network services, integration with external systems.
 
-Tools like **Mesos, YARN, Docker and Kubernetes** are built specifically to run application code, and by focusing on that one job they do it far better than a database offering UDF execution as a side feature.
+Tools like **Mesos, YARN, Docker and Kubernetes** (cluster schedulers and container tools that package programs and run them across many machines) are built specifically to run application code, and by focusing on that one job they do it far better than a database offering UDF execution as a side feature.
 
 So it makes sense for some parts of a system to specialise in **durable storage** and others in **running code**, interacting but independent.
 
@@ -410,7 +410,7 @@ Dataflow thinking renegotiates the relationship between code and state. Instead 
 Precedents:
 
 - Treating a database's change log as a subscribable event stream (Chapter 11).
-- **Actors** and other message-passing systems that respond to events (Chapter 4).
+- **Actors** (independent units that keep private state and communicate only by sending messages) and other message-passing systems that respond to events (Chapter 4).
 - The **tuple spaces** model of the 1980s: distributed computation as processes that watch state changes and react.
 - Inside a database: a trigger firing on a change, or a secondary index updating after a table write.
 
@@ -420,14 +420,14 @@ Unbundling applies this to derived datasets **outside** the primary database —
 
 | Requirement for derived data | Why | What breaks it |
 |---|---|---|
-| **Order of state changes matters** | Views derived from the same log must process events in the same order to stay consistent with each other | Many message brokers reorder when redelivering unacknowledged messages; dual writes are ruled out too |
+| **Order of state changes matters** | Views derived from the same log must process events in the same order to stay consistent with each other | Many message brokers (servers relaying messages from producers to consumers) reorder when redelivering unacknowledged (not yet confirmed as processed) messages; dual writes are ruled out too |
 | **Fault tolerance is essential** | Losing one message leaves the derived dataset permanently out of sync; both delivery and state updates must be reliable | Many actor systems keep actor state and messages in memory by default, lost on a crash |
 
 Stable ordering and fault-tolerant processing are demanding, but **much cheaper and more operationally robust than distributed transactions**. Modern stream processors provide them at scale and let you run application code as stream operators — code that can do arbitrary processing that built-in database derivation functions can't. Just as Unix tools can be joined with pipes, **stream operators compose**: each takes streams of state changes in and emits streams of state changes out.
 
 #### Stream processors and services
 
-Today's trendy style splits functionality into **services** talking over **synchronous** network requests (e.g., REST APIs). The main advantage over a monolith is **organisational scalability via loose coupling**: different teams own different services and coordinate less (as long as services deploy independently).
+Today's trendy style splits functionality into **services** talking over **synchronous** network requests (e.g., REST APIs — HTTP interfaces organised around resources and URLs). The main advantage over a monolith (one large application deployed as a single unit) is **organisational scalability via loose coupling**: different teams own different services and coordinate less (as long as services deploy independently).
 
 Composing stream operators resembles microservices, but the communication is fundamentally different: **one-way, asynchronous message streams** instead of synchronous request/response.
 
@@ -436,7 +436,7 @@ Besides the fault-tolerance benefits of message passing (Chapter 4), dataflow ca
 1. **Microservices approach:** the purchase code **queries** an exchange-rate service or database at purchase time.
 2. **Dataflow approach:** the purchase code **subscribes in advance** to a stream of exchange-rate updates and writes each new rate into a **local database** as it arrives. At purchase time it only reads the local DB.
 
-The second replaces a synchronous network call with a local query (maybe same machine or even same process). It's **faster** and **more robust** to the other service failing. As the book puts it in spirit: the quickest, most dependable network request is the one you never make. Instead of an RPC we now have a **stream-table join** between purchase events and rate-update events.
+The second replaces a synchronous network call with a local query (maybe same machine or even same process). It's **faster** and **more robust** to the other service failing. As the book puts it in spirit: the quickest, most dependable network request is the one you never make. Instead of an RPC (remote procedure call: calling a function on another machine over the network) we now have a **stream-table join** between purchase events and rate-update events.
 
 > **Footnote.** A microservice could cache the rate locally to avoid the call, but keeping that cache fresh needs periodic polling or subscribing to a change stream — which is just the dataflow approach.
 
@@ -459,7 +459,7 @@ Together they cover the full journey of data, from collection to consumption (pr
 
 **The derived dataset is where the two paths meet**, and it embodies a trade-off between work at write time and work at read time.
 
-*Figure 12-1 (redrawn): in a search index, writes (document updates) and reads (queries) meet at the index. On the write path a new document version goes through linguistic analysis and its terms go into the index; on the read path a query is expanded, its terms are looked up in the index, and the posting lists come back as results.*
+*Figure 12-1 (redrawn): in a search index, writes (document updates) and reads (queries) meet at the index. On the write path a new document version goes through linguistic analysis and its terms go into the index; on the read path a query is expanded, its terms are looked up in the index, and the posting lists (for each term, the list of documents containing it) come back as results.*
 ```mermaid
 flowchart LR
     subgraph WP["Write path"]
@@ -491,7 +491,7 @@ Now move the boundary around:
 
 | Option | Write-path work | Read-path work | Verdict |
 |---|---|---|---|
-| **No index** — scan every document like `grep` | None | Huge for many documents | Fine only for small collections |
+| **No index** — scan every document like `grep` (Unix text search) | None | Huge for many documents | Fine only for small collections |
 | **Normal index** | Update entries per term | Look up terms + Boolean logic | The usual balance |
 | **Precompute results for every possible query** | Infinite — the set of possible queries is infinite | Trivial lookup | Impossible |
 | **Precompute results only for the most popular queries**, use the index for the rest | Must update these cached results when new matching documents arrive | Fast for common queries | A "cache of common queries", which is really a **materialized view** |
@@ -507,7 +507,7 @@ This is exactly the **Twitter** home-timeline example from Chapter 1 ("Describin
 Two decades of web apps have made us assume the **client/server model** — mostly stateless clients, servers owning the data — so strongly that we forget alternatives. It's worth questioning.
 
 - Traditionally a browser was a stateless client, useless offline (you could basically just scroll a page loaded while online).
-- Modern **single-page JavaScript apps** have lots of state: client-side UI interaction and persistent local storage in the browser.
+- Modern **single-page JavaScript apps** (web apps that load once and then update the page in the browser without full reloads) have lots of state: client-side UI interaction and persistent local storage in the browser.
 - **Mobile apps** keep much state on the device and don't need a server round-trip for most interactions.
 
 This revives **offline-first** apps: do as much as possible against a **local database on the device**, work without internet, and **sync in the background** when connected. Since mobile networks are often slow and unreliable, not blocking the UI on network calls and working offline is a big user benefit (Chapter 5, "Clients with offline operation").
@@ -516,14 +516,14 @@ Once state lives on devices, a useful mental model appears: **on-device state is
 
 #### Pushing state changes to clients
 
-On a typical web page, if server data changes after you load the page, your browser doesn't know until you reload. It reads once and assumes the data is static — no subscription. So device state is a **stale cache** unless you poll. (RSS and similar HTTP feed subscriptions are basically polling.)
+On a typical web page, if server data changes after you load the page, your browser doesn't know until you reload. It reads once and assumes the data is static — no subscription. So device state is a **stale cache** unless you poll. (RSS — a format for update feeds that readers fetch periodically — and similar HTTP feed subscriptions are basically polling; HTTP is the web's request/response protocol.)
 
 Newer protocols go beyond HTTP request/response:
 
 - **Server-sent events** (the **EventSource API**) and
 - **WebSockets**
 
-both keep a TCP connection open so the server can **push** messages to the browser while it stays connected. The server can tell the client about changes to state the client has cached, reducing staleness.
+both keep a TCP connection (TCP: the internet protocol giving a reliable, ordered byte stream between two machines; see [System Design Fundamentals](../00a-system-design-fundamentals/README.md)) open so the server can **push** messages to the browser while it stays connected. The server can tell the client about changes to state the client has cached, reducing staleness.
 
 In write-path/read-path terms, pushing changes to devices **stretches the write path right up to the end user's device**:
 
@@ -532,11 +532,11 @@ In write-path/read-path terms, pushing changes to devices **stretches the write 
 
 Stream processing and messaging ideas therefore needn't stay in the datacenter; they can reach end-user devices.
 
-**What about offline devices?** Already solved: in Chapter 11 ("Consumer offsets"), a consumer of a log-based broker reconnects and resumes from its offset, missing nothing. Each device is just a small subscriber to a small event stream.
+**What about offline devices?** Already solved: in Chapter 11 ("Consumer offsets"), a consumer of a log-based broker reconnects and resumes from its offset (its position number in the log), missing nothing. Each device is just a small subscriber to a small event stream.
 
 #### End-to-end event streams
 
-Tools for stateful clients and UIs — the **Elm** language and Facebook's **React, Flux and Redux** — already handle client state by consuming an event stream (user input, server responses), much like event sourcing.
+Tools for stateful clients and UIs — the **Elm** language and Facebook's **React, Flux and Redux** (JavaScript libraries for building UIs and managing UI state) — already handle client state by consuming an event stream (user input, server responses), much like event sourcing.
 
 A natural extension is for the **server to feed its own state-change events into that client pipeline** as well. Then state changes flow along an **end-to-end write path**:
 
@@ -552,7 +552,7 @@ flowchart LR
 
 Changes could travel quickly — e.g., in **less than one second** from end to end. Instant messaging and online games already work like this ("real-time" meaning low delay, not hard response-time guarantees as in Chapter 8).
 
-**Why not every app?** Because stateless clients and request/response are deeply baked into databases, libraries, frameworks and protocols. Many datastores offer "one request, one response"; far fewer offer "one request, a **stream** of responses over time" (subscriptions). Extending the write path to users means moving from **request/response** to **publish/subscribe** dataflow. The author believes the payoff — more responsive UIs, better offline support — is worth it, and urges designers to keep **subscribing to changes** in mind, not just querying current state.
+**Why not every app?** Because stateless clients and request/response are deeply baked into databases, libraries, frameworks and protocols. Many datastores offer "one request, one response"; far fewer offer "one request, a **stream** of responses over time" (subscriptions). Extending the write path to users means moving from **request/response** to **publish/subscribe** dataflow (producers publish messages to a topic, and everyone subscribed to it receives them). The author believes the payoff — more responsive UIs, better offline support — is worth it, and urges designers to keep **subscribing to changes** in mind, not just querying current state.
 
 #### Reads are events too
 
@@ -566,7 +566,7 @@ The author goes further. Usually writes flow via the event log, whereas reads ar
 2. Send both read events and write events through the **same stream processor**.
 3. The processor answers a read event by emitting the result on an **output stream**.
 
-When both reads and writes are events routed to the same operator, you're really performing a **stream-table join**: query stream on one side, database on the other. The read event must go to the partition holding the data (Chapter 6, "Request Routing"), just as batch and stream joins must co-partition inputs by key (Chapter 10, reduce-side joins).
+When both reads and writes are events routed to the same operator, you're really performing a **stream-table join**: query stream on one side, database on the other. The read event must go to the partition holding the data (Chapter 6, "Request Routing"), just as batch and stream joins must co-partition inputs by key (split both inputs the same way, so matching keys land in the same partition) (Chapter 10, reduce-side joins).
 
 This link between serving requests and joins is fundamental:
 
@@ -590,21 +590,21 @@ MPP databases' internal query execution graphs look similar. If you need multi-p
 
 **Stateless vs stateful.** If a stateless, read-only service misbehaves, you fix the bug, restart it, and all is well. Databases are different: they're built to remember things (more or less) forever, so a mistake's effects may **also last forever**. Stateful systems deserve more careful thought.
 
-We want applications that are **reliable and correct** — programs whose behaviour is well defined and understood even when faults occur. For roughly **four decades**, the go-to tools here have been the transaction guarantees of **atomicity, isolation and durability** (Chapter 7). But:
+We want applications that are **reliable and correct** — programs whose behaviour is well defined and understood even when faults occur. For roughly **four decades**, the go-to tools here have been the transaction guarantees of **atomicity, isolation and durability** (all-or-nothing; no interference between concurrent transactions; committed data survives crashes) (Chapter 7). But:
 
-- Those foundations are **weaker than they look** — consider the confusion around weak isolation levels (Chapter 7).
+- Those foundations are **weaker than they look** — consider the confusion around weak isolation levels (settings that allow some concurrency anomalies in return for speed) (Chapter 7).
 - Some areas are **abandoning transactions** for models with better performance and scalability but messier semantics (e.g., leaderless replication, Chapter 5).
 - **Consistency** is talked about a lot but poorly defined (Chapter 7, Chapter 9). Some people say "embrace weak consistency" for availability without a clear idea of what that means in practice.
 
 Our understanding and engineering methods are surprisingly **flaky**. It's very hard to tell whether an app is safe at a given isolation level or replication configuration. Simple solutions often seem fine at low concurrency without faults, then reveal subtle bugs under stress.
 
-- **Kyle Kingsbury's Jepsen** experiments exposed stark gaps between products' **claimed** safety guarantees and their **actual** behaviour under network problems and crashes.
+- **Kyle Kingsbury's Jepsen** experiments (a test harness that injects network faults and crashes into databases and checks the results) exposed stark gaps between products' **claimed** safety guarantees and their **actual** behaviour under network problems and crashes.
 - Even if the infrastructure were flawless, application code must still **use it correctly**, which is error-prone when configuration is hard to understand (weak isolation levels, quorum settings, etc.).
 
 | If your app... | Then... |
 |---|---|
 | Can tolerate occasionally losing or corrupting data unpredictably | Life is easy; you might get away with hoping for the best |
-| Needs stronger correctness | **Serializability** and **atomic commit** are the established tools, but they usually work only **within a single datacenter** (ruling out geo-distribution) and **limit scale and fault tolerance** |
+| Needs stronger correctness | **Serializability** (transactions behave as if run one at a time) and **atomic commit** are the established tools, but they usually work only **within a single datacenter** (ruling out geo-distribution) and **limit scale and fault tolerance** |
 
 The author doesn't think traditional transactions are going away, but he doesn't think they're the **final word** either. This section explores correctness in **dataflow architectures**.
 
@@ -623,13 +623,13 @@ Recall **exactly-once** (or **effectively-once**) semantics (Chapter 11). When p
 
 **Processing twice is also corruption**: charging a customer twice (overbilling), or incrementing a counter twice (inflating a metric). Exactly-once means arranging the computation so the **final effect equals a fault-free run**, even if retries happened.
 
-The most effective approach: make the operation **idempotent** — same effect whether run once or many times. Turning a non-idempotent operation into an idempotent one takes care: you may need extra metadata (e.g., the set of operation IDs that already updated a value), and **fencing** when failing over between nodes (Chapter 8, "The leader and the lock").
+The most effective approach: make the operation **idempotent** — same effect whether run once or many times. Turning a non-idempotent operation into an idempotent one takes care: you may need extra metadata (e.g., the set of operation IDs that already updated a value), and **fencing** (tagging requests with an increasing token so a node that has lost its role gets rejected) when failing over (switching to a replacement node) between nodes (Chapter 8, "The leader and the lock").
 
 #### Duplicate suppression
 
 Duplicate suppression appears in many places beyond stream processing.
 
-**TCP** numbers packets with sequence numbers so the receiver can put them in order and detect lost or duplicated packets. Lost ones are retransmitted and duplicates dropped by the TCP stack before the app sees the data.
+**TCP** numbers packets (the small chunks data is split into for sending) with sequence numbers so the receiver can put them in order and detect lost or duplicated packets. Lost ones are retransmitted and duplicates dropped by the TCP stack before the app sees the data.
 
 **But that only works within one TCP connection.** Many databases tie a transaction to a client connection (queries sent on the same connection belong to the same transaction). Suppose the client sends `COMMIT`, then the network drops and the connection times out before the reply arrives. The client **doesn't know** whether the transaction committed or aborted (Chapter 8, Figure 8-1).
 
@@ -648,21 +648,21 @@ COMMIT;                                                      -- make both change
 
 So even though this is the textbook example of **atomicity**, it's actually **not correct**, and **real banks don't work this way**.
 
-**Does two-phase commit help?** 2PC breaks the one-connection-one-transaction link, because the coordinator must be able to reconnect after a network fault and instruct the database whether an in-doubt transaction should commit or abort. Is that enough to guarantee once-only execution? **No.**
+**Does two-phase commit help?** 2PC breaks the one-connection-one-transaction link, because the coordinator must be able to reconnect after a network fault and instruct the database whether an in-doubt transaction (one that has voted to commit but not yet heard the final decision) should commit or abort. Is that enough to guarantee once-only execution? **No.**
 
 Even if duplicates are suppressed between the database client and server, there's still the network between the **end user's device** and the **application server**:
 
-1. A user on a weak mobile connection submits a form via HTTP POST.
+1. A user on a weak mobile connection submits a form via HTTP POST (the HTTP method browsers use to send data that changes something on the server).
 2. The POST arrives, but the signal fades before the response comes back.
 3. The user sees an error and retries. The browser warns that the form will be resubmitted and asks for confirmation; the user agrees, because they do want it done.
-4. (The **Post/Redirect/Get** pattern avoids that warning in normal use, but doesn't help when the POST times out.)
+4. (The **Post/Redirect/Get** pattern — after a POST the server redirects the browser to an ordinary page, so refreshing doesn't resend the form — avoids that warning in normal use, but doesn't help when the POST times out.)
 5. To the web server the retry is a **new request**; to the database it's a **new transaction**. The usual deduplication mechanisms don't catch it.
 
 #### Operation identifiers
 
 To make an operation idempotent across **several network hops**, relying on the database's transactions isn't enough; you have to think about the request's **whole journey, end to end**.
 
-1. Generate a **unique operation ID** (e.g., a **UUID**) in the client — say as a hidden form field — or compute a **hash of all relevant form fields**.
+1. Generate a **unique operation ID** (e.g., a **UUID** — a 128-bit random identifier that is practically guaranteed to be unique) in the client — say as a hidden form field — or compute a **hash of all relevant form fields** (a hash is a short fingerprint computed from data; identical input gives an identical hash).
 2. If the browser submits the POST twice, both carry the **same ID**.
 3. Pass that ID all the way to the database and make sure only **one** operation per ID ever executes.
 
@@ -680,7 +680,7 @@ COMMIT;
 ```
 
 - The `UNIQUE` constraint on the ID column is the key: if a retry attempts to add an ID that is already present, the `INSERT` is rejected and the entire transaction **aborts**, so it can't take effect twice.
-- Relational databases usually uphold a uniqueness constraint properly **even under weak isolation**, whereas doing "look first, then insert" in application code can break under non-serializable isolation (Chapter 7, write skew and phantoms).
+- Relational databases usually uphold a uniqueness constraint properly **even under weak isolation**, whereas doing "look first, then insert" in application code can break under non-serializable isolation (Chapter 7, write skew and phantoms — two transactions each check a condition, then both write, and together they break a rule the check was meant to protect).
 - Bonus: the requests table is effectively an **event log**, pointing towards event sourcing. The balance updates don't even need to be in the same transaction — they are redundant, so a downstream consumer could **derive** them from the request event, provided the event is processed exactly once (again enforceable with the request ID).
 
 #### The end-to-end argument
@@ -698,9 +698,9 @@ The same argument covers:
 
 | Concern | Low-level mechanism | What it misses | End-to-end fix |
 |---|---|---|---|
-| Data integrity | Checksums in **Ethernet, TCP and TLS** catch corrupted packets | Bugs in sending/receiving software; corruption on disk | **End-to-end checksums** |
+| Data integrity | Checksums (short codes that reveal altered bytes) in **Ethernet, TCP and TLS** catch corrupted packets | Bugs in sending/receiving software; corruption on disk | **End-to-end checksums** |
 | Encryption | Home **WiFi password** stops snooping on your WiFi | Attackers elsewhere on the internet | **End-to-end encryption and authentication** |
-| Encryption | **TLS/SSL** between client and server stops network attackers | A compromised server | End-to-end encryption and authentication |
+| Encryption | **TLS/SSL** (the encryption behind HTTPS) between client and server stops network attackers | A compromised server | End-to-end encryption and authentication |
 
 The lower-level mechanisms (WiFi encryption, Ethernet checksums, TCP's dedup) remain **useful** — they make higher-level problems less likely. HTTP would often get garbled without TCP reordering packets. They're just **not sufficient** for end-to-end correctness.
 
@@ -734,7 +734,7 @@ From Chapter 9: in a distributed setting, enforcing uniqueness **requires consen
 
 - **Most common method:** make one node the **leader** and let it decide everything. That's OK provided you accept routing every request via one node (even for distant clients) and that node never dies. To tolerate leader failure, you're back to the consensus problem.
 - **Scaling out:** partition by the value that must be unique. For request-ID uniqueness (Example 12-2), route all requests with the same ID to the same partition. For unique usernames, partition by **hash of username**.
-- **Ruled out:** **asynchronous multi-master replication** — different masters could concurrently accept conflicting writes, breaking uniqueness.
+- **Ruled out:** **asynchronous multi-master replication** (several nodes accept writes and sync with each other later) — different masters could concurrently accept conflicting writes, breaking uniqueness.
 - If you want to **immediately reject** violating writes, **synchronous coordination is unavoidable**.
 
 #### Uniqueness in log-based messaging
@@ -767,7 +767,7 @@ sequenceDiagram
 
 This is essentially the "implementing linearizable storage using total order broadcast" algorithm from Chapter 9. It **scales** to high throughput by adding partitions, since each partition is processed independently.
 
-It works for many constraints, not just uniqueness. The core principle: **route any writes that might conflict to the same partition and process them sequentially**. What counts as a conflict depends on the application (Chapter 5 "What is a conflict?", Chapter 7 write skew), but the stream processor can run **arbitrary validation logic**. **Bayou** pioneered a similar approach back in the **1990s**.
+It works for many constraints, not just uniqueness. The core principle: **route any writes that might conflict to the same partition and process them sequentially**. What counts as a conflict depends on the application (Chapter 5 "What is a conflict?", Chapter 7 write skew), but the stream processor can run **arbitrary validation logic**. **Bayou** (a Xerox PARC research system for replicated data on mobile devices) pioneered a similar approach back in the **1990s**.
 
 #### Multi-partition request processing
 
@@ -794,7 +794,7 @@ flowchart LR
 
 Why steps 1 and 2? If the client sent debit and credit **directly**, making sure both-or-neither happen would need an atomic commit across two partitions. Instead we **durably log the request as one message** and derive both instructions from it. **Single-object writes are atomic** in almost every data system, so the request is either in the log or not — no multi-partition atomic commit needed.
 
-**Crash handling:** if the step-2 processor crashes, it resumes from its last **checkpoint**. It won't skip requests, but may reprocess some and emit duplicate credit/debit instructions. Being **deterministic**, it emits the **same** instructions, and the step-3 processors discard them thanks to the end-to-end request ID.
+**Crash handling:** if the step-2 processor crashes, it resumes from its last **checkpoint** (a periodically saved record of its state and how far through the log it got). It won't skip requests, but may reprocess some and emit duplicate credit/debit instructions. Being **deterministic**, it emits the **same** instructions, and the step-3 processors discard them thanks to the end-to-end request ID.
 
 **Preventing overdraft:** add another stream processor, partitioned by the **payer's account number**, that tracks balances and validates transfers; only valid transactions are placed in the step-1 request log.
 
@@ -813,9 +813,9 @@ The author argues the word **consistency** mixes two different requirements:
 | | **Timeliness** | **Integrity** |
 |---|---|---|
 | Meaning | What users see reflects the **latest** state | **Absence of corruption**: no data loss, no contradictory or false data; derived datasets correctly reflect their source |
-| Example of violation | Reading a stale replica shows an inconsistent state (Chapter 5, replication lag) | An index missing some records (not very useful) |
+| Example of violation | Reading a stale replica shows an inconsistent state (Chapter 5, replication lag: the delay before a copy receives a write) | An index missing some records (not very useful) |
 | Nature of violation | **Temporary** — waiting and retrying fixes it | **Permanent** — waiting won't fix corruption; needs explicit checking and repair |
-| Related concepts | CAP's "consistency" = **linearizability**, a strong form of timeliness; weaker forms like **read-after-write** consistency can also be useful | ACID "consistency" usually means an app-specific idea of integrity; **atomicity and durability** are the main tools that protect it |
+| Related concepts | CAP's "consistency" = **linearizability**, a strong form of timeliness; weaker forms like **read-after-write** consistency (you always see your own writes) can also be useful | ACID (atomicity, consistency, isolation, durability) "consistency" usually means an app-specific idea of integrity; **atomicity and durability** are the main tools that protect it |
 | Slogan | Violations = **"eventual consistency"** | Violations = **"perpetual inconsistency"** |
 
 **Integrity usually matters much more than timeliness.** Timeliness violations are annoying and confusing; integrity violations can be **catastrophic**.
@@ -883,14 +883,14 @@ Together: dataflow systems can manage data for many applications **without coord
 
 ### Trust, but Verify
 
-All our reasoning assumes some things can go wrong and others can't. Those assumptions are our **system model** (Chapter 8). We assume processes can crash, machines can lose power, and networks can delay or drop messages arbitrarily. We might also assume data isn't lost after **fsync**, memory isn't corrupted, and the CPU's **multiplication instruction** always gives the right answer.
+All our reasoning assumes some things can go wrong and others can't. Those assumptions are our **system model** (Chapter 8). We assume processes can crash, machines can lose power, and networks can delay or drop messages arbitrarily. We might also assume data isn't lost after **fsync** (the system call that forces buffered writes onto disk), memory isn't corrupted, and the CPU's **multiplication instruction** always gives the right answer.
 
 These are reasonable (true most of the time) — it would be paralysing to constantly doubt the computer. Traditional system models are **binary** ("can happen" / "never happens"), but reality is **probabilistic**. The real question: do violations happen **often enough to meet in practice**?
 
 - Data can get corrupted while sitting untouched on disk (Chapter 7).
 - Network corruption can occasionally **slip past TCP checksums** (Chapter 8).
 
-**Anecdote:** an application the author worked on collected crash reports from clients, and a few reports made sense only as **random bit-flips in the devices' memory**. Unlikely per device, but with enough devices, unlikely things happen.
+**Anecdote:** an application the author worked on collected crash reports from clients, and a few reports made sense only as **random bit-flips in the devices' memory** (a stored 0 spontaneously becoming 1, or vice versa). Unlikely per device, but with enough devices, unlikely things happen.
 
 - Apart from random corruption caused by **radiation** or faulty hardware, some pathological patterns of memory access can flip bits **even when the memory itself is healthy** — the **rowhammer** effect — which can be exploited to break OS security.
 - Hardware is not quite the perfect abstraction it appears.
@@ -905,7 +905,7 @@ Checksums at the network, memory or filesystem level can't catch software bugs. 
 
 even though both are robust, respected, battle-tested databases. Less mature software is likely much worse. Despite careful design, testing and review, bugs creep in; they're rare and eventually fixed, but can corrupt data in the meantime.
 
-**Application code** likely has far more bugs, since it gets much less review and testing than database code. Many apps don't even correctly use the database's integrity features, such as **foreign key** or **uniqueness constraints**.
+**Application code** likely has far more bugs, since it gets much less review and testing than database code. Many apps don't even correctly use the database's integrity features, such as **foreign key** (a column that must point to an existing row in another table) or **uniqueness constraints**.
 
 **ACID consistency** assumes the database starts consistent and each transaction moves it from one consistent state to another. That only holds if transactions are **bug-free**. If the app misuses the database (e.g., uses a weak isolation level unsafely), integrity can't be guaranteed.
 
@@ -914,7 +914,7 @@ even though both are robust, respected, battle-tested databases. Less mature sof
 Since hardware and software fall short of the ideal, corruption seems **inevitable sooner or later**. So we need a way to **detect** it, fix it, and trace its cause. Checking data integrity is called **auditing**.
 
 - Auditing isn't only for finance (Chapter 11, "Advantages of immutable events"), but it's crucial in finance precisely because everyone knows mistakes happen and must be detectable and fixable.
-- Mature systems consider unlikely failures and manage the risk. Large-scale storage like **HDFS** and **Amazon S3** **don't fully trust disks**: background processes continually **read back files, compare with other replicas, and move files between disks** to reduce the risk of silent corruption.
+- Mature systems consider unlikely failures and manage the risk. Large-scale storage like **HDFS** and **Amazon S3** (Amazon's cloud file/object storage service) **don't fully trust disks**: background processes continually **read back files, compare with other replicas, and move files between disks** to reduce the risk of silent corruption.
 - To be sure your data is still there, **actually read it and check**. Usually it's fine; if not, find out early.
 - Likewise, **test restoring from backups** periodically, or you may discover a broken backup only after data is lost.
 
@@ -934,7 +934,7 @@ If a transaction mutates several objects, it's hard to tell afterwards **what it
 
 - In event sourcing, user input is a **single immutable event**; all state updates are **derived** from it.
 - The derivation can be **deterministic and repeatable**: the same events through the same version of the code give the same state.
-- Explicit dataflow (Chapter 10, "Philosophy of batch process outputs") makes data **provenance** clear, so integrity checks become feasible:
+- Explicit dataflow (Chapter 10, "Philosophy of batch process outputs") makes data **provenance** (where each piece of data came from and how it was produced) clear, so integrity checks become feasible:
   - For the event log, use **hashes** to check storage isn't corrupted.
   - For derived state, **rerun** the batch/stream processors and compare the outputs, or even run a **second, redundant derivation side by side**.
 - A deterministic, clearly defined dataflow also helps you **debug and trace** the reasons behind the system's behaviour — you can recreate precisely the conditions that led to a surprise, which amounts to **time-travel debugging**.
@@ -952,16 +952,16 @@ Continuous end-to-end integrity checks give **confidence**, which lets you **mov
 Right now, auditability is a **first-class concern** in only a few data systems.
 
 - Some apps build their own audit mechanisms, e.g., writing every change into a separate **audit table** — yet it remains hard to be sure both that table and the database itself are intact.
-- Periodically signing a transaction log with a **hardware security module** makes it **tamper-proof**, yet that says nothing about whether the **correct** transactions were written into it.
+- Periodically signing a transaction log with a **hardware security module** (a tamper-resistant device that holds cryptographic keys and signs data) makes it **tamper-proof**, yet that says nothing about whether the **correct** transactions were written into it.
 
-An intriguing idea is using **cryptographic tools** to demonstrate system integrity robustly against many hardware and software issues, even **malicious** actions. **Cryptocurrencies, blockchains and distributed ledger technologies** — **Bitcoin, Ethereum, Ripple, Stellar** and others — explore this.
+An intriguing idea is using **cryptographic tools** to demonstrate system integrity robustly against many hardware and software issues, even **malicious** actions. **Cryptocurrencies, blockchains and distributed ledger technologies** (systems where many mutually distrusting parties each keep a copy of a shared, append-only record of transactions, chained together with cryptographic hashes) — **Bitcoin, Ethereum, Ripple, Stellar** and others — explore this.
 
 - The author says he isn't qualified to judge them as currencies or contract mechanisms.
 - Seen as data systems, they're **distributed databases** (each with its own data model and transaction mechanism) whose replicas are hosted by **organisations that don't trust each other**; the replicas constantly verify one another and run a **consensus protocol** to settle which transactions to execute.
-- He's **somewhat skeptical** of their **Byzantine fault tolerance** aspects (Chapter 8) and regards **proof of work** (as in Bitcoin mining) as **hugely wasteful**. Bitcoin's transaction throughput is **rather low**, though more for political and economic reasons than technical ones.
+- He's **somewhat skeptical** of their **Byzantine fault tolerance** aspects (working correctly even if some nodes lie or act maliciously; Chapter 8) and regards **proof of work** (nodes race to solve deliberately costly puzzles to win the right to add the next block, as in Bitcoin mining) as **hugely wasteful**. Bitcoin's transaction throughput is **rather low**, though more for political and economic reasons than technical ones.
 - The **integrity-checking** aspects are the interesting part.
 
-**Merkle trees** underpin much cryptographic auditing: **trees of hashes** that can efficiently prove a record is in a dataset (and a few other things). Outside the crypto hype, **certificate transparency** uses Merkle trees to check the validity of **TLS/SSL certificates**.
+**Merkle trees** underpin much cryptographic auditing: **trees of hashes** that can efficiently prove a record is in a dataset (and a few other things). Outside the crypto hype, **certificate transparency** uses Merkle trees to check the validity of **TLS/SSL certificates** (signed files that prove a website's identity to your browser).
 
 *Illustration (not a book figure): a Merkle tree over four records. To prove record 3 is included you only need H4 and H12 to recompute the root.*
 ```mermaid
@@ -984,12 +984,12 @@ In the book's final section the author steps back. The whole book compared archi
 
 - Every system has a **purpose**, and every action has **intended and unintended consequences**. The purpose may just be making money, but effects on the world can go far beyond it. Engineers are **responsible** for thinking those consequences through and consciously choosing what kind of world we want.
 - We talk about data abstractly, but many datasets are **about people** — their behaviour, interests and identity. Such data must be handled with **humanity and respect**. Users are human, and **human dignity comes first**.
-- Software development increasingly involves **important ethical choices**. Guidelines exist — e.g., the ACM's **Software Engineering Code of Ethics and Professional Practice** — but are rarely discussed, applied or enforced. So engineers and product managers are sometimes **very cavalier** about privacy and harmful consequences.
+- Software development increasingly involves **important ethical choices**. Guidelines exist — e.g., the ACM's (Association for Computing Machinery, the main professional body for computing) **Software Engineering Code of Ethics and Professional Practice** — but are rarely discussed, applied or enforced. So engineers and product managers are sometimes **very cavalier** about privacy and harmful consequences.
 - **A technology is neither good nor evil by itself**; its use and its effect on people are what count. That's as true of a search engine as of a weapon such as a gun. It's not enough for engineers to care only about the tech while ignoring its effects; we **share** the ethical responsibility. Ethics is hard to reason about, but too important to skip.
 
 ### Predictive Analytics
 
-**Predictive analytics** is a big part of the "Big Data" hype. Forecasting the **weather** or how **diseases spread** is fairly harmless. Predicting whether a **convict will reoffend**, whether a **loan applicant will default**, or whether an **insurance customer will make expensive claims** is different: these **directly affect individual lives**.
+**Predictive analytics** is a big part of the "Big Data" hype (the trend of collecting and analysing extremely large datasets). Forecasting the **weather** or how **diseases spread** is fairly harmless. Predicting whether a **convict will reoffend**, whether a **loan applicant will default**, or whether an **insurance customer will make expensive claims** is different: these **directly affect individual lives**.
 
 Organisations naturally want to avoid risk: payment networks try to stop **fraudulent transactions**, banks try to dodge **bad loans**, airlines want no **hijackings**, companies want to avoid hiring **ineffective or untrustworthy** people. To them, a missed opportunity costs little, while a bad loan or bad hire costs a lot, so **when in doubt, they say no**.
 
@@ -1056,7 +1056,7 @@ Apart from automated decision-making, the very act of **collecting** data raises
 - If a system stores only what a user **explicitly entered**, because they want it stored and processed a certain way, the system is **serving the user**: the user is the **customer**.
 - If the user's behaviour is **recorded incidentally** while they do something else, things get murkier. The service no longer just follows the user's instructions; it develops **its own interests**, and these may **clash** with the user's.
 
-**Tracking behavioural data** powers many useful user-facing features: which search results get clicked (improves ranking), "people who liked X also liked Y" recommendations, **A/B tests** and **user flow analysis** to improve the UI. These require some tracking, and **users benefit**.
+**Tracking behavioural data** powers many useful user-facing features: which search results get clicked (improves ranking), "people who liked X also liked Y" recommendations, **A/B tests** (showing two versions to different users and comparing the results) and **user flow analysis** (studying the paths users take through an app) to improve the UI. These require some tracking, and **users benefit**.
 
 But depending on the **business model**, tracking often goes further. If the service is funded by **advertising**, the **advertisers are the real customers**, and users' interests come second. Tracking gets more detailed, analyses reach further, and data is kept longer to build **detailed per-person profiles** for marketing.
 
@@ -1069,7 +1069,7 @@ The relationship now looks different: the user gets a **free service** and is **
 The author admits this is unusually polemical for a book he jokingly retitles **"Designing Surveillance-Intensive Applications"**, but thinks strong words are needed:
 
 - In trying to make software **"eat the world"**, we've built the **largest mass surveillance infrastructure** in history.
-- Heading into an **Internet of Things**, we're approaching a world where every inhabited space has at least one **internet-connected microphone**: smartphones, smart TVs, voice-controlled assistants, baby monitors, even **children's toys** using cloud speech recognition. Many have **terrible security records**.
+- Heading into an **Internet of Things** (everyday devices connected to the internet), we're approaching a world where every inhabited space has at least one **internet-connected microphone**: smartphones, smart TVs, voice-controlled assistants, baby monitors, even **children's toys** using cloud speech recognition. Many have **terrible security records**.
 - Even the most **totalitarian, repressive regimes** could only dream of a microphone in every room and forcing everyone to carry a location-tracking device. Yet we seem to embrace this **voluntarily, even enthusiastically**. The only difference is that **corporations**, not government agencies, collect the data.
 
 Not all data collection is surveillance, but viewing it that way clarifies our relationship with the collector. **Why do we accept corporate surveillance?**
@@ -1093,7 +1093,7 @@ One could argue users **choose** the service, accept the **privacy policy and te
 3. The **derived datasets** discussed in this part of the book — combining the whole user base with behavioural tracking and external data — are precisely what users **can't meaningfully understand**.
 4. Data is extracted through a **one-way process**, not a reciprocal relationship or fair exchange. There's **no dialogue** or negotiation over how much data is given for what service; the relationship is **asymmetric**, and the **service sets the terms**.
 
-For someone who doesn't consent, the only alternative is **not using the service**. But that's not a free choice either: if a service is so widespread that most people consider it **necessary just to take part in social life**, opting out isn't reasonable — using it is **de facto mandatory**. In most Western social communities it's normal to carry a **smartphone**, use **Facebook** to socialise and **Google** to find information. With **network effects**, not using a service carries a **social cost**.
+For someone who doesn't consent, the only alternative is **not using the service**. But that's not a free choice either: if a service is so widespread that most people consider it **necessary just to take part in social life**, opting out isn't reasonable — using it is **de facto mandatory**. In most Western social communities it's normal to carry a **smartphone**, use **Facebook** to socialise and **Google** to find information. With **network effects** (a service becoming more valuable the more people use it), not using a service carries a **social cost**.
 
 Declining a service over tracking is only possible for the **privileged few** who have the time and expertise to understand a privacy policy and can afford to lose the social or professional opportunities it offers. For the **less privileged**, there's no real choice: **surveillance becomes inescapable**.
 
@@ -1108,7 +1108,7 @@ When data is extracted via surveillance, privacy rights aren't necessarily destr
 
 Companies then keep much of what surveillance reveals **secret**, because revealing it would seem **creepy** and hurt their business model (which depends on knowing more about people than competitors do). Intimate information surfaces only **indirectly**, e.g., as ad-targeting tools for specific groups (such as **people with a particular illness**).
 
-Even if individuals can't be **re-identified** from the group an ad targets, they've **lost agency** over disclosing intimate facts like whether they have an illness. It's not the user deciding what to reveal to whom based on their preferences — it's the **company exercising the privacy right to maximise profit**.
+Even if individuals can't be **re-identified** (linked back to their real identity) from the group an ad targets, they've **lost agency** over disclosing intimate facts like whether they have an illness. It's not the user deciding what to reveal to whom based on their preferences — it's the **company exercising the privacy right to maximise profit**.
 
 - Many companies aim **not to be perceived as creepy** — managing **perceptions** rather than asking how intrusive their collection really is. Even perceptions are handled badly: something may be **factually correct** yet **trigger painful memories** the user doesn't want brought up.
 - With any data, expect that it may be **wrong, undesirable or inappropriate**, and build **mechanisms to handle those failures**. "Undesirable" and "inappropriate" need **human judgment**; algorithms are blind to them unless explicitly programmed to respect human needs. Engineers must be **humble** and plan for such failures.
@@ -1173,7 +1173,7 @@ The author's conclusion: the tech industry needs a **culture shift** about perso
 - **Teach end users** what happens to their data rather than hiding it from them.
 - Let each person keep their **privacy** (control over their own data) instead of stealing it via surveillance.
 
-Each person's right to control their own data resembles the wilderness of a **national park**: without explicit protection and care it will be destroyed — a **tragedy of the commons** leaving everyone worse off. **Ubiquitous surveillance is not inevitable**; we can still stop it.
+Each person's right to control their own data resembles the wilderness of a **national park**: without explicit protection and care it will be destroyed — a **tragedy of the commons** (a shared resource ruined because everyone acts in their own short-term interest) leaving everyone worse off. **Ubiquitous surveillance is not inevitable**; we can still stop it.
 
 How exactly is an open question. Starting points:
 

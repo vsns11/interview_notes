@@ -5,10 +5,10 @@
 
 Any database has two jobs at its core: accept data and keep it safe, then hand that same data back when someone asks for it later. Chapter 2 looked at this from the application developer's side (which data model and query language you use). This chapter flips the viewpoint and looks *inside* the database: how does a **storage engine** (the part of a database that actually lays bytes out on disk or in memory and finds them again) do its job?
 
-**Why should you care if you will never write a storage engine?** Because you still have to *pick* one, and you have to *tune* it. Choosing well and tuning well both require a rough mental model of what the engine does under the hood. In particular, engines built for **transactional** workloads (many small reads/writes from users) behave very differently from engines built for **analytics** (a few huge scans by analysts).
+**Why should you care if you will never write a storage engine?** Because you still have to *pick* one, and you have to *tune* it. Choosing well and tuning well both require a rough mental model of what the engine does under the hood. In particular, engines built for **transactional** workloads (a *workload* is the mix of requests a system handles; here, many small reads/writes from users) behave very differently from engines built for **analytics** (a few huge scans by analysts).
 
 The chapter has three big parts:
-1. **Indexes for OLTP-style engines** — two families: *log-structured* engines (append-only files, e.g. LSM-trees) and *page-oriented* engines (update-in-place, e.g. B-trees), plus other kinds of indexes and in-memory databases.
+1. **Indexes for OLTP-style engines** (OLTP = online transaction processing, the interactive many-small-requests style; defined fully below) — two families: *log-structured* engines (append-only files, e.g. LSM-trees) and *page-oriented* engines (update-in-place, e.g. B-trees), plus other kinds of indexes and in-memory databases.
 2. **OLTP vs. analytics** — why companies build separate *data warehouses*, and how warehouse schemas (star/snowflake) look.
 3. **Column-oriented storage** — how analytic engines store data by column, compress it, sort it, write to it, and pre-compute aggregates.
 
@@ -84,7 +84,7 @@ The chapter has three big parts:
 
 ## Data Structures That Power Your Database
 
-**The world's simplest database.** The book opens with a tiny key-value store built from just two **Bash** shell functions (`db_set` and `db_get`), storing values such as JSON documents about cities (London, San Francisco). Here is an equivalent sketch of the same idea with different names:
+**The world's simplest database.** The book opens with a tiny key-value store built from just two **Bash** shell functions (Bash is the standard command-line shell on Linux and macOS) (`db_set` and `db_get`), storing values such as JSON documents (text records written like `{"city": "Oslo"}`) about cities (London, San Francisco). Here is an equivalent sketch of the same idea with different names:
 
 ```bash
 #!/bin/bash
@@ -106,27 +106,27 @@ For example, `put 7 '{"city":"Oslo"}'` then `put 7 '{"city":"Bergen"}'` leaves t
 **Why this is half good, half terrible:**
 
 - **Writes are fast.** Appending to the end of a file is about the cheapest disk operation there is. Many real databases use exactly this internally: a **log**.
-- **Reads are slow.** `fetch` scans the whole file every time. Cost is **O(n)**: double the records, double the lookup time.
+- **Reads are slow.** `fetch` scans the whole file every time. Cost is **O(n)** ("Big-O" notation describes how cost grows with input size *n*; O(n) means linearly): double the records, double the lookup time.
 
 > **What "log" means in this book:** not the text messages an app prints for debugging, but any *append-only sequence of records*. It may be binary and meant only for programs to read.
 
-Real databases must also deal with concurrency, stopping the log from growing forever, and crashes that leave half-written records — but the basic principle stays the same.
+Real databases must also deal with concurrency (several clients reading and writing at the same moment), stopping the log from growing forever, and crashes that leave half-written records — but the basic principle stays the same.
 
-**Indexes.** To find a key without scanning everything, we keep extra metadata on the side that acts like a signpost: an **index**. Important properties:
+**Indexes.** To find a key without scanning everything, we keep extra metadata (data about the data) on the side that acts like a signpost: an **index**. Important properties:
 
 1. An index is **derived** from the primary data. Adding or dropping one never changes the data, only query speed.
 2. Every index must be updated on every write, so **indexes slow down writes**. Nothing beats a plain append for write speed.
-3. Hence the core **trade-off**: good indexes speed up reads, but each one costs write performance. That is why databases don't index everything automatically; the developer or DBA picks indexes based on the application's actual query patterns.
+3. Hence the core **trade-off**: good indexes speed up reads, but each one costs write performance. That is why databases don't index everything automatically; the developer or DBA (database administrator) picks indexes based on the application's actual query patterns.
 
 ### Hash Indexes
 
-**What it is.** The simplest index for key-value data: keep an **in-memory hash map** (the same dictionary type found in most programming languages) where each key maps to the **byte offset** in the data file where its latest value begins.
+**What it is.** The simplest index for key-value data: keep an **in-memory hash map** (the same dictionary type found in most programming languages; it turns a key into a slot number with a *hash function*, so lookups take roughly constant time) where each key maps to the **byte offset** in the data file where its latest value begins.
 
 **How it works:**
 1. **Write:** append `key,value` to the end of the data file, then set `hashmap[key] = offset_of_that_record`. (Works for both new keys and updates.)
-2. **Read:** look up the key in the hash map to get the offset, seek straight to that position in the file, and read the value.
+2. **Read:** look up the key in the hash map to get the offset, seek (jump the read position) straight to that position in the file, and read the value.
 
-*Figure 3-1 (redrawn): an append-only CSV-like log of key-value records, with an in-memory hash map pointing at the byte offset where each key's record starts*
+*Figure 3-1 (redrawn): an append-only CSV-like (comma-separated values) log of key-value records, with an in-memory hash map pointing at the byte offset where each key's record starts*
 ```mermaid
 flowchart LR
   subgraph MEM["In-memory hash map"]
@@ -141,9 +141,9 @@ flowchart LR
   K2 --> R2
 ```
 
-**Real system:** this is essentially **Bitcask**, the default storage engine of **Riak**. It gives high-performance reads and writes **as long as all keys fit in RAM**. Values can be larger than memory, since reading one costs only a single disk seek (and zero disk I/O if that part of the file is already in the operating system's filesystem cache).
+**Real system:** this is essentially **Bitcask**, the default storage engine of **Riak** (an open-source distributed key-value database). It gives high-performance reads and writes **as long as all keys fit in RAM**. Values can be larger than memory, since reading one costs only a single disk seek (and zero disk I/O, i.e. input/output, reading or writing the disk, if that part of the file is already in the operating system's filesystem cache: recently used file data the OS keeps in spare RAM).
 
-**Good fit:** workloads with few distinct keys but many updates per key. Book example: key = URL of a cat video, value = play count, incremented every time someone presses play.
+**Good fit:** workloads with few distinct keys but many updates per key. Book example: key = URL (web address) of a cat video, value = play count, incremented every time someone presses play.
 
 **Problem: the log grows forever.** Solution:
 1. Split the log into **segments**: when a segment file reaches a certain size, close it and start writing to a new one.
@@ -166,7 +166,7 @@ flowchart LR
 
 Key details of merging:
 - Segments are **never modified** after being written; the merged result goes into a **new file**.
-- Merging runs in a **background thread**. Meanwhile, reads and writes continue against the old segments.
+- Merging runs in a **background thread** (a *thread* is an independent sequence of execution inside one program, so this work runs alongside the main work). Meanwhile, reads and writes continue against the old segments.
 - When merging finishes, reads switch to the new segment and the old files are simply deleted.
 - **Each segment has its own hash map.** A read checks the newest segment's map first, then the next-newest, and so on. Merging keeps the number of segments (and so maps to check) small.
 
@@ -174,20 +174,20 @@ Key details of merging:
 
 | Issue | How it's handled |
 |---|---|
-| File format | Use a binary format (length of the string in bytes, then raw bytes) instead of CSV — faster, no escaping needed. |
+| File format | Use a binary format (length of the string in bytes, then raw bytes) instead of CSV — faster, no escaping (marking special characters such as commas inside values) needed. |
 | Deleting records | Append a **tombstone** record. During merging, the tombstone tells the process to drop all earlier values for that key. |
-| Crash recovery | In-memory hash maps vanish on restart. You *could* rebuild each by reading the whole segment, but that's slow for big files. Bitcask speeds this up by persisting a **snapshot of every segment's hash map** to disk, which loads back much faster. |
+| Crash recovery | In-memory hash maps vanish on restart. You *could* rebuild each by reading the whole segment, but that's slow for big files. Bitcask speeds this up by persisting (saving durably) a **snapshot** (a point-in-time copy) **of every segment's hash map** to disk, which loads back much faster. |
 | Partially written records | A crash can leave a half-appended record. Bitcask includes **checksums** so corrupt tails are detected and ignored. |
 | Concurrency control | Writes are strictly sequential, so typically there is **one writer thread**. Segments are immutable once written, so **many threads can read** them at the same time. |
 
 **Why append-only instead of overwriting in place?** It looks wasteful at first, but:
-- Appends and merges are **sequential writes**, which beat random writes by a wide margin on spinning magnetic disks and, to a lesser degree, on SSDs as well.
+- Appends and merges are **sequential writes** (writing one contiguous stretch in order), which beat random writes (small writes scattered all over the disk) by a wide margin on spinning magnetic disks (HDDs, which must physically move a head to each spot) and, to a lesser degree, on SSDs (solid-state drives: flash-memory storage with no moving parts) as well.
 - **Concurrency and crash recovery are simpler** with immutable files — you can never end up with a value that is half old, half new because a crash hit mid-overwrite.
 - **Merging avoids fragmentation** of data files over time.
 
 **Limitations of hash indexes:**
-- **The hash table must fit in memory.** On-disk hash maps perform poorly: lots of random I/O, costly to grow, and fiddly collision handling.
-- **Range queries are inefficient.** You can't cheaply scan all keys between `kitty00000` and `kitty99999`; each key must be looked up individually.
+- **The hash table must fit in memory.** On-disk hash maps perform poorly: lots of random I/O, costly to grow, and fiddly collision handling (dealing with two keys that hash to the same slot).
+- **Range queries** ("give me every key between A and B") **are inefficient.** You can't cheaply scan all keys between `kitty00000` and `kitty99999`; each key must be looked up individually.
 
 ### SSTables and LSM-Trees
 
@@ -195,7 +195,7 @@ Key details of merging:
 
 **Three big advantages over hash-indexed log segments:**
 
-1. **Merging is simple and efficient, even for files bigger than memory.** It works like the merge step of *mergesort*: walk through all input files in parallel, compare their current first keys, emit whichever key sorts lowest to the output, and repeat. The output is also sorted.
+1. **Merging is simple and efficient, even for files bigger than memory.** It works like the merge step of *mergesort* (a sorting algorithm that repeatedly merges already-sorted lists): walk through all input files in parallel, compare their current first keys, emit whichever key sorts lowest to the output, and repeat. The output is also sorted.
    - If the same key appears in several inputs, take the value from the **newest segment** and drop the older ones (each segment covers a time period, so one segment's values are all newer than an older adjacent segment's, assuming we always merge adjacent segments).
 
    *Figure 3-4 (redrawn): merging three SSTable segments mergesort-style; for a key found in several segments, the value from the newest segment wins*
@@ -209,9 +209,9 @@ Key details of merging:
 
 2. **You no longer need every key in memory.** Because keys are sorted, a **sparse** in-memory index is enough. Example from the book: to find `handiwork`, you may only know the offsets of `handbag` and `handsome`; since `handiwork` must fall between them, jump to `handbag` and scan forward. One index entry per **few kilobytes** of file is enough, because scanning a few KB is very fast.
 
-   > **Footnote:** with fixed-size keys and values, a binary search over the file would work and skip the in-memory index entirely. In practice they vary in length, so you can't tell where records start without an index.
+   > **Footnote:** with fixed-size keys and values, a binary search (repeatedly jumping to the middle of the remaining range and discarding the half that cannot contain the key) over the file would work and skip the in-memory index entirely. In practice they vary in length, so you can't tell where records start without an index.
 
-3. **Blocks can be compressed.** Since a read scans several records anyway, bundle neighbouring records into a block and compress that block before it goes to disk. Each sparse index entry points to the start of a compressed block. This saves disk space *and* I/O bandwidth.
+3. **Blocks can be compressed.** Since a read scans several records anyway, bundle neighbouring records into a block and compress (re-encode to take fewer bytes) that block before it goes to disk. Each sparse index entry points to the start of a compressed block. This saves disk space *and* I/O bandwidth.
 
 *Figure 3-5 (redrawn): an SSTable with a sparse in-memory index; each entry points to the start of a compressible block of the sorted file*
 ```mermaid
@@ -236,11 +236,11 @@ flowchart LR
 
 #### Constructing and maintaining SSTables
 
-Incoming writes arrive in random key order, so how do we get sorted files? Keeping a sorted structure **on disk** is possible (that's the B-tree), but keeping one **in memory** is easy using a balanced tree like a **red-black tree** or **AVL tree** — insert in any order, read back sorted.
+Incoming writes arrive in random key order, so how do we get sorted files? Keeping a sorted structure **on disk** is possible (that's the B-tree), but keeping one **in memory** is easy using a balanced tree (a sorted tree structure that rebalances itself so no branch gets much longer than another) like a **red-black tree** or **AVL tree** — insert in any order, read back sorted.
 
 **How the engine works:**
 1. **Write:** insert into an in-memory balanced tree called the **memtable**.
-2. **Flush:** when the memtable exceeds a threshold (typically a **few megabytes**), write it to disk as a new SSTable — easy, since the tree is already sorted. That file becomes the newest segment. New writes go to a fresh memtable while the flush happens.
+2. **Flush** (copy what is in memory out to disk): when the memtable exceeds a threshold (typically a **few megabytes**), write it to disk as a new SSTable — easy, since the tree is already sorted. That file becomes the newest segment. New writes go to a fresh memtable while the flush happens.
 3. **Read:** check the memtable, then the newest on-disk segment, then the next-older one, and so on.
 4. **Background:** periodically merge and compact segments, dropping overwritten and deleted values.
 
@@ -258,9 +258,9 @@ flowchart TD
 
 #### Making an LSM-tree out of SSTables
 
-- This algorithm is essentially what **LevelDB** and **RocksDB** use — key-value engine libraries meant to be embedded in other applications. LevelDB can replace Bitcask inside **Riak**.
-- Similar engines power **Cassandra** and **HBase**, both inspired by Google's **Bigtable** paper, which coined the terms *SSTable* and *memtable*.
-- The structure was first described by **Patrick O'Neil et al.** as the **Log-Structured Merge-Tree (LSM-Tree)**, building on earlier work on log-structured filesystems. Engines based on merging and compacting sorted files are called **LSM storage engines**.
+- This algorithm is essentially what **LevelDB** and **RocksDB** use — key-value engine libraries meant to be embedded in other applications (linked into a program as code, rather than run as a separate database server). LevelDB can replace Bitcask inside **Riak**.
+- Similar engines power **Cassandra** and **HBase**, both inspired by Google's **Bigtable** paper (describing Google's large distributed storage system), which coined the terms *SSTable* and *memtable*.
+- The structure was first described by **Patrick O'Neil et al.** as the **Log-Structured Merge-Tree (LSM-Tree)**, building on earlier work on log-structured filesystems (filesystems that write all changes as an append-only log). Engines based on merging and compacting sorted files are called **LSM storage engines**.
 - **Lucene** (the full-text indexing engine behind **Elasticsearch** and **Solr**) uses a similar approach for its **term dictionary**. A full-text index maps a word (**term**) to the list of IDs of documents containing it (the **postings list**). Lucene keeps these term → postings mappings in SSTable-like sorted files merged in the background.
 
 #### Performance optimizations
@@ -273,7 +273,7 @@ flowchart TD
 | Size-tiered | Newer, smaller SSTables are successively merged into older, larger ones. | HBase; Cassandra (supports both) |
 | Leveled | The key range is split into smaller SSTables, and older data moves into separate "levels"; compaction is more incremental and uses less disk space. | LevelDB (hence the name), RocksDB; Cassandra |
 
-**Why LSM-trees work well:** the core idea (a cascade of SSTables that background merging keeps tidy) is both simple and powerful; it keeps working when the data is far bigger than memory, supports **range queries** (data is sorted), and achieves **very high write throughput** because disk writes are sequential.
+**Why LSM-trees work well:** the core idea (a cascade of SSTables that background merging keeps tidy) is both simple and powerful; it keeps working when the data is far bigger than memory, supports **range queries** (data is sorted), and achieves **very high write throughput** (writes completed per second) because disk writes are sequential.
 
 ### B-Trees
 
@@ -323,22 +323,22 @@ flowchart TD
   BEFORE --> AFTER
 ```
 
-- This keeps the tree **balanced**: depth is always **O(log n)** for n keys. Most databases fit in a tree **three or four levels deep**.
-- **Numbers to remember:** with **4 KB pages** and a **branching factor of 500**, just **four levels** are enough for up to **256 TB** of data.
+- This keeps the tree **balanced**: depth is always **O(log n)** for n keys (it grows with the logarithm of n, i.e. very slowly: each extra level multiplies capacity by the branching factor). Most databases fit in a tree **three or four levels deep**.
+- **Numbers to remember:** with **4 KB pages** and a **branching factor of 500**, just **four levels** are enough for up to **256 TB** (terabytes; 1 TB is about a million megabytes) of data.
 
 > **Footnote:** inserting is intuitive; deleting a key while keeping the tree balanced is more involved.
 
 #### Making B-trees reliable
 
 - The fundamental B-tree write **overwrites a page on disk in place**, assuming its location doesn't change (so all references remain valid). This is the opposite of LSM-trees, which only append and delete whole files.
-- On a spinning disk, an overwrite means moving the head, waiting for the platter to rotate to the right spot, and rewriting the sector. SSDs are more complicated: an SSD has to erase and rewrite a fairly large block of the storage chip in one go.
+- On a spinning disk, an overwrite means moving the head (the arm that reads and writes), waiting for the platter (the spinning magnetic disc) to rotate to the right spot, and rewriting the sector (the disk's smallest writable unit). SSDs are more complicated: an SSD has to erase and rewrite a fairly large block of the storage chip in one go.
 - **Multi-page operations are dangerous.** A page split writes two child pages *and* the parent. If the database crashes halfway, the index is corrupted — e.g., an **orphan page** with no parent.
-- **Fix — the write-ahead log (WAL, a.k.a. redo log):** an append-only file where *every* B-tree change is recorded **before** being applied to the tree pages. After a crash, the WAL is replayed to bring the tree back to a consistent state.
-- **Concurrency is harder too:** with in-place updates, threads could see the tree mid-change. B-trees protect their structures with **latches** (lightweight locks). Log-structured engines have it easier: they merge in the background without disturbing queries and swap old segments for new ones atomically.
+- **Fix — the write-ahead log (WAL, a.k.a. redo log):** an append-only file where *every* B-tree change is recorded **before** being applied to the tree pages. After a crash, the WAL is replayed (its recorded changes are applied again in order) to bring the tree back to a consistent state.
+- **Concurrency is harder too:** with in-place updates, threads could see the tree mid-change. B-trees protect their structures with **latches** (lightweight locks). Log-structured engines have it easier: they merge in the background without disturbing queries and swap old segments for new ones atomically (in one indivisible step, so nobody ever sees a half-done swap).
 
 #### B-tree optimizations
 
-- **Copy-on-write (append-only B-trees)** instead of overwrite + WAL (e.g., **LMDB**): write the modified page to a new location and create new versions of parent pages pointing to it. Also helpful for concurrency control (see snapshot isolation, Chapter 7).
+- **Copy-on-write (append-only B-trees)** instead of overwrite + WAL (e.g., **LMDB**, a small embedded key-value store): write the modified page to a new location and create new versions of parent pages pointing to it. Also helpful for concurrency control (the rules that keep simultaneous operations from corrupting each other; see snapshot isolation, Chapter 7).
 - **Abbreviated keys:** interior pages only need enough of a key to separate ranges. Packing in more keys increases the branching factor → fewer levels. (This variant is sometimes called a **B+ tree**, though the optimisation is so common it's rarely singled out.)
 - **Sequential leaf layout:** pages can live anywhere on disk, so a big range scan might need a seek per page. Many implementations try to place leaf pages in key order on disk, but that's hard to maintain as the tree grows. LSM-trees find this easier, since merging rewrites large chunks in one go.
 - **Sibling pointers:** each leaf links to its left and right neighbours, so an ordered scan doesn't need to climb back up to parents.
@@ -346,20 +346,20 @@ flowchart TD
 
 ### Comparing B-Trees and LSM-Trees
 
-**Rule of thumb:** LSM-trees are usually **faster for writes**; B-trees are generally believed to **read faster**. LSM reads are slower because they may check several structures and SSTables at different compaction stages. **But:** benchmarks are often inconclusive and depend heavily on workload — test with *your* workload.
+**Rule of thumb:** LSM-trees are usually **faster for writes**; B-trees are generally believed to **read faster**. LSM reads are slower because they may check several structures and SSTables at different compaction stages. **But:** benchmarks (standardised performance tests) are often inconclusive and depend heavily on workload — test with *your* workload.
 
 #### Advantages of LSM-trees
 
-- **Write amplification.** In a B-tree, every piece of data hits disk **at least twice** — first in the WAL, then in the tree page itself (plus more on splits). It also writes a **whole page** even if only a few bytes changed; some engines even write the same page **twice** to avoid a torn page on power loss. LSM-trees also rewrite data repeatedly through compaction. The general effect — one database write causing multiple disk writes over the data's lifetime — is **write amplification**. It matters especially on **SSDs**, which wear out after a limited number of overwrites per block.
+- **Write amplification.** In a B-tree, every piece of data hits disk **at least twice** — first in the WAL, then in the tree page itself (plus more on splits). It also writes a **whole page** even if only a few bytes changed; some engines even write the same page **twice** to avoid a torn page (a page only partly written when the power failed) on power loss. LSM-trees also rewrite data repeatedly through compaction. The general effect — one database write causing multiple disk writes over the data's lifetime — is **write amplification**. It matters especially on **SSDs**, which wear out after a limited number of overwrites per block.
 - **Higher write throughput.** In write-heavy apps, disk bandwidth can be the bottleneck, so every extra byte written costs throughput. LSM-trees often sustain more writes because they *sometimes* have lower write amplification (depends on configuration and workload) and because they write compact SSTables **sequentially** instead of overwriting scattered pages. This matters most on magnetic disks.
 - **Better compression, smaller files.** B-trees leave unused space from **fragmentation** (after splits, or when a row doesn't fit a page). LSM-trees aren't page-oriented and periodically rewrite SSTables, so they have lower storage overhead — **especially with leveled compaction**.
-- **On SSDs:** firmware often uses a log-structured algorithm internally to turn random writes into sequential ones, so the engine's write pattern matters less. Still, lower write amplification and less fragmentation help: more compact data means more requests fit in the available I/O bandwidth.
+- **On SSDs:** firmware (software built into the drive itself) often uses a log-structured algorithm internally to turn random writes into sequential ones, so the engine's write pattern matters less. Still, lower write amplification and less fragmentation help: more compact data means more requests fit in the available I/O bandwidth.
 
 #### Downsides of LSM-trees
 
-- **Compaction can interfere with live traffic.** Disks have finite resources, so a request may wait behind an expensive compaction. Average throughput and response time barely suffer, but **high-percentile (tail) latencies** can be quite high. **B-trees are more predictable.**
-- **Compaction can fall behind at high write rates.** Disk bandwidth is shared between initial writes (logging, flushing memtables) and background compaction. On an empty database, all bandwidth goes to new writes, but as data grows, compaction needs more. If compaction can't keep up, **unmerged segments pile up** until the disk fills, and reads slow down as they must check more files. SSTable engines usually **don't throttle** incoming writes in this case, so you need **explicit monitoring**.
-- In a B-tree, **every key lives in exactly one spot** of the index, while an LSM engine may hold copies in several segments. This makes B-trees attractive for **strong transactional semantics**: many relational databases implement isolation with **locks on key ranges**, which can be attached directly to the B-tree (more in Chapter 7).
+- **Compaction can interfere with live traffic.** Disks have finite resources, so a request may wait behind an expensive compaction. Average throughput and response time barely suffer, but **high-percentile (tail) latencies** (the slowest few percent of requests, e.g. the 99th percentile) can be quite high. **B-trees are more predictable.**
+- **Compaction can fall behind at high write rates.** Disk bandwidth is shared between initial writes (logging, flushing memtables) and background compaction. On an empty database, all bandwidth goes to new writes, but as data grows, compaction needs more. If compaction can't keep up, **unmerged segments pile up** until the disk fills, and reads slow down as they must check more files. SSTable engines usually **don't throttle** (deliberately slow down) incoming writes in this case, so you need **explicit monitoring**.
+- In a B-tree, **every key lives in exactly one spot** of the index, while an LSM engine may hold copies in several segments. This makes B-trees attractive for **strong transactional semantics**: many relational databases implement isolation (keeping concurrent transactions from seeing each other's half-finished work) with **locks on key ranges** (a *lock* reserves data so other transactions must wait), which can be attached directly to the B-tree (more in Chapter 7).
 
 | Aspect | B-tree | LSM-tree |
 |---|---|---|
@@ -377,7 +377,7 @@ flowchart TD
 
 So far: **key-value indexes**, which behave like a **primary key** index — a key that uniquely identifies one row (relational), document (document DB) or vertex (graph DB). Other records refer to it by that key/ID, and the index resolves the reference.
 
-**Secondary indexes** are very common. In relational databases you create several per table with `CREATE INDEX`; they're often essential for efficient joins (e.g., an index on `user_id` columns to find all rows for one user).
+**Secondary indexes** are very common. In relational databases you create several per table with `CREATE INDEX`; they're often essential for efficient joins (queries that combine rows from two tables sharing a value; e.g., an index on `user_id` columns to find all rows for one user).
 
 ```sql
 -- A secondary index on a non-unique column
@@ -402,7 +402,7 @@ An index entry's key is what you search by; the value is either **the row itself
   - Updating a value **without changing the key** is efficient if the new value isn't bigger: overwrite it in place.
   - If it **grows** and must move, either update **all indexes** to the new location, or leave a **forwarding pointer** at the old spot.
 - **Clustered index:** when the extra hop from index to heap hurts read performance too much, store the **whole row inside the index**.
-  - **MySQL InnoDB:** the primary key is always a clustered index; secondary indexes refer to the **primary key**, not a heap location.
+  - **MySQL InnoDB** (MySQL's default storage engine): the primary key is always a clustered index; secondary indexes refer to the **primary key**, not a heap location.
   - **SQL Server:** you may define **one** clustered index per table.
 - **Covering index / index with included columns:** a middle ground — store **some** columns in the index, so certain queries can be answered from the index alone (the index **covers** the query).
 
@@ -426,7 +426,7 @@ SELECT salary FROM employees WHERE dept_id = 4;  -- answered from the index alon
 Single-key indexes can't handle queries on several columns at once.
 
 - **Concatenated index** (the most common kind): joins several columns into one key in a defined order. Like a paper **phone book** indexed by (last name, first name): you can find everyone with a given last name, or a given last+first combination, but it's **useless for finding by first name alone**.
-- **Multi-dimensional indexes:** a more general approach, important for **geospatial** data. A restaurant-map site must find restaurants inside the visible rectangle — a **2D range query**:
+- **Multi-dimensional indexes:** a more general approach, important for **geospatial** data (positions on the Earth, such as latitude and longitude). A restaurant-map site must find restaurants inside the visible rectangle — a **2D range query**:
 
 ```sql
 SELECT * FROM cafes
@@ -437,9 +437,9 @@ WHERE lat BETWEEN 48.850 AND 48.862      -- north-south band
 
 **Solutions:**
 - Map 2D points to one number with a **space-filling curve**, then use a regular B-tree.
-- More commonly, use a specialised spatial index such as an **R-tree**. **PostGIS** builds geospatial R-tree indexes on PostgreSQL's **Generalized Search Tree (GiST)** facility.
+- More commonly, use a specialised spatial index such as an **R-tree**. **PostGIS** (the geographic extension for PostgreSQL) builds geospatial R-tree indexes on PostgreSQL's **Generalized Search Tree (GiST)** facility.
 
-**Not just maps:** e-commerce could use a 3D index on **(red, green, blue)** to search by colour range; a weather database could index **(date, temperature)** to find all readings in **2013** between **25 and 30 ℃** without scanning all of 2013 and filtering (or vice versa). **HyperDex** uses this technique.
+**Not just maps:** e-commerce could use a 3D index on **(red, green, blue)** to search by colour range; a weather database could index **(date, temperature)** to find all readings in **2013** between **25 and 30 ℃** without scanning all of 2013 and filtering (or vice versa). **HyperDex** (a research key-value store) uses this technique.
 
 #### Full-text search and fuzzy indexes
 
@@ -447,8 +447,8 @@ Previous indexes need **exact** keys or ranges. They can't find **similar** keys
 
 - Full-text engines expand searches to **synonyms**, ignore **grammatical variations**, find words **near each other**, and support other linguistic features.
 - **Lucene** can find words within a given **edit distance** (distance 1 = one letter added, removed or replaced) to cope with typos.
-- Lucene's term dictionary is SSTable-like and needs a small in-memory index. In **LevelDB** that index is a sparse set of keys; in **Lucene** it's a **finite state automaton** over the characters of the keys, similar to a **trie**. This automaton can be turned into a **Levenshtein automaton**, which efficiently finds words within a given edit distance.
-- Other fuzzy techniques lean toward document classification and machine learning (see information-retrieval textbooks).
+- Lucene's term dictionary is SSTable-like and needs a small in-memory index. In **LevelDB** that index is a sparse set of keys; in **Lucene** it's a **finite state automaton** (a simple machine that moves between a fixed set of states as it reads each character) over the characters of the keys, similar to a **trie** (a tree where each level branches on the next letter, so words sharing a prefix share a path). This automaton can be turned into a **Levenshtein automaton**, which efficiently finds words within a given edit distance.
+- Other fuzzy techniques lean toward document classification and machine learning (programs that learn patterns from example data) (see information-retrieval textbooks).
 
 #### Keeping everything in memory
 
@@ -457,18 +457,18 @@ Everything so far works around disk limitations. Disks are awkward (data must be
 As RAM gets cheaper, many datasets fit in memory — possibly spread over several machines. Hence **in-memory databases**:
 
 - **Cache-only** stores like **Memcached** accept losing data on restart.
-- **Durable** in-memory databases use battery-backed RAM, a **log of changes** on disk, **periodic snapshots** on disk, or **replication** to other machines. On restart they reload state from disk or a replica. They are still "in-memory" because disk is used only as an append-only log for durability — **all reads come from RAM**. Disk files also make backups, inspection and analysis by external tools easy.
+- **Durable** in-memory databases use battery-backed RAM, a **log of changes** on disk, **periodic snapshots** on disk, or **replication** (keeping copies on other machines; Chapter 5) to other machines. On restart they reload state from disk or a replica (one of those copies). They are still "in-memory" because disk is used only as an append-only log for durability — **all reads come from RAM**. Disk files also make backups, inspection and analysis by external tools easy.
 
 **Named systems:**
 - **VoltDB, MemSQL, Oracle TimesTen** — in-memory, relational; vendors claim large speedups by dropping on-disk data-structure overhead.
 - **RAMCloud** — an open-source, durable in-memory key-value store; it organises data log-structured style, both in RAM and on disk.
-- **Redis, Couchbase** — weak durability, writing to disk **asynchronously**.
+- **Redis, Couchbase** — weak durability, writing to disk **asynchronously** (in the background, after already telling the client the write succeeded, so a crash can lose recent writes).
 
 > **Common confusion:** in-memory databases are *not* fast mainly because they skip disk reads. A disk-based engine with enough RAM may never read from disk either, because the OS caches recently used blocks. The real win is avoiding the cost of **encoding in-memory structures into a disk-friendly format**.
 
-**Richer data models:** in-memory systems can offer structures that are hard to build on disk — e.g., **Redis** exposes priority queues and sets, and its implementation stays comparatively simple.
+**Richer data models:** in-memory systems can offer structures that are hard to build on disk — e.g., **Redis** exposes priority queues (lists that always hand out the most important item first) and sets, and its implementation stays comparatively simple.
 
-**Anti-caching:** research suggests in-memory architectures can handle data larger than RAM by evicting **least recently used** records to disk and reloading them when accessed. It resembles OS virtual memory/swap, but the database is smarter: it works on **individual records** rather than whole memory pages. Indexes must still fit in memory (like Bitcask).
+**Anti-caching:** research suggests in-memory architectures can handle data larger than RAM by evicting (pushing out of memory) **least recently used** (LRU: the records untouched for the longest time) records to disk and reloading them when accessed. It resembles OS virtual memory/swap (the operating system moving rarely used memory pages to disk to free RAM), but the database is smarter: it works on **individual records** rather than whole memory pages. Indexes must still fit in memory (like Bitcask).
 
 **Future:** wider adoption of **non-volatile memory (NVM)** may require further changes to storage engine design; it's an active research area.
 
@@ -478,11 +478,11 @@ As RAM gets cheaper, many datasets fit in memory — possibly spread over severa
 
 Early on, a database write usually matched a **commercial transaction**: a sale, a supplier order, a salary payment. The word **transaction** stuck even as databases expanded to non-financial data, now meaning a group of reads and writes forming one logical unit.
 
-> **Note:** a transaction here doesn't need full ACID guarantees (atomicity, consistency, isolation, durability — Chapter 7). *Transaction processing* simply means clients can make **low-latency** reads and writes, in contrast to **batch processing** jobs that run only periodically, e.g. once a day (Chapter 10).
+> **Note:** a transaction here doesn't need full ACID guarantees (atomicity, consistency, isolation, durability — Chapter 7). *Transaction processing* simply means clients can make **low-latency** (quick-to-answer) reads and writes, in contrast to **batch processing** jobs that run only periodically, e.g. once a day (Chapter 10).
 
 **OLTP.** Whether the data is blog comments, game actions or address-book contacts, the pattern resembles business transactions: look up a few records by key using an index; insert or update records based on user input. Because it's interactive, it's called **online transaction processing (OLTP)**.
 
-**OLAP.** Databases also got used for **analytics**, a very different pattern: scan a **huge number of records**, read only **a few columns** each, and compute **aggregates** (count, sum, average) instead of returning raw rows. Examples for a sales table:
+**OLAP.** Databases also got used for **analytics**, a very different pattern: scan a **huge number of records**, read only **a few columns** each, and compute **aggregates** (one summary value computed from many rows: count, sum, average) instead of returning raw rows. Examples for a sales table:
 - Total revenue per store in January?
 - How did banana sales during our most recent promotion compare with normal?
 - Which baby-food brand is most often bought with brand X diapers?
@@ -505,12 +505,12 @@ At first the same databases served both. SQL handles both kinds of queries well.
 
 ### Data Warehousing
 
-A large company may run **dozens** of OLTP systems: the customer website, point-of-sale (checkout) in physical stores, warehouse inventory, vehicle route planning, supplier management, HR, and more. Each is complex, has its own team, and runs mostly on its own.
+A large company may run **dozens** of OLTP systems: the customer website, point-of-sale (checkout) in physical stores, warehouse inventory, vehicle route planning, supplier management, HR (human resources: staff records and payroll), and more. Each is complex, has its own team, and runs mostly on its own.
 
-These systems must be **highly available** and **low-latency** because the business depends on them. DBAs therefore guard them and don't want analysts running expensive **ad hoc** queries that scan large parts of the data and slow down live transactions.
+These systems must be **highly available** and **low-latency** because the business depends on them. DBAs therefore guard them and don't want analysts running expensive **ad hoc** (one-off, written on the spot) queries that scan large parts of the data and slow down live transactions.
 
 A **data warehouse** is a separate database analysts can query freely without hurting OLTP. It holds a **read-only copy** of data from all the OLTP systems. Data gets there via **Extract–Transform–Load (ETL)**:
-1. **Extract** from OLTP databases (periodic dump or continuous stream of updates).
+1. **Extract** from OLTP databases (periodic dump, i.e. a full export, or continuous stream of updates).
 2. **Transform** into an analysis-friendly schema and clean it up.
 3. **Load** into the warehouse.
 
@@ -543,17 +543,17 @@ flowchart TD
 
 #### The divergence between OLTP databases and data warehouses
 
-- Warehouses are usually **relational**, since SQL suits analytics. Many graphical tools generate SQL, visualise results, and support **drill-down** and **slicing and dicing**.
+- Warehouses are usually **relational**, since SQL suits analytics. Many graphical tools generate SQL, visualise results, and support **drill-down** (going from a total to the details behind it) and **slicing and dicing** (cutting the data by different attributes, e.g. by region, then by month).
 - On the surface a warehouse and an OLTP database look alike (both speak SQL), but their **internals differ greatly** because they're optimised for different query patterns. Many vendors now focus on one or the other.
 - **Microsoft SQL Server** and **SAP HANA** support both in one product, but increasingly as two separate storage/query engines behind a shared SQL interface.
-- **Commercial warehouses:** Teradata, Vertica, SAP HANA, ParAccel (expensive licences). **Amazon RedShift** is ParAccel offered as a hosted service.
-- **Open-source SQL-on-Hadoop** (younger, aiming to compete): Spark SQL, Apache Hive, Apache Drill, Apache Tajo, Facebook Presto and Cloudera Impala. Some build on ideas from Google's **Dremel**.
+- **Commercial warehouses:** Teradata, Vertica, SAP HANA, ParAccel (expensive licences). **Amazon RedShift** is ParAccel offered as a hosted service (run for you by the provider in its cloud).
+- **Open-source SQL-on-Hadoop** (younger, aiming to compete): Spark SQL, Apache Hive, Apache Drill, Apache Tajo, Facebook Presto and Cloudera Impala. Some build on ideas from Google's **Dremel** (an internal system for interactive queries over huge datasets).
 
 ### Stars and Snowflakes: Schemas for Analytics
 
 OLTP uses many different data models (Chapter 2), but analytics is much more uniform. Most warehouses use a **star schema** (a.k.a. **dimensional modeling**).
 
-**Fact table** (at the centre, e.g. `fact_sales` for a grocery chain): each row is an **event** at a particular time — here, one customer buying one product. For web analytics, a row might be a page view or click.
+**Fact table** (at the centre, e.g. `fact_sales` for a grocery chain): each row is an **event** at a particular time — here, one customer buying one product. For web analytics (measuring how visitors use a website), a row might be a page view or click.
 - Recording individual events maximises flexibility later, but fact tables become **enormous**. Companies like **Apple, Walmart, eBay** may hold **tens of petabytes** of history, mostly in fact tables.
 - Some columns are **attributes** (sale price, supplier cost → profit margin).
 - Others are **foreign keys** to **dimension tables**, which describe an event's **who, what, where, when, how and why**.
@@ -613,7 +613,7 @@ erDiagram
 ```
 
 - **Why "star":** drawn out, the fact table sits in the middle with dimension tables around it, like rays of a star.
-- **Snowflake schema:** dimensions are split further into sub-dimensions (e.g., separate `brand` and `category` tables referenced by `dim_product`). More **normalised**, but star schemas are usually preferred because they're **simpler for analysts**.
+- **Snowflake schema:** dimensions are split further into sub-dimensions (e.g., separate `brand` and `category` tables referenced by `dim_product`). More **normalised** (each fact stored once and referenced by ID), but star schemas are usually preferred because they're **simpler for analysts**.
 - **Tables are wide:** fact tables often exceed **100 columns**, sometimes several hundred. Dimension tables can be wide too — e.g., `dim_store` might record services offered, whether there's an in-store bakery, floor area, opening date, last remodel date, distance to the nearest highway.
 
 ---
@@ -640,7 +640,7 @@ GROUP BY d.month, s.region;                              -- one total per month 
 
 **The column-oriented idea:** store all values of each **column** together, each column in its **own file**. A query reads and parses only the columns it needs.
 
-> **Aside:** column storage is easiest to picture in the relational model, but it works for non-relational data too. **Parquet** is a columnar format that supports a document model, based on Google's **Dremel**.
+> **Aside:** column storage is easiest to picture in the relational model, but it works for non-relational data too. **Parquet** is a columnar (column-by-column) file format that supports a document model, based on Google's **Dremel**.
 
 *Figure 3-10 (redrawn): the book's eight fact_sales rows stored as one file per column; position k in every file belongs to row k*
 ```mermaid
@@ -672,7 +672,7 @@ Reading fewer columns already cuts disk I/O; **compression** cuts it further, an
 
 **Bitmap encoding** (especially effective in warehouses):
 1. A column usually holds few **distinct values** relative to the number of rows (a retailer may have **billions** of sales but only **100,000** products).
-2. For a column with **n distinct values**, create **n bitmaps** — one per value — with **one bit per row**: 1 if the row has that value, 0 otherwise.
+2. For a column with **n distinct values**, create **n bitmaps** (a *bitmap* is a long row of bits, each 0 or 1) — one per value — with **one bit per row**: 1 if the row has that value, 0 otherwise.
 3. If n is **very small** (e.g., a country column with about **200** values), store bitmaps as-is.
 4. If n is larger, most bitmaps are mostly zeros (**sparse**), so also apply **run-length encoding**: store lengths of alternating runs of 0s and 1s.
 
@@ -701,8 +701,8 @@ flowchart LR
 ```
 
 **Bitmaps make common filters cheap:**
-- `WHERE product_sk IN (30, 68, 69)` → fetch the bitmaps for those three products and **OR** them together bit by bit.
-- A filter on product 31 *and* store 3 (`product_sk = 31 AND store_sk = 3`) → fetch the two bitmaps and **AND** them together bit by bit. This works because all columns keep rows in the same order, so bit k refers to the same row in every bitmap.
+- `WHERE product_sk IN (30, 68, 69)` → fetch the bitmaps for those three products and **OR** them together bit by bit (the result bit is 1 if any input bit is 1).
+- A filter on product 31 *and* store 3 (`product_sk = 31 AND store_sk = 3`) → fetch the two bitmaps and **AND** them together bit by bit (the result bit is 1 only if both input bits are 1). This works because all columns keep rows in the same order, so bit k refers to the same row in every bitmap.
 
 There are many other compression schemes for other kinds of data.
 
@@ -711,15 +711,15 @@ There are many other compression schemes for other kinds of data.
 #### Memory bandwidth and vectorized processing
 
 For scans over millions of rows, disk-to-memory bandwidth is a big bottleneck, but not the only one. Analytic database developers also care about:
-- how fast data moves from **RAM into the CPU cache**,
-- avoiding **branch mispredictions** and **bubbles** in the CPU pipeline,
+- how fast data moves from **RAM into the CPU cache** (a tiny, very fast memory on the processor chip itself),
+- avoiding **branch mispredictions** (the CPU guessed wrongly which way an `if` would go and must throw away work) and **bubbles** (idle slots) in the CPU pipeline (the assembly line of instruction steps a CPU overlaps to run fast),
 - using **SIMD** (single-instruction-multi-data) instructions.
 
-Column layouts help here too: the query engine can grab a piece of compressed column data small enough for the CPU's **L1 cache** and loop over it tightly with **no function calls** — far faster than per-record code full of calls and branches. Compression lets **more rows fit** in L1. Operators like the bitwise AND/OR above can run **directly on compressed chunks**. This is **vectorized processing**.
+Column layouts help here too: the query engine can grab a piece of compressed column data small enough for the CPU's **L1 cache** (the smallest and fastest level of CPU cache) and loop over it tightly with **no function calls** — far faster than per-record code full of calls and branches. Compression lets **more rows fit** in L1. Operators like the bitwise AND/OR above can run **directly on compressed chunks**. This is **vectorized processing**.
 
 ### Sort Order in Column Storage
 
-Rows can be stored in **insertion order** (then inserting = appending to every column file). But we can instead impose a **sort order**, like SSTables, and use it as an index.
+Rows can be stored in **insertion order** (the order they arrived) (then inserting = appending to every column file). But we can instead impose a **sort order**, like SSTables, and use it as an index.
 
 - **You can't sort each column independently** — you'd lose which values belong to the same row. Sort **whole rows**, even though storage is by column.
 - The DBA picks **sort keys** based on common queries. If queries often target date ranges (e.g., last month), make `date_key` the **first** sort key so the engine scans only that month's rows.
@@ -730,7 +730,7 @@ Rows can be stored in **insertion order** (then inserting = appending to every c
 
 #### Several different sort orders
 
-Introduced in **C-Store** and adopted by the commercial warehouse **Vertica**: different queries prefer different sort orders, and you must **replicate** data to several machines anyway to survive failures — so store each replica **sorted differently**, and have each query use the copy that suits it best.
+Introduced in **C-Store** (an academic column-store prototype) and adopted by the commercial warehouse **Vertica**: different queries prefer different sort orders, and you must **replicate** (copy) data to several machines anyway to survive failures — so store each replica **sorted differently**, and have each query use the copy that suits it best.
 
 | | Multiple sort orders (column store) | Multiple secondary indexes (row store) |
 |---|---|---|
@@ -797,7 +797,7 @@ flowchart TD
   Q3["SELECT SUM(net_price) FROM fact_sales<br/>WHERE product_sk = 32 (column total)"] -.-> TOT
 ```
 
-- With more dimensions (Figure 3-9 has **five**: date, product, store, promotion, customer), it becomes a **hypercube**, harder to picture but the same idea: each cell holds sales for one combination, summarisable along any dimension.
+- With more dimensions (Figure 3-9 has **five**: date, product, store, promotion, customer), it becomes a **hypercube** (the same grid idea in more than three dimensions), harder to picture but the same idea: each cell holds sales for one combination, summarisable along any dimension.
 - **Advantage:** some queries become near-instant because they're **precomputed** — e.g., total sales per store yesterday = read the totals along one dimension, no scanning millions of rows.
 - **Disadvantage:** **less flexible** than raw data. E.g., you can't compute what share of sales came from items priced above **$100**, because price isn't a dimension.
 - Therefore most warehouses **retain raw data wherever they can**, treating cubes merely as a **speed-up for particular queries**.
@@ -814,7 +814,7 @@ flowchart TD
 - **Two OLTP schools:**
   - **Log-structured:** only append to files and delete obsolete ones; never modify a written file. Members include Bitcask, SSTables, LSM-trees, LevelDB, HBase, Cassandra, Lucene and more.
   - **Update-in-place:** disk as fixed-size overwritable pages. **B-trees** are the main example, used in all major relational databases and many non-relational ones.
-- Log-structured engines are relatively new; their key trick is turning **random writes into sequential writes**, enabling higher write throughput on HDDs and SSDs.
+- Log-structured engines are relatively new; their key trick is turning **random writes into sequential writes**, enabling higher write throughput on HDDs (hard disk drives) and SSDs.
 - The chapter also toured more complex indexes (secondary, clustered/covering, multi-dimensional, fuzzy) and **in-memory** databases.
 - **Warehouses:** when queries scan many rows sequentially, indexes matter less; what matters is **very compact encoding** to minimise data read — hence columnar storage, compression, sorting.
 - **Takeaway:** knowing engine internals helps you choose the right tool and reason about what a tuning parameter change will do, and helps you understand your database's documentation.

@@ -23,6 +23,7 @@ Overview (with analogy) → Key terms → every book section and sub-section exp
 | # | Chapter | Part |
 |---|---|---|
 | 00 | [Preface: how to read this book](chapters/00-preface/README.md) | |
+| 0a | [System Design Fundamentals](chapters/00a-system-design-fundamentals/README.md) — **start here if you are new**: every basic concept from zero (latency, load balancers, DNS, HTTP, caching, replication, sharding, queues, CAP, consensus, security) + a 300-term glossary | Primer |
 | 01 | [Reliable, Scalable, and Maintainable Applications](chapters/01-reliable-scalable-maintainable/README.md) | I · Foundations of Data Systems |
 | 02 | [Data Models and Query Languages](chapters/02-data-models-and-query-languages/README.md) | I |
 | 03 | [Storage and Retrieval](chapters/03-storage-and-retrieval/README.md) | I |

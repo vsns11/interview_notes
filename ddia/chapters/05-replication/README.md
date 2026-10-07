@@ -10,8 +10,8 @@ Part I of the book looked at data that lives on one computer. Part II asks what 
 | Reason | What it buys you |
 |---|---|
 | **Scalability** | When the amount of data, or the number of reads or writes, outgrows one machine, the work can be shared among several. |
-| **Fault tolerance / high availability** | If one machine (or several, or the network, or a whole datacenter) dies, a redundant machine can take over so the application keeps working. |
-| **Latency** | With servers on several continents, each user talks to a nearby datacenter instead of waiting for packets to cross the planet. |
+| **Fault tolerance / high availability** (staying usable despite failures) | If one machine (or several, or the network, or a whole datacenter, i.e. a building full of servers) dies, a redundant machine can take over so the application keeps working. |
+| **Latency** | With servers on several continents, each user talks to a nearby datacenter instead of waiting for packets (the small chunks data is split into on a network) to cross the planet. |
 
 #### Scaling to Higher Load
 
@@ -19,19 +19,19 @@ There are three broad hardware architectures for handling more load:
 
 | Architecture | How it works | Strengths | Weaknesses |
 |---|---|---|---|
-| **Shared-memory** (vertical scaling, "scaling up") | Buy one bigger machine: many CPUs, RAM chips and disks joined under one operating system; a fast interconnect lets any CPU reach any memory or disk. It behaves like one computer. | Simple to program: it is still "one machine". | Cost rises faster than linearly (a machine twice as big costs much more than twice as much), and bottlenecks mean twice the hardware does not give twice the throughput. Some fault tolerance through hot-swappable parts (disks, memory, even CPUs replaced while running), but it sits in a single location. |
-| **Shared-disk** | Several machines, each with its own CPUs and RAM, all reading and writing one shared array of disks over a fast network (NAS = Network Attached Storage, or SAN = Storage Area Network). | Used for some data-warehouse workloads. | Contention for the disks and the cost of locking limit how far it scales. |
-| **Shared-nothing** (horizontal scaling, "scaling out") | Every machine (or VM) that runs the database software is called a **node**, and it relies solely on its own CPUs, RAM and disks. Nodes coordinate purely in software over an ordinary network. | No special hardware, so you pick whatever gives the best price/performance. Data can be spread across regions, cutting latency and even surviving the loss of a whole datacenter. With cloud VMs, even small companies can run multi-region setups. | More complexity for the application; can restrict which data models you can use. |
+| **Shared-memory** (vertical scaling, "scaling up") | Buy one bigger machine: many CPUs (processors), RAM chips (working memory) and disks joined under one operating system; a fast interconnect (internal high-speed link) lets any CPU reach any memory or disk. It behaves like one computer. | Simple to program: it is still "one machine". | Cost rises faster than linearly (a machine twice as big costs much more than twice as much), and bottlenecks (the slowest part that limits the whole) mean twice the hardware does not give twice the throughput (work completed per second). Some fault tolerance through hot-swappable parts (disks, memory, even CPUs replaced while running), but it sits in a single location. |
+| **Shared-disk** | Several machines, each with its own CPUs and RAM, all reading and writing one shared array of disks over a fast network (NAS = Network Attached Storage, or SAN = Storage Area Network). | Used for some data-warehouse workloads. | Contention (many machines competing for the same disks) and the cost of locking (coordinating so two machines do not change the same data at once) limit how far it scales. |
+| **Shared-nothing** (horizontal scaling, "scaling out") | Every machine (or VM, a virtual machine: a software-simulated computer rented from a cloud provider) that runs the database software is called a **node**, and it relies solely on its own CPUs, RAM and disks. Nodes coordinate purely in software over an ordinary network. | No special hardware, so you pick whatever gives the best price/performance. Data can be spread across regions (geographic areas such as US-East or Europe, each with its own datacenters), cutting latency (the delay before a response arrives) and even surviving the loss of a whole datacenter. With cloud VMs, even small companies can run multi-region setups. | More complexity for the application; can restrict which data models you can use. |
 
 > **NUMA aside.** Even inside one big shared-memory machine, some memory banks are physically nearer to certain CPUs (nonuniform memory access, NUMA). To use such a machine well you must split the work so each CPU mostly touches nearby memory, so a form of partitioning is needed even on "one machine".
 
-The rest of Part II concentrates on **shared-nothing** systems. Not because they are always best, but because they are the ones where the application developer has to be most careful: the database cannot hide all the constraints of distribution from you. The book also warns that a simple single-threaded program can sometimes beat a cluster of more than 100 CPU cores, so distribution is not free performance.
+The rest of Part II concentrates on **shared-nothing** systems. Not because they are always best, but because they are the ones where the application developer has to be most careful: the database cannot hide all the constraints of distribution from you. The book also warns that a simple single-threaded program (one doing one thing at a time) can sometimes beat a cluster (a group of networked machines) of more than 100 CPU cores (independent processing units), so distribution is not free performance.
 
 #### Replication Versus Partitioning
 
 There are two standard ways to lay data out across nodes:
 
-- **Replication**: the *same* data is copied onto several nodes, possibly in different places. This gives redundancy (if some nodes are down, others still serve the data) and can also improve performance. This is Chapter 5.
+- **Replication**: the *same* data is copied onto several nodes, possibly in different places. This gives redundancy (spare copies; if some nodes are down, others still serve the data) and can also improve performance. This is Chapter 5.
 - **Partitioning** (also called **sharding**): a large database is cut into smaller pieces, called **partitions**, and different partitions go on different nodes. This is Chapter 6.
 
 The two are independent mechanisms but are usually combined.
@@ -63,8 +63,10 @@ After these two chapters, Chapter 7 covers transactions, and Chapters 8 and 9 co
 
 Reasons to replicate:
 1. Keep data physically near users (lower **latency**).
-2. Keep working when some parts fail (higher **availability**).
-3. Let more machines answer read queries (higher **read throughput**).
+2. Keep working when some parts fail (higher **availability**: the fraction of time the system is usable).
+3. Let more machines answer read queries (higher **read throughput**: more reads served per second).
+
+See also [System Design Fundamentals](../00a-system-design-fundamentals/README.md) for a primer on latency, availability, replication and sharding.
 
 For this chapter we assume every machine can hold the entire dataset (Chapter 6 lifts that assumption). If data never changed, replication would be trivial: copy it once. All the hard parts come from **changes**. The chapter covers the three algorithms that almost every distributed database uses:
 
@@ -159,11 +161,11 @@ flowchart LR
 Who uses it:
 - Relational: PostgreSQL (since 9.0), MySQL, Oracle Data Guard, SQL Server AlwaysOn Availability Groups.
 - Non-relational: MongoDB, RethinkDB, Espresso.
-- Beyond databases: message brokers Kafka and RabbitMQ highly available queues. DRBD (a replicated block device) and some network filesystems follow a similar pattern.
+- Beyond databases: message brokers (services that pass messages between programs) Kafka and RabbitMQ highly available queues. DRBD (a replicated block device, i.e. a replicated virtual disk) and some network filesystems follow a similar pattern.
 
 ### Synchronous Versus Asynchronous Replication
 
-**What it is.** When the leader forwards a change, does it wait for the follower's confirmation before telling the client "done"? If yes, that follower is **synchronous**; if no, it is **asynchronous**. Relational databases often let you configure this; other systems hard-code one choice.
+**What it is.** When the leader forwards a change, does it wait for the follower's confirmation before telling the client "done"? If yes, that follower is **synchronous**; if no, it is **asynchronous**. Relational databases often let you configure this; other systems hard-code (fix in the code, with no setting) one choice.
 
 Example: a user changes their profile picture. The client sends the update to the leader; the leader forwards it to followers; at some point the leader tells the client it succeeded.
 
@@ -193,15 +195,15 @@ Normally followers apply changes within a second, but **there is no upper bound*
 
 Because one stuck synchronous node would halt everything, making *all* followers synchronous is impractical. The usual compromise is **semi-synchronous**: exactly one follower is synchronous and the rest asynchronous; if the synchronous one becomes slow or unavailable, one of the asynchronous followers is switched to synchronous mode. This guarantees the data is current on at least two nodes (leader plus one follower).
 
-Very often, leader-based replication is **fully asynchronous**. Then a write the client was told succeeded can still vanish if the leader fails for good before sending it on, meaning durability is **not guaranteed**. The upside: the leader keeps accepting writes even if every follower lags. This weaker durability is still widely accepted, especially with many followers or followers spread across regions.
+Very often, leader-based replication is **fully asynchronous**. Then a write the client was told succeeded can still vanish if the leader fails for good before sending it on, meaning durability (the promise that confirmed data is never lost) is **not guaranteed**. The upside: the leader keeps accepting writes even if every follower lags. This weaker durability is still widely accepted, especially with many followers or followers spread across regions.
 
 > **Research on replication.** Losing data when an async leader fails is serious, so researchers keep looking for methods that avoid loss yet stay fast and available. **Chain replication**, a synchronous variant, has been deployed successfully in a handful of systems, Microsoft Azure Storage being one. Replication consistency is closely tied to **consensus** (getting nodes to agree on a value), covered in Chapter 9.
 
 ### Setting Up New Followers
 
-You add followers to get more replicas or to replace dead ones. Just copying the data files does not work: writes keep arriving, so a plain file copy would capture different parts of the database at different moments, which could be nonsense. Locking the database during the copy would work but kills availability. Instead, the usual no-downtime procedure is:
+You add followers to get more replicas or to replace dead ones. Just copying the data files does not work: writes keep arriving, so a plain file copy would capture different parts of the database at different moments, which could be nonsense. Locking the database (blocking all writes) during the copy would work but kills availability. Instead, the usual no-downtime procedure is:
 
-1. **Snapshot** the leader's database consistently at one point in time, ideally without locking the whole database. Most databases can do this because backups need it; sometimes a third-party tool is needed (e.g. *innobackupex* for MySQL, part of Percona XtraBackup).
+1. **Snapshot** the leader's database consistently at one point in time, ideally without locking the whole database. Most databases can do this because backups need it; sometimes a third-party (from another vendor) tool is needed (e.g. *innobackupex* for MySQL, part of Percona XtraBackup).
 2. **Transfer** that snapshot onto the new follower's machine.
 3. The new follower **asks the leader for every change made after the snapshot**. This only works if the snapshot is tied to an exact position in the replication log: PostgreSQL calls this the **log sequence number**, MySQL the **binlog coordinates**.
 4. Once the follower has worked through that backlog it has **caught up**, and from then on it just follows the live stream of changes.
@@ -210,12 +212,12 @@ How automated this is depends heavily on the database: some do it all for you, o
 
 ### Handling Node Outages
 
-Nodes go down from faults and, just as often, planned maintenance (for example rebooting to apply a kernel security patch). Being able to restart individual nodes without downtime is a big operational win. The goal: keep the whole system running and minimise the impact of any single node being down.
+Nodes go down from faults and, just as often, planned maintenance (for example rebooting to apply a kernel security patch, a fix to the core of the operating system). Being able to restart individual nodes without downtime is a big operational win. The goal: keep the whole system running and minimise the impact of any single node being down.
 
 #### Follower failure: Catch-up recovery
 
 Each follower keeps on its local disk a log of changes received from the leader. After a crash/restart, or a temporary network break, the follower:
-1. Looks in its log for the last transaction it processed.
+1. Looks in its log for the last transaction (a group of writes applied as one unit; Chapter 7) it processed.
 2. Asks the leader for all changes after that point.
 3. Applies them, is caught up, and resumes receiving the stream.
 
@@ -223,16 +225,16 @@ Each follower keeps on its local disk a log of changes received from the leader.
 
 Harder. **Failover** means: promote a follower to leader, point clients' writes at it, and have the other followers consume from it. It can be manual (an admin is alerted and acts) or automatic. Automatic failover usually goes:
 
-1. **Decide that the leader has failed.** Crashes, power cuts, network trouble... there is no foolproof detector, so systems use a **timeout**: nodes exchange messages constantly, and a node silent for, say, **30 seconds** is presumed dead. (Planned maintenance is different; you know the leader is going down.)
+1. **Decide that the leader has failed.** Crashes, power cuts, network trouble... there is no foolproof detector, so systems use a **timeout** (a fixed waiting limit after which you give up): nodes exchange messages constantly, and a node silent for, say, **30 seconds** is presumed dead. (Planned maintenance is different; you know the leader is going down.)
 2. **Pick a new leader**, either by an **election** (a majority of remaining replicas choose) or by a previously elected **controller node** appointing one. The best choice is usually whichever replica holds the freshest copy of the old leader's changes, to lose as little as possible. Getting all nodes to agree is a **consensus** problem (Chapter 9).
 3. **Reconfigure the system** so clients send writes to the new leader (see "Request Routing" in Chapter 6). If the old leader returns and still thinks it is leader, the system must force it to become a follower.
 
 What can go wrong:
 
 - **Lost writes.** With async replication, the new leader may be missing some of the old leader's last writes. If the old leader rejoins, what to do with them? The new leader may have accepted conflicting writes meanwhile. The usual answer is to **throw the old leader's unreplicated writes away**, which can break the durability promise made to clients.
-- **Danger with outside systems.** Discarding writes is worse when other storage depends on the database. In an incident at **GitHub**, a stale MySQL follower became leader. Primary keys came from an autoincrementing counter, and the new leader's counter was behind, so it **reused primary keys** the old leader had already handed out. Those keys were also used in **Redis**, so MySQL and Redis disagreed and some private data was shown to the wrong users.
-- **Split brain.** In some faults (Chapter 8) two nodes both believe they are leader. If both accept writes with no conflict-resolution process, data can be lost or corrupted. Some systems shut one down when two leaders are detected (**fencing**, or **STONITH**), but a poorly designed version can end up shutting down *both* (the book cites a GitHub outage postmortem for this).
-- **Choosing the timeout.** Long timeout: slow recovery after a real failure. Short timeout: needless failovers, e.g. a load spike pushes response time past the limit, or a network glitch delays packets. A needless failover on a system already struggling with load or network trouble usually makes things **worse**.
+- **Danger with outside systems.** Discarding writes is worse when other storage depends on the database. In an incident at **GitHub**, a stale MySQL follower became leader. Primary keys (the unique ID of each row) came from an autoincrementing counter (the database hands out 1, 2, 3, ... to new rows), and the new leader's counter was behind, so it **reused primary keys** the old leader had already handed out. Those keys were also used in **Redis** (an in-memory key-value store, here used as a cache), so MySQL and Redis disagreed and some private data was shown to the wrong users.
+- **Split brain.** In some faults (Chapter 8) two nodes both believe they are leader. If both accept writes with no conflict-resolution process, data can be lost or corrupted. Some systems shut one down when two leaders are detected (**fencing**, or **STONITH**), but a poorly designed version can end up shutting down *both* (the book cites a GitHub outage postmortem, i.e. a published write-up of what went wrong, for this).
+- **Choosing the timeout.** Long timeout: slow recovery after a real failure. Short timeout: needless failovers, e.g. a load spike (a sudden burst of traffic) pushes response time past the limit, or a network glitch delays packets. A needless failover on a system already struggling with load or network trouble usually makes things **worse**.
 
 There are no easy fixes, which is why some operations teams do failover **manually** even when the software could automate it. Node crashes, flaky networks, and the tension between replica consistency, durability, availability and latency are fundamental distributed-systems problems, revisited in Chapters 8 and 9.
 
@@ -254,14 +256,14 @@ UPDATE orders SET shipped_at = NOW() WHERE customer = 'ana';
 -- statement 3: result depends on current data and on execution order
 DELETE FROM orders WHERE shipped_at < '2024-01-01';
 ```
-- Line 1 is deterministic, so replaying it gives the same row everywhere (except that an autoincrement ID depends on ordering).
+- Line 1 is deterministic (same inputs always give the same result), so replaying it gives the same row everywhere (except that an autoincrement ID depends on ordering).
 - Line 2 calls `NOW()`, a nondeterministic function, so each follower would store a different timestamp.
 - Line 3 depends on existing data; if replicas run statements in different orders, they delete different rows.
 
 **Where it breaks:**
 - Nondeterministic functions such as `NOW()` or `RAND()` produce different values per replica.
 - Statements using an autoincrement column, or that depend on existing data (`UPDATE ... WHERE <condition>`), must run in **exactly** the same order on every replica, which is restrictive when many transactions run concurrently.
-- Side effects (triggers, stored procedures, user-defined functions) may differ per replica unless fully deterministic.
+- Side effects (triggers; stored procedures, i.e. programs stored and run inside the database; user-defined functions) may differ per replica unless fully deterministic.
 
 **Workarounds** exist, e.g. the leader replaces `NOW()` with a fixed value when logging, but there are so many edge cases that other methods are now preferred.
 
@@ -270,12 +272,12 @@ DELETE FROM orders WHERE shipped_at < '2024-01-01';
 #### Write-ahead log (WAL) shipping
 
 Recall from Chapter 3 that storage engines append every write to a log:
-- In a **log-structured** engine (SSTables/LSM-trees), the log *is* the main storage; background jobs compact old segments and garbage-collect them.
+- In a **log-structured** engine (SSTables/LSM-trees), the log *is* the main storage; background jobs compact old segments and garbage-collect them (delete them once nothing needs them).
 - In a **B-tree**, each modification goes to a **write-ahead log** before touching the tree, so a crash can be recovered from.
 
 Either way, there is an append-only byte log of all writes. The leader can simply send that same log over the network; a follower replaying it builds identical data structures. **Used by PostgreSQL and Oracle**, among others.
 
-**Downside:** the WAL is very low level (which bytes changed in which disk blocks), so replication is **tightly coupled to the storage engine**. If the on-disk format changes between versions, leader and followers usually cannot run different versions. That matters operationally: if followers *could* run a newer version, you could do a **zero-downtime upgrade** (upgrade followers first, then fail over to an upgraded one). With WAL shipping that version mismatch is often not allowed, so upgrades need downtime.
+**Downside:** the WAL is very low level (which bytes changed in which disk blocks), so replication is **tightly coupled** (dependent in detail) **to the storage engine** (the database layer that lays data out on disk). If the on-disk format changes between versions, leader and followers usually cannot run different versions. That matters operationally: if followers *could* run a newer version, you could do a **zero-downtime upgrade** (upgrade followers first, then fail over to an upgraded one). With WAL shipping that version mismatch is often not allowed, so upgrades need downtime.
 
 #### Logical (row-based) log replication
 
@@ -284,7 +286,7 @@ Use a **different log format for replication** than for storage, decoupling repl
 - **Delete:** enough to identify the row uniquely, normally the primary key; if the table has none, the old values of all columns.
 - **Update:** enough to identify the row, plus the new column values (all of them, or at minimum those that changed).
 
-A transaction touching several rows produces several records followed by a commit record. **MySQL's binlog** in row-based mode works like this.
+A transaction touching several rows produces several records followed by a commit record (a marker saying the transaction is complete and its changes are final). **MySQL's binlog** in row-based mode works like this.
 
 A sketch of what such records might look like (illustrative JSON, my own data):
 
@@ -301,11 +303,11 @@ A sketch of what such records might look like (illustrative JSON, my own data):
 
 **Benefits:**
 - Easier to keep **backward compatible**, so leader and followers can run different software versions or even different storage engines.
-- Easier for **external applications** to parse, e.g. to feed a data warehouse or build custom indexes and caches. This is **change data capture** (Chapter 11).
+- Easier for **external applications** to parse, e.g. to feed a data warehouse (a separate database for analytics) or build custom indexes and caches. This is **change data capture** (Chapter 11).
 
 #### Trigger-based replication
 
-The previous methods live entirely inside the database. Sometimes you need more flexibility: replicate only a subset of data, replicate between different kinds of database, or apply custom **conflict resolution**. Then replication moves up into the application layer.
+The previous methods live entirely inside the database. Sometimes you need more flexibility: replicate only a subset of data, replicate between different kinds of database, or apply custom **conflict resolution** (deciding what to keep when two copies were changed differently). Then replication moves up into the application layer.
 
 Options:
 - Tools like **Oracle GoldenGate** read the database log and expose changes to an application.
@@ -342,7 +344,7 @@ CREATE TRIGGER books_changes AFTER INSERT OR UPDATE ON books
 
 Replication is not only for surviving failures; it also helps **scalability** (more requests than one machine can take) and **latency** (replicas near users).
 
-With a single leader, writes go through one node but reads can go anywhere. For read-heavy workloads (common on the web), you can create many followers and spread reads across them: a **read-scaling architecture**. Add followers to add read capacity. This really only works with **asynchronous** replication: synchronous replication to every follower would make any single node failure or network glitch stop all writes, and more nodes means more chances one is down.
+With a single leader, writes go through one node but reads can go anywhere. For read-heavy workloads (far more reads than writes, common on the web), you can create many followers and spread reads across them: a **read-scaling architecture**. Add followers to add read capacity. This really only works with **asynchronous** replication: synchronous replication to every follower would make any single node failure or network glitch stop all writes, and more nodes means more chances one is down.
 
 But reading from an async follower can return **outdated data**. Run the same query on leader and follower at the same moment and you may get different answers. This is temporary: stop writing, wait, and followers catch up. Hence the name **eventual consistency**.
 
@@ -409,11 +411,11 @@ Had the first read also returned nothing, the user would not notice; seeing the 
 
 **Guarantee: monotonic reads.** Weaker than strong consistency, stronger than eventual consistency. You might still read old data, but successive reads by one user never go to an *older* state after seeing a newer one.
 
-**How:** make each user always read from the **same replica** (different users can use different replicas), e.g. choose the replica by **hashing the user ID** rather than at random. If that replica fails, the user must be rerouted.
+**How:** make each user always read from the **same replica** (different users can use different replicas), e.g. choose the replica by **hashing the user ID** (feeding it through a function that turns it into a stable number, then using that number to pick a replica) rather than at random. If that replica fails, the user must be rerouted.
 
 ### Consistent Prefix Reads
 
-**Problem:** causality violated. The book uses a dialogue between Mr. Poons (asks how far ahead Mrs. Cake can see) and Mrs. Cake (answers about ten seconds). The answer depends on the question. If an observer reads the answer via a fast replica and the question via a slow one, they see the reply **before** the question, as though Mrs. Cake were psychic.
+**Problem:** causality (the cause-and-effect order of events) violated. The book uses a dialogue between Mr. Poons (asks how far ahead Mrs. Cake can see) and Mrs. Cake (answers about ten seconds). The answer depends on the question. If an observer reads the answer via a fast replica and the question via a slow one, they see the reply **before** the question, as though Mrs. Cake were psychic.
 
 *Figure 5-5 (redrawn): Mr. Poons's question goes to partition 1, whose follower lags a lot; Mrs. Cake's answer goes to partition 2, whose follower lags little. Each speaker hears the other via the leaders, but the observer, reading from the followers, receives the answer first.*
 ```mermaid
@@ -495,7 +497,7 @@ flowchart LR
 
 Tools: some databases support it by default; often it is bolted on via external tools such as **Tungsten Replicator** (MySQL), **BDR** (PostgreSQL), **GoldenGate** (Oracle).
 
-**Big downside:** the same data can be changed concurrently in two datacenters, producing **write conflicts** that need resolving. Also, because multi-leader is often retrofitted, it interacts badly with features such as **autoincrementing keys, triggers, and integrity constraints**. It is often regarded as dangerous territory to avoid if possible.
+**Big downside:** the same data can be changed concurrently in two datacenters, producing **write conflicts** that need resolving. Also, because multi-leader is often retrofitted, it interacts badly with features such as **autoincrementing keys, triggers, and integrity constraints** (rules the database enforces, such as "no two rows share this value"). It is often regarded as dangerous territory to avoid if possible.
 
 #### Clients with offline operation
 
@@ -536,7 +538,7 @@ This cannot happen with a single leader.
 
 #### Synchronous versus asynchronous conflict detection
 
-- **Single leader:** the second writer either blocks until the first write completes, or its transaction is aborted and the user retries.
+- **Single leader:** the second writer either blocks until the first write completes, or its transaction is aborted (cancelled, with all its changes undone) and the user retries.
 - **Multi-leader:** both writes succeed locally; the conflict is detected **later, asynchronously**, by which point asking the user may no longer be possible.
 - You *could* detect conflicts synchronously by waiting for replication to all replicas before confirming, but that throws away multi-leader's main benefit (independent writes on each leader). If you want that, just use single-leader.
 
@@ -553,7 +555,7 @@ It breaks down when the designated leader must change, e.g. a datacenter fails a
 A single leader applies writes in sequence, so the last write to a field decides its value. With multiple leaders there is **no defined order**. In Figure 5-7, leader 1 sees B then C; leader 2 sees C then B. Neither order is "more correct". If each simply applied writes in arrival order, leader 1 would end with C and leader 2 with B: permanently inconsistent, which is unacceptable. Resolution must be **convergent**: all replicas reach the same final value once all changes have replicated.
 
 Ways to converge:
-1. **Give each write a unique ID** (timestamp, long random number, UUID, or hash of key and value); keep the write with the highest ID and drop the others. With timestamps this is **last write wins (LWW)**: popular but **dangerously prone to data loss**.
+1. **Give each write a unique ID** (timestamp, long random number, UUID (a 128-bit randomly generated identifier that is practically guaranteed unique), or hash of key and value); keep the write with the highest ID and drop the others. With timestamps this is **last write wins (LWW)**: popular but **dangerously prone to data loss**.
 2. **Give each replica a unique ID**; writes from a higher-numbered replica always win. Also loses data.
 3. **Merge the values**, e.g. sort alphabetically and concatenate (the title might become "B/C").
 4. **Record the conflict** in a data structure that keeps all information, and let application code resolve it later (maybe by asking the user).
@@ -561,14 +563,14 @@ Ways to converge:
 #### Custom conflict resolution logic
 
 The right resolution is application-specific, so most multi-leader tools let you supply code, run either:
-- **On write:** when the database finds a conflict in the incoming replicated changes, it calls your handler. **Bucardo** lets you write a Perl snippet for this. The handler runs in a background process, must be quick, and cannot prompt a user.
+- **On write:** when the database finds a conflict in the incoming replicated changes, it calls your handler. **Bucardo** lets you write a Perl (a scripting language) snippet for this. The handler runs in a background process, must be quick, and cannot prompt a user.
 - **On read:** all conflicting versions are stored; the next read returns them all to the application, which may ask the user or resolve automatically and write back the result. **CouchDB** works this way.
 
 Conflict resolution usually works **per row or document, not per transaction**. So if a transaction atomically makes several writes (Chapter 7), each write is resolved separately.
 
 > **Automatic Conflict Resolution.** Custom handlers get complicated and buggy. A well-known example is **Amazon**'s shopping cart: for a while its resolution logic preserved *additions* to a cart but not *removals*, so deleted items sometimes came back. Research directions:
 > - **CRDTs (conflict-free replicated datatypes)**: sets, maps, ordered lists, counters, etc. that multiple users can edit concurrently and that resolve conflicts sensibly on their own. Some are implemented in **Riak 2.0**.
-> - **Mergeable persistent data structures**: track history explicitly like **Git** and use a **three-way merge** (CRDTs use two-way merges).
+> - **Mergeable persistent data structures**: track history explicitly like **Git** (the version-control tool programmers use) and use a **three-way merge** (comparing both edited versions against their common ancestor; CRDTs use two-way merges).
 > - **Operational transformation**: the algorithm behind **Etherpad** and **Google Docs**, built specifically for concurrent edits to an ordered sequence, like the characters making up a document.
 >
 > Database implementations are still young, but these could make multi-leader sync much easier.
@@ -608,9 +610,9 @@ flowchart LR
 
 **Avoiding infinite loops.** In circular and star layouts, writes pass through several nodes, so nodes forward what they receive. Each node has a unique ID, and each write in the log is tagged with the IDs of every node it has passed through. A node that receives a change tagged with its own ID ignores it, knowing it already processed it.
 
-**Fault tolerance.** In circular and star layouts, **one failed node can block replication** between others until fixed; rerouting around it is usually manual. Denser topologies like all-to-all avoid this single point of failure because messages can take other paths.
+**Fault tolerance.** In circular and star layouts, **one failed node can block replication** between others until fixed; rerouting around it is usually manual. Denser topologies like all-to-all avoid this single point of failure (one part whose failure stops everything) because messages can take other paths.
 
-**All-to-all's own problem: messages overtaking each other.** Some links are faster (e.g. due to congestion elsewhere), so replication messages can arrive out of order.
+**All-to-all's own problem: messages overtaking each other.** Some links are faster (e.g. due to congestion, i.e. traffic jams on the network, elsewhere), so replication messages can arrive out of order.
 
 *Figure 5-9 (redrawn): client A inserts row x on leader 1, client B increments it on leader 3, but the insert travels slowly to leader 2, so leader 2 receives the dependent update before the insert.*
 ```mermaid
@@ -738,7 +740,7 @@ If fewer than w or r nodes respond successfully, the write or read **returns an 
 
 **Even with w + r > n, stale reads can happen.** Edge cases:
 1. **Sloppy quorum** in use: the w writes and r reads may land on different nodes, so no guaranteed overlap.
-2. **Concurrent writes**: unclear which came first. The only safe option is to merge; picking a winner by timestamp (LWW) can lose writes to **clock skew**.
+2. **Concurrent writes**: unclear which came first. The only safe option is to merge; picking a winner by timestamp (LWW) can lose writes to **clock skew** (different machines' clocks disagreeing about the time).
 3. **A write concurrent with a read**: the write may be on only some replicas, so the read may return old or new.
 4. **Partial write failure**: succeeded on some replicas (others had full disks), fewer than w overall. The replicas that did store it do **not undo** it, so a write reported as failed may or may not show up in later reads.
 5. **Restored from stale replica**: a node holding the new value fails and is restored from a replica with an old value, so the count holding the new value may drop below w.
@@ -750,7 +752,7 @@ So quorums *seem* to promise the latest value but in practice it is not that sim
 
 Even if stale reads are acceptable, you must know whether replication is healthy and get alerted if it falls far behind (e.g. network trouble, overloaded node).
 
-- **Leader-based:** easy. Writes are applied in the same order everywhere and every node's progress can be expressed as a log position (count of writes applied). **Lag = leader's position minus follower's position.** Databases usually expose this metric.
+- **Leader-based:** easy. Writes are applied in the same order everywhere and every node's progress can be expressed as a log position (count of writes applied). **Lag = leader's position minus follower's position.** Databases usually expose this metric (a measured number reported for monitoring).
 - **Leaderless:** no fixed write order, so it is harder. If read repair is the sole repair mechanism (anti-entropy absent), nothing **limits how old** a rarely read value can be.
 
 Research exists on measuring staleness in leaderless systems and on forecasting what fraction of reads will be stale for given n, w and r, but it is not yet common practice. The book argues staleness should be a standard metric: eventual consistency is vague, but for operations you need to **quantify "eventual"**.
@@ -836,7 +838,7 @@ How do we tell whether two operations are concurrent?
 
 So for any A and B there are exactly three cases: A before B, B before A, or concurrent. We need an algorithm to tell which. If one happened before the other, the later one should overwrite; if concurrent, there is a conflict to resolve.
 
-> **Concurrency, Time, and Relativity.** "Concurrent" does not mean "at literally the same instant". Clocks in distributed systems make exact simultaneity hard to judge anyway (Chapter 8). What matters is only whether each operation was **unaware** of the other, regardless of physical time. Some compare this to special relativity: information cannot travel faster than light, so two distant events closer in time than light needs to travel between them cannot influence each other. In computers, two operations can be concurrent even when light would easily have had time, e.g. if a slow or broken network prevented one from learning of the other.
+> **Concurrency, Time, and Relativity.** "Concurrent" does not mean "at literally the same instant". Clocks in distributed systems make exact simultaneity hard to judge anyway (Chapter 8). What matters is only whether each operation was **unaware** of the other, regardless of physical time. Some compare this to special relativity (Einstein's physics of space and time): information cannot travel faster than light, so two distant events closer in time than light needs to travel between them cannot influence each other. In computers, two operations can be concurrent even when light would easily have had time, e.g. if a slow or broken network prevented one from learning of the other.
 
 #### Capturing the happens-before relationship
 
@@ -896,7 +898,7 @@ No data is silently lost, but clients must **clean up** by merging the concurren
 
 Merging siblings is the same problem as multi-leader conflict resolution. Picking one by version or timestamp (LWW) loses data, so something smarter in application code may be needed.
 
-- **Cart example:** take the **union**. The last two siblings, `[milk, flour, eggs, bacon]` plus `[eggs, milk, ham]`, merge into `[milk, flour, eggs, bacon, ham]` with duplicates removed (milk and eggs show up in both siblings despite each being added only once).
+- **Cart example:** take the **union** (every item that appears in any sibling). The last two siblings, `[milk, flour, eggs, bacon]` plus `[eggs, milk, ham]`, merge into `[milk, flour, eggs, bacon, ham]` with duplicates removed (milk and eggs show up in both siblings despite each being added only once).
 - **Removals break plain union:** if an item was removed in only one sibling, the union brings it back (the Amazon cart problem). Fix: on removal, leave a marker with a suitable version number saying the item was deleted. This deletion marker is a **tombstone** (seen before in log compaction for hash indexes, Chapter 3).
 
 Merging by hand is complex and error-prone, so there are efforts at data structures that merge automatically. **Riak's datatype support** uses **CRDTs**, which merge siblings sensibly, **including preserving deletions**.

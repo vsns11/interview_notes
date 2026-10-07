@@ -10,7 +10,7 @@ The data models from Chapter 2 cope with change in different ways:
 - **Schema-on-read ("schemaless") databases** impose no schema at all, so old-format and new-format records can sit side by side.
 
 When the data format changes, the code that reads and writes it usually has to change too. In a big system, though, code **cannot change everywhere at the same instant**:
-- **Server-side:** you typically do a **rolling upgrade** (also called a **staged rollout**) — deploy the new version to a few nodes, check it behaves, then continue node by node. This avoids downtime and so encourages frequent releases.
+- **Server-side:** you typically do a **rolling upgrade** (also called a **staged rollout**) — deploy (install and start) the new version to a few nodes (a *node* is one machine in the system), check it behaves, then continue node by node. This avoids downtime (a period when the service is unavailable) and so encourages frequent releases.
 - **Client-side:** you depend on users, who may not install an update for a long time.
 
 So **old and new code, and old and new data formats, will coexist**. To keep working, the system needs compatibility **in both directions**:
@@ -22,7 +22,7 @@ So **old and new code, and old and new data formats, will coexist**. To keep wor
 
 The chapter answers two questions:
 1. **How do encoding formats** (JSON, XML, Protocol Buffers, Thrift, Avro) **handle schema changes** so that old and new code/data can coexist?
-2. **How do these formats get used when data flows** between processes — through databases, through services (REST and RPC), and through asynchronous messages (message brokers and actors)?
+2. **How do these formats get used when data flows** between processes (separate running programs, possibly on different machines) — through databases, through services (REST and RPC), and through asynchronous messages (message brokers and actors)?
 
 **Everyday analogy.** Imagine a paper form your office has used for years. A new version adds a "mobile phone" box. Staff trained on the new form must still understand old forms (backward compatibility). Staff still using old instructions must be able to process the new forms by simply skipping the box they don't recognise — and, if they re-file the form, not tear that box off (forward compatibility + preserving unknown fields).
 
@@ -87,10 +87,10 @@ The chapter answers two questions:
 ## Formats for Encoding Data
 
 Programs hold data in **at least two representations**:
-1. **In memory:** objects, structs, lists, arrays, hash tables, trees… These are tuned for fast CPU access and manipulation, usually with **pointers**.
+1. **In memory:** objects, structs (records grouping named fields), lists, arrays, hash tables (key-to-value lookup structures), trees… These are tuned for fast CPU access and manipulation, usually with **pointers** (values that hold the memory address of another piece of data).
 2. **On disk / on the network:** a **self-contained sequence of bytes** (e.g., a JSON document). A pointer means nothing to another process, so this form looks very different from the in-memory one.
 
-> **Footnote:** exceptions exist, e.g. some memory-mapped files, or operating directly on compressed data (as with column compression in Chapter 3).
+> **Footnote:** exceptions exist, e.g. some memory-mapped files (files the OS makes appear directly as part of a program's memory), or operating directly on compressed data (as with column compression in Chapter 3).
 
 So we need translation in both directions:
 - **Encoding** (also **serialization** or **marshalling**): in-memory → bytes.
@@ -98,19 +98,19 @@ So we need translation in both directions:
 
 > **Terminology clash:** "serialization" also has a totally different meaning for transactions (Chapter 7). To avoid confusion the book says **encoding**, even though serialization is probably the more common word.
 >
-> **Footnote:** encoding is unrelated to **encryption**, which the book doesn't cover.
+> **Footnote:** encoding is unrelated to **encryption** (scrambling data so only holders of a secret key can read it), which the book doesn't cover.
 
 There are countless libraries and formats; here's the tour.
 
 ### Language-Specific Formats
 
-**What they are.** Many languages have built-in ways to turn objects into bytes: **Java** has `java.io.Serializable`, **Ruby** has `Marshal`, **Python** has `pickle`. There are third-party ones too, e.g. **Kryo** for Java.
+**What they are.** Many languages have built-in ways to turn objects into bytes: **Java** has `java.io.Serializable`, **Ruby** has `Marshal`, **Python** has `pickle`. There are third-party ones (written by someone other than the language's makers) too, e.g. **Kryo** for Java.
 
 **Why people like them:** you can save and restore in-memory objects with almost no extra code.
 
 **Why they're a bad idea (deep problems):**
 1. **Tied to one language.** Reading the data from another language is very hard, so you lock yourself into your current language for a long time and make integration with other organisations (using other languages) difficult.
-2. **Security risk.** To rebuild objects of the original types, the decoder must be able to **instantiate arbitrary classes**. If an attacker can feed your app arbitrary bytes to decode, they can create arbitrary classes — which often lets them do terrible things like **remote code execution**.
+2. **Security risk.** To rebuild objects of the original types, the decoder must be able to **instantiate arbitrary classes** (create objects of any type at all; a *class* is the blueprint for a kind of object). If an attacker can feed your app arbitrary bytes to decode, they can create arbitrary classes — which often lets them do terrible things like **remote code execution** (running their own commands on your server).
 3. **Versioning is an afterthought.** Built for quick-and-easy encoding, these libraries often ignore forward and backward compatibility.
 4. **Efficiency is an afterthought.** Both CPU cost and encoded size may be poor; **Java's built-in serialization** is infamous for being slow and producing bloated bytes.
 
@@ -126,23 +126,23 @@ item = pickle.loads(blob)                       # decode; never do this with unt
 
 ### JSON, XML, and Binary Variants
 
-**Standardised, cross-language formats:** **JSON** and **XML** are the obvious choices — widely known, widely supported, and nearly as widely disliked. XML is often called too verbose and needlessly complicated. JSON is popular mainly because web browsers support it natively (it's a subset of JavaScript) and it's simpler than XML. **CSV** is another language-independent format, though less powerful.
+**Standardised, cross-language formats:** **JSON** and **XML** are the obvious choices — widely known, widely supported, and nearly as widely disliked. XML is often called too verbose and needlessly complicated. JSON is popular mainly because web browsers support it natively (built in, no extra library; it's a subset of JavaScript, the browser's programming language) and it's simpler than XML. **CSV** is another language-independent format, though less powerful.
 
 All three are **textual** and so somewhat human-readable. Beyond arguments about syntax, they have **subtle problems**:
 
 1. **Number ambiguity.**
    - In **XML and CSV**, a number and a string of digits look identical (unless you consult an external schema).
-   - **JSON** separates strings from numbers, but doesn't separate **integers from floating-point numbers** and specifies **no precision**.
-   - This bites with large numbers: integers above **2^53** can't be represented exactly in an **IEEE 754 double**, so languages that parse JSON numbers as floats (like **JavaScript**) get them wrong. Real example: **Twitter** uses **64-bit** numbers as tweet IDs. To stop JavaScript clients from mangling them, its API includes every tweet ID **twice**: as a JSON number and also as a **decimal string**.
-2. **No binary strings.** JSON and XML handle Unicode text well but not raw bytes. The workaround is to **Base64**-encode binary data as text and use the schema to say "this is Base64". It works, but it's hacky and grows the data by **33%**.
-3. **Optional, complicated schemas.** Both XML and JSON have optional schema languages; they're powerful and therefore complicated to learn and implement. XML schemas are fairly widespread; many JSON tools skip schemas entirely. Because interpreting numbers and binary strings depends on the schema, apps without one must **hardcode** the encoding/decoding logic.
+   - **JSON** separates strings from numbers, but doesn't separate **integers from floating-point numbers** (numbers with a fractional part, stored approximately) and specifies **no precision** (how many digits are kept exactly).
+   - This bites with large numbers: integers above **2^53** can't be represented exactly in an **IEEE 754 double** (the standard 64-bit floating-point number format, which has only 53 bits for the digits), so languages that parse JSON numbers as floats (like **JavaScript**) get them wrong. Real example: **Twitter** uses **64-bit** numbers (integers stored in 64 binary digits) as tweet IDs. To stop JavaScript clients from mangling them, its API includes every tweet ID **twice**: as a JSON number and also as a **decimal string**.
+2. **No binary strings.** JSON and XML handle Unicode text (the universal standard that assigns a number to every character in every script) well but not raw bytes. The workaround is to **Base64**-encode binary data as text and use the schema to say "this is Base64". It works, but it's hacky and grows the data by **33%**.
+3. **Optional, complicated schemas.** Both XML and JSON have optional schema languages; they're powerful and therefore complicated to learn and implement. XML schemas are fairly widespread; many JSON tools skip schemas entirely. Because interpreting numbers and binary strings depends on the schema, apps without one must **hardcode** (write fixed into the program code) the encoding/decoding logic.
 4. **CSV has no schema at all.** The app decides what each row and column means; if a change adds a row or column, you handle it by hand. CSV is also **vague** — what if a value contains a comma or newline? Its escaping rules have been formally specified, but not every parser implements them correctly.
 
-**Still good enough.** Despite the flaws, JSON, XML and CSV work for many uses, especially as **data interchange formats** between organisations. There, as long as everyone agrees on the format, prettiness and efficiency hardly matter — getting organisations to agree on *anything* is the hard part.
+**Still good enough.** Despite the flaws, JSON, XML and CSV work for many uses, especially as **data interchange formats** (agreed formats for passing data between parties) between organisations. There, as long as everyone agrees on the format, prettiness and efficiency hardly matter — getting organisations to agree on *anything* is the hard part.
 
 #### Binary encoding
 
-Inside **one organisation**, there's less pressure to pick a lowest-common-denominator format; you can choose something more compact or faster to parse. For small datasets the gain is negligible, but at **terabyte** scale the choice matters a lot.
+Inside **one organisation**, there's less pressure to pick a lowest-common-denominator format (the simplest one every party can handle); you can choose something more compact or faster to parse. For small datasets the gain is negligible, but at **terabyte** scale the choice matters a lot.
 
 JSON is less verbose than XML, yet both use much more space than binary formats. This led to many **binary encodings**:
 - **For JSON:** MessagePack, BSON, BJSON, UBJSON, BISON, Smile, and others.
@@ -162,9 +162,9 @@ These found niche adoption, but none is as widespread as textual JSON/XML. Some 
 - `bookTitle` is a string, `pageCount` an integer, `genres` a list of strings. Any schemaless binary JSON format must still store the three field-name strings inside the bytes.
 
 **MessagePack walkthrough** (encoding the book's Example 4-1):
-1. First byte **0x83**: the high nibble 0x80 means "object", the low nibble 0x03 means it has **three fields**. (Objects with more than 15 fields don't fit in four bits; they get a different type marker and the count is stored in two or four bytes.)
+1. First byte **0x83** (`0x` marks a hexadecimal, base-16, number; one byte is two hex digits): the high nibble (the first 4 of the byte's 8 bits) 0x80 means "object", the low nibble 0x03 means it has **three fields**. (Objects with more than 15 fields don't fit in four bits; they get a different type marker and the count is stored in two or four bytes.)
 2. Second byte **0xa8**: high nibble 0xa0 means "string", low nibble 0x08 gives its length of **eight bytes**.
-3. The next eight bytes: the field name `userName` in ASCII. The length was already given, so no end marker or escaping is needed.
+3. The next eight bytes: the field name `userName` in ASCII (the classic encoding of English letters, digits and punctuation as one byte each). The length was already given, so no end marker or escaping is needed.
 4. The next seven bytes: the six-letter value `Martin`, with the prefix **0xa6**; and so on.
 
 **Result:** **66 bytes**, versus **81 bytes** for textual JSON with whitespace removed — only slightly smaller. All binary JSON variants are similar. It's unclear whether such a small saving (and perhaps faster parsing) is worth losing human-readability. The following formats get the same record down to **32 bytes**.
@@ -220,8 +220,8 @@ Each comes with a **code generation tool** that turns the schema into classes in
 > **Footnote:** actually three — **DenseProtocol** too, but only the C++ implementation supports it, so it isn't cross-language. There are also two JSON-based encodings. "What fun!" as the book jokes.
 
 **Thrift BinaryProtocol** — Example 4-1 takes **59 bytes**:
-- Like MessagePack, each field has a **type annotation** (string, integer, list…) and where needed a **length** (string length, list item count). Strings (“Martin”, “daydreaming”, “hacking”) are ASCII (really UTF-8).
-- **Big difference: no field names.** Instead each field carries a **field tag** — the numbers 1, 2, 3 from the schema. Tags act as compact **aliases** for fields.
+- Like MessagePack, each field has a **type annotation** (string, integer, list…) and where needed a **length** (string length, list item count). Strings (“Martin”, “daydreaming”, “hacking”) are ASCII (really UTF-8, the common byte encoding of Unicode text that matches ASCII for English characters).
+- **Big difference: no field names.** Instead each field carries a **field tag** — the numbers 1, 2, 3 from the schema. Tags act as compact **aliases** (alternative names) for fields.
 
 *Figure 4-2 (redrawn): Example 4-1 in Thrift BinaryProtocol — type byte, 2-byte tag, then length/value*
 ```mermaid
@@ -287,7 +287,7 @@ flowchart LR
 | Protocol Buffers | 33 |
 | Avro | 32 |
 
-> **Common confusion — required vs optional:** the marker doesn't change the encoding at all; nothing in the bytes says whether a field was required. All `required` does is switch on a **check at runtime**, which raises an error when the field is missing — useful for spotting bugs.
+> **Common confusion — required vs optional:** the marker doesn't change the encoding at all; nothing in the bytes says whether a field was required. All `required` does is switch on a **check at runtime** (while the program is running), which raises an error when the field is missing — useful for spotting bugs.
 
 #### Field tags and schema evolution
 
@@ -309,7 +309,7 @@ An encoded record is just its encoded fields concatenated. Every field carries i
 
 #### Datatypes and schema evolution
 
-**Changing a field's type** may be possible (check the docs), but risks **losing precision or truncation**. Example: 32-bit → 64-bit integer:
+**Changing a field's type** may be possible (check the docs), but risks **losing precision or truncation** (cutting off the part of a value that does not fit). Example: 32-bit → 64-bit integer:
 - New code reading old data: fine — the parser fills missing bits with zeros.
 - Old code reading new data: it still stores the value in a **32-bit** variable, so a 64-bit value that doesn't fit gets **truncated**.
 
@@ -317,11 +317,11 @@ An encoded record is just its encoded fields concatenated. Every field carries i
 - Newer code, given old records, gets a list holding **zero or one** item (depending on whether the field was set).
 - Older code, given new records, just keeps the **final** item of the list.
 
-**Thrift** has a real **list** type, parameterised by element type. It doesn't allow that single→multi evolution, but it supports **nested lists**.
+**Thrift** has a real **list** type, parameterised by element type (you declare what each item is, e.g. `list<string>`). It doesn't allow that single→multi evolution, but it supports **nested lists**.
 
 ### Avro
 
-**What it is.** **Apache Avro** is another binary format, interestingly different from protobuf and Thrift. It began in **2009** as a **Hadoop** subproject because Thrift didn't fit Hadoop's use cases well.
+**What it is.** **Apache Avro** is another binary format, interestingly different from protobuf and Thrift. It began in **2009** as a **Hadoop** (open-source framework for storing and processing huge datasets on many machines) subproject because Thrift didn't fit Hadoop's use cases well.
 
 **Two schema languages:** **Avro IDL** (for humans to edit) and a **JSON-based** one (easier for machines). Our own example in Avro IDL:
 
@@ -430,9 +430,9 @@ How does a reader know which writer's schema encoded a piece of data? Attaching 
 |---|---|
 | **Large file with lots of records** (common with Hadoop; see Chapter 10) | Millions of records share one schema, so the writer puts the schema **once at the start of the file**. Avro defines **object container files** for this. |
 | **Database with individually written records** | Records written at different times may use different schemas. Simplest fix: prefix every record with a **version number** and keep a **list of schema versions in the database**. The reader extracts the version, fetches that writer's schema, and decodes the rest. **Espresso** works this way. |
-| **Sending records over a network connection** | Two processes on a **bidirectional** connection **negotiate the schema version at connection setup** and use it for the whole connection. The **Avro RPC** protocol does this. |
+| **Sending records over a network connection** | Two processes on a **bidirectional** (two-way) connection **negotiate the schema version at connection setup** and use it for the whole connection. The **Avro RPC** protocol does this. |
 
-A **database of schema versions** is useful anyway: it's documentation and lets you **check compatibility** of schema changes. The version can be a simple **incrementing integer** or a **hash of the schema**.
+A **database of schema versions** is useful anyway: it's documentation and lets you **check compatibility** of schema changes. The version can be a simple **incrementing integer** or a **hash of the schema** (a short fingerprint computed from its text, which changes whenever the schema does).
 
 #### Dynamically generated schemas
 
@@ -448,18 +448,18 @@ Why does it matter that Avro schemas have **no tag numbers**? Because Avro is fr
 
 #### Code generation and dynamically typed languages
 
-- **Thrift and protobuf rely on code generation.** That suits **statically typed** languages (**Java, C++, C#**): efficient in-memory structures for decoded data, plus type checking and IDE autocompletion.
-- In **dynamically typed** languages (**JavaScript, Ruby, Python**), there's no compile-time checker to satisfy, so generated code adds little. Code generation is often frowned upon there because they otherwise avoid a compile step. When the schema itself is **generated dynamically** (say, from a database table), a code-generation step just gets in the way of reading the data.
+- **Thrift and protobuf rely on code generation.** That suits **statically typed** languages (**Java, C++, C#**; variable types are fixed and checked before the program runs): efficient in-memory structures for decoded data, plus type checking and IDE autocompletion (an IDE, *integrated development environment*, is a code editor that suggests names as you type).
+- In **dynamically typed** languages (**JavaScript, Ruby, Python**; types are checked only as the code runs), there's no compile-time checker (a tool that checks the code before it runs) to satisfy, so generated code adds little. Code generation is often frowned upon there because they otherwise avoid a compile step (translating source code into a runnable form ahead of time). When the schema itself is **generated dynamically** (say, from a database table), a code-generation step just gets in the way of reading the data.
 - **Avro** offers **optional** code generation for static languages but works fine without it. An **object container file** embeds the writer's schema, so you can open it with the Avro library and browse it like a JSON file — it's **self-describing**.
-- This is especially handy with dynamically typed data processing languages like **Apache Pig**: open Avro files, analyse them, and write derived datasets back as Avro, without thinking about schemas.
+- This is especially handy with dynamically typed data processing languages like **Apache Pig** (a scripting language for Hadoop jobs): open Avro files, analyse them, and write derived datasets back as Avro, without thinking about schemas.
 
 ### The Merits of Schemas
 
-Protobuf, Thrift and Avro all use schemas for a binary format. Their schema languages are **far simpler** than **XML Schema** or **JSON Schema**, both of which offer elaborate validation rules (e.g., "this string must match a regular expression", "this integer must be between 0 and 100"). Because they're easier to implement and use, libraries for them now exist in quite a broad set of languages.
+Protobuf, Thrift and Avro all use schemas for a binary format. Their schema languages are **far simpler** than **XML Schema** or **JSON Schema**, both of which offer elaborate validation rules (e.g., "this string must match a regular expression" (a text-matching pattern), "this integer must be between 0 and 100"). Because they're easier to implement and use, libraries for them now exist in quite a broad set of languages.
 
 **Not a new idea:**
-- **ASN.1**, a schema definition language first standardised in **1984**, was used to define many network protocols. Its binary encoding **DER** still encodes **SSL certificates (X.509)**. ASN.1 supports schema evolution with **tag numbers**, like protobuf/Thrift — but it's very complex and badly documented, so it's unlikely to be a wise pick for a new application.
-- Many data systems use their own **proprietary binary encodings**. E.g., most relational databases have a **network protocol** for queries and responses, specific to that database; the vendor supplies a **driver** (e.g., via **ODBC** or **JDBC** APIs) that decodes responses into in-memory structures.
+- **ASN.1**, a schema definition language first standardised in **1984**, was used to define many network protocols (agreed rules for how machines exchange messages). Its binary encoding **DER** still encodes **SSL certificates (X.509)** (the digital ID documents websites present to prove who they are for secure HTTPS connections). ASN.1 supports schema evolution with **tag numbers**, like protobuf/Thrift — but it's very complex and badly documented, so it's unlikely to be a wise pick for a new application.
+- Many data systems use their own **proprietary binary encodings**. E.g., most relational databases have a **network protocol** for queries and responses, specific to that database; the vendor supplies a **driver** (a client library that speaks the database's protocol; e.g., via **ODBC** or **JDBC**, standard database-access APIs for C-family languages and Java respectively) that decodes responses into in-memory structures.
 
 **Nice properties of schema-based binary encodings:**
 1. **Much more compact** than "binary JSON" variants, because field names can be left out.
@@ -506,14 +506,14 @@ flowchart LR
 **Who encodes/decodes:** whoever **writes** to the database does the encoding; whoever **reads** does the decoding.
 
 - **Single process:** the reader might just be a **later version** of the same process — writing to the database is like **leaving a note for your future self**. That makes **backward compatibility** obviously necessary, or your future self can't read what you wrote.
-- **Many processes:** usually several apps/services, or several instances of one service (for scale or fault tolerance), access the database at once. During a **rolling upgrade**, some run new code and some old. So a value may be **written by new code and later read by old code** → **forward compatibility** is often needed too.
+- **Many processes:** usually several apps/services, or several instances (running copies) of one service (for scale or fault tolerance, i.e. surviving the failure of some copies), access the database at once. During a **rolling upgrade**, some run new code and some old. So a value may be **written by new code and later read by old code** → **forward compatibility** is often needed too.
 
 **The extra snag — preserving unknown fields:**
 1. A new field is introduced in the schema, and **new code** stores a value in it.
 2. Then **old code**, which has never heard of that field, loads the record, **modifies** something, and saves it.
 3. What you normally want: the old code **leaves the new field untouched**, despite not understanding it.
 
-The encoding formats above support preserving unknown fields, but sometimes you must handle it **at the application level**: e.g., if you decode into **model objects** and re-encode them, the unknown field can be **lost** in that translation. Not hard to solve — just be aware of it.
+The encoding formats above support preserving unknown fields, but sometimes you must handle it **at the application level**: e.g., if you decode into **model objects** (the classes your code uses to represent records, such as a `Person` class) and re-encode them, the unknown field can be **lost** in that translation. Not hard to solve — just be aware of it.
 
 *Figure 4-7 (redrawn): an older app version reads a record written by a newer version, updates one field through its model object, and writes it back. The newer field (`photoURL`) is silently lost.*
 ```mermaid
@@ -543,20 +543,20 @@ sequenceDiagram
 
 #### Archival storage
 
-- You may **snapshot** the database periodically, e.g. for **backups** or loading into a **data warehouse** (Chapter 3).
+- You may **snapshot** (take a point-in-time copy of) the database periodically, e.g. for **backups** or loading into a **data warehouse** (a separate database built for analysis; Chapter 3).
 - The dump is typically encoded with the **latest schema**, even if the source mixed many schema versions — since you're copying all the data anyway, you may as well encode it consistently.
-- The dump is written once and then **immutable**, so **Avro object container files** fit well. It's also a chance to write the data in a **column-oriented** layout that suits analytics, such as **Parquet**.
+- The dump is written once and then **immutable** (never changed), so **Avro object container files** fit well. It's also a chance to write the data in a **column-oriented** layout that suits analytics, such as **Parquet** (a column-oriented file format).
 - More on archival data in Chapter 10.
 
 ### Dataflow Through Services: REST and RPC
 
-**Clients and servers.** The most common arrangement for network communication: **servers** expose an API over the network; **clients** connect and send requests. The API a server exposes is called a **service**.
+**Clients and servers.** The most common arrangement for network communication: **servers** expose an API over the network; **clients** connect and send requests. The API a server exposes is called a **service**. (For background on HTTP, proxies, load balancers and idempotency, see [System Design Fundamentals](../00a-system-design-fundamentals/README.md).)
 
-- **The web works this way:** browsers (clients) issue **GET** requests to fetch HTML, CSS, JavaScript and images, and **POST** requests to send data to the server. The API is a set of **standard** protocols and formats (HTTP, URLs, SSL/TLS, HTML…). Because browsers, servers and site authors largely agree on these standards, any browser can in theory access any website.
-- **Other clients:** native mobile/desktop apps also make network requests; client-side JavaScript in a browser can use **XMLHttpRequest** to act as an HTTP client — a technique called **Ajax**. Here the response is usually not HTML for humans but data (e.g., **JSON**) for the client code. HTTP is the transport, but the API on top is **application-specific**, and client and server must agree on it.
+- **The web works this way:** browsers (clients) issue **GET** requests to fetch HTML (page structure), CSS (page styling), JavaScript and images, and **POST** requests to send data to the server (GET and POST are HTTP *methods*, the verb of a request). The API is a set of **standard** protocols and formats (HTTP, the web's request/response protocol; URLs; SSL/TLS, the encryption layer behind `https://`; HTML…). Because browsers, servers and site authors largely agree on these standards, any browser can in theory access any website.
+- **Other clients:** native (installed on the device, not running in a browser) mobile/desktop apps also make network requests; client-side JavaScript in a browser can use **XMLHttpRequest** to act as an HTTP client — a technique called **Ajax**. Here the response is usually not HTML for humans but data (e.g., **JSON**) for the client code. HTTP is the transport, but the API on top is **application-specific**, and client and server must agree on it.
 - **A server can itself be a client** of another service (e.g., a web app server is a client of its database). Decomposing a large application into smaller services by functionality, each calling others as needed, has long been known as **service-oriented architecture (SOA)**; a refined, renamed version of the idea is now called **microservices**.
 
-**Services vs databases.** Both let clients submit and query data. But databases accept **arbitrary queries** (Chapter 2's query languages), while services expose an **application-specific API** where inputs and outputs are fixed by the service's business logic. This gives **encapsulation**: services can finely restrict what clients may do.
+**Services vs databases.** Both let clients submit and query data. But databases accept **arbitrary queries** (Chapter 2's query languages), while services expose an **application-specific API** where inputs and outputs are fixed by the service's business logic (the rules specific to what the business does). This gives **encapsulation** (hiding internals behind a controlled interface): services can finely restrict what clients may do.
 
 **Why compatibility matters here:** a key goal of SOA/microservices is to make applications easier to change by making services **independently deployable and evolvable** — each service owned by **one team** that can release often **without coordinating** with others. So expect **old and new versions of clients and servers running simultaneously**, and the data encoding must be compatible across API versions — exactly this chapter's theme.
 
@@ -564,16 +564,16 @@ sequenceDiagram
 
 When a service uses **HTTP** as its protocol, it's a **web service** — a slight misnomer, since it's used well beyond the web:
 1. **Client app on a user's device** (native mobile app, or JavaScript web app using Ajax) calling a service over HTTP, typically across the **public internet**.
-2. **Service to service within one organisation**, often in the **same datacenter**, as part of SOA/microservices. (Software supporting this is sometimes called **middleware**.)
-3. **Service to service across organisations**, usually over the internet — data exchange between companies' backends. Examples are **public APIs** of online services, like **credit card processing**, or **OAuth** for letting one service access user data held by another.
+2. **Service to service within one organisation**, often in the **same datacenter** (building of servers), as part of SOA/microservices. (Software supporting this is sometimes called **middleware**.)
+3. **Service to service across organisations**, usually over the internet — data exchange between companies' backends. Examples are **public APIs** of online services, like **credit card processing**, or **OAuth** (a standard that lets you grant one app limited access to your account at another, without giving it your password) for letting one service access user data held by another.
 
 **Two popular approaches: REST and SOAP** — almost diametrically opposed philosophies, and the subject of heated debate.
 
-> **Footnote:** even inside each camp there are arguments; **HATEOAS** (short for hypermedia as the engine of application state), for instance, is a frequent source of debate.
+> **Footnote:** even inside each camp there are arguments; **HATEOAS** (short for hypermedia as the engine of application state: responses include links telling the client what it can do next), for instance, is a frequent source of debate.
 
 **REST (Representational State Transfer):**
 - **Not a protocol** but a **design philosophy** built on HTTP's principles.
-- Emphasises **simple data formats**, **URLs to identify resources**, and **HTTP's built-in features** for caching control, authentication and negotiating content types.
+- Emphasises **simple data formats**, **URLs to identify resources**, and **HTTP's built-in features** for caching control (saying how long a response may be reused), authentication (proving who the caller is) and negotiating content types (agreeing on JSON vs XML and so on).
 - Gaining popularity over SOAP, at least for **cross-organisational** integration, and often associated with **microservices**. An API following REST is **RESTful**.
 
 **SOAP:**
@@ -581,7 +581,7 @@ When a service uses **HTTP** as its protocol, it's a **web service** — a sligh
 - Comes with a sprawling, complex family of related standards — the **web service framework, WS-\*** — adding various features.
 - APIs are described in **WSDL (Web Services Description Language)**, XML-based. WSDL enables **code generation** so clients can call the remote service via local classes and method calls (encoded to XML and back by the framework). Useful for static languages, less so for dynamic ones.
 - WSDL isn't designed to be human-readable and SOAP messages are often too complex to build by hand, so SOAP users rely heavily on **tools, code generation and IDEs**. Languages not supported by SOAP vendors have a hard time integrating.
-- Although nominally standardised, **interoperability between vendors' implementations** often causes problems.
+- Although nominally standardised, **interoperability** (different products working together correctly) **between vendors' implementations** often causes problems.
 - As a result, SOAP survives in plenty of **large enterprises** but most smaller companies have **moved away** from it.
 
 > **Footnote:** despite similar acronyms, **SOAP is not required for SOA**. SOAP is one particular technology, while SOA is a broad way of structuring systems.
@@ -600,7 +600,7 @@ When a service uses **HTTP** as its protocol, it's a **web service** — a sligh
 #### The problems with remote procedure calls (RPCs)
 
 Web services are just the latest in a long line of technologies for API calls over a network — many heavily hyped but seriously flawed:
-- Java's **Remote Method Invocation (RMI)** and **Enterprise JavaBeans (EJB**, part of Java Enterprise Edition): **Java-only**.
+- Java's **Remote Method Invocation (RMI)** and **Enterprise JavaBeans (EJB**, part of Java Enterprise Edition): **Java-only**. (These and the next two are older frameworks for calling objects on other machines.)
 - **DCOM (Distributed Component Object Model)**: limited to **Microsoft** platforms.
 - **CORBA (Common Object Request Broker Architecture)**: **excessively complex**, and provides **no backward or forward compatibility**.
 
@@ -611,9 +611,9 @@ All are based on the **remote procedure call (RPC)**, around since the **1970s**
 | Local function call | Network request |
 |---|---|
 | **Predictable**: succeeds or fails based only on parameters you control. | **Unpredictable**: request/response may be lost, remote machine slow or down — none of it under your control. Such failures happen often, so you must expect them (e.g., by **retrying**). |
-| Returns a result, throws an exception, or never returns (infinite loop/crash). | Can also **time out** and return nothing — then you **don't know** whether the request got through (see Chapter 8). |
-| Calling twice is something you choose to do. | **Retrying** may repeat an action whose response was lost, unless the protocol has **deduplication (idempotence)** (see Chapter 11). |
-| Takes about the same time each call. | **Much slower** and **wildly variable** latency: under a millisecond at good times, **many seconds** when the network is congested or the service overloaded. |
+| Returns a result, throws an exception (signals an error), or never returns (infinite loop/crash). | Can also **time out** (give up after a set waiting period) and return nothing — then you **don't know** whether the request got through (see Chapter 8). |
+| Calling twice is something you choose to do. | **Retrying** may repeat an action whose response was lost, unless the protocol has **deduplication (idempotence)** (recognising and ignoring repeats; see Chapter 11). |
+| Takes about the same time each call. | **Much slower** and **wildly variable** latency: under a millisecond at good times, **many seconds** when the network is congested (carrying more traffic than it can move promptly) or the service overloaded. |
 | Can pass **pointers/references** to local objects efficiently. | Every parameter must be **encoded into bytes** — fine for numbers/strings, problematic for large objects. |
 | Same language on both sides. | Client and service may be in **different languages**, so the framework must translate datatypes — can be ugly (recall JavaScript's trouble with numbers above **2^53**). |
 
@@ -634,7 +634,7 @@ RPC isn't going away. Frameworks exist on top of every encoding in this chapter:
 
 **RPC vs REST trade-off:**
 - Custom RPC protocols with **binary encoding** can **outperform** generic JSON-over-REST.
-- But **RESTful APIs** have big advantages: easy to **experiment and debug** (just use a browser or **curl**, no code generation or installs), supported by **all mainstream languages and platforms**, and a **huge ecosystem** of supporting tools — servers, caches, proxies, load balancers, firewalls, plus monitoring, testing and debugging tools.
+- But **RESTful APIs** have big advantages: easy to **experiment and debug** (just use a browser or **curl**, a command-line tool for sending HTTP requests; no code generation or installs), supported by **all mainstream languages and platforms**, and a **huge ecosystem** of supporting tools — servers, caches, proxies (intermediaries that forward requests), load balancers (which spread incoming requests across many servers), firewalls (which block unwanted network traffic), plus monitoring, testing and debugging tools.
 - Hence **REST dominates public APIs**, while **RPC frameworks** focus on requests **between services of the same organisation**, usually in the **same datacenter**.
 
 ```bash
@@ -652,13 +652,13 @@ For evolvability, RPC clients and servers must be changeable and deployable **in
 An RPC scheme's compatibility is **inherited from its encoding**:
 - **Thrift, gRPC (Protocol Buffers), Avro RPC** evolve under their encoding's rules.
 - **SOAP:** requests/responses are defined with **XML schemas**; they can evolve but there are subtle pitfalls.
-- **RESTful APIs:** responses are typically **JSON with no formally specified schema**; requests use JSON or **URI-encoded / form-encoded** parameters. Changes generally seen as safe: **new optional request parameters** and **extra fields in response objects**.
+- **RESTful APIs:** responses are typically **JSON with no formally specified schema**; requests use JSON or **URI-encoded / form-encoded** parameters (values packed into the URL, like `?page=2`, or into the body the way an HTML form sends them). Changes generally seen as safe: **new optional request parameters** and **extra fields in response objects**.
 
-**Harder across organisations:** the provider often can't control or force clients to upgrade, so compatibility may need to last a **very long time, perhaps forever**. If a breaking change is needed, providers often run **multiple API versions side by side**.
+**Harder across organisations:** the provider often can't control or force clients to upgrade, so compatibility may need to last a **very long time, perhaps forever**. If a breaking change (one that makes existing clients fail) is needed, providers often run **multiple API versions side by side**.
 
 **API versioning** — no agreement on how clients should indicate a version:
-- For REST, commonly: put the **version in the URL**, or put it in the **HTTP `Accept` header**.
-- For services using **API keys** to identify clients: the server can **remember which API version each client asked for**, and let clients change it through a **separate admin interface**.
+- For REST, commonly: put the **version in the URL**, or put it in the **HTTP `Accept` header** (headers are name-value lines sent along with an HTTP request; `Accept` says which response format the client wants).
+- For services using **API keys** (secret tokens each client sends to identify itself) to identify clients: the server can **remember which API version each client asked for**, and let clients change it through a **separate admin interface**.
 
 ### Message-Passing Dataflow
 
@@ -667,9 +667,9 @@ So far: **REST/RPC** (one process sends a request and expects a quick response) 
 - **Like a database:** the message doesn't go over a direct connection but through an intermediary — a **message broker** (other names: **message queue**, **message-oriented middleware**) that **holds on to it for a while**.
 
 **Advantages of a broker over direct RPC:**
-1. Serves as a **buffer** when the recipient is down or overwhelmed → more reliable system.
+1. Serves as a **buffer** (temporary holding area) when the recipient is down or overwhelmed → more reliable system.
 2. Can **redeliver** messages to a crashed process → prevents message loss.
-3. Sender needn't know the recipient's **IP address and port** — very useful in the cloud where **virtual machines come and go**.
+3. Sender needn't know the recipient's **IP address and port** (the network address of a machine, plus the number identifying which program on it) — very useful in the cloud where **virtual machines** (software-simulated computers rented from a provider) **come and go**.
 4. One message can go to **several recipients**.
 5. **Logically decouples** sender and recipient: the sender just publishes and doesn't care who consumes.
 
@@ -702,10 +702,10 @@ flowchart LR
 
 #### Distributed actor frameworks
 
-**The actor model** is a concurrency programming model **within a single process**. Instead of dealing with threads directly (with race conditions, locking and deadlock), logic lives in **actors**:
+**The actor model** is a concurrency programming model **within a single process**. Instead of dealing with threads directly (threads are parallel paths of execution sharing memory, which bring race conditions, where the result depends on unlucky timing; locking, reserving data so others must wait; and deadlock, where two threads wait on each other forever), logic lives in **actors**:
 - Each actor usually represents **one client or entity**, may hold **local state** (not shared with other actors), and talks to others by sending and receiving **asynchronous messages**.
 - **Message delivery is not guaranteed** — in some error cases, messages are lost.
-- Each actor handles **one message at a time**, so it needn't worry about threads, and the framework can schedule actors independently.
+- Each actor handles **one message at a time**, so it needn't worry about threads, and the framework can schedule (decide when and where to run) actors independently.
 
 **Distributed actor frameworks** use this model to scale across **multiple nodes**. Messaging works identically whether the two actors share a node or not; across nodes, the framework quietly **encodes the message, ships it over the network, and decodes it** at the far end.
 
@@ -718,7 +718,7 @@ A distributed actor framework effectively **combines a message broker with the a
 | Framework | Default encoding | Rolling upgrades |
 |---|---|---|
 | **Akka** | **Java's built-in serialization** — no forward/backward compatibility | Possible if you swap in e.g. **Protocol Buffers** |
-| **Orleans** | A **custom** encoding without rolling-upgrade support | To upgrade: set up a **new cluster**, move traffic over, shut down the old one. Custom serialization plug-ins can be used, as with Akka. |
+| **Orleans** | A **custom** encoding without rolling-upgrade support | To upgrade: set up a **new cluster** (group of machines), move traffic over, shut down the old one. Custom serialization plug-ins can be used, as with Akka. |
 | **Erlang OTP** | Record schemas are surprisingly hard to change, despite many high-availability features | Possible but must be **planned carefully**. A newer experimental **maps** datatype (JSON-like; arrived in **Erlang R17, 2014**) could ease this in future. |
 
 ---
@@ -746,7 +746,7 @@ A distributed actor framework effectively **combines a message broker with the a
 
 ## Looking ahead
 
-That closes Part I, which dealt with data on a single machine. Part II, *Distributed Data*, opens with a short introduction on why data gets spread across several machines (scalability, fault tolerance, latency) and on shared-memory, shared-disk and shared-nothing architectures. That introduction is summarised at the start of the [Chapter 5 notes](../05-replication/README.md), which then cover replication.
+That closes Part I, which dealt with data on a single machine. Part II, *Distributed Data*, opens with a short introduction on why data gets spread across several machines (scalability, fault tolerance, latency: the delay before a response arrives) and on shared-memory, shared-disk and shared-nothing architectures. That introduction is summarised at the start of the [Chapter 5 notes](../05-replication/README.md), which then cover replication.
 
 ---
 
