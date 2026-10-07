@@ -14,7 +14,7 @@
 |---|---|
 | No one outside should talk to internal servers directly | Reverse Proxy |
 | Popular content should sit close to the people reading it | CDN |
-| A single entrance that authenticates, routes, and enforces policy | API Gateway |
+| A single entrance that authenticates (checks who the caller is), routes, and enforces policy | API Gateway |
 | Different clients need the API shaped differently | Backend for Frontend |
 | Fair use, enforced right at the entrance | Rate Limiting |
 | Pick up a listing exactly where you stopped | Cursor Pagination |
@@ -25,7 +25,7 @@
 
 ### Two facts that organize the module
 
-**Fact 1 — nearly everything here is one building block playing different roles.** A **primitive** means a basic building block. Here, that block is the **proxy**: a server that takes in requests and passes them on somewhere else. Place it in front of your servers and it's a **reverse proxy**. Give it health checks and have it spread traffic, and it's a **load balancer**. Give it API policies (who may call, and how often) and it's an **API gateway**. Copy it, with a cache, into 200 cities and it's a **CDN**. Put a small one next to every service and wire them together, and you get a **sidecar**, then a **service mesh**. The diagram below shows this family tree.
+**Fact 1 — nearly everything here is one building block playing different roles.** A **primitive** means a basic building block. Here, that block is the **proxy**: a server that takes in requests and passes them on somewhere else. Place it in front of your servers and it's a **reverse proxy**. Give it health checks (regular "are you alive?" probes of each server) and have it spread traffic, and it's a **load balancer**. Give it API policies (who may call, and how often) and it's an **API gateway**. Copy it, with a cache (a store of recent answers that can be reused without redoing the work), into 200 cities and it's a **CDN**. (New to proxies, caches or CDNs? See the [System Design Fundamentals](../00-system-design-fundamentals/README.md) primer.) Put a small one next to every service and wire them together, and you get a **sidecar**, then a **service mesh**. The diagram below shows this family tree.
 
 *One primitive, many roles*
 ```mermaid
@@ -37,18 +37,18 @@ flowchart TD
     SC -->|"+ central control plane"| MESH[Service mesh]
 ```
 
-**Fact 2 — the edge is where you're cheapest and strongest.** The cheapest request is the one that never gets to your application tier. Turning away bad logins or too much usage at the edge uses up no service capacity. Serving cached pages or static files from there skips application work completely. The edge is also the *single* place every request passes through. So rules like authentication, rate limits, and version policies can be applied once there, instead of being rebuilt (each a little differently) in every service.
+**Fact 2 — the edge is where you're cheapest and strongest.** The cheapest request is the one that never gets to your application tier. Turning away bad logins or too much usage at the edge uses up no service capacity. Serving cached pages or static files (files that are identical for every user, such as images, scripts and stylesheets) from there skips application work completely. The edge is also the *single* place every request passes through. So rules like authentication, rate limits, and version policies can be applied once there, instead of being rebuilt (each a little differently) in every service.
 
 ### North-south vs. east-west traffic
 
 - **North-south** traffic crosses the system boundary: outside clients, browsers, and partners calling in. It's controlled by gateways, CDNs, rate limiters, and version policies.
-- **East-west** traffic flows *between* your internal services — for example, checkout calling inventory and then pricing. It needs services to trust each other, plus retries and tracing. Sidecars and meshes supply those.
+- **East-west** traffic flows *between* your internal services — for example, checkout calling inventory and then pricing. It needs services to trust each other, plus retries and tracing (recording the path and timing of one request as it hops between services). Sidecars and meshes supply those.
 
 Both rely on the proxy primitive, but they trust different things. That difference splits the module into two halves, and it comes up a lot in interviews.
 
 ### How to read the module
 
-Begin with **Reverse Proxy**. It's short, and it defines the primitive. Next, move inward from the edge. **CDN** answers lots of requests before they cross an ocean. **API Gateway** applies public policy. **BFF** deals with clients that want responses shaped differently. After that come three key gateway policies: **Rate Limiting**, **Cursor Pagination**, and **API Versioning**. Then switch to east-west traffic. **Sidecar** gives every service the same helper, and **Service Mesh** configures and links those helpers. **Authorization Service** is an added lesson (not in the original course): the gateway authenticates, but deciding whether *this user* may touch *this object* belongs to a shared decision service — roles, attributes and Zanzibar-style relationship graphs. The **capstone** pulls it all together into a public API layer for web and mobile.
+Begin with **Reverse Proxy**. It's short, and it defines the primitive. Next, move inward from the edge. **CDN** answers lots of requests before they cross an ocean. **API Gateway** applies public policy. **BFF** deals with clients that want responses shaped differently. After that come three key gateway policies: **Rate Limiting**, **Cursor Pagination**, and **API Versioning**. Then switch to east-west traffic. **Sidecar** gives every service the same helper, and **Service Mesh** configures and links those helpers. **Authorization Service** is an added lesson (not in the original course): the gateway authenticates, but deciding whether *this user* may touch *this object* belongs to a shared decision service — roles, attributes and Zanzibar-style relationship graphs (Zanzibar is Google's internal permission system). The **capstone** pulls it all together into a public API layer for web and mobile.
 
 > Short on time? Read **API Gateway**, **Rate Limiting**, and **CDN** first. Every "design X" interview draws this boundary, and those three are what the follow-up questions dig into.
 
@@ -93,9 +93,9 @@ In the course figure below, clients send their requests to the reverse proxy, wh
 *Figure — Reverse Proxy (course diagram)*
 
 1. **Terminates TLS.** It takes care of the HTTPS handshake and the encryption. Certificates, renewals, and protocol settings then live in one layer rather than in every app. *Why:* there's just one place to configure and patch.
-2. **Buffers slow clients.** An **event-loop proxy** uses one thread to juggle many connections — the async I/O model from the SSE lesson. It can hold thousands of idle connections for a few kilobytes each. It waits until a slow upload is *completely* received, then sends a single fast request inward. *Why:* app threads are costly, and waiting on a slow phone shouldn't tie one up.
-3. **Serves static files itself.** Images, JavaScript, and CSS never reach app code.
-4. **Reuses connections.** **Keep-alive** lets a single client connection carry many requests. **Connection pooling** keeps ready-to-use connections open to the backends. *Why:* you pay the handshake cost once, not on every request.
+2. **Buffers slow clients.** An **event-loop proxy** uses one thread (a single sequence of execution inside a program) to juggle many connections — the async I/O model (waiting on many network operations without blocking a thread for each) from the SSE (server-sent events, a long-lived server-to-browser stream) lesson. It can hold thousands of idle connections for a few kilobytes each. It waits until a slow upload is *completely* received, then sends a single fast request inward. *Why:* app threads are costly, and waiting on a slow phone shouldn't tie one up.
+3. **Serves static files itself.** Images, JavaScript, and CSS (the stylesheet language that controls how pages look) never reach app code.
+4. **Reuses connections.** **Keep-alive** lets a single client connection carry many requests. **Connection pooling** keeps ready-to-use connections open to the backends (the servers behind the proxy that do the real work). *Why:* you pay the handshake cost once, not on every request.
 5. **Hides the topology.** Clients only see one public address. Behind it, internal servers can be renumbered, swapped, or added whenever you like.
 6. **Serves as the enforcement point.** Every request passes through this one layer. That makes it the obvious home for authentication, limits, and the other policies later in this module.
 
@@ -117,14 +117,14 @@ In the course figure below, clients send their requests to the reverse proxy, wh
 - It's cheap. A modern proxy forwards a request in **well under 1 ms** and handles enormous numbers of connections on modest hardware.
 
 **You pay:**
-- **An extra hop.** It adds a real delay, though under a millisecond, plus one more system to patch and watch. Since every request depends on it, it has to be **redundant** across failure domains. That means paired instances, or **anycast** — one IP address advertised from several places, so the network picks a nearby one that works.
-- **A trust boundary you have to set up correctly.** The app now sees the *proxy's* IP address instead of the client's. So the proxy writes the real client address into the **`X-Forwarded-For`** header. But clients can send that header themselves and lie in it. The rules: the proxy must **overwrite** any value the client sent (never append to it). And the app must trust the header **only** when the request came from its own proxy's address.
+- **An extra hop.** It adds a real delay, though under a millisecond, plus one more system to patch and watch. Since every request depends on it, it has to be **redundant** across failure domains (groups of machines that can fail together, such as one rack or one datacenter). That means paired instances, or **anycast** — one IP address advertised from several places, so the network picks a nearby one that works.
+- **A trust boundary you have to set up correctly.** The app now sees the *proxy's* IP address instead of the client's. So the proxy writes the real client address into the **`X-Forwarded-For`** header (a header is a named key-value line sent along with an HTTP request or response). But clients can send that header themselves and lie in it. The rules: the proxy must **overwrite** any value the client sent (never append to it). And the app must trust the header **only** when the request came from its own proxy's address.
 - **A false sense of safety.** A proxy on its own isn't a security control. It's just the place where you'll *put* your controls.
 
 ### When not to use it
 
 Almost everyone uses one, so the real question is whether you need *another* proxy layer:
-- **Your platform already gives you one.** A cloud load balancer or hosted front end may already handle these jobs. Adding nginx behind it adds delay and one more header-trust boundary, with no separate owner or purpose.
+- **Your platform already gives you one.** A cloud load balancer or hosted front end may already handle these jobs. Adding nginx (a widely used open-source web server and reverse proxy) behind it adds delay and one more header-trust boundary, with no separate owner or purpose.
 - **Small, purely internal services on a trusted network** might not need one. That holds until they need encryption, retries, or **observability** (logs, metrics, traces). At that point, the sidecar brings this primitive to east-west traffic.
 - **Don't stack proxies without thinking.** CDN + cloud load balancer + nginx + app means four sets of timeouts, body-size limits, and header-trust rules to check in every incident. When a **12 MB** upload is rejected, you might have to dig through all four.
 
@@ -185,7 +185,7 @@ Adding servers in Virginia can't speed up light. Even an origin that answered in
 
 - **"Optimize the backend."** The origin adds 20 ms. The trip across the world adds 200 ms, several times over. Speeding up the smallest ~**3%** of the delay can't fix the ~97% that comes from geography. Always split server time from network time first.
 - **"Open a datacenter in Sydney."** A full region would fix distance eventually. But you'd have to run the entire stack there and replicate the database between regions. You'd take on the consistency module's hardest trade-offs just to move identical images and JavaScript closer.
-- **"Use HTTP/2 and buy more bandwidth."** **Multiplexing** (sending several requests over one connection at the same time) cuts the number of connections and improves parallel loading. More bandwidth moves more bytes at once. Neither one removes the round-trip wait before those bytes begin to arrive.
+- **"Use HTTP/2 and buy more bandwidth."** (HTTP/2 is a newer version of the web protocol; bandwidth is how many bytes per second a link can carry.) **Multiplexing** (sending several requests over one connection at the same time) cuts the number of connections and improves parallel loading. More bandwidth moves more bytes at once. Neither one removes the round-trip wait before those bytes begin to arrive.
 
 Most of the slow content is identical, popular, and static for every Sydney user. So this is a **distribution** problem, not a computation problem.
 
@@ -203,8 +203,8 @@ The course figure below shows the Sydney user reaching the Sydney edge cache in 
    - `stale-while-revalidate` — keep serving the old copy while one refresh runs in the background.
    - `stale-if-error` — serve the old copy if the origin is failing.
    Every caching rule from Module 4 still holds. That includes **hit ratio** (the share of requests answered from cache), **TTL** (time to live — how long an entry counts as valid, which is your staleness budget), and misses that arrive all at once.
-3. **Beat invalidation by never invalidating — use fingerprinted URLs.** **Invalidation** means removing a stale cached copy, and across 200 cities it takes seconds to minutes. So instead, the build tool puts a hash of the content into the filename, such as `app.3f9a2c.js`, and marks it as cacheable forever with `immutable`. When the content changes, it gets a *new* URL. That way, a stale response can never live at the new address.
-4. **Get the cache key right.** The **cache key** is how an edge looks up a stored response. It's the URL plus whatever headers you declare. Cookies are the classic trap. If you vary on every cookie, every user's request becomes unique (hit ratio → zero). If you accidentally cache a `Set-Cookie` response, it's even worse: private content gets served to other people.
+3. **Beat invalidation by never invalidating — use fingerprinted URLs.** **Invalidation** means removing a stale cached copy, and across 200 cities it takes seconds to minutes. So instead, the build tool (the program that packages source code for release) puts a hash of the content (a short fingerprint computed from the bytes, which changes whenever they change) into the filename, such as `app.3f9a2c.js`, and marks it as cacheable forever with `immutable`. When the content changes, it gets a *new* URL. That way, a stale response can never live at the new address.
+4. **Get the cache key right.** The **cache key** is how an edge looks up a stored response. It's the URL plus whatever headers you declare. Cookies are the classic trap. If you vary on every cookie, every user's request becomes unique (hit ratio → zero). If you accidentally cache a `Set-Cookie` response (one that tells the browser to store a cookie, often a login session), it's even worse: private content gets served to other people.
 5. **Add an origin shield.** Without one, a popular file missing at 200 edges at once triggers 200 origin requests. That's a **cache stampede** on a global scale. The shield **coalesces** (merges) those identical misses into a single fetch from the origin.
 6. **Use the edge for more than caching.** TLS ends at the nearby edge, so a 3-round-trip handshake runs over 15 ms instead of across the ocean — ~600 ms drops to **45 ms**. Long-lived, already-warm **edge-to-origin connections** reuse finished handshakes, which speeds up even *uncacheable* dynamic requests. The provider's enormous network soaks up **DDoS** attacks (floods of malicious traffic meant to overwhelm a site). And `stale-if-error` gives you **graceful degradation**: during an origin outage, users get older content instead of an error. (Providers expose this as options like Cloudflare "Always Online".)
 
@@ -246,7 +246,7 @@ The course figure below shows the Sydney user reaching the Sydney edge cache in 
 | Can stale content exist? | Not possible by design | Yes, while the purge spreads |
 | Cache lifetime | Forever + immutable — the best possible hit ratio | Whatever TTL you were brave enough to set |
 | Works for | Anything that something else links to (assets referenced from HTML) | The documents doing the linking, and emergencies |
-| Cost | Build-tool setup (standard in bundlers) | An API call — plus trust |
+| Cost | Build-tool setup (standard in bundlers — tools that combine code files for the browser) | An API call — plus trust |
 
 **Standard setup:** fingerprint the assets that get referenced and cache them forever. Give the HTML that references them a short TTL using `s-maxage` plus `stale-while-revalidate`. Save purges for emergencies and legal takedowns.
 
@@ -254,9 +254,9 @@ The course figure below shows the Sydney user reaching the Sydney edge cache in 
 
 - **Akamai, Cloudflare, Fastly, CloudFront** — the pattern turned into an industry. Cloudflare alone carries a large share of web traffic.
 - **Netflix Open Connect** — puts cache servers *inside* internet service providers. Video makes up a huge share of traffic, so skipping the ocean crossing entirely beats making it faster.
-- **RFC 5861** — the standard for `stale-while-revalidate` and `stale-if-error` (Module 4's stale serving and Module 5's fallbacks, written as HTTP headers).
-- **Edge compute** — Cloudflare Workers and Lambda@Edge run authentication, redirects, and experiment selection close to users.
-- **For AI engineers:** model weights are enormous static files, so model hubs deliver them through CDNs. GPU inference **cold starts** also pull weights through the same edge network. Token streams are unique to each request and can't be cached. They still benefit from edge TLS and warm origin connections, which cuts **time to first token** for far-away users.
+- **RFC 5861** (RFCs are the numbered documents that define internet standards) — the standard for `stale-while-revalidate` and `stale-if-error` (Module 4's stale serving and Module 5's fallbacks, written as HTTP headers).
+- **Edge compute** (running small pieces of your own code on CDN servers) — Cloudflare Workers and Lambda@Edge run authentication, redirects, and experiment selection close to users.
+- **For AI engineers:** model weights are enormous static files, so model hubs deliver them through CDNs. GPU inference **cold starts** (starting a model server from scratch) also pull weights through the same edge network. Token streams (the model's output arriving word-piece by word-piece) are unique to each request and can't be cached. They still benefit from edge TLS and warm origin connections, which cuts **time to first token** (how long until the first piece of the answer appears) for far-away users.
 
 ### In the interview
 
@@ -305,9 +305,9 @@ A classic prompt: "Users in Australia see slow pages, but the Virginia servers l
 ### The problem: eleven front doors
 
 The store runs **11 services** (catalog, search, checkout, orders, accounts, reviews, …). Web, iOS, and Android clients call each one directly. Having eleven public entrances turns out to be costly:
-- **Authentication is built 11 times.** Every service checks tokens using whatever library version it last shipped. An audit turns up **3 implementations in 2 languages**. The reviews service's version is **14 months old** and ignores **token revocation** (cancelling a token before it would naturally expire). When a stolen account had all its tokens revoked, those tokens could *still post reviews*. That's a security incident, not an everyday bug.
-- **The mobile app hardcodes 9 hostnames.** Each public address is now a promise to clients, and a surface attackers can target. None of them can change without releasing a new app through the app store.
-- **Internal refactors break customers.** Splitting the orders service in two makes sense, but it breaks partner integrations. The internal **topology** (how the services are arranged) has turned into part of the public API.
+- **Authentication is built 11 times.** Every service checks tokens (signed strings a client sends to prove who it is, issued at login) using whatever library version it last shipped. An audit turns up **3 implementations in 2 languages**. The reviews service's version is **14 months old** and ignores **token revocation** (cancelling a token before it would naturally expire). When a stolen account had all its tokens revoked, those tokens could *still post reviews*. That's a security incident, not an everyday bug.
+- **The mobile app hardcodes 9 hostnames** (server names like `orders.shop.com`). Each public address is now a promise to clients, and a surface attackers can target. None of them can change without releasing a new app through the app store.
+- **Internal refactors (restructuring code or services without changing what they do) break customers.** Splitting the orders service in two makes sense, but it breaks partner integrations. The internal **topology** (how the services are arranged) has turned into part of the public API.
 - **Rate limits, log formats, and TLS settings** vary a little across all 11. None of them is reliably "the standard".
 
 The shared root cause: **cross-cutting policy** (rules that apply to every request) is built separately by each service. It changes at 11 different deploy speeds, in 3 languages. It *will* drift apart. Better discipline can't fix something built into the structure — but a single shared entrance can.
@@ -328,12 +328,12 @@ The course figure below shows Web, Mobile, and Partners all coming in through a 
 *Figure — API Gateway (course diagram)*
 
 1. **Routing — the topology is private again.** Paths are mapped to services (`/orders/*` → orders), and clients keep using a single hostname. Splitting orders into order + fulfillment becomes just a routing change that nobody outside notices.
-2. **Authentication, done once.** At the boundary, the gateway checks the token's signature, expiry, and revocation. Then it passes the verified identity inward as **signed headers or trusted claims**. Services never have to parse raw external tokens. *Why:* one revocation fix now protects every service, in a single deploy.
+2. **Authentication, done once.** At the boundary, the gateway checks the token's signature (a cryptographic seal proving who issued it and that it wasn't altered), expiry, and revocation. Then it passes the verified identity inward as **signed headers or trusted claims** (claims are the facts inside a token, such as user ID and roles). Services never have to parse raw external tokens. *Why:* one revocation fix now protects every service, in a single deploy.
 3. **AuthN at the gateway, AuthZ in the services.** **Authentication (AuthN)** answers "who are you?" — a fact that applies everywhere. **Authorization (AuthZ)** answers "are you allowed to do *this* particular thing?" (e.g., edit this review) — which is domain logic. Keep AuthN at the entrance, and keep AuthZ with each service's business rules.
 4. **The policy set.** Rate limits and quotas, request-size limits, **schema validation** (checking that a request has the expected shape), and TLS. They're applied the same way at the one layer that sees every external request.
-5. **The root of observability.** The gateway generates the **request ID** that distributed tracing is built around. Every later **span** (a timed step in a trace) then links back to the moment the request first arrived. It also writes one uniform audit record for each external request.
+5. **The root of observability.** The gateway generates the **request ID** that distributed tracing (following one request across every service it touches) is built around. Every later **span** (a timed step in a trace) then links back to the moment the request first arrived. It also writes one uniform audit record for each external request.
 
-**The rule that keeps it stable: policy yes, product no.** Since everything passes through it, teams will want to add response transformations, multi-service orchestration, discount checks… Every one of these pushes the gateway toward a hidden monolith. That monolith would need one team's sign-off for every feature, and would put *all* incoming traffic at risk on every deploy. Older architectures called this central integration layer an **ESB (enterprise service bus)**, and it was painful. **Test:** can you describe the rule without using any domain words? If not, it belongs in a service. A thin gateway that rarely changes is a stable gateway.
+**The rule that keeps it stable: policy yes, product no.** Since everything passes through it, teams will want to add response transformations, multi-service orchestration, discount checks… Every one of these pushes the gateway toward a hidden monolith (one big application that everything depends on and every team must change together). That monolith would need one team's sign-off for every feature, and would put *all* incoming traffic at risk on every deploy. Older architectures called this central integration layer an **ESB (enterprise service bus)**, and it was painful. **Test:** can you describe the rule without using any domain words? If not, it belongs in a service. A thin gateway that rarely changes is a stable gateway.
 
 **North-south only.** Internal calls between services (**east-west**) must never leave the network through the gateway and come back in. That adds latency and a coupling that shouldn't exist. Internal traffic has its own tools (sidecar, mesh).
 
@@ -372,7 +372,7 @@ The course figure below shows Web, Mobile, and Partners all coming in through a 
 | | API Gateway | Service Mesh |
 |---|---|---|
 | Direction | North-south: the outside world → your services | East-west: your services → one another |
-| Identity question | "Which user or client is this?" (tokens, API keys) | "Which service is this?" (mutual TLS, workload identity) |
+| Identity question | "Which user or client is this?" (tokens, API keys — secret strings that identify a calling program) | "Which service is this?" (mutual TLS, workload identity) |
 | Policy flavor | Auth, quotas, versioning — rules that face the product | Retries, timeouts, mutual TLS, traffic splits — infrastructure rules |
 | Topology | One (redundant) entrance | A sidecar for each service — hundreds of small entrances |
 | Failure blast radius | All incoming traffic | One service at a time |
@@ -384,7 +384,7 @@ They work together. The gateway checks external users at a single entrance, and 
 - **Kong, Apigee, AWS API Gateway** — the open-source, commercial, and managed versions of the pattern.
 - **Netflix Zuul** — a well-known large-scale gateway. Its history shows how gateways pile up product logic until BFFs are needed to pull client-specific shaping back out.
 - **Envoy-based gateways (Emissary, Gloo)** — the same proxy code runs at the public edge and inside meshes. One codebase plays different roles depending on where it's placed and how it's configured.
-- **For AI engineers:** an **LLM gateway** is this pattern pointed at model providers. Authentication becomes safekeeping of API keys, rate limits become token budgets, and path routing becomes model selection. On top of that come usage metering, fallback between providers, and semantic caching.
+- **For AI engineers:** an **LLM gateway** is this pattern pointed at model providers. Authentication becomes safekeeping of API keys, rate limits become token budgets, and path routing becomes model selection. On top of that come usage metering (recording who used how much, for billing), fallback between providers, and semantic caching (reusing an answer for a question that means the same thing, even if worded differently).
 
 ### In the interview
 
@@ -434,7 +434,7 @@ Once you've drawn microservices, expect "how do outside clients reach them?" Fol
 ### The problem: one API fits every client equally badly
 
 The gateway gives every client one consistent way in. But a year later, the mobile team is having a hard time:
-- The mobile **product screen needs data from 6 services**. That means **6 cellular round trips of ~300 ms** each.
+- The mobile **product screen needs data from 6 services**. That means **6 cellular round trips (request out, reply back, over the phone network) of ~300 ms** each.
 - Each response sends back **40 fields**, but the phone displays only **6**. That wastes bytes, battery, and parsing time.
 - Every change to a screen has to wait on a ticket to a backend team.
 
@@ -447,7 +447,7 @@ In the course figure below, the mobile app and the web app each make **1 call** 
 ![Backend for Frontend](images/backend-for-frontend-1.png)
 *Figure — Backend for Frontend (course diagram)*
 
-1. **A BFF gathers and shapes data — and does nothing else.** It **fans out**, meaning it calls several services in parallel, over fast datacenter links. Then it returns exactly the fields one screen needs. Pricing, permissions, order totals, and other domain rules stay in the services. *Why:* a BFF that works out discounts turns into a chunk of monolith hiding in the presentation layer.
+1. **A BFF gathers and shapes data — and does nothing else.** It **fans out**, meaning it calls several services in parallel, over fast datacenter links. Then it returns exactly the fields one screen needs. Pricing, permissions, order totals, and other domain rules stay in the services. *Why:* a BFF that works out discounts turns into a chunk of monolith hiding in the presentation layer (the part of a system that formats data for display).
 2. **The client team owns it.** The mobile team changes its own BFF on the mobile release schedule, with no backend ticket. *Why:* this change in ownership is the real point of the pattern.
 3. **One BFF per experience, not per screen.** Web, mobile, and TV are different experiences, so each may get its own. **iOS and Android usually share a single mobile BFF** until their behavior truly splits. A **partner API** sits in a similar place in the diagram but is a different thing: a stable, documented, versioned public product.
 4. **BFFs never call one another.** Requests travel in one direction: client → gateway → BFF → domain services. *Why:* calls from one BFF to another create an accidental service layer full of hidden dependencies.
@@ -466,7 +466,7 @@ In the course figure below, the mobile app and the web app each make **1 call** 
 - **A gateway that stays thin for good** — response shaping has a home that isn't the entrance.
 
 **You pay:**
-- **N more things to deploy** — every BFF needs its own build pipeline, monitoring, and on-call owner.
+- **N more things to deploy** — every BFF needs its own build pipeline (the automated steps that test and ship code), monitoring, and on-call owner (the engineer paged when it breaks).
 - **Intentional duplication** — the web and mobile BFFs may put product data together differently, because their screens differ. Trying to erase all duplication with a shared "BFF framework" can bring back the very coupling you got away from.
 - **A leak risk** — BFFs sit close to features, so domain rules tend to drift into them. If two BFFs apply the same rule differently, the product behaves inconsistently.
 
@@ -483,9 +483,9 @@ Both solve **over-fetching** (receiving fields you don't use) and **under-fetchi
 | | BFF | GraphQL |
 |---|---|---|
 | Who shapes the response | The client's server team, per experience | The client's query, per request |
-| Flexibility | Fixed shapes — any change needs a BFF deploy | Whatever the schema permits, no deploy needed |
-| Server-side complexity | N thin services | One graph, with resolver efficiency to manage (the **N+1 query** problem — one query per item instead of one batched query), query cost limits, and caching complexity |
-| HTTP caching | Easy (fixed endpoints) | Harder (queries are usually sent as POST) |
+| Flexibility | Fixed shapes — any change needs a BFF deploy | Whatever the schema (the typed description of all available data) permits, no deploy needed |
+| Server-side complexity | N thin services | One graph, with resolver (the function that fetches one field) efficiency to manage (the **N+1 query** problem — one query per item instead of one batched query), query cost limits, and caching complexity |
+| HTTP caching | Easy (fixed endpoints) | Harder (queries are usually sent as POST, the HTTP method for sending data, which caches skip) |
 
 You can also mix them — some teams build each BFF *using* GraphQL (one graph per experience). A rule of thumb: use BFFs when you have a few stable client experiences. Use GraphQL when many clients' data needs change faster than you can deploy — and budget for GraphQL's server-side defenses against expensive queries.
 
@@ -496,7 +496,7 @@ A typical prompt: a slow mobile screen makes six calls and gets big payloads —
 > **30-second answer:** "Every client experience gets a backend-for-frontend. It's a thin aggregation layer behind the gateway, owned by that client's team. Mobile's six-call screen turns into one call. The BFF fans out to the six services in parallel over datacenter links and returns exactly the fields the screen shows — crossing the slow network once instead of six times. The rules: BFFs aggregate and shape but contain no domain logic; they never call each other; and iOS and Android share one until they really diverge. GraphQL is the alternative when data needs change faster than BFF deploys — the same problem, fixed on the client side, with a cost on the server side."
 
 **Likely follow-ups (with answers):**
-- *"Can the BFF handle checkout? It already talks to every service."* It can gather reads and *kick off* the operation. But checkout is a write with rules about money and inventory, so a **domain-owned saga** has to coordinate it. The BFF may start the saga and format its status for display, but it doesn't own the business transaction.
+- *"Can the BFF handle checkout? It already talks to every service."* It can gather reads and *kick off* the operation. But checkout is a write with rules about money and inventory, so a **domain-owned saga** (a multi-step workflow with an undo step for each action) has to coordinate it. The BFF may start the saga and format its status for display, but it doesn't own the business transaction.
 - *"One BFF or two for iOS and Android?"* Start with one — they're usually the same mobile experience. Split only when a real difference (a feature only one has, a tablet redesign) justifies another deployable and another owner.
 
 **Mistake that fails candidates:** putting business logic in a BFF; letting BFFs call each other; or making one backend per screen with no ownership model that can last.
@@ -536,22 +536,22 @@ A typical prompt: a slow mobile screen makes six calls and gets big payloads —
 
 The public API serves the mobile apps plus several hundred partner integrations. One partner ships a bug that makes it retry in a loop **without backoff**. (Backoff means waiting a bit longer between each retry.) Their traffic jumps from **40 requests/s to 4,000** — 100x their normal level. Each request has valid credentials and is properly formed, so the gateway authenticates every one. Shared services get overloaded. One customer's bug turns into an outage for every partner and every mobile user.
 
-The logs also reveal two quieter abusers. One is a **scraper** pulling the whole catalog through search. The other is a **credential-stuffing** bot hitting login — it tries huge numbers of leaked username/password pairs. Accidental, greedy, and hostile callers all slip through the same structural gap: **the entrance checks *who* you are, but nobody counts *how often* you come in.** The bulkhead lesson kept damage contained inside the system, by resource. At the public boundary, though, callers have identities and pricing tiers. So fairness has to be enforced there, before the work gets in.
+The logs also reveal two quieter abusers. One is a **scraper** pulling the whole catalog through search. The other is a **credential-stuffing** bot hitting login — it tries huge numbers of leaked username/password pairs. Accidental, greedy, and hostile callers all slip through the same structural gap: **the entrance checks *who* you are, but nobody counts *how often* you come in.** The bulkhead lesson (separate resource pools so one overload can't sink everything) kept damage contained inside the system, by resource. At the public boundary, though, callers have identities and pricing tiers. So fairness has to be enforced there, before the work gets in.
 
 ### Why the obvious fixes fail
 
 - **"Block the partner's IP."** The partner is still a paying customer. Their broken endpoint should be *slowed down*, not cut off completely. Bots also hop across thousands of addresses anyway. Worse, **NAT (network address translation)** places many users behind one public IP. Blocking a university's address can lock out **5,000** innocent students.
-- **"Scale up and soak it up."** Buying servers to handle someone else's endless retry loop turns their bug into your bill. An autoscaler will gladly automate that waste for you. Capacity should serve real demand, not a malfunction with no limit.
+- **"Scale up and soak it up."** Buying servers to handle someone else's endless retry loop turns their bug into your bill. An autoscaler (a control loop that adds or removes servers as load changes) will gladly automate that waste for you. Capacity should serve real demand, not a malfunction with no limit.
 - **"Email the partner."** Their fix might take days and depends on their deploy schedule, while your outage keeps going. As the circuit-breaker lesson put it: when minutes count, the right human decision has to become an automatic one.
 
 ### How it works — four decisions
 
-In the course figure below, every request reaches the **gateway turnstile** first. If there's budget left, it uses up a token (an atomic operation) and forwards the request to the services. If the bucket is empty, it refuses at the door with **429 + Retry-After in ~0.1 ms**. The gateway instances share their counters in **Redis** using an atomic check-and-decrement, so all the instances agree.
+In the course figure below, every request reaches the **gateway turnstile** first. If there's budget left, it uses up a token (an atomic operation — one that happens completely or not at all, with no other request slipping in halfway) and forwards the request to the services. If the bucket is empty, it refuses at the door with **429 + Retry-After in ~0.1 ms**. The gateway instances share their counters in **Redis** (a fast in-memory key-value store) using an atomic check-and-decrement, so all the instances agree.
 
 ![Rate Limiting](images/rate-limiting-1.png)
 *Figure — Rate Limiting (course diagram)*
 
-**Decision 1 — a refusal is a contract, not just a "no".** Send back `429` with `Retry-After: 30`, along with budget headers such as `X-RateLimit-Remaining`. *Why:* well-behaved SDKs (like the polite client from the retry lesson) read these and back off on their own. A 4,000/s loop then shrinks itself within seconds.
+**Decision 1 — a refusal is a contract, not just a "no".** Send back `429` with `Retry-After: 30`, along with budget headers such as `X-RateLimit-Remaining`. *Why:* well-behaved SDKs (software development kits: ready-made client libraries for calling an API), like the polite client from the retry lesson, read these and back off on their own. A 4,000/s loop then shrinks itself within seconds.
 
 **Decision 2 — the algorithm.**
 - **Fixed window** ("100 per minute; the counter resets at :00"). Very simple, but it suffers a **boundary burst**. 100 requests at 11:59:59 plus 100 at 12:00:01 = **200 in 2 seconds**, and all are allowed. It's only good enough for rough protection.
@@ -561,7 +561,7 @@ In the course figure below, every request reaches the **gateway turnstile** firs
 **Decision 3 — the key: what exactly are you counting per?** Use a trusted **API key or account** as the main identity. Use IP only as a *generous* backstop for anonymous callers, since NAT can make one IP stand for thousands of people. Two refinements: **tiers** (e.g., free 10/min, paid 1,000/min) and **cost weighting** (an expensive search uses 10 tokens; a health check uses 1).
 
 **Decision 4 — where the counters live.** A gateway normally runs N instances. If each one enforces 100/s by itself, the true limit becomes N x 100. Your options:
-- **Shared Redis**, with an atomic `INCR` + `EXPIRE`: about **0.5 ms** per request, and exact.
+- **Shared Redis**, with an atomic `INCR` + `EXPIRE` (Redis commands to add one to a counter and make it vanish after a set time): about **0.5 ms** per request, and exact.
 - **Local buckets that sync now and then:** faster, but approximate. A **tenant** (one customer in a shared system) briefly getting 110 instead of 100 is fine for *protection*. *Billing*, however, needs exact counts.
 
 ### Walkthrough with numbers (Tuesday's incident, replayed: r=100/s, b=200 for the partner tier)
@@ -656,13 +656,13 @@ In the course figure below, every request reaches the **gateway turnstile** firs
 *Original lesson: [Cursor-Based Pagination on DesignGurus ↗](https://www.designgurus.io/course-play/system-design-patterns/doc/6a5363aa1ecebe8563b1f005)*
 
 
-**What it is.** Rather than asking the API for "page 2", the client tells it **where it stopped**. A **cursor** is an opaque bookmark — something like "everything after order 8412" — that comes back with each page. It's tied to a *row*, not a *count*. So it stays fast no matter how deep you go, and it doesn't skip or repeat items when the list changes.
+**What it is.** Rather than asking the API for "page 2", the client tells it **where it stopped**. A **cursor** is an opaque (the client can't see inside or rely on its format) bookmark — something like "everything after order 8412" — that comes back with each page. It's tied to a *row*, not a *count*. So it stays fast no matter how deep you go, and it doesn't skip or repeat items when the list changes.
 
 **Analogy.** Compare a bookmark with "page 212". If someone adds new pages at the front of your book, "page 212" now shows different text. Your bookmark, though, stays exactly where you stopped reading.
 
 ### The problem: offset pagination fails two ways
 
-**Offset pagination** requests a numbered page and makes the database skip over a number of rows: `?page=2` → `OFFSET 20 LIMIT 20`.
+**Offset pagination** requests a numbered page and makes the database skip over a number of rows: `?page=2` → `OFFSET 20 LIMIT 20` (SQL for "skip 20 rows, then return 20").
 
 1. **Drift.** A user reads page 1 of the mobile order feed. Then three new orders show up at the top, which shoves every row down by three. Page 2 now begins with three items the user has already seen — **duplicates**. Deletions do the reverse and **skip** rows the user never saw. Page numbers are positions in a list that keeps shifting.
 2. **The cost of deep pages.** A partner exports the catalog using `?page=5000`. `OFFSET 100000` can't leap straight to row 100,000 — instead, the database has to scan and throw away 100,000 rows first. The work grows in a straight line with depth: page 1 takes **2 ms**, while page 5,000 takes **800 ms**. The further the export goes, the slower it gets.
@@ -679,7 +679,7 @@ Cursor:  SELECT ... WHERE (created_at, id) < (:cursor_ts, :cursor_id)
 ```
 
 1. **Send a cursor back with every page.** The response contains `next_cursor`, an opaque token. It's usually the last row's sort values, encoded in **base64** (a way of turning data into text). *Why:* it records "where I stopped" as values rather than as a count.
-2. **Use an index to jump from the cursor.** The next request uses `WHERE (created_at, id) < (cursor values)`. That lets the database jump directly to that spot through an index, taking the same time at any depth. *Why:* no rows get scanned and thrown away.
+2. **Use an index to jump from the cursor.** The next request uses `WHERE (created_at, id) < (cursor values)`. That lets the database jump directly to that spot through an index (a sorted lookup structure, like a book's index, that finds rows without reading the whole table), taking the same time at any depth. *Why:* no rows get scanned and thrown away.
 3. **Tie progress to a row.** New rows added before that row can't move it, so there's no drift.
 
 The diagram below compares the two. Offset scans and throws away 100,020 rows. The cursor does an index seek and reads just 20.
@@ -705,7 +705,7 @@ flowchart LR
 **You gain:**
 - **The same cost at any depth** — page 5,000 costs as much as page 1.
 - **No drift** — no duplicates or skips while the list changes. For infinite scroll, this is a correctness requirement.
-- **Works well with replicas** — cheap index-seek reads are a good fit for **read replicas**.
+- **Works well with replicas** — cheap index-seek reads are a good fit for **read replicas** (read-only copies of the database).
 
 **You pay:**
 - **No random access.** You get next and previous, but not "jump to page 47". You can still jump *by value*, though (e.g., "start from last Tuesday").
@@ -793,7 +793,7 @@ A team renames `order.state` to `order.status`, because "state" confused people.
 **Rule 1 — additive first: most changes need no version at all.**
 - Add fields, endpoints, and optional parameters that have safe defaults. **Never remove, rename, or change the type** of anything that already exists.
 - Clients should be **tolerant readers**, meaning they ignore fields they don't recognize.
-- *Why:* additive servers plus tolerant clients make most changes invisible to existing integrations. (It's pub/sub's additive-only rule, applied to REST.)
+- *Why:* additive servers plus tolerant clients make most changes invisible to existing integrations. (It's pub/sub's additive-only rule, applied to REST — the common style of HTTP APIs built around URLs for resources and verbs like GET and POST.)
 - The honest cost is clutter. `status` sits next to `state`, both documented, with one marked as preferred, until the next major version allows a cleanup.
 
 **Rule 2 — when a breaking change can't be avoided, version explicitly and coarsely.**
@@ -815,7 +815,7 @@ Where the version goes:
 
 | | URL path (`/v2/orders`) | Header (`Accept: ...v2+json`) |
 |---|---|---|
-| Visibility | Shows up in every log, link, and curl command | Hidden — cleaner in theory, harder to debug |
+| Visibility | Shows up in every log, link, and curl (command-line HTTP tool) command | Hidden — cleaner in theory, harder to debug |
 | Caching/routing | Easy (the URLs are different) | Needs caches and routes that understand headers |
 | Adoption reality | The practical default | Favored by a minority of REST purists |
 
@@ -865,7 +865,7 @@ stateDiagram-v2
 
 - **Internal APIs with coordinated deploys** — when you own both the caller and the service, update them together and use **contract tests**. (These are automated tests that check both sides stick to the shared interface.)
 - **Pre-launch and beta surfaces** — label instability clearly (e.g., `/beta/`) and keep the freedom to change. Long-term promises start at **GA** (general availability).
-- **Event schemas** — same law, different transport. Use pub/sub's schema registries, additive rules, and versioned topics.
+- **Event schemas** — same law, different transport. Use pub/sub's schema registries (central stores of message formats), additive rules, and versioned topics (named channels that messages are published to).
 
 **Common misuse:** creating `/v3` because editing `/v2` feels risky, while `/v1` never gets retired. You end up with three permanent, half-maintained versions that slow down every change.
 
@@ -935,16 +935,16 @@ The sidecar turns the placement around: **if you can't bring all the traffic to 
 
 ### How it works
 
-In the course figure below, a Go Checkout instance and a Python Inventory instance each run their business logic. Each one talks in plain text over localhost to its own sidecar ("same binary"). The only hop that leaves the machine is sidecar-to-sidecar mutual TLS. That's where timeouts, retries, circuit breaking, metrics, and traces happen. The note at the bottom works out the fleet math: 11 services x 40 instances = 440 sidecars, ~50 MB each, so ~22 GB of memory goes to networking.
+In the course figure below, a Go Checkout instance and a Python Inventory instance each run their business logic. Each one talks in plain text over localhost to its own sidecar ("same binary" — the identical compiled program). The only hop that leaves the machine is sidecar-to-sidecar mutual TLS. That's where timeouts, retries, circuit breaking, metrics, and traces happen. The note at the bottom works out the fleet math: 11 services x 40 instances = 440 sidecars, ~50 MB each, so ~22 GB of memory goes to networking.
 
 ![Sidecar Pattern](images/sidecar-1.svg)
 *Figure — Sidecar Pattern (course diagram)*
 
-1. **Run one helper process next to each service instance.** The app sends plain requests to localhost. The sidecar adds TLS, timeouts, retries, and telemetry on the network side. *Why:* the networking logic lives outside the app.
+1. **Run one helper process next to each service instance.** The app sends plain requests to localhost. The sidecar adds TLS, timeouts, retries, and telemetry (automatically collected metrics, logs and traces) on the network side. *Why:* the networking logic lives outside the app.
 2. **It works with any language by design.** The sidecar is a separate process, not a library linked into the app. So Python, Go, and Java services all run the exact same binary. There are no parallel implementations to keep in step.
 3. **Policy upgrades move at infrastructure speed.** A new retry policy, timeout, or TLS certificate reaches every service just by rolling out the sidecar fleet — with **zero application deploys**. Networking gets its own lifecycle, instead of waiting on 11 release schedules.
 4. **Application code gets smaller.** The mechanics of timeouts, retries, and **circuit breakers** (from the reliability module) move into infrastructure. Services keep only the *domain* decisions — for example, which reduced response to send back when a dependency fails.
-5. **The wider family.** "Sidecar" means any helper that runs alongside a service — log collectors, secret fetchers, config reloaders. But *proxy* sidecars became the most influential kind, because they standardized how services talk over the network. A proxy sidecar is the reverse-proxy primitive, deployed once per instance.
+5. **The wider family.** "Sidecar" means any helper that runs alongside a service — log collectors, secret fetchers (helpers that load passwords and keys from a secure store), config reloaders. But *proxy* sidecars became the most influential kind, because they standardized how services talk over the network. A proxy sidecar is the reverse-proxy primitive, deployed once per instance.
 6. **A sidecar is a building block, not the whole system.** Hundreds of proxies still need certificates, routes, and policies from somewhere. The service mesh (next lesson) supplies that coordination. The sidecar does the work; the mesh decides its configuration and hands it out.
 
 **Roll it out bit by bit.** Start with one service that isn't critical. Measure memory and latency, and check that startup and shutdown happen in the right order. Then expand one group at a time. That way you separate proxy bugs from application bugs before the whole fleet relies on it.
@@ -974,7 +974,7 @@ In the course figure below, a Go Checkout instance and a Python Inventory instan
 - **Small fleets using one language.** Five Go services owned by a single team can use one well-kept library and skip paying 50 MB per instance.
 - **Latency budgets measured in microseconds** (e.g., trading) — two extra process hops may be too much.
 - **Serverless** — there's no long-running instance for a sidecar to sit next to, so the platform has to provide equivalent controls.
-- **No platform team** — hundreds of injected processes, upgrades, and new ways to fail all need an owner. Newer **sidecar-less** options do the same jobs without a process per pod. They use **eBPF** (programs that run inside the operating-system kernel) or **ambient**, node-level proxies. The jobs still exist even when the separate process goes away.
+- **No platform team** — hundreds of injected processes, upgrades, and new ways to fail all need an owner. Newer **sidecar-less** options do the same jobs without a process per pod (a pod is Kubernetes' smallest deployable unit: one or more containers run together). They use **eBPF** (programs that run inside the operating-system kernel) or **ambient**, node-level (one per machine) proxies. The jobs still exist even when the separate process goes away.
 
 **Common misuse:** adopting sidecars for ten services just because big companies do — even though there's one team, two languages, and little drift. You pay all the cost and get none of the benefit that comes with organizational scale. Revisit the choice as the number of teams and languages changes.
 
@@ -1050,9 +1050,9 @@ Sidecars standardized *how* traffic moves. They didn't standardize the *knowledg
 
 ### Why the obvious fixes fail
 
-- **"Use config management — template the files in CI."** Templates handle static settings. But deploy pipelines take minutes, while IP addresses change in seconds. Routing is live state, and it needs to be delivered continuously.
+- **"Use config management — template the files in CI."** (CI, continuous integration, is the automated system that builds and tests every code change.) Templates handle static settings. But deploy pipelines take minutes, while IP addresses change in seconds. Routing is live state, and it needs to be delivered continuously.
 - **"Use DNS for discovery."** DNS answers are cached for their **TTL**, so callers might keep hitting removed instances for minutes. (It's the load-balancer lesson's caching problem, now east-west.) DNS also only tells you location. It carries no health info, no identity certificates, and no authorization policy.
-- **"Write a cert-rotation runbook."** 440 certificates every 90 days has to be done perfectly, forever. One slip means an overnight outage. Routine decisions like this need automation that runs at machine speed.
+- **"Write a cert-rotation runbook."** (A runbook is a written step-by-step procedure for operators.) 440 certificates every 90 days has to be done perfectly, forever. One slip means an overnight outage. Routine decisions like this need automation that runs at machine speed.
 
 ### How it works
 
@@ -1062,7 +1062,7 @@ In the course figure below, the control plane sits at the top. It watches the re
 *Figure — Service mesh: data plane and control plane (course diagram)*
 
 1. **Certificates take care of themselves.** The control plane acts as a **certificate authority (CA)** — the trusted issuer of identity certificates. It hands every workload a cryptographic **workload identity** (e.g., "checkout, in prod"), using **short-lived certificates that rotate automatically** (e.g., hourly). *Why:* outages from expired certificates become very unlikely by design. Also, services now trust each other based on *identity*, not *network location*. That's the foundation of **zero-trust networking**, where being inside the network doesn't earn you any automatic trust.
-2. **Routing at platform speed.** The control plane watches the orchestrator's live registry (e.g., the **Kubernetes API server**). When a deploy changes IPs, it **streams** new routes to the affected sidecars within seconds. It uses **Envoy's xDS** protocol, which provides long-lived, typed streams for machine configuration. (This resolves the forward reference from the bidirectional-streaming lesson.)
+2. **Routing at platform speed.** The control plane watches the orchestrator's (the system that schedules containers onto machines) live registry (e.g., the **Kubernetes API server**). When a deploy changes IPs, it **streams** new routes to the affected sidecars within seconds. It uses **Envoy's xDS** protocol, which provides long-lived, typed streams for machine configuration. (This resolves the forward reference from the bidirectional-streaming lesson.)
 3. **Policy becomes declarative and central.** **Declarative** means you describe the result you want, not the steps to get there. Retry budgets, timeouts, and circuit breaking (which many meshes call **outlier detection**) become versioned config objects. They can apply globally or to one service. Sidecars no longer keep their own local settings; the control plane keeps feeding them.
 4. **Authorization finally has somewhere to be written.** A single policy object — "only checkout and refunds may call payments" — is enforced by the *receiving* payments sidecar. It checks the caller's cryptographic identity and logs every allow and deny. Access control between internal services becomes explicit and auditable.
 5. **Observability comes free.** Every proxy sees every request. So it reports uniform rates, errors, latency, and trace spans for each pair of services — this baseline needs no app instrumentation. The **dependency graph** becomes visible right away.
@@ -1167,8 +1167,8 @@ A direct prompt: "fifty services in four languages need consistent mTLS, retries
 
 ### The problem: thirty services, thirty permission systems
 
-The store has opened a **seller portal**: 200,000 seller organisations, 2 million staff accounts, teams inside each seller, and 500 million orders and invoices. Each of ~30 services wrote its own checks, usually a SQL join in the handler. Four findings from one quarter:
-- **The data leak.** `GET /invoices/8812` checked that the caller was *logged in*, not that the invoice belonged to the caller's organisation. A curious seller changed the number in the URL and read a competitor's invoices. This is the most common API vulnerability there is — **broken object-level authorization** (BOLA), number one on the OWASP API Security Top 10.
+The store has opened a **seller portal**: 200,000 seller organisations, 2 million staff accounts, teams inside each seller, and 500 million orders and invoices. Each of ~30 services wrote its own checks, usually a SQL join (a query combining rows from several tables) in the handler (the function that processes one kind of request). Four findings from one quarter:
+- **The data leak.** `GET /invoices/8812` checked that the caller was *logged in*, not that the invoice belonged to the caller's organisation. A curious seller changed the number in the URL and read a competitor's invoices. This is the most common API vulnerability there is — **broken object-level authorization** (BOLA), number one on the OWASP API Security Top 10 (OWASP is a non-profit that publishes widely used lists of common security flaws).
 - **The half-removed employee.** A seller removed a fired employee from their "finance" team. The payout service stopped showing him reports. The search service, which cached team membership for a day, kept showing him invoice titles.
 - **The slow "what can I see?"** Sharing works through folders inside folders and teams inside teams. The documents page runs recursive queries per request and takes **2 seconds** for large sellers.
 - **The unanswerable audit.** A large customer asks, "list everyone who can read our payout data, and why." No system can answer, because the answer is spread across thirty codebases.
@@ -1177,13 +1177,13 @@ The gateway authenticated every request (the capstone's Stage 2), and deliberate
 
 ### Why the obvious fixes fail
 
-- **"Put roles in the JWT."** A token can carry coarse roles ("seller-admin"), but not "can view these 40,000 invoices". Tokens also stay valid until they expire, so a revoked permission lives on for the token's lifetime (the Spring book's [token revocation section](../../../spring/chapters/11-spring-security-2-tokens-and-oauth2/README.md#1111-refresh-tokens-lifetimes-revocation-and-logout) covers this trade-off).
-- **"Let the API gateway decide."** The gateway would need to know what an invoice is, who owns it and how folders nest — exactly the domain knowledge a thin gateway must not have. It stays the place for coarse checks: authenticated, token scope, rate limits.
+- **"Put roles in the JWT."** (A JWT, JSON Web Token, is a signed token that carries claims about the user.) A token can carry coarse roles ("seller-admin"), but not "can view these 40,000 invoices". Tokens also stay valid until they expire, so a revoked permission lives on for the token's lifetime (the Spring book's [token revocation section](../../../spring/chapters/11-spring-security-2-tokens-and-oauth2/README.md#1111-refresh-tokens-lifetimes-revocation-and-logout) covers this trade-off).
+- **"Let the API gateway decide."** The gateway would need to know what an invoice is, who owns it and how folders nest — exactly the domain knowledge a thin gateway must not have. It stays the place for coarse checks: authenticated, token scope (the list of APIs a token is allowed to call), rate limits.
 - **"A shared permissions library" / "copy the roles table everywhere."** The *logic* becomes consistent, but each service reads its own copy of the *data*, going stale at thirty different speeds — the half-removed employee still happens, and a rule change means thirty redeploys.
 
 ### How it works
 
-**1. Split enforcement from decision.** Two roles, named in the NIST and XACML vocabulary:
+**1. Split enforcement from decision.** Two roles, named in the NIST (the US standards institute) and XACML (a standard language for access-control policies) vocabulary:
 - The **policy enforcement point (PEP)** is the code at the moment of access — a handler, a gateway filter, a sidecar. It builds the question, asks, and obeys the answer.
 - The **policy decision point (PDP)** is the authorization service. It holds the rules and the facts, and answers `allow` or `deny` (plus a reason, for the logs).
 
@@ -1198,7 +1198,7 @@ Services keep enforcement (only they know that `/invoices/8812` means "invoice 8
 | **ABAC** (attribute-based) | Do attributes of user, resource and context satisfy a policy? | allow if `user.org == invoice.org` and `user.mfa == true` and time is 08:00–20:00 | Answering "who can see X?" means evaluating the policy against every user |
 | **ReBAC** (relationship-based) | Is there a path of relationships from the user to the object? | user → member of team → viewer of folder → parent of invoice | Pure attribute rules (time of day, IP range) don't fit a graph |
 
-Real systems combine them: **RBAC** for coarse staff roles ("support agent"), **ReBAC** for ownership and sharing (organisations, teams, folders), and **ABAC conditions** on top (require MFA for payouts, block access from unusual countries). The Spring book shows the in-process RBAC end of this spectrum: [authorizing requests with roles and authorities](../../../spring/chapters/10-spring-security-1-fundamentals/README.md#106-authorizing-requests-roles-authorities-401-vs-403) and [method security](../../../spring/chapters/10-spring-security-1-fundamentals/README.md#107-method-security).
+Real systems combine them: **RBAC** for coarse staff roles ("support agent"), **ReBAC** for ownership and sharing (organisations, teams, folders), and **ABAC conditions** on top (require MFA — multi-factor authentication, such as a password plus a phone code — for payouts, block access from unusual countries). The Spring book shows the in-process RBAC end of this spectrum: [authorizing requests with roles and authorities](../../../spring/chapters/10-spring-security-1-fundamentals/README.md#106-authorizing-requests-roles-authorities-401-vs-403) and [method security](../../../spring/chapters/10-spring-security-1-fundamentals/README.md#107-method-security).
 
 **3. Zanzibar-style relationship tuples.** Zanzibar stores every permission fact as a **relation tuple**: `object#relation@subject`. The subject can be a user, or a *set* of users described by another tuple:
 
@@ -1231,7 +1231,7 @@ The check starts at the invoice and follows stored tuples: its parent folder gra
 **5. Make it fast enough to sit on every request.** Authorization is on the critical path of nearly every call, so:
 - **Cache decisions and sub-results** close to the caller — "li is a member of acme-finance" is reused by thousands of checks. Keep cache lifetimes short, or tie them to consistency tokens.
 - **Batch** — a page listing 50 invoices sends one bulk check, not 50 network calls.
-- **Filter lists at the source.** *Pre-filter* (index each document with the principals allowed to read it, updated from tuple changes) or *post-filter* (fetch a page, bulk-check, fetch more if items were dropped). Post-filtering suits small pages; pre-filtering is needed when most results would be dropped.
+- **Filter lists at the source.** *Pre-filter* (index each document with the principals — users, groups or services that can hold permissions — allowed to read it, updated from tuple changes) or *post-filter* (fetch a page, bulk-check, fetch more if items were dropped). Post-filtering suits small pages; pre-filtering is needed when most results would be dropped.
 - **Run a local decision point** for pure policy rules: an ABAC engine such as Open Policy Agent (OPA) can run as a sidecar, with policies pushed to it, and answer in microseconds without a network hop.
 
 **6. Decide failure behaviour per action.** If the authorization service is unreachable, most requests should **fail closed** (deny) — a leak is worse than an error. A few low-risk reads may **fail open** from cache for a short time. Write this down per endpoint, like the fail-open/fail-closed choices in [Graceful Degradation](../05-reliability/README.md#graceful-degradation).
@@ -1250,9 +1250,9 @@ The check starts at the invoice and follows stored tuples: its parent folder gra
 
 - **Check volume.** 16,000 req/s reach the gateway (the capstone's figure); about a quarter hit the seller portal, and each portal request makes ~3 object checks → **~12,000 checks/s**. A decision cache with an 80% hit rate leaves **~2,400 checks/s** for the authorization service — a handful of instances.
 - **Latency budget.** Most checks are 2–4 graph hops. With membership sub-results cached, a check is well under **10 ms at p99** — small next to a 200 ms page budget. List pages use one bulk check per page.
-- **Tuple storage.** Memberships and shares: ~2M staff × ~10 tuples = **20M tuples**. Should all 500M invoices get a `parent` tuple? That's ~**50 GB** at ~100 bytes each — feasible, but a second copy of ownership data to keep in sync (by [Change Data Capture](../10-batch-and-streaming/README.md#change-data-capture) from the orders database). The alternative is to pass the invoice's folder in the check request as a **contextual fact** and store tuples only for things users actually share. Choose per object type.
+- **Tuple storage.** Memberships and shares: ~2M staff × ~10 tuples = **20M tuples**. Should all 500M invoices get a `parent` tuple? That's ~**50 GB** at ~100 bytes each — feasible, but a second copy of ownership data to keep in sync (by [Change Data Capture](../10-batch-and-streaming/README.md#change-data-capture) — streaming every database change out to other systems — from the orders database). The alternative is to pass the invoice's folder in the check request as a **contextual fact** and store tuples only for things users actually share. Choose per object type.
 - **The half-removed employee, replayed.** Removal deletes one tuple. The payout report saved after the removal carries a consistency token, so no service can show it to him. Search's pre-filter index updates from the tuple change within seconds.
-- **The data leak, replayed.** `GET /invoices/8812` now calls `check(user, "view", invoice:8812)`. Changing the URL gets a **403**. A shared test suite asserts, for every object endpoint, that a user from another organisation is denied.
+- **The data leak, replayed.** `GET /invoices/8812` now calls `check(user, "view", invoice:8812)`. Changing the URL gets a **403** (HTTP "forbidden"). A shared test suite asserts, for every object endpoint, that a user from another organisation is denied.
 
 ### Trade-offs
 
@@ -1264,7 +1264,7 @@ The check starts at the invoice and follows stored tuples: its parent folder gra
 
 **You pay:**
 - **A new critical dependency on nearly every request.** It needs high availability, caching and a deliberate fail-closed policy.
-- **Data duplication.** Relationship tuples mirror facts that also live in domain databases, and the two must be kept in sync (dual-writes drift; CDC or the outbox pattern is safer).
+- **Data duplication.** Relationship tuples mirror facts that also live in domain databases, and the two must be kept in sync (dual-writes — the app writing to two stores separately — drift; CDC or the outbox pattern, which saves the event in the same database transaction and publishes it afterwards, is safer).
 - **"What can I see?" remains hard.** Checks are cheap; list filtering needs extra indexes.
 - **A policy language to learn and test.** Wrong schemas grant access silently — test policies like code, including "must deny" cases.
 
@@ -1279,19 +1279,19 @@ The check starts at the invoice and follows stored tuples: its parent folder gra
 ### Real-world examples
 
 - **Google Zanzibar** — one system for the permissions of Drive, YouTube, Calendar, Cloud and more. The 2019 paper reports more than two trillion stored ACL tuples, millions of checks per second, and — over three years of production — 95th-percentile latency under 10 ms and availability above 99.999%.
-- **Open-source Zanzibar-style systems:** SpiceDB (AuthZed), OpenFGA (a CNCF project started at Auth0/Okta), Ory Keto. **Airbnb's Himeji** is an in-house system in the same family.
+- **Open-source Zanzibar-style systems:** SpiceDB (AuthZed), OpenFGA (a CNCF — Cloud Native Computing Foundation — project started at Auth0/Okta), Ory Keto. **Airbnb's Himeji** is an in-house system in the same family.
 - **Policy engines for ABAC:** Open Policy Agent (OPA) with its Rego language, often run as a sidecar; AWS's **Cedar** language and the Amazon Verified Permissions service.
-- **For AI engineers:** a RAG system must filter retrieved passages by the *asking user's* permissions before they reach the prompt — otherwise the model summarises documents the user may not open ([RAG Pipeline](../11-ai-era-systems/README.md#rag-pipeline)). Agents that call tools on a user's behalf should be checked as *that user*, not with the agent's own broad service credentials.
+- **For AI engineers:** a RAG (retrieval-augmented generation: fetch relevant documents, then have the model answer using them) system must filter retrieved passages by the *asking user's* permissions before they reach the prompt — otherwise the model summarises documents the user may not open ([RAG Pipeline](../11-ai-era-systems/README.md#rag-pipeline)). Agents that call tools on a user's behalf should be checked as *that user*, not with the agent's own broad service credentials.
 
 ### In the interview
 
-Prompts: "design the sharing model for a Google-Drive-like product", "how do 30 microservices enforce permissions consistently?", or a follow-up inside any multi-tenant design: "how do you stop one tenant reading another's data?"
+Prompts: "design the sharing model for a Google-Drive-like product", "how do 30 microservices enforce permissions consistently?", or a follow-up inside any multi-tenant (many customers sharing one system) design: "how do you stop one tenant reading another's data?"
 
 > **30-second answer:** "I separate enforcement from decision. The gateway authenticates and checks coarse token scopes; each service enforces at the object — `check(user, action, object)` — against a central authorization service. For the model I'd use RBAC for staff roles, relationship-based rules for ownership and sharing — Zanzibar-style tuples like `folder#viewer@team#member`, so a check is a short graph walk — and attribute conditions like MFA on top. Removals delete one tuple, so they take effect everywhere; consistency tokens stop a removed user from seeing content created after the removal. It's on the hot path, so I cache membership sub-results, bulk-check list pages, pre-filter search, fail closed, and log every decision with its reason for audit."
 
 **Likely follow-ups (with answers):**
 - *"How do you show a user only the documents they may see in search?"* — Pre-filter: index each document with the principals allowed to read it, updated from tuple changes, and add "readable by any of my principals" to the query. Post-filter with bulk checks only works when few results are removed.
-- *"The authorization service is down — what happens?"* — Fail closed for writes and sensitive reads; short-lived cached decisions for low-risk reads only if the product explicitly accepted that. It is tier-0: replicated and cached, with availability at least that of its callers.
+- *"The authorization service is down — what happens?"* — Fail closed for writes and sensitive reads; short-lived cached decisions for low-risk reads only if the product explicitly accepted that. It is tier-0 (the most critical class of service, which everything else depends on): replicated and cached, with availability at least that of its callers.
 
 **Mistake that fails candidates:** checking only "is logged in" (BOLA); putting per-object permissions in JWTs; making the gateway understand the domain; ignoring revocation delay.
 

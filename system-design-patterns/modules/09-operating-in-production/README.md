@@ -4,7 +4,7 @@
 *Original lesson: [Module introduction on DesignGurus ↗](https://www.designgurus.io/course-play/system-design-patterns/doc/6a53675b9bf81a86ec3a1943)*
 
 
-**What this module is about.** Hardware failures, traffic spikes and attackers cause some outages. But most production outages come from somewhere closer to home: *changes we make ourselves*. A deploy, a config tweak or a database migration touches a system that was healthy a minute ago, and suddenly it isn't. The reliability module earlier covered failures that arrive from the outside world. Here the focus shifts inward. You will learn to ship your own changes safely, and to *watch* production closely while each change goes out.
+**What this module is about.** Hardware failures, traffic spikes and attackers cause some outages. But most production outages come from somewhere closer to home: *changes we make ourselves*. A deploy (putting a new version of code onto the servers), a config tweak or a database migration (a scripted change to a database's tables or stored data) touches a system that was healthy a minute ago, and suddenly it isn't. The reliability module earlier covered failures that arrive from the outside world. Here the focus shifts inward. You will learn to ship your own changes safely, and to *watch* production closely while each change goes out.
 
 **Analogy.** Picture a hospital operating room. The surgery is the deploy. Before the surgeon touches anything, the patient is wired to monitors — that is observation. A skilled surgeon also knows how to pause or reverse any step the moment a monitor turns red — that is rollback. This module hands you the monitors first, then teaches the careful surgery.
 
@@ -18,7 +18,7 @@
 | Make the new version earn trust on a small slice of real traffic before everyone gets it | Canary Deployment |
 | Put the code in production "dark" (there, but switched off), then turn the feature on later — step by step, and with an off switch | Feature Flags |
 | Package every service the same way and keep a fleet of them running in the declared state | Containers and Kubernetes *(added lesson)* |
-| Get every change from commit to production through one automated, trusted path, with the right rollout strategy | CI/CD Pipelines and Deployment Strategies *(added lesson)* |
+| Get every change from commit (one saved, recorded code change) to production through one automated, trusted path, with the right rollout strategy | CI/CD Pipelines and Deployment Strategies *(added lesson)* |
 
 Two of these patterns **observe**. They answer "is this server okay?" and "where did this request spend its time?". The other three **change** production, but without betting every user on each deploy. We cover observation first for a simple reason. Every safe delivery technique relies on spotting failure fast and accurately. "Roll back if the metrics look bad" means nothing if you can't see the metrics.
 
@@ -44,7 +44,7 @@ flowchart LR
 ```
 The diagram shows all three patterns sharing one starting step, "deploy code". They differ only in *when, and for whom,* the release happens. Each branch also finishes with its own cheap undo.
 
-**Four terms used throughout**
+**Four terms used throughout** (load balancers, latency, replicas and other basics are explained in the [System Design Fundamentals](../00-system-design-fundamentals/README.md) primer)
 - **Deploy vs. release** — putting code on servers vs. letting users feel it (Fact 1). No distinction in this module matters more.
 - **Exposure scope (blast radius)** — the number of users a bad change can hurt before operators manage to stop it. A naive release hits 100%. Blue-green also hits 100%, but you can undo it fast. A canary hits about 1%. A flag can shrink it to a single named team.
 - **Roll back vs. roll forward** — to *roll back* is to reverse the change. To *roll forward* is to push a fix on top of it. When rolling back is an option, it is usually the quicker one. The capstone shows how to reshape a migration so that rollback stays available even where the naive plan would rule it out.
@@ -56,7 +56,7 @@ The diagram shows all three patterns sharing one starting step, "deploy code". T
 
 **Before you start — three questions about a system you know**
 - Think of your most recent bad deploy. How long until someone *noticed*, and how long until it was *undone*? This module is about shrinking exactly those two numbers.
-- When a request is slow, can you tell which service used up the time? Or do you grep thirty log files and make a guess?
+- When a request is slow, can you tell which service used up the time? Or do you grep (search text with a command-line tool) thirty log files and make a guess?
 - Could your newest feature be switched off this minute, with no deploy? And who would be able to do it?
 
 ---
@@ -65,14 +65,14 @@ The diagram shows all three patterns sharing one starting step, "deploy code". T
 *Original lesson: [Health Check Endpoint on DesignGurus ↗](https://www.designgurus.io/course-play/system-design-patterns/doc/6a5367889bf81a86ec3a1dad)*
 
 
-**What it is.** A health check is a very small HTTP endpoint that lives on each server instance. It exists to answer a single question: *"should this instance be getting traffic at this moment?"* Three callers hit it every couple of seconds and act on what it says: the load balancer, the container orchestrator (Kubernetes, for example) and the auto-scaler. Each call is cheap and they never stop. Yet the answer matters a lot, because the callers can only respond in drastic ways. They either stop sending traffic to the instance, or they kill it and start it again.
+**What it is.** A health check is a very small HTTP endpoint (a URL the server answers, such as `/healthz`) that lives on each server instance. It exists to answer a single question: *"should this instance be getting traffic at this moment?"* Three callers hit it every couple of seconds and act on what it says: the load balancer (which spreads requests across servers), the container orchestrator (the system that starts, stops and places containerised apps on machines — Kubernetes, for example) and the auto-scaler (which adds or removes servers as load changes). Each call is cheap and they never stop. Yet the answer matters a lot, because the callers can only respond in drastic ways. They either stop sending traffic to the instance, or they kill it and start it again.
 
 **Analogy.** Imagine a manager asking a shop assistant two quite different questions. First: "Are you conscious?" A "no" means calling an ambulance — the equivalent of a restart. Second: "Can you serve customers this minute?" A "no" here is often harmless. Maybe the till is still being set up, or the counter is closing. The fix is just to point customers to the next counter for a bit. Confuse the two questions and you end up calling an ambulance whenever the till is slow.
 
 ### The problem: naive health checks lie in both directions
 
 The load-balancer lesson showed two mistakes that pull in opposite directions:
-- A **shallow** check asks only whether the process answers ("I'm alive, HTTP 200"). The check can stay green even when the instance can't reach any of the databases or services it needs to do real work. The load balancer then keeps routing users to a server that can't help them.
+- A **shallow** check asks only whether the process answers ("I'm alive, HTTP 200" — the standard "OK" status code). The check can stay green even when the instance can't reach any of the databases or services it needs to do real work. The load balancer then keeps routing users to a server that can't help them.
 - A **deep** check also probes dependencies — for instance, it pings the database. That fixes the first mistake but introduces a worse one. Suppose the *shared* database has a short hiccup. **Every** instance fails its check at the same instant, and the load balancer pulls *the whole fleet* out of service. What was a partial slowdown turns into a full outage.
 
 The way out is to ask a better question. Not "is the entire architecture healthy?", but "should *this particular instance* get traffic?" Modern platforms go further and break that into two separate questions, each with its own consequence.
@@ -103,7 +103,7 @@ This state diagram follows readiness across an instance's life. The instance rea
 
 ### Three rules that keep health checks safe
 
-- **Check yourself, not the architecture.** Handle dependency failures *inside* the service. Use circuit breakers (they stop calls to a dependency that is failing) and fallbacks, so the service can keep reporting "ready" while running in a reduced mode. There is one exception. Some services are completely pointless without one dependency — a pure database proxy is the classic case. There, readiness *may* include that dependency. The team just has to accept, with eyes open, that when it fails every instance gets de-routed.
+- **Check yourself, not the architecture.** Handle dependency failures *inside* the service. Use circuit breakers (they stop calls to a dependency that is failing) and fallbacks (a simpler substitute answer used when the real one isn't available), so the service can keep reporting "ready" while running in a reduced mode. There is one exception. Some services are completely pointless without one dependency — a pure database proxy is the classic case. There, readiness *may* include that dependency. The team just has to accept, with eyes open, that when it fails every instance gets de-routed.
 - **Cost almost nothing.** Run the numbers. 30 services × 40 instances, each probed every 2 seconds, gives **600 checks per second** — without end. Put a database query in each probe and you have 600 useless queries per second. It gets worse: a slow probe can *time out*, making healthy capacity look failed. You have built an outage yourself. Aim for an in-memory check that finishes in roughly **1 ms**.
 - **Tell the truth at every lifecycle stage.** This is step 3 from above: not ready until warmed up, and not ready while draining.
 
@@ -142,7 +142,7 @@ Routing checks run per instance, run very often and must be cheap. **Monitoring 
 Any service that receives routed traffic needs health checks. Just keep what they check narrow:
 - **Don't use a single endpoint for routing, restarting and alerting.** Three different consequences call for three different designs.
 - **Don't make readiness depend on optional dependencies.** If the recommendations service is down, the page should simply hide that widget (degrade) — not knock your whole fleet offline.
-- **Batch workers and queue consumers** receive no routed traffic. For them, "health" means liveness plus **backlog age** (the age of the oldest message not yet processed). The queue's own metrics serve as the readiness signal.
+- **Batch workers and queue consumers** (processes that pull jobs from a message queue rather than receiving requests) receive no routed traffic. For them, "health" means liveness plus **backlog age** (the age of the oldest message not yet processed). The queue's own metrics serve as the readiness signal.
 
 ### In the interview
 
@@ -202,7 +202,7 @@ What we need is a record that carries one identifier through every service, note
 
 1. **The entry point creates a trace ID.** The first component the request reaches (the API gateway) generates a unique trace ID. This is why the gateway lesson gave the gateway the job of creating request IDs. It is the first to see every external request, so it naturally becomes the *root* of every trace tree.
 2. **Each operation records a span.** A span is a single timed operation: handling the request, making an outbound call, or running a database query. It holds a name, a start time and an end time, its **parent span** (the operation that triggered it), and attributes like URL, status and error. Spans nest inside one another to form a parent/child tree. Draw that tree along a timeline and you have the waterfall.
-3. **Context propagation carries the IDs forward.** The trace ID and the current span ID ride along with the request. On synchronous HTTP calls they go in a standard header (W3C **`traceparent`**). On asynchronous work they go in **queue message metadata**. The consumer's span *links* back to the producer's span, and the time between them shows how long the message sat in the queue. **If even one service fails to pass the header on, every span after it becomes an orphan** — it has no parent, so it drops out of the trace.
+3. **Context propagation carries the IDs forward.** The trace ID and the current span ID ride along with the request. On synchronous HTTP calls (the caller waits for the reply) they go in a standard header (W3C **`traceparent`**). On asynchronous work (handed off through a queue and processed later) they go in **queue message metadata** (extra labelled fields that travel with a message, separate from its body). The consumer's span *links* back to the producer's span, and the time between them shows how long the message sat in the queue. **If even one service fails to pass the header on, every span after it becomes an orphan** — it has no parent, so it drops out of the trace.
 4. **Spans are sent to a collector**, which puts each trace back together as a waterfall you can view and search.
 
 Here is a trace of the slow checkout (indentation shows parent/child):
@@ -243,7 +243,7 @@ This sequence diagram shows the trace context travelling two ways: on an HTTP ca
 
 **Instrumentation — the three ways spans get created, from least to most effort:**
 - **Service-mesh sidecars** (proxies that run beside each service) capture every hop between services on their own. You get this visibility without changing the application at all.
-- **Auto-instrumentation libraries**, such as **OpenTelemetry**, wrap the HTTP clients, database drivers and queue clients inside each process.
+- **Auto-instrumentation libraries**, such as **OpenTelemetry**, wrap the HTTP clients, database drivers (the libraries an app uses to talk to a database) and queue clients inside each process.
 - **Manual domain spans** cover steps no library can guess — "apply discount rules", for example. Add these only where the same investigations keep coming back. The two automatic layers already provide a helpful skeleton, and that alone cracks many latency puzzles.
 
 **Sampling — keeping everything isn't possible.** 40,000 requests/s × ~40 spans per request = **1.6 million spans per second**. Saving all of that isn't practical, so you keep only some:
@@ -274,8 +274,8 @@ These aren't rivals; you use them in order. **Metrics ring the alarm** (p99 is o
 
 **You gain:**
 - Evidence about a single request across any number of services — something separate logs simply can't express, by their nature.
-- Quicker latency diagnosis. Retry storms, lock contention and **N+1 queries** (one query per item, rather than one query for all the items) show up as visible sequences in the waterfall.
-- Knowing which service really caused an error across service boundaries — which component actually returned the 500.
+- Quicker latency diagnosis. Retry storms (waves of repeated retries that pile extra load onto a struggling service), lock contention (requests queuing to change the same locked data) and **N+1 queries** (one query per item, rather than one query for all the items) show up as visible sequences in the waterfall.
+- Knowing which service really caused an error across service boundaries — which component actually returned the 500 (HTTP "internal server error").
 - A live dependency map, as a free side effect.
 
 **You pay:**
@@ -286,8 +286,8 @@ These aren't rivals; you use them in order. **Metrics ring the alarm** (p99 is o
 
 ### When not to use it
 
-- **A monolith.** A profiler does a much better job of explaining time spent inside one process. Tracing earns its keep when latency is scattered *between* processes.
-- **Three services and a queue.** Structured logs with correlation IDs might be all you need. Tracing becomes more valuable the more hops there are.
+- **A monolith** (one application deployed as a single unit). A profiler (a tool that measures where a program spends its CPU time) does a much better job of explaining time spent inside one process. Tracing earns its keep when latency is scattered *between* processes.
+- **Three services and a queue.** Structured logs (log lines written as named fields, such as JSON, so tools can filter them) with correlation IDs might be all you need. Tracing becomes more valuable the more hops there are.
 - **In place of logs.** Spans give you the skeleton (timing and structure). Logs give you the story (the details).
 - Two frequent misuses: storing 100% of traces forever (costs blow up as traffic grows), and hand-instrumenting every internal function from day one (effort wasted on code that never puzzled anyone).
 
@@ -297,7 +297,7 @@ These aren't rivals; you use them in order. **Metrics ring the alarm** (p99 is o
 - **OpenTelemetry** — vendor-neutral instrumentation, `traceparent` propagation and exporting. It is *the* standard to mention in interviews.
 - **Jaeger, Zipkin, Grafana Tempo** — store and show traces. **Honeycomb, Datadog** — all-in-one observability platforms.
 - **Service meshes** — generate the service-level trace skeleton without any extra work (the observability benefit from the mesh lesson, fed into a trace backend).
-- **For AI engineers:** observing an agent *is* tracing. One agent run is a trace. Every model call, tool call and retrieval is a span, with attributes like token count, cost and model version. A waterfall could reveal that a 40-second, $0.30 run made three model calls one after another that could have been merged — or it could point straight at the tool call that failed. LLM tracing tools such as **LangSmith** are descendants of Dapper. And context has to be passed through an LLM gateway just as it is through HTTP headers.
+- **For AI engineers:** observing an agent (an LLM-driven program that plans steps and calls tools on its own) *is* tracing. One agent run is a trace. Every model call, tool call and retrieval is a span, with attributes like token count, cost and model version. A waterfall could reveal that a 40-second, $0.30 run made three model calls one after another that could have been merged — or it could point straight at the tool call that failed. LLM tracing tools such as **LangSmith** are descendants of Dapper. And context has to be passed through an LLM gateway just as it is through HTTP headers.
 
 ### In the interview
 
@@ -341,14 +341,14 @@ A common prompt: "a slow request passes through thirty services — how do you f
 
 ### The problems it solves
 
-- **Rollback is slow.** Rolling back in place means rebuilding the old version and redeploying it through CI, artifact storage and rollout. Even when engineers know exactly what to do, the system may limp along for **15–25 minutes**. Rollback ends up being one more deployment.
+- **Rollback is slow.** Rolling back in place means rebuilding the old version and redeploying it through CI, artifact storage (where built, ready-to-deploy packages are kept) and rollout. Even when engineers know exactly what to do, the system may limp along for **15–25 minutes**. Rollback ends up being one more deployment.
 - **The verification gap.** Staging is not production: its data, config, integrations and load all differ. With no second *production* environment, a release gets its first full test only once users are already on it.
 
 ### How it works
 
 1. **Deploy to green** while blue handles everyone. Green *is* production: same infrastructure, same config, same database. **Infrastructure-as-code** (describing environments in version-controlled files) keeps the two the same. That matters, because quiet **environment drift** would break the whole idea.
 2. **Check green before any user reaches it.** Run **smoke tests** (fast checks that the basics work) against the real infrastructure. Wait for health/readiness to turn green. Warm up the caches and connection pools. This is deploy and release split apart by just a few seconds: the code is completely deployed, yet no user has been released onto it.
-3. **Switch.** The router starts sending new traffic to green. You do this by changing the load balancer's target, or in Kubernetes by flipping a service's selector. Blue **drains**, meaning requests already underway finish on the environment where they began. User sessions carry over because they're kept in a shared store rather than on the servers (the earlier statelessness lessons set this up).
+3. **Switch.** The router starts sending new traffic to green. You do this by changing the load balancer's target, or in Kubernetes by flipping a service's selector (the label rule that decides which pods a Service sends traffic to). Blue **drains**, meaning requests already underway finish on the environment where they began. User sessions carry over because they're kept in a shared store rather than on the servers (the earlier statelessness lessons set this up).
 4. **Keep blue on standby** for an undo window, usually a few hours. Switching back *is* the rollback. It takes about **10 seconds**, with no CI and no build. Once everyone is confident, blue turns into the green for the next release.
 
 ![Blue-Green Deployment](images/blue-green-deployment-1.svg)
@@ -358,7 +358,7 @@ In this figure, the router sends 100% of traffic to blue (v1.41, live) and 0% to
 
 ### The database does not blue-green
 
-The two versions talk to the **same database**. For the whole rollback window, the old code and the new code both have to read and write the shared schema and data without breaking anything. That's why schema changes follow **expand-contract**:
+The two versions talk to the **same database**. For the whole rollback window, the old code and the new code both have to read and write the shared schema (the database's table and column layout) and data without breaking anything. That's why schema changes follow **expand-contract**:
 - **Expand:** add the new structures in a way that doesn't break anything, write data in both the old and new forms, and make sure either version can read safely.
 - **Contract:** delete the old structure only when *no* version that relies on it could ever return — that is, once the rollback window has closed.
 
@@ -386,10 +386,10 @@ Rolling deploys are cheap and every orchestrator supports them, which makes them
 - **No fleet running mixed versions.** Exactly one version serves at a time. (With a rolling deploy, v1.41 and v1.42 responses are interleaved, so the two must be able to live side by side safely.)
 
 **You pay:**
-- **2× capacity** while the release window lasts. In the cloud, you can spin up green for a few hours and then delete it. On-premises, you may need hardware that sits idle all the time. Compare that against the cost of the outages it prevents.
+- **2× capacity** while the release window lasts. In the cloud, you can spin up green for a few hours and then delete it. On-premises (in your own datacenter rather than the cloud), you may need hardware that sits idle all the time. Compare that against the cost of the outages it prevents.
 - **All-or-nothing exposure.** The switch moves **100% of users at once**. If a bug slipped past verification, everyone hits it right away. (Canary solves this.)
 - **Schema discipline as an ongoing cost.** Every migration has to remain expand-contract compatible, or the rollback button stops working.
-- **Draining is tricky.** Long-lived connections (server-sent events, websockets) keep blue busy until they close or move over.
+- **Draining is tricky.** Long-lived connections (server-sent events, websockets — connections the server keeps open to push data to the client) keep blue busy until they close or move over.
 
 ### When not to use it
 
@@ -453,9 +453,9 @@ The takeaway: green proved the version could *run*. It didn't prove the version 
 ### How it works
 
 1. **The split.** Load-balancer weights, or a service mesh's traffic policy, route a controlled percentage (say 1%) to the new version. (Routing by cohort with feature flags is a close alternative.)
-2. **Sticky slicing.** Every user stays on *one* version for their entire workflow. Bouncing between v1.42 and v1.43 on each request could break a multi-step checkout and muddy the comparison. Hashing the **user ID** onto a hash ring (as in consistent hashing) produces a stable 1% cohort. When the canary grows, new users are added and earlier ones don't move. Stable assignment also lets an engineer work out which version served a session someone reported.
+2. **Sticky slicing.** Every user stays on *one* version for their entire workflow. Bouncing between v1.42 and v1.43 on each request could break a multi-step checkout and muddy the comparison. Hashing the **user ID** (turning it into a number with a fixed formula, so the same ID always lands in the same place) onto a hash ring (as in consistent hashing) produces a stable 1% cohort. When the canary grows, new users are added and earlier ones don't move. Stable assignment also lets an engineer work out which version served a session someone reported.
 3. **Compare against the baseline, not a fixed threshold.** The question isn't "is the canary's error rate under X?". It's "is the canary *worse than the baseline at this moment*?" The remaining 99% — the **concurrent baseline** — sees the same traffic, the same dependency conditions and the same cache state at the same instant. Yesterday's figures or fixed thresholds, by contrast, confuse normal daily swings with regressions. **Netflix Kayenta** runs this canary-vs-baseline analysis automatically over many metrics.
-4. **Compare the right things.** Golden signals (errors, latency, saturation, traffic) **plus business metrics** (conversion, add-to-cart rate) **plus traces**. A broken button might raise no errors and add no latency, yet stop people buying. Comparing traces can expose a new 200 ms span even while overall p99 still looks healthy. A gate can only be as good as the telemetry behind it. With no conversion metric, a release that is technically fine but commercially broken sails straight through.
+4. **Compare the right things.** Golden signals (errors, latency, saturation, traffic) **plus business metrics** (conversion — the share of visitors who complete a purchase — and add-to-cart rate) **plus traces**. A broken button might raise no errors and add no latency, yet stop people buying. Comparing traces can expose a new 200 ms span even while overall p99 still looks healthy. A gate can only be as good as the telemetry behind it. With no conversion metric, a release that is technically fine but commercially broken sails straight through.
 5. **Gates and rollback run automatically.** A timed analysis moves each stage forward (1 → 5 → 25 → 100%) once its evidence window is over — or rejects it. No person stares at dashboards (people lose focus and don't apply statistics consistently). A failing score **drains the canary automatically in seconds**.
 6. **Respect the statistics of small groups.** At 40,000 req/s, a 1% canary receives **400 req/s**. A bug affecting 0.1% of requests creates roughly **24 bad events per minute** — you'll catch it fast. Something affecting 0.01% of users could take hours, or need a bigger group. **Detection time depends on cohort size × effect frequency.** So work out how many events you expect *before* you pick percentages and windows. If you don't, a "clean" gate might only mean you had too few samples.
 7. **The database rule still holds, and always will.** Canary and baseline share a single schema, so expand-contract is required. And unlike blue-green's atomic switch, the two versions **coexist during every rollout**. Old and new code must both read and write the same in-between data safely. Compatibility across mixed versions becomes a permanent trait of your delivery system.
@@ -468,7 +468,7 @@ In this figure, traffic flows into a splitter (an LB weight or a mesh dial). The
 ### Walkthrough with numbers
 
 - **v1.43 run again, this time as a canary.** 14:00: a stable 1% cohort receives v1.43. 14:06: the automated analysis notices a **2.1%** error rate on the canary against **0.3%** on the baseline, and drains it. Roughly 1% of users were affected for six minutes, and idempotent clients (safe to retry without side effects) retried their failed checkouts without harm. Once fixed, a fresh canary begins at 15:30 and clears 1%, 5%, 25% and 100%.
-- **A subtler rescue, two weeks on.** v1.44 shows no change in errors or latency. But in the canary cohort, checkout **conversion drops 8%**. A CSS bug had hidden the payment button on small screens, and it raised no exceptions at all. The gate on the business metric caught it and drained the canary. That's why technical metrics by themselves don't tell the whole story.
+- **A subtler rescue, two weeks on.** v1.44 shows no change in errors or latency. But in the canary cohort, checkout **conversion drops 8%**. A CSS (the stylesheet language that controls page layout) bug had hidden the payment button on small screens, and it raised no exceptions at all. The gate on the business metric caught it and drained the canary. That's why technical metrics by themselves don't tell the whole story.
 - **The bill.** A rollout now stretches over **hours** of observation windows, rather than a blue-green switch that takes seconds. What those hours buy is evidence — worth it for risky changes.
 
 ### Canary vs. blue-green
@@ -504,14 +504,14 @@ Experienced teams use both together. They build a green environment, then move t
 - **Versions that can't run side by side.** Use blue-green's atomic switch rather than creating a mix that isn't allowed.
 - **Emergencies.** If production is already down, get it back up first; canary the *next* release.
 - **Bugs that are too rare, or limited to one cohort,** for the slice's statistics to see (see self-check Q3). A canary is one layer of protection, not a guarantee.
-- **"Canary theater":** a cron job bumps the percentage in steps, with no automated analysis and no rollback. It resembles a canary but never produces a verdict — it's only a staged rollout.
+- **"Canary theater":** a cron job (a task run on a fixed schedule) bumps the percentage in steps, with no automated analysis and no rollback. It resembles a canary but never produces a verdict — it's only a staged rollout.
 
 ### Real-world examples
 
 - **Netflix Kayenta** (used with Spinnaker) — scores the concurrent canary against the baseline across whole sets of metrics, automatically.
 - **Argo Rollouts and Flagger** — provide Kubernetes rollout stages, analysis runs and automatic rollback, while the mesh handles the traffic split.
 - **Google's percent rollouts** — the same idea at huge scale.
-- **For AI engineers:** a *model* canary routes 1% of live requests to the new model and compares it with the current model over the same period. It looks at answer-quality evals, negative user feedback, refusal rate, cost per request and per-token latency. Routing through a mesh or LLM gateway does the split; automated evals deliver the verdict.
+- **For AI engineers:** a *model* canary routes 1% of live requests to the new model and compares it with the current model over the same period. It looks at answer-quality evals (automated tests that score a model's answers), negative user feedback, refusal rate, cost per request and per-token latency. Routing through a mesh or LLM gateway does the split; automated evals deliver the verdict.
 
 ### In the interview
 
@@ -557,10 +557,10 @@ Any question about a "risky release" expects a canary at the heart of the answer
 
 Three teams share a single deployment pipeline, and marketing has already promised a launch date:
 - **Timing.** A new *wishlist-sharing* feature has to go live **Tuesday 9:00 AM** on the web and on both mobile apps; the press release and influencer posts are already scheduled. The feature is risky, so it should go through a canary — but canaries widen over hours. Also, app-store review takes days, so the mobile code has to ship early. There's no way deploy time and release time can be *the same* moment.
-- **Integration.** The checkout refactor and the search fixes travel on the same **release trains** (scheduled deployments that bundle every team's changes). Half-built wishlist code can't be merged, because users would see it. So it sits on a **six-week feature branch** while main changes every day. Merging it at the end takes **two days** of resolving conflicts.
+- **Integration.** The checkout refactor and the search fixes travel on the same **release trains** (scheduled deployments that bundle every team's changes). Half-built wishlist code can't be merged, because users would see it. So it sits on a **six-week feature branch** (a separate line of code changes kept apart from the shared main line until merged) while main changes every day. Merging it at the end takes **two days** of resolving conflicts.
 - **Reversal.** At **11 AM Tuesday**, at peak traffic, wishlist swamps the database with an **N+1 query** (a separate query per item, rather than one query for all of them). The canary's low volume never surfaced it. The only way to turn it off is a rollback — and that would also strip out the checkout refactor and search fixes that shipped after it. **Killing one feature kills three.**
 
-What ties these together: timing, audience and reversal all hinge on which binary is running. Fact 1 says they can be pulled apart; flags finish that job.
+What ties these together: timing, audience and reversal all hinge on which binary (the compiled, deployable program) is running. Fact 1 says they can be pulled apart; flags finish that job.
 
 ### Why the obvious fixes fail
 
@@ -602,7 +602,7 @@ In this diagram, the service asks its *local* SDK cache whether a flag is on for
 - **Wednesday:** the flag is turned on for **500 employees**.
 - **Thursday:** the flag is turned on for the opted-in beta, and the accessibility cohort is included on purpose. Now a screen-reader bug affects dozens of beta users rather than triggering thousands of support tickets.
 - **Tuesday 9:00:** exposure climbs to 100% over **ten minutes** on web, iOS and Android at the same time. It's a rule change, not a deploy — every binary has carried the code for weeks.
-- **11:04 AM:** the N+1 bug strikes at peak, and database load rises. An operator flips the kill-switch within **30 seconds**. Wishlist vanishes, checkout and search keep running, and the DB recovers. The fix is deployed Wednesday and ramped up again Thursday, and the flag is deleted the following sprint.
+- **11:04 AM:** the N+1 bug strikes at peak, and database load rises. An operator flips the kill-switch within **30 seconds**. Wishlist vanishes, checkout and search keep running, and the DB recovers. The fix is deployed Wednesday and ramped up again Thursday, and the flag is deleted the following sprint (a team's fixed work period, often two weeks).
 - **Side by side:** without flags — a cross-platform 9 AM deploy that can't actually happen, an 11 AM rollback that pulls three features, and a six-week merge. With flags — three rule updates and one deleted `if`.
 
 ### Trade-offs
@@ -645,7 +645,7 @@ Mature pipelines use all three. They create green, move traffic onto it through 
 - **Facebook's Gatekeeper** — ran dark launches and widened them cohort by cohort to billions of users, before commercial flag products existed.
 - **GitHub ships dark** — a feature can sit in production for months, visible only to staff, before customers get it.
 - **Knight Capital** — the $460M lesson in flag hygiene: a reused name + dead code left in place + a deployment that didn't finish, all within 45 minutes.
-- **For AI engineers:** flags are turning into the operating controls of LLM products. Prompt versions change through config with no deploy. New models go to named cohorts first, then get canary verdicts. Ops kill-switches handle fallbacks when a provider fails, turn off costly features like AI summaries at peak, and limit agent tools to approved cohorts (internal ones, say). Module 5's graceful-degradation sequence says *what* to shed; flags hand on-call engineers the switches to shed it.
+- **For AI engineers:** flags are turning into the operating controls of LLM products. Prompt versions change through config with no deploy. New models go to named cohorts first, then get canary verdicts. Ops kill-switches handle fallbacks when a provider fails, turn off costly features like AI summaries at peak, and limit agent tools to approved cohorts (internal ones, say). Module 5's graceful-degradation sequence says *what* to shed; flags hand on-call engineers (the people paged when production breaks) the switches to shed it.
 
 ### In the interview
 
@@ -680,13 +680,13 @@ The prompt could be "launch at a precise time on web and mobile", "pull one bad 
 *Added lesson (not part of the DesignGurus course). Written from primary sources listed under "Sources" at the end of the lesson.*
 
 
-**What it is.** A **container** is an ordinary process that the Linux kernel isolates and limits: it sees its own filesystem, network and process list, and it may use only the CPU and memory it was given. It starts from an **image** — a packaged, read-only filesystem with the app and everything it needs. **Kubernetes** is a system that runs containers across a fleet of machines and keeps them in the state you declared: "20 copies of checkout, version 4.2, each with 1 CPU and 1 GiB, reachable as `checkout`". When reality drifts (a machine dies, a process crashes), Kubernetes notices and corrects it.
+**What it is.** A **container** is an ordinary process that the Linux kernel (the core of the operating system, which controls hardware and processes) isolates and limits: it sees its own filesystem, network and process list, and it may use only the CPU and memory it was given. It starts from an **image** — a packaged, read-only filesystem with the app and everything it needs. **Kubernetes** is a system that runs containers across a fleet of machines and keeps them in the state you declared: "20 copies of checkout, version 4.2, each with 1 CPU and 1 GiB (gibibyte, about 1.07 billion bytes), reachable as `checkout`". When reality drifts (a machine dies, a process crashes), Kubernetes notices and corrects it.
 
 **Analogy.** Shipping containers: a standard box lets any crane, ship or truck move any cargo without knowing what is inside. Kubernetes is the port authority — you file a manifest, and its cranes keep making the port match it.
 
 ### The problem: 30 services, 440 hand-kept servers
 
-The store runs ~30 services as **440 instances on 440 virtual machines**. A month of operations shows the cost:
+The store runs ~30 services as **440 instances on 440 virtual machines** (VMs — software-emulated computers, each with its own operating system, sharing one physical host). A month of operations shows the cost:
 - **"It works on my machine."** A service passed every test on build servers with one version of a TLS library and crashed in production, which had another. Every VM is a slightly different snowflake built by scripts over years.
 - **Waste.** Each instance got its own VM "for isolation". Average CPU use across the fleet: **15%**. Most of the compute bill pays for idle machines.
 - **Slow change.** Baking a new VM image for a deploy takes **40 minutes**; starting a VM takes minutes more. Every team wrote its own deploy script.
@@ -704,16 +704,16 @@ The underlying issue: the unit of deployment is a *machine*, set up by imperativ
 
 **Part 1 — what a container really is.** Three Linux features, no magic:
 1. **Namespaces — what the process can see.** A PID namespace gives it its own process list (it thinks it is process 1); a network namespace, its own network interfaces and ports; a mount namespace, its own filesystem view; others isolate hostname, users and inter-process communication.
-2. **Control groups (cgroups) — what it may use.** Limits and accounting for CPU time, memory and I/O. Exceed the memory limit and the kernel kills the process (**OOMKilled**); exceed the CPU limit and it is **throttled** (paused until the next scheduling period).
-3. **Layered images.** An image is a stack of read-only layers (base OS files, then the runtime, then libraries, then your app), plus metadata such as the start command. A running container adds a thin writable layer on top (**copy-on-write**). Layers are shared and cached: 20 services on the same Java base image store that layer once per machine. Images follow the **OCI** (Open Container Initiative) format, so any compliant runtime (containerd, CRI-O) can run them.
+2. **Control groups (cgroups) — what it may use.** Limits and accounting for CPU time, memory and I/O (input/output: disk and network reads and writes). Exceed the memory limit and the kernel kills the process (**OOMKilled**); exceed the CPU limit and it is **throttled** (paused until the next scheduling period).
+3. **Layered images.** An image is a stack of read-only layers (base OS files, then the runtime — e.g. the Java or Python environment that runs your code — then libraries, then your app), plus metadata such as the start command. A running container adds a thin writable layer on top (**copy-on-write**). Layers are shared and cached: 20 services on the same Java base image store that layer once per machine. Images follow the **OCI** (Open Container Initiative) format, so any compliant runtime (containerd, CRI-O) can run them.
 
 Because containers share the host's kernel, they start in well under a second and cost little memory beyond the app itself — much lighter than a VM, which boots its own kernel. The price: a kernel bug is shared, so isolation is weaker than a VM's (which is why serverless platforms run tenants inside microVMs; see the Scaling module's multi-region lesson).
 
 **Image practices that matter:**
-- **Multi-stage builds** — compile in a large "builder" image, copy only the result into a small runtime image. Fewer packages mean a smaller attack surface and faster pulls.
+- **Multi-stage builds** — compile in a large "builder" image, copy only the result into a small runtime image. Fewer packages mean a smaller attack surface (less code an attacker could exploit) and faster pulls.
 - **Order layers for the cache** — dependencies first, source code last, so a code change rebuilds only the top layer.
 - **Build once, deploy by digest** — the **digest** is the image's content hash. Tags like `latest` can be moved; a digest can't, so the image tested is the image deployed.
-- **No secrets in images** (anyone who pulls the image can read every layer), run as a **non-root** user, one main process per container, logs to standard output.
+- **No secrets in images** (anyone who pulls the image can read every layer), run as a **non-root** user (not the all-powerful administrator account), one main process per container, logs to standard output (the default text stream a process prints to).
 - The Spring book shows the Java side — layered jars and building images with buildpacks — in [Faster startup and container images](../../../spring/chapters/15-observability-and-production/README.md#1511-faster-startup-extracted-jars-cds-aot-cache-native-images).
 
 **Part 2 — Kubernetes: desired state and control loops.** You never tell Kubernetes "start a container on host 12". You submit a **desired state**, and **controllers** — control loops like the Auto-Scaling lesson's — repeatedly compare it with the actual state and act to close the gap.
@@ -740,8 +740,8 @@ Everything goes through the **API server**, which stores the cluster's state in 
 | **Deployment** | "Keep N identical pods of this template running; roll out changes gradually" | Stateless services — the horizontal-scaling fleet |
 | **Service** | A stable name and virtual IP in front of the pods matching a label | Pods come and go with new IPs; callers use the Service name (built-in discovery) |
 | **Ingress / Gateway API** | HTTP routing from outside the cluster to Services | The cluster's L7 front door (behind your edge and API gateway) |
-| **ConfigMap / Secret** | Configuration and credentials injected as files or environment variables | Same image in every environment; config varies |
-| **StatefulSet** | Pods with stable names and their own persistent volumes | Databases, brokers — things that are not interchangeable |
+| **ConfigMap / Secret** | Configuration and credentials injected as files or environment variables (named settings a process reads at startup) | Same image in every environment; config varies |
+| **StatefulSet** | Pods with stable names and their own persistent volumes (disk storage that survives pod restarts) | Databases, brokers — things that are not interchangeable |
 | **DaemonSet** | One pod on every node | Log shippers, monitoring agents |
 | **Job / CronJob** | Run to completion, once or on a schedule | Batch work, the nightly report |
 | **HorizontalPodAutoscaler** | Changes a Deployment's replica count from a metric | The Auto-Scaling control loop, built in |
@@ -751,7 +751,7 @@ Service types in one line: **ClusterIP** (reachable only inside the cluster — 
 **Part 3 — the settings that decide whether it works in production.**
 - **Requests and limits.** A **request** is what the scheduler reserves for the container ("needs 0.5 CPU, 1 GiB"); a **limit** is the ceiling the kernel enforces. Memory limit exceeded → OOMKilled. CPU limit reached → throttled, which shows up as mysterious latency spikes. Many teams set memory limits equal to requests and leave CPU unlimited, or generous.
 - **Probes.** **Readiness** decides whether the pod receives traffic; **liveness** decides whether it gets restarted; **startup** gives slow starters time before liveness begins. These are the [Health Check Endpoint](#health-check-endpoint) lesson's two verdicts, and the same rule applies: a liveness probe must never depend on a shared downstream, or one database blip restarts the whole fleet. Spring Boot's mapping is in [Kubernetes probes](../../../spring/chapters/15-observability-and-production/README.md#153-health-health-groups-and-kubernetes-probes).
-- **Graceful shutdown.** On a rollout or scale-down, Kubernetes sends **SIGTERM**, removes the pod from the Service's endpoints, and waits up to `terminationGracePeriodSeconds` (default 30 s) before killing it. The endpoint removal and SIGTERM happen at nearly the same time, so an app should keep serving for a few seconds after SIGTERM (a short `preStop` sleep) and then drain in-flight work — the load balancer's *draining*, done per pod. See [Graceful shutdown in Kubernetes](../../../spring/chapters/15-observability-and-production/README.md#159-graceful-shutdown).
+- **Graceful shutdown.** On a rollout or scale-down, Kubernetes sends **SIGTERM** (the operating system's polite "please shut down" signal), removes the pod from the Service's endpoints, and waits up to `terminationGracePeriodSeconds` (default 30 s) before killing it. The endpoint removal and SIGTERM happen at nearly the same time, so an app should keep serving for a few seconds after SIGTERM (a short `preStop` sleep) and then drain in-flight work — the load balancer's *draining*, done per pod. See [Graceful shutdown in Kubernetes](../../../spring/chapters/15-observability-and-production/README.md#159-graceful-shutdown).
 - **Rolling updates.** A Deployment replaces pods in waves controlled by **maxSurge** (how many extra pods may exist during the rollout) and **maxUnavailable** (how many may be missing). A new pod counts only once its readiness probe passes, so a broken version stalls the rollout instead of replacing everything. (Blue-green and canary on Kubernetes are covered in the next lesson.)
 - **PodDisruptionBudget** — "never take more than 2 of my 20 pods down at once for maintenance", respected when nodes are drained for upgrades.
 - **Spread across failure domains** — topology spread constraints place replicas across nodes and availability zones, so one zone loss removes a third of the pods, not all of them.
@@ -768,7 +768,7 @@ Service types in one line: **ClusterIP** (reachable only inside the cluster — 
 - **Packing.** Each instance needs about **0.5 CPU and 1 GiB** at normal load. 440 × 0.5 = **220 CPUs**. A 16-CPU node has about 14 allocatable after system reservations → 220 / 14 ≈ **16 nodes**. Add room for a 25% rollout surge and one zone's worth of failure (N+1 at the zone level) → **~24 nodes** instead of 440 VMs. Utilisation rises from ~15% to ~60%.
 - **Deploy time.** Image build with cached layers: **~3 minutes** (only the app layer changes). A rolling update of 20 replicas with maxSurge 5 and maxUnavailable 0 runs in 4 waves; each wave waits for readiness (~30 s) → **~2–3 minutes** to finish, with no capacity loss.
 - **The 3 AM crash.** The kubelet restarts a crashed container within seconds. If a whole node dies, it is marked not-ready after ~40–50 s, and by default its pods are evicted and rescheduled once a **5-minute** toleration expires (tunable per pod — shorten it for stateless services). Nobody is paged unless restarts keep repeating (**CrashLoopBackOff** alerts).
-- **The OOM trap.** A Java service with a 1 GiB memory limit is OOMKilled every few hours. Heap was set to 1 GiB, but the JVM also needs memory outside the heap (threads, metaspace, buffers). Fix: set the heap as a percentage of the container limit (for example `-XX:MaxRAMPercentage=75`) — modern JVMs read cgroup limits — and alert on restarts.
+- **The OOM trap.** A Java service with a 1 GiB memory limit is OOMKilled every few hours. Heap (the memory area where a Java program keeps its objects) was set to 1 GiB, but the JVM (Java Virtual Machine, the runtime that executes Java) also needs memory outside the heap (threads, metaspace, buffers). Fix: set the heap as a percentage of the container limit (for example `-XX:MaxRAMPercentage=75`) — modern JVMs read cgroup limits — and alert on restarts.
 
 ### Trade-offs
 
@@ -782,11 +782,11 @@ Service types in one line: **ClusterIP** (reachable only inside the cluster — 
 - **A complex platform to run.** Upgrades every few months, networking plugins, certificates, etcd backups. Managed offerings (EKS, GKE, AKS) remove some of it, not all of it.
 - **Many new ways to be wrong:** missing requests (overpacked nodes), tight CPU limits (throttling), deep liveness probes (restart storms), missing PodDisruptionBudgets (maintenance outages).
 - **Weaker isolation than VMs** — the kernel is shared; untrusted multi-tenant code needs sandboxing (gVisor, microVMs) or separate nodes.
-- **Stateful workloads are harder.** Databases on Kubernetes need StatefulSets, persistent volumes and usually an **operator** (a controller that encodes a DBA's procedures). Many teams keep databases on managed services instead.
+- **Stateful workloads are harder.** Databases on Kubernetes need StatefulSets, persistent volumes and usually an **operator** (a controller that encodes a DBA's — database administrator's — procedures). Many teams keep databases on managed services instead.
 
 ### When not to use it
 
-- **A few services and a small team.** A managed container service (AWS ECS or Fargate, Google Cloud Run, Azure Container Apps), a platform-as-a-service, or serverless functions give most of the benefit without running a cluster.
+- **A few services and a small team.** A managed container service (AWS ECS or Fargate, Google Cloud Run, Azure Container Apps), a platform-as-a-service (a hosted platform where you hand over code and it runs it for you), or serverless functions (code the provider runs on demand, with no servers for you to manage) give most of the benefit without running a cluster.
 - **"Kubernetes because everyone uses it."** Cloud-native anti-patterns include lifting old, stateful "pet" servers into containers unchanged (same fragility, more layers), a microservice per function so every request crosses ten network hops (a *distributed monolith*), and a cluster to serve a static site.
 - **Workloads that need the whole machine** — very large databases or latency-critical systems tuned to specific hardware — often run better on dedicated VMs.
 
@@ -799,7 +799,7 @@ Service types in one line: **ClusterIP** (reachable only inside the cluster — 
 
 ### In the interview
 
-Prompts: "how would you deploy these services?", "what happens when a pod dies?", "explain requests vs limits", "why is my pod being OOMKilled?" Interviewers want the model (desired state and control loops), not a list of YAML fields.
+Prompts: "how would you deploy these services?", "what happens when a pod dies?", "explain requests vs limits", "why is my pod being OOMKilled?" Interviewers want the model (desired state and control loops), not a list of YAML (the indented text format Kubernetes configuration is written in) fields.
 
 > **30-second answer:** "A container is a process isolated with namespaces and limited with cgroups, started from a layered, immutable image — so the artifact we test is the artifact we run. Kubernetes keeps a declared state true: a Deployment keeps N pods of an image running and rolls changes out in waves gated by readiness; a Service gives them a stable name; the HPA adjusts N; controllers reschedule pods when nodes die. The production details I'd call out are requests and limits — memory over limit is OOMKilled, CPU over limit is throttled — readiness vs liveness probes with liveness kept shallow, graceful SIGTERM handling with a short pre-stop delay, and spreading replicas across zones. For a handful of services I'd consider a managed container service before running a cluster."
 
@@ -841,11 +841,11 @@ Prompts: "how would you deploy these services?", "what happens when a pod dies?"
 ### The problem: the monthly release
 
 The store's platform team of 40 engineers ships once a month:
-- **Big batches.** Each release carries **~400 commits**. When it breaks, finding the guilty change means bisecting 400 commits under incident pressure.
+- **Big batches.** Each release carries **~400 commits**. When it breaks, finding the guilty change means bisecting (repeatedly testing the halfway point to narrow down) 400 commits under incident pressure.
 - **Merge week.** Long-lived branches take **two days** to merge before each release; bugs appear in the merge itself.
 - **Different builds per environment.** Staging and production each build their own binary from the same tag, with slightly different dependency versions resolved on different days. "It passed in staging" proves little.
 - **Hand-made infrastructure.** Load balancers and databases were created by clicking in the cloud console. Nobody can say what production's configuration is, and staging doesn't match it.
-- **Slow fixes.** A one-line hotfix takes **6 hours**: manual approvals, a manual QA pass and a manual deploy runbook.
+- **Slow fixes.** A one-line hotfix (an urgent small fix shipped outside the normal schedule) takes **6 hours**: manual approvals, a manual QA (quality assurance — people testing by hand) pass and a manual deploy runbook.
 
 Each safeguard (more QA, fewer releases) made batches *bigger*, and bigger batches made each release riskier.
 
@@ -869,7 +869,7 @@ flowchart LR
   S --> P["Production: canary 1, 10, 50, 100 pct with verdicts"]
   P --> V["Post-deploy checks; auto-rollback on bad signals"]
 ```
-- **Commit stage (minutes):** compile, unit tests, linters, static security analysis, dependency vulnerability scans. Keep it **under ~10 minutes** so engineers wait for it instead of context-switching.
+- **Commit stage (minutes):** compile, unit tests (fast tests of one small piece of code in isolation), linters (tools that flag suspicious or badly styled code), static security analysis, dependency vulnerability scans. Keep it **under ~10 minutes** so engineers wait for it instead of context-switching.
 - **Package once:** the output is an immutable artifact — a container image identified by its **digest** — plus a **software bill of materials** (SBOM, the list of every component inside) and a signature. Every later stage deploys *this exact artifact*. Environments differ only in configuration (Twelve-Factor's "build, release, run" separation).
 - **Test environments:** integration tests against real dependencies, and **contract tests** that check each service still honours the API its consumers expect (see the Spring book's [contract testing section](../../../spring/chapters/16-spring-cloud-and-microservices/README.md#1610-contract-testing)).
 - **Production rollout:** a progressive strategy (below) with automatic verdicts from the golden signals, then post-deploy checks. A failed verdict triggers rollback without a human.
@@ -893,16 +893,16 @@ Every strategy has the same hidden requirement: **old and new versions must work
 **3. Infrastructure as code (IaC).** Servers, networks, load balancers and databases are described in files kept in version control, reviewed like code and applied by the pipeline.
 - **Terraform** (and similar tools) is *declarative*: you describe the resources you want, `plan` shows the difference from what exists, and `apply` makes the changes. It records what it manages in a **state file**, which must be stored remotely with locking so two runs can't collide.
 - **Drift** — someone changed production by hand — shows up as an unexpected diff in the next plan.
-- Reviewing the *plan* in the pull request means reviewers see "this will delete a database", not just a code diff.
+- Reviewing the *plan* in the pull request (a proposed change submitted for review before it is merged) means reviewers see "this will delete a database", not just a code diff.
 
-**4. GitOps — the cluster pulls its desired state.** GitOps applies the Kubernetes control-loop idea to deployment itself. The desired state of each environment (which image digest, which config) lives in a Git repository. An agent inside the cluster (Argo CD, Flux) continuously compares the cluster with Git and fixes any difference. Deploying is a reviewed commit that changes a digest; rolling back is reverting that commit. The CI system never needs credentials to production — the cluster pulls instead of being pushed to, which removes a powerful secret from the pipeline.
+**4. GitOps — the cluster pulls its desired state.** GitOps applies the Kubernetes control-loop idea to deployment itself. The desired state of each environment (which image digest, which config) lives in a Git repository (a version-controlled folder that records every change). An agent inside the cluster (Argo CD, Flux) continuously compares the cluster with Git and fixes any difference. Deploying is a reviewed commit that changes a digest; rolling back is reverting that commit. The CI system never needs credentials to production — the cluster pulls instead of being pushed to, which removes a powerful secret from the pipeline.
 
-**5. Secrets in pipelines.** Avoid long-lived cloud keys stored in the CI system. Modern CI can prove its identity to the cloud with short-lived **OIDC** tokens (the cloud trusts "this workflow in this repository on this branch"), and apps read secrets from a secrets manager at runtime (see [Storing keys and secrets](../../../spring/chapters/11-spring-security-2-tokens-and-oauth2/README.md#1113-storing-keys-and-secrets)).
+**5. Secrets in pipelines.** Avoid long-lived cloud keys stored in the CI system. Modern CI can prove its identity to the cloud with short-lived **OIDC** (OpenID Connect, a standard way to prove identity with signed tokens) tokens (the cloud trusts "this workflow in this repository on this branch"), and apps read secrets from a secrets manager at runtime (see [Storing keys and secrets](../../../spring/chapters/11-spring-security-2-tokens-and-oauth2/README.md#1113-storing-keys-and-secrets)).
 
 **6. Measure delivery with the four DORA metrics.** The *Accelerate* research (Forsgren, Humble and Kim) found four measures that separate strong delivery teams from weak ones: **deployment frequency**, **lead time for changes** (commit to production), **change failure rate** (share of deploys causing a failure) and **time to restore service**. The key finding is that speed and stability rise *together*: small, frequent changes are easier to test, diagnose and undo.
 
 **Vocabulary interviewers mix in (one line each)**
-- **DevOps** — a culture: the team that builds a service also runs it, with shared tooling and automation. **SRE** (Site Reliability Engineering) — Google's practice of running operations as software engineering, with reliability targets (SLOs) and error budgets deciding how fast to ship. **Platform engineering** — a team that builds the internal "paved road" (pipelines, clusters, templates) other teams use as a self-service product.
+- **DevOps** — a culture: the team that builds a service also runs it, with shared tooling and automation. **SRE** (Site Reliability Engineering) — Google's practice of running operations as software engineering, with reliability targets (SLOs — service-level objectives, e.g. "99.9% of requests succeed") and error budgets (the amount of failure the SLO still allows; once spent, releases slow down) deciding how fast to ship. **Platform engineering** — a team that builds the internal "paved road" (pipelines, clusters, templates) other teams use as a self-service product.
 - **Monorepo vs polyrepo** — one repository for many services (atomic cross-service changes, one toolchain, needs build tooling that only rebuilds what changed) versus a repository per service (clear ownership and independent pipelines, but cross-service changes need coordinated releases).
 - **How Git stores history** — every file version (blob), directory (tree) and commit is stored under the hash of its content; a branch is just a movable pointer to a commit. **Merge** joins two histories with a merge commit and keeps them as they happened; **rebase** replays your commits on top of the target, giving a straight history but rewriting commit IDs — so never rebase commits others have already pulled.
 
@@ -995,15 +995,15 @@ Each time you stop to make a decision, ask one question: **what is the undo butt
 
 ### Stage 1 — Expand: the change that changes nothing
 
-*Decision:* add `total_cents BIGINT NULL`. It's nullable, nothing writes to it and nothing reads it. The application behaves exactly as before — being invisible is what makes this the expand phase. **Undo:** drop the column. It costs nothing, because no code refers to it.
+*Decision:* add `total_cents BIGINT NULL` (a large-integer column that may be empty). It's nullable, nothing writes to it and nothing reads it. The application behaves exactly as before — being invisible is what makes this the expand phase. **Undo:** drop the column. It costs nothing, because no code refers to it.
 
-*Why give it the full delivery process anyway?* Even this "trivial" migration goes through a canary and is watched on readiness and golden signals. An `ALTER TABLE` can take **locks** you didn't expect, or run past a migration tool's timeout. Schema changes that look harmless still cause 3 AM incidents. The acceptance test: signals stay healthy and no user notices anything.
+*Why give it the full delivery process anyway?* Even this "trivial" migration goes through a canary and is watched on readiness and golden signals. An `ALTER TABLE` (the SQL command that changes a table's structure) can take **locks** (holds that block other reads or writes to the table) you didn't expect, or run past a migration tool's timeout. Schema changes that look harmless still cause 3 AM incidents. The acceptance test: signals stay healthy and no user notices anything.
 
 ### Stage 2 — Dual-write, behind a flag, plus a backfill
 
-*Decision 1 — the dual-write code ships dark and a flag releases it.* New code that writes both `total` and `total_cents` for every order goes out switched off. A canary checks the *binary*. Then a separate flag change switches the *behavior* on. Why a flag instead of deploying it already on? Dual-writing could add latency, clash with a database trigger, or expose an N+1 problem that only shows up at peak. With a flag, undoing it is a **30-second** flip rather than a full rollback. Users don't see this change, so no cohort ramp is needed — the goal is simply independent control.
+*Decision 1 — the dual-write code ships dark and a flag releases it.* New code that writes both `total` and `total_cents` for every order goes out switched off. A canary checks the *binary*. Then a separate flag change switches the *behavior* on. Why a flag instead of deploying it already on? Dual-writing could add latency, clash with a database trigger (code the database runs automatically when a row changes), or expose an N+1 problem that only shows up at peak. With a flag, undoing it is a **30-second** flip rather than a full rollback. Users don't see this change, so no cohort ramp is needed — the goal is simply independent control.
 
-*Decision 2 — backfill 200 million historical rows* using `total_cents = round(total × 100)`. What makes it safe to run, and to run again, comes from the Module 5 reliability patterns:
+*Decision 2 — backfill (fill the new column in for rows that already exist) 200 million historical rows* using `total_cents = round(total × 100)`. What makes it safe to run, and to run again, comes from the Module 5 reliability patterns:
 - **Idempotent** (safe to repeat): every write sets a value that is always the same for the same row, so a failed batch can just run again without damaging data.
 - **Rate-limited as a bulkhead**: the job is slowed down and kept separate, so production requests always come first when both want the database.
 - **Checkpointed**: lasting progress markers (the write-ahead-log habit) let it pick up from where it stopped.
@@ -1066,6 +1066,6 @@ Scan the undo column from top to bottom and you're watching Fact 2 at work: free
 Move state over in stages. Expand with a column nobody uses yet. Turn on a flagged dual-write, plus a backfill that is idempotent, throttled and checkpointed. Verify using a comparison job and shadow reads. Ramp the reads with a flag and canary verdicts. Then contract in two gated steps. Each stage keeps a cheap undo, right up to the last, deliberate one-way door.
 
 ### Extend it yourself (practice questions)
-- **Queue-format version:** run the same process for a breaking change to a message format that five teams consume. The matching steps are publishing both formats at once, shadow-consuming the new format, and contracting later. Work out what a **schema registry** ought to reject.
+- **Queue-format version:** run the same process for a breaking change to a message format that five teams consume. The matching steps are publishing both formats at once, shadow-consuming the new format, and contracting later. Work out what a **schema registry** (a central service that stores message formats and rejects incompatible changes) ought to reject.
 - **Multi-region:** with primary-replica replication across regions, backfill traffic can raise **replication lag** (how long it takes a primary's write to show up on a replica). Design the comparison job so that stale replicas don't set off false mismatch alerts.
-- **For AI engineers:** migrate prompt-v1 → prompt-v2 or model A → model B. Here, "dual-write" means running both and comparing their outputs. The comparison job runs **LLM-judge evals** on sampled pairs. Define the flag ramp, and the evidence you'd need before the contract step retires prompt-v1 for good.
+- **For AI engineers:** migrate prompt-v1 → prompt-v2 or model A → model B. Here, "dual-write" means running both and comparing their outputs. The comparison job runs **LLM-judge evals** (using a language model to grade answers) on sampled pairs. Define the flag ramp, and the evidence you'd need before the contract step retires prompt-v1 for good.

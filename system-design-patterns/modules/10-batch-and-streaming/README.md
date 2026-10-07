@@ -13,7 +13,7 @@
 **Two facts that organize the module**
 
 1. **Batch and streaming are the same computation with different staleness budgets.** A *staleness budget* is how old an answer is allowed to be. Take "revenue per product". You could compute it every night from yesterday's full data. That is batch: simpler and thorough, but the answer is hours stale. Or you could update it continuously as each order comes in. That is streaming: the answer is seconds fresh, but it costs more to operate. Just like in the caching module, the allowed age decides which mechanism you pick. Batch works on **bounded** data, meaning a finished dataset that has a known end. Streaming works on **unbounded** data, which never ends. So streaming cannot wait for "all the input". Instead, it must decide when a partial answer is complete enough to publish.
-2. **The log is the foundation.** In Module 3 we met the append-only log that lives inside databases. That was the **write-ahead log, WAL**: every change is first written to a sequential log, and only then applied. In this module, the log grows into a whole data platform. Kafka-style logs carry the flows of events. **CDC** takes a database's WAL and turns it into a public stream. **Replay**, meaning reading the log again from an earlier position, makes reprocessing possible. And exactly-once processing works by combining log positions with idempotency.
+2. **The log is the foundation.** In Module 3 we met the append-only log that lives inside databases. That was the **write-ahead log, WAL**: every change is first written to a sequential log, and only then applied. In this module, the log grows into a whole data platform. Kafka-style logs carry the flows of events (**Kafka** is a widely used open-source system that stores streams of events as a durable, replayable log). **CDC** (Change Data Capture) takes a database's WAL and turns it into a public stream. **Replay**, meaning reading the log again from an earlier position, makes reprocessing possible. And exactly-once processing works by combining log positions with **idempotency** (the property that doing the same operation twice has the same effect as doing it once). For a refresher on logs, queues, replication and other basics used here, see [System Design Fundamentals](../00-system-design-fundamentals/README.md).
 
 **The seven patterns (plus one added lesson)**
 
@@ -28,7 +28,7 @@
 | Running consumers in parallel while keeping the order for each key | Partitioned Consumption |
 | Knowing what the log underneath really guarantees, and which settings decide it | Inside Kafka *(added lesson)* |
 
-**How to read it.** MapReduce shows the basic shape of batch work: split the input, compute on each piece locally, then merge the results. Its answers are hours old on purpose, and that gap is the reason Stream Processing exists. Stream Processing covers windows, event time versus processing time, and answering questions over input that isn't finished. Lambda & Kappa weighs two options: running a separate batch pipeline and stream pipeline, or running one stream pipeline you can replay. The remaining patterns are supporting infrastructure. CDC creates streams out of database changes. Exactly-Once builds on the idempotency lesson. Backpressure deals with traffic that exceeds what a consumer can handle. Partitioned Consumption keeps per-key order while several consumers work in parallel. **Inside Kafka** is an added lesson (not in the original course) that opens the log itself: segments and retention, why it is fast, replication with the ISR and high watermark, every way messages can be lost and the setting that prevents it, consumer-group internals, and how idempotent producers and transactions implement exactly-once. The capstone puts everything together in a clickstream dashboard. Treat each pattern as the answer to a requirement someone has stated. Pick batch when completeness matters more than freshness. Pick streaming only when answers have short deadlines.
+**How to read it.** MapReduce shows the basic shape of batch work: split the input, compute on each piece locally, then merge the results. Its answers are hours old on purpose, and that gap is the reason Stream Processing exists. Stream Processing covers windows, event time versus processing time, and answering questions over input that isn't finished. Lambda & Kappa weighs two options: running a separate batch pipeline and stream pipeline, or running one stream pipeline you can replay. The remaining patterns are supporting infrastructure. CDC creates streams out of database changes. Exactly-Once builds on the idempotency lesson. Backpressure deals with traffic that exceeds what a consumer can handle. Partitioned Consumption keeps per-key order while several consumers work in parallel. **Inside Kafka** is an added lesson (not in the original course) that opens the log itself: segments and retention, why it is fast, replication with the ISR and high watermark (the set of copies that are fully caught up, and the marker for how far all of them have got), every way messages can be lost and the setting that prevents it, consumer-group internals (a **consumer group** is a set of readers that share the work of reading one stream), and how idempotent producers and transactions implement exactly-once. The capstone puts everything together in a clickstream dashboard. Treat each pattern as the answer to a requirement someone has stated. Pick batch when completeness matters more than freshness. Pick streaming only when answers have short deadlines.
 
 > Short on time? If you are a data engineer, begin with Stream Processing and CDC, because data-platform interviews test those the most. Everyone else should begin with CDC, since it fixes many everyday integration problems.
 
@@ -55,7 +55,7 @@
 
 ### The problem
 
-Ten years in, finance wants **"total revenue by product category, all time, by region"**. The data is **5 billion order rows, ~2 TB**, stored in object storage.
+Ten years in, finance wants **"total revenue by product category, all time, by region"**. The data is **5 billion order rows, ~2 TB**, stored in **object storage** (cheap cloud storage, such as Amazon S3, that keeps data as whole files called objects).
 
 An analyst writes a script. It reads every row and keeps running totals. Do the math: one machine reads roughly **100 MB/s**. So 2 TB ÷ 100 MB/s = **20,000 seconds ≈ 5.5 hours just to read**. The script is started Monday 9 AM. At 12:40 PM the cloud provider takes back the **spot instance** (cheap cloud capacity that the provider can reclaim whenever it wants). Three hours of progress held in memory are gone, and the script starts again at row one. On Wednesday, the retry fails after four hours because of a network failure. By Thursday the analyst has built a checkpoint file and a resume flag by hand, and there is still no answer.
 
@@ -63,9 +63,9 @@ There are two different limits here. First, **one machine is too slow**. Second,
 
 ### Why the obvious fixes fail
 
-- **"A bigger machine."** Its read bandwidth still has a ceiling. And it is still a single failure domain, so one crash wipes out everything held in memory.
+- **"A bigger machine."** Its read bandwidth still has a ceiling. And it is still a single **failure domain** (one unit whose failure takes everything inside it down), so one crash wipes out everything held in memory.
 - **"Split it by hand"** over 20 machines, then merge the pieces with a script. This works once. But problems pile up. If machine 14 dies at minute 50, a person has to spot it and rerun that share. If the chunks are uneven, 19 machines sit idle while one grinds away for hours. The merge script breaks easily. And the next question needs a whole new manual procedure. This is not a system you can reuse.
-- **"Run it on the production database shards."** Why not scatter-gather the query over the orders DB, which is already sharded? Because then the analytics scans fight checkout for production I/O. The storage module split those two workloads on purpose. That is exactly why analytics keeps its own copy in object storage, and it is why analytics needs its own compute too.
+- **"Run it on the production database shards."** Why not **scatter-gather** the query (send it to every shard at once and combine the answers) over the orders DB, which is already **sharded** (split across several database servers, each holding part of the rows)? Because then the analytics scans fight checkout for production **I/O** (disk and network reads and writes). The storage module split those two workloads on purpose. That is exactly why analytics keeps its own copy in object storage, and it is why analytics needs its own compute too.
 
 The hand-split approach actually had the right *algorithm*: divide, count locally, merge. What was missing was everything around it: scheduling, handling failures, handling **stragglers** (a straggler is a task that runs far slower than the others), and merging reliably. MapReduce provides that execution framework.
 
@@ -123,12 +123,14 @@ The diagram above shows each input block being mapped and combined on its own ma
 
 ### When not to use it
 
-- **Interactive questions** — analysts trying idea after idea need answers in seconds. That calls for a data warehouse (indexed and columnar). Under their SQL, warehouses still run map-shuffle-reduce shapes. The idea lives on; only the way you use it changed.
-- **Small data — and "small" has grown.** 2 TB fits on a laptop SSD. One powerful machine running **DuckDB** or **Polars** can scan it in minutes, with no cluster at all. The modern rule: **exhaust one machine before renting two hundred** (the same restraint as the vertical-scaling lesson). Setting up cluster infrastructure for data that fits on a laptop is a common mistake today.
+- **Interactive questions** — analysts trying idea after idea need answers in seconds. That calls for a **data warehouse** (indexed and columnar). A data warehouse is a database built for analytics queries over huge tables; *columnar* means it stores each column's values together, so reading one column across billions of rows is fast. Under their SQL, warehouses still run map-shuffle-reduce shapes. The idea lives on; only the way you use it changed.
+- **Small data — and "small" has grown.** 2 TB fits on a laptop SSD. One powerful machine running **DuckDB** or **Polars** (single-machine analytics tools: an embedded SQL engine and a fast DataFrame library) can scan it in minutes, with no cluster at all. The modern rule: **exhaust one machine before renting two hundred** (the same restraint as the vertical-scaling lesson, where *vertical scaling* means buying a bigger machine instead of more machines). Setting up cluster infrastructure for data that fits on a laptop is a common mistake today.
 - **Low-latency needs** — for unbounded streams, see the next lesson.
-- **Iterative algorithms** — ML training reads the same data hundreds of times. Classic MapReduce does full disk I/O on every pass, which is too slow. That pushed people to build in-memory successors, and modern ML now uses specialized training systems.
+- **Iterative algorithms** — ML (machine learning) training reads the same data hundreds of times. Classic MapReduce does full disk I/O on every pass, which is too slow. That pushed people to build in-memory successors, and modern ML now uses specialized training systems.
 
 ### MapReduce vs. Spark (the idea vs. the implementation)
+
+**Apache Spark** is an open-source engine for processing large datasets across a cluster (a group of machines working together). It keeps the split-locally-then-merge idea but runs whole pipelines in memory.
 
 | | Classic MapReduce | Spark (and successors) |
 |---|---|---|
@@ -136,17 +138,17 @@ The diagram above shows each input block being mapped and combined on its own ma
 | Program shape | Strictly map, then shuffle, then reduce | Any **DAGs** (graphs of steps) made of transforms: map, filter, join… |
 | Multi-stage / iterative work | A chain of complete jobs, so the I/O multiplies | A single job with cached intermediate results: 10–100× faster |
 | Fault tolerance | Run the tasks again from the input | Same idea: rebuild lost partitions from their **lineage** (the recorded chain of transforms) |
-| You write | Java boilerplate, two functions at a time | SQL / DataFrames, and the shape is generated for you |
+| You write | Java boilerplate, two functions at a time | SQL / DataFrames (tables you manipulate in code), and the shape is generated for you |
 
-The takeaway for interviews: **the execution model outlived the original implementation.** No one hand-writes MapReduce anymore. Yet Spark plans, the BigQuery and Snowflake engines, and distributed ML data prep all do the same three things: split the work locally, shuffle by key, and merge.
+The takeaway for interviews: **the execution model outlived the original implementation.** No one hand-writes MapReduce anymore. Yet Spark plans, the BigQuery and Snowflake engines (two popular cloud data warehouses), and distributed ML data prep all do the same three things: split the work locally, shuffle by key, and merge.
 
 ### Real-world examples
 
 - **Google's 2004 paper** — where it all started. Indexing the web needed exactly this shape, and the paper kicked off the "big data" era.
-- **Hadoop** — made the model available to everyone for about a decade. **Spark** — began at Berkeley to skip the disk writes between stages and speed up iterative work. It took over from Hadoop for many workloads and, through **Databricks**, runs a large share of production batch.
+- **Hadoop** — the open-source implementation of MapReduce (plus a distributed file system); it made the model available to everyone for about a decade. **Spark** — began at Berkeley to skip the disk writes between stages and speed up iterative work. It took over from Hadoop for many workloads and, through **Databricks** (the company that sells a hosted Spark platform), runs a large share of production batch.
 - **BigQuery, Snowflake and peers** — SQL on the surface, map-shuffle-reduce underneath.
 - **dbt** — declarative data pipelines that run on those same engines.
-- **For AI engineers:** preparing training data is the largest MapReduce workload today. Take deduplicating, filtering and tokenizing a crawl of the whole web. Map handles each document on its own, fully in parallel. Shuffle groups near-duplicates together using a hash key. Reduce chooses which copies survive. Every serious lab runs this on Spark. Embedding a corpus is just a map with no shuffle. And the **all-reduce** step in distributed training merges gradients across GPUs on every step, which belongs to the same compute-locally-then-merge family.
+- **For AI engineers:** preparing training data is the largest MapReduce workload today. Take deduplicating, filtering and **tokenizing** (splitting text into the small pieces, called tokens, that a language model reads) a crawl of the whole web. Map handles each document on its own, fully in parallel. Shuffle groups near-duplicates together using a hash key. Reduce chooses which copies survive. Every serious lab runs this on Spark. **Embedding** a corpus (turning each document into a list of numbers that captures its meaning) is just a map with no shuffle. And the **all-reduce** step in distributed training merges **gradients** (the per-step numbers that say how to adjust a model's weights) across **GPUs** (graphics chips used for the heavy maths of ML) on every step, which belongs to the same compute-locally-then-merge family.
 
 ### In the interview
 
@@ -194,12 +196,12 @@ The fraud team runs a nightly batch job that spots coordinated use of stolen car
 
 - **"Run the batch every five minutes"** (this is called micro-batching). It is a real approach (it inspired Spark Streaming), but it has two limits. First, the overhead of starting each job puts a floor under the interval: a cluster job launched every 30 s might spend most of its time just starting up. Second, a question like "orders on this card in the last hour" covers many runs, so every run needs **running state from previous runs**. The true difference between batch and streaming is *persistent state*, not only speed.
 - **"Query the database on every order"** — running `SELECT COUNT(*) WHERE card=? AND time > now()-1h` means **400 expensive queries/s** against production. That is the analytics-on-production problem once more, and the indexes were not designed for it. A database is good at storing history; it is not designed to *watch* events as they arrive.
-- **"Count in application memory."** The checkout service is scaled out horizontally. **40 servers each see ~1/40** of a given card's orders, so no single server's counter is complete. This is the per-server-counter problem. Every event for a card has to reach *one* place that holds that card's state, which means you need **key-based routing**.
+- **"Count in application memory."** The checkout service is scaled out horizontally (run as many identical copies behind a load balancer). **40 servers each see ~1/40** of a given card's orders, so no single server's counter is complete. This is the per-server-counter problem. Every event for a card has to reach *one* place that holds that card's state, which means you need **key-based routing**.
 
 ### How it works
 
 1. **State is the core.** The operator (one processing step) keeps its running answer locally, either in memory or on local disk, for example per-card counts or per-minute sums. The state is **keyed**. All events for card X go to the operator instance that owns card X. This is the shard-key idea applied to compute, and Partitioned Consumption formalizes it. Most of what a streaming framework does is manage this state.
-2. **Recovery = checkpoint + rewind.** Every so often, the framework saves a durable **snapshot of all state together with the log position** that the state matches. After a crash, the operator loads the snapshot, **rewinds the log** to that position, and processes again from there. This only works because the source is a log that can be *replayed*. One side effect: events close to the crash get processed **twice**, so the outputs must be able to handle duplicates (→ Exactly-Once lesson).
+2. **Recovery = checkpoint + rewind.** Every so often, the framework saves a durable (stored so it survives a crash) **snapshot of all state together with the log position** that the state matches. After a crash, the operator loads the snapshot, **rewinds the log** to that position, and processes again from there. This only works because the source is a log that can be *replayed*. One side effect: events close to the crash get processed **twice**, so the outputs must be able to handle duplicates (→ Exactly-Once lesson).
 3. **Windows slice the endless input into finite pieces**, because an infinite stream has no "final total":
    - **Tumbling** — fixed intervals placed back to back. Each event falls into exactly one of them (e.g. orders per minute).
    - **Sliding** — intervals that overlap (e.g. orders in the last 10 minutes, checked again every 30 s).
@@ -210,7 +212,7 @@ The fraud team runs a nightly batch job that spots coordinated use of stolen car
 ![Stream Processing](images/stream-processing-1.png)
 *Figure — Stream Processing (course diagram)*
 
-The figure above shows an orders topic (the event log) feeding a stateful operator keyed by `card_id`. Its state stores counts for each time window (e.g. card 123: 7, 12, 5 across three 5-minute windows). The operator sends results to an alerts sink and a dashboard sink. It also regularly writes durable checkpoints of its state + log position so it can recover.
+The figure above shows an orders **topic** (a named stream of events in the log) feeding a stateful operator keyed by `card_id`. Its state stores counts for each time window (e.g. card 123: 7, 12, 5 across three 5-minute windows). The operator sends results to an alerts **sink** and a dashboard sink (a sink is wherever a pipeline writes its output). It also regularly writes durable checkpoints of its state + log position so it can recover.
 
 ### Walkthrough with numbers (rule: more than 5 orders on one card within 10 minutes)
 
@@ -228,7 +230,7 @@ The figure above shows an orders topic (the event log) feeding a stateful operat
 | Complexity | Everything described above | Clearly easier to reason about |
 | Fits | Fraud, alerting, features needed in under a second | Dashboards, feeds, pipelines with a one-minute budget |
 
-**The budget decides:** with a one-minute budget, micro-batch is the simpler and correct choice (**Spark Structured Streaming**). With a one-second budget, only true streaming will do (**Flink**). Both run enormous production workloads. Saying "the budget chooses" is a better answer than being loyal to either tool.
+**The budget decides:** with a one-minute budget, micro-batch is the simpler and correct choice (**Spark Structured Streaming**). With a one-second budget, only true streaming will do (**Flink**, i.e. Apache Flink, an open-source engine for stateful stream processing). Both run enormous production workloads. Saying "the budget chooses" is a better answer than being loyal to either tool.
 
 ### Trade-offs
 
@@ -237,13 +239,13 @@ The figure above shows an orders topic (the event log) feeding a stateful operat
 **You pay:**
 - **The steepest concept stack in the course** — windows, two kinds of time, watermarks, late policies and state. Teams tend to underestimate it.
 - **Stateful operations** — state has to be checkpointed, restored, monitored and **rescaled**. Rescaling means re-partitioning the state when the job grows or shrinks, and it is hard.
-- **Provisional answers** — results based on event time can be changed when stragglers show up. So downstream consumers must accept corrections (eventual consistency in analytics).
-- **Operational weight** — a stateful distributed job that runs forever is really a *service*. It needs on-call, upgrades and capacity planning.
+- **Provisional answers** — results based on event time can be changed when stragglers show up. So downstream consumers must accept corrections (**eventual consistency** in analytics: the numbers agree with the truth eventually, not instantly).
+- **Operational weight** — a stateful distributed job that runs forever is really a *service*. It needs **on-call** (an engineer ready to respond to alerts at any hour), upgrades and capacity planning.
 
 ### When not to use it
 
 - **No deadline** — nightly revenue rollups and weekly cohorts are simpler and cheaper in batch, and easy to reprocess.
-- **Small scale** — a cron job with a SQL query can count a startup's daily active users without any Flink cluster.
+- **Small scale** — a **cron job** (a task the operating system runs on a fixed schedule) with a SQL query can count a startup's daily active users without any Flink cluster.
 - **Ad-hoc exploration** — analysts need a warehouse, not a new streaming job for every idea they want to test.
 - **No team to run it** — a stateful platform with no owner turns into the main cause of outages between the log and the dashboard.
 - Misuse: rebuilding stable nightly jobs as streams when the business has no need for fresher data.
@@ -254,7 +256,7 @@ The figure above shows an orders topic (the event log) feeding a stateful operat
 - **Google's Dataflow model (2015 paper)** — brought windows, watermarks and late-data triggers together into one model. Most frameworks implement its ideas.
 - **Kafka Streams** — the pattern packaged as a library inside your own service, with no separate cluster.
 - **Spark Structured Streaming** — micro-batch at industrial scale.
-- **For AI engineers:** how fresh your features are affects how good your model is. A fraud model using hour-old velocity features misses coordinated attacks that fresh streaming features would catch. The feature store's **online path** uses jobs like these to produce keyed aggregates that are fresh to the millisecond. Token-usage metering, prediction monitoring and evals over sampled traffic rely on it too. Use **event time**: if you train on processing-time features, the model learns *network lag* instead of user behavior.
+- **For AI engineers:** how fresh your features are affects how good your model is. A fraud model using hour-old velocity features misses coordinated attacks that fresh streaming features would catch. A **feature store** is a system that computes and serves the input values (*features*) that ML models use, both for training and for live predictions. Its **online path** uses jobs like these to produce keyed aggregates that are fresh to the millisecond. Token-usage metering, prediction monitoring and **evals** (automated checks of model quality) over sampled traffic rely on it too. Use **event time**: if you train on processing-time features, the model learns *network lag* instead of user behavior.
 
 ### In the interview
 
@@ -314,7 +316,7 @@ Three weeks go by. A change to a discount rule gets shipped, but only in the bat
 
 ### How it works — Lambda
 
-**Nathan Marz** proposed it (during the Twitter / Storm era). It has three layers:
+**Nathan Marz** proposed it (during the Twitter / Storm era; **Storm** was an early open-source stream processor). It has three layers:
 1. **Speed layer** — streaming; quick but provisional.
 2. **Batch layer** — slow but authoritative; recomputed on a schedule from the raw history.
 3. **Serving layer** — joins the two: recent hours come from the speed layer, settled history comes from the batch layer.
@@ -352,7 +354,7 @@ In the diagram above, Lambda sends the same raw events into two layers, and the 
 
 ### The pragmatic synthesis
 
-Most organizations run a practical **dual path**: streaming for operational freshness, and a warehouse for deep analysis. They often leave out Lambda's formal overwrite. They should still keep **scheduled backfills**, though. (A backfill recomputes a past period and replaces the results that already exist.) The engines have also grown closer together. **Flink** can run bounded inputs in batch mode. **Spark** can process streams. And **lakehouse tables (Delta, Iceberg)** take streaming writes while also serving batch queries. More and more, you end up with **one logic, two execution tempos**, which is exactly what Kappa aims for.
+Most organizations run a practical **dual path**: streaming for operational freshness, and a warehouse for deep analysis. They often leave out Lambda's formal overwrite. They should still keep **scheduled backfills**, though. (A backfill recomputes a past period and replaces the results that already exist.) The engines have also grown closer together. **Flink** can run bounded inputs in batch mode. **Spark** can process streams. And **lakehouse tables (Delta, Iceberg)** (open table formats that put database-like tables on top of plain files in object storage) take streaming writes while also serving batch queries. More and more, you end up with **one logic, two execution tempos**, which is exactly what Kappa aims for.
 
 ### Walkthrough with numbers: the deploy-gap bug under each design
 
@@ -424,15 +426,15 @@ The prompt: "design analytics with a live dashboard *and* accurate finance repor
 *Original lesson: [Change Data Capture on DesignGurus ↗](https://www.designgurus.io/course-play/system-design-patterns/doc/6a537f6b7bbf9d62838bbc2f)*
 
 
-**What it is.** Change Data Capture (CDC) takes the change log a database keeps for itself and turns it into a public stream of events. A **connector** reads the database's **write-ahead log (WAL)**. The WAL is the ordered record of every committed change, which the database keeps so it doesn't lose data. The connector reads it just like a replica would. The difference is that, instead of applying the changes, it *publishes* them. Every committed insert, update and delete becomes an event on a topic, no matter which code path made it, and in commit order. Other systems (search, caches, warehouses, streams) then consume those events.
+**What it is.** Change Data Capture (CDC) takes the change log a database keeps for itself and turns it into a public stream of events. A **connector** reads the database's **write-ahead log (WAL)**. The WAL is the ordered record of every committed change, which the database keeps so it doesn't lose data. The connector reads it just like a **replica** (a copy of the database kept in sync from that log) would. The difference is that, instead of applying the changes, it *publishes* them. Every committed insert, update and delete becomes an event on a topic, no matter which code path made it, and in commit order. Other systems (search, caches, warehouses, streams) then consume those events.
 
 **Analogy.** Picture an office. You could ask every clerk to remember to call the other departments whenever they change a file, but they will forget. Instead, you tap into the office's official logbook, where *every* change has to be written down before it counts, and you broadcast each entry.
 
 ### The problem: four incidents, one cause
 
 Four incidents from earlier in the course have the same root cause:
-- **Search (CQRS lesson):** the app wrote to the database, and then wrote separately to Elasticsearch. During a deploy, the Elasticsearch calls timed out. Orders existed in the DB but never showed up in search.
-- **Cache (cache-aside lesson):** a bulk import wrote directly to the DB and never invalidated the cache. Products stayed stale for an hour.
+- **Search (CQRS lesson):** the app wrote to the database, and then wrote separately to **Elasticsearch** (a popular search engine). During a deploy, the Elasticsearch calls timed out. Orders existed in the DB but never showed up in search.
+- **Cache (cache-aside lesson):** a bulk import wrote directly to the DB and never **invalidated** the cache (deleted the stale cached copy so the next read fetches fresh data). Products stayed stale for an hour.
 - **Analytics (pub/sub lesson):** analytics was not allowed to read the orders tables directly, yet it still needs that data.
 - **Warehouse:** loading the warehouse means a full dump every night. That means a 2 AM window, data that is a day stale, and reading *everything* just to find the 1% that changed.
 
@@ -440,9 +442,9 @@ Derived systems need a *complete* record of what changed in the database. But an
 
 ### Why the obvious fixes fail
 
-- **Dual-write** — the app updates the DB and then notifies the other systems. No single transaction covers both writes. So if the app crashes between them, the systems end up **permanently and silently inconsistent**. This is *loss*, not *lag*. (You can see lag and recover from it; a missed write leaves no error behind.)
+- **Dual-write** — the app updates the DB and then notifies the other systems. No single **transaction** (a group of writes that all succeed or all fail together) covers both writes. So if the app crashes between them, the systems end up **permanently and silently inconsistent**. This is *loss*, not *lag*. (You can see lag and recover from it; a missed write leaves no error behind.)
 - **Polling** — running `SELECT * WHERE updated_at > :last_check` on a timer. It has three built-in gaps. (1) **Deletes are invisible**: a row that was deleted can't show up in any query result, so the search index keeps a **ghost row** (an entry whose source row is gone). (2) **Intermediate states collapse**: three updates between two polls look like one final snapshot. That may be fine for a cache, but not for auditing or event processing. (3) It relies on **every writer** keeping `updated_at` correct.
-- **Database triggers writing to a change table.** Triggers really do see every write, including the ones that bypass the app. That is the right idea (let the database capture the changes). But triggers add synchronous work to every transaction and need upkeep for each table. And the database already keeps an ordered record of changes *below* the trigger layer.
+- **Database triggers writing to a change table.** (A **trigger** is code the database runs automatically on every insert, update or delete.) Triggers really do see every write, including the ones that bypass the app. That is the right idea (let the database capture the changes). But triggers add synchronous work to every transaction and need upkeep for each table. And the database already keeps an ordered record of changes *below* the trigger layer.
 
 ### How it works
 
@@ -451,18 +453,18 @@ A CDC connector **tails** the replication log, meaning it keeps reading the log 
 1. **It cannot miss.** Every committed change has to pass through the WAL; that is what "committed" means. So edits from admin tools, bulk imports and manual `UPDATE`s are all captured, and the application doesn't need any discipline for this to work.
 2. **Deletes arrive as events.** The log records a delete like any other change. CDC publishes it as a **tombstone**, an event that says "this key no longer exists". Deletion becomes a recorded fact (the rule from the vector-clocks lesson), so there are no ghost rows.
 3. **Ordered per key, for free** — events come out in the order they were committed.
-4. **Zero application changes** — you get a full history of changes without rewriting the app or switching to event sourcing.
+4. **Zero application changes** — you get a full history of changes without rewriting the app or switching to **event sourcing** (storing every change as an event and deriving the current state from those events).
 5. **Delivery is at-least-once** — an event may show up more than once, but it is never lost. That's because after a crash, the connector picks up again from the log position it saved. This means consumers must be **idempotent**: applying an event twice must give the same result as applying it once. Row-image events such as "set name to X" are idempotent by nature.
 6. **Snapshot bootstrap.** The first time it connects, the connector takes a consistent snapshot of the table. It then switches to tailing the log with no gap in between. New consumers therefore get the history plus the live stream, in order.
 
-**What CDC events are, and aren't.** CDC tells you *what* changed ("row 8412: status active → cancelled"). It does not tell you *why* ("customer cancelled due to delay"). These are **row diffs, not business intent**. For data infrastructure such as indexes, caches and warehouses, diffs are exactly what you want. For domain events, use the outbox.
+**What CDC events are, and aren't.** CDC tells you *what* changed ("row 8412: status active → cancelled"). It does not tell you *why* ("customer cancelled due to delay"). These are **row diffs, not business intent**. For data infrastructure such as indexes, caches and warehouses, diffs are exactly what you want. For **domain events** (business-level facts like "OrderCancelled"), use the outbox.
 
-**The outbox pattern — the standard replacement for dual-writes.** The app writes its business event ("OrderCancelled, reason: delay") into an **outbox table in the same transaction** as the data change. So either both happen, or neither does. CDC then reads the outbox table and publishes the event, business meaning included. **The transaction provides atomicity, the log provides delivery, the app provides intent.** This is the "reliable publisher" that the pub/sub lesson promised.
+**The outbox pattern — the standard replacement for dual-writes.** The app writes its business event ("OrderCancelled, reason: delay") into an **outbox table in the same transaction** as the data change. So either both happen, or neither does. CDC then reads the outbox table and publishes the event, business meaning included. **The transaction provides atomicity (all-or-nothing), the log provides delivery, the app provides intent.** This is the "reliable publisher" that the pub/sub lesson promised.
 
 ![Change Data Capture](images/change-data-capture-1.png)
 *Figure — Change Data Capture (course diagram)*
 
-In the figure above, every kind of write — app code, bulk imports and manual fixes — lands in the database, and so ends up in its WAL/binlog. The Debezium CDC connector reads that log. It publishes an ordered stream of insert/update/delete events to a `products.changes` topic. Several consumers read that topic independently: a search indexer, a cache invalidator, warehouse ingest, and streaming jobs.
+In the figure above, every kind of write — app code, bulk imports and manual fixes — lands in the database, and so ends up in its WAL/binlog (*binlog* is MySQL's name for its change log). The **Debezium** CDC connector (a popular open-source CDC tool) reads that log. It publishes an ordered stream of insert/update/delete events to a `products.changes` topic. Several consumers read that topic independently: a search indexer, a cache invalidator, warehouse ingest, and streaming jobs.
 
 ### Walkthrough with numbers: the four problems, fixed
 
@@ -478,7 +480,7 @@ In the figure above, every kind of write — app code, bulk imports and manual f
 | Atomicity | None — this is the torn-write bug | Perfect (the log *is* the commit) | Perfect (a single transaction) |
 | Carries intent | It could, but writes can tear | No — only row diffs | Yes — whatever event you choose |
 | App changes | Yes, and every path needs discipline | None | One outbox write for each event |
-| Consumer coupling | Tied to your API | Tied to your table schemas | Tied to a contract you designed |
+| Consumer coupling | Tied to your API | Tied to your table schemas (column names and types) | Tied to a contract you designed |
 | Fits | Nothing — retire it | Your own infrastructure: caches, indexes, warehouse | Domain events that other teams consume |
 
 **Rule to memorize:** use raw CDC for derived infrastructure that you own; use the outbox for events other teams consume; never use dual-writes. Together, these solve the reliable-publishing problem from Module 2.
@@ -492,17 +494,17 @@ In the figure above, every kind of write — app code, bulk imports and manual f
 
 **You pay:**
 - **Schema coupling — the big one.** Raw CDC events copy the table schemas. So renaming a column affects every consumer, and your internal schema effectively turns into a public API. You can soften this with an outbox for domain events, a **schema registry** (a service that stores event schemas, checks them, and rejects changes that would break compatibility), or a transformation layer between the table schema and the event schema.
-- **WAL retention pressure.** A slow or dead connector stops the log from being trimmed (the failure mode named in the WAL lesson). Lag on the replication slot must be a top-priority alert, or it turns into a full disk on the primary.
+- **WAL retention pressure.** A slow or dead connector stops the log from being trimmed (the failure mode named in the WAL lesson). Lag on the replication slot must be a top-priority alert, or it turns into a full disk on the **primary** (the main database server, the one that accepts writes).
 - **Diffs, not intent** — consumers that need to know "why" need the outbox.
-- **Another critical component** — connector high availability, managing snapshots, keeping topics tidy. It's small, but it sits on the path of everything derived.
+- **Another critical component** — connector **high availability** (keeping it running through failures, usually with a standby), managing snapshots, keeping topics tidy. It's small, but it sits on the path of everything derived.
 
 ### When not to use it
 
 - **When other teams want meaning** — don't send them the internal structure of your tables. Use the outbox instead (it's still CDC underneath, but it publishes a contract you designed). Raw table streams are for infrastructure you own.
 - **Tiny scale** — a nightly dump may be good enough. CDC's operating cost needs a real payoff in freshness or completeness.
-- **As a transaction mechanism** — CDC is asynchronous, and consumers lag by design. It spreads facts around *eventually*. It does not make two systems atomically consistent (that belongs to Module 7).
-- **No log access** on a managed database — this is getting rare (Postgres logical replication, MySQL binlog and the cloud equivalents are almost everywhere), but check before you commit.
-- **Common misuse:** treating raw CDC topics as the company-wide bus for domain events. Then every consumer depends on table schemas, and every migration turns into a negotiation across many teams (the governance problem from the EDA lesson).
+- **As a transaction mechanism** — CDC is **asynchronous** (it happens after the original write, not as part of it), and consumers lag by design. It spreads facts around *eventually*. It does not make two systems atomically consistent (that belongs to Module 7).
+- **No log access** on a managed database (one a cloud provider runs for you) — this is getting rare (Postgres logical replication, MySQL binlog and the cloud equivalents are almost everywhere), but check before you commit.
+- **Common misuse:** treating raw CDC topics as the company-wide bus for domain events. Then every consumer depends on table schemas, and every migration turns into a negotiation across many teams (the governance problem from the EDA, or event-driven architecture, lesson).
 
 ### Real-world examples
 
@@ -510,7 +512,7 @@ In the figure above, every kind of write — app code, bulk imports and manual f
 - **Postgres logical replication and replication slots** — the mechanism underneath (and the cause of the Q3 disk failure). **MySQL's binlog** is the matching change log.
 - **Managed ingest:** **Fivetran, AWS DMS, Snowpipe Streaming** — CDC and ingestion offered as services someone else runs.
 - **Netflix's DBLog** and similar in-house systems — the pattern at the scale of a streaming giant, with snapshot and tail combined.
-- **For AI engineers:** CDC keeps feature stores and retrieval indexes fresh. Feature stores read changes from operational tables, so values like "user's current plan" or "orders this week" update within seconds, without app teams having to publish anything. For **RAG** (retrieval-augmented generation), changes to content tables trigger **re-embedding only the changed rows** (the vector-index read model from the CQRS lesson). That way, stale embeddings don't hurt relevance.
+- **For AI engineers:** CDC keeps feature stores and retrieval indexes fresh. Feature stores read changes from operational tables, so values like "user's current plan" or "orders this week" update within seconds, without app teams having to publish anything. For **RAG** (retrieval-augmented generation), changes to content tables trigger **re-embedding only the changed rows** (the vector-index read model from the CQRS lesson; a **vector index** finds items whose embeddings are close to a query's embedding). That way, stale embeddings don't hurt relevance.
 
 ### In the interview
 
@@ -577,10 +579,10 @@ The team wants "exactly once". The idempotency lesson said exactly-once delivery
 
 1. **Coupling point 1 — state with position.** The stream lesson's **checkpoint** saves the running counts *atomically with* the log offset they belong to. So restore-and-rewind puts the count and the offset back at the same logical moment. The replayed events then update a state that doesn't include them yet, and the total comes out right. **Flink** takes a consistent snapshot of a whole pipeline with many operators using **checkpoint barriers**. These are markers that travel through the stream along with the data. Each operator takes its snapshot when the barrier reaches it, so every snapshot describes the same logical point.
 2. **Coupling point 2 — outputs with position.** Replays show up at the sink, and there are two ways to make them harmless:
-   - **Transactional sink** (e.g. Kafka). A **transaction** bundles writes so that they all become visible together, or none do. The job writes its outputs *and* commits the offsets it consumed, all in one transaction. Downstream readers configured with **`read_committed`** see both or neither. If the job crashes partway through a window, the open transaction **aborts**. The partial outputs stay hidden and the offsets stay put. The replay then reprocesses the events and commits once. Under the hood this is a **two-phase commit** inside the log system, where the participants are replicated and the coordinators can recover.
+   - **Transactional sink** (e.g. Kafka). A **transaction** bundles writes so that they all become visible together, or none do. The job writes its outputs *and* commits the offsets it consumed, all in one transaction. Downstream readers configured with **`read_committed`** see both or neither. If the job crashes partway through a window, the open transaction **aborts**. The partial outputs stay hidden and the offsets stay put. The replay then reprocesses the events and commits once. Under the hood this is a **two-phase commit** (a protocol where a coordinator first asks every participant to *prepare*, and only when all agree tells them to *commit*) inside the log system, where the participants are replicated and the coordinators can recover.
    - **Idempotent sink.** Writes that are deterministic and keyed: `UPSERT (partner, day) = count` (an **upsert** inserts the row if it's missing, or overwrites it if it exists). A replay writes the very same values, so you don't need transactions or the read-committed delay. For most production pipelines this is enough, so try it first.
-3. **Kafka's two enablers underneath:** the **idempotent producer** tags every append with a sequence number per producer and per partition, so the broker throws away duplicate appends (it's an idempotency key by another name). And **transactions** make writes across many partitions, together with the offset commit, atomic.
-4. **The boundary.** The guarantee applies **only inside the transactional log ecosystem**. Outside side effects — sending an email, calling a partner's API, firing a webhook — can't be rolled back or overwritten by a Kafka transaction. For those, Module 5's rules still apply: idempotency keys and deduplication on the receiving side.
+3. **Kafka's two enablers underneath:** the **idempotent producer** tags every append with a sequence number per producer and per **partition** (one ordered slice of a topic), so the **broker** (a Kafka server) throws away duplicate appends (it's an idempotency key by another name). And **transactions** make writes across many partitions, together with the offset commit, atomic.
+4. **The boundary.** The guarantee applies **only inside the transactional log ecosystem**. Outside side effects — sending an email, calling a partner's API, firing a **webhook** (an HTTP call one system makes to notify another) — can't be rolled back or overwritten by a Kafka transaction. For those, Module 5's rules still apply: idempotency keys and deduplication on the receiving side.
 
 *Crash recovery with checkpoint and transactional sink*
 ```mermaid
@@ -644,13 +646,13 @@ Senior summary: you get an exactly-once effect from idempotent upserts where out
 - **Flink checkpoint barriers + two-phase-commit sinks** — prepare when the checkpoint happens, commit when the checkpoint completes (the real-world example the 2PC lesson promised).
 - **Spark Structured Streaming** — checkpoints plus idempotent sinks stamped with transaction IDs, running at micro-batch cadence (small batches every few seconds).
 - **Google Dataflow** — exactly-once processing as the default on a managed platform.
-- **For AI engineers:** token-usage metering (billing per million tokens) is exactly the pipeline from this incident. It is counter-shaped, high-volume and about money, so it runs on this machinery. Usage events go on the log, aggregation is checkpointed, and transactional or keyed-upsert sinks feed billing, while a live dashboard reads the same stream more loosely. Counting eval pass rates and attributing cost per tenant deserve the same care. This also closes out the caveat from the write-behind lesson: anything an invoice or leaderboard depends on needs state, position and output tied together.
+- **For AI engineers:** token-usage metering (billing per million tokens) is exactly the pipeline from this incident. It is counter-shaped, high-volume and about money, so it runs on this machinery. Usage events go on the log, aggregation is checkpointed, and transactional or keyed-upsert sinks feed billing, while a live dashboard reads the same stream more loosely. Counting eval pass rates and attributing cost per **tenant** (one customer account in a shared system) deserve the same care. This also closes out the caveat from the write-behind lesson: anything an invoice or leaderboard depends on needs state, position and output tied together.
 
 ### In the interview
 
 The trap version: "Can you guarantee exactly-once delivery?" Start by explaining the distinction (delivery: no; effect: yes, if you build for it), and only then describe the machinery. The applied version: "design usage-based billing on a stream".
 
-> **30-second answer:** "Exactly-once delivery can't be done. Acknowledgments can get lost, so a sender always has to pick between resending and risking loss. What you can get is an exactly-once *effect*: at-least-once delivery, with duplicates made harmless by tying three things together. First, operator state is snapshotted along with the log offset, so a rewind puts the counts and the bookmark back to the same moment. Second, outputs move together with offsets. That's either one transaction, Kafka-style, with read-committed consumers, or deterministic keyed upserts that a replay overwrites with identical values. I try the upsert first. The boundary I always call out: the guarantee lives inside the log ecosystem. An email sent from the pipeline escapes every transaction, so external effects need idempotency keys and deduplication at the receiver. And for a dashboard I'd skip all of this, because the machinery is for numbers that auditors check."
+> **30-second answer:** "Exactly-once delivery can't be done. Acknowledgments (the receiver's "got it" replies) can get lost, so a sender always has to pick between resending and risking loss. What you can get is an exactly-once *effect*: at-least-once delivery, with duplicates made harmless by tying three things together. First, operator state is snapshotted along with the log offset, so a rewind puts the counts and the bookmark back to the same moment. Second, outputs move together with offsets. That's either one transaction, Kafka-style, with read-committed consumers, or deterministic keyed upserts that a replay overwrites with identical values. I try the upsert first. The boundary I always call out: the guarantee lives inside the log ecosystem. An email sent from the pipeline escapes every transaction, so external effects need idempotency keys and deduplication at the receiver. And for a dashboard I'd skip all of this, because the machinery is for numbers that auditors check."
 
 **Likely follow-ups (with answers):**
 - *"Crash mid-window — walk me through recovery."* — The open transaction aborts, so readers of committed data never see what was in it. State is restored from the checkpoint along with its offset. The log replays the gap, and the reprocessed outputs are committed once. The count stays exact because the restored state and the replay offset describe the same logical moment.
@@ -681,13 +683,13 @@ The trap version: "Can you guarantee exactly-once delivery?" Start by explaining
 *Original lesson: [Backpressure on DesignGurus ↗](https://www.designgurus.io/course-play/system-design-patterns/doc/6a5380b0a3d6c4c011ebad46)*
 
 
-**What it is.** Sometimes a producer sends data faster than its consumer can handle it. When that happens, something has to give. A buffer fills up, data gets thrown away, or the producer slows down. **Backpressure** means *choosing on purpose* which of these happens. When slowing down is the choice, it also means carrying the consumer's "slow down" signal back upstream. If nobody makes a deliberate choice, the default is a buffer with no limit, and that eventually crashes with out-of-memory.
+**What it is.** Sometimes a producer sends data faster than its consumer can handle it. When that happens, something has to give. A buffer fills up, data gets thrown away, or the producer slows down. **Backpressure** means *choosing on purpose* which of these happens. When slowing down is the choice, it also means carrying the consumer's "slow down" signal back upstream. If nobody makes a deliberate choice, the default is a buffer with no limit, and that eventually crashes with out-of-memory (the process has used up its RAM and is killed).
 
 **Analogy.** Picture a kitchen where the chef plates food faster than the waiters can carry it out. You could use a heated shelf that only holds so many plates (a bounded buffer). You could throw away dishes that go cold, because only fresh ones count (drop). Or you could tell the chef to wait until a waiter is free (slow the producer). What you can't do is let plates pile up on the floor forever.
 
 ### The problem: rate mismatch is normal
 
-You have already seen this three times. In the bidirectional-streaming lesson, a slow phone filled up a gateway's memory. In the queue lesson, a growing queue depth revealed a mismatch. And the rate limiter's **429** ("Too Many Requests") put a limit at the edge of the system. The rule behind all three: **producers outrunning consumers is a normal operating condition, not an exception.** Consumers get redeployed, pause for garbage collection, run into slow **sinks** (the place where a stage writes its results), and change speed over time. So every link between a faster producer and a slower consumer has to decide where the extra data goes.
+You have already seen this three times. In the bidirectional-streaming lesson, a slow phone filled up a gateway's memory. In the queue lesson, a growing queue depth revealed a mismatch. And the rate limiter's **429** ("Too Many Requests") put a limit at the edge of the system. The rule behind all three: **producers outrunning consumers is a normal operating condition, not an exception.** Consumers get redeployed, pause for **garbage collection** (the language runtime briefly stopping to reclaim unused memory), run into slow **sinks** (the place where a stage writes its results), and change speed over time. So every link between a faster producer and a slower consumer has to decide where the extra data goes.
 
 Here's the math of the default. A producer at **5,000 events/s** feeding a consumer at **3,000/s** piles up **2,000 buffered events every second**. With a buffer that has no limit, the process *will* run out of memory unless the mismatch stops. It's a crash with a timetable, and the size of the mismatch sets the timetable.
 
@@ -698,12 +700,12 @@ Every system chooses at least one of these for each stream:
 1. **Buffer it (bounded).** Hold on to the extra data when you expect the mismatch to be *temporary*. This is only correct if the buffer has a fixed maximum size, and the mismatch is a burst in front of a consumer that can catch up. A buffer with no limit isn't a strategy; it's a failure you can predict.
 2. **Drop it (by explicit policy).** Throw the extra data away when old data is worthless. A video call has no use for frames from three seconds ago. A metrics stream can sample. A "current location" update replaces the last one, so **drop-oldest, keep-latest** acts like a buffer with just one slot. Dropping is only a failure when it happens *by accident*.
 3. **Slow the producer.** Send the consumer's available capacity back upstream, so the source produces at a rate that can be sustained. Examples:
-   - **TCP flow control** — the receiver's *window* tells the sender how much it is allowed to send.
+   - **TCP flow control** — **TCP** is the internet protocol that delivers bytes reliably and in order; the receiver's *window* tells the sender how much it is allowed to send.
    - **Kafka's pull model** — consumers ask for each batch only when they are ready, so the consumer's pace *is* the flow rate. You get backpressure for free, with no return signal needed.
-   - **Reactive streams** `request(n)` — the consumer gives permission for *n* more items.
+   - **Reactive streams** (a standard API for asynchronous streams with built-in backpressure) `request(n)` — the consumer gives permission for *n* more items.
    - **Flink credit-based channels** — when an operator slows down, its reduced capacity (its credits) passes back stage by stage until it reaches the source.
 
-**A log between stages.** A common design answer is to put a Kafka topic between the producer and the consumer. It works as a huge buffer bounded by *disk*, with **retention** (how long each event is kept available). The two sides then run independently, and any mismatch shows up as **consumer lag** (how far behind the consumer has fallen). Lag can be measured, alerted on, and used to autoscale based on how old the backlog is. It doesn't remove the limit: retention is finite, and lag that goes past retention means lost data. What it does is turn a sudden full-buffer crash into a backlog you can see and recover from.
+**A log between stages.** A common design answer is to put a Kafka topic between the producer and the consumer. It works as a huge buffer bounded by *disk*, with **retention** (how long each event is kept available). The two sides then run independently, and any mismatch shows up as **consumer lag** (how far behind the consumer has fallen). Lag can be measured, alerted on, and used to **autoscale** (automatically add or remove consumer instances) based on how old the backlog is. It doesn't remove the limit: retention is finite, and lag that goes past retention means lost data. What it does is turn a sudden full-buffer crash into a backlog you can see and recover from.
 
 **Inside a streaming topology** (the chain of processing stages that a stream passes through), backpressure makes the *whole pipeline* run at the speed of its slowest stage. And since checkpoint barriers travel along the same channels as the data, they slow down too. So **checkpoint timeouts are often the first visible symptom, even when the cause is several stages away** (see self-check Q3).
 
@@ -742,15 +744,15 @@ Real pipelines mix all three: bounded channels inside, logs between stages, drop
 ### When dropping is right (and when it never is)
 
 - **Freshness-only data** — live positions, video frames, sensor readings where the newest value replaces the rest. Here drop-oldest is better than slowing the producer. Nobody needs the full history of where a driver has been.
-- **Sampled observability** — metrics and traces are built to shed data. Tail sampling is dropping done on principle.
+- **Sampled observability** — metrics and **traces** (records of one request's path through many services) are built to shed data. **Tail sampling** (deciding which traces to keep only after seeing how each request ended) is dropping done on principle.
 - **Never for money or facts** — billing events, orders, anything covered by exactly-once guarantees has to stay in a log or slow the source. Dropping them is data loss.
-- **Common misuse: hidden unbounded buffers** — in-memory queues, thread-pool queues with no limit, default async channels. Each is an out-of-memory crash waiting to happen at some unknown time. Check every "unbounded" setting, because each one is a capacity decision that nobody actually made.
+- **Common misuse: hidden unbounded buffers** — in-memory queues, **thread-pool** queues with no limit (a thread pool is a fixed set of worker threads that take tasks from a queue), default async channels. Each is an out-of-memory crash waiting to happen at some unknown time. Check every "unbounded" setting, because each one is a capacity decision that nobody actually made.
 
 ### In the interview
 
 The direct prompt: "your producer emits 5,000/s but the consumer handles 3,000 — what happens?" This tests whether you know the three responses and the unbounded-buffer failure. A debugging version: "why have our checkpoints started timing out?"
 
-> **30-second answer:** "Something has to give: you buffer, drop, or slow down. The one wrong answer is a buffer with no limit, because it turns a mismatch you could see into an out-of-memory crash on a timer. For bursts, I'd use bounded buffers. For data where only freshness matters, I'd drop on purpose and keep the latest. For a mismatch that lasts, I'd push the pressure upstream, and pull-based consumers give you that for free. That's one reason a log between stages is the go-to design: the mismatch turns into lag that you can see, alert on, and use to drive autoscaling. Inside a topology, a slow sink sets the pace for the whole pipeline and stalls checkpoints. At the very edge, backpressure becomes a 429 with Retry-After. The signal has to end up somewhere; the design choice is where."
+> **30-second answer:** "Something has to give: you buffer, drop, or slow down. The one wrong answer is a buffer with no limit, because it turns a mismatch you could see into an out-of-memory crash on a timer. For bursts, I'd use bounded buffers. For data where only freshness matters, I'd drop on purpose and keep the latest. For a mismatch that lasts, I'd push the pressure upstream, and pull-based consumers give you that for free. That's one reason a log between stages is the go-to design: the mismatch turns into lag that you can see, alert on, and use to drive autoscaling. Inside a topology, a slow sink sets the pace for the whole pipeline and stalls checkpoints. At the very edge, backpressure becomes a 429 with Retry-After (an HTTP header telling the client how long to wait before trying again). The signal has to end up somewhere; the design choice is where."
 
 **Likely follow-ups (with answers):**
 - *"Why do pull-based systems get backpressure for free?"* — Because the consumer starts each exchange. It asks for the next batch only when it's ready, so its speed is the flow rate. When no request comes, that *is* the signal. Push systems have to build a separate return channel (credits, windows, 429s).
@@ -806,7 +808,7 @@ Kafka-style **consumer groups** are the one mechanism behind all three.
      consumer C ← partitions 8-11     partitions' offsets (bookmarks)
 ```
 
-1. **The producer routes by key hash.** `partition = hash(key) % N` always gives the same answer for the same key. So every event for one key ends up in one ordered partition, in the order it was produced. Pick the key the way you'd pick a shard key: it has to keep related events together *and* spread the load evenly.
+1. **The producer routes by key hash.** A **hash** function turns a key into a number, always the same number for the same key, and `% N` (modulo) keeps the remainder after dividing by N. So `partition = hash(key) % N` always gives the same answer for the same key. So every event for one key ends up in one ordered partition, in the order it was produced. Pick the key the way you'd pick a shard key: it has to keep related events together *and* spread the load evenly.
 2. **The exclusive lease.** Inside one consumer group, exactly one consumer owns each partition at any moment. That exclusivity is what keeps things in order: only one reader processes that partition and moves its position forward. *Different* groups each receive all the partitions on their own (pub/sub fan-out).
 3. **Offsets per partition.** An **offset** records how far a consumer has read in a single partition. If you commit the offset *after* processing, you get at-least-once delivery (a message may be seen twice). So handlers need to be **idempotent**.
 4. **Rebalancing.** When a consumer joins or dies, the group hands out the partitions again. Processing pauses briefly while ownership, offsets and any local state move over. For stateful consumers, the state has to move too. Frequent **rebalance storms** usually come from unstable consumers, or from processing that takes longer than the session timeout (so the group decides the consumer is dead).
@@ -814,7 +816,7 @@ Kafka-style **consumer groups** are the one mechanism behind all three.
 
 Two problems you've seen before, in a new form:
 - **The hot partition.** A **hot key** (one with much more traffic than the rest) sends all its volume to a single partition. That could be 40% of all the work landing on one consumer. Hashing spreads *keys*, not *weight* (the same skew you saw with shards, cache keys and reducers). Remedies: cache reads, split or **salt** the heavy key (a composite key, but only if its ordering needs allow it), pre-aggregate, or handle the extreme keys separately (e.g. give them their own topic).
-- **Per-lane head-of-line blocking.** A **poison message** (one that fails every time it's processed) only blocks its own partition, not the whole topic. But in lanes that must stay strictly in order, moving it to a dead-letter queue changes the order. So those consumers must **pause and fix** instead of using a DLQ.
+- **Per-lane head-of-line blocking** (one stuck item holding up everything queued behind it). A **poison message** (one that fails every time it's processed) only blocks its own partition, not the whole topic. But in lanes that must stay strictly in order, moving it to a **dead-letter queue** (DLQ: a side queue where messages that keep failing are parked for later) changes the order. So those consumers must **pause and fix** instead of using a DLQ.
 
 *Key-hashed partitions with exclusive consumer ownership*
 ```mermaid
@@ -830,7 +832,7 @@ The diagram above matches the code block. The producer hashes each key into one 
 
 ### Partitioned log vs. competing-consumer queue
 
-| | Partitioned log (Kafka-style) | Competing consumers (SQS-style) |
+| | Partitioned log (Kafka-style) | Competing consumers (SQS-style; Amazon's simple cloud queue) |
 |---|---|---|
 | Ordering | Strict for each key (each lane) | None — any worker can take any message |
 | Scaling granularity | By partition; the count is fixed at the start | By worker; add one whenever you like |
@@ -855,7 +857,7 @@ The ruling: **independent jobs → competing consumers; ordered facts → partit
 - **Order doesn't matter** — independent jobs (like image resizes) fit a plain competing-consumer queue: easier scaling, no lanes, no rebalances.
 - **You need global order** — that means a single partition and a single consumer, which puts a cap on throughput. First ask what *really* needs to be in order. Usually it's per entity, which this pattern already handles.
 - **Tiny throughput** — one consumer and one lane are enough.
-- **Common misuse:** using random or round-robin keys while assuming each entity's events stay in order. That brings back refund-before-charge. The key *defines* the scope of the ordering.
+- **Common misuse:** using random or **round-robin** keys (assigned in turn, in a fixed rotation) while assuming each entity's events stay in order. That brings back refund-before-charge. The key *defines* the scope of the ordering.
 
 ### In the interview
 
@@ -899,7 +901,7 @@ The prompt: "process events in parallel but keep per-user order". Follow-ups: pa
 
 The team's Kafka knowledge was three slogans. Each one cost an incident:
 - **"Kafka never loses messages."** Producers used `acks=1` (the leader confirms as soon as *it* has the write). A broker's disk controller failed before followers copied the last ~40 ms: **~800 confirmed orders vanished** (≈20,000 orders/s × 0.04 s).
-- **"Replication factor 3 means three copies."** Both followers of a partition fell out of sync; the topic accepted writes with one in-sync copy, then that broker died — and an out-of-sync follower was allowed to become leader, so offsets **went backwards** with a gap of missing events.
+- **"Replication factor 3 means three copies."** (The **replication factor** is how many copies of each partition Kafka keeps: one **leader** that takes writes and **followers** that copy from it.) Both followers of a partition fell out of sync; the topic accepted writes with one in-sync copy, then that broker died — and an out-of-sync follower was allowed to become leader, so offsets **went backwards** with a gap of missing events.
 - **"Just add consumers."** A consumer taking 6 minutes per batch was declared dead (limit 5 minutes), its partitions moved, it came back, the group rebalanced again — a **rebalance storm** that stalled processing for an hour.
 
 None of these was a Kafka bug. Each was a setting whose meaning nobody had checked.
@@ -907,14 +909,14 @@ None of these was a Kafka bug. Each was a setting whose meaning nobody had check
 ### Why the obvious fixes fail
 
 - **"Set replication factor 3 and relax."** Replication factor is how many copies *can* exist. What protects a write is how many copies exist *before the producer is told "ok"* — that's `acks` together with `min.insync.replicas`.
-- **"Force every write to disk (fsync)."** Kafka deliberately relies on copies on *other machines* (ideally other zones) instead; per-message fsync would cut throughput heavily. Durability comes from replication, not one disk.
+- **"Force every write to disk (fsync)."** (**fsync** forces the operating system to push data from memory onto the physical disk.) Kafka deliberately relies on copies on *other machines* (ideally other **zones**, meaning separate data centres within one cloud region) instead; per-message fsync would cut throughput heavily. Durability comes from replication, not one disk.
 - **"Turn on exactly-once."** Kafka's exactly-once covers *reading from Kafka, processing and writing back to Kafka*. It does not stop your consumer from sending the same email twice. External effects still need the [Idempotency](../05-reliability/README.md#idempotency) and [Exactly-Once Semantics](#exactly-once-semantics) lessons' machinery.
 
 ### How it works
 
 **1. Storage: a partition is a folder of segment files.** A **topic** is split into **partitions**; each partition is an ordered, append-only log with its own offsets (0, 1, 2, …). On a broker's disk a partition is a directory of **segments**:
-- `00000000000000500000.log` — the records themselves, grouped into **record batches** (a batch carries its base offset, timestamps, a checksum, and producer ID and sequence numbers used by idempotence). The file name is the first offset in the segment.
-- `.index` — a **sparse offset index**: an entry roughly every 4 KB of log, mapping offset → byte position. To find offset 500,123, Kafka binary-searches the index, jumps near it and scans a few KB.
+- `00000000000000500000.log` — the records themselves, grouped into **record batches** (a batch carries its base offset, timestamps, a **checksum** (a small value computed from the bytes to detect corruption), and producer ID and sequence numbers used by idempotence). The file name is the first offset in the segment.
+- `.index` — a **sparse offset index**: an entry roughly every 4 KB of log, mapping offset → byte position. To find offset 500,123, Kafka **binary-searches** the index (repeatedly halves the range it is looking in), jumps near it and scans a few KB.
 - `.timeindex` — timestamp → offset, so a consumer can "rewind to 09:00".
 - Only the newest (**active**) segment is written to. When it reaches its size limit (1 GiB by default) or age, it is closed and a new one starts.
 
@@ -922,17 +924,17 @@ None of these was a Kafka bug. Each was a setting whose meaning nobody had check
 
 **2. Why it is fast.** Five choices, all about avoiding work:
 - **Sequential I/O** — appends and forward reads are the fastest thing a disk does (hundreds of MB/s even on spinning disks).
-- **The OS page cache** — no big in-process cache; consumers that keep up read recent data from kernel memory.
-- **Zero-copy** — bytes are never modified, so `sendfile` moves them from page cache to socket without passing through the application (TLS needs them in user space, so encrypted clusters lose this and need more CPU).
+- **The OS page cache** (memory the operating system uses to hold recently read or written file data) — no big in-process cache; consumers that keep up read recent data from kernel memory.
+- **Zero-copy** — bytes are never modified, so `sendfile` moves them from page cache to **socket** (the operating system's endpoint for a network connection) without passing through the application (**TLS**, the encryption behind HTTPS, needs them in user space, so encrypted clusters lose this and need more CPU).
 - **Batching and compression end to end** — producers fill per-partition batches (waiting `linger.ms`), compress them; brokers store them as is; consumers decompress. Fewer requests, 3–5× fewer bytes for text-like data.
-- **Pull with long polling** — "everything after offset X, up to 1 MB, wait up to 500 ms"; a consumer's progress is one number per partition.
+- **Pull with long polling** (the server holds a request open until data arrives or a time limit passes) — "everything after offset X, up to 1 MB, wait up to 500 ms"; a consumer's progress is one number per partition.
 
-**3. Replication: leader, followers, ISR and the high watermark.** Each partition has one **leader** replica (it serves all writes and, by default, reads) and followers on other brokers — placed in different availability zones when brokers are labelled with their rack/zone. Followers *fetch* from the leader just like consumers.
+**3. Replication: leader, followers, ISR and the high watermark.** Each partition has one **leader** replica (it serves all writes and, by default, reads) and followers on other brokers — placed in different **availability zones** (AZs) when brokers are labelled with their rack/zone. Followers *fetch* from the leader just like consumers.
 - **LEO (log end offset)** — the next offset a replica will write; each replica has its own.
 - **ISR (in-sync replica set)** — the leader plus followers that have caught up within `replica.lag.time.max.ms` (30 s by default). A slow follower drops out of the ISR, so it can't hold back commits, and rejoins after catching up.
-- **High watermark (HW)** — the highest offset that every ISR member has. Records below it are **committed**. Consumers can read only up to the HW, so they never see a record that a leader failover could erase.
+- **High watermark (HW)** — the highest offset that every ISR member has. Records below it are **committed**. Consumers can read only up to the HW, so they never see a record that a leader **failover** (switching to a new leader after the old one fails) could erase.
 - **Leader epochs** — each new leader increments an epoch number. A returning old leader uses it to find where its log diverged and **truncates** its uncommitted tail, rather than keeping records nobody else has.
-- **The controller** — a small quorum of controller nodes (KRaft mode, using the Raft consensus algorithm; ZooKeeper was removed in Kafka 4.0) stores metadata, detects dead brokers and elects new partition leaders from the ISR.
+- **The controller** — a small **quorum** (a group that decides by majority) of controller nodes (KRaft mode, using the **Raft consensus algorithm**, a protocol that lets several nodes agree on the same data even if some fail; **ZooKeeper**, the separate coordination service Kafka used to depend on, was removed in Kafka 4.0) stores metadata, detects dead brokers and elects new partition leaders from the ISR.
 
 *A produce with acks=all: the producer is answered only after every in-sync replica has the batch*
 ```mermaid
@@ -969,9 +971,9 @@ Each follower's *next* fetch tells the leader how far it got; once every in-sync
 
 The safe default set: **replication factor 3 across 3 zones, `min.insync.replicas=2`, `acks=all`, idempotence on, unclean election off, commit after processing, alert on lag age.** It tolerates losing one broker with no loss *and* no downtime; losing two makes writes fail loudly rather than silently.
 
-**5. Consumer groups, inside.** Each group has a **group coordinator** — the broker leading the partition of the internal `__consumer_offsets` topic that the group's name hashes to. Members send heartbeats to it; committed offsets are written to that compacted topic.
+**5. Consumer groups, inside.** Each group has a **group coordinator** — the broker leading the partition of the internal `__consumer_offsets` topic that the group's name hashes to. Members send **heartbeats** (small regular "I'm alive" messages) to it; committed offsets are written to that compacted topic.
 - **Two timers decide "dead".** `session.timeout.ms` (45 s by default) — no heartbeat for this long means the process is gone. `max.poll.interval.ms` (5 minutes by default) — no call to `poll()` for this long means the consumer is stuck, so it is removed even though its heartbeat thread is alive. That second timer caused the rebalance storm above: process in smaller batches (`max.poll.records`) or hand slow work to a thread pool.
-- **Rebalancing styles.** The original *eager* protocol made every member give up every partition on each change — a stop-the-world pause. **Cooperative (incremental) rebalancing** moves only the partitions that must move. **Static membership** (`group.instance.id`) lets a restarting pod keep its partitions if it returns within the session timeout, so rolling deploys don't trigger rebalances. The **new consumer group protocol** (KIP-848, generally available in Kafka 4.0; opt in with `group.protocol=consumer`) moves assignment to the broker and makes every rebalance incremental.
+- **Rebalancing styles.** The original *eager* protocol made every member give up every partition on each change — a stop-the-world pause. **Cooperative (incremental) rebalancing** moves only the partitions that must move. **Static membership** (`group.instance.id`) lets a restarting **pod** (one running container instance in Kubernetes) keep its partitions if it returns within the session timeout, so **rolling deploys** (updating instances a few at a time) don't trigger rebalances. The **new consumer group protocol** (KIP-848; a **KIP** is a Kafka Improvement Proposal, generally available in Kafka 4.0; opt in with `group.protocol=consumer`) moves assignment to the broker and makes every rebalance incremental.
 - Everything else — ordering per key, partitions as the parallelism ceiling, hot partitions — is the [Partitioned Consumption](#partitioned-consumption) lesson.
 
 **6. Exactly-once, inside.** Two mechanisms, layered:
@@ -984,8 +986,8 @@ Together these give **read-process-write exactly-once within Kafka** — what Ka
 
 | Generation | Examples | Model | Strength | Weak spot |
 |---|---|---|---|---|
-| Enterprise queues (1990s) | IBM MQ (MQSeries, 1993), JMS brokers | Queue manager; per-message acknowledgment; transactions | Reliable delivery of individual business messages | Vertical scaling; messages gone once consumed |
-| Smart brokers (2007 →) | RabbitMQ (AMQP) | Exchanges route messages to queues; per-message acks; priorities, delays | Flexible routing, task queues | Throughput per queue; no replay (streams added later) |
+| Enterprise queues (1990s) | IBM MQ (MQSeries, 1993), JMS (Java Message Service) brokers | Queue manager; per-message acknowledgment; transactions | Reliable delivery of individual business messages | Vertical scaling; messages gone once consumed |
+| Smart brokers (2007 →) | RabbitMQ (AMQP, an open messaging protocol) | Exchanges route messages to queues; per-message acks; priorities, delays | Flexible routing, task queues | Throughput per queue; no replay (streams added later) |
 | The distributed log (2011 →) | Apache Kafka (from LinkedIn) | Partitioned, replicated append-only log; consumer offsets | Huge throughput, replay, many independent readers | Per-message routing, priorities and delays need extra topics |
 | Separated storage (2016 →) | Apache Pulsar (from Yahoo) | Stateless brokers over a separate storage layer (BookKeeper) | Independent scaling of serving and storage; multi-tenancy; built-in geo-replication | More components to run |
 
@@ -994,7 +996,7 @@ Newer designs keep Kafka's protocol but change the engine or storage (Redpanda i
 ### Walkthrough with numbers: the order topic, hardened
 
 - **Setup.** `orders`: 48 partitions, replication factor 3, one replica per zone, `min.insync.replicas=2`, `acks=all`, idempotence on, 7-day retention. Peak 20,000 orders/s × 1 KB = **20 MB/s** in, **60 MB/s** written cluster-wide with replication.
-- **Latency cost of `acks=all`.** Followers are ~1–2 ms away across zones, and producers linger 5 ms to batch. p99 produce latency ≈ **10–15 ms** instead of ~5 ms with `acks=1` — the price of not losing the 800 orders.
+- **Latency cost of `acks=all`.** Followers are ~1–2 ms away across zones, and producers linger 5 ms to batch. **p99** produce latency (the time that 99% of requests beat) ≈ **10–15 ms** instead of ~5 ms with `acks=1` — the price of not losing the 800 orders.
 - **A broker dies.** The controller elects new leaders from the ISR within **seconds**; producers retry (idempotence drops the duplicates); nothing committed is lost. The ISR of affected partitions is now 2 — still at `min.insync.replicas`, so writes continue.
 - **A second broker dies.** Partitions with ISR 1 **reject writes** (`NotEnoughReplicas`) — a visible outage instead of silent single-copy data.
 - **The rebalance storm, replayed.** `max.poll.records` 500 → 50 makes a poll loop ~40 s instead of 6 minutes; static membership keeps partitions in place during deploys. Rebalances per deploy: **~20 → 0**.
@@ -1066,7 +1068,7 @@ Prompts: "can Kafka lose messages?", "why is Kafka fast?", "what is the ISR?", "
 
 ### The brief
 
-- **In:** the clickstream — page views, searches and cart events — at about **30,000 events/s at peak** from web and mobile, plus order events (which we've had since Module 2).
+- **In:** the **clickstream** (the running record of what users view and click) — page views, searches and cart events — at about **30,000 events/s at peak** from web and mobile, plus order events (which we've had since Module 2).
 - **Out — three customers, three budgets:**
   - **Live ops dashboard** — orders per minute, conversion, top products. Staleness: *seconds*. Accuracy: honest, but forgiving.
   - **Daily business reports** — revenue by category, good enough for finance. Staleness: *daily*. Accuracy: *audited*.
@@ -1115,7 +1117,7 @@ The usual move would be a separate nightly batch job over the warehouse, just fo
 
 *Decision: one logic source.* Metric definitions (how revenue is calculated, how returns are adjusted) live in **one shared library**. The streaming job computes them continuously. The "daily report" is then just a view of those aggregates **finalized at day close**.
 
-*Where does the warehouse fit?* It is still there, fed by CDC and the same event topics. It serves ad-hoc analysis, **ML training**, and batch-shaped work such as joins over many years and cohort studies. It stores the stream's outputs and the raw history, but it **never re-implements** the dashboard metrics.
+*Where does the warehouse fit?* It is still there, fed by CDC and the same event topics. It serves ad-hoc analysis, **ML training**, and batch-shaped work such as joins over many years and **cohort studies** (comparing groups of users who, for example, signed up in the same month). It stores the stream's outputs and the raw history, but it **never re-implements** the dashboard metrics.
 
 *When a metric definition changes:* use the Kappa move. Replay from an earlier offset with the new logic, verify, and switch consumers over (the migration playbook). **Scheduled backfills**, borrowed from Lambda, put a limit on how long any streaming error can last. Dashboard and finance agree because each metric has a single implementation.
 

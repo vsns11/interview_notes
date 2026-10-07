@@ -4,7 +4,7 @@
 *Original lesson: [Module introduction on DesignGurus ↗](https://www.designgurus.io/course-play/system-design-patterns/doc/6a53590aba41b5b746965576)*
 
 
-**What this module is about.** Picture one database handling "move $50 from checking to savings." Either both halves happen, or neither does. That all-or-nothing promise has a name: **atomicity**. A single database gets it almost for free from its **write-ahead log (WAL)**. The WAL is a file where the database first writes down, durably, what it plans to do. Only then does it do it. If it crashes halfway, it reads the log and either finishes or reverses the work. Now split the data across several machines (shards) or several services. No one WAL sees both halves anymore. Say one change lands on shard 2 and its partner change lands on shard 5. Nothing ties them together on its own. This module shows how to get all-or-nothing back across machines. It also shows what each approach costs you in speed, availability, or complexity.
+**What this module is about.** Picture one database handling "move $50 from checking to savings." Either both halves happen, or neither does. That all-or-nothing promise has a name: **atomicity**. A single database gets it almost for free from its **write-ahead log (WAL)**. The WAL is a file where the database first writes down, durably (saved to disk so it survives a crash or power loss), what it plans to do. Only then does it do it. If it crashes halfway, it reads the log and either finishes or reverses the work. Now split the data across several machines (shards — each machine holds one slice of the data) or several services (separately deployed programs that each own their own database). No one WAL sees both halves anymore. Say one change lands on shard 2 and its partner change lands on shard 5. Nothing ties them together on its own. This module shows how to get all-or-nothing back across machines. It also shows what each approach costs you in speed, availability, or complexity.
 
 **Analogy.** Think of a single database as one bank teller with one ledger. Moving money between your two accounts takes a single pen stroke. A distributed system is more like two separate banks. Each must update its own ledger for the same transfer. Somebody has to coordinate them, and every coordination method comes with a price.
 
@@ -14,17 +14,17 @@ Only four patterns live here, so it is the smallest module. It is also the tough
 
 | The situation | The pattern |
 |---|---|
-| Several parties must either all commit or all back out | Two-Phase Commit (2PC) |
+| Several parties must either all commit (make their changes permanent) or all back out | Two-Phase Commit (2PC) |
 | A workflow has many steps, and any one of them might fail midway | Saga |
-| Several copies of the same data need to agree, with no single leader | Quorum |
+| Several copies of the same data need to agree, with no single leader (main copy that takes all writes) | Quorum |
 | We need to know who saw which update, and in what order | Vector Clocks |
 
 ### Two facts that organize the module
 
-**Fact 1 — when the network splits, you have to pick a side.** A **network partition** happens when groups of machines keep running but lose contact with each other. At that moment a system has two options. Option (a): stop serving requests until the link comes back. Data stays **consistent**, but you lose **availability**. Option (b): keep serving on both sides and sort out the differences afterwards. You stay available, but the data is briefly inconsistent. This unavoidable choice is known as the **CAP trade-off** (Consistency, Availability, Partition tolerance). Smarter engineering cannot make it go away. It comes from how networks physically behave — much like how availability shrinks as you chain components together. Each pattern here makes its own choice. Interviewers also like to ask about CAP directly.
+**Fact 1 — when the network splits, you have to pick a side.** A **network partition** happens when groups of machines keep running but lose contact with each other. At that moment a system has two options. Option (a): stop serving requests until the link comes back. Data stays **consistent**, but you lose **availability**. Option (b): keep serving on both sides and sort out the differences afterwards. You stay available, but the data is briefly inconsistent. This unavoidable choice is known as the **CAP trade-off** (Consistency, Availability, Partition tolerance). (The [System Design Fundamentals](../00-system-design-fundamentals/README.md) primer introduces CAP, replication and sharding from scratch.) Smarter engineering cannot make it go away. It comes from how networks physically behave — much like how availability shrinks as you chain components together. Each pattern here makes its own choice. Interviewers also like to ask about CAP directly.
 
-**Fact 2 — the cheapest distributed transaction is one you never need.** Coordinating many machines is costly. So reach for cheaper tools first:
-- **Shard-key discipline** (covered in the sharding lesson): choose the shard key so that a single customer's checkout sits on a single shard. Then a normal local transaction still does the job.
+**Fact 2 — the cheapest distributed transaction is one you never need.** (A *distributed transaction* is one all-or-nothing change that spans several machines or services.) Coordinating many machines is costly. So reach for cheaper tools first:
+- **Shard-key discipline** (covered in the sharding lesson): choose the shard key (the field that decides which shard a record lives on) so that a single customer's checkout sits on a single shard. Then a normal local transaction (one that runs inside a single database) still does the job.
 - **Idempotent operations** and **commutative operations** shrink what truly needs agreement. Idempotent means repeating it is safe: running it twice has the same effect as running it once. Commutative means the order doesn't matter: any order gives the same result.
 
 In most systems, only a few flows truly need distributed-transaction machinery. Typical examples are moving money between different owners, or promising stock across services. Save the heavy machinery for those.
@@ -33,8 +33,8 @@ In most systems, only a few flows truly need distributed-transaction machinery. 
 
 The store's order workflow now touches three services: inventory, payment, and shipping. We need all-or-nothing behavior across all of them again.
 - **Two-Phase Commit** relies on a coordinator that gathers a unanimous "yes". The catch: every participant is stuck waiting until the coordinator announces its decision.
-- **Saga** is the usual answer between services. You run the steps in order. If a later step fails, you run "undo" steps (called compensations) for the earlier ones that already finished. It reuses the pub/sub ideas from earlier.
-- **Quorum** deals with several leaderless replicas of the same data. You pick how many replicas must confirm a write (W) and how many a read must ask (R). Choose them so that **W + R > N**. Then any read and any write always have at least one replica in common.
+- **Saga** is the usual answer between services. You run the steps in order. If a later step fails, you run "undo" steps (called compensations) for the earlier ones that already finished. It reuses the pub/sub (publish-subscribe: a sender broadcasts events and any interested service receives them) ideas from earlier.
+- **Quorum** deals with several leaderless replicas (copies of the same data kept on different machines) of the same data. You pick how many replicas must confirm a write (W) and how many a read must ask (R). Choose them so that **W + R > N**. Then any read and any write always have at least one replica in common.
 - **Vector Clocks** keep track of which updates were aware of which other updates. That lets a leaderless system tell edits made at the same time apart from edits made one after another.
 - The **capstone** builds order fulfillment two ways — with 2PC and with a saga — and compares how each one breaks.
 
@@ -67,7 +67,7 @@ The store's order workflow now touches three services: inventory, payment, and s
 
 The store now lets customers send gift-card balances to each other. Customer A's data sits on shard 2 and A sends $50 to customer B, whose data sits on shard 5. So a single logical operation touches two databases, and no one transaction spans both.
 
-Version one simply performs two writes, one after the other: take $50 off on shard 2, then add $50 on shard 5. Thousands of transfers go through fine. Then, at **2:37 AM**, the application server crashes. The subtraction had already committed. The addition had not been sent yet. No retry happens, because the process that knew "shard 5 still needs its addition" no longer exists. No error gets logged either. The nightly reconciliation job later notices $50 is missing. (Had the writes run in the reverse order, the very same crash would have *invented* $50 from nothing.) Both shards behaved perfectly on their own. The problem is that the *operation as a whole* was never atomic. All-or-nothing across machines doesn't come for free; you have to build it.
+Version one simply performs two writes, one after the other: take $50 off on shard 2, then add $50 on shard 5. Thousands of transfers go through fine. Then, at **2:37 AM**, the application server (the machine running the store's own code) crashes. The subtraction had already committed. The addition had not been sent yet. No retry happens, because the process that knew "shard 5 still needs its addition" no longer exists. No error gets logged either. The nightly reconciliation job (a batch check that compares records and flags mismatches) later notices $50 is missing. (Had the writes run in the reverse order, the very same crash would have *invented* $50 from nothing.) Both shards behaved perfectly on their own. The problem is that the *operation as a whole* was never atomic. All-or-nothing across machines doesn't come for free; you have to build it.
 
 ### Why the obvious fixes fail
 
@@ -82,7 +82,7 @@ Look at the course figure below. The coordinator speaks straight to Shard 2 (sub
 ![Two-Phase Commit](images/two-phase-commit-1.svg)
 *Figure — Two-Phase Commit (course diagram)*
 
-1. **Phase 1 — Prepare.** The coordinator asks each participant, "Can you commit this — yes or no?" Before answering, each participant does *all* of the work. It writes a durable **PREPARED** entry into its own write-ahead log. It **keeps its row locks**. Only then does it vote. *Why:* because the work is done and logged first, the participant can still carry out a "commit" even after crashing and restarting.
+1. **Phase 1 — Prepare.** The coordinator asks each participant, "Can you commit this — yes or no?" Before answering, each participant does *all* of the work. It writes a durable **PREPARED** entry into its own write-ahead log. It **keeps its row locks** (a lock stops other transactions from changing — or sometimes reading — those rows until it is released). Only then does it vote. *Why:* because the work is done and logged first, the participant can still carry out a "commit" even after crashing and restarting.
 2. **A yes vote is a binding promise.** It means: "The work is done and safely on disk. I can commit even if I crash. I'll keep my locks until you tell me the result."
 3. **The coordinator writes down its decision.** If every vote is yes, it logs COMMIT in its own log. If any vote is no, or any participant stays silent, it logs ABORT. *Why:* that one log entry *is* the transaction's final outcome. Recovery can always look it up.
 4. **Phase 2 — Commit or abort.** The coordinator sends the decision to everyone. Each participant commits (or aborts) and then lets go of its locks.
@@ -110,7 +110,7 @@ stateDiagram-v2
 
 ### Walkthrough with numbers (the $50 transfer under 2PC)
 
-- **Cost when all goes well.** You pay for two network round trips (one for prepare, one for commit). You also pay for a durable disk write at every participant and at the coordinator. That disk write is an **fsync**, which forces data onto disk before moving on. Altogether the transfer takes about **4x** as long as one write on a local shard. You'll notice it, but it's often acceptable.
+- **Cost when all goes well.** You pay for two network round trips (a round trip is one message sent plus its reply) (one for prepare, one for commit). You also pay for a durable disk write at every participant and at the coordinator. That disk write is an **fsync**, which forces data onto disk before moving on. Altogether the transfer takes about **4x** as long as one write on a local shard. You'll notice it, but it's often acceptable.
 - **The hidden cost: time spent holding locks.** Each shard keeps the gift-card row locks from prepare all the way to commit. That stretches lock time from roughly **1 ms to 10–20 ms**. Recall the rule *rate x duration = concurrency*. If locks are held **10x longer**, you get roughly **10x more collisions** on busy rows. So 2PC slows down its neighbours, not only itself.
 - **Failure drill.** The coordinator crashes **5 ms** after both shards vote yes. Both shards stay in doubt with locks held. Eventually a replacement coordinator replays the log and sends commit — **40 seconds** later. During those 40 s, any transaction that touches either customer's rows waits or fails.
 - **Replicating the coordinator** makes recovery faster, because the decision survives the loss of one machine. It does *not* get rid of prepare-time locks, the extra round trips, or the need for every participant to be online. It eases the single worst failure, but the protocol's basic cost stays the same.
@@ -121,20 +121,20 @@ stateDiagram-v2
 **You gain:**
 - **True atomicity across machines.** The "vanished $50" kind of bug simply can't happen by design, so no reconciliation is needed.
 - **Strong consistency.** Nobody ever catches the half-done moment where money has left A but not yet reached B.
-- **It looks normal to application code.** With driver support it feels like an everyday transaction. The **XA standard** is a common interface for 2PC, and Java's **JTA** is built on top of it.
+- **It looks normal to application code.** With driver (the library an app uses to talk to a database) support it feels like an everyday transaction. The **XA standard** is a common interface for 2PC, and Java's **JTA** is built on top of it.
 
 **You pay:**
 - **Blocking — its trademark cost.** In-doubt participants keep their locks even while the coordinator might be unreachable. For *making progress*, the coordinator is a single point of failure, since no participant can finish by itself. Prepared transactions that get stuck are a genuine emergency for database administrators.
-- **Latency and throughput.** Two round trips, several fsyncs, and longer lock holds all add delay and create contention on popular rows.
+- **Latency and throughput.** Two round trips, several fsyncs, and longer lock holds all add delay and create contention (many requests competing for the same resource and waiting on each other) on popular rows.
 - **Availability shrinks as you multiply.** No one can commit unless every participant is up.
 - **It can't cross trust boundaries.** A **trust boundary** is the line between your systems and another company's. No outside company will allow your coordinator to hold locks in its database. So 2PC stays inside your own walls.
 
 ### When not to use it
 
 - **Between microservices.** When locks are held across service boundaries, every participant's speed and uptime become tied to the slowest one. A checkout might take seconds or even minutes — much too long to keep locks. The coordinator also turns into a bottleneck, both technically and between teams. Sagas were made to solve exactly this.
-- **Hot rows, operations across companies, or flows where "fixed by morning" reconciliation is good enough.** In these cases, 2PC's atomicity costs more than the inconsistency it would prevent.
+- **Hot rows (rows that a large share of traffic reads or writes), operations across companies, or flows where "fixed by morning" reconciliation is good enough.** In these cases, 2PC's atomicity costs more than the inconsistency it would prevent.
 
-**Where it *does* fit:** operations that are short, internal, rare, and high-value — and most of all, **inside distributed databases**. Google Spanner runs 2PC between groups of shards. But in Spanner, each participant and the coordinator is not one machine. Each is a **quorum-replicated group**, meaning a majority of its copies must agree. A majority can keep working when individual machines die, and that removes most of the risk of a blocked coordinator. So 2PC isn't obsolete, and it isn't for everything either. Its best home is inside a database whose participants are replicated.
+**Where it *does* fit:** operations that are short, internal, rare, and high-value — and most of all, **inside distributed databases**. Google Spanner (Google's globally distributed SQL database) runs 2PC between groups of shards. But in Spanner, each participant and the coordinator is not one machine. Each is a **quorum-replicated group**, meaning a majority of its copies must agree. A majority can keep working when individual machines die, and that removes most of the risk of a blocked coordinator. So 2PC isn't obsolete, and it isn't for everything either. Its best home is inside a database whose participants are replicated.
 
 **Operational safeguards (even there):** set strict deadlines on transactions. Make the age of prepared transactions visible. Alert *before* held locks start slowing unrelated work. Build recovery tools that display the coordinator's decision and each participant's state. This matters because people guessing during recovery can cause the very inconsistency 2PC is meant to prevent.
 
@@ -152,11 +152,11 @@ The whole contrast in one line: **2PC hides the in-between state by holding lock
 
 ### Real-world examples
 
-- **XA standard and Java's JTA** — 2PC plumbing for committing databases and message brokers together. Banks and airlines still run on these systems.
+- **XA standard and Java's JTA** — 2PC plumbing for committing databases and message brokers (servers that receive, store and hand out messages between programs) together. Banks and airlines still run on these systems.
 - **PostgreSQL `PREPARE TRANSACTION`** (finished with `COMMIT PREPARED` or `ROLLBACK PREPARED`) — lets you play the participant role directly. The PostgreSQL docs warn you not to use it casually. A prepared transaction that gets abandoned keeps its locks forever, until an operator steps in.
 - **Google Spanner** — runs 2PC across shard groups whose participants are replicated with **Paxos**. (Paxos is a consensus protocol that lets several copies settle on one value.) Replication soaks up single-machine failures, but you pay for the consensus overhead.
-- **Kafka transactions** — a protocol shaped like 2PC for atomic consume-process-produce work. One broker plays the coordinator.
-- **For data engineers:** writing exactly-once into external systems often relies on this pattern. **Flink** transactional sinks treat a checkpoint as the "prepare" step, where every operator durably records that it's ready. Finishing the checkpoint acts as the "commit" into Kafka or a database.
+- **Kafka transactions** — a protocol shaped like 2PC for atomic consume-process-produce work (Kafka is a widely used distributed log that stores streams of messages). One broker plays the coordinator.
+- **For data engineers:** writing exactly-once (each record's effect lands one time, never zero or twice) into external systems often relies on this pattern. **Flink** (a stream-processing engine) transactional sinks (the output stage that writes results to another system) treat a checkpoint (a saved snapshot of the job's progress) as the "prepare" step, where every operator (one processing step in the pipeline) durably records that it's ready. Finishing the checkpoint acts as the "commit" into Kafka or a database.
 
 ### In the interview
 
@@ -206,7 +206,7 @@ You may be asked, "How can two services update their databases atomically?" Walk
 
 Checkout now involves three services. It reserves inventory, then charges the card via an **external payment provider**, then creates a shipment. The code makes these three calls in order, and most orders go through.
 
-Then a bad deploy knocks the shipping service offline for **20 busy minutes**. Reservations still succeed. Charges still succeed. Only the third call fails. The catch block writes an error to the log and does nothing more. The outcome: **340 orders** where the customer paid, stock was reserved, and nothing shipped. Each service did its own part correctly, so none of them saw a problem. Support found out from angry customer emails. Then **three engineers spent a weekend** working from a spreadsheet, refunding charges and releasing reservations by hand.
+Then a bad deploy (a release of new code to production) knocks the shipping service offline for **20 busy minutes**. Reservations still succeed. Charges still succeed. Only the third call fails. The catch block (the code that runs when an error is thrown) writes an error to the log and does nothing more. The outcome: **340 orders** where the customer paid, stock was reserved, and nothing shipped. Each service did its own part correctly, so none of them saw a problem. Support found out from angry customer emails. Then **three engineers spent a weekend** working from a spreadsheet, refunding charges and releasing reservations by hand.
 
 2PC was already off the table. An external provider won't hold locks for twenty seconds, never mind twenty minutes. This workflow crosses a trust boundary, takes real time to run, and can fail after earlier steps have already committed. It needs two things: (1) a durable record of how far each order has gotten, and (2) a clear plan for reversing steps that already finished. Locks can't safely give you either one.
 
@@ -225,12 +225,12 @@ The course figure below shows the full picture. Across the top runs the forward 
 
 1. **Break the workflow into local transactions.** Reserve, charge, and ship each commit at once inside their own service. *Why:* no service sits holding locks while it waits for another. Hot rows stay free, and a slow service can't freeze the rest.
 2. **Record your intent durably before every step — this is the saga log.** Before doing anything, save a note like "order 7f3a: T1 done, starting T2". It's the WAL's "write it down before you do it" rule, applied to a whole workflow. The **orchestrator** is the process that drives the workflow. It may crash; if so, another instance reads the log and carries on from the saved state. Progress is never kept only in memory. A good log records: the saga ID, the current state, which steps are done, how many attempts were made, idempotency keys, deadlines, and which action is allowed next.
-3. **Make each state change conditional.** Before triggering the next external effect, take a lease or do a **compare-and-set** update. Compare-and-set means "write only if the state is still what I expect". *Why:* if two orchestrators are both recovering, they must never both move the same order forward.
+3. **Make each state change conditional.** Before triggering the next external effect, take a lease (a lock that expires automatically after a set time) or do a **compare-and-set** update. Compare-and-set means "write only if the state is still what I expect". *Why:* if two orchestrators are both recovering, they must never both move the same order forward.
 4. **If failure persists, compensate in reverse order.** Undo the most recent finished step first (the refund), then the earlier ones (the release). *Why:* undoing in reverse puts the world back in the opposite order from how it was changed.
 5. **Make every step and every compensation idempotent.** The orchestrator retries whenever something times out, so any request may show up more than once. Each step gets its own stable **idempotency key**. Also, "refund order 7f3a" must be safe to run twice. If it isn't, the saga will create duplicates.
 6. **Hand off what can't be fixed automatically.** Suppose a refund has been failing for ten minutes. It stays recorded as a durable *pending obligation*, and the saga is not marked done. After a limited number of retries, the orchestrator creates a task for a human. The task includes the order, the provider's references, the attempts so far, and the safe next steps. The unresolved state stays visible the whole time.
 
-**Compensations are a business undo, not a rollback.** A local transaction that has committed can't be wiped out. So each step gets a new, visible opposite action: refund, release, or cancel. This resembles the corrective entries used in event sourcing. It has three consequences:
+**Compensations are a business undo, not a rollback.** A local transaction that has committed can't be wiped out. So each step gets a new, visible opposite action: refund, release, or cancel. This resembles the corrective entries used in event sourcing (storing every change as an append-only event instead of overwriting the current state). It has three consequences:
 - Compensations are *new actions that others can see*, not erasures.
 - **Business owners have to define them**, since not every effect can be perfectly reversed. You can't un-send a confirmation email. Its "compensation" is a follow-up message that apologizes and explains.
 - Some effects can't be compensated at all. Once a package has physically shipped, you need **forward recovery** instead — such as a return label or a support case. That point where there's no going back is called the **pivot**. Place pivot steps *last*, and recover forward from anything after them.
@@ -311,7 +311,7 @@ With **orchestration**, a single coordinator chooses the next step. With **chore
 - **Travel industry** — where it began: flight, hotel, and car are booked one after another, and cancellation policies act as compensations.
 - **Temporal** (and **Cadence**, which came before it) — turn the saga log into **durable execution** infrastructure, so workflow code automatically resumes after a crash. **AWS Step Functions** provides a managed state machine.
 - **Every serious order or payment system** — the "processing" status you see there is an intentional saga in-between state.
-- **For AI engineers:** an agent whose tools have side effects *is* a saga. Say it books a meeting, emails the attendees, and updates a CRM. If a later tool call fails, you need a designed way to reverse the earlier ones. A durable workflow engine lets an interrupted agent pick up again instead of charging or messaging twice. Idempotency keys on tool calls, plus compensations, are what separate a production agent from a demo.
+- **For AI engineers:** an agent whose tools have side effects *is* a saga. Say it books a meeting, emails the attendees, and updates a CRM (customer relationship management system — the database of customers and contacts). If a later tool call fails, you need a designed way to reverse the earlier ones. A durable workflow engine lets an interrupted agent pick up again instead of charging or messaging twice. Idempotency keys on tool calls, plus compensations, are what separate a production agent from a demo.
 
 ### In the interview
 
@@ -321,7 +321,7 @@ A checkout spanning inventory, payment, and shipping is a test of saga thinking.
 
 **Likely follow-ups (with answers):**
 - *"The payment call timed out and you don't know if it charged. Do you compensate?"* No. Find out what actually happened first. Either retry with the **same idempotency key** (the provider sends back the original result) or check the charge status. Only continue or compensate once you know the true state.
-- *"What if the refund itself fails?"* Compensations need to be just as reliable as forward steps. Retry the idempotent refund with backoff. If it keeps failing, send it to a **dead-letter** escalation queue that alerts a person and gives them the full context.
+- *"What if the refund itself fails?"* Compensations need to be just as reliable as forward steps. Retry the idempotent refund with backoff. If it keeps failing, send it to a **dead-letter** escalation queue (a side queue for messages that keep failing, so they're parked instead of retried forever) that alerts a person and gives them the full context.
 
 **Mistake that fails candidates:** suggesting 2PC; saying "compensations" without explaining what they are; or storing orchestration state only in process memory. Each of these brings back a failure this lesson solves.
 
@@ -362,7 +362,7 @@ A checkout spanning inventory, payment, and shipping is a test of saga thinking.
 
 The last two lessons dealt with *different services doing different jobs*. This lesson, and the next one, deal with *copies of the same data* agreeing on the current value.
 
-The cart ran on a primary-replica setup. Its weak spot was **failover**: when the primary dies, a replica gets promoted to be the new primary. For the cart, failover took about **30 seconds**, and no customer could add items during that time. Plenty of datasets can live with a 30-second pause on writes. Carts can't, because they feed straight into revenue. The business wants the cart to keep accepting writes through the failure of any single machine.
+The cart ran on a primary-replica setup (one primary copy takes all writes and copies them to read-only replicas). Its weak spot was **failover**: when the primary dies, a replica gets promoted to be the new primary. For the cart, failover took about **30 seconds**, and no customer could add items during that time. Plenty of datasets can live with a 30-second pause on writes. Carts can't, because they feed straight into revenue. The business wants the cart to keep accepting writes through the failure of any single machine.
 
 So the team moves to a **leaderless** store: **3 replicas**, no primary, and any replica can take reads and writes. With no leader, there's never a promotion.
 
@@ -412,7 +412,7 @@ Supporting mechanisms:
 5. **Tolerating stragglers (a bonus you don't see at first).** With W=2 of 3, the coordinator moves on after the two quickest replies. So the slowest replica (the **straggler**) doesn't decide your **p99** latency — the time within which 99% of requests complete.
 
 **Three qualifications on the guarantee:**
-- **Sloppy quorums and hinted handoff.** Some Dynamo-style systems act differently during a partition. If the intended replicas can't be reached, temporary stand-in nodes are allowed to accept writes. Later, **hinted handoff** hands that data back to the proper replicas. This boosts availability. But while stand-ins are in use, read and write groups may not overlap. So reads can miss writes even when W + R > N.
+- **Sloppy quorums and hinted handoff.** Some Dynamo-style systems (stores modeled on Amazon's Dynamo design, such as Cassandra and Riak) act differently during a partition. If the intended replicas can't be reached, temporary stand-in nodes (machines in the cluster) are allowed to accept writes. Later, **hinted handoff** hands that data back to the proper replicas. This boosts availability. But while stand-ins are in use, read and write groups may not overlap. So reads can miss writes even when W + R > N.
 - **Partial writes.** A coordinator might collect fewer than W acknowledgements and report a failure — even though one replica actually saved the value. A later read or retry might then see it anyway. So writes still need stable IDs or merge behavior, even when the response said "failed".
 - **Quorum promises visibility, not ordering.** Two devices might update the same cart at the same moment. Each could reach W=2 through a *different* pair of replicas. That leaves two "newest" versions, called **siblings**. Vector clocks (next lesson) can tell whether writes were concurrent or sequential. If you need a single, ordered winner, you need **consensus** protocols such as **Raft** or **Paxos**. They add stricter rules on top of simple majority counting.
 
@@ -427,16 +427,16 @@ Supporting mechanisms:
 
 **You gain:**
 - **No leader and no failover** — reads and writes carry on through the loss of one replica without pausing, so the revenue-critical cart stays writable.
-- **Consistency you can tune per operation** — W and R let you trade speed against visibility. One cluster can serve carts, telemetry, and configuration, each with its own guarantees.
+- **Consistency you can tune per operation** — W and R let you trade speed against visibility. One cluster can serve carts, telemetry (automatically collected measurements such as metrics and events), and configuration, each with its own guarantees.
 - **Tolerance of stragglers** — the slowest replica no longer sets p99.
 
 **You pay:**
 - **Writes at the same moment conflict** — quorum doesn't put simultaneous updates in order, so you need version tracking and a way to resolve conflicts. (A leader avoids this by handling writes one at a time.)
 - **Amplification** — R or W network calls for each operation, plus background repair traffic that doesn't appear in client request counts.
 - **Edge cases where the guarantee weakens** — sloppy quorums and partial writes can return old data even when W + R > N. Learn exactly what your store promises.
-- **Only one key at a time** — quorum settles the value of a single key. It won't make a stock decrement and a card charge atomic together (that's a job for 2PC or sagas). This shapes how you model data. Values that need a single consistency decision may need to live under one key — as long as that key stays small and doesn't turn into a hot partition.
+- **Only one key at a time** — quorum settles the value of a single key. It won't make a stock decrement and a card charge atomic together (that's a job for 2PC or sagas). This shapes how you model data. Values that need a single consistency decision may need to live under one key — as long as that key stays small and doesn't turn into a hot partition (one shard or key that gets a disproportionate share of traffic).
 
-**Client guarantees also need thought.** A user can still read stale data right after their own write, if the next request uses a weaker level. Sessions that need **read-your-writes** should carry along the version they saw and reject any older response. Make consistency levels part of the API design and service ownership, not something buried in database defaults. For example, a checkout read might need quorum, while a recommendation counter on the same cluster reads just one replica. Track strict and sloppy responses separately. An overall success rate hides the requests that quietly got weaker guarantees during a partition.
+**Client guarantees also need thought.** A user can still read stale data right after their own write, if the next request uses a weaker level. Sessions that need **read-your-writes** should carry along the version they saw and reject any older response. Make consistency levels part of the API (the interface other code uses to call the service) design and service ownership, not something buried in database defaults. For example, a checkout read might need quorum, while a recommendation counter on the same cluster reads just one replica. Track strict and sloppy responses separately. An overall success rate hides the requests that quietly got weaker guarantees during a partition.
 
 ### When not to use it
 
@@ -452,21 +452,21 @@ Supporting mechanisms:
 | | Primary-Replica (leader) | Leaderless Quorum |
 |---|---|---|
 | Write conflicts | Can't happen — all writes pass through one leader | Can happen — you need versioning plus resolution |
-| Failover | Real: a pause of seconds on writes, plus promotion and fencing | None: a single replica dying goes unnoticed |
+| Failover | Real: a pause of seconds on writes, plus promotion and fencing (blocking the old leader from writing) | None: a single replica dying goes unnoticed |
 | Consistency story | Easy to reason about (apart from read-your-writes) | Adjustable, subtle, and full of fine print |
 | Latency profile | Your p99 is the leader's p99 | Tolerates stragglers (waits only for the fastest W) |
 | Complexity lives in | The failover machinery | The version and conflict machinery |
-| Fits | Most data: catalogs, orders, accounts | Keys that must always accept writes: carts, sessions, presence |
+| Fits | Most data: catalogs, orders, accounts | Keys that must always accept writes: carts, sessions, presence (online/offline status) |
 
 A leader gives you simpler behavior but pauses during failover. Leaderless stays available but shows you the conflicts. Mature systems make this choice dataset by dataset.
 
 ### Real-world examples
 
 - **Amazon's Dynamo paper** — introduced this pattern for a shopping cart that had to accept writes even during failures. It also defined sloppy quorums and hinted handoff.
-- **Cassandra** — its per-query consistency levels `ONE`, `QUORUM`, and `ALL` turn W and R into API parameters.
+- **Cassandra** (an open-source, Dynamo-inspired wide-column database) — its per-query consistency levels `ONE`, `QUORUM`, and `ALL` turn W and R into API parameters.
 - **DynamoDB and Riak** — both descend from Dynamo.
-- **etcd and ZooKeeper** — rely on *consensus* instead (Raft and the Paxos family). That's why Kubernetes can trust their ordered control-plane data.
-- **For data engineers:** feature stores and time-series systems built on Cassandra face these operational decisions. They use `QUORUM` reads where stale features could change how a model behaves, and `ONE` for high-volume telemetry where throughput counts more. The choice can differ from query to query.
+- **etcd and ZooKeeper** (small, highly reliable stores for configuration and coordination) — rely on *consensus* instead (Raft and the Paxos family). That's why Kubernetes (the standard system for running containers on a cluster) can trust their ordered control-plane data.
+- **For data engineers:** feature stores (databases that serve the input values an ML model needs) and time-series systems (stores optimized for timestamped measurements) built on Cassandra face these operational decisions. They use `QUORUM` reads where stale features could change how a model behaves, and `ONE` for high-volume telemetry where throughput counts more. The choice can differ from query to query.
 
 ### In the interview
 
@@ -483,7 +483,7 @@ A classic question is: "With three replicas, how many write acknowledgements and
 ### Self-check
 
 - **Q1: Give the formula and, in one sentence, why it works.** → W + R > N. Because the total is larger than the number of replicas, every successful write group and every read group must share at least one replica, and that replica holds the newest completed write.
-- **Q2: One cluster holds three datasets — (a) feature flags, read all the time and written weekly; (b) the cart, which must accept writes no matter what; (c) raw clickstream, with heavy writes that are batch-read later. Choose W and R.** → (a) W=3/R=1. Writes are rare, so they can afford to wait for every replica, and the constant reads need only one reply and still stay current. (b) W=2/R=2 — overlap holds even through one failure. (c) W=1, and let the batch reader choose R. A few late events cost less than slower writes. Set these per dataset or per query.
+- **Q2: One cluster holds three datasets — (a) feature flags, read all the time and written weekly; (b) the cart, which must accept writes no matter what; (c) raw clickstream (a log of every click and page view), with heavy writes that are batch-read later. Choose W and R.** → (a) W=3/R=1. Writes are rare, so they can afford to wait for every replica, and the constant reads need only one reply and still stay current. (b) W=2/R=2 — overlap holds even through one failure. (c) W=1, and let the batch reader choose R. A few late events cost less than slower writes. Set these per dataset or per query.
 - **Q3: The flickering cart is back — but only during last week's partition between datacenters, and only for some users. Settings are N=3/W=2/R=2, and the docs mention "hinted handoff." Explain it and lay out the real choice.** → During the partition, some coordinators couldn't reach the intended replicas B and C. So a **sloppy quorum** counted stand-in nodes toward W=2 and kept hints to hand off later. Those stand-ins weren't part of the normal read groups, so reads through A+B or A+C missed writes that had succeeded. The real choice is between a **strict quorum** (reject writes when the true replicas can't reach W — consistent, but unavailable) and a **sloppy quorum** (keep accepting writes, but temporarily miss data). For a cart, availability plus later reconciliation may well be right. But it has to be a deliberate CAP decision. Vector clocks then reconcile the versions.
 
 ### Related patterns
@@ -510,7 +510,7 @@ A classic question is: "With three replicas, how many write acknowledgements and
 
 **What it is.** A vector clock is a small version label attached to each key. It's a table with **one counter for each writer**. Every time a writer writes, it increases its own counter. Compare two labels and you can tell one of two things. Either one version *knew about* the other (so it replaces it), or the two were written **concurrently** — meaning neither saw the other. That's a real conflict. Both versions should be kept and merged, not quietly discarded.
 
-**Analogy.** Think of Git. Branches are edits made concurrently, and the commit graph records who built on whose work. When Git reports a "merge conflict", it's saying "neither branch comes from the other — you choose." A vector clock is the same idea, squeezed down to one number per writer instead of a full commit history.
+**Analogy.** Think of Git (the version-control tool that tracks changes to code). Branches are edits made concurrently, and the commit graph records who built on whose work. When Git reports a "merge conflict", it's saying "neither branch comes from the other — you choose." A vector clock is the same idea, squeezed down to one number per writer instead of a full commit history.
 
 ### The problem: which "newest" version wins?
 
@@ -548,7 +548,7 @@ laptop (offline!) adds hat                 {phone:0, laptop:1}
 3. **If each version leads in some slot, they're concurrent.** Neither one saw the other. The store keeps **both** as **siblings** rather than choosing one.
 4. **Vector clocks spot conflicts; they don't settle them.** On the next read, the application merges the siblings using one of three approaches:
    - **Merge by meaning** — for carts, take the union: {sneakers} ∪ {hat}. This was Amazon Dynamo's original approach (it has a well-known trap — see self-check Q3).
-   - **CRDTs (conflict-free replicated data types)** — counters, sets, and documents built so that concurrent edits combine on their own. This is the technology behind Figma-style collaboration.
+   - **CRDTs (conflict-free replicated data types)** — counters, sets, and documents built so that concurrent edits combine on their own. This is the technology behind Figma-style collaboration (several people editing the same design or document live).
    - **Ask the user** — show both versions, like a git merge conflict.
 5. **Write back one merged version whose clock descends from every sibling.** Take the larger value in each slot — like a git merge commit. *Why:* if the merged version kept only one sibling's clock, another replica would see it as concurrent again, and the conflict would start all over.
 
@@ -573,7 +573,7 @@ flowchart TD
 
 **You gain:**
 - **Nothing lost silently** — concurrent writes stay around as siblings until a clear merge policy deals with them.
-- **Immunity to clock skew** — causality is tracked with counters, not wall-clock time, so clock drift can't choose the wrong winner.
+- **Immunity to clock skew** (the gap between different machines' clocks) — causality is tracked with counters, not wall-clock time, so clock drift can't choose the wrong winner.
 - **Precise language** — "descended" versus "concurrent" makes leaderless updates something you can actually reason about.
 
 **You pay:**
@@ -768,7 +768,7 @@ flowchart LR
 ### Extend it yourself
 
 - **Checkout across multiple regions.** Now the orchestrator, its log, and the three services span two regions. Which parts are easy to replicate? Where should the saga log live? It's the new consistency-critical state, so what W and R does it need? What happens to a saga that's mid-flight when the regions are partitioned? (This is Fact 1 applied to the machinery itself.)
-- **The provider's webhook.** The payment provider confirms charges later, through **webhooks** (HTTP callbacks). They arrive at-least-once and possibly out of order. Connect that incoming path to the saga. Which step turns into "wait for external confirmation"? What's the timeout rule? How do duplicate confirmations interact with the saga log?
+- **The provider's webhook.** The payment provider confirms charges later, through **webhooks** (HTTP callbacks). They arrive at-least-once (every message is delivered, but some may arrive more than once) and possibly out of order. Connect that incoming path to the saga. Which step turns into "wait for external confirmation"? What's the timeout rule? How do duplicate confirmations interact with the saga log?
 - **For AI engineers.** Swap checkout for an agent doing a three-step job — book a venue, email the attendees, update the CRM — on a durable-execution engine. Design the compensations, choose where the pivot goes, and decide which tool calls are allowed to run before the workflow hits a state it can't undo.
 
 ### Interview summary

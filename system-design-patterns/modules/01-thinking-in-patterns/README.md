@@ -16,10 +16,10 @@ Here is the big idea behind the course. Most large software systems are assemble
 ### Key terms
 - **System design pattern:** a solution you can reuse for a problem that shows up over and over, bundled with the price you pay for using it.
 - **Pattern vs technology:** a technology is one particular product, while a pattern is the idea that product carries out. *Redis* is a technology: a data store that keeps its data in memory. *Cache-aside* is a pattern. You hold a quick, temporary copy of data you use often (that copy is a **cache**). You look there first. You only go to the slower database when the copy doesn't have what you need (that situation is a **cache miss**). Products rise and fall over the years, but the pattern keeps its value.
-- **Server / database / HTTP request:** these are all you need to know going in. A server is a program that answers requests arriving over the network. A database keeps data safely so it survives restarts. An HTTP request is the usual message a client sends to a web server.
+- **Server / database / HTTP request:** these are all you need to know going in. A server is a program that answers requests arriving over the network. A database keeps data safely so it survives restarts. An HTTP request is the usual message a client sends to a web server. (HTTP is the standard language browsers and apps use to talk to web servers, and a **client** is whatever program sends the request: a browser, a phone app, or another server.) If any of these feel shaky, the [System Design Fundamentals](../00-system-design-fundamentals/README.md) primer walks through them from scratch.
 
 ### Who it's for
-The course targets software engineers in the early or middle part of their careers. Engineers who build data or AI systems benefit as well: their work is spread over many machines, so they run into the same problems. You don't need any background in distributed systems. Each term gets explained the first time it shows up.
+The course targets software engineers in the early or middle part of their careers. Engineers who build data or AI systems benefit as well: their work is spread over many machines, so they run into the same problems. You don't need any background in **distributed systems** (systems made of many computers that cooperate over a network and must keep working when some of them fail). Each term gets explained the first time it shows up.
 
 ### The twelve modules
 
@@ -32,15 +32,15 @@ The figure above is a map of the course. Module 1 lays the groundwork. Modules 2
 |---|---|
 | 1. Thinking in Patterns | The meaning of a pattern, plus the simple math that shows up everywhere |
 | 2. Moving Data | The ways services talk to each other: request-response, queues, pub/sub, streams |
-| 3. Storing Data | Replication, sharding and logs: making a database bigger and keeping it running |
+| 3. Storing Data | Replication (keeping copies of data on several machines), sharding (splitting data across machines) and logs: making a database bigger and keeping it running |
 | 4. Serving Data Fast | Caching, and the price you pay for it |
 | 5. Surviving Failure | Dealing with calls that hang, fail, or arrive two times |
 | 6. Growing Under Load | Scaling, load balancing, connection pooling |
-| 7. Keeping Data Consistent | How machines reach agreement: transactions, sagas, quorums |
-| 8. The Entry Point | How traffic gets in: gateways, rate limits, CDNs, proxies |
+| 7. Keeping Data Consistent | How machines reach agreement: transactions (all-or-nothing groups of changes), sagas (multi-step workflows with undo steps), quorums (majority votes) |
+| 8. The Entry Point | How traffic gets in: gateways (the front door for all requests), rate limits (caps on requests per second), CDNs (servers near users that hold copies of content), proxies (middlemen that forward requests) |
 | 9. Operating in Production | Shipping, watching, and safely undoing changes (deploying, monitoring, rolling back) |
-| 10. Data-Intensive Systems | Processing big volumes of events in batches and in streams |
-| 11. AI-Era Systems | The very same patterns, used again inside LLM and ML systems |
+| 10. Data-Intensive Systems | Processing big volumes of events in batches (large chunks at a time) and in streams (one by one as they arrive) |
+| 11. AI-Era Systems | The very same patterns, used again inside LLM (large language model, like ChatGPT) and ML (machine learning) systems |
 | 12. Capstones | Four full designs that pull everything together |
 
 *Added in these notes (not part of the course):* five extra lessons in modules 6, 8, 9 and 10, and six case-study modules — [13 Building Blocks](../13-case-studies-building-blocks/README.md), [14 Messaging and Media](../14-case-studies-messaging-and-media/README.md), [15 Location and Real-Time](../15-case-studies-location-and-realtime/README.md), [16 Infrastructure](../16-case-studies-infrastructure/README.md), [17 Money and Reservations](../17-case-studies-money-and-reservations/README.md) and [18 Client and Mobile](../18-client-and-mobile-system-design/README.md) — that apply the same patterns to the classic "design X" prompts.
@@ -51,7 +51,7 @@ The figure above is a map of the course. Module 1 lays the groundwork. Modules 2
 *Figure — The structure of each pattern lesson (course diagram)*
 
 Every pattern lesson uses the same 11-step layout shown in the figure. The order is always: the problem, then how the fix works, then what it costs.
-1. **The incident:** a believable failure in production, with real numbers, so you sense *why* the pattern matters.
+1. **The incident:** a believable failure in **production** (the live system that real users are using, as opposed to a test setup), with real numbers, so you sense *why* the pattern matters.
 2. **The obvious fixes:** the things engineers tend to try first, and the reason they fall short.
 3. **The pattern:** the solution, laid out one step at a time.
 4. **Walkthrough with numbers:** the pattern applied to that same incident, with the gain worked out.
@@ -61,7 +61,7 @@ Every pattern lesson uses the same 11-step layout shown in the figure. The order
 8. **Real-world examples** taken from systems running in production.
 9. **Interview angle:** how interviewers probe it, along with a rehearsed 30-second answer.
 10. **Self-check quiz.**
-11. **TL;DR card:** a brief summary. Put all the cards together and you get a review deck for the evening before an interview.
+11. **TL;DR card** ("too long; didn't read"): a brief summary. Put all the cards together and you get a review deck for the evening before an interview.
 
 Lessons come in two sizes, full and compact. A simpler pattern just has fewer decisions to cover. At the end of each module there's a **mini-capstone**: a small system design that uses that module's patterns together.
 
@@ -102,14 +102,14 @@ The figure uses cache-aside to show that every pattern needs three parts. If any
 2. **A standard solution.** This is what seasoned engineers normally do. Here: hold a quick copy of the answer and hand it out until the answer changes.
 3. **A cost.** The copy can go **stale**, meaning out of date, so something has to refresh it. This cost belongs to the pattern itself. It isn't a detail you leave for later.
 
-Tools like Redis, Kafka or Postgres are not part of what defines a pattern. They are simply products that happen to carry out patterns well right now.
+Tools like Redis, Kafka (a popular message-log product) or Postgres (a popular relational database) are not part of what defines a pattern. They are simply products that happen to carry out patterns well right now.
 
 **Patterns existed long before software.** Banks kept paper ledgers, which is event sourcing: you record every change and work out the balance from them. Ships have bulkheads, walls that keep one flooded compartment from sinking the whole ship. Post offices had a way of handling mail that couldn't be delivered, which is a dead letter queue. Roughly sixty patterns cover so much because every system runs into the same limits. Networks break. Every machine has a maximum capacity. Copies of data slowly stop matching. Load shows up unevenly. Since the problems keep repeating, the solutions keep repeating too.
 
 ### Patterns combine into architectures
-An architecture is just several patterns working together. Take Netflix: it's roughly fifteen patterns cooperating. Caches reduce repeated reads. Queues keep one service's work separate from another's. Circuit breakers guard calls to the services Netflix depends on. Replicas keep extra copies of the data. That means a "design X" question breaks down into three smaller steps:
+An architecture is just several patterns working together. Take Netflix: it's roughly fifteen patterns cooperating. Caches reduce repeated reads. Queues keep one **service's** work separate from another's (a service is a separately running program that owns one job, such as payments or search). Circuit breakers guard calls to the services Netflix depends on (its **dependencies**: the other systems it needs in order to do its job). Replicas keep extra copies of the data. That means a "design X" question breaks down into three smaller steps:
 1. **Find the problems.** A news feed has a **fan-out** problem, where one post must reach many followers. It also has a **hot-key** problem, where a single item draws an enormous share of the traffic. Checkout, on the other hand, has problems around payments and calls to third parties.
-2. **Choose a pattern for each problem, then check how the patterns affect each other.** Retries need idempotency, or else a retried payment bills the customer twice. Caches need a rule for when entries expire. **Shards** are pieces of a database spread across machines, and they need a **shard key**: the field that decides which piece stores each row.
+2. **Choose a pattern for each problem, then check how the patterns affect each other.** **Retries** (automatically sending a failed request again) need idempotency, or else a retried payment bills the customer twice. Caches need a rule for when entries expire. **Shards** are pieces of a database spread across machines, and they need a **shard key**: the field that decides which piece stores each row.
 3. **Name every cost**, and say no to a pattern when the problem isn't big enough to deserve it.
 
 Each module finishes with a capstone that runs these steps on a small system. The last module runs them on four full designs and names every pattern involved.
@@ -124,11 +124,11 @@ If you keep one habit from this course, make it this one. No pattern makes every
 | Sharding | Room for more writes | Queries that span several shards become difficult |
 | Circuit breaker | Gives up quickly instead of hanging | Might "trip" even though the dependency could still have replied |
 
-This is the reason each lesson includes a "When Not to Use It" section. Look at two interview answers side by side. The weak one: "We'll use Kafka here." The strong one: "A queue is a good fit, because no one is waiting on this work. Queues can deliver the same message twice, so the consumer filters out duplicates. They can also change message order, and this operation is fine with that." The strong answer covers the **problem, pattern and cost**. Junior engineers know what patterns do. Senior engineers also know the price of each one and when to turn it down.
+This is the reason each lesson includes a "When Not to Use It" section. Look at two interview answers side by side. The weak one: "We'll use Kafka here." The strong one: "A queue is a good fit, because no one is waiting on this work. Queues can deliver the same message twice, so the **consumer** (the program that reads messages off the queue) filters out duplicates. They can also change message order, and this operation is fine with that." The strong answer covers the **problem, pattern and cost**. Junior engineers know what patterns do. Senior engineers also know the price of each one and when to turn it down.
 
 ### How interviews test patterns
 Interviewers seldom ask you to define a pattern. They check three things instead:
-- **Spotting problems from their symptoms.** For example: every health check is green, but one feature is starved of resources. You should think "bulkhead" (give each feature its own separate pool of resources) before the interviewer says the word. This is why lessons open with an incident.
+- **Spotting problems from their symptoms.** For example: every **health check** (an automatic "are you alive?" probe a system sends to each server) is green, but one feature is starved of resources. You should think "bulkhead" (give each feature its own separate pool of resources) before the interviewer says the word. This is why lessons open with an incident.
 - **Interactions between patterns.** "Could a retry charge someone twice?" "What happens right when your busiest cache key expires?"
 - **Defending your choices.** When they ask "Why not use X everywhere?", they really mean "what does X cost?" Answers that skip the trade-offs sound memorized.
 
@@ -158,7 +158,7 @@ Interviewers seldom ask you to define a pattern. They check three things instead
 This is a checklist of five questions, always asked in the same order, that you can point at any system. Each question brings problems to light, and each problem leads you to patterns. **Analogy:** think of a pilot's checklist before takeoff. The pilot already knows how to fly. The checklist just makes sure nothing is forgotten when things get stressful.
 
 ### The problem
-The interviewer says "Design a URL shortener," passes you the marker, and goes quiet. Most candidates freeze here. It's not that they don't know enough; it's that they have no procedure to follow. When your questions come in a fixed order, you always know what to do next. The first lesson was about reasoning with patterns. This one shows *where to look* to find them.
+The interviewer says "Design a URL shortener" (a service like bit.ly that turns a long web address into a short code and redirects people who visit it), passes you the marker, and goes quiet. Most candidates freeze here. It's not that they don't know enough; it's that they have no procedure to follow. When your questions come in a fixed order, you always know what to do next. The first lesson was about reasoning with patterns. This one shows *where to look* to find them.
 
 **Step 0 — get the numbers first.** Before starting the questions, pin down a few numbers: how many users there are, the **RPS** (requests per second), how much data there is, the **read:write ratio** (how many reads happen for every write), and how much an outage costs. A design that suits 100 users won't suit 100 million. (The next lesson teaches you to estimate these quickly.)
 
@@ -188,7 +188,7 @@ The figure above lists the five questions and which part of the diagram each one
 
 **3. How is it served fast? → the caches.** Figure out which reads happen again and again, how out of date each kind of data is allowed to be, what the **hit ratio** is (the share of reads the cache answers), and what breaks when a heavily used entry expires. Begin with **cache-aside**. Switch to write-based variants for data that changes often. Add **stampede prevention** for when many requests miss the same hot entry at the same moment. The key decision in the caching module is this: give each type of data a **staleness budget** (how old it may be), then choose a mechanism that keeps to it.
 
-*Example:* "Product descriptions are fine if they're an hour old. Prices can be a few seconds old, as long as updates invalidate the cache. At checkout the price must be exact, so that step always reads from the database."
+*Example:* "Product descriptions are fine if they're an hour old. Prices can be a few seconds old, as long as updates **invalidate** the cache (delete or mark the old cached copy so the next read fetches the new value). At checkout the price must be exact, so that step always reads from the database."
 
 **4. What happens when it fails? → the failure budget.** Go through *every arrow* from question 1. For each one, ask: what if the other side never answers, fails once, or stays down for ten minutes? Could a retry cause an effect to happen twice, such as a charge? What will the user see? Your toolbox (Module 5):
 - **Timeout**: give up waiting once a deadline passes.
@@ -198,13 +198,13 @@ The figure above lists the five questions and which part of the diagram each one
 - **Bulkhead**: stop one broken feature from eating all the shared resources.
 - **Graceful degradation**: send back a smaller result rather than an error.
 
-*Example:* "If the payment provider slows down, we cut off the call once it takes twice its usual worst-case latency. Retries include idempotency keys, so a customer can't be charged twice. If failures keep happening, the breaker stops the calls, and we save the cart and email the customer."
+*Example:* "If the payment provider slows down, we cut off the call once it takes twice its usual worst-case **latency** (the time one call takes from start to finish). Retries include **idempotency keys** (a unique ID attached to a request so the receiver can spot and ignore a repeat), so a customer can't be charged twice. If failures keep happening, the breaker stops the calls, and we save the cart and email the customer."
 
-**5. How does it grow? → the capacity plan.** If traffic grows 10x, which part breaks first: reads, writes, storage, or a single hot key? Which parts grow just by adding machines, and which need a redesign? Module 6 covers **load balancing**, **autoscaling**, and **horizontal scaling** (growing by adding machines).
+**5. How does it grow? → the capacity plan.** If traffic grows 10x, which part breaks first: reads, writes, storage, or a single hot key? Which parts grow just by adding machines, and which need a redesign? Module 6 covers **load balancing** (spreading incoming requests across many servers), **autoscaling** (adding or removing servers automatically as traffic changes), and **horizontal scaling** (growing by adding machines).
 
-*Example:* "Replicas and caching take care of reads, but the single primary caps how many writes we can do. The next step is sharding by customer ID, and we plan it before the primary hits its limit."
+*Example:* "Replicas and caching take care of reads, but the single **primary** (the one database server that accepts writes; replicas only copy from it) caps how many writes we can do. The next step is sharding by customer ID, and we plan it before the primary hits its limit."
 
-The five questions line up with Modules 2–6 in the same order. Later modules add consistency, the entry point, and operations. The data and AI modules run the same questions on pipelines and ML systems.
+The five questions line up with Modules 2–6 in the same order. Later modules add consistency, the entry point, and operations. The data and AI modules run the same questions on **pipelines** (chains of steps that move and transform data) and ML systems.
 
 ### Walkthrough: the URL shortener in about three minutes
 
@@ -215,8 +215,8 @@ The figure above shows where the walkthrough ends up. Redirects arrive at 1,000/
 - **Move:** there's one write path (send a long URL, receive a short code) and one redirect path that's mostly reads, at roughly 100 reads for every write. Both use direct calls. Click analytics is extra work nobody waits on, so it goes onto a queue and never slows a redirect down.
 - **Live:** each row is tiny (two URLs and a counter), but there could be billions of them. For now, a primary with replicas is enough. Once rows reach the billions, shard by short code, since every redirect lookup already includes it. There's no need to keep history.
 - **Fast:** a given short code always points to the same URL, so use cache-aside with a long **TTL** (time-to-live: how long an entry stays in the cache). A small number of links get most of the clicks, so those hot links get stampede prevention and shouldn't expire during normal operation.
-- **Fail:** redirects need very high availability, so a cache miss reads from a replica. Link creation can reply "try again shortly," because a short outage there does less harm. Each path gets its own reliability target.
-- **Grow:** replicas and cache nodes handle more reads, and there aren't many writes. The real risk is **key generation**. Random codes need a check for collisions. Codes based on a counter need coordination so that two servers never hand out the same code. Mark it as future work and offer both options.
+- **Fail:** redirects need very high **availability** (the share of time a service is up and answering correctly), so a cache miss reads from a replica. Link creation can reply "try again shortly," because a short outage there does less harm. Each path gets its own reliability target.
+- **Grow:** replicas and cache nodes handle more reads, and there aren't many writes. The real risk is **key generation**. Random codes need a check for **collisions** (two links accidentally getting the same code). Codes based on a counter need coordination so that two servers never hand out the same code. Mark it as future work and offer both options.
 
 After three minutes you've got: separate read and write paths, storage with a shard key picked out, a caching plan, a reliability target for each path, and one growth risk flagged. If a requirement changes, just run the questions again.
 
@@ -259,12 +259,12 @@ A rough answer you get in 30 seconds can still shape the design today. A precise
 
 | Operation | Time |
 |---|---|
-| Reading from memory (RAM) | ~100 ns (nanoseconds) |
-| Reading from a fast SSD | ~100 µs (microseconds) |
-| A network call within one datacenter (for example, a cache read) | ~0.5–1 ms |
+| Reading from memory (RAM, the computer's fast working memory) | ~100 ns (nanoseconds) |
+| Reading from a fast SSD (solid-state drive, flash storage) | ~100 µs (microseconds) |
+| A network call within one datacenter (a building full of servers), e.g. a cache read | ~0.5–1 ms (milliseconds) |
 | A simple database query | ~5–15 ms |
 | A seek on a spinning disk, or a slow query | ~10–100 ms |
-| A round trip from one region to another | ~100 ms |
+| A round trip (request there, reply back) from one region (a geographic area with its own datacenters) to another | ~100 ms |
 | The longest delay that still feels "instant" to users | ~100–200 ms |
 
 This table leads to three design facts:
@@ -282,7 +282,7 @@ This table leads to three design facts:
 The figure above sums up the four formulas, with one example for each. Here they are in more detail:
 
 **1. Rate × duration = work in progress (Little's law).**
-`things in flight = arrival rate × duration`. Say 300 requests come in every second and each one takes 2 seconds. Then 300 × 2 = **600 requests are active at any moment**, and each one is holding a thread or a database connection. A **connection pool** is a fixed set of open DB connections that get reused; one with 200 slots would be too small here. The same formula gives you a queue's **drain time**, meaning how long it takes to clear a backlog. With 552,000 messages processed at 400/s: 552,000 / 400 ≈ 1,400 s ≈ **23 minutes**. You'll use this calculation more than any other in the course. It sizes thread pools, connection pools, bulkhead limits and backlog drain. Its official name, **Little's law**, is a good term to drop in interviews.
+`things in flight = arrival rate × duration`. Say 300 requests come in every second and each one takes 2 seconds. Then 300 × 2 = **600 requests are active at any moment**, and each one is holding a **thread** (one independent line of execution inside a program; a server runs many at once) or a database connection. A **connection pool** is a fixed set of open DB connections that get reused; one with 200 slots would be too small here. The same formula gives you a queue's **drain time**, meaning how long it takes to clear a backlog. With 552,000 messages processed at 400/s: 552,000 / 400 ≈ 1,400 s ≈ **23 minutes**. You'll use this calculation more than any other in the course. It sizes thread pools, connection pools, bulkhead limits and backlog drain. Its official name, **Little's law**, is a good term to drop in interviews.
 
 **2. Availability drops along a chain.**
 **Availability** is the share of time a service answers correctly. When one request depends on several parts in a row, you multiply their availabilities together. The answer always ends up lower than the weakest part. With five dependencies at 99.9% each: 0.999⁵ ≈ **99.5%**. A shortcut when failure rates are small: just *add* them (5 × 0.1% ≈ 0.5% failure). Turning these into time makes them easier to picture:
@@ -315,7 +315,7 @@ Dropping from 99% to 90% doesn't mean "9% worse." The *miss* rate jumps from 1% 
 ### Walkthrough: sizing the URL shortener (~60 seconds, five numbers)
 Speak each assumption out loud as you work:
 - "Let's assume **100M redirects/day**. Divide by 100,000 and you get **1,000/s** on average, so plan for about **4,000/s** at peak."
-- "Each mapping holds two URLs plus some metadata; let's say **1 KB**. With **500M links**, that comes to roughly **500 GB**. A single database can handle that today, so sharding can wait."
+- "Each mapping holds two URLs plus some **metadata** (descriptive extras such as creation date and owner); let's say **1 KB**. With **500M links**, that comes to roughly **500 GB**. A single database can handle that today, so sharding can wait."
 - "There are roughly 100:1 more reads than writes, and a handful of links get most of the traffic. If we cache the top 1%, that's **5M rows ≈ 5 GB**. At a 99% hit ratio, only around **10 queries/s** make it to the DB."
 - "At peak, 4,000/s × 2 ms = **8 requests in flight**. So we need one strong database, one replica, a cache, and careful failure handling."
 

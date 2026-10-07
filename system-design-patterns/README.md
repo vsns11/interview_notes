@@ -1,6 +1,6 @@
 # System Design Patterns — Study Notes
 
-Condensed study notes for the DesignGurus course **System Design Patterns: From Fundamentals to Real Systems** (Arslan Ahmad), extended into **18 modules**: the course's 12 modules and 93 lessons (60+ patterns), **5 added lessons** in modules 6, 8, 9 and 10 (multi-region and cells, authorization, containers and Kubernetes, CI/CD, inside Kafka), and **6 added case-study modules (13–18)** with 29 worked designs plus two primers (how money moves; the client framework). Every pattern lesson uses the same layout: problem → how it works → key numbers → trade-offs → when to use it → a 30-second interview one-liner; every case study goes requirements → estimates → API and data model → architecture → deep dives → failure walk → trade-offs → follow-ups. The course's own diagrams are embedded, and redrawn Mermaid diagrams cover the rest. Added lessons and modules are written from primary sources (papers, official docs, engineering blogs) cited at the end of each.
+Condensed study notes for the DesignGurus course **System Design Patterns: From Fundamentals to Real Systems** (Arslan Ahmad), extended into **19 modules**: a new **Module 00 — System Design Fundamentals** (every basic concept and term defined from zero: latency, throughput, load balancers and all their types, DNS, CDNs, caching, databases, replication, sharding, queues, consistency, CAP, security and more, with a 300-term glossary), the course's 12 modules and 93 lessons (60+ patterns), **5 added lessons** in modules 6, 8, 9 and 10 (multi-region and cells, authorization, containers and Kubernetes, CI/CD, inside Kafka), and **6 added case-study modules (13–18)** with 29 worked designs plus two primers (how money moves; the client framework). Every pattern lesson uses the same layout: problem → how it works → key numbers → trade-offs → when to use it → a 30-second interview one-liner; every case study goes requirements → estimates → API and data model → architecture → deep dives → failure walk → trade-offs → follow-ups. The course's own diagrams are embedded, and redrawn Mermaid diagrams cover the rest. Added lessons and modules are written from primary sources (papers, official docs, engineering blogs) cited at the end of each.
 
 > Personal study notes. The embedded diagrams belong to DesignGurus; do not redistribute.
 
@@ -8,7 +8,7 @@ Condensed study notes for the DesignGurus course **System Design Patterns: From 
 
 | Path | Purpose |
 |---|---|
-| `System-Design-Patterns-Notes.pdf` | **The whole book in one PDF**: cover, clickable contents, all 18 modules. |
+| `System-Design-Patterns-Notes.pdf` | **The whole book in one PDF**: cover, clickable contents, all 19 modules (starting with Module 00 Fundamentals). |
 | `interview/System-Design-Patterns-Interview-Edition.pdf` | **Interview Edition** (~63 pages): one compact card per pattern and per case study, the interview framework, back-of-envelope numbers, top questions, gotchas and a pattern-selection table for fast revision (source: `interview/INTERVIEW.md`). |
 | `capstones/CAPSTONES.md` + `capstones/System-Design-Patterns-Capstone-Projects.pdf` | **Capstone Projects**: 40 build-it-yourself design briefs, beginner to advanced (URL shortener and webhook delivery up to a Dynamo-style KV store, Kafka-like log, multi-region ledger and AI copilot platform), each with requirements, architecture, data model, milestones, hard parts, testing and interview questions. |
 | `modules/NN-name/README.md` | One module's notes (Markdown, renders on GitHub/VS Code). |
@@ -21,6 +21,7 @@ Condensed study notes for the DesignGurus course **System Design Patterns: From 
 
 | # | Module | Patterns |
 |---|---|---|
+| 00 | [System Design Fundamentals](modules/00-system-design-fundamentals/README.md) | **Start here if you are new.** Clients/servers, latency, throughput, percentiles, estimation, availability and SLAs, scaling, networking (DNS, TCP/UDP, HTTP, TLS, REST/gRPC, WebSockets), proxies and API gateways, load balancers (L4/L7, every algorithm), CDNs, databases, ACID, indexes, replication, sharding, consistent hashing, caching, queues and streams, consistency models, CAP/PACELC, consensus, microservices, resilience, rate limiting, Kubernetes, observability, disaster recovery, security, plus a 300-term A–Z glossary |
 | 01 | [Thinking in Patterns](modules/01-thinking-in-patterns/README.md) | Five Questions, back-of-envelope math |
 | 02 | [Moving Data](modules/02-moving-data/README.md) | Request-response, message queue, pub/sub, EDA, webhooks, SSE, bidirectional streaming |
 | 03 | [Storing Data](modules/03-storing-data/README.md) | Primary-replica, sharding, consistent hashing, WAL, event sourcing, CQRS |

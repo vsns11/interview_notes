@@ -4,7 +4,7 @@
 *Original lesson: [Module introduction on DesignGurus ↗](https://www.designgurus.io/course-play/system-design-patterns/doc/6a534d50ba41b5b74695db9a)*
 
 
-**What this module is about.** The storage module finished with one remark: *a cache is a small, short-lived read model*. This module builds on that remark. Caches are some of the most widely used pieces of infrastructure, and also some of the most misused. They also come up in system design interviews more often than almost any other storage technique. A **cache** is a small, fast copy of some data. The authoritative ("true") version of that data lives in a slower system, such as a database.
+**What this module is about.** The storage module finished with one remark: *a cache is a small, short-lived read model*. This module builds on that remark. Caches are some of the most widely used pieces of infrastructure, and also some of the most misused. They also come up in system design interviews more often than almost any other storage technique. A **cache** is a small, fast copy of some data. The authoritative ("true") version of that data lives in a slower system, such as a database. (New to caches, databases and latency? The [System Design Fundamentals](../00-system-design-fundamentals/README.md) primer introduces them.)
 
 **Analogy.** Using a cache is like keeping the few books you need every day on your desk, instead of walking to the library each time. It's quick. But if the library's copy gets revised, your desk copy is now out of date, unless someone tells you.
 
@@ -47,12 +47,12 @@
 
 ### The problem
 
-In Module 3 we scaled the database with replicas, shards and projections, and it works. But look at what all that machinery spends its day doing. **Item 8412** is this month's bestseller. It's read **4,000 times per minute**. Its row hasn't changed in **three weeks**, yet the database works out the same **15 ms** answer every single time. Across the whole catalog, reads peak at **12,000/s**, and well over **99%** of them return exactly what the request before got. The replica fleet keeps up, but it needs **eight** database machines that mostly repeat work. Latency climbs above 15 ms when requests queue up at peak. And every marketing campaign sets off another capacity meeting. The waste is paying database prices for answers that haven't changed. A better idea: keep the last answer in fast storage and serve it until the data changes.
+In Module 3 we scaled the database with replicas, shards and projections, and it works. But look at what all that machinery spends its day doing. **Item 8412** is this month's bestseller. It's read **4,000 times per minute**. Its row hasn't changed in **three weeks**, yet the database works out the same **15 ms** answer every single time. Across the whole catalog, reads peak at **12,000/s**, and well over **99%** of them return exactly what the request before got. The replica fleet (read-only copies of the database) keeps up, but it needs **eight** database machines that mostly repeat work. **Latency** (the time each request takes) climbs above 15 ms when requests queue up at peak. And every marketing campaign sets off another capacity meeting. The waste is paying database prices for answers that haven't changed. A better idea: keep the last answer in fast storage and serve it until the data changes.
 
 ### Why the obvious fixes fail
 
 - **"More replicas."** They really do scale read volume, but the cost grows just as fast. You're running full database queries only to reproduce answers that haven't changed. The problem is *repetition*, not a shortage of database capacity.
-- **"A dictionary in each app server's memory."** It's cheap and tempting. But with **40 app servers**, each one keeps its own private copy. That means 40 cold misses per key instead of one, 40 copies going stale on their own, and every deploy wiping all of them and dumping the full load back on the database. It only works for data that is tiny, used all the time, and unaffected by staleness.
+- **"A dictionary in each app server's memory."** It's cheap and tempting. But with **40 app servers**, each one keeps its own private copy. That means 40 cold misses per key instead of one, 40 copies going stale on their own, and every **deploy** (rollout of a new code version, which restarts the servers) wiping all of them and dumping the full load back on the database. It only works for data that is tiny, used all the time, and unaffected by staleness.
 - **"Cache it forever."** The hit ratio is excellent. But customers never see Friday's price change. A cache with no way to stay correct doesn't give you fast current data. It gives you *fast old data*.
 
 What you need: one shared, fast copy that fills up when data is requested, plus a plan for keeping it correct.
@@ -62,9 +62,9 @@ What you need: one shared, fast copy that fills up when data is requested, plus 
 ![Cache-Aside](images/cache-aside-1.png)
 *Figure — Cache-Aside (course diagram)*
 
-The figure above shows three phases as a numbered sequence between the Application, the Cache (Redis) and the Database. **(1–6) A read that misses:** `GET product:8412` comes back empty, the app runs a `SELECT` (15 ms), then does `SET product:8412` with a 1-hour TTL, and returns. **(7–9) A read that hits:** for the next ~240,000 reads, `GET` returns the value in 1 ms. **(10–13) A write:** a price change runs `UPDATE product 8412` on the database, then `DEL product:8412`. So the next reader misses and fetches fresh data.
+The figure above shows three phases as a numbered sequence between the Application, the Cache (Redis) and the Database. **(1–6) A read that misses:** `GET product:8412` comes back empty, the app runs a `SELECT` (15 ms; `SELECT` is the SQL command that reads rows, SQL being the query language of relational databases, and `UPDATE` is its command for changing rows), then does `SET product:8412` with a 1-hour TTL, and returns. **(7–9) A read that hits:** for the next ~240,000 reads, `GET` returns the value in 1 ms. **(10–13) A write:** a price change runs `UPDATE product 8412` on the database, then `DEL product:8412`. So the next reader misses and fetches fresh data.
 
-The cache itself is kept simple on purpose. **Redis** and **Memcached** are the standard tools: a fast store that replies "here it is" or "not here". Every decision lives in the application code. That gives the pattern its flexibility, and also its maintenance cost.
+The cache itself is kept simple on purpose. **Redis** and **Memcached** (both in-memory key-value servers) are the standard tools: a fast store that replies "here it is" or "not here". Every decision lives in the application code. That gives the pattern its flexibility, and also its maintenance cost.
 
 1. **Read: look in the cache.** If it's a hit, return straight away.
 2. **Read miss: get it from the database**, since the cache doesn't have it.
@@ -78,7 +78,7 @@ The cache itself is kept simple on purpose. **Redis** and **Memcached** are the 
 Redis cache-aside on the product page, with a 1-hour TTL and a delete on every write:
 - **The first read of 8412 is a miss:** 1 ms cache check + 15 ms database + 1 ms SET = **17 ms**. That's a little *worse* than having no cache. It's the honest cost: misses pay for the cache check as well.
 - **The next ~240,000 reads that hour:** **1 ms** each. The catalog's hit ratio settles at about **99.2%**. So the average latency = 0.992 × 1 ms + 0.008 × 17 ms ≈ **1.1 ms** (down from 15 ms).
-- **Read load on the database:** it drops from **12,000/s to about 150/s**, which are the real misses. **Six of the eight replicas** are shut down by the end of the quarter. RAM is cheap; database machines are not.
+- **Read load on the database:** it drops from **12,000/s to about 150/s**, which are the real misses. **Six of the eight replicas** are shut down by the end of the quarter. RAM (fast working memory, where caches keep their data) is cheap; database machines are not.
 - **A price change on 8412:** `UPDATE` the database, then `DEL product:8412`. The next reader misses and fills the cache again. The window of staleness is a few **milliseconds**. With a TTL alone, the old price could have stayed for up to a whole **hour**.
 - **The forgotten-delete drill:** three months later, a bulk import updates **2,000 products** without invalidating. Those stale copies are served for up to one TTL, then fix themselves. That's annoying, but limited and survivable. It's exactly what the TTL is there for.
 
@@ -91,7 +91,7 @@ You've changed a price in the database. What should happen to the cached entry? 
 | Next read | One extra miss (fetch again from the DB) | An immediate hit that is already fresh |
 | Race safety | Safe: the true value is fetched after all writes have settled | Risky: two writes at once can SET in the wrong order and leave the older value cached until the TTL |
 | Wasted work | None, if nobody reads it again | Stores values that might never be read |
-| Complexity | One line that's hard to get wrong | You must serialize or version updates to stay correct |
+| Complexity | One line that's hard to get wrong | You must serialize (force one-at-a-time) or version updates to stay correct |
 
 **The race, step by step:** write A sets the price to $45 and write B sets it to $40 at almost the same moment. Suppose A is the *last* to commit to the database, so the truth is $45 — but the two cache updates can arrive in the reverse order, so B's `SET 40` lands after A's `SET 45`. Now the cache says $40 and the database says $45, and it stays wrong for up to a full TTL. With `DEL`, the worst possible ordering is just two deletes, and the next reader fetches the true $45 from the database. A single extra miss wipes out a whole category of wrong answers.
 
@@ -100,7 +100,7 @@ DEL still has one uncommon race. A slow reader that fetched the *old* value befo
 ### Trade-offs
 
 **You gain:**
-- Big relief on reads: about **two orders of magnitude** less read load on the database, in exchange for one small service and a few GB of RAM.
+- Big relief on reads: about **two orders of magnitude** (roughly 100×) less read load on the database, in exchange for one small service and a few GB of RAM.
 - Latency that users can feel: **15 ms → 1 ms** on the hottest pages.
 - Full control: your code chooses, for each data type, what to cache (rows, whole pages, computed results), how to key it, and how long to trust it.
 - Resilience: if Redis dies, every read becomes a miss. That's slow but *correct*, because the database is still the truth. (Whether the database survives the sudden full load is the topic of the stampede lesson.)
@@ -124,9 +124,9 @@ DEL still has one uncommon race. A slow reader that fetched the *old* value befo
 
 - **Redis and Memcached** — the industry-standard tools. "**Look-aside caching**" is another name for this pattern.
 - **Facebook's memcache paper** — cache-aside at huge scale, including fixes for the races and request surges covered in this module.
-- **Framework helpers** — Rails' `Rails.cache.fetch`, Django's cache API and Spring's `@Cacheable` all implement cache-aside, so you don't have to repeat the code.
-- **Your own hardware** — the database buffer pool, the operating system's page cache, and the CPU's **L1/L2/L3** caches all do the same thing. They check a fast copy, fetch from slower storage on a miss, and keep the result. It's one of the most common patterns in computing.
-- **For AI engineers:** exact-match caching works well for embeddings of strings that come up again and again (search queries, product titles), for moderation decisions, and for feature vectors at serving time (the online layer of a feature store often uses it). Every cached embedding saves a paid API call. LLM answers are harder. Users rarely repeat a question byte for byte, so exact keys miss. A **semantic cache** (later in the course) matches by meaning instead.
+- **Framework helpers** — Rails' `Rails.cache.fetch`, Django's cache API and Spring's `@Cacheable` (Rails, Django and Spring are popular web frameworks for Ruby, Python and Java) all implement cache-aside, so you don't have to repeat the code.
+- **Your own hardware** — the database buffer pool, the operating system's **page cache** (recently read disk blocks kept in RAM), and the CPU's **L1/L2/L3** caches (tiny, very fast memories built into the processor) all do the same thing. They check a fast copy, fetch from slower storage on a miss, and keep the result. It's one of the most common patterns in computing.
+- **For AI engineers:** exact-match caching works well for embeddings of strings that come up again and again (search queries, product titles), for **moderation** decisions (checks for harmful content), and for **feature vectors** (the lists of input numbers a model receives) at serving time (the online layer of a feature store often uses it). Every cached embedding saves a paid API call. LLM answers are harder. Users rarely repeat a question byte for byte, so exact keys miss. A **semantic cache** (later in the course) matches by meaning instead.
 
 ### In the interview
 
@@ -187,7 +187,7 @@ In the figure above, the application calls `get(product:8412)`. The cache (which
 4. **Request coalescing comes for free**, because the cache sees every reader. With cache-aside, **5,000** misses at the same moment on one key mean 5,000 copies of app logic, each querying the database. A loading cache lets the *first* caller do the fetch while the other **4,999** wait a moment for the same answer. Many simultaneous misses on one key → **one** database fetch. This is the first defense against the module's second fact (caches fail as crowds), which the stampede lesson develops fully.
 5. **Writes aren't handled.** Read-through only deals with reads. So changes still need delete-on-write invalidation plus TTLs. The other option is to pair it with write-through (next lesson), which moves writes into the cache layer too.
 
-Where you'll run into it: loading-cache libraries like **Caffeine** and **Guava's `LoadingCache`**, ORM second-level caches like **Hibernate**'s, and managed front ends like **DynamoDB DAX**, a caching service that knows how to reach the table behind it.
+Where you'll run into it: loading-cache libraries like **Caffeine** and **Guava's `LoadingCache`** (both Java libraries), **ORM** second-level caches like **Hibernate**'s (an ORM, object-relational mapper, is a library that maps database tables to objects in your code), and managed front ends like **DynamoDB DAX**, a caching service that knows how to reach the table behind it.
 
 ### Read-through vs. cache-aside (the comparison)
 
@@ -209,8 +209,8 @@ Where you'll run into it: loading-cache libraries like **Caffeine** and **Guava'
 
 **You pay:**
 - **Flexibility.** A loader fetches one kind of object by key. A dashboard or page fragment built from three sources doesn't fit, while cache-aside can cache anything the app computes.
-- **Smarter infrastructure.** The cache layer has to run fetch logic with access to the database. That means an in-process library, an ORM or a caching service. Plain Memcached can't do it.
-- **Coupling.** Queries and access rules now live in the cache layer too, so schema changes can spill over into it.
+- **Smarter infrastructure.** The cache layer has to run fetch logic with access to the database. That means an **in-process** library (one running inside your application's own program), an ORM or a caching service. Plain Memcached can't do it.
+- **Coupling.** Queries and access rules now live in the cache layer too, so **schema** changes (changes to the database's table structure) can spill over into it.
 - **Writes are still your job.** You have the same invalidation duties and TTL insurance as with cache-aside.
 
 ### When not to use it
@@ -227,7 +227,7 @@ It's often asked directly: "What's the difference between cache-aside and read-t
 > **30-second answer:** It's the same miss path with a different owner. In cache-aside, my application checks the cache and does the fetch-and-fill itself. That's as flexible as it gets, but it's repeated everywhere, and someone always forgets a step. In read-through, the app only talks to the cache, and the cache fetches through a configured loader on a miss. There's one implementation. And because the cache sees every reader, it can merge simultaneous misses on a hot key into one database query, which is real protection when a popular key expires. The trade-off: loaders fetch one kind of thing by key, so computed results still call for cache-aside. And in both cases, writes need their own invalidation plan.
 
 **Likely follow-ups (with answers):**
-- *"Which for a product catalog read by forty microservices?"* — Read-through, as a shared caching service or layer. Every consumer gets one loader, one TTL policy, the same behavior and coalescing. The alternative is forty teams building forty slightly different procedures.
+- *"Which for a product catalog read by forty **microservices** (small, separately deployed services)?"* — Read-through, as a shared caching service or layer. Every consumer gets one loader, one TTL policy, the same behavior and coalescing. The alternative is forty teams building forty slightly different procedures.
 - *"Does read-through fix the stale-after-bulk-import bug from cache-aside?"* — No. That failure happened on the *write* path, and read-through only controls reads. It still needs careful invalidation or a pattern on the write side.
 
 **Mistake that fails candidates:** treating the two as rivals that give different results, or claiming read-through solves invalidation. When they succeed, their read behavior is exactly the same. Only the ownership, and what follows from it, is different.
@@ -397,18 +397,18 @@ The view counter, rebuilt with a **2-second** flush:
 
 | | Write-Behind | Queue + batching worker |
 |---|---|---|
-| Ack comes from | Cache memory (fast, but volatile) | The broker, once it has persisted the message |
+| Ack comes from | Cache memory (fast, but volatile: lost if power or the process dies) | The broker, once it has persisted the message |
 | Durability of acknowledged writes | Whatever is in the flush window is at risk | Durable in the broker: nothing confirmed is lost |
 | Coalescing (+1 merging) | Happens naturally, in place | Can be done in the worker, but it's clumsier |
 | Live reads of the current value | The cache serves them, which is the whole point | Not possible; readers see the database's lag |
-| Machinery | Dirty tracking inside the cache | A topic, a consumer and offsets (the usual Module 2 kit) |
+| Machinery | Dirty tracking inside the cache | A topic, a consumer and offsets (each reader's saved position in the stream; the usual Module 2 kit) |
 
 **The question that decides it: does any reader need the hot, current value?** The product page shows the live count, so write-behind wins. The cache acts as both the write buffer and the read layer. For a pure ingestion stream that nobody reads right away (analytics events, telemetry), use a queue and a worker. The broker keeps every confirmed write, and nothing useful is lost. Adding a read cache to the queue, or a persistent log to the cache, pushes each design toward the other. Choose the one whose built-in strengths fit the main workload.
 
 ### Trade-offs
 
 **You gain:**
-- Write confirmations at cache speed. Row contention disappears at its source.
+- Write confirmations at cache speed. Row **contention** (many writers fighting over the same row) disappears at its source.
 - Orders of magnitude fewer database writes, thanks to batching and coalescing. Load grows with distinct keys, not with the write rate.
 - Natural absorption of bursts. Spikes pile up as dirty entries, and the flusher drains them at whatever pace the database can handle (the same shape as the queue lesson).
 
@@ -420,7 +420,7 @@ The view counter, rebuilt with a **2-second** flush:
 
 ### When not to use it
 
-- **Money, ledgers, payments, orders, anything related to compliance.** Any chance of a loss window rules it out, no matter the throughput. Writes that matter one by one keep the WAL's promise.
+- **Money, ledgers, payments, orders, anything related to compliance.** Any chance of a loss window rules it out, no matter the **throughput** (operations handled per second). Writes that matter one by one keep the WAL's promise.
 - **Other systems read the database directly** and need current values. Truth inversion breaks them *without any error*, which makes it especially hard to spot.
 - **Writes that don't coalesce.** Unique records (new orders, messages) can be batched, but they don't get the huge reduction a hot key gets. A durable queue can batch them without putting confirmed data at risk.
 - **Modest volume.** A counter at **50 updates/s** doesn't justify dirty tracking and flushers. An ordinary database handles it fine.
@@ -432,8 +432,8 @@ The view counter, rebuilt with a **2-second** flush:
 - **CPU write-back caches** — the name comes from hardware. Processors have made this trade between cache and RAM for decades.
 - **Social counters at scale** — views, likes and impressions are buffered in caches and flushed as totals. Locking a row for every reaction would be absurdly expensive.
 - **Rate limiters and leaderboards** — Redis counters that serve live reads and reach permanent storage later.
-- **EhCache, Hazelcast** — offer write-behind as a built-in feature. The rule about documenting the loss window still applies, even though it's easy to turn on.
-- **For AI engineers:** training metrics and telemetry fit well (buffer, batch, flush; losing ~2 s of loss-curve points is fine). Online feature stores can buffer updates the same way. Token metering needs care. It's shaped like a counter (which suits write-behind), but it's billing (money). So buffer dashboards aggressively, and compute invoices from a durable, reconciled event stream. Dashboards can lose a moment; invoices can't.
+- **EhCache, Hazelcast** (Java caching products) — offer write-behind as a built-in feature. The rule about documenting the loss window still applies, even though it's easy to turn on.
+- **For AI engineers:** training metrics and telemetry fit well (buffer, batch, flush; losing ~2 s of **loss-curve** points (the training-error measurements plotted over time) is fine). Online feature stores can buffer updates the same way. Token metering needs care. It's shaped like a counter (which suits write-behind), but it's billing (money). So buffer dashboards aggressively, and compute invoices from a durable, reconciled event stream. Dashboards can lose a moment; invoices can't.
 
 ### In the interview
 
@@ -451,7 +451,7 @@ A typical prompt: a like button or view counter at large scale. Diagnose **row c
 
 - **Q1. Describe the full write path, define "dirty", and say exactly what the acknowledgment promises.** → The cache accepts the write and confirms it right away. It marks the entry dirty (changed, but not in the database yet) and pins it so it can't be evicted. Every so often, the flusher merges the dirty changes, writes them to the database and marks them clean. The ack only promises that the value is in cache memory and *should* reach the database later. It does not promise the value is durably saved.
 - **Q2. For view counts, cart contents, payment records and a "trending now" score: write-behind or not, and complete the loss sentence.** → View counts: yes, "…the numbers are imperceptibly lower." Trending score: yes, since it's approximate, derived and can be recomputed. Cart contents: no, use a durable store. Losing user choices is visible harm, and the volume rarely calls for it. Payments: never, because no loss window is acceptable. Whether it fits depends on what losing the dirty window would cause.
-- **Q3. A nightly analytics job reading the database reports view counts ~2% below the cache-backed dashboard, and counts dip slightly after every deploy. Explain and fix proportionately.** → The 2% gap is truth inversion doing what it was designed to do (the database trails the cache's dirty counts). Have analytics read post-flush data labeled "as of" a time, or accept the difference and label it. The dips after deploys happen because restarting cache nodes drop changes that weren't flushed. **Flush dirty entries on graceful shutdown**, and add a replica if the remaining gap matters. Persisting every write would be overkill for views and would basically rebuild write-through.
+- **Q3. A nightly analytics job reading the database reports view counts ~2% below the cache-backed dashboard, and counts dip slightly after every deploy. Explain and fix proportionately.** → The 2% gap is truth inversion doing what it was designed to do (the database trails the cache's dirty counts). Have analytics read post-flush data labeled "as of" a time, or accept the difference and label it. The dips after deploys happen because restarting cache nodes drop changes that weren't flushed. **Flush dirty entries on graceful shutdown** (a planned stop where the process finishes its work before exiting), and add a replica if the remaining gap matters. Persisting every write would be overkill for views and would basically rebuild write-through.
 
 ### Related patterns
 
@@ -512,14 +512,14 @@ Three tools protect a single hot key. Two more protect the whole cache fleet. Re
 3. The other requests see the lock, wait a moment, and check the cache again once the fresh value is there.
 Result: 600 misses → **1 query + 599 short waits**. The lock needs a **short TTL of its own**, because the request holding it might crash. A lock that never expires turns into an outage by itself.
 
-**Tool 2 — Serve stale, refresh behind.** If slightly old data is fine, nobody has to wait. Keep entries a little past their *logical* expiry. When an entry has expired, serve the stale copy right away and let **one** background refresh, protected by a lock, fetch the new value. Users get data a few seconds old at full speed, and the database gets one query. (A product page that's 50 ms stale looks exactly like a fresh one.) HTTP makes this standard with the **`stale-while-revalidate`** header.
+**Tool 2 — Serve stale, refresh behind.** If slightly old data is fine, nobody has to wait. Keep entries a little past their *logical* expiry. When an entry has expired, serve the stale copy right away and let **one** background refresh, protected by a lock, fetch the new value. Users get data a few seconds old at full speed, and the database gets one query. (A product page that's 50 ms stale looks exactly like a fresh one.) HTTP makes this standard with the **`stale-while-revalidate`** **header** (a name-value line of metadata sent with an HTTP request or response).
 
 **Tool 3 — Probabilistic early refresh.** Stop the hottest keys from ever reaching expiry. As a key gets close to its TTL, each request has a small random chance of refreshing it early, and that chance grows as expiry gets nearer. A key with thousands of readers nearly always gets refreshed before it expires. A cold key with no readers just expires quietly, with no crowd. The randomness automatically points refresh work at the keys whose traffic makes it worth doing.
 
 **Fleet tool 1 — TTL jitter.** Mass expiry is a stampede spread over *many different* keys. For example, a deploy warms **10,000** entries within a minute, all with TTL **3600**. So all of them expire together an hour later. Add a small random variation, such as **3600 ± 10%**, so the expirations spread out over many minutes. That randomness is called **jitter**.
 
 **Fleet tool 2 — A cold-start plan.** An empty cluster at peak means a 100% miss ratio at full traffic. Before you let traffic in:
-1. **Warm** the most popular keys from an access log or a snapshot (fewer misses right away).
+1. **Warm** (pre-load) the most popular keys from an **access log** (a record of which keys were requested) or a snapshot (fewer misses right away).
 2. **Ramp traffic up slowly** (the load that's left stays within the database's capacity).
 3. Count on **single flight** to limit database work to **one query per distinct key**. That gives operators a measurable upper limit instead of an uncontrolled crowd.
 Also use **consistent hashing** for the cache cluster, so a normal resize doesn't turn into mass misses the way modulo routing does.
@@ -553,7 +553,7 @@ Big systems often run **all five** together. They serve stale for ordinary toler
 
 **You pay:**
 - **Limited staleness, served on purpose.** Serve-stale returns old data for one rebuild interval. For many data types that's negligible, but it's a decision per key, not a universal default.
-- **Lock complexity and its own class of bugs.** Expiry timers, handling a crashed lock holder, and fallback for waiters. Use proven code (Go's **`singleflight`**, documented Redis lock recipes) instead of writing your own.
+- **Lock complexity and its own class of bugs.** Expiry timers, handling a crashed lock holder, and fallback for waiters. Use proven code (Go's **`singleflight`**, from the Go programming language's libraries; documented Redis lock recipes) instead of writing your own.
 - **Waiting requests tie up resources.** Single flight *without* stale serving makes requests wait a few ms, and that can matter at extreme concurrency.
 - **A little wasted work.** Early refresh sometimes refreshes an entry that could have expired without harm, and the cache client gets more complex.
 - **Justify it with measurements:** simultaneous misses per key, database queries per rebuild, time spent waiting on locks, and stale responses served. These show whether the protections cut real load and which keys deserve early refresh.
@@ -561,20 +561,20 @@ Big systems often run **all five** together. They serve stale for ordinary toler
 ### When not to use it
 
 - **Cold and long-tail keys.** A key read once a minute can't have many simultaneous misses, so locks and stale tracking add nothing. Measure simultaneous misses first.
-- **Low-traffic systems.** At **50 requests/s**, the biggest possible crowd is too small for the database to notice. Distributed locking at ~**100 req/s** guards against a crowd that never shows up. (The opposite mistake is more common: nobody thinks about simultaneous expiry until a flash sale exposes it.)
+- **Low-traffic systems.** At **50 requests/s**, the biggest possible crowd is too small for the database to notice. **Distributed locking** (a lock shared by many servers, usually kept in Redis) at ~**100 req/s** guards against a crowd that never shows up. (The opposite mistake is more common: nobody thinks about simultaneous expiry until a flash sale exposes it.)
 - **Staleness truly not allowed.** Then serving stale data is out. Use the single-flight lock so callers wait briefly for fresh data, or don't cache that key at all. (The cache-aside advice to read critical values from the source still holds.)
 
 ### Real-world examples
 
 - **Facebook's memcache "leases"** (from the same paper mentioned in cache-aside). The cache gives the first request that misses a token that allows it to rebuild, while the others wait. This is single flight at huge scale.
-- **`stale-while-revalidate`** — made standard in **RFC 5861**. CDNs and browsers use it to answer right away while refreshing in the background.
+- **`stale-while-revalidate`** — made standard in **RFC 5861** (RFCs are the numbered documents that define internet standards). **CDNs** (content delivery networks: servers around the world that keep cached copies near users) and browsers use it to answer right away while refreshing in the background.
 - **Go's `singleflight` package** — single flight within one process, offered as a small standard building block.
 - **The XFetch paper**, "Optimal Probabilistic Cache Stampede Prevention" — the math behind probabilistic early refresh.
-- **For AI engineers:** a stampede costs more when the rebuild is a **billable, multi-second LLM generation** rather than a 50 ms query. One popular answer that expires can set off dozens of identical paid generations. Single flight for identical prompts is one of the most valuable protections in an inference stack. It works alongside the later semantic cache (which also catches *similar* requests). Inference cold starts likewise need model weights and caches warmed up before traffic is let in gradually.
+- **For AI engineers:** a stampede costs more when the rebuild is a **billable, multi-second LLM generation** rather than a 50 ms query. One popular answer that expires can set off dozens of identical paid generations. Single flight for identical prompts is one of the most valuable protections in an inference stack. It works alongside the later semantic cache (which also catches *similar* requests). Inference cold starts likewise need **model weights** (the learned numbers that make up a trained model) and caches warmed up before traffic is let in gradually.
 
 ### In the interview
 
-Once you propose caching, expect this: "What happens when your most popular key expires at peak?" Work through the concurrency math out loud, then explain how coordinated rebuilds put a ceiling on it.
+Once you propose caching, expect this: "What happens when your most popular key expires at peak?" Work through the **concurrency** math (how many requests are in progress at the same moment) out loud, then explain how coordinated rebuilds put a ceiling on it.
 
 > **30-second answer:** A hot key that expires under load causes a stampede. At 12,000 requests a second with a 50 ms rebuild, 600 requests miss together and send identical queries, and the slowdown feeds on itself. I stack several defenses. Every rebuild is guarded by a lock, so exactly one request does the work (single flight). Keys that tolerate staleness serve the stale copy while one background refresh runs, so latency stays flat. The hottest keys refresh probabilistically before expiry, so that moment never arrives. Across the fleet, TTL jitter keeps keys that were warmed together from expiring together. And there's a cold-start plan: warm the top keys, ramp traffic, and let single flight cap the database at one query per distinct key.
 
@@ -703,7 +703,7 @@ In the diagram above, the product page reads through the consistent-hash Redis c
 ### Extend it yourself (open questions to practice)
 
 - **Multi-region:** the catalog now serves two continents, and each has its own Redis cluster. A price change made in one region has to stop being wrong in the other within seconds. Design cross-region invalidation. What gets sent (deletes or values?), over what channel (hint: a Module 2 pub/sub-style channel), and what goes wrong when that channel lags (the other region serves stale prices)?
-- **Personalized prices:** enterprise customers see negotiated prices. So the key becomes `price:{product}:{customer}`, and the key space jumps from **100K to 500 million**. What's left of the price design? Think about hit ratios on long-tail keys (rarely read, so they rarely hit) and memory budgets. Also ask whether the *inputs* to the price calculation are easier to cache than the result.
+- **Personalized prices:** enterprise customers see negotiated prices. So the key becomes `price:{product}:{customer}`, and the **key space** (the number of possible distinct keys) jumps from **100K to 500 million**. What's left of the price design? Think about hit ratios on long-tail keys (rarely read, so they rarely hit) and memory budgets. Also ask whether the *inputs* to the price calculation are easier to cache than the result.
 - **For AI engineers:** add semantic product search ("cozy reading chair") using an LLM-embedded vector query that takes ~**200 ms** and costs real money each time. Exact-match caching misses all the time, because nobody words a query the same way twice. Sketch a design, then compare it with the semantic cache lesson (merging *similar* requests is a pattern of its own).
 
 **Interview one-liner**

@@ -6827,3 +6827,531 @@ erDiagram
 
 ### TL;DR
 A copilot platform is serving, retrieval, tools and governance working together. Measure the batching curve, isolate tenants at every layer, treat content as untrusted, and gate every change on evaluations.
+
+## Appendix: Concepts you need
+
+Every technical term, acronym, tool and concept used in the 40 briefs above, in alphabetical order and in plain English. Each entry says which projects use it and, where this book teaches it, links to the module that explains it in depth. The general system-design vocabulary (latency, throughput, caching, replication, sharding, queues and so on) is explained from scratch in [System Design Fundamentals](../modules/00-system-design-fundamentals/README.md).
+
+### 0–9
+
+- **301 vs 302** — HTTP redirect codes. 301 means "moved permanently" (browsers remember it and stop asking); 302 means "found elsewhere for now" (every visit comes back to the server). Used in project 1. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **409 Conflict** — HTTP status meaning the request clashes with the current state, for example the same idempotency key is still being processed or a version check failed. Used in project 5.
+- **429 Too Many Requests** — HTTP status a server returns when a caller is over its rate limit; usually paired with a `Retry-After` header. Used in projects 3, 24. ([Module 8](../modules/08-api-and-edge/README.md))
+
+### A
+
+- **ABAC (attribute-based access control)** — Deciding access from attributes of the user, resource and request (department, time of day, IP range) rather than from fixed roles or relationships. Used in project 38.
+- **`acks` (Kafka producer acknowledgements)** — How many replicas must confirm a write before the producer is told it succeeded: `acks=0` (none), `acks=1` (the leader) or `acks=all` (every in-sync replica). Used in projects 27, 36. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **ACL (access control list)** — A list attached to a resource saying who may do what with it. Used in projects 25, 38. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Active-passive** — A setup where one copy (region, server) serves traffic and another stands by, ready to take over on failure. Used in project 29. ([Module 6](../modules/06-scaling/README.md))
+- **Adaptive bitrate (ABR)** — The video player switches between quality levels segment by segment, based on measured bandwidth and how much video is buffered. Used in project 33. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **Agent loop** — An LLM repeatedly decides on an action (such as calling a tool), sees the result and decides again, until it produces a final answer or hits a step limit. Used in project 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Aggregate (event sourcing)** — One consistency unit, such as one order, whose events form a single ordered stream and whose rules are checked together. Used in projects 14, 18. ([Module 3](../modules/03-storing-data/README.md))
+- **Airflow** — Apache Airflow, a popular open-source tool for scheduling and running workflows defined as DAGs of tasks. Used in project 28. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Allowed lateness** — In stream processing, how long after a window closes the system still accepts late events and updates the result. Used in project 23. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **AMQP** — Advanced Message Queuing Protocol, an open standard protocol for message brokers (RabbitMQ speaks it). Used in project 11.
+- **Anti-entropy** — A background process where replicas compare their data (often with Merkle trees) and copy over whatever differs, so they converge even without new writes. Used in project 26. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **API (application programming interface)** — The set of requests a service accepts and the responses it returns; the contract other programs code against. Used in most projects (30 of 40). ([Module 8](../modules/08-api-and-edge/README.md))
+- **API gateway** — A single entry point in front of many services that handles shared concerns once: routing, authentication, rate limits, logging. Used in projects 17, 24, 36, 40. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Append-only log** — A file or table you only ever add to at the end, never edit in place; the basis of WALs, Kafka and event stores. Used in projects 7, 14, 18, 26, 27, 30, 31, 32. ([Module 3](../modules/03-storing-data/README.md))
+- **Argo Rollouts** — A Kubernetes add-on that performs canary and blue-green deployments with automated analysis and rollback. Used in project 39. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Arrow (tuple-to-userset)** — In Zanzibar-style schemas, a rule that follows a relation to another object and reuses its permissions, e.g. "viewers of a doc include viewers of its parent folder" (`parent->viewer`). Used in project 38. ([Module 8](../modules/08-api-and-edge/README.md))
+- **asyncio** — Python's standard library for asynchronous programming: one thread runs many tasks that pause while waiting for I/O. Used in projects 4, 8, 16, 22.
+- **At-least-once delivery** — A guarantee that every message is delivered, possibly more than once; receivers must therefore handle duplicates. Used in projects 4, 6, 14, 28, 29. ([Module 5](../modules/05-reliability/README.md))
+- **Atomic operation** — An operation that happens completely or not at all, with no other operation able to see or interleave with a half-done state. Used in projects 3, 4, 5, 12, 14, 15, 19, 24, 27, 31, 34.
+- **Audit log** — An append-only record of who changed what and when, kept for security, debugging and compliance. Used in projects 6, 10, 18, 29. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Autoscaling** — Automatically adding or removing machines (or pods) based on a signal such as CPU, queue depth or pending requests. Used in projects 11, 33, 40. ([Module 6](../modules/06-scaling/README.md))
+- **Availability** — The share of time a system is up and answering requests correctly. Used in projects 3, 4, 15, 19, 20, 26, 27, 32, 34, 37, 39.
+- **Awareness / presence channel** — A side channel in collaborative apps that shares short-lived state such as cursors and who is online; it is never stored. Used in project 32. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **AWS SDK / AWS CLI** — Amazon's official client libraries and command-line tool; pointing them at your own server tests S3 compatibility. Used in projects 11, 31.
+- **AWS Signature V4** — Amazon's scheme for signing HTTP requests with a secret key so the server can verify who sent them and that nothing was changed. Used in project 31.
+
+### B
+
+- **B-tree** — The standard database index structure: a balanced tree of sorted keys that supports fast lookups and range scans. Used in projects 2, 12, 21.
+- **Backend for Frontend (BFF)** — A small API layer built for one client (a web page, a mobile app) that calls several backend services and returns exactly what that screen needs. Used in project 9. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Backfill** — Re-running processing over past data, for example to fill a new table or fix results after a bug. Used in projects 23, 28. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Backpressure** — A way for a slow consumer to make a fast producer slow down (or for the system to drop or buffer data) instead of being overwhelmed. Used in projects 22, 23, 25, 27, 37. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Base62 encoding** — Writing a number using 62 characters (0–9, a–z, A–Z), which makes short, URL-safe codes. Used in project 1. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Batching** — Grouping many small operations into one bigger one (one network call, one disk write) to cut per-operation overhead. Used in projects 1, 2, 3, 4, 8, 12, 13, 14, 18, 19, 20, 23, 25, 27, 28, 29, 31, 34, 35, 37, 39, 40.
+- **BFS / DFS** — Breadth-first search explores everything one step away before going deeper; depth-first search follows one path as far as possible first. Used in project 22.
+- **Bitcask** — A simple storage design: values appended to a log file plus an in-memory hash index from each key to its position in the file. Used in project 26.
+- **Bitrate ladder** — The set of quality levels (resolution and bitrate pairs) a video is encoded into so players can pick one. Used in project 33. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **Blast radius** — How much of the system (users, tenants, services) is affected when one part fails or a bad change ships. Used in project 39. ([Module 6](../modules/06-scaling/README.md))
+- **Block-list** — A list of forbidden items (search terms, IPs, URLs) that are filtered out. Used in projects 12, 17.
+- **Bloom filter** — A compact bit array that answers "definitely not in the set" or "probably in the set"; it can have false positives but never false negatives. Used in projects 1, 22. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **BM25** — A classic keyword-ranking formula that scores documents by how often query words appear, adjusted for word rarity and document length. Used in project 25. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Bucket (object storage)** — A named container for objects, like a top-level folder, in S3-style storage. Used in projects 11, 31. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Bulkhead** — Isolating resources (thread pools, connections, workers) per dependency or customer so one slow or failing part cannot use up everything. Used in projects 6, 9. ([Module 5](../modules/05-reliability/README.md))
+
+### C
+
+- **Cache hit ratio** — The share of requests answered from the cache instead of the slower source. Used in projects 1, 11, 16, 21, 24, 33. ([Module 4](../modules/04-caching/README.md))
+- **Cache invalidation** — Removing or updating cached copies when the underlying data changes, so readers do not see stale values. Used in projects 1, 10, 11, 16, 21, 25, 31. ([Module 4](../modules/04-caching/README.md))
+- **Cache stampede (thundering herd)** — Many requests miss the same cache entry at the same moment and all hit the backend together; prevented with locks, request collapsing or jittered expiry. Used in projects 1, 16, 28. ([Module 4](../modules/04-caching/README.md))
+- **Cache-aside (lazy loading)** — The application checks the cache first; on a miss it reads the database and writes the result into the cache itself. Used in project 1. ([Module 4](../modules/04-caching/README.md))
+- **Canary deployment** — Releasing a change to a small slice of traffic (one cell, a few percent of users) first and watching metrics before rolling it out further. Used in project 39. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Cardinality** — The number of distinct values; in metrics, the number of distinct label combinations, i.e. separate time series. Used in projects 20, 37. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **CAS (compare-and-swap)** — An atomic "set this value only if it is still X" operation, used to update shared data safely without locks. Used in projects 2, 30.
+- **CDC (change data capture)** — Reading a database's own change log (its WAL) to stream every committed insert, update and delete to other systems. Used in projects 14, 15, 18, 21, 29, 38, 39. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **CDN (content delivery network)** — A worldwide set of cache servers that keep copies of files close to users, so most requests never reach your servers. Used in projects 1, 10, 11, 12, 33. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Cell (cell-based architecture)** — A complete, independent copy of the whole stack serving a subset of customers, so one failure or bad deploy only affects that subset. Used in project 39. ([Module 6](../modules/06-scaling/README.md))
+- **Cell router** — The thin layer that looks up which cell a tenant lives in and forwards its requests there. Used in project 39. ([Module 6](../modules/06-scaling/README.md))
+- **Checkpoint** — A saved position or state (such as "processed up to offset 812") that lets a consumer or stream job restart where it left off. Used in projects 18, 23. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Checksum** — A small value computed from data (CRC, SHA-256) and stored with it, so corruption can be detected by recomputing and comparing. Used in projects 27, 31, 36, 39. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Chunking** — Splitting big data (a file, a video, a document) into smaller pieces that can be stored, sent, retried or processed independently. Used in projects 17, 20, 25, 31, 33. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **Circuit breaker** — A wrapper that stops calling a dependency after repeated failures, fails fast for a while, then lets a few test calls through to see if it recovered. Used in projects 4, 9, 17, 24. ([Module 5](../modules/05-reliability/README.md))
+- **Citus** — A PostgreSQL extension that shards tables across several PostgreSQL servers. Used in project 35. ([Module 3](../modules/03-storing-data/README.md))
+- **Clearing (suspense) account** — An internal account that holds money "in transit" between two steps, so the books balance at every moment of a multi-step transfer. Used in projects 29, 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **ClickHouse** — An open-source columnar database built for fast analytical queries over large volumes of events. Used in projects 23, 37. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Clock skew** — Different machines' clocks disagreeing by some amount, which makes timestamps from different hosts unreliable for ordering. Used in projects 2, 3, 26, 37. ([Module 7](../modules/07-consistency/README.md))
+- **Cold start** — The first requests after a process or cache starts, which are slow because nothing is loaded or cached yet. Used in projects 10, 16. ([Module 18](../modules/18-client-and-mobile-system-design/README.md))
+- **Columnar storage** — Storing each column's values together on disk, which makes scanning and aggregating a few columns over many rows very fast. Used in project 37. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Compaction** — Rewriting stored data to drop obsolete versions, deleted items or old log entries and reclaim space. Used in projects 20, 27, 30, 31, 32. ([Module 3](../modules/03-storing-data/README.md))
+- **Compensating action / event** — A step that semantically undoes an earlier completed step (refund a payment, release stock), used in sagas and event-sourced systems instead of a rollback. Used in projects 18, 19, 29. ([Module 7](../modules/07-consistency/README.md))
+- **Concurrency** — Several operations in progress at the same time, which can interfere with each other if they touch shared data. Used in projects 2, 3, 4, 5, 6, 8, 9, 13, 15, 18, 22, 24, 26, 28, 29, 30, 32, 33, 34, 36, 38, 40.
+- **Conditional (atomic) update** — An `UPDATE ... WHERE <condition>` that changes a row only if a check still holds, doing the check and the write in one step. Used in projects 15, 34. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Connection pool** — A set of open database connections reused across requests, with a cap so the database is not flooded. Used in projects 1, 9, 16, 17. ([Module 6](../modules/06-scaling/README.md))
+- **Consensus** — Getting a group of machines to agree on one value or one ordered log even if some of them fail; Raft and Paxos are consensus algorithms. Used in project 30. ([Module 7](../modules/07-consistency/README.md))
+- **Consistency token (zookie)** — An opaque token from a write that later reads pass back to say "answer with data at least this fresh". Used in project 38. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Consistent hashing** — Placing keys and servers on a hash ring so each key belongs to the next server clockwise; adding or removing a server moves only a small share of keys. Used in projects 13, 16, 26, 32, 37. ([Module 3](../modules/03-storing-data/README.md))
+- **Consumer group** — A set of consumers sharing the work of reading a topic: each partition is read by exactly one member at a time. Used in project 27. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Container** — A packaged process with its own filesystem and dependencies that runs the same way on any machine (Docker builds and runs them). Used in projects 28, 33. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Context propagation** — Passing request identifiers (such as a trace ID) along with every call, including through queues and thread pools, so work can be linked back to the original request. Used in projects 9, 10, 37. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Continuous batching** — An LLM-serving technique that adds new requests into a running GPU batch at every decoding step instead of waiting for the whole batch to finish. Used in project 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Control plane vs data plane** — The control plane manages configuration and placement (slow, rarely called); the data plane handles the actual user requests (fast, on every call). Used in projects 17, 39. ([Module 6](../modules/06-scaling/README.md))
+- **Convergence** — After all replicas have seen the same set of updates, they end up with the same state regardless of the order updates arrived in. Used in projects 26, 32. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Counter reset** — A metrics counter dropping back to zero because the process restarted; rate calculations must treat the drop as a restart, not a negative rate. Used in project 20. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **CPU** — The processor that runs program instructions; CPU usage is a common load signal. Used in projects 4, 7, 8, 11, 20, 32, 37, 40.
+- **CQRS (command query responsibility segregation)** — Using one model for writes (commands) and separate, query-shaped models for reads. Used in project 18. ([Module 3](../modules/03-storing-data/README.md))
+- **Crash recovery** — What a component does on restart to get back to a correct state, typically by replaying a log from the last checkpoint. Used in projects 4, 5, 8, 10, 11, 14, 17, 18, 19, 20, 22, 23, 28, 29, 30, 31, 32, 33, 34, 36.
+- **Crawl-delay** — A `robots.txt` hint telling crawlers how many seconds to wait between requests to the site. Used in project 22. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Crawler trap** — A site region that generates endless URLs (calendars, session IDs) and can keep a crawler busy forever. Used in project 22. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **CRDT (conflict-free replicated data type)** — A data structure whose copies can be edited independently, even offline, and always merge to the same result without a coordinator. Used in projects 26, 32. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Cron expression** — A compact schedule format such as `0 2 * * *` ("02:00 every day") from the classic Unix scheduler cron. Used in projects 4, 28. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Cross-encoder (reranker)** — A model that reads the question and a candidate passage together and scores how well they match; slower but more precise than comparing embeddings. Used in project 25. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **CRUD** — Create, read, update, delete: the four basic operations on stored records. Used in projects 10, 18, 21, 28, 31.
+- **Cursor pagination** — Returning results a page at a time, where each page ends with a bookmark (cursor) for "continue after this item", so inserts do not shift pages. Used in projects 32, 35. ([Module 8](../modules/08-api-and-edge/README.md))
+
+### D
+
+- **DAG (directed acyclic graph)** — A set of steps with "must happen before" arrows and no loops; used to describe pipelines and job dependencies. Used in projects 28, 33. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Dead man's switch** — An alert that is always firing on purpose; if it ever stops arriving, the monitoring pipeline itself is broken and someone is paged. Used in project 20. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Dead-letter queue (DLQ)** — A holding queue for messages or jobs that keep failing, so they stop blocking others and humans can inspect and replay them. Used in projects 4, 6, 11. ([Module 5](../modules/05-reliability/README.md))
+- **Deadline propagation** — Passing the remaining time budget of a request down to every call it makes, so downstream work that cannot finish in time is skipped. Used in project 9. ([Module 5](../modules/05-reliability/README.md))
+- **Deadlock** — Two or more transactions each waiting for a lock the other holds, so none can proceed; avoided by always locking in the same order. Used in projects 15, 29. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Debezium** — An open-source CDC tool that reads database change logs (such as the PostgreSQL WAL) and publishes the changes to Kafka. Used in projects 14, 39. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Debounce** — Waiting until input stops changing for a short time (for example 100 ms after the last keystroke) before acting on it. Used in project 12. ([Module 18](../modules/18-client-and-mobile-system-design/README.md))
+- **Decompression bomb** — A small file (image, archive) that expands to a huge size when decoded, used to exhaust a server's memory. Used in project 11.
+- **Delta-of-delta encoding** — Compressing timestamps by storing the change in the gap between consecutive points; for regular intervals that is almost always zero. Used in project 20. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Deterministic** — Always producing the same output from the same input, with no dependence on clocks, randomness or thread timing. Used in projects 10, 11, 18, 19, 23, 24, 26, 30, 32, 33, 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Deterministic bucketing** — Hashing a stable key (flag plus user ID) to a number from 0–99 so the same user always lands in the same rollout bucket. Used in project 10. ([Module 9](../modules/09-operating-in-production/README.md))
+- **DNS (Domain Name System)** — The internet's directory that turns names like `example.com` into IP addresses. Used in projects 6, 22.
+- **Docker / Docker Compose** — Docker builds and runs containers; Docker Compose starts a group of containers (app, database, cache) from one file with `docker compose up`. Used in projects 1, 3, 26. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Double-entry bookkeeping** — Recording every money movement as matching debits and credits that sum to zero, so money can only move, never appear or vanish. Used in project 29. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Downsampling / rollups** — Replacing many fine-grained data points with summaries over larger intervals (for example 5-minute min/max/sum/count) to save space for old data. Used in projects 12, 20. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **DST (daylight saving time)** — Seasonal clock changes that make some local times happen twice and others not at all, which complicates schedules. Used in project 28. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Dual write** — An application writing the same change to two systems separately (database and cache, database and Kafka); a failure between them leaves them disagreeing. Used in projects 7, 14. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Durability** — The guarantee that data, once acknowledged, survives crashes and hardware failures. Used in projects 5, 6, 7, 8, 11, 12, 19, 22, 24, 27, 28, 29, 30, 31, 35, 36.
+- **Durable execution (Temporal)** — Workflow engines such as Temporal that record every step so a workflow resumes exactly where it stopped after a crash. Used in projects 19, 29, 33. ([Module 7](../modules/07-consistency/README.md))
+- **Dynamo** — Amazon's 2007 design for a highly available, leaderless key-value store; the inspiration for Cassandra and Riak. Used in project 26. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+
+### E
+
+- **Edge (edge cache)** — Servers at the network's edge, close to users, such as CDN points of presence that cache content. Used in projects 11, 12, 33. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Edge effect (geospatial)** — Two nearby points falling in different grid cells across a boundary, so a search must also check neighbouring cells. Used in project 21. ([Module 15](../modules/15-case-studies-location-and-realtime/README.md))
+- **Elasticsearch** — A popular search engine built on inverted indexes, used for full-text search and log analytics. Used in projects 12, 14, 18.
+- **Election restriction (Raft)** — A node only votes for a candidate whose log is at least as up to date as its own, which guarantees the new leader has every committed entry. Used in project 30. ([Module 7](../modules/07-consistency/README.md))
+- **Embedding** — A list of numbers (a vector) produced by a model to represent the meaning of a text or image; similar meanings get nearby vectors. Used in projects 24, 25. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Envoy** — A widely used open-source proxy for API gateways and service meshes. Used in projects 17, 39. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Epoch (ID generation)** — The custom start date from which an ID's timestamp is counted, chosen recent so the time bits last as long as possible. Used in project 2. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Erasure coding (k+m)** — Splitting data into k pieces and computing m extra parity pieces so any k of the k+m can rebuild the original, using far less space than full copies. Used in project 31. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **ETA (estimated time of arrival)** — A prediction of how long a trip or delivery will take. Used in project 34. ([Module 15](../modules/15-case-studies-location-and-realtime/README.md))
+- **ETag** — An HTTP header holding a version tag for a resource; clients send it back to ask "has this changed?" and get `304 Not Modified` if not. Used in projects 10, 31. ([Module 18](../modules/18-client-and-mobile-system-design/README.md))
+- **etcd** — A small, strongly consistent key-value store replicated with Raft, used by Kubernetes and others for configuration, leases and leader election. Used in projects 16, 27, 28, 30. ([Module 7](../modules/07-consistency/README.md))
+- **Event sourcing** — Storing every change as an immutable event and rebuilding current state by replaying them, instead of storing only the latest state. Used in projects 18, 36. ([Module 3](../modules/03-storing-data/README.md))
+- **Event time vs processing time** — Event time is when something actually happened; processing time is when the system sees it. They differ when events arrive late or out of order. Used in project 23. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Event-driven processing** — Components react to events ("file uploaded", "order placed") published by others instead of being called directly. Used in projects 11, 14. ([Module 2](../modules/02-moving-data/README.md))
+- **EventSource** — The browser API that opens a Server-Sent Events stream and reconnects automatically, sending `Last-Event-ID`. Used in project 8. ([Module 2](../modules/02-moving-data/README.md))
+- **Eventual consistency** — Replicas may briefly disagree after a write but will converge if no new writes arrive; readers can see stale data meanwhile. Used in projects 6, 11, 15, 18, 19, 30, 32, 34, 38. ([Module 7](../modules/07-consistency/README.md))
+- **Exactly-once (in effect)** — Every operation takes effect once even though messages may be delivered more than once, achieved with idempotent processing or transactions. Used in projects 4, 5, 6, 14, 18, 19, 23, 27, 28, 29. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **EXIF** — Metadata stored inside photos (camera model, time, often GPS location); stripped before publishing for privacy. Used in project 11.
+- **Exponential backoff with jitter** — Waiting longer after each failed retry (1 s, 2 s, 4 s...) plus a random extra delay, so many clients do not retry in lockstep. Used in projects 4, 5, 6, 9, 19. ([Module 5](../modules/05-reliability/README.md))
+
+### F
+
+- **Fail open / fail closed** — When a check cannot run (its store is down), failing open lets requests through; failing closed rejects them. Open protects availability, closed protects safety. Used in projects 3, 24, 38. ([Module 5](../modules/05-reliability/README.md))
+- **Failover** — Switching to a standby or replica when the primary fails. Used in projects 5, 24, 26, 27, 28, 29, 36, 39. ([Module 3](../modules/03-storing-data/README.md))
+- **Failure domain** — A group of components that can fail together (a disk, a host, a rack, a zone); copies are spread across them. Used in project 31. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Fallback** — A cheaper or older answer used when the normal path fails (cached data, a default, another provider). Used in projects 3, 8, 9, 24, 40. ([Module 5](../modules/05-reliability/README.md))
+- **Fan-out** — One input producing many outputs, such as one post pushed to thousands of followers' feeds or one event sent to many webhooks. Used in projects 4, 6, 8, 9, 13, 15, 18, 20, 32, 34, 35, 36. ([Module 2](../modules/02-moving-data/README.md))
+- **Fan-out on write / on read** — On write (push): copy each new post into every follower's feed when it is created. On read (pull): assemble the feed from followees when it is requested. Hybrids push for most users and pull for celebrities. Used in project 35. ([Module 12](../modules/12-capstones/README.md))
+- **FastAPI** — A popular Python web framework for building HTTP APIs with async support. Used in projects 1, 5, 7, 10, 11, 15, 19, 21, 24.
+- **Fault injection / chaos testing** — Deliberately breaking things (killing processes, adding latency, cutting networks) to check the system handles failures as designed. Used in projects 1, 3, 6, 9, 16, 17, 19, 23, 26, 27, 28, 30, 31, 33, 34, 35, 39, 40. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Feature flag** — A switch, read at runtime, that turns a code path on or off for some or all users without deploying. Used in project 10. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Feistel cipher** — A reversible scrambling construction that can shuffle integers one-to-one, turning sequential IDs into non-guessable but still unique codes. Used in project 1.
+- **Fencing token** — A number that increases each time ownership changes; storage rejects writes carrying an older token, so a paused former owner cannot do damage. Used in projects 2, 28, 29, 36. ([Module 7](../modules/07-consistency/README.md))
+- **FFmpeg** — The standard open-source command-line tool and libraries for decoding, encoding and converting audio and video. Used in project 33. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **FIFO** — First in, first out: items are processed in the order they arrived. Used in project 36.
+- **File descriptor limit** — The operating system's cap on how many open files and sockets one process may hold; long-lived connections hit it. Used in project 8.
+- **Filter chain** — An ordered list of steps (auth, rate limit, logging) each request passes through in a proxy or framework; any step can reject or modify it. Used in project 17. ([Module 8](../modules/08-api-and-edge/README.md))
+- **First-writer-wins** — When two writers race, the one whose insert lands first succeeds and the other is rejected, typically enforced by a unique constraint. Used in project 5. ([Module 5](../modules/05-reliability/README.md))
+- **FIX protocol** — The Financial Information eXchange message standard used between brokers and exchanges. Used in project 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Flink** — Apache Flink, a stream-processing engine with event-time windows, managed state and exactly-once checkpoints. Used in project 23. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Fold (event sourcing)** — Computing current state by applying events one by one, in order, starting from an empty state. Used in project 18. ([Module 3](../modules/03-storing-data/README.md))
+- **fsync** — The system call that forces written data from memory buffers onto the physical disk, so it survives a power loss. Used in projects 27, 30. ([Module 3](../modules/03-storing-data/README.md))
+
+### G
+
+- **Gap detection** — Using gap-free sequence numbers so a receiver that sees 41 then 43 knows 42 is missing and fetches it. Used in projects 13, 36. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **Garbage collection (storage)** — A background job that finds and deletes data nothing refers to any more, such as orphan chunks or expired versions. Used in projects 2, 28, 31, 32, 36. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Garbage-collection pause** — A moment when a language runtime (such as the JVM) pauses the program to free memory; a long pause can make a process miss lease deadlines. Used in projects 2, 28, 36.
+- **Gateway (connection gateway)** — A server tier that holds client connections (WebSockets, SSE) and forwards messages, keeping the rest of the system stateless. Used in projects 13, 34. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **Geo-sharding** — Partitioning data and services by geographic region (city, cell) so local traffic stays on local servers. Used in project 34. ([Module 12](../modules/12-capstones/README.md))
+- **Geohash** — Encoding a latitude/longitude as a short string where a shared prefix means the points are in the same grid cell. Used in project 21. ([Module 15](../modules/15-case-studies-location-and-realtime/README.md))
+- **GiST index** — PostgreSQL's generalised search-tree index, used by PostGIS to index shapes and locations (R-tree style). Used in project 21. ([Module 15](../modules/15-case-studies-location-and-realtime/README.md))
+- **Gossip protocol** — Nodes periodically exchange state with random peers, so information (membership, failures) spreads through the cluster without a central server. Used in projects 16, 26. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **GPU** — A graphics processor; its many parallel cores make it the hardware of choice for running ML models such as LLMs. Used in project 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Graceful degradation** — Keeping the core function working with reduced features or quality when a dependency fails, instead of failing completely. Used in projects 9, 35, 39, 40. ([Module 5](../modules/05-reliability/README.md))
+- **Grafana** — An open-source dashboard tool for charting metrics from many data sources. Used in project 20. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Greedy vs batched matching** — Greedy assigns each request immediately to the best current option; batched collects requests for a moment and solves them together for a better overall result. Used in project 34. ([Module 12](../modules/12-capstones/README.md))
+- **gRPC** — A high-performance remote-procedure-call framework from Google using HTTP/2 and typed Protocol Buffers messages, with streaming support. Used in projects 17, 26, 27, 30, 38.
+
+### H
+
+- **H3 / S2** — Uber's hexagonal and Google's square-cell hierarchical grids that divide the Earth into numbered cells at many resolutions. Used in projects 21, 34. ([Module 15](../modules/15-case-studies-location-and-realtime/README.md))
+- **Hash function** — A function that turns any input into a fixed-size number or string; the same input always gives the same output. Used in projects 1, 3, 5, 6, 10, 11, 13, 16, 20, 22, 24, 25, 26, 27, 28, 31, 32, 34, 36, 37. ([Module 3](../modules/03-storing-data/README.md))
+- **Haversine distance** — The formula for great-circle distance between two latitude/longitude points on a sphere. Used in project 21. ([Module 15](../modules/15-case-studies-location-and-realtime/README.md))
+- **Head block** — In a time-series database, the most recent data held in memory (backed by a WAL) before it is compressed and written as an immutable block. Used in project 20. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Head sampling vs tail sampling** — Head sampling decides whether to keep a trace when it starts (cheap, misses rare errors); tail sampling decides after seeing the whole trace (catches errors and slow requests, needs buffering). Used in project 37. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Health check** — An endpoint or probe that reports whether a service instance is working, used by load balancers and deploy tools. Used in project 39. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Heap (data structure)** — A tree-shaped structure that always gives you the smallest (or largest) item quickly; used for "next due" queues. Used in projects 12, 17, 22.
+- **Heartbeat** — A small periodic "I'm alive" message; when heartbeats stop, the sender is presumed dead. Used in projects 4, 8, 13, 26, 27, 28, 30. ([Module 2](../modules/02-moving-data/README.md))
+- **Helm** — A package manager for Kubernetes that installs an application from a templated chart. Used in project 39. ([Module 9](../modules/09-operating-in-production/README.md))
+- **High watermark (Kafka)** — The highest offset copied to all in-sync replicas; consumers can only read up to it, so they never see records that could be lost. Used in project 27. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Hinted handoff** — When a replica is down, another node accepts its writes with a note (hint) and hands them over once it recovers. Used in project 26. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **HLS (HTTP Live Streaming)** — Apple's streaming format: video cut into short segment files plus playlists that list them, served over plain HTTP. Used in project 33. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **HMAC signature** — A hash of a message computed with a shared secret key; the receiver recomputes it to verify the sender and that nothing was altered. Used in project 6. ([Module 2](../modules/02-moving-data/README.md))
+- **HNSW** — Hierarchical Navigable Small World, a layered graph index for fast approximate nearest-neighbour search over vectors. Used in project 25. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Hot key / hot shard / hot account** — One key, partition or account that receives a disproportionate share of traffic and overloads the node holding it. Used in projects 1, 3, 7, 15, 16, 23, 26, 29, 35. ([Module 4](../modules/04-caching/README.md))
+- **Hot reload / hot swap** — Replacing configuration or data (routes, an index) in a running process without restarting or dropping requests. Used in projects 12, 17.
+- **Hot standby** — A replica kept fully up to date and ready to take over immediately if the primary fails. Used in projects 29, 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **HPA (Horizontal Pod Autoscaler)** — Kubernetes' built-in autoscaler that changes the number of pods based on a metric. Used in project 33. ([Module 6](../modules/06-scaling/README.md))
+- **HTTP** — The request/response protocol of the web; HTTP/2 and HTTP/3 multiplex many requests over one connection. Used in projects 1, 2, 3, 5, 6, 8, 12, 13, 16, 19, 22, 23, 28, 33, 37, 40.
+- **Hybrid search** — Combining keyword search (exact words) and vector search (meaning) and merging their result lists. Used in project 25. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Hydration (feed)** — Turning a list of IDs into full objects (posts with authors and counts) by fetching them, usually with one multi-get. Used in project 35. ([Module 12](../modules/12-capstones/README.md))
+- **HyperLogLog** — A tiny probabilistic sketch that estimates how many distinct items it has seen (unique users) within about 1% error. Used in project 23. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Hysteresis** — Using different thresholds for switching on and switching off, so a value hovering near one threshold does not flip back and forth. Used in project 20.
+
+### I
+
+- **Idempotency / idempotent** — Doing an operation twice has the same effect as doing it once, so retries are safe. Used in projects 4, 5, 9, 11, 14, 15, 17, 18, 19, 23, 27, 28, 29, 33. ([Module 5](../modules/05-reliability/README.md))
+- **Idempotency key** — A unique ID the client attaches to one logical request and reuses on every retry, so the server can recognise and dedupe repeats. Used in projects 4, 5, 15, 17, 19, 29. ([Module 5](../modules/05-reliability/README.md))
+- **Idempotent producer (Kafka)** — A producer that tags records with a producer ID and sequence number so the broker drops retried duplicates. Used in project 27. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Immutability** — Never modifying data once written; corrections are new records, which makes history, audit and caching simpler. Used in projects 11, 18, 20, 29, 33. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **In-sync replicas (ISR)** — In Kafka, the followers that are fully caught up with the leader; only they count for `acks=all`. Used in project 27. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Inbox table (idempotent consumer)** — A table where a consumer records processed message IDs in the same transaction as its work, so redelivered messages are skipped. Used in projects 8, 14, 19. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Integer minor units / ticks** — Storing money or prices as whole numbers of the smallest unit (cents, price ticks) instead of floating-point numbers, so arithmetic is exact. Used in projects 5, 28, 29, 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Interleaving anomaly** — In collaborative editing, two users' concurrent typing being mixed character by character ("axbycz") instead of kept as separate runs. Used in project 32. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Inverted index / postings list** — A map from each term (a word, a label value) to the list of documents or series containing it; the core of search engines. Used in project 20. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+
+### J
+
+- **Java virtual threads** — Lightweight threads in modern Java that make it cheap to run thousands of concurrent blocking tasks. Used in projects 4, 6, 8, 13, 16, 22, 31, 38.
+- **Jepsen** — A tool and method for testing distributed databases by injecting failures and checking the recorded history of operations for consistency violations. Used in projects 26, 30.
+- **Jitter** — A small random variation added to timers, TTLs or retry delays so many clients do not act at exactly the same moment. Used in projects 1, 4, 5, 8, 9, 28, 36. ([Module 5](../modules/05-reliability/README.md))
+- **JMH** — Java Microbenchmark Harness, the standard tool for accurate micro-benchmarks in Java. Used in projects 2, 36.
+- **Journal** — A durable, ordered, append-only record of inputs or changes (a ledger's journal entries, an exchange's order journal). Used in projects 12, 14, 29, 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **JSON** — JavaScript Object Notation, a simple text format for structured data used by most web APIs. Used in projects 4, 17, 20, 24, 32, 40.
+- **Jump consistent hash / rendezvous hashing** — Alternatives to a hash ring: jump hash computes a bucket with a tiny formula; rendezvous hashing picks the node with the highest hash score for each key. Used in project 16. ([Module 3](../modules/03-storing-data/README.md))
+- **JWT / JWKS** — A JSON Web Token is a signed token carrying identity claims that services verify locally; a JWKS is the published set of public keys used to verify them. Used in project 17. ([Module 8](../modules/08-api-and-edge/README.md))
+
+### K
+
+- **k6 / wrk** — Load-testing tools that fire many concurrent HTTP requests and report latency percentiles and throughput. Used in projects 1, 3, 7, 8, 15.
+- **Kafka** — Apache Kafka, a distributed, partitioned, replicated append-only log used as a durable message bus and event stream. Used in projects 4, 6, 8, 11, 12, 13, 14, 18, 19, 23, 24, 25, 27, 28, 29, 30, 33, 34, 35, 36, 37. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Kafka Connect** — Kafka's framework for running connectors that move data between Kafka and other systems (Debezium runs on it). Used in project 14. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Kafka Streams** — A Java library for building stream-processing applications directly on Kafka topics. Used in project 23. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Kappa vs Lambda architecture** — Lambda runs a batch path and a streaming path side by side; Kappa uses only a streaming path and reprocesses history by replaying the log. Used in project 23. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **KEDA** — Kubernetes Event-Driven Autoscaling: scales workloads on external metrics such as queue length. Used in projects 33, 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Key-value store** — A database that stores values under keys and supports get/put by key (Redis, Dynamo, etcd). Used in projects 7, 21, 26, 30. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Keyframe** — A video frame that can be decoded on its own; players can only start or switch quality at keyframes. Used in project 33. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **Kill switch** — A flag that instantly turns off a feature, route or trading path when something goes wrong. Used in projects 10, 36. ([Module 9](../modules/09-operating-in-production/README.md))
+- **kind / k3d** — Tools that run a small Kubernetes cluster inside Docker containers on a laptop. Used in project 39. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Kubernetes** — The standard container orchestrator: it schedules containers onto machines, restarts them, scales them and wires up networking. Used in projects 26, 27, 28, 29, 30, 31, 33, 34, 39, 40. ([Module 9](../modules/09-operating-in-production/README.md))
+- **KV cache** — In LLM serving, the stored attention keys and values for every token of each in-flight request; its GPU memory size limits how many requests can run at once. Used in project 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+
+### L
+
+- **Last-Event-ID** — The header a reconnecting SSE client sends with the ID of the last event it received, so the server can resend what it missed. Used in project 8. ([Module 2](../modules/02-moving-data/README.md))
+- **Last-writer-wins (LWW)** — Resolving conflicting writes by keeping the one with the latest timestamp; simple, but silently drops the others. Used in project 26. ([Module 7](../modules/07-consistency/README.md))
+- **Latency** — How long one request takes from start to finish. Used in most projects (27 of 40).
+- **Leader election** — Choosing one node to coordinate (accept writes, assign work), and choosing a new one when it fails. Used in projects 27, 28, 30, 34. ([Module 7](../modules/07-consistency/README.md))
+- **Leader epoch / term** — A counter increased every time a new leader takes over, so messages from an old leader can be recognised and rejected. Used in projects 27, 30. ([Module 7](../modules/07-consistency/README.md))
+- **Leaderless replication** — Replication with no single leader: clients write to several replicas directly and use quorums (Dynamo style). Used in project 26. ([Module 7](../modules/07-consistency/README.md))
+- **Lease** — A time-limited claim (on a worker ID, shard or lock) that must be renewed before it expires or ownership passes to someone else. Used in projects 2, 16, 27, 28, 30, 34, 36. ([Module 7](../modules/07-consistency/README.md))
+- **Least privilege** — Giving each user, service or tool only the permissions it strictly needs. Used in project 40.
+- **libvips** — A fast, memory-efficient image-processing library used for resizing and converting images. Used in project 11.
+- **Limit / market / IOC order** — A limit order trades only at a set price or better; a market order trades now at the best available price; an immediate-or-cancel order fills what it can at once and cancels the rest. Used in project 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Linearizability** — The strongest single-object consistency: every operation appears to happen at one instant between its start and end, so reads always see the latest write. Used in projects 26, 27, 30. ([Module 7](../modules/07-consistency/README.md))
+- **LISTEN/NOTIFY** — PostgreSQL's built-in publish-subscribe: a session listening on a channel is notified when another session calls `NOTIFY`. Used in project 4. ([Module 2](../modules/02-moving-data/README.md))
+- **LLM (large language model)** — A neural network trained on huge amounts of text that generates text one token at a time (GPT, Claude, Llama). Used in projects 24, 25, 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **LLM-as-judge** — Using a language model to grade another model's answers against a rubric, as part of automated evaluation. Used in projects 25, 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Load balancer** — A component that spreads incoming requests across several server instances (round-robin, least-requests) and skips unhealthy ones. Used in projects 1, 8, 17. ([Module 6](../modules/06-scaling/README.md))
+- **Load shedding** — Deliberately rejecting some requests when overloaded so the rest still succeed. Used in projects 1, 3. ([Module 5](../modules/05-reliability/README.md))
+- **Local evaluation (feature flags)** — The SDK evaluates flag rules in memory inside the application, so checks need no network call. Used in project 10. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Log compaction / snapshot (Raft)** — Periodically saving the full state machine and deleting the log entries it already includes, so the log does not grow forever. Used in projects 27, 30, 32. ([Module 7](../modules/07-consistency/README.md))
+- **Lost update** — Two read-modify-write operations overlap and one overwrites the other's change. Used in project 3.
+- **LRU eviction** — When memory is full, remove the least recently used entries first. Used in project 16. ([Module 4](../modules/04-caching/README.md))
+- **Lua script (Redis)** — A small script Redis runs atomically, so a multi-step read-check-write cannot be interleaved with other commands. Used in project 3. ([Module 8](../modules/08-api-and-edge/README.md))
+
+### M
+
+- **Magic bytes** — The first bytes of a file that identify its real format (JPEG, PNG), regardless of its name or declared type. Used in project 11.
+- **MapReduce / batch job** — Processing a large dataset offline in parallel chunks (map) and combining the results (reduce), as opposed to processing events as they arrive. Used in projects 12, 20, 23. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Market data** — The public feed of an exchange's prices, order-book changes and trades. Used in project 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Matching engine** — The core of an exchange that pairs buy and sell orders according to price-time priority. Used in project 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Membership** — The current list of live nodes in a cluster, which clients and nodes must agree on to route keys correctly. Used in projects 16, 26, 27, 30. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Merkle tree** — A tree of hashes where each parent hashes its children; comparing roots and then branches finds differences between replicas quickly. Used in project 26. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Metadata** — Data about data: an object's name, size, owner and chunk locations, as opposed to the bytes themselves. Used in projects 6, 11, 18, 20, 22, 24, 25, 27, 31, 32. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Microservices** — An architecture where an application is split into many small services, each owning its own data and deployed independently. Used in projects 14, 17, 19, 24.
+- **min.insync.replicas** — A Kafka setting: the minimum number of in-sync replicas required for an `acks=all` write; below it the leader refuses writes. Used in project 27. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **MinIO** — An open-source, S3-compatible object store you can run locally. Used in projects 11, 22, 31, 33. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Misfire policy** — What a scheduler does about runs it missed while it was down: run once to catch up, run all, or skip them. Used in project 28. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Model alias / routing** — Mapping a stable name such as `fast` or `smart` to a concrete model, and choosing a model per request by policy, cost or difficulty. Used in projects 24, 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Monotonic** — Only ever increasing (or never going backwards); used for IDs, revisions, fencing tokens and rollouts. Used in projects 2, 10, 28, 30.
+- **Multi-tenant** — One deployed system serving many separate customers (tenants), whose data and load must be kept apart. Used in projects 20, 24, 25, 28, 39, 40. ([Module 6](../modules/06-scaling/README.md))
+- **Multipart upload** — Uploading a large object as many separately sent and retried parts, then committing them as one object. Used in projects 11, 31, 33. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **MurmurHash3 / xxHash** — Fast non-cryptographic hash functions with good distribution, used for bucketing and placing keys. Used in projects 10, 16.
+- **MVCC (multi-version concurrency control)** — Keeping several versions of each row so readers see a consistent snapshot while writers create new versions; PostgreSQL works this way, which is why old versions must be vacuumed. Used in projects 4, 38.
+
+### N
+
+- **Negative caching** — Caching a "not found" answer for a short time so repeated lookups of missing keys do not reach the database. Used in project 1. ([Module 4](../modules/04-caching/README.md))
+- **Netty** — A Java library for building high-performance, non-blocking network servers. Used in projects 16, 17, 26, 27, 31, 36.
+- **New enemy problem** — A stale permission check lets a user see content created after their access was removed; fixed by evaluating checks at least as fresh as the content's write. Used in project 38. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Nginx** — A widely used web server and reverse proxy that can also act as a cache. Used in projects 8, 11, 33. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Noisy neighbour** — One tenant whose heavy usage degrades performance for others sharing the same resources. Used in projects 20, 39, 40. ([Module 6](../modules/06-scaling/README.md))
+- **North-south vs east-west traffic** — North-south is traffic from clients into the system (handled by a gateway); east-west is traffic between internal services (handled by a service mesh). Used in project 17. ([Module 8](../modules/08-api-and-edge/README.md))
+- **NTP (Network Time Protocol)** — The protocol machines use to synchronise their clocks; it can step a clock backwards. Used in project 2.
+
+### O
+
+- **O(log N)** — Big-O notation: work grows with the logarithm of the data size, so doubling the data adds only one step. Used in projects 7, 26.
+- **Object storage** — A store for large files (objects) addressed by bucket and key, such as Amazon S3 or MinIO; cheap and durable but not a filesystem. Used in projects 11, 12, 20, 22, 23, 27, 31, 33. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Observability** — Being able to understand what a running system is doing from its outputs: metrics, logs and traces. Used in projects 9, 37. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Offset** — A record's position number within a log partition; consumers save the offset they have processed up to. Used in projects 14, 23, 27, 31. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **OpenFeature** — A vendor-neutral standard API for evaluating feature flags. Used in project 10. ([Module 9](../modules/09-operating-in-production/README.md))
+- **OpenFGA / SpiceDB** — Open-source authorization services that implement the Zanzibar relationship-based model. Used in project 38. ([Module 8](../modules/08-api-and-edge/README.md))
+- **OpenStreetMap** — A free, community-built map of the world whose data can be downloaded and used. Used in project 21.
+- **OpenTelemetry / OTLP** — The vendor-neutral standard and SDKs for producing traces, metrics and logs; OTLP is its protocol for sending them to collectors. Used in projects 9, 37. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Operational transformation (OT)** — A technique for real-time co-editing that rewrites the positions of concurrent edits against each other; it relies on a central server to order operations. Used in project 32. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Optimistic vs pessimistic locking** — Pessimistic locks a row before changing it so others wait; optimistic does not lock but checks a version number at write time and retries on conflict. Used in projects 15, 18, 29. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Orchestration vs choreography** — In orchestration a central coordinator tells each service what to do next; in choreography each service reacts to the others' events with no coordinator. Used in projects 19, 29, 33, 39, 40. ([Module 7](../modules/07-consistency/README.md))
+- **Order book** — All resting buy and sell orders for one symbol, sorted by price and then by arrival time. Used in project 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Origin shield** — A middle cache tier between edge caches and the origin server that merges many edge misses into one origin fetch. Used in project 33. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **Orphan (sweeper)** — Data left behind with nothing referring to it (an upload never confirmed, a chunk with no metadata), cleaned up by a background sweeper. Used in projects 11, 31, 37. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **OSRM** — Open Source Routing Machine, a fast route planner over OpenStreetMap road data. Used in project 34. ([Module 15](../modules/15-case-studies-location-and-realtime/README.md))
+- **Outbox (transactional outbox)** — Writing an event into an `outbox` table in the same database transaction as the business change, then publishing it from there, so the change and the event never disagree. Used in projects 4, 14, 18, 19. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Outlier ejection** — A load balancer temporarily removing an instance that returns many errors. Used in project 17. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Overbooking** — Deliberately selling a little more inventory than exists, because some customers will not show up. Used in project 15. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+
+### P
+
+- **p95 / p99 (percentile latency)** — The latency below which 95% or 99% of requests fall; it shows how bad the slow tail is, which averages hide. Used in most projects (29 of 40). ([Module 1](../modules/01-thinking-in-patterns/README.md))
+- **Paged KV cache / prefix caching** — LLM-serving techniques (PagedAttention) that store the KV cache in fixed-size pages to cut waste, and share the cache for a common prompt prefix across requests. Used in project 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Partial fill** — An order executed for only part of its quantity, with the rest still resting or cancelled. Used in project 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Partition (Kafka / data)** — One independent slice of a topic or dataset; ordering is guaranteed only within a partition, and partitions are spread across servers. Used in projects 5, 6, 8, 13, 14, 18, 19, 22, 23, 26, 27, 28, 29, 30, 31, 33, 34, 36, 37, 39. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Partition key** — The field that decides which partition, shard or cell a record belongs to. Used in projects 3, 29, 39. ([Module 3](../modules/03-storing-data/README.md))
+- **Percentage rollout** — Enabling a feature for a chosen percentage of users, increased step by step. Used in projects 10, 17, 39. ([Module 9](../modules/09-operating-in-production/README.md))
+- **pgvector** — A PostgreSQL extension that adds a vector column type and nearest-neighbour indexes (HNSW, IVFFlat). Used in projects 24, 25, 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Pivot transaction** — In a saga, the step after which the saga can no longer be undone and must complete; irreversible steps are placed at or after it. Used in project 19. ([Module 7](../modules/07-consistency/README.md))
+- **Placement service** — The component that chooses which storage nodes hold each chunk, spreading them across failure domains. Used in project 31. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Point-in-time / temporal query** — Asking what the state was at a past moment, possible when history is kept as events or versions. Used in projects 18, 29. ([Module 3](../modules/03-storing-data/README.md))
+- **Politeness (crawler)** — Limiting how often a crawler hits each host so it does not overload websites. Used in project 22. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Polling** — Checking repeatedly on a timer whether something changed; simple but wasteful compared with being notified. Used in projects 4, 6, 8, 10, 14, 28. ([Module 2](../modules/02-moving-data/README.md))
+- **PostGIS** — The PostgreSQL extension for geographic data: geometry types, spatial indexes and distance functions. Used in project 21. ([Module 15](../modules/15-case-studies-location-and-realtime/README.md))
+- **PostgreSQL** — A popular open-source relational database with strong transactions; the default durable store in these projects. Used in most projects (32 of 40).
+- **Power-law / Zipf distribution** — A skewed distribution where a few items (keys, accounts, posts) get most of the traffic and a long tail gets very little. Used in projects 1, 12, 16, 35. ([Module 1](../modules/01-thinking-in-patterns/README.md))
+- **Pre-trade risk check** — Validating an order against the trader's balance and limits before it reaches the order book. Used in project 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Precomputed top-K** — Storing the best K results for every prefix or key ahead of time so a query is a lookup, not a search. Used in projects 12, 23. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Preference list** — In Dynamo-style stores, the N distinct nodes (walking clockwise around the ring) that hold copies of a key. Used in project 26. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Presence** — Showing whether users are online, away or typing; short-lived data kept in memory with TTLs. Used in projects 13, 32. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **Presigned URL** — A temporary URL signed by the server that lets a client upload or download one object directly from storage without credentials. Used in projects 11, 31. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **Price-time priority** — The exchange matching rule: better prices trade first, and at the same price the earlier order trades first. Used in project 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Primary / replica** — The primary copy of a database accepts writes; replicas copy its changes and can serve reads or take over. Used in projects 1, 7, 10, 13, 21, 26, 27, 29, 30, 31, 32, 34, 36, 38. ([Module 3](../modules/03-storing-data/README.md))
+- **Projection / read model** — A query-shaped table or view built by processing events; it can be thrown away and rebuilt from the events. Used in projects 14, 18. ([Module 3](../modules/03-storing-data/README.md))
+- **Prometheus** — An open-source monitoring system that pulls metrics from targets, stores them as time series and evaluates alert rules. Used in projects 4, 20. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Prompt injection** — Text inside retrieved documents or tool output that tries to make an LLM follow attacker instructions; content must be treated as data, not commands. Used in project 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Pub/sub (publish-subscribe)** — Publishers send messages to a named channel or topic and every current subscriber receives a copy. Used in projects 4, 8, 10, 13. ([Module 2](../modules/02-moving-data/README.md))
+- **Push vs pull** — Push: the source sends data as it happens. Pull: the receiver asks for data when it wants it. Pull gives the receiver control; push gives lower delay. Used in project 20. ([Module 2](../modules/02-moving-data/README.md))
+
+### Q
+
+- **QPS / throughput** — Queries (or operations) handled per second; how much work a system completes per unit of time. Used in projects 2, 3, 4, 13, 14, 16, 22, 26, 27, 31, 36, 40. ([Module 1](../modules/01-thinking-in-patterns/README.md))
+- **Quadtree** — A tree that splits a map square into four smaller squares only where there are many points, adapting to density. Used in project 21. ([Module 15](../modules/15-case-studies-location-and-realtime/README.md))
+- **Queue depth / lag** — How many messages are waiting, or how far behind a consumer is; the main signal for scaling workers. Used in projects 4, 11, 33, 40. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Quorum (N, R, W)** — With N copies, a write waits for W acknowledgements and a read for R replies; if R + W > N, every read overlaps the latest write's replicas. Used in projects 26, 30. ([Module 7](../modules/07-consistency/README.md))
+
+### R
+
+- **R-tree** — A spatial index that groups nearby shapes into nested bounding rectangles. Used in project 21. ([Module 15](../modules/15-case-studies-location-and-realtime/README.md))
+- **RabbitMQ** — RabbitMQ, a widely used open-source message broker with queues, acknowledgements and dead-lettering. Used in projects 4, 11, 33. ([Module 2](../modules/02-moving-data/README.md))
+- **Radix tree** — A compressed trie where chains of single-child nodes are merged into one node, saving memory. Used in project 12. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Raft** — A consensus algorithm that elects a leader and replicates an ordered log to a majority of nodes; used by etcd and many databases. Used in projects 27, 30, 31, 36. ([Module 7](../modules/07-consistency/README.md))
+- **RAG (retrieval-augmented generation)** — Answering a question by first retrieving relevant passages from your documents and then giving them to an LLM to answer from. Used in projects 25, 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Range scan** — Reading all rows whose keys fall in a range, in key order, which sorted indexes make cheap. Used in projects 13, 20.
+- **Rate limiting** — Capping how many requests a caller may make in a time window, rejecting or delaying the rest. Used in projects 1, 3, 17, 22, 24, 26, 36, 39. ([Module 8](../modules/08-api-and-edge/README.md))
+- **RBAC / ReBAC** — Role-based access control grants permissions through roles; relationship-based access control derives them from relationships (owner of, member of, parent folder). Used in project 38. ([Module 8](../modules/08-api-and-edge/README.md))
+- **React** — A popular JavaScript library for building browser user interfaces. Used in projects 32, 33, 37.
+- **Read repair** — When a read finds replicas with different versions, the coordinator writes the newest version back to the stale ones. Used in project 26. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Read replica** — A copy of the database that receives the primary's changes and serves read queries, slightly behind. Used in projects 7, 21, 38. ([Module 3](../modules/03-storing-data/README.md))
+- **Read-after-write consistency** — After a successful write, every later read sees it. Used in projects 18, 31. ([Module 7](../modules/07-consistency/README.md))
+- **Rebalance (consumer group)** — Redistributing partitions among consumers when one joins or leaves; naive versions pause the whole group. Used in projects 27, 28, 39. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Recall@k** — Of the relevant items that exist, the share found in the top k results; the standard retrieval-quality metric. Used in projects 24, 25, 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Reciprocal rank fusion (RRF)** — Merging ranked lists by summing 1/(k + rank) for each item across lists, a simple way to combine keyword and vector search. Used in project 25. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Reconciliation** — Comparing two independently produced records (your ledger and a bank file, a table and storage) and investigating every difference. Used in projects 5, 7, 11, 24, 26, 29. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Redis** — A fast in-memory data store with rich types (strings, hashes, sorted sets, streams, pub/sub) used for caches, counters and queues. Used in projects 1, 3, 4, 5, 7, 8, 9, 10, 11, 13, 15, 17, 21, 24, 34, 35, 38, 39. ([Module 4](../modules/04-caching/README.md))
+- **Redis Cluster** — Redis's built-in sharding mode that spreads keys over several nodes by hash slot. Used in projects 1, 3, 35. ([Module 4](../modules/04-caching/README.md))
+- **Redis Streams** — A Redis data type that is an append-only log with consumer groups, more durable than pub/sub. Used in projects 8, 13. ([Module 2](../modules/02-moving-data/README.md))
+- **Reed-Solomon** — The classic erasure code family used to build k-of-n parity schemes for storage. Used in project 31. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Relation tuple** — One fact in a Zanzibar-style store, such as `doc:readme#viewer@user:ana` ("Ana is a viewer of readme"). Used in project 38. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Rendition** — One encoded version of a media file at a specific size or quality. Used in projects 11, 33. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **Replay** — Re-processing stored events or messages from an earlier point to rebuild state or redeliver data. Used in projects 4, 5, 6, 7, 8, 12, 14, 18, 19, 20, 23, 26, 27, 29, 34, 35, 36, 37. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Replay protection** — Rejecting an old, captured message that is sent again, typically by checking a timestamp and a unique ID in the signed payload. Used in project 6. ([Module 2](../modules/02-moving-data/README.md))
+- **Replication** — Keeping copies of data on several machines so it survives failures and can serve more reads. Used in projects 14, 16, 20, 21, 26, 27, 29, 30, 31, 32, 36. ([Module 3](../modules/03-storing-data/README.md))
+- **Replication factor** — How many copies of each piece of data the system keeps (often 3). Used in projects 26, 27, 31. ([Module 3](../modules/03-storing-data/README.md))
+- **Replication slot** — A PostgreSQL object that makes the server keep WAL until a consumer (like Debezium) has read it; an idle slot can fill the disk. Used in project 14. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Request collapsing / single-flight** — When many requests ask for the same missing item at once, only one goes to the backend and the rest wait for its result. Used in project 33. ([Module 4](../modules/04-caching/README.md))
+- **Request fingerprint** — A hash of a request's body stored with its idempotency key, so a reused key with a different body can be detected. Used in projects 5, 22. ([Module 5](../modules/05-reliability/README.md))
+- **Request ID / trace header** — A unique ID added to every request (for example `X-Request-ID` or W3C `traceparent`) so its logs and spans can be found across services. Used in projects 3, 17, 20, 37. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Resilience4j** — A Java library providing circuit breakers, retries, bulkheads, rate limiters and time limiters. Used in project 9. ([Module 5](../modules/05-reliability/README.md))
+- **Retention** — How long data (logs, metrics, messages) is kept before it is deleted or downsampled. Used in projects 20, 27, 37. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Retry amplification / retry budget** — When several layers each retry, one failure multiplies into many calls; a retry budget caps retries to a small share of normal traffic. Used in projects 9, 17. ([Module 5](../modules/05-reliability/README.md))
+- **Retry-After** — An HTTP header telling the client how many seconds to wait before retrying. Used in projects 3, 24. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Reverse proxy** — A server that receives client requests and forwards them to backend servers, hiding them behind one address. Used in projects 9, 16, 17, 24, 39. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Revision** — A monotonically increasing version number for the whole store, assigned to every change; reads and watches can be asked "as of" a revision. Used in projects 28, 30, 38. ([Module 7](../modules/07-consistency/README.md))
+- **Ring buffer** — A fixed-size circular array where new entries overwrite the oldest; used for recent-history buffers. Used in projects 30, 36.
+- **robots.txt** — A file at a website's root telling crawlers which paths they may fetch and how often (standardised as RFC 9309). Used in project 22. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **RocksDB** — An embedded key-value storage engine based on an LSM tree, used inside many databases and stream processors. Used in projects 23, 26.
+- **Rollback** — Undoing a change: a database transaction's uncommitted writes, or a deployment back to the previous version. Used in projects 4, 12, 14, 15, 17, 19, 29, 39. ([Module 9](../modules/09-operating-in-production/README.md))
+- **RPO / RTO** — Recovery point objective: how much recent data you may lose in a disaster. Recovery time objective: how long recovery may take. Used in project 29. ([Module 6](../modules/06-scaling/README.md))
+
+### S
+
+- **S3** — Amazon Simple Storage Service, the reference object store; its API is copied by MinIO and many others. Used in projects 11, 31, 33. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **SaaS** — Software as a service: an application sold as a hosted subscription shared by many customers. Used in project 39.
+- **Saga** — A long business transaction split into local steps, each with a compensating action that undoes it if a later step fails. Used in projects 19, 29. ([Module 7](../modules/07-consistency/README.md))
+- **Saga log** — The durable record of a saga's current state and completed steps, so it can resume after a crash. Used in project 19. ([Module 7](../modules/07-consistency/README.md))
+- **Sandbox** — An isolated environment that limits what untrusted code can access (network, files, credentials). Used in project 40.
+- **Schema evolution / upcasting** — Changing the shape of events or messages over time while staying compatible with old ones; upcasting converts old event versions into the current shape when read. Used in projects 14, 18. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Schema registry** — A service that stores message schemas and rejects incompatible changes. Used in project 14. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Scrubbing** — Periodically re-reading stored data and checking checksums to find and repair silent corruption. Used in project 31. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Semantic cache** — Reusing a previous LLM answer when a new question is close in meaning (by embedding similarity) to a cached one. Used in projects 24, 25, 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Semantic lock** — A status value (such as `PENDING`) that marks a record as in the middle of a saga so other operations treat it carefully. Used in project 19. ([Module 7](../modules/07-consistency/README.md))
+- **Sequence CRDT** — A CRDT for ordered lists such as text, where every element has a unique, permanent ID so concurrent inserts merge deterministically. Used in project 32. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Sequence number** — A gap-free counter assigned to each message in a stream, giving a total order, duplicate detection and gap detection. Used in projects 13, 27, 32, 36. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **Sequencer** — The single component that stamps every input with the next sequence number, defining one global order. Used in projects 13, 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Server-Sent Events (SSE)** — A long-lived HTTP response that the server keeps writing events to; one-way (server to client) with built-in browser reconnect. Used in projects 7, 8, 10, 13, 24, 35. ([Module 2](../modules/02-moving-data/README.md))
+- **Service mesh / sidecar** — A layer of proxies (sidecars) next to every service that handles service-to-service traffic: retries, encryption, metrics. Used in projects 17, 37. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Session window** — A stream window that groups a user's events until a gap of inactivity (such as 30 minutes) closes it. Used in project 23. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Shard / sharding** — Splitting data across several databases or nodes by a key, so each holds only part of the data and load. Used in projects 1, 2, 3, 5, 7, 8, 11, 12, 15, 16, 20, 21, 24, 25, 28, 29, 30, 34, 35, 37, 39, 40. ([Module 3](../modules/03-storing-data/README.md))
+- **Shuffle sharding** — Giving each tenant a random small subset of shared nodes, so two tenants rarely share all of theirs and one bad tenant hurts few others. Used in project 39. ([Module 6](../modules/06-scaling/README.md))
+- **Siblings** — Several concurrent versions of one key returned together because the store could not decide which is newer; the application merges them. Used in project 26. ([Module 7](../modules/07-consistency/README.md))
+- **Side output** — A separate stream where a stream processor sends records that missed their window, so they are not silently dropped. Used in project 23. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **SimHash** — A fingerprint where similar documents get similar bit patterns, used to detect near-duplicate pages. Used in project 22. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **SKIP LOCKED** — A PostgreSQL `SELECT ... FOR UPDATE SKIP LOCKED` option that skips rows other transactions have locked, letting many workers claim different jobs safely. Used in projects 4, 28. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Sliding window** — A time window that moves continuously (or in small steps), so each moment sees the last N seconds; used in rate limiting and analytics. Used in projects 3, 9, 23. ([Module 8](../modules/08-api-and-edge/README.md))
+- **SLO (service level objective)** — A target for a service's reliability or speed, such as "99.9% of requests succeed within 300 ms". Used in projects 10, 38. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Sloppy quorum** — During failures, writing to stand-in nodes outside a key's normal replica set to stay available, which weakens the quorum overlap guarantee. Used in project 26. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Snapshot** — A saved copy of the full state at one point (with the log position it reflects), so recovery only replays what came after. Used in projects 10, 12, 18, 23, 26, 29, 30, 32, 36, 38. ([Module 3](../modules/03-storing-data/README.md))
+- **Snowflake ID** — A 64-bit ID made of a timestamp, a worker ID and a per-millisecond sequence, unique across machines and roughly time-sorted. Used in projects 2, 35. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Sorted set (Redis ZSET)** — A Redis type that keeps members ordered by a numeric score, with fast inserts, rank lookups and range reads (`ZADD`, `ZREVRANK`, `ZREVRANGE`). Used in projects 3, 7, 21. ([Module 15](../modules/15-case-studies-location-and-realtime/README.md))
+- **Source of truth** — The one authoritative store whose data wins when copies disagree; caches and read models are derived from it. Used in projects 1, 7, 13, 18, 23, 31, 34, 35, 36. ([Module 3](../modules/03-storing-data/README.md))
+- **Span** — One timed operation inside a trace, with a name, start, duration, parent and attributes. Used in project 37. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Split brain** — Two nodes or regions both believing they are the primary and accepting writes, which causes conflicting data. Used in project 29. ([Module 7](../modules/07-consistency/README.md))
+- **Spring Boot** — The most popular Java framework for building services; it wires up web servers, database access and configuration automatically. Used in projects 1, 3, 5, 7, 8, 9, 10, 11, 13, 14, 15, 17, 19, 21, 24, 29, 33, 34.
+- **SSRF (server-side request forgery)** — Tricking a server into making requests to internal addresses (cloud metadata, private services) on the attacker's behalf. Used in project 6.
+- **Stale lock takeover** — Letting a later request take over a lock (or idempotency key) left behind by a crashed request after it is older than a timeout. Used in project 5. ([Module 5](../modules/05-reliability/README.md))
+- **Stale read / stale set** — Reading an out-of-date value, or a slow writer putting an old value back into a cache after a newer change. Used in projects 1, 2, 4, 5, 6, 9, 11, 12, 15, 16, 21, 25, 26, 28, 30, 34, 35, 38. ([Module 4](../modules/04-caching/README.md))
+- **State machine** — A model with a fixed set of states and allowed transitions between them (an order or trip lifecycle). Used in projects 19, 20, 30, 34, 36.
+- **State vector** — In Yjs-style CRDTs, a summary of how many operations each client has contributed, used to send a peer only what it is missing. Used in project 32. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **StatefulSet** — A Kubernetes workload type that gives each pod a stable name and its own persistent disk, needed for databases and brokers. Used in projects 26, 27, 31. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Stateless service** — A service that keeps no client data between requests, so any instance can handle any request and you can add copies freely. Used in projects 1, 9, 10, 17, 19, 21, 24, 31, 33, 37, 38, 39. ([Module 6](../modules/06-scaling/README.md))
+- **Static stability** — Designing a component to keep working with its last known configuration when its control plane is unavailable. Used in project 39. ([Module 6](../modules/06-scaling/README.md))
+- **Storage engine** — The part of a database that lays data out on disk and in memory (B-tree, LSM tree, append-only log with index). Used in projects 20, 26, 27. ([Module 3](../modules/03-storing-data/README.md))
+- **Stream processing** — Continuously computing results over an unbounded flow of events as they arrive (counts per minute, joins, alerts). Used in project 23. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **Streaming (LLM responses)** — Sending generated tokens to the client as they are produced instead of waiting for the full answer. Used in projects 24, 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Surge pricing** — Raising prices in an area where demand exceeds supply, to attract supply and ration demand. Used in project 34. ([Module 12](../modules/12-capstones/README.md))
+- **Synchronous vs asynchronous replication** — Synchronous waits for the replica before acknowledging a write (no data loss, slower); asynchronous acknowledges first (faster, the latest writes can be lost on failover). Used in projects 29, 31. ([Module 3](../modules/03-storing-data/README.md))
+
+### T
+
+- **Tail latency** — The latency of the slowest requests (p99, p99.9), which users notice and which grows with fan-out. Used in project 40. ([Module 1](../modules/01-thinking-in-patterns/README.md))
+- **Tenant migration** — Moving one customer's data and traffic from one cell or shard to another while the system keeps running. Used in project 39. ([Module 6](../modules/06-scaling/README.md))
+- **Testcontainers** — A library that starts real dependencies (PostgreSQL, Redis, Kafka) in Docker containers for integration tests. Used in project 1.
+- **Tie-breaking** — A deterministic rule for ordering equal values (the earlier score wins, the lower client ID wins), so every node agrees. Used in projects 7, 32. ([Module 15](../modules/15-case-studies-location-and-realtime/README.md))
+- **Time series** — A sequence of timestamped measurements identified by a metric name and labels. Used in project 20. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Time to first token (TTFT)** — How long an LLM request takes before the first output token arrives; the latency users feel in chat. Used in projects 24, 25, 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Time-sortable ID** — An ID whose leading bits are a timestamp, so sorting by ID sorts by creation time (Snowflake, UUIDv7). Used in projects 2, 35. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Timeout** — The maximum time a caller waits for a response before giving up, so a slow dependency cannot hold resources forever. Used in projects 1, 3, 4, 5, 6, 8, 9, 17, 19, 22, 24, 27, 28, 30, 34, 38, 40. ([Module 5](../modules/05-reliability/README.md))
+- **Timing wheel** — An in-memory circular array of time buckets that makes scheduling and expiring huge numbers of timers cheap. Used in project 28. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+- **Token (LLM)** — The unit of text a language model reads and writes, roughly a word piece; usage and cost are counted in tokens. Used in projects 24, 25, 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Token bucket** — A rate-limiting algorithm: a bucket refills with tokens at a steady rate and each request spends one, allowing short bursts up to the bucket size. Used in project 3. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Token budget** — A per-team or per-request cap on how many LLM tokens may be used, reserved before the call and refunded after. Used in project 24. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Tombstone** — A marker recording that something was deleted, kept for a while so replicas or merges do not bring the item back. Used in projects 26, 32. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Toxiproxy** — A proxy for testing that injects latency, timeouts and connection resets between services on command. Used in projects 9, 17, 26. ([Module 5](../modules/05-reliability/README.md))
+- **Trace / trace ID** — The record of one request's path through all services, made of spans that share one trace ID. Used in projects 17, 20, 37. ([Module 9](../modules/09-operating-in-production/README.md))
+- **Transaction (database)** — A group of reads and writes that the database applies all together or not at all, isolated from other transactions. Used in projects 4, 5, 6, 13, 14, 15, 18, 19, 23, 27, 28, 29, 30, 34, 36, 38.
+- **Transcoding** — Converting media from one encoding or format to another, for example into several resolutions and bitrates. Used in project 33. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **Trie (prefix tree)** — A tree where each node is one character, so all words sharing a prefix share a path; ideal for autocomplete. Used in project 12. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **TTL (time to live)** — How long a cached entry, key or lease lives before it expires automatically. Used in projects 1, 3, 11, 13, 16, 22, 23, 26, 30, 34. ([Module 4](../modules/04-caching/README.md))
+- **Tumbling window** — Fixed, non-overlapping time windows (each minute) in stream processing; every event belongs to exactly one. Used in project 23. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **tus protocol** — An open protocol for resumable file uploads over HTTP. Used in project 33. ([Module 14](../modules/14-case-studies-messaging-and-media/README.md))
+- **Two-phase commit (2PC)** — A protocol where a coordinator first asks every participant "can you commit?" and only if all say yes tells them all to commit. Correct but blocking: if the coordinator dies mid-way, participants wait holding locks. Used in projects 19, 23, 29. ([Module 7](../modules/07-consistency/README.md))
+
+### U
+
+- **UDP multicast** — Sending one network packet that the network delivers to many subscribers at once; fast and fair, but packets can be lost. Used in project 36. ([Module 17](../modules/17-case-studies-money-and-reservations/README.md))
+- **Unique constraint / unique index** — A database rule that rejects a second row with the same value in a column, the simplest reliable guard against duplicates. Used in projects 1, 5, 6, 13, 18, 28, 29.
+- **Upsert** — Insert a row, or update it if a row with that key already exists, in one statement. Used in projects 4, 23.
+- **URL frontier** — A crawler's prioritised, per-host-throttled queue of URLs still to fetch. Used in project 22. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **URL normalisation** — Rewriting URLs into one canonical form (lower-case host, no default port, sorted parameters) so duplicates are recognised. Used in project 22. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+- **Userset** — In Zanzibar, a set of users defined by a relation on an object, such as "members of group eng" (`group:eng#member`). Used in project 38. ([Module 8](../modules/08-api-and-edge/README.md))
+- **UUID / UUIDv7** — A 128-bit universally unique ID that needs no coordination; version 4 is random, version 7 starts with a timestamp so IDs sort by creation time. Used in projects 2, 5, 6, 11, 14, 15, 18, 19, 25, 29, 32, 33, 39, 40. ([Module 13](../modules/13-case-studies-building-blocks/README.md))
+
+### V
+
+- **VACUUM / table bloat** — PostgreSQL never overwrites rows in place; old row versions pile up (bloat) until `VACUUM` (or autovacuum) cleans them. Used in project 4.
+- **Vector clock** — A per-node counter list attached to each version that reveals whether one version happened before another or both were concurrent. Used in project 26. ([Module 7](../modules/07-consistency/README.md))
+- **Vector index / vector database** — A store that indexes embeddings for fast nearest-neighbour search. Used in projects 25, 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+- **Versioned URL** — A URL that includes a version or content hash, so changed content gets a new URL and caches never serve the old version. Used in project 11. ([Module 8](../modules/08-api-and-edge/README.md))
+- **Virtual nodes (vnodes)** — Placing each physical server at many points on a hash ring so keys spread evenly and a dead server's load spreads over all survivors. Used in project 16. ([Module 3](../modules/03-storing-data/README.md))
+- **Visibility timeout** — How long a claimed job or message stays hidden from other workers; if not finished by then, it becomes available again. Used in project 4. ([Module 2](../modules/02-moving-data/README.md))
+- **vLLM** — An open-source LLM inference server known for continuous batching and paged KV cache. Used in project 40. ([Module 11](../modules/11-ai-era-systems/README.md))
+
+### W
+
+- **WAL (write-ahead log)** — An append-only log a database writes every change to before applying it, used for crash recovery, replication and CDC. Used in projects 14, 20, 26, 30, 31, 36. ([Module 3](../modules/03-storing-data/README.md))
+- **WARC** — Web ARChive, the standard file format for storing crawled web pages with their HTTP metadata. Used in project 22.
+- **Watch** — A subscription that streams every change to a key or prefix from a given revision onward. Used in projects 9, 11, 20, 30, 38. ([Module 7](../modules/07-consistency/README.md))
+- **Watermark (stream processing)** — The processor's estimate that no more events older than time T will arrive, which lets it close event-time windows. Used in projects 23, 27. ([Module 10](../modules/10-batch-and-streaming/README.md))
+- **WebFlux** — Spring's non-blocking (reactive) web framework. Used in projects 8, 24.
+- **Webhook** — An HTTP POST your platform sends to a URL a customer registered, to tell their server that an event happened. Used in projects 6, 20, 33. ([Module 2](../modules/02-moving-data/README.md))
+- **WebSocket** — A persistent, full-duplex connection over which client and server can both send messages at any time. Used in projects 8, 13, 17, 32, 34, 36. ([Module 2](../modules/02-moving-data/README.md))
+- **Write amplification** — One logical write causing many physical writes, such as one post copied into a million follower timelines. Used in project 35. ([Module 12](../modules/12-capstones/README.md))
+- **Write-behind (write-back)** — Writing to a fast store (cache) first and flushing to the database later in batches. Used in project 1. ([Module 4](../modules/04-caching/README.md))
+- **Write-through** — Writing to the cache and the database together on every write, so the cache is always populated. Used in project 1. ([Module 4](../modules/04-caching/README.md))
+
+### X
+
+- **XOR value compression** — Compressing a series of floating-point values by storing each one XOR-ed with the previous one; slowly changing values leave mostly zero bits. Used in project 20. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+
+### Y
+
+- **YAML** — A human-friendly text format for configuration files. Used in projects 3, 17.
+- **Yjs / Automerge** — Open-source CRDT libraries for building collaborative and offline-first apps. Used in project 32. ([Module 16](../modules/16-case-studies-infrastructure/README.md))
+
+### Z
+
+- **Zanzibar** — Google's global authorization system that stores relation tuples and answers permission checks by walking the relationship graph. Used in project 38. ([Module 8](../modules/08-api-and-edge/README.md))

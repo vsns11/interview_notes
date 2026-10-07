@@ -4,7 +4,7 @@
 *Original lesson: [Module introduction on DesignGurus ↗](https://www.designgurus.io/course-play/system-design-patterns/doc/6a5346f301e8e02a37d09f39)*
 
 
-**What this module is about.** In Module 2 we looked at the *arrows* in an architecture diagram, meaning how the parts talk to each other. Now we focus on the most important box of all: the database. Most other parts of a system are easy to replace at any moment. API servers hold no lasting state. You can add ten of them or lose three, and users won't notice. The database is different. It holds the system's **facts**: payments, who owns what, and the record of what happened. You can't just start a second, independent database next to it. Two separate copies of the truth slowly stop matching. So as a product grows, the database is usually the first part to hit its limit. It is also the most dangerous part to change.
+**What this module is about.** In Module 2 we looked at the *arrows* in an architecture diagram, meaning how the parts talk to each other. Now we focus on the most important box of all: the database. Most other parts of a system are easy to replace at any moment. API servers hold no lasting **state** (data remembered between requests); they are *stateless*. You can add ten of them or lose three, and users won't notice. The database is different. It holds the system's **facts**: payments, who owns what, and the record of what happened. You can't just start a second, independent database next to it. Two separate copies of the truth slowly stop matching. So as a product grows, the database is usually the first part to hit its limit. It is also the most dangerous part to change.
 
 **Analogy.** Picture the database as a company's official ledger book. Hiring more clerks (app servers) is easy. But you can't buy a second ledger and let each clerk write in whichever book is nearer. Before long, the two books would disagree.
 
@@ -28,7 +28,7 @@
 
 **Four terms used throughout**
 - **Read path vs. write path** — a query that *gets* data travels the read path. A request that *changes* data travels the write path. The two paths need different scaling tools and carry different risks. They may even end up on different databases.
-- **Replication lag** — a copy stays current by receiving changes from the original. Sending them takes time. So a copy is behind the original by milliseconds, and sometimes by more. This is the database version of **eventual consistency** from the Event-Driven Architecture lesson: the copies match *in the end*, not right away.
+- **Replication lag** — a copy stays current by receiving changes from the original. Sending them takes time. So a copy is behind the original by milliseconds, and sometimes by more. This is the database version of **eventual consistency** from the Event-Driven Architecture lesson: the copies match *in the end*, not right away. (Replication and consistency basics are also covered in the [System Design Fundamentals](../00-system-design-fundamentals/README.md) primer.)
 - **Shard key** — the one field that decides which machine owns a row. This choice decides how evenly the work is spread. A poor shard key causes the main failure in the capstone.
 - **Durability** — the promise that once the database says "saved", the data survives a crash, a reboot or a power cut. The write-ahead log is what keeps that promise.
 
@@ -49,7 +49,7 @@
 
 ### The problem
 
-For years, the store has run on a single PostgreSQL machine. One Tuesday, a look at the traffic shows **8,000 reads per second** (product pages, search, order history) and **300 writes per second** (orders, cart changes). The machine can only handle **5,000 queries per second** in total. Product pages need **4 seconds** to load. Checkout gets slow as well, because reads and writes compete for the same CPU, memory and disk. Look at the split: **96%** of the traffic is reads. That split *is* the problem.
+For years, the store has run on a single PostgreSQL (a popular open-source relational database) machine. One Tuesday, a look at the traffic shows **8,000 reads per second** (product pages, search, order history) and **300 writes per second** (orders, cart changes). The machine can only handle **5,000 queries per second** in total. Product pages need **4 seconds** to load. Checkout gets slow as well, because reads and writes compete for the same CPU, memory and disk. Look at the split: **96%** of the traffic is reads. That split *is* the problem.
 
 A second problem hides behind the first. This overloaded machine is also the **only copy** of the company's data. It has one disk and one power supply. That makes it a **single point of failure**: one part that stops everything when it breaks. Last night's backup can't restore today's orders. If the machine failed at 4 PM, the whole day's orders would be gone. A single pattern solves both problems.
 
@@ -91,9 +91,9 @@ Every replicated setup must answer one key question: *at what moment does the pr
 | | Asynchronous | Synchronous |
 |---|---|---|
 | Primary says "saved"... | Right away, and sends the change afterward | Only once a replica confirms it has the change |
-| Write latency | Fast (only local work) | Slower (one network round trip at minimum) |
+| Write latency (time until "saved") | Fast (only local work) | Slower (one network round trip at minimum) |
 | If the primary dies | The most recent confirmed writes might be lost | No confirmed write is lost |
-| If a replica dies or slows | No one notices | Writes stall or fail, because the replica now sits on the critical path |
+| If a replica dies or slows | No one notices | Writes stall or fail, because the replica now sits on the critical path (the steps a write must wait for) |
 | Fits | Most workloads: feeds, catalogs, profiles | Moving money, committing inventory |
 
 - **Async is the usual default nearly everywhere.** Its failure (losing ~200 ms of writes during a rare failover) usually costs less than sync's price. With sync, every single write pays for a network round trip, and writes stall whenever a replica struggles.
@@ -111,11 +111,11 @@ Every replicated setup must answer one key question: *at what moment does the pr
 - **Lag and the odd behavior it causes.** Every read from a replica is a bit out of date. That is usually harmless. But it shows up as read-your-writes problems. So the application must send reads that *need fresh data* to the primary, and all other reads to replicas.
 - **Writes don't scale at all.** Each replica has to apply each write to stay current. So adding replicas adds *zero* write capacity. It even adds work, because the primary now has one more follower to feed. When writes outgrow one machine, the data has to be *divided* (the next lesson).
 - **Untested failover is dangerous.** Split brain, data lost to async replication, and promotion scripts that were never run can each break recovery. A failover plan nobody has practiced doesn't really exist.
-- **More to run:** extra machines, lag dashboards, heartbeats, runbooks.
+- **More to run:** extra machines, lag dashboards, heartbeats, **runbooks** (written step-by-step guides for handling incidents).
 
 ### When not to use it
 
-- **Workloads heavy on writes** (logging, telemetry, very frequent updates). When writes are the bottleneck, replicas multiply the work and add no capacity. That problem belongs to sharding.
+- **Workloads heavy on writes** (logging, **telemetry** (a constant flow of measurements sent by devices or servers), very frequent updates). When writes are the bottleneck, replicas multiply the work and add no capacity. That problem belongs to sharding.
 - **Small scale with good backups.** One properly sized machine, backups you've tested, and an hour of acceptable recovery time is a fully professional setup for a small product. Don't take on distributed-systems problems until scale makes you.
 - **When every read must be completely fresh** (uncommon, but it does happen in trading and some inventory cases). Sending every read to the primary cancels the benefit of the pattern. Either pay for synchronous replication, or challenge the requirement.
 - **As a promise that writes are always available.** Failover takes seconds to minutes. If writes must *never* pause, this pattern alone can't give you that.
@@ -124,9 +124,9 @@ Every replicated setup must answer one key question: *at what moment does the pr
 ### Real-world examples
 
 - **PostgreSQL streaming replication** and **MySQL replication** — the textbook form of the pattern. For most companies, the first scaling step looks just like the walkthrough.
-- **MongoDB replica sets** — come with automatic failover. The replicas run an *election* and promote a new primary by themselves, usually within seconds.
-- **AWS RDS and Aurora** — offer the pattern as checkboxes: "add read replica" and "enable Multi-AZ" (a standby, replicated synchronously, kept ready for failover). **Aurora** goes a step further and allows up to **15 replicas** that share one storage layer.
-- **For AI engineers:** vector databases use a single writer for embeddings and replicas for similarity search. The online reads of a feature store are exactly the read-heavy traffic replicas are good at. Training and evaluation jobs should read from a replica, so a data scientist's 2-hour scan never slows production. Read-your-writes hits ML as well: right after a fresh feature write, a prediction served from a lagging replica may use yesterday's feature value.
+- **MongoDB replica sets** — MongoDB is a popular document database (it stores JSON-like records instead of table rows). Its replica sets come with automatic failover. The replicas run an *election* and promote a new primary by themselves, usually within seconds.
+- **AWS RDS and Aurora** — offer the pattern as checkboxes: "add read replica" and "enable Multi-AZ" (AZ = availability zone, a separate datacenter within a cloud region; this option keeps a standby, replicated synchronously, kept ready for failover). **Aurora** goes a step further and allows up to **15 replicas** that share one storage layer.
+- **For AI engineers:** **vector databases** (databases that store **embeddings**, lists of numbers representing meaning, and find the closest ones) use a single writer for embeddings and replicas for **similarity search** (finding the most similar items). The online reads of a **feature store** (a database of the input values ML models use) are exactly the read-heavy traffic replicas are good at. Training and evaluation jobs should read from a replica, so a data scientist's 2-hour scan never slows production. Read-your-writes hits ML as well: right after a fresh feature write, a prediction served from a lagging replica may use yesterday's feature value.
 
 ### In the interview
 
@@ -144,7 +144,7 @@ Common prompts: "Your database is overloaded — what do you do?" (the interview
 
 - **Q1. What scales when you add replicas, what doesn't, and why?** → Read capacity scales, since each replica serves more reads. Write capacity doesn't, since every replica must apply every write: a write costs work once *per copy*, and the primary gets one more follower to send to. You also gain failover and a place for backups/analytics.
 - **Q2. A platform stores social-feed posts and account balance transfers. Which replication mode for each?** → Feed posts: asynchronous. Users feel write latency on every post, while data is lost only during rare failovers. Balance transfers: synchronous, or at least semi-synchronous. A bank can't lose the last ~200 ms of transfers it already confirmed. Pick per table/operation.
-- **Q3. After adding two replicas: "I updated my shipping address, refreshed, the old one was back; a minute later it was fine." Diagnose and give two fixes with costs.** → This is read-your-writes, caused by replication lag. The refresh read from a replica that hadn't yet replayed the update, and it "fixed itself" when the replica caught up. Fix 1: send the user's reads to the primary for ~10 s after a write. It costs session state, and those reads lose the replica benefit. Fix 2: note the log position of the user's write and read only from replicas past it. The data layer needs extra plumbing for this, but in return those reads keep using the replicas. (For purely cosmetic cases: optimistic UI.) The *wrong* fix is sending every read to the primary. That throws away the reason replicas exist.
+- **Q3. After adding two replicas: "I updated my shipping address, refreshed, the old one was back; a minute later it was fine." Diagnose and give two fixes with costs.** → This is read-your-writes, caused by replication lag. The refresh read from a replica that hadn't yet replayed the update, and it "fixed itself" when the replica caught up. Fix 1: send the user's reads to the primary for ~10 s after a write. It costs **session state** (remembering per-user facts, such as "wrote 5 s ago", between requests), and those reads lose the replica benefit. Fix 2: note the log position of the user's write and read only from replicas past it. The data layer needs extra plumbing for this, but in return those reads keep using the replicas. (For purely cosmetic cases: optimistic UI.) The *wrong* fix is sending every read to the primary. That throws away the reason replicas exist.
 
 ### Related patterns
 
@@ -166,7 +166,7 @@ Common prompts: "Your database is overloaded — what do you do?" (the interview
 *Original lesson: [Sharding on DesignGurus ↗](https://www.designgurus.io/course-play/system-design-patterns/doc/6a53480cd69c6e1df6959557)*
 
 
-**What it is.** Sharding divides *the rows of one table* across many machines. Each machine is called a **shard**. A rule based on one field, the **shard key**, decides where each row goes. Every shard completely owns its piece, including its own writes, reads and indexes. No single machine holds all the data.
+**What it is.** Sharding divides *the rows of one table* across many machines. Each machine is called a **shard**. A rule based on one field, the **shard key**, decides where each row goes. Every shard completely owns its piece, including its own writes, reads and **indexes** (sorted lookup structures that make finding rows fast). No single machine holds all the data.
 
 **Analogy.** Think of a phone book that is too big for one volume. You split it into A–F, G–M, N–S and T–Z. Everyone knows the rule, so any name takes one step to find. And four printers can update the four volumes at the same time.
 
@@ -201,9 +201,9 @@ Whether sharding works comes down to three decisions:
 2. **Pick the routing rule: how a key turns into a shard number.**
    - **Hash sharding:** pass the key through a **hash function** (something that turns any value into an evenly spread number), then take the remainder: `hash(customer_id) % 4`. This spreads the load well and is the default choice.
    - **Range sharding:** give each shard a range (A–F, G–M, or a date range). Neighboring values stay together, which is great for range queries. It's also risky: if you shard by date, today's shard gets 100% of the writes while the others do nothing.
-3. **Decide who does the routing.** It can be the application applying the rule, a proxy sitting in the middle, or the database itself (MongoDB, Vitess, Citus). All three work at scale, as long as every caller applies the exact same rule.
+3. **Decide who does the routing.** It can be the application applying the rule, a **proxy** (a middleman server that forwards each query to the right shard), or the database itself (MongoDB, Vitess, Citus). All three work at scale, as long as every caller applies the exact same rule.
 
-**The price, stated honestly.** Any question that crosses shards gets harder. "This customer's orders" touches a single shard and is fast. "Top 10 products sold today, across everyone" has to ask every shard and combine the results. That is called **scatter-gather**. Joins across shards stop being something the database does for you. They become your application's job. In the same way, a **transaction** that touches two shards (say, two customers on different shards swapping money) can't be a single **atomic** database transaction (all-or-nothing) anymore. Patterns such as the **saga** (later in the course) exist for exactly this case. Sharding gives you write capacity, and you pay for it with query flexibility.
+**The price, stated honestly.** Any question that crosses shards gets harder. "This customer's orders" touches a single shard and is fast. "Top 10 products sold today, across everyone" has to ask every shard and combine the results. That is called **scatter-gather**. **Joins** (queries that combine rows from two tables by matching a shared field, such as `customer_id`) across shards stop being something the database does for you. They become your application's job. In the same way, a **transaction** that touches two shards (say, two customers on different shards swapping money) can't be a single **atomic** database transaction (all-or-nothing) anymore. Patterns such as the **saga** (later in the course) exist for exactly this case. Sharding gives you write capacity, and you pay for it with query flexibility.
 
 ### Walkthrough with numbers
 
@@ -223,7 +223,7 @@ Four shards, routed by `hash(customer_id)`:
 | Hot key risk | A single huge key still overloads its shard | The same, and hot ranges too |
 | Resharding | Painful with plain modulo (the next lesson fixes this) | You can split a busy range where it sits, which is gentler |
 
-Choose **hash** by default. For transactional work, an even spread matters more than range queries. Choose **range** when data really is accessed by range (time series, leaderboards, browsing alphabetically). Then manage the ranges with care, so the current month doesn't turn into one overloaded shard.
+Choose **hash** by default. For transactional work, an even spread matters more than range queries. Choose **range** when data really is accessed by range (**time series**, i.e. measurements stored by timestamp; leaderboards; browsing alphabetically). Then manage the ranges with care, so the current month doesn't turn into one overloaded shard.
 
 ### Trade-offs
 
@@ -247,14 +247,14 @@ Sharding is a **last resort**. Reach for it only once the cheaper options are us
 - **A functional split is enough.** If no single table outgrows a machine, don't split rows.
 - **Your queries don't match the split.** A workload full of joins and transactions across many entities will slow down. Think about changing the data model first.
 
-**Misuses:** *sharding for prestige*. That means four shards at a scale one Postgres handles easily, paying for the complexity for years before the scale shows up, if it ever does. And the classic key mistake: **auto-incrementing ID with range routing**. Every new row goes to the newest shard, so one machine does all the writing.
+**Misuses:** *sharding for prestige*. That means four shards at a scale one Postgres handles easily, paying for the complexity for years before the scale shows up, if it ever does. And the classic key mistake: **auto-incrementing ID with range routing** (an auto-incrementing ID is one the database assigns as 1, 2, 3, …, so new rows always get the highest number). Every new row goes to the newest shard, so one machine does all the writing.
 
 ### Real-world examples
 
 - **Instagram** sharded Postgres by user ID and stored the shard information inside the IDs themselves. Thanks to a well-chosen key, billions of photos ran on ordinary databases.
 - **Slack** shards by workspace. That is a natural tenant key, because nearly every query is "inside this workspace". Its hot shards from giant workspaces are the self-check scenario at huge scale.
-- **Vitess** (created at YouTube, now open source) and **Citus** add sharding to MySQL and Postgres. **MongoDB** has it built in: you pick a shard key, and routing and rebalancing are handled for you.
-- **DynamoDB and Cassandra** are built around sharding from the start. The *partition key* in your table design *is* the shard key. That's why their docs teach how to choose it first.
+- **Vitess** (created at YouTube, now **open source**, meaning its code is public and free to use) and **Citus** add sharding to MySQL and Postgres. **MongoDB** has it built in: you pick a shard key, and routing and rebalancing are handled for you.
+- **DynamoDB and Cassandra** (Amazon's managed key-value database and a popular open-source wide-column database) are built around sharding from the start. The *partition key* in your table design *is* the shard key. That's why their docs teach how to choose it first.
 - **For AI engineers:** feature stores shard by entity ID (user, item). Training datasets shard by ranges of examples so they can load in parallel. When a vector index grows past one machine, you shard it and scatter-gather every similarity query (covered in the later vector-database sharding lesson).
 
 ### In the interview
@@ -272,7 +272,7 @@ Any "design Twitter / Instagram / Uber at scale" question arrives here within mi
 ### Self-check
 
 - **Q1. What does sharding scale that replication can't, and what are the three properties of a good shard key?** → Write capacity and total data size. Replication copies *everything* onto every machine, and every copy applies every write. Sharding hands each machine its own slice. A good key shows up in nearly every query, spreads load evenly, and keeps related rows together.
-- **Q2. Multi-tenant SaaS (companies sign up, employees use it): shard by `company_id`, `user_id`, or the row's random ID?** → `company_id`. Nearly every B2B query is "inside this company", so queries stay on one shard, and a company's data stays together for exports and deletion. Known risk: tenant sizes can be very unequal, so plan dedicated shards for giant tenants. `user_id` breaks queries across the whole company ("all documents in this workspace" becomes scatter-gather). A random row ID spreads data perfectly but ruins every real query, because no lookup knows where anything is stored.
+- **Q2. Multi-tenant SaaS (software-as-a-service sold by subscription; multi-tenant means many customer companies share one system; companies sign up, employees use it): shard by `company_id`, `user_id`, or the row's random ID?** → `company_id`. Nearly every B2B (business-to-business) query is "inside this company", so queries stay on one shard, and a company's data stays together for exports and deletion. Known risk: tenant sizes can be very unequal, so plan dedicated shards for giant tenants. `user_id` breaks queries across the whole company ("all documents in this workspace" becomes scatter-gather). A random row ID spreads data perfectly but ruins every real query, because no lookup knows where anything is stored.
 - **Q3. Hashed `user_id` across 8 shards; an influencer's live shopping event (40M followers) overloads shard 5 while the others sit at 15%. Diagnose and give three fixes.** → It's a hot key. Hashing spreads keys evenly, but this single key carries the load of 40M users. (1) Cache the storefront reads. They're almost the same for every viewer, so this may be enough by itself. (2) Send celebrity accounts to dedicated shards. (3) Split the influencer's own data by a second key, such as follower ID. The bigger lesson: monitor load per shard, because the business keeps creating unequal keys.
 
 ### Related patterns
@@ -342,9 +342,9 @@ The simple lookup table from earlier, when built properly, is the ring's real ri
 | Data moved on resize | About 1/N, with no manual work | Whatever you decide; completely flexible |
 | Placement control | None: the hash decides | Complete: you pin, split and move ranges yourself |
 | Hot range/tenant | Can't be treated as a special case | Split the hot range, move it, finished |
-| Extra infrastructure | None: it's just math inside the client | A metadata service that has to stay highly available |
+| Extra infrastructure | None: it's just math inside the client | A metadata service (a small service holding the "what lives where" map) that has to stay highly available |
 | Range queries | Spread around | Natural: ranges stay together |
-| Typical home | Caches, clusters that change size, peer-to-peer | Databases that want operational control |
+| Typical home | Caches, clusters that change size, peer-to-peer (machines that talk directly with no central server) | Databases that want operational control |
 
 **The modern hybrid** combines the best of each. Hash keys into many small, fixed **buckets**. Then keep a small directory that maps buckets to servers. **Redis Cluster** does exactly this with **16,384 "hash slots"**. The hash spreads keys evenly, which is the ring's strength. Moving a slot is a one-row change in the directory, which is the directory's strength. If an interviewer asks "what comes after the ring?", this hybrid is the answer.
 
@@ -374,9 +374,9 @@ The simple lookup table from earlier, when built properly, is the ring's real ri
 
 - **Akamai** — consistent hashing was invented there (Karger et al., **1997**) to route web requests over cache fleets that kept changing.
 - **Amazon's Dynamo paper (2007)** made "ring plus virtual nodes" the trademark technique of distributed databases. **Cassandra** and **Riak** took it over directly, and **DynamoDB** is descended from it.
-- **Memcached clients** have included it for two decades, and the miss-storm math is the reason.
+- **Memcached** (a simple in-memory cache server) **clients** have included it for two decades, and the miss-storm math is the reason.
 - **Redis Cluster** uses the hybrid: 16,384 hash slots, mapped to nodes through a directory.
-- **For AI engineers:** in LLM inference, a conversation's attention cache (the **KV cache**) stays on the GPU that last served it. Routing by conversation ID with consistent hashing preserves that match even as autoscaling changes the number of workers. Each scaling event moves only ~1/N of conversations, and the rest keep their warm caches. The same approach assigns partitions of the embedding space to workers in a sharded vector index.
+- **For AI engineers:** in LLM **inference** (running a trained model to produce answers), a conversation's attention cache (the **KV cache**, the model's saved intermediate results for earlier tokens) stays on the GPU that last served it. Routing by conversation ID with consistent hashing preserves that match even as autoscaling changes the number of workers. Each scaling event moves only ~1/N of conversations, and the rest keep their warm caches. The same approach assigns partitions of the embedding space to workers in a sharded vector index.
 
 ### In the interview
 
@@ -421,7 +421,7 @@ Typical ways in: "design a distributed cache", then "now add a node". Or the int
 
 ### The problem
 
-It's Tuesday, 3:07 AM. A power failure knocks out the rack that holds shard 2. The machine reboots 90 seconds later, and one of two bad mornings follows:
+It's Tuesday, 3:07 AM. A power failure knocks out the **rack** (a tall cabinet of stacked servers) that holds shard 2. The machine reboots 90 seconds later, and one of two bad mornings follows:
 
 - **Bad morning A — corruption.** The database won't start. It reports "data files corrupted". How? A single `UPDATE` isn't a single disk operation. Changing an order's status touches the table row *and* two indexes: three separate spots on disk. The power died after the first write but before the other two. Now an index points at a row that says something different, and the database is right to trust none of it.
 - **Bad morning B — lost writes.** The database starts, but the last two seconds have vanished. **40 orders** that customers were told were "saved" never happened. The database confirmed them from memory before writing them to disk.
@@ -432,7 +432,7 @@ The physics seem impossible to beat. A disk can lose power partway through a wri
 
 - **"Write everything to disk immediately, no memory buffering."** This is very slow. A single `UPDATE` hits three scattered locations. **Random writes** (jumping from place to place on the disk) cost much more than one continuous stream; on spinning disks, about **100×** more. And it still doesn't stop corruption, because the power can fail between the first location and the second.
 - **"Keep everything in memory and snapshot to disk every few minutes."** It's fast. But now a crash loses *minutes* instead of seconds. And copying a dataset while it is changing is a hard problem of its own. Still, snapshots end up being half of the real answer (see the comparison).
-- **"Buy batteries."** A **UPS** (battery backup) makes the window smaller but doesn't close it. Kernels panic, hardware fails, someone unplugs the wrong cable. A durability plan that relies on nothing going wrong isn't a durability plan.
+- **"Buy batteries."** A **UPS** (battery backup) makes the window smaller but doesn't close it. Kernels panic (the operating system's core crashes), hardware fails, someone unplugs the wrong cable. A durability plan that relies on nothing going wrong isn't a durability plan.
 
 All three miss the same need: to record one *logical* change (the whole `UPDATE`) as a single cheap, atomic disk operation. Scattered data pages can't do that. A log can.
 
@@ -505,7 +505,7 @@ You almost never *pick* a WAL. Your database picked it long ago. What you do pic
 
 ### In the interview
 
-The direct version: "How does a database survive a power cut without losing acknowledged writes?" Related ones: design a key-value store, explain why sequential writes are fast, or describe what a restarted database does before it accepts queries.
+The direct version: "How does a database survive a power cut without losing acknowledged writes?" Related ones: design a **key-value store** (a database that just maps a key to a value, like a giant dictionary), explain why sequential writes are fast, or describe what a restarted database does before it accepts queries.
 
 > **30-second answer:** Before it touches any data structure, the database appends one record describing the whole change to an append-only log and fsyncs it. Only after that does it acknowledge the client. Tables and indexes are updated later, in the background. On restart it replays from the last checkpoint and uses the checksum to throw away a torn record at the tail, so every acknowledged write survives. The append is sequential, so the safe path is also the fast path, and group commit packs many commits into each fsync. The same log provides replication (send it to replicas) and point-in-time recovery (archive it along with snapshots).
 
@@ -556,7 +556,7 @@ There's one root cause. The database keeps only the present, and `UPDATE` destro
 
 ### Why the obvious fixes fail
 
-- **"Add an audit table"** (triggers or app code copy every change into `order_history`). It half works. But it's a copy added as an afterthought. Some code path always forgets to write to it, backfills skip it, and on the day it disagrees with the orders table, which one is right? An audit log that sits beside the truth is only as reliable as its sloppiest writer. It also still records diffs ("status: shipped") rather than intent ("customer clicked cancel").
+- **"Add an audit table"** (**triggers**, i.e. database rules that run automatically on every change, or app code copy every change into `order_history`). It half works. But it's a copy added as an afterthought. Some code path always forgets to write to it, backfills skip it, and on the day it disagrees with the orders table, which one is right? An audit log that sits beside the truth is only as reliable as its sloppiest writer. It also still records diffs ("status: shipped") rather than intent ("customer clicked cancel").
 - **"Add columns: `updated_at`, `previous_status`…"** This clutters the schema and captures just one step of history. It answers Monday's question only if you're lucky, and can't answer Wednesday's or Friday's at all.
 - **"We have point-in-time backups."** That's true (from the WAL lesson). But restoring a database from two weeks ago just to answer one question is slow and clumsy. And a backup shows *that* a row changed, never *why*. No backup contains the fact "the customer cancelled".
 
@@ -627,10 +627,10 @@ Skip it for high-volume data where only the current value matters (sensor readin
 ### Real-world examples
 
 - **Banking and accounting** — the oldest example, roughly 500 years old. A double-entry ledger is really an event log kept by hand.
-- **Git** — commits are immutable events, your working directory is a projection, and `git log` is the audit trail.
+- **Git** (the standard version-control tool for code) — commits are immutable events, your working directory (the files you currently see) is a projection, and `git log` is the audit trail.
 - **Kafka-centric architectures** — the topic is the durable log, and every database is a projection of it. This is event sourcing at the scale of a whole company.
 - **EventStoreDB, Axon, Marten** — event stores built for the purpose.
-- **For AI engineers:** agents are event-sourced whether you planned it or not. A conversation is an append-only stream of messages, tool calls and results, and the agent's state is a replay of that stream. That's why you can re-run an eval from history, debug by replaying a session, and audit what an agent did and why. So store agent traces as real event streams. Feature stores need the same idea for **point-in-time correctness**. Training a model "as of March 1st" means replaying feature history up to that moment, and that only works if the history was stored as events.
+- **For AI engineers:** agents are event-sourced whether you planned it or not. A conversation is an append-only stream of messages, tool calls and results, and the agent's state is a replay of that stream. That's why you can re-run an **eval** (an automated test of a model's or agent's quality) from history, debug by replaying a session, and audit what an agent did and why. So store agent traces as real event streams. Feature stores need the same idea for **point-in-time correctness**. Training a model "as of March 1st" means replaying feature history up to that moment, and that only works if the history was stored as events.
 
 ### In the interview
 
@@ -670,7 +670,7 @@ The classic prompt: "Design a banking ledger or digital wallet". Say that the tr
 *Original lesson: [CQRS on DesignGurus ↗](https://www.designgurus.io/course-play/system-design-patterns/doc/6a534afead69318077d5683e)*
 
 
-**What it is.** CQRS (Command Query Responsibility Segregation) breaks one data model into two. **Commands** are writes, such as "place order 7f3a". They go to a **write model** designed for correctness: normalized, validated and transactional. **Queries** are reads, such as "orders for customer 8412". They go to one or more **read models**, and each one is shaped to fit its question exactly: pre-joined tables, search indexes, aggregates. A stream of changes from the write side keeps every read model current.
+**What it is.** CQRS (Command Query Responsibility Segregation) breaks one data model into two. **Commands** are writes, such as "place order 7f3a". They go to a **write model** designed for correctness: normalized (each fact stored once), validated and transactional. **Queries** are reads, such as "orders for customer 8412". They go to one or more **read models**, and each one is shaped to fit its question exactly: pre-joined tables, search indexes, aggregates (pre-computed totals and counts). A stream of changes from the write side keeps every read model current.
 
 **Analogy.** At a bank, one desk takes deposits, and a separate system prints statements and reports. Each is fast because it only has one job.
 
@@ -698,18 +698,18 @@ The real fix: stop asking one model to do two jobs.
 ![CQRS](images/cqrs-1.png)
 *Figure — CQRS (course diagram)*
 
-In the figure above, commands (place order, cancel) go into a write model. It is normalized, has only 3 indexes and uses transactions. A **change stream** (events or CDC) flows out of it into three read models. A flat, pre-joined `orders-list` table serves the orders page. Elasticsearch serves support search. An analytics store of daily aggregates serves dashboards.
+In the figure above, commands (place order, cancel) go into a write model. It is normalized, has only 3 indexes and uses transactions. A **change stream** (events or CDC) flows out of it into three read models. A flat, pre-joined `orders-list` table serves the orders page. Elasticsearch (a dedicated search engine) serves support search. An analytics store of daily aggregates serves dashboards.
 
 1. **Commands and queries travel separate routes.** A command goes to the write model, which checks it and commits it. A query goes to whichever read model has the right shape for it, and it **never touches the write model**.
 2. **Read models are projections.** They're the same derived, disposable, rebuildable copies from the Event Sourcing lesson (and the local views from the EDA lesson). CQRS is the name for splitting the model. The machinery behind it is something you already know.
-3. **Sync from the log, never with dual writes.** This is the first thing everyone gets wrong. The tempting approach has app code write to Postgres and *then* write to **Elasticsearch** (a search engine) as well. That's a **dual write**, and it's a trap. The two writes aren't one transaction. The app can crash in between. Then the two models disagree forever, and nobody knows. The safe approach reads one stream of truth. Either consume the write model's **domain events**, or tap the database's own change log using **change data capture (CDC)**, which reads each committed change out of the WAL and passes it along. Projection updates must be **idempotent**: applying one twice has the same result as applying it once. That makes redeliveries harmless. If you use event sourcing, your projections are already CQRS: one writer, one log, many followers.
+3. **Sync from the log, never with dual writes.** This is the first thing everyone gets wrong. The tempting approach has app code write to Postgres and *then* write to **Elasticsearch** (a search engine) as well. That's a **dual write**, and it's a trap. The two writes aren't one transaction. The app can crash in between. Then the two models disagree forever, and nobody knows. The safe approach reads one stream of truth. Either consume the write model's **domain events** (business facts such as `OrderPlaced`), or tap the database's own change log using **change data capture (CDC)**, which reads each committed change out of the WAL and passes it along. Projection updates must be **idempotent**: applying one twice has the same result as applying it once. That makes redeliveries harmless. If you use event sourcing, your projections are already CQRS: one writer, one log, many followers.
 4. **CQRS is a spectrum, not a single step.** The second thing everyone gets wrong is assuming it always means "two databases". It has three levels:
    - **Level 1:** the same database, but separate code paths and query models for reads and for writes. It's cheap, and it's often enough.
    - **Level 2:** read models as separate tables or replicas with a different shape (for example, a flat orders-list table).
    - **Level 3:** separate systems, such as Elasticsearch for search and a **data warehouse** (a database for analytics) for reports.
    Move along the spectrum only as far as your measured shape conflict forces you to.
 
-**CQRS and event sourcing are related, but they aren't the same thing.** Event sourcing can exist without CQRS (a log with a single state view). CQRS without event sourcing is everywhere (read models fed by CDC over a plain relational write model). You can adopt either one by itself.
+**CQRS and event sourcing are related, but they aren't the same thing.** Event sourcing can exist without CQRS (a log with a single state view). CQRS without event sourcing is everywhere (read models fed by CDC over a plain **relational** write model, i.e. ordinary SQL tables linked by keys). You can adopt either one by itself.
 
 ### Walkthrough with numbers
 
@@ -756,7 +756,7 @@ In the figure above, commands (place order, cancel) go into a write model. It is
 
 ### Real-world examples
 
-- **Every large e-commerce product page** — a normalized write side for catalog and inventory, plus a denormalized, pre-joined, heavily cached product-view read model, with a search index next to it.
+- **Every large e-commerce (online shopping) product page** — a normalized write side for catalog (the product listings) and inventory, plus a denormalized, pre-joined, heavily cached product-view read model, with a search index next to it.
 - **Twitter timelines** — the famous extreme case. The write side stores tweets. The read side builds each user's home timeline in advance at tweet time (**fan-out**), so reading is just fetching a list. The "tweets from everyone I follow" join runs once at write time instead of billions of times at read time.
 - **YouTube, LinkedIn, Uber** — view counts, profiles and trip histories are read from projections shaped for the purpose, not from the transactional core.
 - **For AI engineers:** a **feature store** is CQRS. A compute/write path builds features, and a separate low-latency online path serves them, with pipelines keeping the two in sync. Every **RAG** system (retrieval-augmented generation: a model answers using documents fetched for the question) is CQRS as well. Documents live in a source-of-truth store (the write model). The **vector index is a read model** shaped for "what is similar to this?". It's fed by the document change stream and rebuilt when the embedding model changes, which is the projection-rebuild property from Event Sourcing.

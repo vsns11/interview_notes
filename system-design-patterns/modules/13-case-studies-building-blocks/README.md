@@ -2,7 +2,7 @@
 
 ## Module Introduction
 
-**What this module is.** Module 12 composed patterns into four large products. This module goes one level down. It designs six systems that *other* systems are built on: an ID generator, a URL shortener, a key-value store, a message queue, a web crawler and a search-autocomplete service. They are the classic "design X" interview prompts, and each one is really a test of two or three patterns you have already met. No new patterns are introduced. Every design names the lesson it borrows from and links back to it (and to the matching chapter of the DDIA notes) instead of teaching the theory again.
+**What this module is.** Module 12 composed patterns into four large products. This module goes one level down. It designs six systems that *other* systems are built on: an ID generator, a URL shortener, a key-value store, a message queue, a web crawler and a search-autocomplete service. They are the classic "design X" interview prompts, and each one is really a test of two or three patterns you have already met. No new patterns are introduced. Every design names the lesson it borrows from and links back to it (and to the matching chapter of the DDIA notes, i.e. notes on Martin Kleppmann's book *Designing Data-Intensive Applications*) instead of teaching the theory again.
 
 **Analogy.** Module 12 was about cooking complete meals. This module is about making the stock, the sauce and the bread from scratch. They look humble, but every meal depends on them, and a cook who can make them understands *why* the meals work.
 
@@ -10,7 +10,7 @@
 
 | Case | Center of gravity (the main problem) | Patterns it leans on |
 |---|---|---|
-| 1. Unique ID Generator | Uniqueness across machines with no coordinator on the hot path | Clocks, bit budgets, leases |
+| 1. Unique ID Generator | Uniqueness across machines with no coordinator on the hot path | Clocks, bit budgets, leases (time-limited claims) |
 | 2. URL Shortener | A tiny write path and a huge, cacheable read path | Cache-aside, sharding, key generation, message queue |
 | 3. Distributed Key-Value Store | Staying writable while nodes fail, without losing writes | Consistent hashing, quorum, vector clocks, write-ahead log |
 | 4. Distributed Message Queue | A durable, replayable, ordered log at millions of messages per second | Partitioned consumption, replication, exactly-once |
@@ -28,7 +28,7 @@
 8. **Follow-up questions:** what interviewers ask next, with answers.
 9. **Pattern manifest**, a one-line interview answer and a **TL;DR**.
 
-**Runnable simulations.** Five small Python scripts in [`code/`](code/) make the key mechanisms concrete: Snowflake-style IDs, base-62 short codes, a consistent-hash ring, a Bloom filter for "URL already seen?" and a trie with cached top-k. Run any of them with the books' virtual environment, for example `.venv-books/bin/python system-design-patterns/modules/13-case-studies-building-blocks/code/trie_topk.py` from the notes root. Their real output is pasted into the cases.
+**Runnable simulations.** Five small Python scripts in [`code/`](code/) make the key mechanisms concrete: Snowflake-style IDs, base-62 short codes, a consistent-hash ring, a Bloom filter for "URL already seen?" and a trie with cached top-k. Run any of them with the books' **virtual environment** (an isolated folder holding Python and the packages these scripts need), for example `.venv-books/bin/python system-design-patterns/modules/13-case-studies-building-blocks/code/trie_topk.py` from the notes root. Their real output is pasted into the cases.
 
 **How to rehearse.** Same rule as Module 12: at each stage, stop and do it yourself on paper before reading on. Cases 1 and 2 are short warm-ups; cases 3 and 4 are the deepest (they reuse most of Modules 3 and 7 and 10); cases 5 and 6 are pipelines, where the hard part is the offline flow of data rather than the request path.
 
@@ -40,23 +40,23 @@
 
 **The prompt (in short).** Many services need identifiers for new rows, messages and events. Design a way to hand out IDs that are unique across hundreds of machines, fit in 64 bits, and sort roughly by creation time.
 
-**What makes it hard.** A single database counter gives perfect IDs but becomes one machine that every write in the company waits on. Random IDs need no coordination but are 128 bits and don't sort. The goal is to get most of both: no coordinator on the hot path, and IDs that still sort by time.
+**What makes it hard.** A single database counter gives perfect IDs but becomes one machine that every write in the company waits on. Random IDs need no coordination but are 128 bits and don't sort. The goal is to get most of both: no coordinator on the **hot path** (the code that runs on every single request), and IDs that still sort by time.
 
 **1. Requirements and numbers**
-- *Functional:* `next_id()` returns an ID that has never been issued before, anywhere. IDs are **64-bit integers** (they fit a `BIGINT` column; send them to browsers as strings, because JavaScript numbers lose precision above 2^53). IDs created later compare *roughly* greater than IDs created earlier. This property is called **k-sorted** or **roughly time-ordered**: IDs from the same millisecond may interleave across machines, but a newer millisecond always sorts after an older one.
-- *Non-functional:* no single point of failure; generation in **microseconds** (it sits inside every write); **10,000+ IDs/s per node** sustained; should keep working for decades.
-- *Numbers:* assume **500 application servers** that create IDs, a company-wide peak of **2M IDs/s**, and the busiest single server at **20,000 IDs/s**. Storage matters too: a 64-bit key is **8 bytes** against **16** for a UUID. A table with **10B rows** and three indexes that contain the key saves roughly 10B × 8 B × 4 ≈ **320 GB** by choosing the smaller key, and smaller keys mean more of each index fits in memory.
+- *Functional:* `next_id()` returns an ID that has never been issued before, anywhere. IDs are **64-bit integers** (they fit a `BIGINT` column, the database's 64-bit integer type; send them to browsers as strings, because JavaScript numbers lose precision above 2^53). IDs created later compare *roughly* greater than IDs created earlier. This property is called **k-sorted** or **roughly time-ordered**: IDs from the same millisecond may interleave across machines, but a newer millisecond always sorts after an older one.
+- *Non-functional:* no **single point of failure** (one component whose failure stops everything); generation in **microseconds** (it sits inside every write); **10,000+ IDs/s per node** sustained; should keep working for decades.
+- *Numbers:* assume **500 application servers** that create IDs, a company-wide peak of **2M IDs/s**, and the busiest single server at **20,000 IDs/s**. Storage matters too: a 64-bit key is **8 bytes** against **16** for a **UUID** (a standard 128-bit "universally unique identifier"). A table with **10B rows** and three **indexes** (sorted lookup structures the database keeps to find rows quickly) that contain the key saves roughly 10B × 8 B × 4 ≈ **320 GB** by choosing the smaller key, and smaller keys mean more of each index fits in memory.
 
 **2. The five-questions pass**
 - **Flow:** the caller waits for the ID, so generation must be local (a library call), not a network hop on every write.
 - **Storage:** nothing needs to be stored per ID. The only durable state is *which worker number each process owns*.
-- **Speed:** a counter increment in memory costs nanoseconds; any design with a network round trip per ID costs about 1 ms and becomes a bottleneck.
+- **Speed:** a counter increment in memory costs nanoseconds; any design with a network **round trip** (a request sent and its reply received) per ID costs about 1 ms and becomes a bottleneck.
 - **Failure:** the scary failures are *duplicates*, not outages. Two processes sharing a worker number, or a clock that jumps backwards, can silently create the same ID twice.
 - **Growth:** the bit layout decides the ceilings (how many workers, how many IDs per millisecond, how many years). Choose it once, carefully.
 
 **3. API and data model**
 - *API (library):* `long next_id()`. Optionally a batch call `next_ids(n)`.
-- *API (if run as a service):* `POST /v1/ids?count=100` → `{"ids": [...]}`. Batching amortises the network hop across 100 IDs.
+- *API (if run as a service):* `POST /v1/ids?count=100` → `{"ids": [...]}`. Batching **amortises** the network hop across 100 IDs (spreads its fixed cost over all of them).
 - *Data model — the ID itself is the data model.* The layout used here (the one Twitter published for Snowflake in 2010, and still the common default; Twitter itself split the 10 worker bits into 5 datacenter bits and 5 machine bits):
 
 | Bits | Field | Meaning | Ceiling it sets |
@@ -72,8 +72,8 @@
 
 | Option | How it works | Good | Bad |
 |---|---|---|---|
-| **UUID v4** | 122 random bits | Zero coordination; any machine, any time | 128 bits; random order scatters inserts across a B-tree index (poor locality, page splits) |
-| **UUID v7** (RFC 9562) | 48-bit ms timestamp + random bits | No coordination; time-ordered | Still 128 bits |
+| **UUID v4** | 122 random bits | Zero coordination; any machine, any time | 128 bits; random order scatters inserts across a B-tree index (the usual sorted, tree-shaped index; poor locality, page splits) |
+| **UUID v7** (RFC 9562, an internet standard) | 48-bit ms timestamp + random bits | No coordination; time-ordered | Still 128 bits |
 | **Auto-increment with step** | N databases; DB *i* issues *i, i+N, i+2N…* | Simple; compact | Adding a database changes N; IDs from different DBs aren't time-ordered; each DB is still on the write path |
 | **Central ticket server** | One DB row incremented per request (Flickr, 2010) | Perfectly ordered, compact | Network hop per ID; a single point of failure unless you run two with odd/even steps |
 | **Range leasing** | A service hands each server a *block* of 1,000 numbers; the server spends them locally | One network hop per 1,000 IDs; compact | Blocks from different servers interleave, so order is only rough; a crash wastes the rest of a block |
@@ -95,12 +95,12 @@ Reading the diagram: the ID library lives inside every service process, so `next
 
 **5. Deep dives**
 - **Deep dive 1 — spending the 63 bits.** Every field trades against the others. More timestamp bits buy more years; more worker bits buy more machines; more sequence bits buy more IDs per millisecond. With 500 servers today, 10 worker bits (1,024) leave room to double. The busiest server needs 20,000/s = **20 per ms**, far below the 4,096 per ms the sequence allows, so you could move 2 bits from sequence to worker (4,096 workers, 1,024 per ms) if the fleet is expected to grow a lot. Variants exist in the wild: Instagram (2012) put the *database shard number* in the middle field and generated IDs inside PostgreSQL, so an ID also tells you which shard holds the row. Pick the custom epoch close to launch day, because every year before it is wasted range.
-- **Deep dive 2 — clocks going backwards.** The wall clock (time-of-day clock) can jump backwards when NTP corrects it or a VM migrates, and a generator that trusts it will re-issue timestamps it already used ([Unreliable Clocks](../../../ddia/chapters/08-trouble-with-distributed-systems/README.md#unreliable-clocks) explains why clocks drift and jump). The rules: (1) remember the last timestamp used; (2) if the clock is behind by a few milliseconds, **wait** until it catches up; (3) if it is behind by more (say 100 ms), **refuse** and alert rather than risk duplicates; (4) configure NTP to *slew* (speed up or slow down gradually) rather than *step*. The simulation's guard does exactly this:
+- **Deep dive 2 — clocks going backwards.** The wall clock (time-of-day clock) can jump backwards when NTP corrects it or a **VM** (virtual machine) migrates to another physical host, and a generator that trusts it will re-issue timestamps it already used ([Unreliable Clocks](../../../ddia/chapters/08-trouble-with-distributed-systems/README.md#unreliable-clocks) explains why clocks drift and jump). The rules: (1) remember the last timestamp used; (2) if the clock is behind by a few milliseconds, **wait** until it catches up; (3) if it is behind by more (say 100 ms), **refuse** and alert rather than risk duplicates; (4) configure NTP to *slew* (speed up or slow down gradually) rather than *step*. The simulation's guard does exactly this:
 
 ```text
 clock skew guard: clock moved back 3 ms; refusing to issue IDs
 ```
-- **Deep dive 3 — worker IDs must be unique, even during failures.** If two live processes hold worker 17, they generate identical IDs in the same millisecond. Hard-coding IDs in config works for a small fixed fleet but breaks with autoscaling. The robust way is a **lease**: a process claims a free number in the coordination service with a time-to-live (say 30 s) and renews it every 10 s. If a process pauses (a long garbage-collection pause) past its lease, another process may take the number. So the generator checks the lease expiry before issuing and stops if the lease might have lapsed. This is the same "a lease holder must not act after expiry" problem that [fencing tokens](../../../ddia/chapters/08-trouble-with-distributed-systems/README.md#fencing-tokens) address. In Kubernetes, a StatefulSet's stable pod ordinal is a simple alternative source of unique numbers.
+- **Deep dive 3 — worker IDs must be unique, even during failures.** If two live processes hold worker 17, they generate identical IDs in the same millisecond. Hard-coding IDs in config works for a small fixed fleet but breaks with **autoscaling** (machines being added and removed automatically as load changes). The robust way is a **lease**: a process claims a free number in the coordination service with a time-to-live (say 30 s) and renews it every 10 s. If a process pauses (a long **garbage-collection** pause, when the language runtime stops the program to reclaim memory) past its lease, another process may take the number. So the generator checks the lease expiry before issuing and stops if the lease might have lapsed. This is the same "a lease holder must not act after expiry" problem that [fencing tokens](../../../ddia/chapters/08-trouble-with-distributed-systems/README.md#fencing-tokens) address. In **Kubernetes** (the standard system for running containers across many machines), a StatefulSet's stable pod ordinal (each copy gets a fixed number: 0, 1, 2, …) is a simple alternative source of unique numbers.
 - **Deep dive 4 — sequence exhaustion.** If one worker asks for more than 4,096 IDs within one millisecond, the sequence wraps. The generator must then **wait for the next millisecond**, never wrap silently. Running [`code/snowflake_ids.py`](code/snowflake_ids.py), three workers issue 5,000 IDs each in a burst on a shared simulated clock:
 
 ```text
@@ -116,9 +116,9 @@ Worker 1 used up its 4,096 numbers first and waited one millisecond (the shared 
 **6. The failure walk**
 1. **The coordination service is down:** running processes keep their leases for a while and keep generating; only *new* processes can't start. Give leases a generous TTL and alert well before expiry.
 2. **A clock jumps back 2 seconds:** that generator refuses to issue for up to 2 s and the service returns errors or retries on another instance. Better a short, visible failure than invisible duplicates.
-3. **Two processes get the same worker ID** (lease bug, cloned VM): duplicates appear. The final safety net is the database's **unique constraint** on the primary key, which turns a silent duplicate into a loud insert error.
+3. **Two processes get the same worker ID** (lease bug, cloned VM): duplicates appear. The final safety net is the database's **unique constraint** (a rule that rejects a second row with the same value) on the **primary key** (the column that identifies each row), which turns a silent duplicate into a loud insert error.
 4. **The 69.7 years run out:** plan a new epoch or a wider ID long before. (It's a real date: write it down.)
-5. **Very low traffic:** most IDs have sequence 0, so `id % 16` for sharding is skewed. Start each millisecond's sequence at a random value, or shard on a hash of the ID.
+5. **Very low traffic:** most IDs have sequence 0, so `id % 16` (the remainder after dividing by 16) for sharding is skewed. Start each millisecond's sequence at a random value, or shard on a hash of the ID.
 
 **7. Trade-offs**
 
@@ -131,10 +131,10 @@ Worker 1 used up its 4,096 numbers first and waited one millisecond (the shared 
 | Time-ordered IDs in public URLs | Easy pagination and debugging | Leaks creation time and volume to outsiders |
 
 **8. Follow-up questions**
-- **"Are these IDs strictly ordered?"** No: they are ordered by millisecond, and within a millisecond by worker, not by real arrival. Strict global order needs a single sequencer or consensus ([Total Order Broadcast](../../../ddia/chapters/09-consistency-and-consensus/README.md#total-order-broadcast)), which is exactly the coordination we avoided. For "sort by newest", roughly ordered is enough.
+- **"Are these IDs strictly ordered?"** No: they are ordered by millisecond, and within a millisecond by worker, not by real arrival. Strict global order needs a single sequencer or **consensus** (a protocol that makes several machines agree on one value or order) ([Total Order Broadcast](../../../ddia/chapters/09-consistency-and-consensus/README.md#total-order-broadcast)), which is exactly the coordination we avoided. For "sort by newest", roughly ordered is enough.
 - **"Can outsiders guess IDs?"** Yes, roughly, which is why public-facing IDs are often a separate random token or an encrypted form of the internal ID. *Trap:* using sequential IDs for anything that should be unguessable, like password-reset links.
 - **"Why not just UUIDs?"** A fine answer if 16 bytes is acceptable. UUID v7 fixes the ordering problem. The 64-bit design wins when keys appear in many large indexes or in systems limited to 64-bit integers.
-- **"How do you test it?"** Property tests: millions of IDs across simulated workers are unique and monotonic per worker; clock rollback is refused; sequence overflow waits.
+- **"How do you test it?"** **Property tests** (tests that check a rule holds across many generated inputs): millions of IDs across simulated workers are unique and **monotonic** (only ever increasing) per worker; clock rollback is refused; sequence overflow waits.
 
 **9. Pattern manifest**
 
@@ -165,7 +165,7 @@ Worker 1 used up its 4,096 numbers first and waited one millisecond (the shared 
 
 **1. Requirements and numbers**
 - *Functional:* create a short link (optionally with a custom alias and an expiry date); redirect; delete/disable; basic click statistics.
-- *Non-functional:* redirects are the product, so they need **very high availability** and low latency (**p99 < 50 ms** at the server); links live for **10 years** by default; codes must not be trivially enumerable.
+- *Non-functional:* redirects are the product, so they need **very high availability** (the share of time the service works) and low **latency** (the time one request takes) (**p99 < 50 ms** at the server, meaning 99% of requests finish within 50 ms); see [System Design Fundamentals](../00-system-design-fundamentals/README.md) for these basics; links live for **10 years** by default; codes must not be trivially enumerable.
 - *Writes:* **100M new links/day** ÷ 100,000 s ≈ **1,000/s average**, plan for **~5,000/s peak**.
 - *Reads:* read:write ≈ **10:1**, so **1B redirects/day ≈ 10,000/s average, ~50,000/s peak**.
 - *Code length:* 10 years × 100M/day = **365B links**. Base 62 (0–9, a–z, A–Z) with 7 characters gives 62^7 ≈ **3.5 trillion** codes, about 10× headroom. The simulation confirms the arithmetic:
@@ -180,12 +180,12 @@ links in 10 years: 365,000,000,000 -> need length 7
 **2. The five-questions pass**
 - **Flow:** create and redirect are request-response. Click events are recorded **asynchronously on a queue**, never in the redirect's critical path ([Message Queue](../02-moving-data/README.md#message-queue)).
 - **Storage:** the source of truth is `code → long URL`, written once, read forever, looked up only by code. That is a key-value access pattern, sharded by code ([Sharding](../03-storing-data/README.md#sharding)).
-- **Speed:** mappings never change (until deleted), so they cache extremely well: [Cache-Aside](../04-caching/README.md#cache-aside) with a long TTL, plus a CDN at the edge for the hottest links.
+- **Speed:** mappings never change (until deleted), so they cache extremely well: [Cache-Aside](../04-caching/README.md#cache-aside) with a long **TTL** (time to live: how long a cached copy stays valid), plus a CDN at the edge for the hottest links.
 - **Failure:** redirects must survive a database shard outage (serve from cache and replicas); link creation can degrade to "try again".
 - **Growth:** reads grow with virality (a single link can get millions of clicks in minutes, a **hot key**); storage grows linearly and predictably.
 
 **3. API and data model**
-- `POST /v1/links` with `{"long_url": "...", "custom_alias": "optional", "expires_at": "optional"}` → `201 {"code": "aZ3k9Qx", "short_url": "https://sho.rt/aZ3k9Qx"}`. Requires an API key or login, which enables per-user [Rate Limiting](../08-api-and-edge/README.md#rate-limiting).
+- `POST /v1/links` with `{"long_url": "...", "custom_alias": "optional", "expires_at": "optional"}` → `201 {"code": "aZ3k9Qx", "short_url": "https://sho.rt/aZ3k9Qx"}`. Requires an **API key** (a secret string that identifies the caller) or login, which enables per-user [Rate Limiting](../08-api-and-edge/README.md#rate-limiting).
 - `GET /{code}` → `302 Found` (or `301`, see deep dive 2) with `Location: <long_url>`; `404` if unknown; `410 Gone` if expired or disabled.
 - `DELETE /v1/links/{code}` → `204`. `GET /v1/links/{code}/stats` → click counts by day and country.
 - *Data model:*
@@ -196,7 +196,7 @@ links in 10 years: 365,000,000,000 -> need length 7
 | `links_by_owner` | `owner_id`, `created_at` | `code` | A second, derived table for "my links" pages |
 | `click_counts` | `code`, `day` | `count`, per-country counts | Written by the analytics consumer, not the redirect path |
 
-A wide-column or key-value database (Cassandra, DynamoDB) or sharded MySQL/PostgreSQL both work, because every hot query is a single-key lookup.
+A **wide-column** (rows with many flexible, optional columns) or key-value database (Cassandra, DynamoDB) or sharded MySQL/PostgreSQL both work, because every hot query is a single-key lookup.
 
 **4. The architecture, annotated**
 
@@ -217,13 +217,13 @@ flowchart LR
 
 Reading the diagram:
 1. A redirect first hits the **CDN** (content delivery network: caches near users; see [CDN](../08-api-and-edge/README.md#cdn)). Popular links can be cached there for a short time, which also absorbs viral spikes.
-2. On a CDN miss, a stateless **redirect service** looks the code up in **Redis** (cache-aside), then in the **links store** on a miss, and fills the cache.
+2. On a CDN miss, a stateless **redirect service** looks the code up in **Redis** (a fast in-memory key-value store used here as the cache; cache-aside), then in the **links store** on a miss, and fills the cache.
 3. It sends a small click event (code, time, country, referrer) to a **queue** and returns immediately. An analytics consumer aggregates counts in batches.
 4. The **create service** validates the URL (format, length, safe-browsing check), obtains a code (deep dive 1), and writes the row with a **conditional insert** (insert only if the code doesn't exist), which makes collisions detectable instead of silent overwrites.
 
 **5. Deep dives**
 - **Deep dive 1 — generating the code. Three options.**
-  1. **Hash and truncate:** take a hash of the long URL (e.g. SHA-256), keep 7 base-62 characters, and insert-if-absent; on collision, add a salt and hash again. No coordination, and the same URL can map to the same code (free deduplication). But collisions grow with the table (the birthday effect). With 7 characters the odds stay small but not zero:
+  1. **Hash and truncate:** take a hash of the long URL (e.g. SHA-256, a standard cryptographic hash function), keep 7 base-62 characters, and insert-if-absent; on collision, add a **salt** (a little extra data mixed in so the hash comes out different) and hash again. No coordination, and the same URL can map to the same code (free deduplication). But collisions grow with the table (the **birthday effect**: collisions become likely far sooner than intuition suggests, as with two people in a room sharing a birthday). With 7 characters the odds stay small but not zero:
 
 ```text
 after   100,000,000 links: next 7-char hash collides with p = 2.8e-05 (about 1 in 35,216)
@@ -235,16 +235,16 @@ after 1,000,000,000 links: next 7-char hash collides with p = 2.8e-04 (about 1 i
   3. **Pre-generated key pool:** a background job creates random unused 7-character codes and stores them; create servers take batches. Collision-free at use time, at the cost of a pool to manage.
 
   **Choice:** option 2 (range-leased counter + scramble + base 62). It is collision-free, needs one coordination hop per 10,000 creations, and a crashed server just wastes the rest of its block (3.5 trillion codes can afford it). Custom aliases use the same conditional insert and simply fail with `409 Conflict` if taken.
-- **Deep dive 2 — 301 or 302?** HTTP defines `301 Moved Permanently` and `308` as permanent (browsers and proxies may cache them indefinitely), and `302 Found` and `307` as temporary (clients ask again each time) — see RFC 9110. With **301**, repeat clicks from the same browser never reach you: less load, but you lose click analytics and **cannot change, expire or disable** the link for those users, which matters when a link turns out to be malicious. With **302**, every click reaches your edge: accurate analytics and full control, at the cost of more traffic. Most commercial shorteners use 302 (or 301 with short cache headers). A middle ground: 302 plus `Cache-Control: max-age=300` at the CDN, so the edge absorbs spikes while you can still disable a link within 5 minutes.
-- **Deep dive 3 — the hot link and the cold miss.** A link shared by a celebrity gets 50,000 clicks in its first minute: the CDN and Redis absorb it, and [Cache Stampede Prevention](../04-caching/README.md#cache-stampede-prevention) (single-flight on a miss) stops thousands of simultaneous misses from hitting one database shard. The opposite problem is scanners hammering *random* codes, which all miss the cache: cache **negative results** ("code not found") for a short time and rate-limit by client IP.
+- **Deep dive 2 — 301 or 302?** HTTP defines `301 Moved Permanently` and `308` as permanent (browsers and **proxies**, the intermediate servers between client and site, may cache them indefinitely), and `302 Found` and `307` as temporary (clients ask again each time) — see RFC 9110. With **301**, repeat clicks from the same browser never reach you: less load, but you lose click analytics and **cannot change, expire or disable** the link for those users, which matters when a link turns out to be malicious. With **302**, every click reaches your edge: accurate analytics and full control, at the cost of more traffic. Most commercial shorteners use 302 (or 301 with short cache headers). A middle ground: 302 plus `Cache-Control: max-age=300` at the CDN, so the edge absorbs spikes while you can still disable a link within 5 minutes.
+- **Deep dive 3 — the hot link and the cold miss.** A link shared by a celebrity gets 50,000 clicks in its first minute: the CDN and Redis absorb it, and [Cache Stampede Prevention](../04-caching/README.md#cache-stampede-prevention) (single-flight on a miss) stops thousands of simultaneous misses from hitting one database shard. The opposite problem is scanners hammering *random* codes, which all miss the cache: cache **negative results** ("code not found") for a short time and rate-limit by client IP (the caller's network address).
 - **Deep dive 4 — abuse and expiry.** Check new URLs against a malicious-URL list (for example Google's Safe Browsing API) at creation and re-check periodically, because a harmless page can turn bad later; disabling a link sets `status = disabled`, invalidates the cache and returns `410`. Expiry is enforced **lazily** at read time (`expires_at < now` → 410) plus a slow background sweeper that deletes old rows. Don't reuse expired codes for a long time; old copies of the short link are still out in emails and documents.
 
 **6. The failure walk**
 1. **A Redis node dies:** its share of keys misses and falls through to the store; consistent hashing in the cache client limits the damage to that node's slice ([Consistent Hashing](../03-storing-data/README.md#consistent-hashing)).
-2. **A store shard's primary dies:** replicas keep serving reads, so redirects continue; creates targeting that shard retry after failover. Redirect availability is protected by cache + replicas; create availability is allowed to dip.
+2. **A store shard's primary dies:** replicas keep serving reads, so redirects continue; creates targeting that shard retry after **failover** (a replica being promoted to replace the dead primary). Redirect availability is protected by cache + replicas; create availability is allowed to dip.
 3. **The key-range service is down:** create servers keep spending the blocks they already hold (hours of headroom at 10,000 per block); only when blocks run out do creates fail.
 4. **The analytics queue backs up:** clicks queue up as lag; redirects are unaffected. If the queue itself is down, the redirect service drops click events after a small local buffer (stats are best-effort, redirects are not).
-5. **A region is lost:** the mapping data is replicated across regions; DNS or anycast moves traffic. Since mappings are immutable, cross-region replication lag only delays very new links.
+5. **A region is lost:** the mapping data is replicated across regions; **DNS** (the internet's name-to-address lookup) or **anycast** (one IP address announced from many places, so traffic reaches the nearest) moves traffic. Since mappings are immutable, cross-region replication lag only delays very new links.
 
 **7. Trade-offs**
 
@@ -292,24 +292,24 @@ after 1,000,000,000 links: next 7-char hash collides with p = 2.8e-04 (about 1 i
 
 **1. Requirements and numbers**
 - *Functional:* `get(key)`, `put(key, value)`, `delete(key)`; values up to **10 KB** (typically ~1 KB); no multi-key transactions and no range scans (those are out of scope and should be said out loud).
-- *Non-functional:* **always writable** (a shopping cart that rejects "add to cart" loses money); **tunable consistency** per request; p99 latency **< 10 ms** inside a datacenter; scale by adding nodes with no downtime; survive the loss of any node, and of a whole rack.
+- *Non-functional:* **always writable** (a shopping cart that rejects "add to cart" loses money); **tunable consistency** per request (the caller chooses how up to date a read must be, trading against speed); p99 latency **< 10 ms** inside a datacenter; scale by adding nodes with no downtime; survive the loss of any node, and of a whole **rack** (a cabinet of servers that share power and network switches).
 - *Data:* **10B keys × 1 KB = 10 TB** of data; with **3 replicas**, **30 TB** stored.
 - *Traffic:* peak **1M operations/s**, 70% reads and 30% writes. With 3 replicas, each write touches 3 nodes (300K × 3 = 900K replica writes/s) and each quorum read asks 2 nodes (700K × 2 = 1.4M replica reads/s): about **2.3M replica operations/s**.
-- *Nodes:* one node on NVMe SSDs comfortably does ~40K operations/s → 2.3M ÷ 40K ≈ **58 nodes**; call it **60**. Each then holds 30 TB ÷ 60 = **500 GB**, which leaves room on a 2 TB disk for compaction (which temporarily needs extra space) and growth. Here throughput, not disk, sets the node count.
+- *Nodes:* one node on NVMe SSDs comfortably does ~40K operations/s → 2.3M ÷ 40K ≈ **58 nodes**; call it **60**. Each then holds 30 TB ÷ 60 = **500 GB**, which leaves room on a 2 TB disk for **compaction** (background merging of data files, which temporarily needs extra space) and growth. Here throughput, not disk, sets the node count.
 
 **2. The five-questions pass**
 - **Flow:** clients send request-response calls to any node; that node acts as **coordinator** for the request and forwards it to the replicas.
-- **Storage:** the data is spread across nodes by hashing the key onto a ring ([Consistent Hashing](../03-storing-data/README.md#consistent-hashing)), and each key is stored on N = 3 nodes. Each node stores data in an LSM tree (log → memory → sorted files).
-- **Speed:** reads and writes each wait only for a **quorum** of replicas, not all of them, so one slow node doesn't slow the request ([Quorum](../07-consistency/README.md#quorum)).
-- **Failure:** temporary failures are handled by writing to a stand-in node (hinted handoff); permanent divergence is repaired in the background (Merkle-tree anti-entropy); conflicts from concurrent writes are *detected*, not silently lost ([Vector Clocks](../07-consistency/README.md#vector-clocks)).
+- **Storage:** the data is spread across nodes by hashing the key onto a ring ([Consistent Hashing](../03-storing-data/README.md#consistent-hashing)), and each key is stored on N = 3 nodes. Each node stores data in an **LSM tree** (log-structured merge tree: log → memory → sorted files).
+- **Speed:** reads and writes each wait only for a **quorum** (a minimum number of replica replies, typically a majority) of replicas, not all of them, so one slow node doesn't slow the request ([Quorum](../07-consistency/README.md#quorum)).
+- **Failure:** temporary failures are handled by writing to a stand-in node (hinted handoff); permanent divergence is repaired in the background (Merkle-tree **anti-entropy**: replicas comparing trees of hashes to find keys that differ); conflicts from concurrent writes are *detected* (with per-replica version counters), not silently lost ([Vector Clocks](../07-consistency/README.md#vector-clocks)).
 - **Growth:** adding a node moves only about 1/N of the data; virtual nodes spread that load.
 
 **3. API and data model**
-- `get(key)` → `[(value, context)]`. Usually one value; **more than one** if concurrent writes conflicted (the values are called **siblings**). The `context` is an opaque blob holding the version vector.
+- `get(key)` → `[(value, context)]`. Usually one value; **more than one** if concurrent writes conflicted (the values are called **siblings**). The `context` is an **opaque** blob (data the client stores and sends back without looking inside) holding the version vector.
 - `put(key, context, value)` → `ok`. The client passes back the context it read, which tells the store which versions this write replaces.
 - `delete(key, context)` writes a **tombstone** (a marker saying "deleted") rather than removing data at once, so the deletion itself can replicate.
 - Per-request consistency knobs: `W` (replica acks needed for a write) and `R` (replica replies needed for a read), with N fixed per table.
-- *On-disk data model per node:* a **commit log** (append-only, for crash safety), a **memtable** (sorted in-memory map), and immutable **SSTables** (sorted string tables: files of key-sorted records) with a **Bloom filter** and a sparse index per file ([SSTables and LSM-Trees](../../../ddia/chapters/03-storage-and-retrieval/README.md#sstables-and-lsm-trees)).
+- *On-disk data model per node:* a **commit log** (append-only, for crash safety), a **memtable** (sorted in-memory map), and immutable **SSTables** (sorted string tables: files of key-sorted records) with a **Bloom filter** (a compact bit array that can say "definitely not here" or "probably here") and a sparse index per file ([SSTables and LSM-Trees](../../../ddia/chapters/03-storage-and-retrieval/README.md#sstables-and-lsm-trees)).
 - *Per-record metadata:* `key, value | tombstone, version vector, write timestamp`.
 
 **4. The architecture, annotated**
@@ -334,7 +334,7 @@ Reading the diagram, following one write:
 2. The coordinator hashes the key onto the ring and walks clockwise to find the key's **preference list**: the first N = 3 *distinct physical* nodes (skipping extra virtual nodes of a machine already chosen, and preferring machines in different racks).
 3. It sends the write to all three and replies to the client as soon as **W = 2** have acknowledged. Each replica appends to its commit log, then updates its memtable ([Write-Ahead Log](../03-storing-data/README.md#write-ahead-log)).
 4. If node C is unreachable, the coordinator writes C's copy to the next healthy node D with a **hint** ("this belongs to C"). D hands it back when C recovers.
-5. In the background, nodes **gossip** membership and liveness, and neighbouring replicas compare **Merkle trees** to find and repair keys that differ.
+5. In the background, nodes **gossip** membership and liveness (each node regularly swaps what it knows with a random peer, so news spreads like a rumour), and neighbouring replicas compare **Merkle trees** to find and repair keys that differ.
 
 **5. Deep dives**
 - **Deep dive 1 — partitioning and replication on the ring.** With one position per node, a 10-node ring is badly uneven; with a few hundred virtual nodes per machine it evens out, and adding a node moves only its fair share. Running [`code/consistent_hash_ring.py`](code/consistent_hash_ring.py) with 100,000 keys:
@@ -348,8 +348,8 @@ same change with hash % N: 90.7% of keys move
 preference list for 'user:42': ['node0', 'node5', 'node6']
 ```
   Each key's three replicas are the first three distinct machines clockwise, as the last line shows. DDIA's [Rebalancing Partitions](../../../ddia/chapters/06-partitioning/README.md#rebalancing-partitions) compares this with the alternative of a fixed number of partitions that move as a whole (the approach Riak and Elasticsearch use).
-- **Deep dive 2 — quorums and staying writable.** With N = 3, choosing **W + R > N** (e.g. W = 2, R = 2) means every read quorum overlaps every write quorum in at least one node, so a read sees the latest acknowledged write in the normal case. W = 1, R = 1 is faster but can return stale data; W = 3 is safest but a single slow node blocks writes. Now the always-writable requirement: if two of a key's three home nodes are unreachable, a strict quorum fails. A **sloppy quorum** accepts writes on *any* N healthy nodes further round the ring, with hints, and **hinted handoff** delivers them home later ([Sloppy Quorums and Hinted Handoff](../../../ddia/chapters/05-replication/README.md#sloppy-quorums-and-hinted-handoff)). The price: during that window, W + R > N no longer guarantees a fresh read, because the write may sit on nodes the reader doesn't ask. Say it plainly: this store chooses availability over linearizability ([The CAP theorem](../../../ddia/chapters/09-consistency-and-consensus/README.md#the-cap-theorem)).
-- **Deep dive 3 — concurrent writes and conflicts.** Two clients update the same cart through different coordinators during a partition. Which wins? **Last write wins (LWW)** keeps the one with the higher timestamp and silently drops the other; it is simple and Cassandra's default, but clock skew means "later" can be wrong and a write is *lost*. **Version vectors** (one counter per replica, carried in the `context`) let the store tell "B replaced A" from "A and B happened concurrently" ([Version vectors](../../../ddia/chapters/05-replication/README.md#version-vectors)). Concurrent values are both kept as siblings and returned to the client, which merges them (for a cart: union of items, with deletes as tombstones) and writes back the merge with the combined context. Choose per data type: LWW for values where losing a concurrent overwrite is acceptable (a profile photo), siblings or CRDTs (data types that merge automatically) for values where it is not (a cart, a counter).
+- **Deep dive 2 — quorums and staying writable.** With N = 3, choosing **W + R > N** (e.g. W = 2, R = 2) means every read quorum overlaps every write quorum in at least one node, so a read sees the latest acknowledged write in the normal case. W = 1, R = 1 is faster but can return stale data; W = 3 is safest but a single slow node blocks writes. Now the always-writable requirement: if two of a key's three home nodes are unreachable, a strict quorum fails. A **sloppy quorum** accepts writes on *any* N healthy nodes further round the ring, with hints, and **hinted handoff** delivers them home later ([Sloppy Quorums and Hinted Handoff](../../../ddia/chapters/05-replication/README.md#sloppy-quorums-and-hinted-handoff)). The price: during that window, W + R > N no longer guarantees a fresh read, because the write may sit on nodes the reader doesn't ask. Say it plainly: this store chooses availability over **linearizability** (every read sees the latest write, as if there were only one copy) ([The CAP theorem](../../../ddia/chapters/09-consistency-and-consensus/README.md#the-cap-theorem)).
+- **Deep dive 3 — concurrent writes and conflicts.** Two clients update the same cart through different coordinators during a partition. Which wins? **Last write wins (LWW)** keeps the one with the higher timestamp and silently drops the other; it is simple and Cassandra's default, but **clock skew** (different machines' clocks disagreeing) means "later" can be wrong and a write is *lost*. **Version vectors** (one counter per replica, carried in the `context`) let the store tell "B replaced A" from "A and B happened concurrently" ([Version vectors](../../../ddia/chapters/05-replication/README.md#version-vectors)). Concurrent values are both kept as siblings and returned to the client, which merges them (for a cart: union of items, with deletes as tombstones) and writes back the merge with the combined context. Choose per data type: LWW for values where losing a concurrent overwrite is acceptable (a profile photo), siblings or CRDTs (data types that merge automatically) for values where it is not (a cart, a counter).
 - **Deep dive 4 — failure detection and repair.** There's no master to say who is alive. Each node **gossips** every second with a random peer, exchanging a table of `(node, heartbeat counter)`; a node whose counter stops rising for, say, 10 s is *suspected* down ([Detecting Faults](../../../ddia/chapters/08-trouble-with-distributed-systems/README.md#detecting-faults)). Short failures are covered by hinted handoff. Longer ones leave replicas out of sync, and hints can themselves be lost. **Read repair** fixes a key when a read notices a stale replica; **anti-entropy** fixes everything else: each replica builds a **Merkle tree** (a tree of hashes where each parent hashes its children) over its key ranges; two replicas compare roots and descend only into subtrees whose hashes differ, so they exchange a few kilobytes of hashes to locate a handful of stale keys among millions ([Read repair and anti-entropy](../../../ddia/chapters/05-replication/README.md#read-repair-and-anti-entropy)).
 - **Deep dive 5 — the write and read path on one node.** Write: append to the commit log (sequential disk write), insert into the memtable, acknowledge. When the memtable reaches ~64 MB, flush it as a new SSTable. Read: check the memtable, then SSTables newest to oldest; each SSTable's **Bloom filter** answers "definitely not here" for most files, so a read usually touches one or two files. **Compaction** merges SSTables in the background, dropping overwritten values and, after a grace period, tombstones. That grace period (Cassandra's default is 10 days) must be longer than the time a dead replica can be away; otherwise a replica that missed the delete brings the old value back to life.
 
@@ -367,11 +367,11 @@ preference list for 'user:42': ['node0', 'node5', 'node6']
 | Leaderless + sloppy quorum vs single leader per partition | Always writable; no failover pause | Conflicts to resolve; no linearizability |
 | W = 2, R = 2 vs W = 1, R = 1 | Reads usually see the latest write | Higher latency; needs 2 healthy replicas |
 | Version vectors vs LWW | No silently lost writes | Clients must merge siblings; bigger metadata |
-| LSM storage vs B-tree | Fast sequential writes; good compression | Read amplification, compaction I/O spikes |
+| LSM storage vs B-tree | Fast sequential writes; good compression | Read amplification (one read touching many files), compaction I/O spikes |
 | Virtual nodes vs one token per node | Even load; spread-out recovery | More ring metadata; repair touches many peers |
 
 **8. Follow-up questions**
-- **"Make it strongly consistent."** Switch to one leader per partition, replicated with a consensus protocol (Raft or Paxos), as etcd, TiKV and Spanner do. Writes then go through the leader and a majority; you lose writes during leader elections and in the minority side of a partition. *Trap:* claiming W + R > N alone gives linearizability; with sloppy quorums, clock-based LWW and partial failures it does not ([Limitations of Quorum Consistency](../../../ddia/chapters/05-replication/README.md#limitations-of-quorum-consistency)).
+- **"Make it strongly consistent."** Switch to one leader per partition, replicated with a consensus protocol (Raft or Paxos, the two best-known ones), as etcd, TiKV and Spanner do. Writes then go through the leader and a majority; you lose writes during leader elections and in the minority side of a partition. *Trap:* claiming W + R > N alone gives linearizability; with sloppy quorums, clock-based LWW and partial failures it does not ([Limitations of Quorum Consistency](../../../ddia/chapters/05-replication/README.md#limitations-of-quorum-consistency)).
 - **"How do you add range scans?"** Partition by key range instead of hash (sorted keys stay together) and accept hot-spot risk for sequential keys like timestamps ([Partitioning by Key Range](../../../ddia/chapters/06-partitioning/README.md#partitioning-by-key-range)). Cassandra's compromise: hash the partition key, sort by a clustering key within it.
 - **"How does a client find the right node?"** Three options: any node forwards (simplest), a routing tier, or a partition-aware client library that learns the ring by gossip ([Request Routing](../../../ddia/chapters/06-partitioning/README.md#request-routing)).
 - **"What happens to deleted data?"** Tombstones replicate like writes; compaction removes them after the grace period; running repair more often than that period prevents deleted data coming back.
@@ -403,7 +403,7 @@ preference list for 'user:42': ['node0', 'node5', 'node6']
 
 ## Case 4 — Design a Distributed Message Queue
 
-**The prompt (in short).** Build a Kafka-like system: producers publish messages to named topics; many independent consumer groups read them, in order, at their own pace, and can re-read old messages. It must handle millions of messages per second and not lose acknowledged messages.
+**The prompt (in short).** Build a Kafka-like system (Kafka is the widely used open-source distributed log): producers publish messages to named topics; many independent consumer groups read them, in order, at their own pace, and can re-read old messages. It must handle millions of messages per second and not lose acknowledged messages.
 
 **What makes it hard.** Three goals pull against each other: **throughput** (millions of messages a second), **durability** (an acknowledged message survives machine loss) and **ordering** (messages about the same thing are processed in the order they were sent). The design that reconciles them is the partitioned, replicated, append-only log.
 
@@ -411,15 +411,15 @@ preference list for 'user:42': ['node0', 'node5', 'node6']
 - *Functional:* create topics; produce messages (key, value, headers); consume from a position (**offset**, the message's sequence number within its partition) and commit progress; consumer groups share a topic's work; replay from any retained offset; **retention** by time (7 days) or size.
 - *Non-functional:* ordering **per key** (not global); configurable durability; **at-least-once** delivery by default with an option for effectively exactly-once; producer latency **p99 < 20 ms**; no data loss when one broker (server) fails.
 - *Ingress:* peak **1M messages/s × 1 KB = 1 GB/s**; average about **500 MB/s**.
-- *Storage:* 500 MB/s × 604,800 s (7 days) ≈ **300 TB**; with replication factor 3, **~900 TB**. A broker with 12 × 4 TB disks, kept under 70% full, holds ~33 TB → **~28 brokers** for storage; round up to **30**.
-- *Network:* at peak each message is written once by the producer and copied twice to followers (3 GB/s of disk writes cluster-wide) and read by, say, 3 consumer groups (3 GB/s egress). Spread over 30 brokers that's ~200–300 MB/s each, well inside a 25 Gbit/s (~3 GB/s) network card. Disk space, not bandwidth, sets the broker count.
+- *Storage:* 500 MB/s × 604,800 s (7 days) ≈ **300 TB**; with **replication factor** 3 (three copies of everything), **~900 TB**. A broker with 12 × 4 TB disks, kept under 70% full, holds ~33 TB → **~28 brokers** for storage; round up to **30**.
+- *Network:* at peak each message is written once by the producer and copied twice to followers (3 GB/s of disk writes cluster-wide) and read by, say, 3 consumer groups (3 GB/s **egress**, i.e. data sent out). Spread over 30 brokers that's ~200–300 MB/s each, well inside a 25 Gbit/s (~3 GB/s) network card. Disk space, not bandwidth, sets the broker count.
 - *Partitions:* if one consumer instance processes ~10 MB/s, a 600 MB/s topic needs **≥ 60 partitions** for its consumers to keep up; choose **128** to leave room (partitions are the unit of parallelism and can't easily be reduced later).
 
 **2. The five-questions pass**
 - **Flow:** producers push, consumers **pull** (fetch) at their own pace, which gives natural [Backpressure](../10-batch-and-streaming/README.md#backpressure): a slow consumer just falls behind (lag) instead of being overwhelmed.
 - **Storage:** each partition is an **append-only log** on disk, split into segment files; messages are not deleted on consumption, only when retention expires ([Partitioned Logs](../../../ddia/chapters/11-stream-processing/README.md#partitioned-logs)).
 - **Speed:** sequential disk writes and reads, the OS page cache, batching and compression make a log on disk faster than most people expect.
-- **Failure:** each partition has one **leader** and followers; acknowledged messages exist on several brokers before the producer hears "ok".
+- **Failure:** each partition has one **leader** (the copy that takes the writes) and **followers** (copies that replicate from it); acknowledged messages exist on several brokers before the producer hears "ok".
 - **Growth:** add partitions and brokers; ordering is only promised per partition, which is what allows scaling ([Partitioned Consumption](../10-batch-and-streaming/README.md#partitioned-consumption)).
 
 **3. API and data model**
@@ -427,7 +427,7 @@ preference list for 'user:42': ['node0', 'node5', 'node6']
 - `fetch(topic, partition, offset, max_bytes)` → a batch of messages starting at `offset`.
 - `commit(group, topic, partition, offset)` stores a group's progress (in an internal, compacted topic).
 - Admin: `create_topic(name, partitions, replication_factor, retention)`.
-- *Data model on disk:* per partition, a directory of **segments** (e.g. 1 GB each). Each segment has a `.log` file (batches of records: offset, timestamp, key, value, headers, CRC checksum), an **offset index** (sparse map: offset → byte position) and a **time index** (timestamp → offset, for "replay from 9 am"). Retention deletes whole old segments, which is cheap.
+- *Data model on disk:* per partition, a directory of **segments** (e.g. 1 GB each). Each segment has a `.log` file (batches of records: offset, timestamp, key, value, headers, CRC checksum, a short code that reveals corrupted bytes), an **offset index** (sparse map: offset → byte position) and a **time index** (timestamp → offset, for "replay from 9 am"). Retention deletes whole old segments, which is cheap.
 - *Metadata:* topics, partitions, which broker leads each partition, the in-sync replica set, consumer-group membership. It lives in a small strongly consistent controller quorum (Kafka's KRaft mode uses Raft; older versions used ZooKeeper, whose support was removed in Kafka 4.0).
 
 **4. The architecture, annotated**
@@ -453,7 +453,7 @@ flowchart LR
 Reading the diagram: a topic with two partitions, replication factor 3. Each partition has one **leader** broker that takes all writes and reads for it, and **followers** that copy its log by fetching from it, like consumers. The controller quorum decides leaders and tracks which followers are caught up. Within consumer group *billing*, each partition is assigned to exactly one consumer, so per-partition order is preserved; another group (say *search-indexer*) reads the same partitions independently with its own offsets.
 
 **5. Deep dives**
-- **Deep dive 1 — why an append-only log is fast.** Writes are sequential appends, which disks (even HDDs) do at hundreds of MB/s. Recent data sits in the operating system's **page cache** (memory the kernel uses to cache files), so consumers that are keeping up read from memory. Brokers don't transform messages, so they can send file bytes straight to the network socket with **zero-copy** (`sendfile`), skipping user-space copies. **Batching** amortises per-request overhead, and **compression** per batch cuts disk and network 3–5× for text-like payloads. The log is also its own index: a consumer's position is one integer per partition, not a per-message acknowledgment record ([Logs compared to traditional messaging](../../../ddia/chapters/11-stream-processing/README.md#logs-compared-to-traditional-messaging)).
+- **Deep dive 1 — why an append-only log is fast.** Writes are sequential appends, which disks (even HDDs, spinning hard disks) do at hundreds of MB/s. Recent data sits in the operating system's **page cache** (memory the kernel uses to cache files), so consumers that are keeping up read from memory. Brokers don't transform messages, so they can send file bytes straight to the network socket with **zero-copy** (`sendfile`), skipping **user-space** copies (copies into the application's own memory). **Batching** amortises per-request overhead, and **compression** per batch cuts disk and network 3–5× for text-like payloads. The log is also its own index: a consumer's position is one integer per partition, not a per-message acknowledgment record ([Logs compared to traditional messaging](../../../ddia/chapters/11-stream-processing/README.md#logs-compared-to-traditional-messaging)).
 - **Deep dive 2 — replication, ISR and acks.** Followers fetch from the leader. The **in-sync replica set (ISR)** is the leader plus the followers that have caught up recently (within, say, 30 s). A message is **committed** once every ISR member has it; the leader tracks this as the **high watermark**, and consumers only see messages below it, so they never read a message that could later vanish. The producer chooses its durability with `acks`:
 
 | `acks` | Producer is told "ok" when… | Can lose acknowledged data? | Latency |
@@ -463,7 +463,7 @@ Reading the diagram: a topic with two partitions, replication factor 3. Each par
 | all | every ISR member has it | No, as long as one ISR member survives | Highest |
 
   Pair `acks=all` with **min.insync.replicas = 2** (with replication factor 3): if the ISR shrinks to just the leader, writes are *rejected* rather than accepted with a single copy. And forbid **unclean leader election** (promoting an out-of-sync follower), which trades lost data for availability. This is [Leaders and Followers](../../../ddia/chapters/05-replication/README.md#leaders-and-followers) with a durability dial.
-- **Deep dive 3 — consumer groups, offsets and delivery semantics.** Group members heartbeat to a **group coordinator** broker; when members join or leave, partitions are reassigned (**rebalancing**). Modern "cooperative" rebalancing moves only the partitions that must move instead of pausing everyone. Delivery semantics come from *when* the consumer commits its offset ([Consumer offsets](../../../ddia/chapters/11-stream-processing/README.md#consumer-offsets)):
+- **Deep dive 3 — consumer groups, offsets and delivery semantics.** Group members **heartbeat** (send regular "I'm alive" messages) to a **group coordinator** broker; when members join or leave, partitions are reassigned (**rebalancing**). Modern "cooperative" rebalancing moves only the partitions that must move instead of pausing everyone. Delivery semantics come from *when* the consumer commits its offset ([Consumer offsets](../../../ddia/chapters/11-stream-processing/README.md#consumer-offsets)):
   - commit **before** processing → a crash skips messages → **at-most-once**;
   - commit **after** processing → a crash re-processes some → **at-least-once** (the default; make handlers [idempotent](../05-reliability/README.md#idempotency));
   - **effectively exactly-once** within the log system: an **idempotent producer** (the broker de-duplicates retries using a producer ID and per-partition sequence numbers) plus **transactions** that atomically write output messages *and* the consumer's offset commit, so a read-process-write step either fully happens or doesn't. Side effects outside the log (sending an email) still need idempotency keys ([Exactly-Once Semantics](../10-batch-and-streaming/README.md#exactly-once-semantics)).
@@ -481,7 +481,7 @@ Reading the diagram: a topic with two partitions, replication factor 3. Each par
 
 | Choice | Gain | Cost |
 |---|---|---|
-| Log (Kafka style) vs classic queue (RabbitMQ/SQS style) | Replay, many independent consumers, huge throughput | Per-message routing, priorities and per-message acks are harder |
+| Log (Kafka style) vs classic queue (RabbitMQ/SQS style: messages deleted once acknowledged) | Replay, many independent consumers, huge throughput | Per-message routing, priorities and per-message acks are harder |
 | Pull vs push to consumers | Backpressure for free; batching | Consumers poll; slightly higher idle latency |
 | Order per partition vs global order | Horizontal scale | Only same-key messages are ordered |
 | `acks=all` + min ISR 2 vs `acks=1` | No loss of acknowledged data | Higher produce latency; writes fail when replicas are down |
@@ -492,7 +492,7 @@ Reading the diagram: a topic with two partitions, replication factor 3. Each par
 - **"How do you add delayed or scheduled messages?"** Not natively in a log. Use per-delay topics (retry-5s, retry-1m) consumed by a service that waits, or a separate scheduler that produces at the due time.
 - **"How do you support priorities?"** Separate topics per priority, with consumers reading the high-priority topic first. A log has no in-place reordering.
 - **"Can consumers be more than partitions?"** No, extra consumers in a group sit idle; partition count is the ceiling on a group's parallelism, which is why you over-provision partitions up front.
-- **"Multi-region?"** Keep each cluster regional and mirror topics asynchronously between regions (offsets differ across clusters, so consumers failing over need offset translation).
+- **"Multi-region?"** Keep each cluster regional and **mirror** topics (continuously copy them) asynchronously between regions (offsets differ across clusters, so consumers failing over need offset translation).
 
 **9. Pattern manifest**
 
@@ -525,17 +525,17 @@ Reading the diagram: a topic with two partitions, replication factor 3. Each par
 **What makes it hard.** Fetching one page is trivial. The difficulty is scale combined with manners and hostility: never overload any single website (**politeness**), don't download the same URL or the same content twice (**dedup**), don't get stuck in infinite URL spaces (**traps**), and decide which of billions of known URLs deserve the next fetch (**prioritisation** and **freshness**).
 
 **1. Requirements and numbers**
-- *Functional:* given seeds, fetch HTML pages over HTTP(S); obey `robots.txt`; extract and normalise links; store page content for the indexer; re-crawl pages based on how often they change.
+- *Functional:* given **seeds** (the starting URLs), fetch HTML pages over HTTP(S); obey `robots.txt` (a file in which a site tells crawlers which paths they may fetch); extract and normalise links; store page content for the indexer; re-crawl pages based on how often they change.
 - *Non-functional:* **polite** (at most one request at a time to a host, with a delay between requests); **robust** (malformed HTML, slow servers, traps, redirects loops); **extensible** (new content types later); **scalable** by adding fetch machines.
 - *Throughput:* **1B pages/month** ÷ ~2.6M seconds ≈ **385 pages/s average**; design for **1,000 pages/s** to allow for re-crawls and catch-up.
 - *Bandwidth:* average HTML page ~**100 KB** → 385 × 100 KB ≈ **38 MB/s ≈ 310 Mbit/s** on average, ~1 Gbit/s at the design peak.
 - *Storage:* 1B × 100 KB = **100 TB/month** raw; compressed about 4–5× → **~25 TB/month**, ~300 TB a year if every version is kept.
-- *Concurrency:* a fetch takes ~1 s on average (DNS, connect, download). 1,000 pages/s × 1 s = **~1,000 fetches in flight** ([Back-of-Envelope Math](../01-thinking-in-patterns/README.md#back-of-envelope-math)). If each host is visited at most once every 2 s, 1,000 pages/s requires at least **2,000 different hosts** being crawled at any moment, so the design must keep many hosts busy at once rather than a few hosts fast.
+- *Concurrency:* a fetch takes ~1 s on average (DNS lookup of the host's address, connect, download). 1,000 pages/s × 1 s = **~1,000 fetches in flight** ([Back-of-Envelope Math](../01-thinking-in-patterns/README.md#back-of-envelope-math)). If each host is visited at most once every 2 s, 1,000 pages/s requires at least **2,000 different hosts** being crawled at any moment, so the design must keep many hosts busy at once rather than a few hosts fast.
 - *URL set:* each page has ~50 links, so the crawler *discovers* ~50B link occurrences a month, mostly repeats. Suppose ~**10B distinct URLs** are known. The "seen already?" check runs ~20,000 times a second (1,000 pages × ~20 new-looking links).
 
 **2. The five-questions pass**
 - **Flow:** a pipeline of asynchronous stages connected by queues: frontier → fetch → parse → dedup → store, with extracted links flowing back to the frontier ([Message Queue](../02-moving-data/README.md#message-queue)). Nobody waits on the crawler synchronously.
-- **Storage:** page content goes to cheap blob storage (large files, append-mostly); URL metadata (last fetch time, content hash, change rate, priority) goes to a key-value store keyed by URL.
+- **Storage:** page content goes to cheap **blob storage** (storage for large, unstructured files; append-mostly); URL metadata (last fetch time, content hash, change rate, priority) goes to a key-value store keyed by URL.
 - **Speed:** the hot lookups are "have I seen this URL?" and "what is this host's IP address and robots rule?", so both are held in memory: a **Bloom filter** for URLs and caches for DNS and robots.txt.
 - **Failure:** websites time out, return garbage and set traps; workers crash. Every stage must tolerate bad input and be restartable from durable queues.
 - **Growth:** partition work **by host** (hash of the hostname), so each host's politeness state lives on exactly one worker ([Sharding](../03-storing-data/README.md#sharding)).
@@ -584,7 +584,7 @@ Reading the diagram, following one URL:
 **5. Deep dives**
 - **Deep dive 1 — the URL frontier: priority and politeness together.** The frontier has two layers (the design published for the Mercator crawler, 1999):
   - **Front queues (priority):** F queues, one per priority level. A URL's priority comes from signals such as the site's importance (e.g. link-based rank), how often the page changes, and whether it is new. A selector takes URLs from higher-priority queues more often, but not exclusively, so low priority still gets some share.
-  - **Back queues (politeness):** B queues, each holding URLs of **exactly one host**. A small table maps host → back queue. A **min-heap** holds each back queue's *next allowed fetch time* (last fetch + delay, where the delay is the robots.txt `crawl-delay` or a multiple of the last response time). A fetcher pops the host whose time has come, takes one URL from its queue, and after fetching pushes the host back with a new time. When a back queue empties, it is refilled from the front queues with a URL for a host not currently assigned.
+  - **Back queues (politeness):** B queues, each holding URLs of **exactly one host**. A small table maps host → back queue. A **min-heap** (a structure that always hands back its smallest item first) holds each back queue's *next allowed fetch time* (last fetch + delay, where the delay is the robots.txt `crawl-delay` or a multiple of the last response time). A fetcher pops the host whose time has come, takes one URL from its queue, and after fetching pushes the host back with a new time. When a back queue empties, it is refilled from the front queues with a URL for a host not currently assigned.
   - Keep B around **3× the number of fetcher threads** so there is always a host ready. The frontier is too big for memory (billions of URLs): keep the queue heads in memory and the tails on disk, appended and read sequentially.
 - **Deep dive 2 — "seen before?" for URLs and for content.** *URLs:* an exact set of 10B URLs (at ~100 bytes each, ~1 TB) is too big to check 20,000 times a second in memory. A **Bloom filter** answers "definitely new" or "probably seen" in a few memory reads ([Bloom filters in DDIA](../../../ddia/chapters/03-storage-and-retrieval/README.md#performance-optimizations)). Running [`code/bloom_url_seen.py`](code/bloom_url_seen.py):
 
@@ -595,15 +595,15 @@ demo: m=1,917,012 bits (234 KiB), k=7; measured false-positive rate 1.06% (targe
 ```
   12 GB fits in memory, split by host hash across the crawl machines. The cost of a false positive is that 1% of genuinely new URLs are skipped; for a crawler that is acceptable (important pages have many inbound links and will be offered again). A Bloom filter never says "new" for a URL it has seen, so it never causes a re-fetch. *Content:* identical pages under different URLs are caught by an **exact hash** of the normalised content (e.g. 64-bit or 128-bit). **Near-duplicates** (same article, different ads and timestamps) are caught by **SimHash**: a 64-bit fingerprint where similar documents differ in only a few bits; pages whose fingerprints differ in ≤ 3 bits are treated as duplicates (Manku, Jain & Das Sarma, WWW 2007, used this at a scale of 8B pages).
 - **Deep dive 3 — traps and robustness.** A **crawler trap** is a URL space that never ends: a calendar with a "next month" link forever, session IDs added to every link, or `a/b/a/b/a/b/…` path loops from relative links. Defences, all cheap: maximum URL length (e.g. 2,000 characters) and path depth; a **per-host page budget** tied to the host's importance (an unknown site gets, say, 10,000 pages until it earns more); detect repeating path segments; drop known session parameters in normalisation; stop following a host whose pages are all near-duplicates. Robustness at the fetch level: connect and total timeouts (e.g. 5 s and 30 s), a maximum body size (e.g. 10 MB), a cap on redirects (5), and per-host error counts that back the host off exponentially ([Retry with Exponential Backoff](../05-reliability/README.md#retry-with-exponential-backoff), [Circuit Breaker](../05-reliability/README.md#circuit-breaker) per host).
-- **Deep dive 4 — freshness: when to re-crawl.** Pages change at very different rates: a news home page every few minutes, an archived article never. Track each page's history (did the content fingerprint change since the last visit?) and estimate its **change rate**; schedule the next visit so that frequently changing and important pages are revisited more often. Research on crawl freshness (Cho & Garcia-Molina, 2003) shows a counter-intuitive result: to maximise average freshness under a fixed budget, *don't* chase pages that change faster than you can possibly keep up with; spend the budget where a revisit actually makes the copy fresh. Use HTTP conditional requests (`If-Modified-Since`, `ETag`) so unchanged pages cost a `304 Not Modified` instead of a full download. Sitemaps and RSS feeds give cheap hints about new URLs.
-- **Deep dive 5 — distributing the crawl.** Assign hosts to crawl machines by **consistent hashing of the hostname**. All of a host's URLs, its back queue, its robots rules and its politeness timer then live on one machine, so politeness needs no cross-machine coordination. A link discovered on machine A for a host owned by machine B is sent to B in batches. Adding machines moves only 1/N of hosts ([Consistent Hashing](../03-storing-data/README.md#consistent-hashing)). At 1,000 pages/s, about **10–20 machines** with async I/O (each handling ~100 concurrent fetches) are enough; the bottleneck is usually politeness and DNS, not CPU.
+- **Deep dive 4 — freshness: when to re-crawl.** Pages change at very different rates: a news home page every few minutes, an archived article never. Track each page's history (did the content fingerprint change since the last visit?) and estimate its **change rate**; schedule the next visit so that frequently changing and important pages are revisited more often. Research on crawl freshness (Cho & Garcia-Molina, 2003) shows a counter-intuitive result: to maximise average freshness under a fixed budget, *don't* chase pages that change faster than you can possibly keep up with; spend the budget where a revisit actually makes the copy fresh. Use HTTP conditional requests (`If-Modified-Since`, `ETag` — a version tag the server attaches to a page) so unchanged pages cost a `304 Not Modified` instead of a full download. Sitemaps (a site's own list of its pages) and RSS feeds (machine-readable lists of new posts) give cheap hints about new URLs.
+- **Deep dive 5 — distributing the crawl.** Assign hosts to crawl machines by **consistent hashing of the hostname**. All of a host's URLs, its back queue, its robots rules and its politeness timer then live on one machine, so politeness needs no cross-machine coordination. A link discovered on machine A for a host owned by machine B is sent to B in batches. Adding machines moves only 1/N of hosts ([Consistent Hashing](../03-storing-data/README.md#consistent-hashing)). At 1,000 pages/s, about **10–20 machines** with **async I/O** (one thread juggling many network requests instead of waiting on each) (each handling ~100 concurrent fetches) are enough; the bottleneck is usually politeness and DNS, not CPU.
 
 **6. The failure walk**
 1. **A crawl machine dies:** its hosts move to their ring neighbours; its frontier is rebuilt from the durable on-disk queues and the URL metadata store (URLs "leased" to a fetcher but not completed are handed out again). Some pages get fetched twice, which is harmless ([Idempotency](../05-reliability/README.md#idempotency) by content fingerprint).
 2. **A website is slow or erroring:** its back-queue timer stretches (backoff); the rest of the crawl is unaffected because each host has its own queue, a built-in [Bulkhead](../05-reliability/README.md#bulkhead).
 3. **The DNS resolver is slow:** fetchers stall. Run local caching resolvers, prefetch DNS for URLs about to be crawled, and respect record expiry (TTL).
 4. **Content store or indexer backs up:** the queue in between absorbs it; if it keeps growing, the frontier slows the fetch rate ([Backpressure](../10-batch-and-streaming/README.md#backpressure)) rather than dropping fetched pages.
-5. **A site complains about load:** obey robots.txt, identify the crawler in the User-Agent with a contact URL, and keep a manual per-host rate override.
+5. **A site complains about load:** obey robots.txt, identify the crawler in the User-Agent (the request header that names the client) with a contact URL, and keep a manual per-host rate override.
 
 **7. Trade-offs**
 
@@ -616,10 +616,10 @@ demo: m=1,917,012 bits (234 KiB), k=7; measured false-positive rate 1.06% (targe
 | Frequent recrawl vs broad coverage | Fresher index | Fewer new pages discovered with the same budget |
 
 **8. Follow-up questions**
-- **"How would you crawl pages that need JavaScript to render?"** Add a separate, much smaller rendering tier (headless browsers) for pages whose raw HTML lacks the content; it is 10–100× more expensive per page, so route only pages that need it.
+- **"How would you crawl pages that need JavaScript to render?"** Add a separate, much smaller rendering tier (**headless browsers**: real browsers run without a screen and driven by code) for pages whose raw HTML lacks the content; it is 10–100× more expensive per page, so route only pages that need it.
 - **"How do you avoid crawling the same site twice from two machines?"** Host-based partitioning makes each host owned by exactly one machine; the rule is enforced by the hash, not by locks.
 - **"How do you handle a site with 100 million pages?"** Give it a larger budget and allow a small number of parallel connections if its robots rules and response times allow; split its back queue by path prefix across a few workers with a shared rate limiter ([Rate Limiting](../08-api-and-edge/README.md#rate-limiting)).
-- **"What about spam and low-quality pages?"** Score pages after parsing (link farms, keyword stuffing) and feed the score into priority, so bad neighbourhoods get less budget over time. *Trap:* treating all discovered URLs as equally worth fetching.
+- **"What about spam and low-quality pages?"** Score pages after parsing (link farms, i.e. networks of pages that link to each other to fake importance; keyword stuffing) and feed the score into priority, so bad neighbourhoods get less budget over time. *Trap:* treating all discovered URLs as equally worth fetching.
 
 **9. Pattern manifest**
 
@@ -655,16 +655,16 @@ demo: m=1,917,012 bits (234 KiB), k=7; measured false-positive rate 1.06% (targe
 **1. Requirements and numbers**
 - *Functional:* given a prefix, return the top **k = 10** completions by popularity; lower-case matching; English only at first; results update from recent query logs (daily is fine; trending topics within an hour is a stretch goal); filter offensive, dangerous or private suggestions.
 - *Non-functional:* server latency **p99 < 20 ms** (leaving the rest of the 100 ms budget for the network and rendering); high availability (if autocomplete fails, search still works, so degrade silently); relevance can be eventually consistent.
-- *Traffic:* **10M DAU × 10 searches/day × ~6 suggestion requests per search** (the client waits for a short typing pause, called **debouncing**, instead of sending every keystroke) = **600M requests/day ≈ 6,000/s average, ~20,000/s peak**.
+- *Traffic:* **10M DAU (daily active users) × 10 searches/day × ~6 suggestion requests per search** (the client waits for a short typing pause, called **debouncing**, instead of sending every keystroke) = **600M requests/day ≈ 6,000/s average, ~20,000/s peak**.
 - *Data in:* 100M searches/day × ~50 bytes of log (query, time, locale) = **5 GB/day** of logs.
-- *Data served:* say 200M distinct queries a week, of which ~**20M** pass the minimum-count and safety filters. With an average length of ~20 characters and shared prefixes, the trie has on the order of **100–200M nodes**; storing ~100 bytes per node (children + a top-10 list of query IDs) gives **10–20 GB**, which fits in the memory of one large server. That means the whole index can be **replicated** instead of sharded, at least for one language.
+- *Data served:* say 200M distinct queries a week, of which ~**20M** pass the minimum-count and safety filters. With an average length of ~20 characters and shared prefixes, the **trie** (a prefix tree, explained in section 3) has on the order of **100–200M nodes**; storing ~100 bytes per node (children + a top-10 list of query IDs) gives **10–20 GB**, which fits in the memory of one large server. That means the whole index can be **replicated** instead of sharded, at least for one language.
 
 **2. The five-questions pass**
 - **Flow:** the request path is request-response (the user is waiting); the data path is a **batch pipeline**: logs → aggregation → build → publish ([MapReduce](../10-batch-and-streaming/README.md#mapreduce)).
 - **Storage:** the source of truth is the query log. The trie (or prefix table) is a **derived read model**, rebuilt from logs and swapped in whole ([CQRS](../03-storing-data/README.md#cqrs)).
 - **Speed:** precompute the top-k for every prefix so a lookup is one walk down the trie or one key-value get; cache popular prefixes in the browser and at the CDN.
 - **Failure:** a stale suggestion list is fine; an empty one is acceptable; a slow one is harmful (it blocks typing feedback), so use tight timeouts.
-- **Growth:** more languages and regions multiply the data (one index per locale); traffic grows with users and is absorbed by replicas and caches.
+- **Growth:** more languages and regions multiply the data (one index per **locale**, a language-plus-region setting such as `en-US`); traffic grows with users and is absorbed by replicas and caches.
 
 **3. API and data model**
 - `GET /v1/suggest?q=tra&locale=en-US&k=10` → `200 {"prefix": "tra", "suggestions": ["translate", "train times", ...]}` with `Cache-Control: public, max-age=3600` for anonymous users.
@@ -701,7 +701,7 @@ Reading the diagram:
 4. **Trending (optional):** a small streaming job counts the last hour's queries and the API merges a few fast-rising queries into the answer ([Stream Processing](../10-batch-and-streaming/README.md#stream-processing), the [Lambda](../10-batch-and-streaming/README.md#lambda-and-kappa) shape: a batch layer plus a speed layer).
 
 **5. Deep dives**
-- **Deep dive 1 — the trie with cached top-k.** A plain trie answers "what completes *tra*?" by walking to the *tra* node and then searching its entire subtree, which can be millions of nodes for a short prefix. Storing the top-k at every node makes the lookup **O(prefix length)**: walk three steps, read the list. The cost is memory (k entries per node) and build time, and it's why updates are done offline in bulk rather than per query. Running [`code/trie_topk.py`](code/trie_topk.py) on a small week of counts, with k = 3 and one blocked query:
+- **Deep dive 1 — the trie with cached top-k.** A plain trie answers "what completes *tra*?" by walking to the *tra* node and then searching its entire subtree, which can be millions of nodes for a short prefix. Storing the top-k at every node makes the lookup **O(prefix length)** (its cost grows only with how many characters were typed): walk three steps, read the list. The cost is memory (k entries per node) and build time, and it's why updates are done offline in bulk rather than per query. Running [`code/trie_topk.py`](code/trie_topk.py) on a small week of counts, with k = 3 and one blocked query:
 
 ```text
    't' -> ['translate', 'tree', 'trip advisor']
@@ -737,9 +737,9 @@ after rebuild, 'tr' -> ['trip advisor', 'translate', 'tree']
 
 **8. Follow-up questions**
 - **"Personalise it."** Merge two lists at request time: the global top-k from the trie and the user's own recent searches (a small per-user store), re-ranked by a simple score. Personal answers must not be cached publicly (`Cache-Control: private`).
-- **"Support typos."** Allow completions within a small edit distance of the prefix (fuzzy matching on the trie, bounded to distance 1–2), or add common misspellings as extra keys pointing to the right query during the build.
-- **"Support many languages."** One index per locale, built by the same pipeline; languages without spaces or with complex input methods need their own tokenisation.
-- **"Rank by more than popularity?"** Freshness, location, and the probability the suggestion leads to a click can be combined into a score in the build; a learned ranker on the top ~50 candidates is the next step. *Trap:* running an expensive model per keystroke without a candidate-generation step first.
+- **"Support typos."** Allow completions within a small **edit distance** (the number of single-character insertions, deletions or swaps between two strings) of the prefix (fuzzy matching on the trie, bounded to distance 1–2), or add common misspellings as extra keys pointing to the right query during the build.
+- **"Support many languages."** One index per locale, built by the same pipeline; languages without spaces or with complex input methods need their own **tokenisation** (rules for splitting text into words).
+- **"Rank by more than popularity?"** Freshness, location, and the probability the suggestion leads to a click can be combined into a score in the build; a **learned ranker** (a machine-learning model that orders candidates) on the top ~50 candidates is the next step. *Trap:* running an expensive model per keystroke without a candidate-generation step first.
 
 **9. Pattern manifest**
 
