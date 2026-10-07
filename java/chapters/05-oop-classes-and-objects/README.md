@@ -1,8 +1,8 @@
 # Chapter 5 — OOP: Classes and Objects
 
-Java is an **object-oriented** language: programs are built from *objects* that bundle data with the code that works on that data. This chapter teaches the mechanics — how to write a class, create objects, construct them correctly, share state with `static`, hide details with access modifiers, organise code in packages, make objects immutable, and understand exactly in what order Java initialises everything.
+Java is an **object-oriented** language: programs are built from *objects* that bundle data with the code that works on that data. This chapter teaches the mechanics — how to write a class, create objects, construct them correctly, share state with `static` (members that belong to the class itself and are shared by every object), hide details with access modifiers (keywords such as `private` that control who can see what), organise code in packages, make objects immutable (impossible to change once created), and understand exactly in what order Java initialises everything.
 
-The *design* side of OOP — when to use which relationship, SOLID, patterns — is covered in depth in the LLD handbook; this chapter links there instead of repeating it: [LLD Chapter 2 — OOP fundamentals](../../../lld/chapters/02-oop-fundamentals/README.md).
+The *design* side of OOP — when to use which relationship, SOLID (five classic object-oriented design principles), patterns (named, reusable solutions to common design problems) — is covered in depth in the LLD (low-level design) handbook; this chapter links there instead of repeating it: [LLD Chapter 2 — OOP fundamentals](../../../lld/chapters/02-oop-fundamentals/README.md).
 
 **What you'll learn**
 
@@ -37,7 +37,7 @@ Grouping data with the behaviour that protects it keeps rules in one place. A `B
 
 ### How it works
 1. **Declare** the class (one public top-level class per file, file named after it: `BankAccount.java`).
-2. **Create** objects with `new ClassName(args)`. `new` allocates memory on the **heap**, runs the constructor (§5.3), and returns a **reference** to the new object.
+2. **Create** objects with `new ClassName(args)`. `new` allocates memory on the **heap** (the JVM memory area where all objects live), runs the constructor (the object's set-up code, §5.3), and returns a **reference** to the new object.
 3. **Store** the reference in a variable of the class type. The variable is not the object; it *points to* it.
 4. **Use** the object with the dot operator: `a.deposit(100)`, `a.owner`.
 5. When no live variable references an object any more, it becomes **unreachable** and the **garbage collector** (GC) eventually reclaims its memory. Java has no `delete`/`free` — see GC in [Chapter 16](../16-jvm-internals-and-performance/README.md).
@@ -113,7 +113,7 @@ NPE: Cannot invoke "ch05.classes.BankAccount.deposit(long)" because "<local5>" i
 What the output shows:
 - `a` and `b` are independent objects; `c = a` created a second name for the *same* object.
 - **Fields get default values** (`null`, `0`, `false`) — unlike local variables.
-- **`null`** means "no object". Calling a method through it throws `NullPointerException`. Since Java 14 (JEP 358, on by default since 15) the message says exactly what was null. It shows `<local5>` here because the class was compiled without debug info; compile with `javac -g` (IDEs and build tools do) and it names the variable: `because "nobody" is null`.
+- **`null`** means "no object". Calling a method through it throws `NullPointerException` (an *exception* is an error object that, once thrown, stops normal execution unless caught — [Chapter 8](../08-exceptions/README.md)). Since Java 14 (JEP 358 — a JDK Enhancement Proposal — on by default since 15) the message says exactly what was null. It shows `<local5>` here because the class was compiled without debug info (extra data that maps compiled code back to source variable names and line numbers); compile with `javac -g` (IDEs and build tools do) and it names the variable: `because "nobody" is null`.
 - The money is kept in `long` cents — never `double` for money (Chapter 2/7).
 
 ### Common mistakes
@@ -124,7 +124,7 @@ What the output shows:
 ### Self-check
 1. How many `BankAccount` objects exist after `var x = new BankAccount(); var y = x;`? → One, with two references.
 2. What value does an `int` field have before assignment? A local `int`? → `0`; a local has no value and cannot be read until assigned.
-3. When is an object eligible for garbage collection? → When it is no longer reachable from any live reference (thread stacks, static fields, …).
+3. When is an object eligible for garbage collection? → When it is no longer reachable from any live reference (thread stacks — each *thread*, an independent path of execution, has its own stack — static fields, …).
 
 ### TL;DR
 Class = blueprint and type; object = instance on the heap; variables hold references. `new` creates, GC reclaims unreachable objects, `null` means no object.
@@ -143,7 +143,7 @@ Class = blueprint and type; object = instance on the heap; variables hold refere
 |---|---|---|
 | Disambiguate a field hidden by a parameter | `this.size = size;` | The parameter **shadows** the field; `size = size` would just assign the parameter to itself |
 | Pass the current object to someone else | `registry.register(this)` | Lets other objects hold a reference to you |
-| Return the current object for chaining | `return this;` → `pizza.addTopping("a").addTopping("b")` | Fluent APIs, builders ([LLD Builder](../../../lld/chapters/08-patterns-creational/README.md)) |
+| Return the current object for chaining | `return this;` → `pizza.addTopping("a").addTopping("b")` | Fluent APIs (method chains that read like a sentence), builders (helper objects that assemble another object step by step; [LLD Builder](../../../lld/chapters/08-patterns-creational/README.md)) |
 | Call another constructor of the same class | `this(size, false);` | Constructor chaining (§5.3) |
 
 Inside an instance method, a bare field name like `balanceCents` is shorthand for `this.balanceCents` unless a local variable or parameter with the same name shadows it.
@@ -151,7 +151,7 @@ Inside an instance method, a bare field name like `balanceCents` is shorthand fo
 ### Common mistakes
 - `this.name = name` written as `name = name` — compiles, does nothing; the field stays `null`. Many IDEs warn "assignment to itself".
 - Using `this` inside a `static` method — compile error; there is no current object.
-- Letting `this` **escape** from a constructor (registering a listener, starting a thread with `this`) before construction finishes — other code can then see a half-built object. Especially dangerous with threads ([Chapter 14](../14-concurrency-1/README.md)).
+- Letting `this` **escape** from a constructor (registering a listener — an object notified when something happens — or starting a thread with `this`) before construction finishes — other code can then see a half-built object. Especially dangerous with threads ([Chapter 14](../14-concurrency-1/README.md)).
 
 ### TL;DR
 Instance fields are per-object; `this` is the current object — used to reach shadowed fields, pass/return yourself, and chain constructors.
@@ -164,14 +164,14 @@ Instance fields are per-object; `this` is the current object — used to reach s
 A **constructor** is special code that runs when an object is created with `new`. Its job is to put the new object into a **valid** state. It looks like a method but:
 - its name is exactly the class name,
 - it has **no return type** (not even `void` — adding one turns it into an ordinary method with a confusing name),
-- it is not inherited.
+- it is not inherited (subclasses do not receive it).
 
 ### How it works
-1. **Default constructor.** If you write *no* constructor, the compiler adds a no-argument one that just calls `super()`. Its access matches the class's access.
+1. **Default constructor.** If you write *no* constructor, the compiler adds a no-argument one that just calls `super()` (the parent class's constructor). Its access matches the class's access.
 2. As soon as you write **any** constructor, no default is generated. If you still want `new X()`, write it yourself.
 3. **Overloading.** A class can have many constructors with different parameter lists (same rules as method overloading, [Chapter 4 §4.3](../04-methods-and-arrays/README.md#43-overloading)).
 4. **Chaining with `this(...)`.** One constructor can delegate to another. Put the real work (validation, assignments) in one "full" constructor and let the others supply defaults — no duplicated logic.
-5. **Every constructor starts by running a superclass constructor** — either explicitly with `super(...)` or with an implicit `super()` the compiler inserts ([Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#61-inheritance-and-super)). A constructor calls *either* `this(...)` *or* `super(...)`, at most once.
+5. **Every constructor starts by running a superclass constructor** (the *superclass* is the parent class this one extends; a class that extends another is its *subclass*) — either explicitly with `super(...)` or with an implicit `super()` the compiler inserts ([Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#61-inheritance-and-super)). A constructor calls *either* `this(...)` *or* `super(...)`, at most once.
 6. **Validate** arguments and throw (usually `IllegalArgumentException` or `NullPointerException` via `Objects.requireNonNull`) so an invalid object never exists — "fail fast" ([LLD design principles](../../../lld/chapters/05-design-principles/README.md)).
 
 ### Flexible constructor bodies (Java 25, JEP 513)
@@ -243,22 +243,22 @@ rejected: bad size: XXL
 ### Trade-offs — ways to create objects
 | Approach | Good for | Weak spot |
 |---|---|---|
-| Telescoping constructors (as `Pizza`) | 1–3 optional parameters | Many parameters of the same type are easy to swap by mistake |
-| Static factory method (`Pizza.margherita()`, `List.of`, `Integer.valueOf`) | Descriptive names, caching, returning subtypes (*Effective Java*, Item 1) | Not obvious in docs that it replaces a constructor |
+| Telescoping constructors (a series of constructors, each adding one more parameter, as `Pizza`) | 1–3 optional parameters | Many parameters of the same type are easy to swap by mistake |
+| Static factory method (a static method that creates and returns an instance: `Pizza.margherita()`, `List.of`, `Integer.valueOf`) | Descriptive names, caching, returning subtypes (*Effective Java* — Joshua Bloch's well-known best-practice book — Item 1) | Not obvious in docs that it replaces a constructor |
 | Builder (`Pizza.builder().size("L").cheese(true).build()`) | Many optional parameters, readable call sites (*Effective Java*, Item 2) | More code — see [LLD Builder](../../../lld/chapters/08-patterns-creational/README.md) |
-| Records ([Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#68-records)) | Plain data carriers | Fixed to "all components" canonical form |
+| Records ([Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#68-records)) | Plain data carriers | Fixed to "all components" canonical form (one constructor taking every field) |
 
 ### Common mistakes
 - Adding a return type: `public void Pizza() {}` is a *method*, not a constructor.
 - Adding an argument constructor and then being surprised `new Pizza()` stops compiling.
 - Duplicating validation in every constructor instead of chaining to one.
-- Calling overridable methods from a constructor — a subclass override can run before the subclass's fields are initialised (*Effective Java*, Item 19; demo in [Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#63-overriding)).
+- Calling overridable methods (methods a subclass can replace with its own version) from a constructor — a subclass override can run before the subclass's fields are initialised (*Effective Java*, Item 19; demo in [Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#63-overriding)).
 - Recursive chaining (`A() { this(1); }  A(int x) { this(); }`) — compile error "recursive constructor invocation".
 
 ### In the interview
 **30-second answer:** "A constructor initialises a new object into a valid state. If you declare none, Java adds a no-arg default constructor; declare any and it disappears. Constructors overload, and I chain them with `this(...)` so validation lives in one place. Every constructor first runs a superclass constructor via `super(...)`, explicit or implicit. Since Java 25, I can validate arguments before that `this`/`super` call, as long as I don't touch `this`."
 
-- *Follow-up: Can a constructor be private?* → Yes — for singletons, static-factory-only classes, and utility classes that must not be instantiated.
+- *Follow-up: Can a constructor be private?* → Yes — for singletons (classes that must have exactly one instance), static-factory-only classes, and utility classes that must not be instantiated.
 - *Follow-up: Are constructors inherited?* → No. A subclass must declare its own and call a superclass one.
 
 ### Self-check
@@ -275,7 +275,7 @@ Constructors: class name, no return type, not inherited. Default constructor onl
 
 ### What it is
 A **package** is a named group of related classes, like a folder — and it literally maps to a folder. Packages give you:
-1. **Namespaces** — `java.util.Date` and `java.sql.Date` can coexist.
+1. **Namespaces** (separate naming areas, so equal names don't collide) — `java.util.Date` and `java.sql.Date` can coexist.
 2. **Access control** — package-private members (§5.6) are visible only inside the package.
 3. **Organisation** — `com.shop.orders`, `com.shop.payments`.
 
@@ -291,11 +291,11 @@ A **package** is a named group of related classes, like a folder — and it lite
 | Single-type import | `import java.util.List;` | Preferred — explicit, no ambiguity |
 | Type-import-on-demand (wildcard) | `import java.util.*;` | Imports types of *that* package only, **not** subpackages (`java.util.function` needs its own import) |
 | Static import | `import static java.lang.Math.max;` / `import static java.lang.Math.*;` | Imports static members; use sparingly (constants, test assertions) |
-| Module import (Java 25, JEP 511) | `import module java.base;` | Imports all public types of every package the module exports; single-type imports win on name clashes |
+| Module import (Java 25, JEP 511) | `import module java.base;` | Imports all public types of every package the module (a named group of packages, see JPMS) exports; single-type imports win on name clashes |
 
 6. `java.lang` (`String`, `Math`, `Integer`, `System`, …) and your own package are imported automatically.
 7. Imports are purely a **compile-time** convenience: they don't load or include code, and have no runtime cost.
-8. At runtime the JVM finds classes via the **class path** (`java -cp out ch05.statics.StaticDemo`) or the **module path** ([Chapter 16](../16-jvm-internals-and-performance/README.md)).
+8. At runtime the JVM finds classes via the **class path** (the list of folders and JAR files to search: `java -cp out ch05.statics.StaticDemo`) or the **module path** ([Chapter 16](../16-jvm-internals-and-performance/README.md)).
 
 ### Common mistakes
 - Name clash: importing both `java.util.*` and `java.sql.*` then writing `Date` — ambiguous, compile error. Import one explicitly or use the fully qualified name.
@@ -380,20 +380,20 @@ Notice that printing `MAX_PER_ORDER` did *not* trigger the static block; calling
 ### When to use `static` — and when not
 | Good fit | Poor fit |
 |---|---|
-| Constants (`MAX_PER_ORDER`, `Math.PI`) | Mutable global state (`static List<User> users`) — hidden coupling, hard to test, **not thread-safe** without synchronisation |
+| Constants (`MAX_PER_ORDER`, `Math.PI`) | Mutable global state (`static List<User> users`) — hidden coupling (parts of the program silently depending on each other), hard to test, **not thread-safe** (unsafe when several threads use it at once) without synchronisation (coordinating threads, e.g. with locks) |
 | Pure utility functions: output depends only on inputs (`Math.max`, `Integer.parseInt`) | Behaviour that should vary by implementation — static methods cannot be overridden ([Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#63-overriding)) |
 | Static factory methods (`List.of`, `Integer.valueOf`) | Dependencies you want to swap in tests (a `static Database db`) — prefer passing objects in |
-| Counters/ID generators — but use `AtomicInteger` if threads are involved | |
+| Counters/ID generators — but use `AtomicInteger` (a thread-safe counter class) if threads are involved | |
 
 Utility classes (`Math`, `Collections`, `Arrays`) are `final` with a `private` constructor so they can't be instantiated (*Effective Java*, Item 4). The Singleton pattern and its pitfalls are in [LLD Chapter 8](../../../lld/chapters/08-patterns-creational/README.md).
 
 ### Common mistakes
 - "non-static variable cannot be referenced from a static context" — calling instance members from `main`. Create an object.
-- The `issued++` counter above is a **race condition** if two threads create tickets at once ([Chapter 14](../14-concurrency-1/README.md)).
+- The `issued++` counter above is a **race condition** (a bug whose outcome depends on the unpredictable timing of threads) if two threads create tickets at once ([Chapter 14](../14-concurrency-1/README.md)).
 - Overusing static imports so readers can't tell where `of(...)` comes from.
 
 ### In the interview
-**30-second answer:** "Static members belong to the class: one shared copy of a static field, and static methods run without an instance, so they have no `this` and can't be overridden — only hidden. Static initialisation happens once, lazily, when the class is first actively used. I use static for constants, pure utilities and factories, and avoid mutable static state because it's global, hard to test and needs synchronisation."
+**30-second answer:** "Static members belong to the class: one shared copy of a static field, and static methods run without an instance, so they have no `this` and can't be overridden — only hidden (a subclass static method with the same signature just shadows it). Static initialisation happens once, lazily, when the class is first actively used. I use static for constants, pure utilities and factories, and avoid mutable static state because it's global, hard to test and needs synchronisation."
 
 - *Follow-up: Can a static method access an instance field?* → Not directly; only through an object reference it is given or creates.
 - *Follow-up: When does a static block run?* → Once, during class initialisation — on first instantiation, static method call, or non-constant static field access.
@@ -411,16 +411,16 @@ Static = one per class. Use for constants, pure utilities, factories. Static ini
 ## 5.6 Access modifiers
 
 ### What it is
-**Access modifiers** control *who can see* a class, field, method or constructor. They are how Java enforces encapsulation at compile time.
+**Access modifiers** control *who can see* a class, field, method or constructor. They are how Java enforces encapsulation (hiding an object's internals, §5.7) at compile time.
 
 | Modifier | Same class | Same package | Subclass in another package | Everywhere else |
 |---|:-:|:-:|:-:|:-:|
 | `private` | yes | no | no | no |
 | *(none)* = **package-private** | yes | yes | no | no |
-| `protected` | yes | yes | yes (through inheritance) | no |
+| `protected` | yes | yes | yes (through inheritance — a subclass receiving its parent's members) | no |
 | `public` | yes | yes | yes | yes |
 
-Top-level classes can only be `public` or package-private. Members (fields, methods, constructors, nested types) can use all four.
+Top-level classes can only be `public` or package-private. Members (fields, methods, constructors, nested types — classes declared inside another class) can use all four.
 
 ### How it works
 ```java
@@ -468,9 +468,9 @@ subclass protected: 4
 ### Guidelines
 1. **Make every field `private`** (constants excepted). Expose behaviour, not data.
 2. Start members as **private or package-private** and widen only when needed. *Effective Java* (Item 15): "minimise the accessibility of classes and members". Every `public` member is a promise you must keep forever.
-3. Use `protected` deliberately — it is part of your public API to subclassers.
+3. Use `protected` deliberately — it is part of your public API (the members other code may rely on) to subclassers.
 4. Package-private is a great default for helper classes that other packages shouldn't depend on.
-5. For stronger, module-level hiding (a `public` class that other *modules* still can't use), see JPMS in [Chapter 16](../16-jvm-internals-and-performance/README.md).
+5. For stronger, module-level hiding (a `public` class that other *modules* still can't use), see JPMS (the Java Platform Module System) in [Chapter 16](../16-jvm-internals-and-performance/README.md).
 
 ### Self-check
 1. Which is wider: `protected` or package-private? → `protected` (package + subclasses).
@@ -491,13 +491,13 @@ Analogy: a car's dashboard. You use the steering wheel and pedals (public method
 
 ### Why it matters
 - **Validity** — nobody can put the object into a nonsense state.
-- **Freedom to change** — you can change the internal representation (store Fahrenheit, add caching) without breaking callers.
-- **Debuggability** — every change passes through one method; put a breakpoint there.
+- **Freedom to change** — you can change the internal representation (store Fahrenheit, add caching — keeping computed results to reuse) without breaking callers.
+- **Debuggability** — every change passes through one method; put a breakpoint (a marker where the debugger pauses the program) there.
 
 ### How it works
 1. Make fields `private`.
 2. Provide methods that express **behaviour** (`raise`, `withdraw`) rather than raw setters where possible ("tell, don't ask" — [LLD principles](../../../lld/chapters/05-design-principles/README.md)).
-3. Where you do need accessors, a **getter** returns a value (`getTargetCelsius()`, `isActive()` for booleans) and a **setter** validates before changing (`setTargetCelsius(v)`).
+3. Where you do need accessors (methods that read or write a field), a **getter** returns a value (`getTargetCelsius()`, `isActive()` for booleans) and a **setter** validates before changing (`setTargetCelsius(v)`).
 4. Omit the setter for read-only properties; compute derived values instead of storing them.
 
 ```java
@@ -538,10 +538,10 @@ rejected: target must be in [5.0, 30.0]: -273.0
 ```
 
 ### Trade-offs
-Getters/setters for every field ("anaemic" objects) are only slightly better than public fields: they keep the option to add validation later, but they don't express behaviour. Prefer meaningful operations; for pure data, prefer an immutable **record** ([Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#68-records)). The full discussion (encapsulation vs abstraction, "tell don't ask", Law of Demeter) is in [LLD §2.3 Encapsulation](../../../lld/chapters/02-oop-fundamentals/README.md#23-encapsulation).
+Getters/setters for every field ("anaemic" objects) are only slightly better than public fields: they keep the option to add validation later, but they don't express behaviour. Prefer meaningful operations; for pure data, prefer an immutable **record** ([Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#68-records)). The full discussion (encapsulation vs abstraction, "tell don't ask", Law of Demeter — an object should talk only to its direct collaborators) is in [LLD §2.3 Encapsulation](../../../lld/chapters/02-oop-fundamentals/README.md#23-encapsulation).
 
 ### Common mistakes
-- Private field but a getter that returns a mutable internal object (a `List`, `Date`, array) — callers can change it anyway. Return an unmodifiable view or copy (§5.9).
+- Private field but a getter that returns a mutable internal object (a `List`, `Date`, array) — callers can change it anyway. Return an unmodifiable view (a read-only window onto the original data) or copy (§5.9).
 - Setters that don't validate.
 - Generating getters/setters by reflex for every field.
 
@@ -571,8 +571,8 @@ Private state + methods that protect invariants. Prefer behaviour over getters/s
 
 Key points:
 - `final` on a reference stops **reassignment**, not **mutation** of the object: a `final StringBuilder sb` can still `append` (see output in §5.9). A `final` array's elements can still change.
-- A variable that is never reassigned is **effectively final** even without the keyword; lambdas and inner classes may only capture such variables ([Chapter 11](../11-lambdas-and-functional-programming/README.md)).
-- `final` fields also carry a **memory-model guarantee**: once a constructor finishes (without leaking `this`), other threads see the correct values of `final` fields without synchronisation ([Chapter 15](../15-concurrency-2-modern/README.md)).
+- A variable that is never reassigned is **effectively final** even without the keyword; lambdas (short inline functions) and inner classes may only capture (use from the surrounding method) such variables ([Chapter 11](../11-lambdas-and-functional-programming/README.md)).
+- `final` fields also carry a **memory-model guarantee** (the Java Memory Model is the set of rules for what one thread is guaranteed to see of another thread's writes): once a constructor finishes (without leaking `this`), other threads see the correct values of `final` fields without synchronisation ([Chapter 15](../15-concurrency-2-modern/README.md)).
 - Don't confuse `final` with `finally` (exception handling, [Chapter 8](../08-exceptions/README.md)) or the deprecated `finalize()` method.
 
 ---
@@ -588,9 +588,9 @@ Analogy: a printed banknote. You can't edit the number on it; to get a different
 | Benefit | Why |
 |---|---|
 | Simple to reason about | One state, set once, validated once |
-| Thread-safe for free | Nothing to race on; share across threads with no locks |
+| Thread-safe for free | Nothing to race on; share across threads with no locks (mechanisms that let only one thread into a section at a time) |
 | Safe to share and cache | `Integer.valueOf` caches; `String` literals are pooled ([Chapter 7](../07-core-apis/README.md)) |
-| Safe as `HashMap` keys / `HashSet` elements | The hash code can't change after insertion |
+| Safe as `HashMap` keys / `HashSet` elements (hash-based lookup collections) | The hash code (the number used to decide where an object is stored) can't change after insertion |
 | No defensive copies needed when passing around | Nobody can modify it |
 
 *Effective Java*, Item 17: "minimise mutability". The trade-off: a new object per change, which can matter for very large objects updated in tight loops (that's why `StringBuilder` exists as the mutable companion of `String`). The design-level treatment is in [LLD §2.13 Immutability and records](../../../lld/chapters/02-oop-fundamentals/README.md#213-immutability-and-records) and [LLD principle 14](../../../lld/chapters/05-design-principles/README.md#14-immutability).
@@ -680,7 +680,7 @@ final ref but mutable object
 **30-second answer:** "An immutable class has a fixed state after construction: final class, private final fields, no setters, validation in the constructor, and defensive copies of any mutable inputs and outputs. Benefits: thread safety without locks, safe sharing and caching, safe as map keys. String, Integer and java.time types are examples; records make simple immutable classes a one-liner if their components are immutable."
 
 - *Follow-up: Why must the class be final?* → A subclass could add mutable state or override methods to behave mutably, breaking the guarantee for code holding a reference of the parent type.
-- *Follow-up: Is a record automatically deeply immutable?* → No. Its fields are final, but a `List` component can still be mutated unless you copy it in the compact constructor ([Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#68-records)).
+- *Follow-up: Is a record automatically deeply immutable?* → No (deeply immutable would mean nothing reachable from it can change). Its fields are final, but a `List` component can still be mutated unless you copy it in the compact constructor (a record's shorthand constructor for validation) ([Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#68-records)).
 
 ### Self-check
 1. `final List<String> xs = new ArrayList<>(); xs.add("a");` — legal? → Yes; `final` stops reassignment only.
@@ -774,12 +774,12 @@ Output:
 ### Common mistakes
 - A static field used by a static block declared *above* it — it still has its default value (source order matters).
 - Calling an overridable method from the parent constructor: it runs the child's override **before** the child's field initialisers (step 3 comes before step 4), so the child sees default values. Demo in [Chapter 6 §6.3](../06-oop-inheritance-interfaces-and-more/README.md#63-overriding).
-- Heavy work or I/O in static blocks: failures surface as `ExceptionInInitializerError`, and the class becomes unusable (`NoClassDefFoundError` on later use).
+- Heavy work or I/O (input/output such as file or network access) in static blocks: failures surface as `ExceptionInInitializerError`, and the class becomes unusable (`NoClassDefFoundError` on later use).
 
 ### Self-check
 1. Which runs first: a parent's instance block or a child's static block? → The child's static block (all class init happens before any object creation).
 2. Two instance blocks and a field initialiser — which order? → Source order, top to bottom.
-3. How often does a static block run? → Once per class (per class loader).
+3. How often does a static block run? → Once per class (per class loader — the JVM component that loads class files).
 
 ### TL;DR
 Statics once (parent first, source order). Per object: defaults → parent (fields/blocks, then constructor body) → child (fields/blocks, then constructor body).

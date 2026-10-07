@@ -1,8 +1,8 @@
 # Chapter 7 — Core APIs: Strings, Numbers, Dates and Randomness
 
-Almost every Java class you write will touch a handful of library types: `String` and `StringBuilder` for text, `Math` and the wrapper classes (`Integer`, `Double`…) for numbers, `BigDecimal` for money, `java.time` for dates, and `Random` for simulations and tests. These live in `java.lang`, `java.math`, `java.time`, `java.text` and `java.util`, and they are part of every JDK — no dependencies needed.
+Almost every Java class you write will touch a handful of library types: `String` and `StringBuilder` for text, `Math` and the wrapper classes (object versions of the primitive types: `Integer`, `Double`…) for numbers, `BigDecimal` for money, `java.time` for dates, and `Random` for simulations and tests. These live in `java.lang`, `java.math`, `java.time`, `java.text` and `java.util`, and they are part of every JDK — no dependencies (external libraries you would have to download) needed.
 
-This chapter teaches each API the way you'll actually use it: what it is, how it behaves, the handful of methods that matter, and the mistakes that cause real bugs (comparing strings with `==`, the `Integer` cache, `new BigDecimal(0.1)`, `YYYY` in date patterns, daylight-saving gaps). [Chapter 2 §2.12](../02-basics-types-and-operators/README.md#212-strings-and-text-blocks) already introduced `String` basics and text blocks, and [§2.11](../02-basics-types-and-operators/README.md#211-floating-point-numbers) explained why `0.1 + 0.2 != 0.3`; here we go deeper instead of repeating.
+This chapter teaches each API the way you'll actually use it: what it is, how it behaves, the handful of methods that matter, and the mistakes that cause real bugs (comparing strings with `==`, the `Integer` cache, `new BigDecimal(0.1)`, `YYYY` in date patterns, daylight-saving gaps — the clock hour that is skipped when clocks "spring forward"). [Chapter 2 §2.12](../02-basics-types-and-operators/README.md#212-strings-and-text-blocks) already introduced `String` basics and text blocks, and [§2.11](../02-basics-types-and-operators/README.md#211-floating-point-numbers) explained why `0.1 + 0.2 != 0.3`; here we go deeper instead of repeating.
 
 **What you'll learn**
 
@@ -39,15 +39,15 @@ Immutability is a deliberate design choice with several pay-offs:
 
 | Benefit | Why immutability enables it |
 |---|---|
-| Safe sharing | Many variables (and threads) can point to one `String` with no risk that one of them changes it — no locking needed. |
-| Safe `HashMap` keys | A key's hash code can't change after insertion, so lookups keep working. `String` even caches its `hashCode` after the first call. |
+| Safe sharing | Many variables (and threads — independent paths of execution running at the same time) can point to one `String` with no risk that one of them changes it — no locking (making other threads wait their turn) needed. |
+| Safe `HashMap` keys | A key's hash code (an `int` computed from its contents, used by a hash table to find it) can't change after insertion, so lookups keep working. `String` even caches its `hashCode` after the first call. |
 | Security | A file path or class name checked by security code can't be altered afterwards by the caller. |
 | The string pool | Identical literals can share one object only because nobody can modify it. |
 
 ### How it works — the string pool
-1. Every string **literal** in your source code (`"hello"`) is stored once in the **string pool** (also called the *intern pool*), a table the JVM keeps on the heap (it moved from PermGen to the main heap in Java 7).
+1. Every string **literal** in your source code (`"hello"`) is stored once in the **string pool** (also called the *intern pool*), a table the JVM keeps on the heap (the memory area where objects live; it moved there from PermGen, an older separate area for class data, in Java 7).
 2. Two identical literals anywhere in the program refer to the **same** pooled object.
-3. **Compile-time constant expressions** — literals joined with `+`, or `final` variables initialised with constants — are folded by the compiler into one literal, so they are pooled too.
+3. **Compile-time constant expressions** — literals joined with `+`, or `final` variables initialised with constants — are folded (computed and joined at compile time) by the compiler into one literal, so they are pooled too.
 4. Strings computed **at run time** (concatenating a non-final variable, reading input, `new String(...)`) are ordinary new heap objects, not pooled.
 5. `s.intern()` returns the pooled copy of `s`'s contents, adding it to the pool if necessary.
 
@@ -96,15 +96,15 @@ s=java, upper=JAVA, same object? false
 **The lesson:** `==` compares *references* (same object?), `equals` compares *contents*. Because of the pool, `==` sometimes *appears* to work on strings — then fails on the first string that came from user input or a database. Always use `equals` (or `Objects.equals(a, b)` when either side may be `null`, or put the literal first: `"yes".equals(answer)`).
 
 ### How strings are stored (Java 9+)
-Since Java 9 (**compact strings**, JEP 254) a `String` stores its characters in a `byte[]`: one byte per character when every character fits in Latin-1, otherwise two bytes per character (UTF-16). This roughly halves memory for mostly-ASCII text and is invisible to your code. Also since Java 9 (JEP 280), `a + b + c` is compiled to an optimised `invokedynamic` call, so a *single* concatenation expression is already efficient — only concatenation *inside loops* needs `StringBuilder` (§7.3).
+Since Java 9 (**compact strings**, JEP 254 — a JEP is a numbered JDK Enhancement Proposal) a `String` stores its characters in a `byte[]`: one byte per character when every character fits in Latin-1 (a one-byte character set for Western European languages), otherwise two bytes per character (UTF-16). This roughly halves memory for mostly-ASCII (the basic 128 English letters, digits and symbols) text and is invisible to your code. Also since Java 9 (JEP 280), `a + b + c` is compiled to an optimised `invokedynamic` call (a bytecode instruction that lets the JVM choose the implementation at run time), so a *single* concatenation expression is already efficient — only concatenation *inside loops* needs `StringBuilder` (§7.3).
 
 ### Common mistakes
 - Calling a "modifying" method and ignoring the result: `s.trim();` does nothing useful — write `s = s.trim();`.
 - Comparing with `==` (see above), including `switch`-like `if (cmd == "quit")` chains.
-- Calling `intern()` everywhere "to save memory" — the pool is a shared table; modern JVMs already deduplicate where it pays (G1 has an optional string-deduplication flag). Intern only with measurements.
+- Calling `intern()` everywhere "to save memory" — the pool is a shared table; modern JVMs already deduplicate where it pays (G1, the default garbage collector, has an optional string-deduplication flag). Intern only with measurements.
 
 ### In the interview
-**30-second answer:** "`String` is immutable and final. That makes it thread-safe, lets it cache its hash code so it's a good map key, keeps security checks valid, and allows the JVM to pool identical literals. Literals and compile-time constants are pooled, runtime strings aren't, so `==` is unreliable — I always compare with `equals`."
+**30-second answer:** "`String` is immutable and final (no subclasses allowed). That makes it thread-safe (safe to share between threads), lets it cache its hash code so it's a good map key, keeps security checks valid, and allows the JVM to pool identical literals. Literals and compile-time constants are pooled, runtime strings aren't, so `==` is unreliable — I always compare with `equals`."
 
 - *Follow-up: How many objects does `new String("hi")` create?* → Up to two: the pooled literal `"hi"` (if it isn't already in the pool from class loading) and the new heap `String`.
 - *Follow-up: Why is `String` final?* → So no subclass can break its immutability guarantees (e.g., a mutable "String" passed to security code).
@@ -133,8 +133,8 @@ Strings never change; methods return new strings. Literals and constants are poo
 | Search | `indexOf`, `lastIndexOf`, `contains`, `startsWith`, `endsWith`, `indexOf(ch/str, begin, end)` (21) | `indexOf` returns **-1** when not found |
 | Extract | `substring(begin)`, `substring(begin, end)`, `subSequence` | throws `StringIndexOutOfBoundsException` for bad indexes |
 | Whitespace | `trim()`, `strip()` (11), `stripLeading()`, `stripTrailing()` (11), `stripIndent()` (15) | `trim` removes chars ≤ U+0020; `strip` uses Unicode `Character.isWhitespace` — prefer `strip` |
-| Case | `toUpperCase()`, `toLowerCase()`, with `Locale` overloads | use `toLowerCase(Locale.ROOT)` for identifiers (see mistakes) |
-| Replace | `replace(char, char)`, `replace(CharSequence, CharSequence)`, `replaceAll(regex, repl)`, `replaceFirst(regex, repl)` | `replace` is **literal**, `replaceAll` is **regex** |
+| Case | `toUpperCase()`, `toLowerCase()`, with `Locale` (language/region setting) overloads | use `toLowerCase(Locale.ROOT)` for identifiers (see mistakes) |
+| Replace | `replace(char, char)`, `replace(CharSequence, CharSequence)`, `replaceAll(regex, repl)`, `replaceFirst(regex, repl)` | `replace` is **literal**, `replaceAll` is **regex** (regular expression — a mini-language of text-matching patterns) |
 | Compare | `equals`, `equalsIgnoreCase`, `compareTo`, `compareToIgnoreCase`, `contentEquals`, `regionMatches`, `matches(regex)` | `compareTo` < 0, 0, > 0 — not necessarily -1/1 |
 | Split & join | `split(regex)`, `split(regex, limit)`, `splitWithDelimiters` (21), `String.join`, `lines()` (11) | `split` takes a **regex** |
 | Build new text | `concat`, `repeat` (11), `indent` (12), `formatted` (15), `transform` (12), `String.valueOf(x)`, `String.format` | `valueOf(null object)` → `"null"` |
@@ -181,11 +181,11 @@ I ❤ Jäva 😀 length=11 codePoints=10 charAt(9) is high surrogate? true
 What to notice:
 - **`compareTo`** compares character by character and returns the *difference* of the first differing characters (`'Z'` is 90, `'a'` is 97, so -7), or the length difference if one string is a prefix of the other. It is **case-sensitive and uppercase sorts before lowercase** — `"Zebra"` comes before `"apple"`. For human-facing sorting use `String.CASE_INSENSITIVE_ORDER` or a locale-aware `java.text.Collator`.
 - **`split` takes a regular expression.** `.` means "any character", so `"1.2.3".split(".")` splits at every character and — because trailing empty strings are removed — returns an empty array. Escape (`"\\."`) or use `Pattern.quote(".")`. Likewise `|`, `+`, `*`, `?`, `(`, `[`, `$`, `^` and `\` are special.
-- **`split` drops trailing empty strings** unless you pass a negative limit (`split(",", -1)`) — important when parsing CSV-like lines where the last fields may be empty.
+- **`split` drops trailing empty strings** unless you pass a negative limit (`split(",", -1)`) — important when parsing CSV-like (comma-separated values, a plain-text table format) lines where the last fields may be empty.
 - **`replace` vs `replaceAll`:** both replace *all* occurrences; the difference is literal vs regex. `replaceAll("$", "")` doesn't remove dollar signs; `replace("$", "")` does.
 
 ### Unicode: `length()` is not "number of characters"
-Java `char` is a 16-bit **UTF-16 code unit**. Most characters fit in one `char`, but characters outside the Basic Multilingual Plane — many emoji, some CJK and historic scripts — need **two** `char`s, called a **surrogate pair**. A **code point** is the actual Unicode character number.
+Java `char` is a 16-bit **UTF-16 code unit**. Most characters fit in one `char`, but characters outside the Basic Multilingual Plane (the first 65 536 Unicode characters) — many emoji, some CJK (Chinese, Japanese, Korean) and historic scripts — need **two** `char`s, called a **surrogate pair**. A **code point** is the actual Unicode character number.
 
 In the output above, the string has 10 visible characters but `length()` is 11, because 😀 takes two `char`s. Consequences:
 - `charAt`, `substring` and `reverse` by index can cut a surrogate pair in half. (`StringBuilder.reverse` is surrogate-aware; manual loops usually aren't.)
@@ -221,12 +221,12 @@ Know the half-open ranges, that `indexOf` returns -1, that `split`/`replaceAll`/
 ## 7.3 `StringBuilder`, `StringBuffer` and `StringJoiner`
 
 ### What it is
-A **`StringBuilder`** is a *mutable* sequence of characters: you can append, insert, delete and replace in place, then call `toString()` once at the end. It's the tool for building text step by step.
+A **`StringBuilder`** is a *mutable* (changeable) sequence of characters: you can append, insert, delete and replace in place, then call `toString()` once at the end. It's the tool for building text step by step.
 
 Analogy: a `String` is a printed page; a `StringBuilder` is a whiteboard you keep editing, then photograph (`toString()`) when finished.
 
 ### Why it matters
-Because strings are immutable, `result += piece` inside a loop creates a brand-new `String` each iteration and copies all the previous characters into it. For *n* pieces that's O(n²) character copying. A `StringBuilder` grows an internal buffer (default capacity 16, roughly doubling when full), so appending is amortised O(1) and the whole build is O(n).
+Because strings are immutable, `result += piece` inside a loop creates a brand-new `String` each iteration and copies all the previous characters into it. For *n* pieces that's O(n²) character copying (Big-O notation: the work grows with the square of *n*). A `StringBuilder` grows an internal buffer (a block of memory it writes into; default capacity 16, roughly doubling when full), so appending is amortised O(1) (constant time on average, even though an occasional append must copy everything) and the whole build is O(n).
 
 When is `+` fine? For a single expression like `"Hello, " + name + "!"` — the compiler already produces efficient code (§7.1). Use `StringBuilder` when you concatenate **in a loop** or across many statements.
 
@@ -277,7 +277,7 @@ capacity=1000 length=0
 | | `String` + `+` | `StringBuilder` | `StringBuffer` | `StringJoiner` / `String.join` / `Collectors.joining` |
 |---|---|---|---|---|
 | Mutable | No | Yes | Yes | builds internally |
-| Thread-safe | Yes (immutable) | **No** | Yes (every method `synchronized`) | No |
+| Thread-safe | Yes (immutable) | **No** | Yes (every method `synchronized` — only one thread at a time may run it) | No |
 | Use for | one-off expressions | loops, incremental building | legacy code only | joining a sequence with delimiter/prefix/suffix |
 
 `StringBuffer` is the Java 1.0 version of `StringBuilder` (added in Java 5). Its locking is almost never what you want — sharing one half-built string between threads is rarely a sensible design — so use `StringBuilder`.
@@ -354,18 +354,18 @@ HexFormat: 0A:FF:7F
 ```
 
 What to notice:
-- `%f` defaults to **6** decimals; `%.2f` **rounds** (HALF_UP) rather than truncates.
+- `%f` defaults to **6** decimals; `%.2f` **rounds** (HALF_UP — a trailing 5 rounds away from zero) rather than truncates.
 - `%b` prints `false` for `null`, and `true` for *any* other non-Boolean object — it is not a "truthiness" check.
 - In `|%2$s %1$s|%s|` the plain `%s` after indexed ones takes the *first* ordinary argument, `"world"` — mixing styles is confusing; pick one.
 - `%n` produces the platform line separator (`\n` on macOS/Linux, `\r\n` on Windows); prefer it in `printf`.
 - Wrong specifier for the type throws at run time: `String.format("%d", 3.5)` → `IllegalFormatConversionException`. Missing arguments → `MissingFormatArgumentException`.
-- **Locale matters.** `String.format` uses the JVM's default locale, so a server running in Germany prints `1.234.567,89`. For machine-readable output (CSV, JSON, logs parsed by tools) pass `Locale.ROOT` or `Locale.US` explicitly. `Locale.of("de", "DE")` (Java 19) replaces the deprecated `new Locale(...)` constructors.
+- **Locale matters.** `String.format` uses the JVM's default locale, so a server running in Germany prints `1.234.567,89`. For machine-readable output (CSV, JSON, logs parsed by tools) pass `Locale.ROOT` or `Locale.US` explicitly. `Locale.of("de", "DE")` (Java 19) replaces the deprecated (officially discouraged and liable to be removed) `new Locale(...)` constructors.
 - `DecimalFormat` patterns: `0` = digit, always shown; `#` = digit, hidden if zero; `,` grouping; `.` decimal point; `%` multiply by 100. `DecimalFormat` is **not thread-safe** — create one per use or per thread. (`DateTimeFormatter` from §7.11, in contrast, is immutable and thread-safe.)
 - Compact number formatting rounds to a whole unit by default (`1.25M` → `1M`); `setMinimumFractionDigits(1)` keeps one decimal. Its rounding mode is `HALF_EVEN`, so 1,250,000 then prints `1.2M` while 1,260,000 prints `1.3M`.
 
 ### When not to use it
 - Money *arithmetic* — format only at the edge; compute with `BigDecimal` or `long` cents (§7.7).
-- Building SQL or HTML by formatting user input — use prepared statements / templating that escapes.
+- Building SQL or HTML by formatting user input — use prepared statements (SQL with placeholders that the database driver fills in safely) / templating that escapes special characters.
 - Hot logging paths — use your logger's placeholders (`log.info("user {} logged in", id)`), which skip formatting when the level is disabled.
 
 ### Self-check
@@ -415,7 +415,7 @@ What to notice:
 - `/` on integers truncates toward zero (`-7/2 = -3`); `floorDiv` rounds toward negative infinity (`-4`). Use `floorMod` for "wrap-around" indexes (clock arithmetic, circular buffers), because `%` keeps the dividend's sign.
 - **Paging:** `Math.ceilDiv(items, perPage)` (Java 18) replaces the classic `(items + perPage - 1) / perPage` trick, which can overflow for huge values.
 - `Math.abs(Integer.MIN_VALUE)` is still negative — see [Chapter 2 §2.10](../02-basics-types-and-operators/README.md#210-integer-overflow); `absExact` throws instead.
-- `StrictMath` gives bit-for-bit identical results on every platform; since Java 17 (JEP 306) all floating-point arithmetic is strict anyway, and `Math` may still use faster intrinsics for functions like `sin`.
+- `StrictMath` gives bit-for-bit identical results on every platform; since Java 17 (JEP 306) all floating-point arithmetic is strict anyway, and `Math` may still use faster intrinsics (CPU-specific implementations the JIT compiler swaps in) for functions like `sin`.
 
 ### Self-check
 1. Type of `Math.round(2.7)`? → `long` (3). `Math.round(2.7f)`? → `int`.
@@ -437,8 +437,8 @@ Each primitive has a **wrapper class** — an immutable object holding one value
 Analogy: a primitive is a coin; a wrapper is the coin in a small labelled envelope. Collections only accept envelopes; Java puts coins in and takes them out for you — but an empty envelope (`null`) has no coin to take out.
 
 ### How it works
-1. **Boxing** calls `valueOf`. For `Integer`, `Short`, `Byte`, `Long` (−128 to 127), `Character` (0 to 127) and `Boolean`, `valueOf` returns **cached, shared objects**. The Java Language Specification (§5.1.7) guarantees this for boxed `int`, `short` and `byte` values in −128…127, `char` values up to 127, and `true`/`false`; the `Long` cache is a JDK implementation choice. `Integer`'s upper bound can be raised with `-XX:AutoBoxCacheMax=<n>`. `Float` and `Double` have no cache.
-2. **Unboxing** calls `xxxValue()` — which throws `NullPointerException` if the reference is `null`.
+1. **Boxing** calls `valueOf`. For `Integer`, `Short`, `Byte`, `Long` (−128 to 127), `Character` (0 to 127) and `Boolean`, `valueOf` returns **cached, shared objects**. The Java Language Specification (§5.1.7; the official rulebook of the language) guarantees this for boxed `int`, `short` and `byte` values in −128…127, `char` values up to 127, and `true`/`false`; the `Long` cache is a JDK implementation choice. `Integer`'s upper bound can be raised with `-XX:AutoBoxCacheMax=<n>`. `Float` and `Double` have no cache.
+2. **Unboxing** calls `xxxValue()` — which throws `NullPointerException` (NPE; throwing an exception signals an error, [Chapter 8](../08-exceptions/README.md)) if the reference is `null`.
 3. **Arithmetic and `<`/`>`** on wrappers unbox first. **`==` between two wrappers compares references**, not values. `==` between a wrapper and a primitive unboxes the wrapper.
 4. The `new Integer(5)` style constructors have been deprecated since Java 9 — always use `valueOf` (or just autobox).
 
@@ -489,20 +489,20 @@ total=499500
 ### Parsing and converting
 | You have | You want | Use |
 |---|---|---|
-| `String` | `int` | `Integer.parseInt(s)` (radix overload: `parseInt("ff", 16)`) |
+| `String` | `int` | `Integer.parseInt(s)` (radix — number base — overload: `parseInt("ff", 16)`) |
 | `String` | `Integer` | `Integer.valueOf(s)` |
 | `int` | `String` | `String.valueOf(i)`, `Integer.toString(i)`, `Integer.toBinaryString/HexString` |
 | `String` | `boolean` | `Boolean.parseBoolean(s)` — `true` **only** for `"true"` (any case); everything else, including `"YES"`, is `false` |
 | `double` | `int` | cast `(int) d` (truncates) or `Math.round` |
 
-Invalid numeric text throws the unchecked **`NumberFormatException`**. The parse methods don't trim: `" 42"` fails. Since the parser is strict, validate or catch at the boundary where text enters your program.
+Invalid numeric text throws the unchecked (the compiler doesn't force you to catch it) **`NumberFormatException`**. The parse methods don't trim: `" 42"` fails. Since the parser is strict, validate or catch at the boundary where text enters your program.
 
-Handy statics: `Integer.MAX_VALUE`/`MIN_VALUE`, `Integer.compare(a, b)` (use this instead of `a - b` in comparators, which can overflow), `Integer.sum/max/min` (useful as method references), `Character.isDigit/isLetter/isWhitespace/toUpperCase`, `Character.getNumericValue`.
+Handy statics: `Integer.MAX_VALUE`/`MIN_VALUE`, `Integer.compare(a, b)` (use this instead of `a - b` in comparators — objects that decide the order of two values — which can overflow), `Integer.sum/max/min` (useful as method references, the `Integer::sum` shorthand for a lambda), `Character.isDigit/isLetter/isWhitespace/toUpperCase`, `Character.getNumericValue`.
 
 ### Trade-offs — primitive vs wrapper
 | | `int` | `Integer` |
 |---|---|---|
-| Memory | 4 bytes | object header + value (typically 16 bytes) + reference |
+| Memory | 4 bytes | object header (bookkeeping data the JVM stores in every object) + value (typically 16 bytes) + reference |
 | Can be `null` | No (default 0) | Yes — useful for "unknown", dangerous when unboxed |
 | Collections/generics | Not allowed | Required |
 | `==` | compares values | compares references |
@@ -515,9 +515,9 @@ Handy statics: `Integer.MAX_VALUE`/`MIN_VALUE`, `Integer.compare(a, b)` (use thi
 ### Common mistakes
 1. `==` on wrappers — works for small cached values in tests, fails in production at 128. Use `equals` or unbox.
 2. `Long.equals(Integer)` is always false — the classes differ. Watch `map.get(42)` on a `Map<Long, …>` (it returns `null`; use `42L`).
-3. Unboxing `null`: from `Map.get`, from a nullable database column, or in a ternary mixing `Integer` and `int`.
+3. Unboxing `null`: from `Map.get`, from a nullable database column, or in a ternary (`cond ? a : b`) mixing `Integer` and `int`.
 4. `List<Integer>.remove(1)` removes by **index**; use `remove(Integer.valueOf(1))` for the value.
-5. Synchronising on a wrapper (`synchronized (count)`) — cached instances are shared JVM-wide; `javac` warns about synchronising on these *value-based* classes.
+5. Synchronising on a wrapper (`synchronized (count)`) — cached instances are shared JVM-wide; `javac` warns about synchronising on (using as a lock) these *value-based* classes (classes whose instances are meant to be treated as plain values, not distinct identities).
 
 ### In the interview
 **30-second answer:** "Wrappers let primitives live in collections and generics. Autoboxing calls `valueOf`, which caches −128 to 127, so `==` on two `Integer`s is true for 127 and false for 128 — always use `equals`. Unboxing `null` throws an NPE, which bites with `Map.get` and mixed ternaries. I use primitives for arithmetic and wrappers only where an object or null is needed."
@@ -540,14 +540,14 @@ Autoboxing = `valueOf`, unboxing = `xxxValue()`. Cache −128…127 makes `==` l
 ### What it is
 Two immutable classes in `java.math` for numbers that primitives can't represent exactly:
 - **`BigInteger`** — whole numbers of *any* size (limited only by memory). Use when values exceed `long` (about 9.2 × 10¹⁸): factorials, cryptography, exact combinatorics.
-- **`BigDecimal`** — exact *decimal* numbers: an arbitrary-precision integer **unscaled value** plus a **scale** (the number of digits after the decimal point). `12.30` is unscaled `1230`, scale `2`. Use for money and anything that must match human decimal arithmetic.
+- **`BigDecimal`** — exact *decimal* numbers: an arbitrary-precision (as many digits as needed) integer **unscaled value** plus a **scale** (the number of digits after the decimal point). `12.30` is unscaled `1230`, scale `2`. Use for money and anything that must match human decimal arithmetic.
 
 Analogy: `double` is a ruler with fine but binary tick marks — 0.1 falls between two ticks. `BigDecimal` is counting coins: exact, but slower.
 
 ### How it works
 1. Both are **immutable**: `a.add(b)` returns a new object — assign the result (`total = total.add(x);`). There are no operators; you call `add`, `subtract`, `multiply`, `divide`, `pow`, `negate`, `abs`, `compareTo`.
 2. **Create `BigDecimal` from a `String`** (`new BigDecimal("0.10")`) or `BigDecimal.valueOf(double)` (which goes through `Double.toString`, giving the short decimal you expect). `new BigDecimal(0.1)` copies the double's exact binary value — 55 digits of noise.
-3. **Division** must say how to round when the result doesn't terminate: `divide(divisor, scale, RoundingMode)` or `divide(divisor, MathContext)`. Plain `divide(divisor)` throws `ArithmeticException` for 10/3.
+3. **Division** must say how to round when the result doesn't terminate: `divide(divisor, scale, RoundingMode)` or `divide(divisor, MathContext)` (an object bundling a precision and a rounding mode). Plain `divide(divisor)` throws `ArithmeticException` for 10/3.
 4. **Rounding** is explicit: `setScale(2, RoundingMode.HALF_EVEN)`. Modes: `UP`/`DOWN` (away from / toward zero), `CEILING`/`FLOOR` (toward +∞ / −∞), `HALF_UP` (school rounding), `HALF_DOWN`, `HALF_EVEN` (**banker's rounding**: ties go to the even neighbour, which avoids systematic upward bias over many operations), `UNNECESSARY` (throws if rounding would be needed).
 5. **`equals` compares value *and scale*** (`2.0` ≠ `2.00`); **`compareTo` compares value only**. Use `compareTo(...) == 0` for numeric equality.
 
@@ -603,14 +603,14 @@ The last line shows a classic money problem: $100.00 split three ways is 33.33 e
 ### Common mistakes
 - `new BigDecimal(0.1)` → use the `String` constructor or `valueOf`.
 - `total.add(x);` without assignment (immutable!).
-- `equals` for numeric comparison; also, **`HashSet`/`HashMap` use `equals`**, so `2.0` and `2.00` are different keys, while a `TreeSet` (uses `compareTo`) treats them as one. Normalise with `stripTrailingZeros()` or a fixed `setScale` before using as keys.
+- `equals` for numeric comparison; also, **`HashSet`/`HashMap` use `equals`**, so `2.0` and `2.00` are different keys, while a `TreeSet` (a sorted set; uses `compareTo`) treats them as one. Normalise with `stripTrailingZeros()` or a fixed `setScale` before using as keys.
 - Unbounded `divide` → `ArithmeticException`; always pass a scale/rounding or a `MathContext`.
 - Rounding too early (per line item) vs. at the end — follow your domain's (often legal) rules; tax is frequently rounded per invoice line.
 - Using `BigInteger`/`BigDecimal` in tight numeric loops where `long` suffices.
 
 ### Real-world examples
-- Payment platforms store amounts as integer minor units (cents) *or* `DECIMAL(19,4)` columns mapped to `BigDecimal` — see the SQL handbook's data types chapter for `NUMERIC` in PostgreSQL.
-- RSA keys and `KeyPairGenerator` internals use `BigInteger.modPow` and `isProbablePrime`.
+- Payment platforms store amounts as integer minor units (cents) *or* `DECIMAL(19,4)` columns (an exact SQL number type: 19 digits, 4 after the decimal point) mapped to `BigDecimal` — see the SQL handbook's data types chapter for `NUMERIC` in PostgreSQL.
+- RSA (a public-key encryption algorithm) keys and `KeyPairGenerator` internals use `BigInteger.modPow` and `isProbablePrime`.
 
 ### In the interview
 **30-second answer:** "For money I use `BigDecimal` built from strings, or long minor units. Doubles are binary fractions, so 0.1 isn't representable. `BigDecimal` is immutable, needs an explicit scale and `RoundingMode` for division — usually `HALF_EVEN` for finance — and I compare with `compareTo` because `equals` also checks scale."
@@ -631,15 +631,15 @@ The last line shows a classic money problem: $100.00 split three ways is 33.33 e
 ## 7.8 The `java.time` model
 
 ### What it is
-`java.time` (JSR 310, **Java 8**, designed by the author of the Joda-Time library) is Java's date-and-time API. It replaced `java.util.Date`, `Calendar` and `SimpleDateFormat`, which were mutable, not thread-safe, used 0-based months, and mixed up "a point in time" with "a date on a calendar". All `java.time` types are **immutable** and **thread-safe**.
+`java.time` (JSR 310 — a Java Specification Request, the formal proposal for a new API — **Java 8**, designed by the author of the Joda-Time library, the popular earlier date library) is Java's date-and-time API. It replaced `java.util.Date`, `Calendar` and `SimpleDateFormat`, which were mutable, not thread-safe, used 0-based months, and mixed up "a point in time" with "a date on a calendar". All `java.time` types are **immutable** and **thread-safe**.
 
-The key idea: **different questions need different types.** "What's the user's birthday?" has no time zone. "When did this payment happen?" is an exact moment. "What time does the 9:00 meeting start in Tokyo?" needs a zone.
+The key idea: **different questions need different types.** "What's the user's birthday?" has no time zone (a region's rules for its offset from UTC — Coordinated Universal Time, the world reference clock — including daylight saving time, DST, when clocks move forward or back an hour). "When did this payment happen?" is an exact moment. "What time does the 9:00 meeting start in Tokyo?" needs a zone.
 
 | Type | Holds | Example | Use for |
 |---|---|---|---|
 | `LocalDate` | year-month-day | `2025-09-16` | birthdays, holidays, due dates |
 | `LocalTime` | hour-minute-second-nanos | `09:30` | opening hours, alarm times |
-| `LocalDateTime` | date + time, **no zone** | `2025-09-16T09:30` | a wall-clock time whose zone is implied elsewhere |
+| `LocalDateTime` | date + time, **no zone** | `2025-09-16T09:30` | a wall-clock time (what a clock on the wall shows) whose zone is implied elsewhere |
 | `ZonedDateTime` | date + time + zone (`ZoneId`) with DST rules | `2026-03-20T09:00-04:00[America/New_York]` | scheduling in a region, displaying to users |
 | `OffsetDateTime` | date + time + fixed offset | `2026-03-20T09:00-04:00` | APIs, databases (`timestamp with time zone` values), logs |
 | `Instant` | a point on the UTC timeline (seconds + nanos since 1970-01-01T00:00Z) | `2025-09-16T05:20:00Z` | event timestamps, storing "when", measuring machine time |
@@ -660,7 +660,7 @@ flowchart TB
 ```
 
 ### How to choose
-1. Storing *when something happened* (logs, orders, audit) → `Instant` (store in UTC; convert for display).
+1. Storing *when something happened* (logs, orders, audit — records kept for later checking) → `Instant` (store in UTC; convert for display).
 2. A date with no time (birthday, invoice date) → `LocalDate`. Don't store it as midnight UTC — that shifts the day for users west of Greenwich.
 3. A future appointment in a place → store `LocalDateTime` + `ZoneId` (not an `Instant`): if the government changes DST rules before the meeting, the meeting should still be at 9:00 local.
 4. Machine elapsed time → `System.nanoTime()` or `Duration.between(instantA, instantB)`; calendar arithmetic → `Period`.
@@ -680,7 +680,7 @@ flowchart TB
 Months are **1-based** (`Month.JANUARY` = 1), unlike `Calendar`.
 
 ### Legacy interop
-You'll meet `Date` in older libraries. Convert at the boundary: `Date.from(instant)`, `date.toInstant()`, `GregorianCalendar.from(zdt)`, `java.sql.Timestamp.from(instant)`. With JDBC 4.2+ drivers you can read and write `LocalDate`, `LocalDateTime`, `OffsetDateTime` directly with `getObject(col, LocalDate.class)`.
+You'll meet `Date` in older libraries. Convert at the boundary: `Date.from(instant)`, `date.toInstant()`, `GregorianCalendar.from(zdt)`, `java.sql.Timestamp.from(instant)`. With JDBC (Java Database Connectivity, the standard database API) 4.2+ drivers you can read and write `LocalDate`, `LocalDateTime`, `OffsetDateTime` directly with `getObject(col, LocalDate.class)`.
 
 ---
 
@@ -733,7 +733,7 @@ What to notice:
 ### Common mistakes
 - Ignoring return values (`date.plusDays(1);`) — the object is immutable.
 - Using `LocalDateTime` for timestamps of events: it has no zone, so it can't identify an instant. Use `Instant` or `OffsetDateTime`.
-- Calling `LocalDate.now()` directly inside business logic — tests become date-dependent. Inject a `Clock` (§7.10).
+- Calling `LocalDate.now()` directly inside business logic (the code that implements the application's real rules) — tests become date-dependent. Inject a `Clock` (pass it in from outside instead of creating it inside; §7.10).
 
 ### Self-check
 1. `LocalDate.of(2024, 3, 31).minusMonths(1)`? → `2024-02-29`.
@@ -745,7 +745,7 @@ What to notice:
 ## 7.10 Zones, instants, `Duration` and daylight saving
 
 ### What it is
-A **time zone** (`ZoneId`, e.g. `America/New_York`) is a region's set of rules: its offset from UTC and when that offset changes (**daylight saving time**, DST). An **offset** (`ZoneOffset`, e.g. `-04:00`) is just a fixed number of hours/minutes. Zone rules come from the IANA time-zone database, shipped with the JDK and updated in JDK updates when governments change rules.
+A **time zone** (`ZoneId`, e.g. `America/New_York`) is a region's set of rules: its offset from UTC and when that offset changes (**daylight saving time**, DST). An **offset** (`ZoneOffset`, e.g. `-04:00`) is just a fixed number of hours/minutes. Zone rules come from the IANA (Internet Assigned Numbers Authority) time-zone database, shipped with the JDK and updated in JDK updates when governments change rules.
 
 ### How it works
 1. `instant.atZone(zone)` shows one moment as local time in a zone. The same `Instant` is 01:20 in New York, 10:50 in Kolkata, 14:20 in Tokyo.
@@ -790,7 +790,7 @@ In 2026, US clocks spring forward on Sunday 8 March at 02:00, so 02:30 doesn't e
 | Need | Use |
 |---|---|
 | Timestamp to store/send | `Instant.now(clock)` |
-| Measuring how long code took | `System.nanoTime()` (monotonic; `Instant.now()` can jump if the system clock is adjusted) |
+| Measuring how long code took | `System.nanoTime()` (monotonic — only ever moves forward; `Instant.now()` can jump if the system clock is adjusted) |
 | Today's date for a user | `LocalDate.now(clock.withZone(userZone))` — "today" depends on the zone |
 | Testable business logic | Inject `Clock`; in tests use `Clock.fixed` or `Clock.offset` |
 
@@ -803,7 +803,7 @@ In 2026, US clocks spring forward on Sunday 8 March at 02:00, so 02:30 doesn't e
 ### In the interview
 **30-second answer:** "I store moments as `Instant` in UTC and convert to `ZonedDateTime` with the user's `ZoneId` only for display. Dates without time are `LocalDate`. `Duration` is exact seconds, `Period` is calendar units, and they differ across DST. All java.time types are immutable and thread-safe, and I inject a `Clock` so time-dependent code is testable."
 
-- *Follow-up: Difference between `ZonedDateTime` and `OffsetDateTime`?* → Zoned knows the region's DST rules; Offset has only a fixed offset — better for serialising a moment unambiguously.
+- *Follow-up: Difference between `ZonedDateTime` and `OffsetDateTime`?* → Zoned knows the region's DST rules; Offset has only a fixed offset — better for serialising (turning into text or bytes to send or store) a moment unambiguously.
 - *Follow-up: Why was `SimpleDateFormat` a problem?* → Mutable and not thread-safe; sharing one in a static field corrupted results under load. `DateTimeFormatter` is immutable.
 
 ### Self-check
@@ -819,7 +819,7 @@ In 2026, US clocks spring forward on Sunday 8 March at 02:00, so 02:30 doesn't e
 ## 7.11 Formatting and parsing dates
 
 ### How it works
-1. Every `java.time` type's `toString()` prints **ISO-8601** (`2025-12-29T14:05:09`), and `parse(text)` reads it back — ideal for JSON, logs and databases.
+1. Every `java.time` type's `toString()` prints **ISO-8601** (the international standard text format for dates and times) (`2025-12-29T14:05:09`), and `parse(text)` reads it back — ideal for JSON, logs and databases.
 2. `DateTimeFormatter` has predefined formatters (`ISO_LOCAL_DATE`, `ISO_OFFSET_DATE_TIME`, `BASIC_ISO_DATE`, `RFC_1123_DATE_TIME`…), localized styles (`ofLocalizedDate(FormatStyle.MEDIUM)`), and custom patterns (`ofPattern("dd MMM uuuu")`).
 3. Format with `value.format(formatter)`; parse with `LocalDate.parse(text, formatter)`. Bad text throws `DateTimeParseException`.
 4. `DateTimeFormatter` is **immutable and thread-safe**, so store it in a `static final` field.
@@ -856,7 +856,7 @@ ISO_OFFSET_DATE_TIME: 2025-12-29T14:05:09Z | zone pattern: 14:05 Europe/London (
 
 **The `YYYY` bug:** 29 December 2025 is a Monday in the week that contains 1 January 2026, so in the US week definition it belongs to *week-based year* 2026. `YYYY-MM-dd` therefore prints `2026-12-29` — a date a year in the future. This has caused real production outages (expired certificates, broken booking systems) during the last days of December. Use `uuuu` (or `yyyy`) — never `YYYY` unless you're printing ISO week numbers with `ww`.
 
-`uuuu` vs `yyyy`: `u` is the proleptic year (can be zero/negative), `y` is year-of-era (needs an era `G` with `ResolverStyle.STRICT`). With the default (smart) resolver both work for modern dates; use `uuuu` if you switch to strict parsing.
+`uuuu` vs `yyyy`: `u` is the proleptic year (a year count extended backwards through year 0 into negatives), `y` is year-of-era (needs an era `G` — AD/BC — with `ResolverStyle.STRICT`). With the default (smart) resolver both work for modern dates; use `uuuu` if you switch to strict parsing.
 
 ### Common mistakes
 - `MM` vs `mm`, `HH` vs `hh`, `YYYY` vs `yyyy`, `DD` (day of year) vs `dd`.
@@ -883,11 +883,11 @@ A **pseudo-random number generator** (PRNG) produces a sequence of numbers that 
 | Class | Since | Thread-safe? | Use for |
 |---|---|---|---|
 | `Math.random()` | 1.0 | yes (one shared generator) | quick scripts; a `double` in [0, 1) |
-| `java.util.Random` | 1.0 | yes, but contended across threads | seeded, reproducible sequences |
-| `ThreadLocalRandom.current()` | 7 | per-thread instance, no contention | general randomness in concurrent code |
-| `SplittableRandom` | 8 | no — split per task | parallel computations (e.g. Fork/Join) |
-| `SecureRandom` | 1.1 | yes | **security**: tokens, passwords, keys, session IDs |
-| `RandomGenerator` interface + `RandomGeneratorFactory` | 17 (JEP 356) | depends on algorithm | choosing modern algorithms (LXM family) by name |
+| `java.util.Random` | 1.0 | yes, but contended (threads must wait for each other) across threads | seeded, reproducible sequences |
+| `ThreadLocalRandom.current()` | 7 | per-thread instance, no contention | general randomness in concurrent code (code where several threads run at once) |
+| `SplittableRandom` | 8 | no — split per task | parallel computations (e.g. Fork/Join, Java's framework for splitting work across CPU cores) |
+| `SecureRandom` | 1.1 | yes | **security**: tokens, passwords, keys, session IDs (secret random strings that identify a logged-in user) |
+| `RandomGenerator` interface + `RandomGeneratorFactory` | 17 (JEP 356) | depends on algorithm | choosing modern algorithms (LXM family — a modern design of fast generators) by name |
 
 Java 17 made all of these implement a common `java.util.random.RandomGenerator` interface, which also added `nextInt(origin, bound)` and `nextLong(origin, bound)` to every generator. `Random.from(RandomGenerator)` (Java 19) adapts a new-style generator for APIs that still want a `Random`.
 

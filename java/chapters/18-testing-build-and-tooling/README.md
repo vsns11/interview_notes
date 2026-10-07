@@ -1,6 +1,6 @@
 # Chapter 18 — Testing, Build and Tooling
 
-Everything so far was compiled with a bare `javac` and run with `java`. Real projects add four things around the language: a **build tool** that downloads libraries and runs every step in the right order, **automated tests** that prove the code still works after each change, **logging** that tells you what a running program did, and a **package** (a JAR) you can ship. This chapter teaches all four on one small shop application, plus the JDBC basics you need to talk to a database, and ends with a map of where to go next (Spring Boot).
+Everything so far was compiled with a bare `javac` and run with `java`. Real projects add four things around the language: a **build tool** that downloads **libraries** (reusable code written by others, shipped as JAR files) and runs every step (compile, test, package) in the right order, **automated tests** that prove the code still works after each change, **logging** that tells you what a running program did, and a **package** (a JAR — *Java ARchive*, a zip file of compiled classes, §18.12) you can ship. This chapter teaches all four on one small shop application, plus the JDBC (Java Database Connectivity, Java's standard database API) basics you need to talk to a database, and ends with a map of where to go next (Spring Boot, the most popular Java framework for building services).
 
 **What you'll learn**
 
@@ -11,13 +11,13 @@ Everything so far was compiled with a bare `javac` and run with `java`. Real pro
 | 18.3 | Gradle: `build.gradle.kts`, configurations, tasks, Maven vs Gradle |
 | 18.4 | JUnit (Jupiter): first tests, assertions, lifecycle, nested tests, tags, running from the command line |
 | 18.5 | Parameterized, repeated and dynamic tests |
-| 18.6 | Test doubles and Mockito |
-| 18.7 | AssertJ fluent assertions |
+| 18.6 | Test doubles (stand-in objects used in tests) and Mockito |
+| 18.7 | AssertJ fluent assertions (checks written as a readable chain of method calls) |
 | 18.8 | Reading a failing test report |
-| 18.9 | Test design: what makes a good test, coverage, flaky tests, integration tests |
-| 18.10 | Logging: `java.util.logging` (run) and SLF4J (snippet) |
-| 18.11 | JDBC basics: connections, prepared statements, transactions, a repository |
-| 18.12 | Packaging: JAR files, executable JARs, fat JARs, jlink/jpackage |
+| 18.9 | Test design: what makes a good test, coverage, flaky (randomly failing) tests, integration tests |
+| 18.10 | Logging: `java.util.logging` (run) and SLF4J (Simple Logging Facade for Java; snippet) |
+| 18.11 | JDBC basics: connections, prepared statements, **transactions** (groups of database changes that succeed or fail together), a repository |
+| 18.12 | Packaging: JAR files, executable JARs, fat JARs (one JAR containing all dependencies), jlink/jpackage |
 | 18.13 | Other everyday tools |
 | 18.14 | Where next: Spring Boot and friends |
 
@@ -28,18 +28,18 @@ Everything so far was compiled with a bare `javac` and run with `java`. Real pro
 | [`code/ch18/shop/`](code/ch18/shop/) | the application: `Cart`, `Discounts`, `OrderService`, … and `ShopDemo` (has `main`) | the book's runner (`javac --release 25`, JDK 26) |
 | [`code/test/ch18/shop/`](code/test/ch18/shop/) | JUnit tests (marked `// tools_run: skip` — they have no `main`) | [`code/run_tests.sh`](code/run_tests.sh) |
 | [`code/ch18/logging/`](code/ch18/logging/) | `JulDemo` | the book's runner |
-| [`code/ch18/jdbc/`](code/ch18/jdbc/) | `JdbcOrderRepository`, `JdbcDemo` (skip-marked: needs a database) | by hand against the SQL Handbook's private PostgreSQL (18.11) |
-| [`code/build-files/`](code/build-files/) | `pom.xml`, `build.gradle.kts`, `settings.gradle.kts` | Maven 3.9.14 and Gradle 9.4.1 **offline**, from the local artifact cache (18.2, 18.3) |
+| [`code/ch18/jdbc/`](code/ch18/jdbc/) | `JdbcOrderRepository`, `JdbcDemo` (skip-marked: needs a database) | by hand against the SQL Handbook's private PostgreSQL (a popular open-source relational database) (18.11) |
+| [`code/build-files/`](code/build-files/) | `pom.xml`, `build.gradle.kts`, `settings.gradle.kts` | Maven 3.9.14 and Gradle 9.4.1 **offline**, from the local **artifact** cache (an artifact is a published file such as a library JAR; 18.2, 18.3) |
 | [`code/package_jar.sh`](code/package_jar.sh) | builds and runs a JAR with the `jar` tool | by hand (18.12) |
 
-Test libraries were downloaded from Maven Central (`repo1.maven.org`, SHA-1 checked) into `ROOT/.java-books/lib/`: **JUnit 6.1.3** (`junit-platform-console-standalone`, the latest release at the time of writing), **Mockito 5.24.0** (`mockito-core`, `mockito-junit-jupiter`) with **Byte Buddy 1.18.14** (`byte-buddy`, `byte-buddy-agent`) and **Objenesis 3.3**, and **AssertJ 3.27.7**. The Maven and Gradle builds used the versions already in the local cache (JUnit 6.0.3, Mockito 5.23.0) because they ran without network. Every output below is real.
+Test libraries were downloaded from Maven Central (`repo1.maven.org`, SHA-1 checked — a *checksum* comparison proving the file wasn't corrupted or altered) into `ROOT/.java-books/lib/`: **JUnit 6.1.3** (`junit-platform-console-standalone`, the latest release at the time of writing), **Mockito 5.24.0** (`mockito-core`, `mockito-junit-jupiter`) with **Byte Buddy 1.18.14** (`byte-buddy`, `byte-buddy-agent`) and **Objenesis 3.3**, and **AssertJ 3.27.7**. The Maven and Gradle builds used the versions already in the local cache (JUnit 6.0.3, Mockito 5.23.0) because they ran without network. Every output below is real.
 
 ---
 
 ## 18.1 The shape of a real Java project
 
 ### What it is
-A Java project is more than `.java` files. It has **dependencies** (other people's JARs), **tests**, **resources** (config files, templates), and **build outputs** (compiled classes, the final JAR). Both mainstream build tools agree on one **standard directory layout**, so any Java developer can open any project:
+A Java project is more than `.java` files. It has **dependencies** (other people's JARs that your code needs), **tests**, **resources** (config files, templates), and **build outputs** (compiled classes, the final JAR). Both mainstream build tools agree on one **standard directory layout**, so any Java developer can open any project:
 
 ```text
 shop/
@@ -55,7 +55,7 @@ shop/
 target/  (Maven)  or  build/  (Gradle)        generated — never commit
 ```
 
-Tests live in the **same package** as the code they test but in a **separate source folder**. That gives them access to package-private members, while the build keeps test classes out of the final JAR. This chapter's `code/` folder mirrors it: `code/ch18/shop` is "main", `code/test/ch18/shop` is "test".
+(The **class path** is the list of folders and JARs where the JVM looks for classes.) Tests live in the **same package** as the code they test but in a **separate source folder**. That gives them access to **package-private** members (ones with no `public`/`private`/`protected` modifier, visible only inside the same package), while the build keeps test classes out of the final JAR. This chapter's `code/` folder mirrors it: `code/ch18/shop` is "main", `code/test/ch18/shop` is "test".
 
 ### Coordinates and repositories
 Every library is identified by three **coordinates**, written `groupId:artifactId:version` — for example `org.assertj:assertj-core:3.27.7`.
@@ -73,7 +73,7 @@ Every library is identified by three **coordinates**, written `groupId:artifactI
 A repository is laid out by coordinates: `org.assertj:assertj-core:3.27.7` lives at `repo1.maven.org/maven2/org/assertj/assertj-core/3.27.7/assertj-core-3.27.7.jar` — how this chapter fetched its jars by hand, and what a build tool does for every (transitive) dependency.
 
 ### Why a build tool
-Without one you'd download jars by hand, keep versions consistent, type long `-cp` lines and remember to test before packaging. A build tool turns that into one file and one command (`mvn verify`, `./gradlew build`) that behaves the same on every machine and on CI.
+Without one you'd download jars by hand, keep versions consistent, type long `-cp` lines and remember to test before packaging. A build tool turns that into one file and one command (`mvn verify`, `./gradlew build`) that behaves the same on every machine and on CI (*continuous integration*: a server that automatically builds and tests every pushed change).
 
 ### TL;DR
 Standard layout (`src/main/java`, `src/test/java`), libraries identified by `group:artifact:version`, downloaded from Maven Central into a local cache. The build tool does the rest.
@@ -83,7 +83,7 @@ Standard layout (`src/main/java`, `src/test/java`), libraries identified by `gro
 ## 18.2 Maven
 
 ### What it is
-**Apache Maven** (2004) is a build tool driven by a declarative XML file, `pom.xml` (**P**roject **O**bject **M**odel). You describe *what* the project is — coordinates, dependencies, plugin settings — and Maven's fixed **lifecycle** decides *how* and *in which order* things happen. Analogy: a set menu — the courses always come in the same order; you only choose the dishes. The current stable line is Maven 3.9 (3.9.16 at the time of writing); Maven 4.0 was still at release-candidate stage.
+**Apache Maven** (2004) is a build tool driven by a **declarative** (describes *what*, not step-by-step *how*) **XML** (a tag-based text format, `<tag>value</tag>`) file, `pom.xml` (**P**roject **O**bject **M**odel). You describe *what* the project is — coordinates, dependencies, **plugin** settings (a plugin is an add-on JAR that does one kind of build work) — and Maven's fixed **lifecycle** decides *how* and *in which order* things happen. Analogy: a set menu — the courses always come in the same order; you only choose the dishes. The current stable line is Maven 3.9 (3.9.16 at the time of writing); Maven 4.0 was still at **release-candidate** stage (a near-final version published for last testing).
 
 ### The `pom.xml` — [`code/build-files/maven/pom.xml`](code/build-files/maven/pom.xml)
 Key parts (the full file adds pinned plugin versions):
@@ -161,13 +161,13 @@ What each part does:
 
 | Scope | On compile class path | On test class path | Packaged / at run time | Typical example |
 |---|---|---|---|---|
-| `compile` (default) | yes | yes | yes | Jackson, Guava |
-| `provided` | yes | yes | no — the runtime supplies it | Servlet API inside an app server |
-| `runtime` | no | yes | yes | JDBC driver (code uses only `java.sql`) |
+| `compile` (default) | yes | yes | yes | Jackson (JSON library), Guava (Google's utility library) |
+| `provided` | yes | yes | no — the runtime supplies it | Servlet API (Java's standard web-request API) inside an **app server** (a server like Tomcat that hosts deployed web applications) |
+| `runtime` | no | yes | yes | JDBC **driver** (the vendor library that actually talks to a specific database; code uses only `java.sql`) |
 | `test` | no (main code) | yes | no | JUnit, Mockito, AssertJ |
 | `import` | — | — | — | only for a BOM inside `dependencyManagement` |
 
-`system` also exists but is deprecated — don't use it.
+`system` also exists but is **deprecated** (officially discouraged, may be removed) — don't use it.
 
 ### Transitive dependencies and version conflicts
 Maven builds a dependency **tree**. When two paths bring *different versions* of one library, Maven picks the **nearest** one in the tree; on a tie, the one declared **first**. This build hit a real conflict: `mockito-core` wants Byte Buddy 1.17.7 at depth 3, `assertj-core` wants 1.18.3 at depth 2 — so "nearest wins" picked AssertJ's version, and Mockito's `byte-buddy-agent` would have stayed at a different version. The fix is to **pin** the version in `dependencyManagement`. The real tree after pinning (`mvn -o dependency:tree`):
@@ -191,7 +191,7 @@ Maven builds a dependency **tree**. When two paths bring *different versions* of
 [INFO]    \- net.bytebuddy:byte-buddy:jar:1.18.11:test
 ```
 
-Other conflict tools: `<exclusions>` on a dependency removes one transitive artifact; the **Maven Enforcer** plugin can fail the build on version convergence problems.
+Other conflict tools: `<exclusions>` on a dependency removes one transitive artifact; the **Maven Enforcer** plugin can fail the build on version convergence problems (different versions of one library being requested).
 
 ### The lifecycle: phases, plugins and goals
 
@@ -212,7 +212,7 @@ flowchart LR
 | package | `jar:jar` | `target/shop-1.0.0-SNAPSHOT.jar` |
 | integration-test / verify | `failsafe:*` if configured | integration tests (`*IT.java`) and checks |
 | install | `install:install` | copy the JAR into `~/.m2/repository` for other local projects |
-| deploy | `deploy:deploy` | upload to a remote repository (company Nexus/Artifactory, Maven Central) |
+| deploy | `deploy:deploy` | upload to a remote repository (company Nexus/Artifactory — self-hosted artifact repository servers — Maven Central) |
 
 Two other lifecycles exist: **clean** (`mvn clean` deletes `target/`) and **site** (project reports). Surefire runs test classes whose names match `Test*`, `*Test`, `*Tests` or `*TestCase` by default.
 
@@ -223,13 +223,13 @@ Two other lifecycles exist: **clean** (`mvn clean` deletes `target/`) and **site
 | `mvn clean verify` | full build from scratch with all checks — what CI usually runs |
 | `mvn test` | compile and run unit tests |
 | `mvn -Dtest=CartTest test` | run one test class (`CartTest#newCartIsEmpty` for one method) |
-| `mvn package -DskipTests` | build the JAR without running tests (compiles them) |
+| `mvn package -DskipTests` | build the JAR without running tests (compiles them; `-Dname=value` sets a property) |
 | `mvn dependency:tree` | print the resolved tree |
 | `mvn -o …` | offline: use only the local repository |
 | `./mvnw …` | the **Maven Wrapper**: downloads the exact Maven version the project pins (`mvn wrapper:wrapper` creates it) |
 
 ### A real build
-The sources were copied into the standard layout in a scratch folder next to this `pom.xml` and built **offline** (`mvn -o -B package`) from the local cache. Trimmed real output:
+The sources were copied into the standard layout in a scratch folder next to this `pom.xml` and built **offline** (`mvn -o -B package`; `-B` = batch mode, no interactive prompts or colours) from the local cache. Trimmed real output:
 
 ```text
 [INFO] --- dependency:3.10.0:properties (default) @ shop ---
@@ -287,7 +287,7 @@ Big projects split into **modules** (`shop-domain`, `shop-web`, …) under a par
 ## 18.3 Gradle
 
 ### What it is
-**Gradle** (2008) is a build tool whose build file is **code** — a Kotlin (`build.gradle.kts`, the default for new builds) or Groovy (`build.gradle`) script. Instead of a fixed lifecycle it builds a **graph of tasks** and runs only what's needed, skipping **up-to-date** tasks (incremental builds) and reusing outputs from a **build cache**. It uses the same Maven repositories and coordinates. Gradle 9 (the version used here is 9.4.1) needs Java 17+ to run the build itself.
+**Gradle** (2008) is a build tool whose build file is **code** — a Kotlin (`build.gradle.kts`, the default for new builds) or Groovy (`build.gradle`) script (Kotlin and Groovy are other languages that run on the JVM). Instead of a fixed lifecycle it builds a **graph of tasks** and runs only what's needed, skipping **up-to-date** tasks (**incremental builds**: only redo work whose inputs changed) and reusing outputs from a **build cache** (stored results of earlier task runs, possibly shared between machines). It uses the same Maven repositories and coordinates. Gradle 9 (the version used here is 9.4.1) needs Java 17+ to run the build itself.
 
 ### The build file — [`code/build-files/gradle/build.gradle.kts`](code/build-files/gradle/build.gradle.kts)
 
@@ -333,7 +333,7 @@ tasks.jar { manifest { attributes["Main-Class"] = "ch18.shop.ShopDemo" } }
 
 `settings.gradle.kts` holds one line, `rootProject.name = "shop"` (multi-project builds list their subprojects there with `include(...)`).
 
-- **Toolchain** — Gradle finds (or provisions) a JDK 25 to compile and test with, independent of the JDK running Gradle.
+- **Toolchain** — Gradle finds (or **provisions** — downloads and installs) a JDK 25 to compile and test with, independent of the JDK running Gradle.
 - **`platform(...)`** — imports a BOM, like Maven's `import` scope.
 - **`testRuntimeOnly("org.junit.platform:junit-platform-launcher")`** — required since Gradle 9 when running on the JUnit Platform.
 - **`useJUnitPlatform()`** — without it Gradle looks for JUnit 4 tests and finds none.
@@ -348,7 +348,7 @@ tasks.jar { manifest { attributes["Main-Class"] = "ch18.shop.ShopDemo" } }
 | `runtimeOnly` | runtime | run time only (JDBC driver, logging backend) |
 | `testImplementation` / `testRuntimeOnly` | test | the same, for tests |
 
-`implementation` vs `api` is a real improvement over Maven: hiding implementation dependencies means fewer recompilations and less accidental coupling.
+`implementation` vs `api` is a real improvement over Maven: hiding implementation dependencies means fewer recompilations and less accidental **coupling** (code depending on details it shouldn't know about).
 
 ### A real build
 The same sources, built offline with Gradle 9.4.1 (`gradle --offline clean build --console=plain`; for the offline run `mavenCentral()` was replaced by `mavenLocal()` so Gradle could read the `~/.m2` cache):
@@ -379,26 +379,26 @@ BUILD SUCCESSFUL in 5s
 
 `build` depends on `assemble` (jar + distributions from the `application` plugin) and `check` (tests). `gradle run` then ran `ShopDemo`. Useful commands: `./gradlew test --tests 'ch18.shop.CartTest'`, `./gradlew dependencies --configuration testRuntimeClasspath`, `./gradlew tasks`, `./gradlew build --scan` (online build report).
 
-**The Gradle Wrapper.** `gradle wrapper` generates `gradlew`, `gradlew.bat` and `gradle/wrapper/gradle-wrapper.properties` (holding `distributionUrl`). Commit them and always run `./gradlew`. The user's OCP study repo is a real example: its [`build.gradle`](../../../../ocp-java21-study/build.gradle) (Groovy DSL) pins a **Java 21 toolchain**, gives every chapter its own *source set* with its own compile task, and its wrapper pins Gradle 9.4.1.
+**The Gradle Wrapper.** `gradle wrapper` generates `gradlew`, `gradlew.bat` and `gradle/wrapper/gradle-wrapper.properties` (holding `distributionUrl`). Commit them and always run `./gradlew`. The user's OCP study repo is a real example: its [`build.gradle`](../../../../ocp-java21-study/build.gradle) (Groovy DSL — *domain-specific language*, a mini-language tailored to one job, here describing builds) pins a **Java 21 toolchain**, gives every chapter its own *source set* with its own compile task, and its wrapper pins Gradle 9.4.1.
 
 ### Maven vs Gradle
 
 | | Maven | Gradle |
 |---|---|---|
 | Build file | XML, declarative | Kotlin/Groovy script |
-| Model | fixed lifecycle of phases | task graph, incremental, build cache, daemon |
+| Model | fixed lifecycle of phases | task graph, incremental, build cache, daemon (a background process kept alive between builds so they start faster) |
 | Speed on big builds | fine | usually faster (up-to-date checks, caching) |
 | Flexibility | limited — write a plugin for custom logic | very high (and easy to over-engineer) |
 | Learning curve | gentle, very uniform across projects | steeper; builds differ more |
-| Where you'll meet it | most enterprise/back-end Java, Spring examples | Android (mandatory), many newer projects, Kotlin |
+| Where you'll meet it | most enterprise/back-end (server-side) Java, Spring examples | Android (mandatory), many newer projects, Kotlin |
 
 Both are good choices; follow the team. Spring Initializr (start.spring.io) generates either.
 
 ### Common mistakes
-- Using `gradle` from your PATH instead of `./gradlew`.
+- Using `gradle` from your PATH (the environment variable listing folders where the shell looks for commands) instead of `./gradlew`.
 - Forgetting `useJUnitPlatform()` — "0 tests" and a green build.
 - Putting everything in `api` "to be safe".
-- Custom logic scattered in the build script; move it to a plugin in `buildSrc` or a convention plugin.
+- Custom logic scattered in the build script; move it to a plugin in `buildSrc` or a convention plugin (a shared plugin that applies a team's standard build settings).
 
 ### Self-check
 1. `implementation` vs `api`? → `api` leaks to consumers' compile class path; `implementation` doesn't.
@@ -413,7 +413,7 @@ Gradle = scripted task graph with incremental builds; same repositories and coor
 ## 18.4 JUnit: your first automated tests
 
 ### What it is
-An **automated test** is code that runs other code with known inputs and checks the result, reporting pass or fail without a human looking at output. A **unit test** checks one small piece (a class or method) in isolation, in milliseconds. **JUnit** is Java's standard test framework. Its modern generation (JUnit 5, 2017; **JUnit 6**, released 30 September 2025) has three parts:
+An **automated test** is code that runs other code with known inputs and checks the result, reporting pass or fail without a human looking at output. A **unit test** checks one small piece (a class or method) in isolation, in milliseconds. **JUnit** is Java's standard test **framework** (a library that calls *your* code, here your test methods). Its modern generation (JUnit 5, 2017; **JUnit 6**, released 30 September 2025) has three parts:
 
 ```mermaid
 flowchart TB
@@ -427,13 +427,13 @@ flowchart TB
 - **JUnit Jupiter** — the programming model (`org.junit.jupiter.api.*`) and its engine.
 - **JUnit Vintage** — an engine for legacy JUnit 4 tests.
 
-JUnit 6 kept the same Jupiter API (annotations and assertions in these examples are identical in JUnit 5), moved the minimum to **Java 17**, gave Platform, Jupiter and Vintage **one shared version number** (6.x instead of 1.x/5.x), added JSpecify nullness annotations, a `--fail-fast` launcher option and test cancellation, and deprecated Vintage. Most JUnit 5 test code runs unchanged.
+JUnit 6 kept the same Jupiter API (annotations and assertions in these examples are identical in JUnit 5), moved the minimum to **Java 17**, gave Platform, Jupiter and Vintage **one shared version number** (6.x instead of 1.x/5.x), added JSpecify nullness **annotations** (`@`-labels on code; these ones say whether a value may be `null`), a `--fail-fast` launcher option and test cancellation, and deprecated Vintage. Most JUnit 5 test code runs unchanged.
 
 ### Why it matters
-Tests let you refactor, upgrade or fix without fear — hundreds of checks in a second. They document behaviour precisely ("SAVE25 needs a subtotal of at least 100"), catch regressions before users do, and push toward better design (hard-to-test code is usually too coupled).
+Tests let you **refactor** (restructure code without changing what it does), upgrade or fix without fear — hundreds of checks in a second. They document behaviour precisely ("SAVE25 needs a subtotal of at least 100"), catch **regressions** (things that used to work and broke) before users do, and push toward better design (hard-to-test code is usually too coupled).
 
 ### The code under test
-[`Cart`](code/ch18/shop/Cart.java) holds `Item` records ([Chapter 6 §6.8](../06-oop-inheritance-interfaces-and-more/README.md#68-records)); adding the same SKU twice merges quantities; money is `BigDecimal` ([Chapter 7 §7.7](../07-core-apis/README.md#77-biginteger-and-bigdecimal)).
+[`Cart`](code/ch18/shop/Cart.java) holds `Item` records ([Chapter 6 §6.8](../06-oop-inheritance-interfaces-and-more/README.md#68-records)); adding the same SKU (*stock-keeping unit*, a product's id) twice merges quantities; money is `BigDecimal` (exact decimal numbers) ([Chapter 7 §7.7](../07-core-apis/README.md#77-biginteger-and-bigdecimal)).
 
 ```java
 public final class Cart {
@@ -510,7 +510,7 @@ class CartTest {
 
 How it works:
 1. `@Test` marks a test method. Test classes and methods don't need to be `public` (package-private is the convention); they must not be `private`.
-2. The static import `org.junit.jupiter.api.Assertions.*` gives the `assertXxx` methods. Argument order is **(expected, actual)**, with an optional message **last**.
+2. The static import `org.junit.jupiter.api.Assertions.*` gives the `assertXxx` methods (an **assertion** is a check that fails the test if it isn't true). Argument order is **(expected, actual)**, with an optional message **last**.
 3. A failed assertion throws `AssertionFailedError`; any other uncaught exception also fails the test. A test that finishes normally passes.
 4. `assertThrows` runs the lambda, checks the exception type and **returns** the exception so you can inspect it.
 5. `@Nested` inner classes group tests sharing a situation; the outer `@BeforeEach` runs first.
@@ -524,7 +524,7 @@ How it works:
 | `assertNull` / `assertNotNull` | null-ness |
 | `assertSame` / `assertNotSame` | same reference (`==`) |
 | `assertArrayEquals`, `assertIterableEquals` | element by element |
-| `assertLinesMatch` | lists of strings, with regex lines allowed |
+| `assertLinesMatch` | lists of strings, with regex (regular-expression pattern) lines allowed |
 | `assertInstanceOf(Type.class, obj)` | type, returns the cast value |
 | `assertThrows` / `assertThrowsExactly` | an exception of that type (or subtype / exactly that type) |
 | `assertDoesNotThrow` | no exception; returns the result |
@@ -579,13 +579,13 @@ Three facts to remember:
 | `@Tag("fast")` | label for filtering (`--include-tag`, Maven `<groups>`, Gradle `includeTags`) |
 | `@Timeout(2)` | fail if slower than 2 s |
 | `@TempDir Path dir` | a fresh temporary directory, deleted afterwards (18.7) |
-| `@ExtendWith(X.class)` | plug in an **extension** (Mockito, Spring) — replaces JUnit 4 runners and rules |
+| `@ExtendWith(X.class)` | plug in an **extension** (a plug-in that hooks into the test lifecycle, e.g. Mockito, Spring) — replaces JUnit 4 runners and rules |
 | `@EnabledOnOs`, `@EnabledIfEnvironmentVariable`, `@EnabledForJreRange` … | conditional execution |
 
 **Assumptions** (`assumeTrue(cond)`, `assumingThat`) stop a test as *aborted* rather than failed when a precondition doesn't hold (e.g. "only on CI").
 
 ### Running the tests from the command line
-IDEs and build tools run JUnit for you. Without them, the **Console Launcher** (`junit-platform-console-standalone`, one JAR containing the Platform, Jupiter, Vintage and Suite engines) does it. The plain form — compile, then point the launcher at the classes:
+IDEs (Integrated Development Environments such as IntelliJ IDEA) and build tools run JUnit for you. Without them, the **Console Launcher** (`junit-platform-console-standalone`, one JAR containing the Platform, Jupiter, Vintage and Suite engines) does it. The plain form — compile, then point the launcher at the classes:
 
 ```text
 $ javac --release 25 -cp '.java-books/lib/*' -d /tmp/java18t $(find ch18/shop test -name '*.java')
@@ -608,9 +608,9 @@ Test run finished after 101 ms
 [         0 tests failed          ]
 ```
 
-`--scan-class-path` discovers every class whose name matches the default pattern (`Test*`, `*Test`, `*Tests`). The exit code is 0 only if nothing failed — that's what CI checks.
+`--scan-class-path` discovers every class whose name matches the default pattern (`Test*`, `*Test`, `*Tests`). The **exit code** (the number a program returns to the shell when it ends; 0 means success) is 0 only if nothing failed — that's what CI checks.
 
-For the Mockito tests the launcher must be started differently, because Mockito wants to be attached as a **Java agent** (18.6) and the agent must be the *same* JAR the tests load. So [`code/run_tests.sh`](code/run_tests.sh) puts everything on one class path and starts the launcher by its main class:
+For the Mockito tests the launcher must be started differently, because Mockito wants to be attached as a **Java agent** (a JAR that the JVM loads before your code so it can modify classes as they load; 18.6) and the agent must be the *same* JAR the tests load. So [`code/run_tests.sh`](code/run_tests.sh) puts everything on one class path and starts the launcher by its main class:
 
 ```bash
 LIB="../../../../.java-books/lib"; CP="$LIB/*"; OUT=$(mktemp -d)
@@ -703,7 +703,7 @@ The `INFO:`/`WARNING:` lines at the top are the application's own logging (18.10
 ## 18.5 Parameterized, repeated and dynamic tests
 
 ### The problem it solves
-Rules like "a code is 4+ capital letters followed by 2 digits" need many inputs. Copy-pasting a test per input is noisy; a loop inside one test stops at the first failure and reports one anonymous result. **Parameterized tests** run the same method once per input, each reported separately. (They live in `junit-jupiter-params`, included in the `junit-jupiter` aggregate artifact.)
+Rules like "a code is 4+ capital letters followed by 2 digits" need many inputs. Copy-pasting a test per input is noisy; a loop inside one test stops at the first failure and reports one anonymous result. **Parameterized tests** run the same method once per input, each reported separately. (They live in `junit-jupiter-params`, included in the `junit-jupiter` aggregate artifact — one dependency that pulls in several others.)
 
 ### The rules under test — [`Discounts.java`](code/ch18/shop/Discounts.java)
 
@@ -813,7 +813,7 @@ Notice: the name pattern placeholders are `{0}`, `{1}` … and `{index}`; this J
 | Source | Supplies | Example use |
 |---|---|---|
 | `@ValueSource(strings/ints/…)` | one literal argument per run | valid/invalid inputs |
-| `@NullSource`, `@EmptySource`, `@NullAndEmptySource` | `null`, empty string/collection/array | edge cases |
+| `@NullSource`, `@EmptySource`, `@NullAndEmptySource` | `null`, empty string/collection/array | edge cases (unusual inputs at the extremes) |
 | `@EnumSource(Level.class)` | each enum constant (filterable with `names`) | behaviour per enum value |
 | `@CsvSource({...})` / `@CsvFileSource(resources = "/x.csv")` | rows of several arguments | input → expected tables |
 | `@MethodSource("factory")` | a `static` method returning `Stream<Arguments>` (or a collection) | objects that can't be written as text |
@@ -840,7 +840,7 @@ One method, many inputs, each reported separately: `@ParameterizedTest` + a sour
 ## 18.6 Test doubles and Mockito
 
 ### The problem it solves
-[`OrderService.checkout`](code/ch18/shop/OrderService.java) charges a card and saves an order. A unit test must not charge real cards or need a real database — it would be slow, flaky and expensive. So the service is written to **receive its collaborators** through the constructor (dependency injection; the *Dependency Inversion Principle*, see [LLD §4.10](../../../lld/chapters/04-solid-principles/README.md#410-dependency-inversion-principle-dip)), and tests pass in stand-ins called **test doubles**.
+[`OrderService.checkout`](code/ch18/shop/OrderService.java) charges a card and saves an order. A unit test must not charge real cards or need a real database — it would be slow, flaky and expensive. So the service is written to **receive its collaborators** (the other objects it relies on) through the constructor (**dependency injection**: an object is handed its dependencies instead of creating them itself; the *Dependency Inversion Principle*, see [LLD §4.10](../../../lld/chapters/04-solid-principles/README.md#410-dependency-inversion-principle-dip)), and tests pass in stand-ins called **test doubles**.
 
 ```java
 public final class OrderService {
@@ -878,7 +878,7 @@ Injecting a `java.time.Clock` ([Chapter 7 §7.10](../07-core-apis/README.md#710-
 | Double | What it is | In this chapter |
 |---|---|---|
 | **Dummy** | passed only to fill a parameter, never used | — |
-| **Stub** | returns canned answers | the lambda `(c, amt) -> new PaymentResult(true, "ok")` |
+| **Stub** | returns canned (pre-set) answers | the lambda `(c, amt) -> new PaymentResult(true, "ok")` |
 | **Fake** | a real, working but simplified implementation | [`InMemoryOrderRepository`](code/ch18/shop/InMemoryOrderRepository.java) (a `LinkedHashMap`) |
 | **Spy** | a real object that also records calls | `spy(new InMemoryOrderRepository())` |
 | **Mock** | programmed with expectations; you **verify** how it was called | `@Mock PaymentGateway gateway` |
@@ -955,7 +955,7 @@ class OrderServiceTest {
 ```
 
 All six passed (tree in 18.4). How Mockito works, step by step:
-1. `@Mock` (or `mock(PaymentGateway.class)`) creates a generated subclass/instrumented class whose methods record each call and return **defaults**: `null`, `0`, `false`, empty collections, `Optional.empty()`.
+1. `@Mock` (or `mock(PaymentGateway.class)`) creates a generated subclass/**instrumented** class (one whose bytecode was rewritten at run time) whose methods record each call and return **defaults**: `null`, `0`, `false`, empty collections, `Optional.empty()`.
 2. `when(mock.method(args)).thenReturn(x)` **stubs** a call: when those arguments arrive, return `x`. Also `thenThrow(...)`, `thenAnswer(inv -> ...)`, and several values in a row (`thenReturn(a, b)`).
 3. The code under test runs.
 4. `verify(mock).method(args)` checks a call happened (exactly once by default). Variants: `times(n)`, `never()`, `atLeastOnce()`, `atMost(n)`, `verifyNoInteractions(...)`, `verifyNoMoreInteractions(...)`; `inOrder(...)` checks ordering.
@@ -968,23 +968,23 @@ All six passed (tree in 18.4). How Mockito works, step by step:
 |---|---|
 | Stub a `void` method to throw | `doThrow(new X()).when(mock).voidMethod()` |
 | Stub a spy without calling the real method | `doReturn(x).when(spy).method()` |
-| Given/when/then wording | `BDDMockito.given(...).willReturn(...)`, `then(mock).should().method()` |
+| Given/when/then wording (BDD — *behaviour-driven development* — style) | `BDDMockito.given(...).willReturn(...)`, `then(mock).should().method()` |
 | Mock a `static` method | `try (MockedStatic<Util> m = mockStatic(Util.class)) { m.when(Util::now).thenReturn(...); }` |
 | Allow an unused stub | `lenient().when(...)` or `@MockitoSettings(strictness = LENIENT)` |
 | Mock without the extension | `mock(X.class)` or `MockitoAnnotations.openMocks(this)` |
 
-**Mockito 5 notes.** Mockito 5 needs Java 11+, and its default *inline* mock maker instruments classes at run time, so it can mock `final` classes, records and static methods. It does that through a Java agent. On JDK 21+ loading an agent *dynamically* prints a warning (JEP 451), and a future JDK will block it by default — without `-javaagent` the first run of this chapter printed:
+**Mockito 5 notes.** Mockito 5 needs Java 11+, and its default *inline* mock maker instruments classes at run time, so it can mock `final` classes, records and static methods. It does that through a Java agent. On JDK 21+ loading an agent *dynamically* (into an already-running JVM) prints a warning (JEP 451 — a JEP, *JDK Enhancement Proposal*, is the numbered design document for a Java change), and a future JDK will block it by default — without `-javaagent` the first run of this chapter printed:
 
 ```text
 Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK. Please add Mockito as an agent to your build as described in Mockito's documentation: ...
 WARNING: A Java agent has been loaded dynamically (.../byte-buddy-agent-1.18.14.jar)
 ```
 
-Hence `-javaagent:mockito-core.jar` in `run_tests.sh`, Surefire's `argLine`, and Gradle's `jvmArgs`. (`-Xshare:off` only silences a harmless class-data-sharing notice caused by the agent.)
+Hence `-javaagent:mockito-core.jar` in `run_tests.sh`, Surefire's `argLine`, and Gradle's `jvmArgs`. (`-Xshare:off` only silences a harmless class-data-sharing notice caused by the agent — CDS is a JVM start-up speed-up, [Chapter 16 §16.2](../16-jvm-internals-and-performance/README.md#162-class-loading-in-depth).)
 
 ### When not to mock
-- **Value objects and records** (`Item`, `Order`, `BigDecimal`) — just create real ones.
-- **Types you don't own** (e.g. a JDBC `ResultSet`, an HTTP client): wrap them behind your own interface and mock that, or use an integration test.
+- **Value objects** (small objects defined only by their data, with no identity or behaviour worth faking) **and records** (`Item`, `Order`, `BigDecimal`) — just create real ones.
+- **Types you don't own** (e.g. a JDBC `ResultSet`, an HTTP client): wrap them behind your own interface and mock that, or use an **integration test** (a test that runs your code against real infrastructure such as a database, §18.9).
 - **Everything** — tests that mock every collaborator end up restating the implementation ("calls A then B then C") and break on every refactor while catching few bugs. Prefer fakes for storage-like collaborators.
 
 ### Common mistakes
@@ -1013,7 +1013,7 @@ Design for injection, then choose the lightest double: real object → fake → 
 ## 18.7 AssertJ fluent assertions
 
 ### What it is
-**AssertJ** is an assertion library: one entry point, `assertThat(actual)`, returns a type-specific object whose methods you chain — your IDE's auto-complete shows only assertions that make sense for that type. Failure messages are detailed (you'll see one in 18.8). It works with any test framework; Spring Boot's test starter includes it. (Hamcrest — `assertThat(x, is(y))` — is the older matcher-style alternative.)
+**AssertJ** is an assertion library: one entry point, `assertThat(actual)`, returns a type-specific object whose methods you chain — your IDE's auto-complete shows only assertions that make sense for that type. Failure messages are detailed (you'll see one in 18.8). It works with any test framework; Spring Boot's test **starter** (a single dependency bundling a set of related libraries) includes it. (Hamcrest — `assertThat(x, is(y))` — is the older matcher-style alternative.)
 
 ### Code — [`AssertjStyleTest.java`](code/test/ch18/shop/AssertjStyleTest.java)
 
@@ -1089,7 +1089,7 @@ All six passed (tree in 18.4). The last test uses JUnit's **`@TempDir`**: a real
 | description | message argument | `.as("subtotal of %s", cart)` before the assertion |
 
 ### Common mistakes
-- `assertThat(x);` with nothing chained — asserts nothing. (Static analysis tools and AssertJ's own `@CheckReturnValue` catch this.)
+- `assertThat(x);` with nothing chained — asserts nothing. (**Static analysis** tools — programs that inspect source code for bugs without running it — and AssertJ's own `@CheckReturnValue` catch this.)
 - Calling `.as("…")` **after** the assertion — too late; it must come first.
 - `isEqualTo` on `BigDecimal` when scale doesn't matter — use `isEqualByComparingTo`.
 
@@ -1208,7 +1208,7 @@ Read the first line (expected vs actual), then the first stack frame in your own
 | **T**imely | written with (or before) the code | — |
 
 ### Structure: Arrange–Act–Assert
-Every test has three blocks — **arrange** (inputs, doubles), **act** (one call to the code under test), **assert** (check outcome) — the same idea as BDD's *given–when–then*. `approvedPaymentSavesTheOrder` above is commented that way. One *behaviour* per test; several assertions about that one behaviour are fine.
+Every test has three blocks — **arrange** (inputs, doubles), **act** (one call to the code under test), **assert** (check outcome) — the same idea as BDD's (behaviour-driven development's) *given–when–then*. `approvedPaymentSavesTheOrder` above is commented that way. One *behaviour* per test; several assertions about that one behaviour are fine.
 
 ### Naming
 Name tests after behaviour, not methods: `declinedPaymentThrowsAndSavesNothing` beats `testCheckout2`. A failing test's name should already tell you what broke. `@DisplayName` allows full sentences.
@@ -1216,7 +1216,7 @@ Name tests after behaviour, not methods: `declinedPaymentThrowsAndSavesNothing` 
 ### Choosing inputs
 - **Equivalence classes**: one representative per group that behaves the same (a valid code, a lowercase code, a too-short code).
 - **Boundaries**: just below, at, just above each limit (`99.99`, `100.00` for SAVE25; `-1`, `0`, `100`, `101` for percentages).
-- **Special values**: `null`, empty, zero, negative, very large, duplicates, Unicode.
+- **Special values**: `null`, empty, zero, negative, very large, duplicates, Unicode (non-ASCII characters such as accents, emoji).
 - **Errors**: each exception path, including exceptions thrown by collaborators (`gatewayOutagePropagates`).
 
 ### The test pyramid
@@ -1229,10 +1229,10 @@ flowchart TB
   E --- I --- U
 ```
 
-Most tests should be fast unit tests; fewer **integration tests** exercise real infrastructure (a real database, real HTTP); a handful of **end-to-end** tests cover whole user journeys. **Testcontainers** (a library, 2.x at the time of writing) starts real databases/brokers in Docker for integration tests — the modern replacement for in-memory lookalikes such as H2, whose SQL dialect differs from production. Maven runs integration tests with the **Failsafe** plugin (`*IT.java`, `verify` phase); Gradle typically uses a separate test source set or the JVM Test Suite plugin.
+Most tests should be fast unit tests; fewer **integration tests** exercise real infrastructure (a real database, real HTTP); a handful of **end-to-end** tests cover whole user journeys. **Testcontainers** (a library, 2.x at the time of writing) starts real databases/**brokers** (message-queue servers such as Kafka or RabbitMQ) in **Docker** (a tool that runs software in lightweight isolated *containers*) for integration tests — the modern replacement for in-memory lookalikes such as H2 (a small Java database that runs inside the test JVM), whose SQL **dialect** (its flavour of the SQL language) differs from production. Maven runs integration tests with the **Failsafe** plugin (`*IT.java`, `verify` phase); Gradle typically uses a separate test **source set** (a named group of source folders with its own compile task) or the JVM Test Suite plugin.
 
 ### Coverage — useful, but not a goal
-**Code coverage** measures which lines/branches the tests executed; **JaCoCo** is the standard Java tool (Maven plugin `jacoco-maven-plugin`, Gradle plugin `jacoco`), producing an HTML report. Low coverage reliably shows *untested* code; high coverage does **not** prove the tests check anything (a test without assertions still "covers" lines). **Mutation testing** (PIT/pitest) is stronger: it makes small changes to your code (flip `>=` to `>`) and checks that some test fails — our `99.99`/`100.00` rows would kill that mutant.
+**Code coverage** measures which lines/**branches** (each possible path through an `if`/`switch`) the tests executed; **JaCoCo** is the standard Java tool (Maven plugin `jacoco-maven-plugin`, Gradle plugin `jacoco`), producing an HTML report. Low coverage reliably shows *untested* code; high coverage does **not** prove the tests check anything (a test without assertions still "covers" lines). **Mutation testing** (PIT/pitest) is stronger: it makes small changes to your code (flip `>=` to `>`) and checks that some test fails — our `99.99`/`100.00` rows would kill that **mutant** (the altered copy of the code).
 
 ### Flaky tests
 A **flaky** test sometimes passes and sometimes fails without code changes. Common causes and cures:
@@ -1242,8 +1242,8 @@ A **flaky** test sometimes passes and sometimes fails without code changes. Comm
 | Current time, time zones | inject `Clock`; fixed zone |
 | Randomness | inject `Random` with a seed, or a `Supplier` |
 | Test order / shared static state | fresh state per test; no static mutables |
-| `Thread.sleep` to "wait" for async work | wait for a condition (Awaitility library, latches — [Chapter 14](../14-concurrency-1/README.md)) |
-| Real network or external services | doubles in unit tests; Testcontainers/WireMock in integration tests |
+| `Thread.sleep` to "wait" for **async** work (work running in the background on another thread) | wait for a condition (Awaitility library, latches — [Chapter 14](../14-concurrency-1/README.md)) |
+| Real network or external services | doubles in unit tests; Testcontainers/WireMock (a fake HTTP server for tests) in integration tests |
 | Hash-order assumptions (`HashMap` iteration) | assert with `containsExactlyInAnyOrder` or sort first |
 
 ### TDD in one paragraph
@@ -1268,7 +1268,7 @@ FIRST, AAA, behaviour names, boundary inputs, mostly unit tests, real infrastruc
 ## 18.10 Logging
 
 ### What it is
-**Logging** records what a running program does, each record with a **level**, a **logger name** (usually the class) and a timestamp, sent to destinations (console, file, log collector) chosen by **configuration**, not code. `System.out.println` has no levels, no way to turn it down in production, no timestamps and no routing.
+**Logging** records what a running program does, each record with a **level**, a **logger name** (usually the class) and a timestamp, sent to destinations (console, file, **log collector** — a central service that gathers logs from many machines) chosen by **configuration**, not code. `System.out.println` has no levels, no way to turn it down in production, no timestamps and no routing.
 
 ### How a logging system works
 1. Code asks for a **logger** named after its class: `Logger.getLogger(OrderService.class.getName())`.
@@ -1389,10 +1389,10 @@ What it shows:
 - **Lazy messages**: the `Supplier` overload skipped the string building; the plain overload built a string that was then discarded ("evaluated: 1"). Use suppliers (or `isLoggable` guards) for expensive messages.
 - **Exceptions**: pass the exception as the last argument — you get the message *and* the stack trace ([Chapter 8 §8.9](../08-exceptions/README.md#89-reading-stack-traces)).
 - **Configuration timing**: levels from a configuration file are applied to loggers as they are created; configure logging at start-up (`-Djava.util.logging.config.file=logging.properties`) before your classes create loggers — that's why this demo, which configures in code, creates its logger afterwards.
-- **`System.Logger`** (Java 9) is a tiny facade in `java.base`; without other setup it forwards to JUL.
+- **`System.Logger`** (Java 9) is a tiny **facade** (a thin front-end API that forwards to whichever real implementation is installed) in `java.base`; without other setup it forwards to JUL.
 
 ### SLF4J + Logback: what most applications use (not run)
-Real applications usually code against **SLF4J** (Simple Logging Facade for Java, 2.0.x) — an API only — and pick a **backend** at deployment: **Logback** (Spring Boot's default) or **Log4j 2**. Libraries log through SLF4J so the *application* decides where output goes. Bridges route JUL, Log4j 1, and Commons Logging calls into SLF4J so one configuration controls everything.
+Real applications usually code against **SLF4J** (Simple Logging Facade for Java, 2.0.x) — an API only — and pick a **backend** (the library that actually writes the logs) at **deployment** (installing and starting the app in its target environment): **Logback** (Spring Boot's default) or **Log4j 2**. Libraries log through SLF4J so the *application* decides where output goes. **Bridges** (adapter JARs) route JUL, Log4j 1, and Commons Logging calls into SLF4J so one configuration controls everything.
 
 ```java
 // (SLF4J — not run: needs slf4j-api plus a backend such as logback-classic on the class path)
@@ -1434,14 +1434,14 @@ public final class OrderService {
 
 - **`{}` placeholders** replace string concatenation and are cheap when the level is off.
 - **MDC** (Mapped Diagnostic Context) attaches key/values (request id, user) to every log line of the current thread — `%X{customer}` prints it. (With virtual threads and thread pools, always clear it in `finally`.)
-- **Structured logging** (JSON lines with fields) makes logs searchable in tools such as Elasticsearch/OpenSearch, Loki or Splunk.
+- **Structured logging** (JSON lines with fields — JSON being the `{"key": value}` text format) makes logs searchable in tools such as Elasticsearch/OpenSearch, Loki or Splunk (log search and analytics systems).
 
 ### Common mistakes
 - Logging and rethrowing the same exception at every layer — one failure, five stack traces. Log once, where it's handled.
 - Logging secrets or personal data (passwords, tokens, card numbers).
 - String concatenation in hot debug logs (`log.debug("x=" + expensive())`).
 - Several backends on the class path — SLF4J warns and picks one; keep exactly one.
-- Treating the logging library as harmless: **Log4Shell** (CVE-2021-44228, December 2021) let attackers run code through message lookups in Log4j 2 versions before 2.15.0 — keep logging libraries patched like any other dependency.
+- Treating the logging library as harmless: **Log4Shell** (CVE-2021-44228 — a CVE id is the public catalogue number of a security vulnerability — December 2021) let attackers run code through message lookups in Log4j 2 versions before 2.15.0 — keep logging libraries patched like any other dependency.
 
 ### In the interview
 **30-second answer:** "I code against SLF4J with a backend like Logback, one logger per class, levels ERROR to TRACE, parameterized `{}` messages, exceptions passed as the last argument, MDC for request ids, configuration outside the code. The JDK has java.util.logging and the `System.Logger` facade, fine for small tools."
@@ -1461,20 +1461,20 @@ Loggers per class, levels, hierarchy, handlers/appenders, config outside code. J
 ## 18.11 JDBC basics
 
 ### What it is
-**JDBC** (Java Database Connectivity, packages `java.sql` and `javax.sql`) is the standard API for talking to relational databases. Your code uses JDBC **interfaces**; a vendor's **driver** JAR (here PostgreSQL's `postgresql-42.7.13.jar`) implements them. Since JDBC 4.0 (Java 6) drivers register themselves through the service loader — the old `Class.forName("org.postgresql.Driver")` line is unnecessary. Every higher-level tool (Spring's `JdbcTemplate`, jOOQ, Hibernate/JPA) is built on JDBC.
+**JDBC** (Java Database Connectivity, packages `java.sql` and `javax.sql`) is the standard API for talking to **relational databases** (databases that store data in tables of rows and columns and are queried with SQL). Your code uses JDBC **interfaces**; a vendor's **driver** JAR (here PostgreSQL's `postgresql-42.7.13.jar`) implements them. Since JDBC 4.0 (Java 6) drivers register themselves through the **service loader** (the JDK's built-in mechanism for discovering plug-in implementations on the class path) — the old `Class.forName("org.postgresql.Driver")` line is unnecessary. Every higher-level tool (Spring's `JdbcTemplate`, jOOQ, Hibernate/JPA — the Java Persistence API) is built on JDBC.
 
-The SQL Handbook's [Chapter 14](../../../sql/chapters/14-advanced-sql-and-using-sql-from-code/README.md) runs a longer JDBC program against the same private PostgreSQL (SQL injection demonstrated, batches, isolation levels); this section focuses on the Java side: resource handling, mapping rows to records, transactions, and hiding JDBC behind the `OrderRepository` interface so the rest of the app — and its tests — don't care.
+The SQL Handbook's [Chapter 14](../../../sql/chapters/14-advanced-sql-and-using-sql-from-code/README.md) runs a longer JDBC program against the same private PostgreSQL (SQL injection demonstrated, batches, **isolation levels** — how strictly concurrent transactions are kept from seeing each other's changes); this section focuses on the Java side: resource handling, mapping rows to records, transactions, and hiding JDBC behind the `OrderRepository` interface so the rest of the app — and its tests — don't care.
 
 ### The pieces
 
 | Type | Role |
 |---|---|
 | `DriverManager` | gets a `Connection` from a URL — simple, for scripts and tools |
-| `DataSource` | a connection factory configured once — what applications inject; a **connection pool** (HikariCP, Spring Boot's default) implements it |
+| `DataSource` | a connection **factory** (an object that creates other objects) configured once — what applications inject; a **connection pool** (a set of reusable open connections — HikariCP, Spring Boot's default) implements it |
 | `Connection` | one session with the database; owns transactions |
 | `PreparedStatement` | SQL with `?` placeholders, values bound by index (from **1**) with typed setters |
-| `ResultSet` | a cursor over result rows: `next()`, then `getString("col")`, `getBigDecimal`, `getObject(col, LocalDate.class)` |
-| `SQLException` | checked exception; `getSQLState()` gives a standard 5-character code (`23505` = unique violation) |
+| `ResultSet` | a **cursor** (a pointer that moves through query results one row at a time) over result rows: `next()`, then `getString("col")`, `getBigDecimal`, `getObject(col, LocalDate.class)` |
+| `SQLException` | **checked** exception (one the compiler forces you to catch or declare); `getSQLState()` gives a standard 5-character code (`23505` = unique violation) |
 
 ```mermaid
 sequenceDiagram
@@ -1552,13 +1552,13 @@ public final class JdbcOrderRepository implements OrderRepository {
 
 What to notice:
 1. **try-with-resources** closes `ResultSet`, `PreparedStatement`, then `Connection`, even on exceptions ([Chapter 8 §8.6](../08-exceptions/README.md#86-try-with-resources)). With a pool, `close()` returns the connection instead of disconnecting.
-2. **Always `PreparedStatement` with `?`** for values — the driver sends them separately from the SQL text, which prevents **SQL injection** (demonstrated in the SQL book) and lets the database reuse the plan.
-3. **Transactions**: a connection starts in **auto-commit** mode (each statement commits alone). For several statements that must succeed together, `setAutoCommit(false)`, then `commit()` or `rollback()`.
+2. **Always `PreparedStatement` with `?`** for values — the driver sends them separately from the SQL text, which prevents **SQL injection** (an attack where user input is crafted to change the SQL command itself; demonstrated in the SQL book) and lets the database reuse the **plan** (its worked-out strategy for executing a query).
+3. **Transactions**: a connection starts in **auto-commit** mode (each statement **commits** — makes its changes permanent — on its own). For several statements that must succeed together, `setAutoCommit(false)`, then `commit()` or `rollback()` (undo everything since the transaction began).
 4. **Exception translation** ([Chapter 8 §8.8](../08-exceptions/README.md#88-chaining-and-exception-translation)): the checked `SQLException` is wrapped, with the cause kept, so the `OrderRepository` interface stays storage-neutral.
 5. The class names only `java.sql`/`javax.sql` types — the driver is a **runtime** dependency.
 
 ### Running it — [`code/ch18/jdbc/JdbcDemo.java`](code/ch18/jdbc/JdbcDemo.java)
-The demo creates a database `ch_18_jdbc` on the SQL Handbook's private server (port 5544, reachable only through a Unix socket, hence the `junixsocket` socket-factory parameters in the URL; against a normal server the URL is just `jdbc:postgresql://localhost:5432/shop`), creates the table, and uses the repository through a `PGSimpleDataSource`:
+The demo creates a database `ch_18_jdbc` on the SQL Handbook's private server (port 5544, reachable only through a **Unix socket** (a local inter-process connection that looks like a file, instead of a network port), hence the `junixsocket` socket-factory parameters in the URL; against a normal server the URL is just `jdbc:postgresql://localhost:5432/shop`), creates the table, and uses the repository through a `PGSimpleDataSource`:
 
 ```java
 PGSimpleDataSource ds = new PGSimpleDataSource();          // the driver's simple, non-pooled DataSource
@@ -1603,10 +1603,10 @@ ORD-4 present after rollback? false
 
 ### Testing database code
 - **Unit tests** of services use the fake `InMemoryOrderRepository` — the reason the interface exists.
-- **Integration tests** of `JdbcOrderRepository` itself need a real database: Testcontainers starts PostgreSQL in Docker, the test creates the schema, runs the repository, and checks rows. Mocking `Connection`/`ResultSet` tests nothing useful.
+- **Integration tests** of `JdbcOrderRepository` itself need a real database: Testcontainers starts PostgreSQL in Docker, the test creates the **schema** (the table definitions), runs the repository, and checks rows. Mocking `Connection`/`ResultSet` tests nothing useful.
 
 ### When not to write raw JDBC
-For a handful of queries, raw JDBC is fine. For a real application, use a helper that removes the boilerplate: **Spring `JdbcClient`/`JdbcTemplate`** (SQL stays visible, mapping is a lambda), **jOOQ** (type-safe SQL builder), or **JPA/Hibernate** (maps objects to tables and generates SQL — powerful, but hides queries; watch for the N+1 problem). The SQL book compares ORMs vs SQL in its Chapter 14.
+For a handful of queries, raw JDBC is fine. For a real application, use a helper that removes the **boilerplate** (repetitive code that's the same every time): **Spring `JdbcClient`/`JdbcTemplate`** (SQL stays visible, mapping is a lambda), **jOOQ** (type-safe SQL builder), or **JPA/Hibernate** (maps objects to tables and generates SQL — powerful, but hides queries; watch for the **N+1 problem**: loading a list with one query, then firing one extra query per item). The SQL book compares **ORMs** (*object-relational mappers*, tools like Hibernate that map classes to tables) vs SQL in its Chapter 14.
 
 ### Common mistakes
 - Concatenating user input into SQL.
@@ -1618,7 +1618,7 @@ For a handful of queries, raw JDBC is fine. For a real application, use a helper
 ### In the interview
 **30-second answer:** "JDBC is the standard API; a driver implements it. Apps get connections from a pooled `DataSource`, use `PreparedStatement` with bound parameters to avoid SQL injection, map `ResultSet` rows to objects, close everything with try-with-resources, and control transactions with `setAutoCommit(false)`, `commit` and `rollback`. I hide it behind a repository interface and test it against a real database with Testcontainers."
 - *`Statement` vs `PreparedStatement`?* → Prepared: parameters bound separately (safe, typed, plan reuse).
-- *Why a connection pool?* → Opening a connection costs a network handshake, authentication and a server process; a pool reuses a bounded number of them.
+- *Why a connection pool?* → Opening a connection costs a network **handshake** (the opening exchange of messages that sets up a connection), authentication and a server process; a pool reuses a bounded number of them.
 
 ### Self-check
 1. First parameter index in JDBC? → 1.
@@ -1634,7 +1634,7 @@ For a handful of queries, raw JDBC is fine. For a real application, use a helper
 ## 18.12 Packaging: JAR files
 
 ### What it is
-A **JAR** (Java ARchive) is a ZIP file of `.class` files and resources plus a **manifest**, `META-INF/MANIFEST.MF`, holding metadata. A manifest with a `Main-Class` makes it an **executable JAR**, started with `java -jar`.
+A **JAR** (Java ARchive) is a ZIP file of `.class` files and resources plus a **manifest**, `META-INF/MANIFEST.MF`, holding **metadata** (data about the archive itself, such as which class to start). A manifest with a `Main-Class` makes it an **executable JAR**, started with `java -jar`.
 
 ### Building one by hand — [`code/package_jar.sh`](code/package_jar.sh)
 This is what `jar:jar` (Maven) and the `jar` task (Gradle) do for you. Real run:
@@ -1675,19 +1675,19 @@ $ ls -l shop.jar
 |---|---|---|
 | Plain JAR + class path | `java -cp "shop.jar:lib/*" ch18.shop.ShopDemo` | simplest; ship a `lib/` folder (Gradle's `application` plugin builds exactly this into `distZip` with start scripts) |
 | `Class-Path` manifest entry | `Class-Path: lib/postgresql-42.7.13.jar` | relative paths, space-separated |
-| **Fat / uber JAR** | Maven Shade plugin, Gradle Shadow plugin | one file with all classes merged; watch for clashing `META-INF/services` files and signatures |
+| **Fat / uber JAR** | Maven Shade plugin, Gradle Shadow plugin | one file with all classes merged; watch for clashing `META-INF/services` files and signatures (cryptographic proofs of who built a JAR) |
 | **Spring Boot JAR** | `spring-boot-maven-plugin` / Gradle plugin | dependencies kept as nested JARs, loaded by Boot's own launcher |
 | **Custom runtime** | `jlink` (Java 9) | a trimmed JDK containing only needed modules — see [Chapter 16 §16.12](../16-jvm-internals-and-performance/README.md#1612-modules-jpms-basics) |
 | **Native installer** | `jpackage` (final in Java 16) | `.dmg`/`.pkg`, `.msi`/`.exe`, `.deb`/`.rpm` bundling a runtime |
-| **Container image** | Dockerfile, Jib, Cloud Native Buildpacks | the common deployment unit for services |
-| **Native executable** | GraalVM Native Image | ahead-of-time compiled, fast start-up; restrictions on reflection |
+| **Container image** (a packaged file system plus start command that a container runtime like Docker runs) | Dockerfile, Jib, Cloud Native Buildpacks | the common deployment unit for services |
+| **Native executable** | GraalVM Native Image | **ahead-of-time** compiled (to machine code before running, not by the JIT), fast start-up; restrictions on **reflection** (inspecting and calling classes by name at run time) |
 
 Other JAR facts: a **multi-release JAR** (Java 9) holds version-specific classes under `META-INF/versions/N/`; a **modular JAR** contains `module-info.class` ([Chapter 16](../16-jvm-internals-and-performance/README.md#1612-modules-jpms-basics), and the [OCP modules chapter](../../../../ocp-java21-study/chapters/12-modules/README.md) for exam depth); JARs can be **signed** with `jarsigner`. Libraries are published as a JAR + `.pom` (+ `-sources.jar` and `-javadoc.jar`) to a repository with `mvn deploy` or Gradle's `maven-publish` plugin.
 
 ### Self-check
 1. What makes a JAR executable? → A `Main-Class` entry in its manifest.
 2. Why does `java -cp lib/* -jar app.jar` not find the libraries? → With `-jar`, the class path comes only from the JAR and its manifest.
-3. Fat JAR vs `jlink` image? → Fat JAR bundles libraries but still needs an installed JRE; `jlink` bundles a trimmed runtime.
+3. Fat JAR vs `jlink` image? → Fat JAR bundles libraries but still needs an installed JRE (Java Runtime Environment: a JVM plus libraries, enough to run but not compile); `jlink` bundles a trimmed runtime.
 
 ### TL;DR
 JAR = ZIP + manifest. `jar --create --main-class`, run with `java -jar`. For dependencies: class path folder, fat JAR, Boot JAR, or container; `jlink`/`jpackage` to ship a runtime.
@@ -1699,19 +1699,19 @@ JAR = ZIP + manifest. `jar --create --main-class`, run with `java -jar`. For dep
 | Need | Tool(s) | One-line note |
 |---|---|---|
 | IDE | IntelliJ IDEA, Eclipse, VS Code + Java extensions | import the Maven/Gradle build; don't hand-configure class paths ([Chapter 1 §1.11](../01-java-and-the-jvm/README.md#111-ides-editors-and-build-tools)) |
-| Debugger | IDE debugger (breakpoints, conditional breakpoints, watches, step into/over, evaluate expression); `jdb` on the command line | start the JVM with `-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005` to attach remotely |
-| Quick experiments | `jshell`, single-file launch `java Foo.java` | [Chapter 1 §1.9–1.10](../01-java-and-the-jvm/README.md#19-jshell--the-java-repl) |
+| Debugger | IDE debugger (**breakpoints** — lines where execution pauses so you can inspect variables — conditional breakpoints, watches, step into/over, evaluate expression); `jdb` on the command line | start the JVM with `-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005` to attach remotely |
+| Quick experiments | `jshell` (Java's REPL — an interactive prompt that runs each line as you type it), single-file launch `java Foo.java` | [Chapter 1 §1.9–1.10](../01-java-and-the-jvm/README.md#19-jshell--the-java-repl) |
 | Formatting | google-java-format, Palantir Java Format, Spotless (build plugin) | format automatically; stop debating style in reviews |
-| Static analysis | compiler warnings (`-Xlint:all`), Error Prone, SpotBugs, PMD, Checkstyle, SonarQube | catch bugs and smells before tests run |
+| Static analysis | compiler warnings (`-Xlint:all`), Error Prone, SpotBugs, PMD, Checkstyle, SonarQube | catch bugs and **smells** (patterns that suggest a design problem) before tests run |
 | Null-safety | JSpecify annotations + NullAway | JUnit 6 and Spring Boot 4 both adopted JSpecify |
 | Coverage / mutation | JaCoCo / PIT | 18.9 |
-| Dependency hygiene | `dependency:tree`, `gradle dependencies`, Dependabot/Renovate, OWASP Dependency-Check | keep libraries current and free of known vulnerabilities |
+| Dependency hygiene | `dependency:tree`, `gradle dependencies`, Dependabot/Renovate (bots that open pull requests to update dependencies), OWASP Dependency-Check | keep libraries current and free of known vulnerabilities |
 | Documentation | `javadoc` (Markdown doc comments since Java 23 — [Chapter 17](../17-modern-java-17-to-25/README.md)) | generated HTML API docs |
 | Profiling / monitoring | JFR, JMC, VisualVM, async-profiler | [Chapter 16 §16.10](../16-jvm-internals-and-performance/README.md#1610-profiling-and-diagnostic-tools) |
 | Benchmarks | JMH | [Chapter 16 §16.9](../16-jvm-internals-and-performance/README.md#169-benchmarking-why-naive-timing-lies-and-jmh) |
 | Continuous integration | GitHub Actions, GitLab CI, Jenkins | run `./mvnw verify` / `./gradlew build` on every push |
 
-A typical CI job is only a few lines — check out, set up a JDK, run the wrapper:
+A typical CI job is only a few lines — check out (fetch the code from the **repository**, the version-controlled project history), set up a JDK, run the wrapper:
 
 ```yaml
 # .github/workflows/build.yml (GitHub Actions — not run)
@@ -1732,15 +1732,15 @@ jobs:
 ## 18.14 Where next: Spring Boot and friends
 
 ### What it is
-Most server-side Java uses a **framework** for dependency injection, configuration, web endpoints, data access, security, observability and testing. The most widely used is **Spring Boot** (on the Spring Framework). **Spring Boot 4.0** was released on 20 November 2025 on Spring Framework 7 (4.1 followed in 2026); it runs on Java 17+ and supports Java 25.
+Most server-side Java uses a **framework** for dependency injection, configuration, web **endpoints** (URLs your service answers), data access, security, **observability** (seeing what a running system does through logs, metrics and traces) and testing. The most widely used is **Spring Boot** (on the Spring Framework). **Spring Boot 4.0** was released on 20 November 2025 on Spring Framework 7 (4.1 followed in 2026); it runs on Java 17+ and supports Java 25.
 
 ### What Spring Boot gives you
 - **Dependency injection container**: you write classes like our `OrderService` with constructor parameters; Spring creates them (*beans*) and passes the right collaborators — exactly the design that made 18.6 testable, without the hand wiring in `ShopDemo`.
 - **Starters**: one dependency per capability (`spring-boot-starter-webmvc`, `-jdbc`, `-data-jpa`, `-security`, `-actuator`) with compatible versions managed by Boot's BOM.
-- **Auto-configuration**: sees a JDBC driver and a URL in `application.properties` → creates a HikariCP `DataSource`; sees the web starter → starts an embedded Tomcat.
+- **Auto-configuration**: sees a JDBC driver and a URL in `application.properties` → creates a HikariCP `DataSource`; sees the web starter → starts an **embedded** Tomcat (a web server running inside your own application rather than as a separate server).
 - **Executable JAR**: `./mvnw spring-boot:run` in development, `java -jar app.jar` in production.
 - **Testing**: the test starter bundles JUnit Jupiter, Mockito and AssertJ (this chapter's tools); `@SpringBootTest` for full context tests, *slice* tests like `@WebMvcTest` and `@DataJdbcTest`, `@MockitoBean` to replace a bean with a mock, and Testcontainers integration.
-- **Actuator**: health checks, metrics (Micrometer), info endpoints for operations.
+- **Actuator**: **health checks** (an endpoint reporting whether the service is working), **metrics** (numbers the service records about itself, collected via Micrometer), info endpoints for operations.
 
 ```java
 // (Spring Boot — not run: needs the Spring Boot starters; shows the shape of an app)
@@ -1773,13 +1773,13 @@ Generate a project at **start.spring.io** (Spring Initializr): choose Maven or G
 
 | Framework | In one line |
 |---|---|
-| **Quarkus** | Kubernetes-oriented, fast start-up, strong GraalVM native-image support; Jakarta EE / MicroProfile APIs |
-| **Micronaut** | compile-time dependency injection (no run-time reflection), small footprint |
+| **Quarkus** | Kubernetes-oriented (Kubernetes runs and scales containers across many machines; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), fast start-up, strong GraalVM native-image support; Jakarta EE / MicroProfile APIs |
+| **Micronaut** | compile-time dependency injection (no run-time reflection), small **footprint** (memory use) |
 | **Jakarta EE** (formerly Java EE) | the standard specifications (Servlet, JPA, CDI, REST) implemented by application servers and runtimes such as WildFly, Open Liberty, Payara |
-| **Helidon**, **Javalin**, **Vert.x** | lighter or reactive options for services |
+| **Helidon**, **Javalin**, **Vert.x** | lighter or **reactive** options for services (reactive = non-blocking, event-driven code) |
 
 ### A learning path from here
-1. Build a small REST API with Spring Boot (web + JDBC or JPA + validation), tested with this chapter's tools and Testcontainers.
+1. Build a small **REST API** (a web interface where URLs name resources and HTTP verbs like GET/POST act on them) with Spring Boot (web + JDBC or JPA + validation), tested with this chapter's tools and Testcontainers.
 2. Learn the design side: [LLD Handbook](../../../lld/) — SOLID, patterns, and the case studies (parking lot, booking systems) — all in Java.
 3. Learn the data side: [SQL Handbook](../../../sql/) and *Designing Data-Intensive Applications* notes in [`ddia/`](../../../ddia/).
 4. Prepare for interviews: [Chapter 19 — Java for coding interviews](../19-java-for-coding-interviews/README.md) and the [OCP Java 21 study repo](../../../../ocp-java21-study/README.md) for certification-level detail.

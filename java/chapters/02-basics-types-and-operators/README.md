@@ -1,6 +1,6 @@
 # Chapter 2 — Basics: Types, Variables and Operators
 
-Every Java program is built from the same small parts: **variables** that hold **values** of some **type**, **operators** that combine them, and **statements** that tell the computer what to do in order. This chapter covers those parts precisely — including the places where Java silently does something you might not expect (integer overflow, integer division, floating-point rounding, `==` on strings). It ends with text blocks, `String` basics and reading/writing the console.
+Every Java program is built from the same small parts: **variables** that hold **values** of some **type** (the kind of data — whole number, decimal, text, true/false — which decides what you can do with it), **operators** that combine them, and **statements** that tell the computer what to do in order. This chapter covers those parts precisely — including the places where Java silently does something you might not expect (integer overflow — a number too big for its type silently wrapping round; integer division — whole-number division that drops the remainder; floating-point rounding — decimals stored only approximately; `==` on strings). It ends with text blocks (multi-line strings), `String` basics and reading/writing the console (the text terminal the program runs in).
 
 **What you'll learn**
 
@@ -29,21 +29,21 @@ Code: [`code/`](code/), compiled with `javac --release 25`, output pasted from r
 ### What it is
 - A **statement** is one complete instruction, ending in `;` (e.g. `int x = 5;`). A **block** `{ … }` groups statements and can appear wherever a statement can.
 - An **expression** is code that produces a value (`x + 1`, `name.length()`, `a > b`). An *expression statement* is an expression used as a statement (`x++;`, `print(...)`).
-- An **identifier** is a name you choose for a variable, method, class or package.
+- An **identifier** is a name you choose for a variable, method (a named block of code you can call), class (a blueprint describing a kind of object) or package (a named group of related classes, like a folder).
 
 ### Identifier rules
 | Rule | Legal | Illegal |
 |---|---|---|
 | Starts with a letter, `$` or `_` | `total`, `$price`, `_temp` | `2fast` |
 | Then letters, digits, `$`, `_` | `item2`, `max_value` | `my-name`, `a b` |
-| Not a reserved keyword or the literals `true`, `false`, `null` | `klass`, `clazz` | `class`, `null` |
+| Not a reserved keyword (a word the language uses itself) or the literals `true`, `false`, `null` | `klass`, `clazz` | `class`, `null` |
 | A single `_` is not an identifier (it is a keyword; see *unnamed variables*, [Chapter 3](../03-control-flow/README.md)) | `__` | `_` |
 | Case-sensitive | `count` ≠ `Count` | — |
 
-Unicode letters are allowed (`größe`), and `$` is legal but by convention reserved for generated code.
+Unicode (the worldwide standard that gives every character in every script a number) letters are allowed (`größe`), and `$` is legal but by convention reserved for generated code.
 
 ### Keywords
-Java 25 has **51 reserved keywords** that can never be identifiers — e.g. `class`, `int`, `if`, `for`, `new`, `static`, `final`, `return`, `try`, plus `const` and `goto` (reserved but unused), `strictfp` (obsolete) and `_`. It also has **17 contextual keywords** that are keywords only in certain positions, so old code using them as names still compiles: `var`, `yield`, `record`, `sealed`, `non-sealed`, `permits`, `when`, and the module words `module`, `open`, `opens`, `exports`, `requires`, `transitive`, `uses`, `provides`, `to`, `with`. `true`, `false` and `null` are *literals*, not keywords, but are still unusable as names.
+Java 25 has **51 reserved keywords** that can never be identifiers — e.g. `class`, `int`, `if`, `for`, `new`, `static`, `final`, `return`, `try`, plus `const` and `goto` (reserved but unused), `strictfp` (obsolete) and `_`. It also has **17 contextual keywords** that are keywords only in certain positions, so old code using them as names still compiles: `var`, `yield`, `record`, `sealed`, `non-sealed`, `permits`, `when`, and the module words `module`, `open`, `opens`, `exports`, `requires`, `transitive`, `uses`, `provides`, `to`, `with`. `true`, `false` and `null` are *literals* (values written directly in the code), not keywords, but are still unusable as names.
 
 ### Comments
 ```java
@@ -105,18 +105,18 @@ count=1
 | | Local variable (inside a method/block) | Field (inside a class) |
 |---|---|---|
 | Default value | **None** — must be assigned before use, or compile error *"variable x might not have been initialized"* | Yes: `0`, `0.0`, `false`, `'\u0000'`, or `null` for references |
-| Lifetime | Until the block ends | As long as the object (instance field) or class (`static` field) |
-| Modifiers | Only `final` | Access modifiers, `static`, `final`, … ([Chapter 5](../05-oop-classes-and-objects/README.md)) |
+| Lifetime | Until the block ends | As long as the object (instance field — one copy per object) or class (`static` field — one copy shared by the whole class) |
+| Modifiers | Only `final` | Access modifiers (`public`, `private`… — who may use it), `static`, `final`, … ([Chapter 5](../05-oop-classes-and-objects/README.md)) |
 
 The compiler's **definite assignment** analysis checks that every path assigns a local before it is read — that is why `count` above compiles: both branches assign it.
 
 ### `final`
-`final` means *assigned once*. For a primitive, the value can never change; for a reference, the variable cannot point elsewhere but the **object itself can still change** (`final List<String> xs = new ArrayList<>(); xs.add("ok");` is legal). Use `final` for constants (`static final int MAX_RETRIES = 3;`) and wherever it clarifies intent.
+`final` means *assigned once*. For a primitive, the value can never change; for a reference, the variable cannot point elsewhere but the **object itself can still change** (`final List<String> xs = new ArrayList<>(); xs.add("ok");` is legal — `List`/`ArrayList` is a growable list of items, covered in [Chapter 10](../10-collections/README.md)). Use `final` for constants (`static final int MAX_RETRIES = 3;`) and wherever it clarifies intent.
 
 ### Common mistakes
 - Reading a local before assigning it in every branch.
-- Redeclaring a name already in scope (`int x = 1; { int x = 2; }` is a compile error — locals cannot shadow locals).
-- Thinking `final` makes an object immutable.
+- Redeclaring a name already in scope (`int x = 1; { int x = 2; }` is a compile error — locals cannot shadow locals, i.e. hide an outer variable by reusing its name).
+- Thinking `final` makes an object immutable (impossible to change after it is created).
 
 ### Self-check
 1. Does `int n; System.out.println(n);` compile inside a method? → No — locals have no default value.
@@ -128,9 +128,9 @@ The compiler's **definite assignment** analysis checks that every path assigns a
 ## 2.3 Primitive types
 
 ### What it is
-Java has exactly **eight primitive types** — simple values stored directly (not as objects). Everything else is a reference type (objects). Sizes and ranges are fixed by the language on every platform, unlike C.
+Java has exactly **eight primitive types** — simple values stored directly (not as objects). Everything else is a reference type (objects). Sizes and ranges are fixed by the language on every platform, unlike C. Sizes are measured in **bits** — a bit is a single binary digit, 0 or 1; 8 bits make one **byte**.
 
-[`code/Primitives.java`](code/Primitives.java) prints the real values from the wrapper classes:
+[`code/Primitives.java`](code/Primitives.java) prints the real values from the wrapper classes (object versions of each primitive, see [2.5](#25-reference-types-and-null)):
 ```java
 System.out.printf("%-8s %5d  %-22d %d%n", "int", Integer.SIZE, Integer.MIN_VALUE, Integer.MAX_VALUE);
 // ... one line per type
@@ -160,8 +160,9 @@ boolean  true or false (size not specified by the language)
 | `boolean` | logical | not specified | `true`, `false` | `false` | conditions, flags |
 
 Notes:
+- *Signed* means the type can hold negative numbers; *unsigned* means zero and positives only. **IEEE 754** is the international standard for how computers store numbers with a decimal point. **UTF-16** is a text encoding that stores characters as 16-bit units. An *I/O buffer* is a block of memory used to hold data being read or written. *Epoch milliseconds* count milliseconds since 1 January 1970 UTC, the usual way computers store a point in time.
 - `float`/`double` `MIN_VALUE` is the smallest **positive** value, not the most negative; the most negative is `-Double.MAX_VALUE`.
-- A `char` is a UTF-16 *code unit*. Characters outside the Basic Multilingual Plane (many emoji) need two `char`s (a *surrogate pair*); see [Chapter 7](../07-core-apis/README.md).
+- A `char` is a UTF-16 *code unit*. Characters outside the Basic Multilingual Plane (the first 65 536 Unicode characters; many emoji lie beyond it) need two `char`s (a *surrogate pair*); see [Chapter 7](../07-core-apis/README.md).
 - `boolean` is not a number: `if (1)` does not compile, and you cannot cast between `boolean` and `int`.
 
 ### Choosing a type
@@ -170,21 +171,21 @@ Notes:
 | Whole numbers that fit in ±2 billion | `int` |
 | Bigger whole numbers, epoch milliseconds, file sizes | `long` |
 | Decimal measurements where tiny rounding is fine | `double` |
-| Money, exact decimal arithmetic | `long` cents or `BigDecimal` — never `double` ([2.11](#211-floating-point-numbers)) |
+| Money, exact decimal arithmetic | `long` cents or `BigDecimal` (Java's exact decimal-number class) — never `double` ([2.11](#211-floating-point-numbers)) |
 | Arbitrary-size integers | `BigInteger` ([Chapter 7](../07-core-apis/README.md)) |
 | Yes/no | `boolean` |
 
 ### Self-check
 1. Largest `int`? → 2 147 483 647 (`Integer.MAX_VALUE`, 2³¹−1).
 2. Is `char` signed? → No, it is unsigned 16-bit (0–65 535).
-3. Why is `Double.MIN_VALUE` positive? → It is the smallest positive (subnormal) double, not the most negative.
+3. Why is `Double.MIN_VALUE` positive? → It is the smallest positive (subnormal — a tiny value below the normal range, stored with fewer digits of precision) double, not the most negative.
 
 ---
 
 ## 2.4 Literals
 
 ### What it is
-A **literal** is a value written directly in source code. Its form decides its type.
+A **literal** is a value written directly in source code. Its form decides its type. Numbers can be written in several bases: **hexadecimal** (base 16, digits 0–9 and A–F, prefix `0x`), **octal** (base 8, prefix `0`) and **binary** (base 2, prefix `0b`).
 
 [`code/Literals.java`](code/Literals.java):
 ```java
@@ -241,7 +242,7 @@ Integer.toBinaryString(10) = 1010, toHexString(255) = ff
 ## 2.5 Reference types and `null`
 
 ### What it is
-Any type that is not one of the eight primitives is a **reference type**: classes (`String`, `Scanner`), interfaces (`List`), arrays (`int[]`), enums and records. A variable of a reference type holds a **reference** — a handle that points to an object on the heap ([1.8](../01-java-and-the-jvm/README.md#18-memory-and-garbage-collection--an-overview)) — or the special value **`null`**, meaning "points to nothing".
+Any type that is not one of the eight primitives is a **reference type**: classes (`String`, `Scanner`), interfaces (`List`), arrays (`int[]`), enums and records. (Interfaces, arrays, enums and records are each explained in Chapters 4–6; for now, just know they are all reference types.) A variable of a reference type holds a **reference** — a handle that points to an object on the heap (the memory area where all objects live; see [1.8](../01-java-and-the-jvm/README.md#18-memory-and-garbage-collection--an-overview)) — or the special value **`null`**, meaning "points to nothing".
 
 ```mermaid
 flowchart LR
@@ -258,7 +259,7 @@ flowchart LR
     C --> S
 ```
 - Assigning a reference (`other = name`) copies the **arrow**, not the object: both variables now point to the same `String`.
-- Calling a method through `null` throws **`NullPointerException`** at run time. Since Java 14 (JEP 358, on by default from Java 15), these *helpful NullPointerException* messages name exactly what was null, e.g. *Cannot invoke "String.length()" because "name" is null*.
+- Calling a method through `null` throws **`NullPointerException`** at run time. To *throw* an **exception** is to signal an error by creating an error object that stops normal execution unless some code catches it ([Chapter 8](../08-exceptions/README.md)). Since Java 14 (JEP 358, on by default from Java 15), these *helpful NullPointerException* messages name exactly what was null, e.g. *Cannot invoke "String.length()" because "name" is null*.
 
 | | Primitive | Reference |
 |---|---|---|
@@ -268,14 +269,14 @@ flowchart LR
 | Has methods | no | yes (`name.length()`) |
 | Name style | lowercase keyword (`int`) | a type name (`String`, `Integer`) |
 
-Every primitive has a **wrapper class** (`Integer`, `Double`, `Character`, `Boolean`…) so it can be used where an object is required, e.g. in `List<Integer>`. Java converts automatically (*autoboxing/unboxing*). The details — and the `Integer` cache trap — are in [Chapter 7](../07-core-apis/README.md).
+Every primitive has a **wrapper class** (`Integer`, `Double`, `Character`, `Boolean`…) so it can be used where an object is required, e.g. in `List<Integer>` (a list of `Integer` objects; the `<…>` part is a *generic* type argument, [Chapter 9](../09-generics/README.md)). Java converts automatically (*autoboxing/unboxing*). The details — and the `Integer` cache trap — are in [Chapter 7](../07-core-apis/README.md).
 
 ---
 
 ## 2.6 `var` — local variable type inference (Java 10)
 
 ### What it is
-`var` (Java 10, JEP 286) lets the compiler **infer** a local variable's type from its initialiser. The variable is still statically typed — the type is fixed at compile time; you just do not write it.
+`var` (Java 10, JEP 286) lets the compiler **infer** (work out by itself) a local variable's type from its initialiser (the `= value` part of the declaration). The variable is still statically typed — the type is fixed at compile time; you just do not write it.
 
 [`code/VarDemo.java`](code/VarDemo.java):
 ```java
@@ -304,14 +305,14 @@ Ada -> [90, 85]
 |---|---|
 | Local variables with an initialiser | Fields, method parameters, return types |
 | `for` loop variables and for-each variables | Without initialiser: `var x;` |
-| try-with-resources variables | `var x = null;` (no type to infer) |
-| Lambda parameters (Java 11): `(var a, var b) -> a + b` — useful to add annotations | Array initialiser alone: `var a = {1, 2};` |
+| try-with-resources variables (auto-closing resources, [Chapter 8](../08-exceptions/README.md)) | `var x = null;` (no type to infer) |
+| Lambda (short inline function) parameters (Java 11): `(var a, var b) -> a + b` — useful to add annotations (`@`-tags such as `@Override` that attach extra information) | Array initialiser alone: `var a = {1, 2};` |
 | | Multiple variables: `var a = 1, b = 2;` |
 
 `var` is a contextual keyword: `var var = 1;` compiles, but you cannot name a *type* `var`.
 
 ### Trade-offs and style
-Use `var` when the type is obvious from the right-hand side (`new`, a well-named factory) or long and noisy (generic types). Avoid it when the reader cannot see the type (`var result = service.process();`) or when the inferred type differs from what you want (`var list = new ArrayList<>()` becomes `ArrayList<Object>`; `var x = 1;` is `int`, not `long`). The OpenJDK team's *Local Variable Type Inference Style Guidelines* say the same: choose clarity for the reader.
+Use `var` when the type is obvious from the right-hand side (`new`, a well-named factory — a method that creates and returns objects) or long and noisy (generic types such as `Map<String, List<Integer>>`). Avoid it when the reader cannot see the type (`var result = service.process();`) or when the inferred type differs from what you want (`var list = new ArrayList<>()` becomes `ArrayList<Object>`; `var x = 1;` is `int`, not `long`). The OpenJDK team's *Local Variable Type Inference Style Guidelines* say the same: choose clarity for the reader.
 
 ---
 
@@ -328,10 +329,10 @@ flowchart LR
 Arrows show **widening primitive conversions**, done automatically (`int i = 'A'; long l = i; double d = l;`). Going against the arrows is **narrowing** and needs a cast.
 
 ### How it works
-1. **Widening** (automatic): the target type can hold every value… *almost*. `int → float`, `long → float` and `long → double` can lose **precision** (not magnitude): a `float` has 24 bits of mantissa.
-2. **Narrowing** (needs a cast): `(int) 3.99` truncates toward zero to `3`; `(byte) 300` keeps the low 8 bits (300 − 256 = 44). Floating → integer conversion clamps out-of-range values to MIN/MAX and turns NaN into 0.
-3. **Numeric promotion** in expressions: before a binary arithmetic operator runs, `byte`, `short` and `char` operands become `int`; if either operand is `long`, `float` or `double`, both are converted to the wider of these. So `byte + byte` is an `int`.
-4. **Compile-time constants** may be assigned to a narrower type if they fit: `byte b = 10 + 20;` is fine; `byte b = x + y;` (variables) is not.
+1. **Widening** (automatic): the target type can hold every value… *almost*. `int → float`, `long → float` and `long → double` can lose **precision** (exact digits), not magnitude (overall size): a `float` has 24 bits of mantissa (the part of a floating-point number that stores its significant digits).
+2. **Narrowing** (needs a cast): `(int) 3.99` truncates (chops off the fraction) toward zero to `3`; `(byte) 300` keeps the low 8 bits (300 − 256 = 44). Floating → integer conversion clamps out-of-range values to MIN/MAX and turns NaN ("Not a Number", the result of undefined maths such as 0.0/0) into 0.
+3. **Numeric promotion** in expressions: before a binary (two-input) arithmetic operator runs, `byte`, `short` and `char` operands (the values an operator works on) become `int`; if either operand is `long`, `float` or `double`, both are converted to the wider of these. So `byte + byte` is an `int`.
+4. **Compile-time constants** (values the compiler can work out itself, such as literals or `final` variables set from literals) may be assigned to a narrower type if they fit: `byte b = 10 + 20;` is fine; `byte b = x + y;` (variables) is not.
 5. **Compound assignment** (`+=`, `-=`, `*=`…) includes a hidden cast: `x += 5` means `x = (T) (x + 5)` where `T` is `x`'s type.
 
 [`code/Conversions.java`](code/Conversions.java) (key lines):
@@ -420,19 +421,19 @@ compound ops -> x=1
 | Rule | Detail |
 |---|---|
 | Integer `/` truncates toward zero | `-17 / 5` is `-3`, not `-4` |
-| `%` takes the sign of the **dividend** | `-17 % 5` is `-2`. For a always-non-negative result (e.g. circular buffers, "day of week"), use `Math.floorMod` |
+| `%` takes the sign of the **dividend** (the number being divided) | `-17 % 5` is `-2`. For a always-non-negative result (e.g. circular buffers — fixed-size arrays that wrap round to the start, "day of week"), use `Math.floorMod` |
 | Integer division by zero | throws `ArithmeticException` |
 | Floating division by zero | no exception: `Infinity`, `-Infinity` or `NaN` |
 | `x++` vs `++x` | both add 1 to `x`; the *expression's value* is the old value (postfix) or the new value (prefix) |
-| `+` with a `String` operand | means concatenation ([2.12](#212-strings-and-text-blocks)) |
+| `+` with a `String` operand | means concatenation (joining text end to end) ([2.12](#212-strings-and-text-blocks)) |
 
-Style: use `++`/`--` as standalone statements (`i++;`). Expressions like `n++ + ++n` are legal and deterministic (Java evaluates operands left to right) but unreadable.
+Style: use `++`/`--` as standalone statements (`i++;`). Expressions like `n++ + ++n` are legal and deterministic (always give the same result; Java evaluates operands left to right) but unreadable.
 
 ### Assignment operators
 `=`, and compound `+= -= *= /= %= &= |= ^= <<= >>= >>>=`. Assignment is itself an expression whose value is the assigned value, and it is right-associative: `a = b = c = 7` assigns 7 to all three.
 
 ### Relational and equality: `< <= > >= == !=`, `instanceof`
-All return `boolean`. For **primitives**, `==` compares values. For **references**, `==` compares **identity** — whether both sides point to the *same object*. To compare contents, call `equals`.
+All return `boolean`. For **primitives**, `==` compares values. For **references**, `==` compares **identity** — whether both sides point to the *same object*. To compare contents, call `equals` (a method every object has for content comparison).
 
 [`code/Comparison.java`](code/Comparison.java):
 ```java
@@ -476,7 +477,7 @@ Output:
 r1=false r2=false true ^ true=false !true=false
 null-safe check with && worked
 ```
-Short-circuiting is what makes the *null guard* idiom `x != null && x.foo()` safe. With `&` it would throw `NullPointerException`.
+Short-circuiting is what makes the *null guard* idiom (a common coding pattern) `x != null && x.foo()` safe. With `&` it would throw `NullPointerException`.
 
 ### Ternary `?:`
 `condition ? valueIfTrue : valueIfFalse` is an **expression** (it produces a value), unlike `if`:
@@ -486,7 +487,7 @@ String category = age < 13 ? "child" : age < 20 ? "teen" : "adult";   // "adult"
 Keep it to one level; nested ternaries become a puzzle — use `if` or a `switch` expression ([Chapter 3](../03-control-flow/README.md)).
 
 ### Bitwise and shift: `& | ^ ~ << >> >>>`
-On integer types these work on individual bits. [`code/Bitwise.java`](code/Bitwise.java):
+On integer types these work on individual bits. A *flag* is a yes/no setting stored in one bit; a *mask* is a value used with `&` to pick out particular bits. [`code/Bitwise.java`](code/Bitwise.java):
 ```java
 static final int READ = 1, WRITE = 2, EXEC = 4;   // 001, 010, 100
 int a = 0b1100, b = 0b1010;
@@ -514,10 +515,10 @@ is 12 even? true
 | `^` | 1 where bits differ | toggle; `a ^ a == 0` |
 | `~` | flip every bit; `~x == -x - 1` | clear with `& ~FLAG` |
 | `<<` | shift left, fill with 0; `x << n` = x·2ⁿ (until overflow) | `1 << k` = k-th bit |
-| `>>` | *arithmetic* shift right, copies the sign bit | `-16 >> 2 = -4` |
+| `>>` | *arithmetic* shift right, copies the sign bit (the top bit: 1 means negative) | `-16 >> 2 = -4` |
 | `>>>` | *logical* shift right, fills with 0 | unsigned view of negatives |
 
-The shift distance uses only the low 5 bits for `int` (6 for `long`), so `1 << 32 == 1`. Real uses: permission flags, hash functions (`HashMap` mixes `h ^ (h >>> 16)`), `EnumSet`'s bit vector, network protocols, and bit tricks in interviews ([Chapter 19](../19-java-for-coding-interviews/README.md)).
+The shift distance uses only the low 5 bits for `int` (6 for `long`), so `1 << 32 == 1`. Real uses: permission flags, hash functions (functions that turn a value into a number used to decide where to store it; `HashMap`, Java's key→value lookup table, mixes `h ^ (h >>> 16)`), `EnumSet`'s bit vector, network protocols, and bit tricks in interviews ([Chapter 19](../19-java-for-coding-interviews/README.md)).
 
 ### Self-check
 1. `-7 / 2` and `-7 % 2`? → `-3` and `-1`.
@@ -584,12 +585,14 @@ x & 1 == 0 needs parentheses: true
 ## 2.10 Integer overflow
 
 ### What it is
-Integer arithmetic in Java is done modulo 2³² (`int`) or 2⁶⁴ (`long`). When a result exceeds the range it silently **wraps around** — no exception, no warning. This is **overflow**.
+Integer arithmetic in Java is done modulo 2³² (`int`) or 2⁶⁴ (`long`) — that is, only the remainder after dividing by 2³² or 2⁶⁴ is kept. When a result exceeds the range it silently **wraps around** — no exception, no warning. This is **overflow**.
 
 Analogy: a car odometer with six digits rolls from 999 999 to 000 000.
 
+> **Key term — two's complement:** the way computers store negative integers. The top bit is the sign bit, and a negative number −n is stored as the bit pattern of 2³² − n (for `int`). This lets the same adding circuit handle positive and negative numbers, and it is why adding 1 to the largest `int` produces the most negative one.
+
 ### Why it matters
-Overflow bugs are real and expensive: the binary-search midpoint bug `(low + high) / 2` sat in the JDK's own `Arrays.binarySearch` for years (fixed in 2006), and timestamps multiplied in `int` produce negative durations.
+Overflow bugs are real and expensive: the binary-search (finding an item in sorted data by repeatedly halving the range) midpoint bug `(low + high) / 2` sat in the JDK's own `Arrays.binarySearch` for years (fixed in 2006), and timestamps multiplied in `int` produce negative durations.
 
 [`code/Overflow.java`](code/Overflow.java):
 ```java
@@ -679,7 +682,7 @@ Math.round(2.5)=3 Math.round(-2.5)=-2 Math.floor(-2.5)=-3.0 Math.ceil(-2.5)=-2.0
 ### How to handle it
 1. **Compare with a tolerance**, not `==`: `Math.abs(a - b) < 1e-9` (choose the tolerance for your domain).
 2. **Money**: use `long` minor units (cents) or `BigDecimal` constructed from a **String** (`new BigDecimal("0.1")`) or `BigDecimal.valueOf(0.1)` — `new BigDecimal(0.1)` captures the binary error exactly, as shown above.
-3. **Rounding**: `Math.round` rounds half **up toward positive infinity** (`-2.5 → -2`); `Math.floor`/`ceil` return `double`. For decimal rounding modes (half-even, as banks use), use `BigDecimal.setScale`.
+3. **Rounding**: `Math.round` rounds half **up toward positive infinity** (`-2.5 → -2`); `Math.floor`/`ceil` return `double`. For decimal rounding modes (half-even — round a trailing 5 to the nearest even digit — as banks use), use `BigDecimal.setScale`.
 4. **Loops**: never use a `double` as a loop counter compared with `==` — after ten additions of 0.1 you have 0.9999999999999999, not 1.0.
 5. Since Java 17 (JEP 306) all floating-point arithmetic is strict IEEE 754 on every platform, so results are reproducible; the `strictfp` modifier is obsolete.
 
@@ -737,11 +740,11 @@ null concatenated: null
 ### Key facts
 | Fact | Consequence |
 |---|---|
-| **Immutable** — no method changes a `String` | Methods return a *new* string; assign the result. Safe to share between threads and as `HashMap` keys. |
+| **Immutable** — no method changes a `String` | Methods return a *new* string; assign the result. Safe to share between threads (independent paths of execution running at the same time) and as `HashMap` keys (the lookup values in a map). |
 | **String pool** — identical literals share one object | `"hi" == "hi"` is `true`, but `new String("hi")` makes a distinct object. Never rely on `==`; use `equals`. |
-| Indexes are **0-based**; `substring(begin, end)` excludes `end` | `"Hello".substring(1, 3)` is `"el"`; out-of-range throws `StringIndexOutOfBoundsException`. |
+| Indexes are **0-based** (the first character is at index 0); `substring(begin, end)` excludes `end` | `"Hello".substring(1, 3)` is `"el"`; out-of-range throws `StringIndexOutOfBoundsException`. |
 | `+` with any `String` operand concatenates | Numbers are converted with `String.valueOf`; `null` becomes `"null"`. Adding two `char`s is **numeric** (`'a' + 'b' == 195`). |
-| Concatenating in a loop creates many objects | Use `StringBuilder` in loops ([Chapter 7](../07-core-apis/README.md)). |
+| Concatenating in a loop creates many objects | Use `StringBuilder` (a changeable, growable string) in loops ([Chapter 7](../07-core-apis/README.md)). |
 | Converting | `String.valueOf(x)` / `"" + x` to text; `Integer.parseInt`, `Double.parseDouble` from text (throw `NumberFormatException` on bad input). |
 
 Most-used methods (Java version for newer ones): `length`, `charAt`, `indexOf`, `substring`, `contains`, `startsWith`/`endsWith`, `toUpperCase`/`toLowerCase`, `trim`, `strip` (11), `isEmpty`, `isBlank` (11), `repeat` (11), `lines` (11), `replace`, `split`, `equals`, `equalsIgnoreCase`, `compareTo`, `String.join`, `formatted` (15).
@@ -792,12 +795,12 @@ lines in json: 4
 ```
 How the compiler processes a text block:
 1. The content starts on the line **after** the opening `"""` (text on the same line is a compile error).
-2. **Incidental indentation** is removed: the compiler finds the smallest indentation among non-blank lines *and the closing `"""` line*, and strips that much from every line. Move the closing delimiter left to keep more indentation.
+2. **Incidental indentation** is removed: the compiler finds the smallest indentation among non-blank lines *and the closing `"""` line*, and strips that much from every line. Move the closing delimiter (the `"""` marker) left to keep more indentation.
 3. Trailing spaces on each line are stripped; line endings become `\n` whatever the OS.
 4. Escapes are processed last. Two escapes were added for text blocks: `\<line-end>` joins lines (no newline), and `\s` is a single space that survives stripping.
 5. If the closing `"""` is on its own line, the string ends with `\n`; if it follows text directly, it doesn't.
 
-Use text blocks for embedded SQL, JSON, HTML and test fixtures. For exam-level indentation traps, see the OCP repo's [text blocks section](../../../../ocp-java21-study/chapters/01-building-blocks/README.md).
+Use text blocks for embedded SQL (database query language), JSON (a text format for structured data), HTML (web-page markup) and test fixtures (fixed sample data used by tests). For exam-level indentation traps, see the OCP repo's [text blocks section](../../../../ocp-java21-study/chapters/01-building-blocks/README.md).
 
 ### Common mistakes
 - `if (input == "yes")` — compares identity; use `"yes".equals(input)` (also null-safe).
@@ -814,7 +817,7 @@ Use text blocks for embedded SQL, JSON, HTML and test fixtures. For exam-level i
 ## 2.13 Console output and input
 
 ### Output: `print`, `println`, `printf`
-`System.out` is a `PrintStream` connected to **standard output**; `System.err` to **standard error** (a separate stream, shown in red by many IDEs, useful for diagnostics that should not mix with data output).
+`System.out` is a `PrintStream` (Java's class for writing text) connected to **standard output** (the program's normal output, the terminal by default); `System.err` to **standard error** (a separate stream — a channel that data flows through — shown in red by many IDEs, useful for diagnostics that should not mix with data output).
 
 [`code/Formatting.java`](code/Formatting.java):
 ```java
@@ -843,25 +846,25 @@ Total: 13.50 / Items: 3
 
 | Specifier | Meaning | Flags/width examples |
 |---|---|---|
-| `%s` | any value via `toString()` | `%-10s` left-align in 10 chars |
+| `%s` | any value via `toString()` (the method every object has that returns its text form) | `%-10s` left-align in 10 chars |
 | `%d` | integer (`int`, `long`, `BigInteger`) | `%5d` width 5, `%05d` zero-pad, `%,d` grouping |
 | `%f`, `%e` | decimal, scientific | `%.2f` two decimals (rounds half-up) |
 | `%b`, `%c` | boolean, char | |
 | `%x`, `%o` | hex, octal | `%08X` |
-| `%n` | platform line separator | prefer over `\n` in `printf` |
+| `%n` | platform line separator (`\n` on Linux/macOS, `\r\n` on Windows) | prefer over `\n` in `printf` |
 | `%%` | a literal `%` | |
 
-Formatting is **locale-sensitive**: the default locale decides the decimal and grouping separators, which is why tests and machine-readable output should pass an explicit `Locale` (e.g. `Locale.ROOT` or `Locale.US`). A mismatched type (`%d` with a `double`) throws `IllegalFormatConversionException` at run time.
+Formatting is **locale-sensitive**: the default locale (a language-and-region setting such as German or US English) decides the decimal and grouping separators, which is why tests and machine-readable output should pass an explicit `Locale` (e.g. `Locale.ROOT` or `Locale.US`). A mismatched type (`%d` with a `double`) throws `IllegalFormatConversionException` at run time.
 
 ### Input: four options
 | Option | Best for | Notes |
 |---|---|---|
-| `Scanner` (`java.util`) | Beginner programs, parsing numbers and words | Tokenises input by whitespace; `nextInt`, `nextDouble`, `next`, `nextLine`, `hasNextInt`… Slow for very large input. |
+| `Scanner` (`java.util`) | Beginner programs, parsing numbers and words | Tokenises input (splits it into words, called tokens) by whitespace; `nextInt`, `nextDouble`, `next`, `nextLine`, `hasNextInt`… Slow for very large input. |
 | `IO.readln(prompt)` (`java.lang.IO`, **Java 25**) | Simplest line input | Returns a line as `String` (or `null` at end of input); pairs with `IO.println`. |
 | `BufferedReader` over `InputStreamReader(System.in)` | Fast line-by-line reading (competitive programming, large input) | `readLine()` returns `null` at end; you parse numbers yourself; throws `IOException`. |
-| `System.console()` → `java.io.Console` | Passwords (`readPassword` does not echo) | Returns `null` when there is no interactive terminal (IDE consoles, redirected input) — always check. |
+| `System.console()` → `java.io.Console` | Passwords (`readPassword` does not echo, i.e. show, the typed characters) | Returns `null` when there is no interactive terminal (IDE consoles, redirected input — input fed from a file with `<` instead of the keyboard) — always check. |
 
-**Pick one reader per program.** Each of them buffers `System.in`; if a `Scanner` reads ahead, a `BufferedReader` created later will not see that input.
+**Pick one reader per program.** Each of them buffers `System.in` (reads ahead into its own memory); if a `Scanner` reads ahead, a `BufferedReader` created later will not see that input.
 
 Deterministic `Scanner` demo reading from a `String` ([`code/ScannerDemo.java`](code/ScannerDemo.java)) — a real program would use `new Scanner(System.in)`:
 ```java
@@ -910,7 +913,7 @@ Arrays.fill(secret, ' ');                     // wipe it from memory
 Password (not echoed):
 Password length: 7
 ```
-With input redirected (`… console < file.txt`) it prints `No interactive console (IDE or redirected input).` Passwords are returned as `char[]`, not `String`, so you can wipe them (a `String` stays in memory until garbage-collected). (In JDK 22–24 `System.console()` could return a `Console` even when redirected; JDK 25 returns to the older default, and JDK 26 made `null` the rule whenever input or output is redirected.)
+With input redirected (`… console < file.txt`) it prints `No interactive console (IDE or redirected input).` Passwords are returned as `char[]`, not `String`, so you can wipe them (a `String` stays in memory until garbage-collected, i.e. freed automatically by the JVM at some later time). (In JDK 22–24 `System.console()` could return a `Console` even when redirected; JDK 25 returns to the older default, and JDK 26 made `null` the rule whenever input or output is redirected.)
 
 `java.lang.IO` also works in ordinary classes ([`code/IOClassDemo.java`](code/IOClassDemo.java)):
 ```java

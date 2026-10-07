@@ -1,6 +1,6 @@
 # Chapter 4 — Methods and Arrays
 
-So far every program has been one long `main`. Real programs are built from small, named pieces of behaviour — **methods** — that take inputs, do one job and hand back a result. Real programs also work with many values at once, and the most basic container Java offers for that is the **array**. This chapter covers both, plus the two places they meet: passing arrays to methods, and the `String[] args` array that every classic `main` method receives.
+So far every program has been one long `main`. Real programs are built from small, named pieces of behaviour — **methods** — that take inputs, do one job and hand back a result. Real programs also work with many values at once, and the most basic container (an object that holds other values) Java offers for that is the **array**. This chapter covers both, plus the two places they meet: passing arrays to methods, and the `String[] args` array that every classic `main` method receives.
 
 **What you'll learn**
 
@@ -23,14 +23,14 @@ All runnable code is in [`code/`](code/) (package `ch04.*`). Every output shown 
 ## 4.1 Methods — declaring and calling
 
 ### What it is
-A **method** is a named block of code that belongs to a class. You give it zero or more inputs (**parameters**), it runs its statements, and it may hand back one value (the **return value**). Other languages call this a *function*; in Java every function lives inside a class, so it is called a method.
+A **method** is a named block of code that belongs to a class (a blueprint that groups data and the code working on it; [Chapter 5](../05-oop-classes-and-objects/README.md)). You give it zero or more inputs (**parameters**), it runs its statements, and it may hand back one value (the **return value**). Other languages call this a *function*; in Java every function lives inside a class, so it is called a method.
 
 Analogy: a method is a recipe card. The card's title is the method name, the ingredient list is the parameter list, the steps are the body, and the finished dish is the return value. Writing the card (declaring) does nothing by itself; cooking from it (calling) is what runs it.
 
 ### Why it matters
 - **Reuse** — write the logic once, call it from many places.
 - **Naming** — `isEven(n)` explains itself; `n % 2 == 0` scattered around does not.
-- **Testing** — a small method with clear inputs and outputs is easy to test (Chapter 18).
+- **Testing** — a small method with clear inputs and outputs is easy to test, i.e. to check automatically with test code (Chapter 18).
 - **Change** — fix a bug in one place, not twenty.
 
 ### How it works — anatomy of a declaration
@@ -49,12 +49,12 @@ public static double area(double width, double height) throws IllegalArgumentExc
 
 | Part | Required? | Notes |
 |---|---|---|
-| Access modifier | No | `public`, `protected`, `private`, or none (= package-private). Explained in [Chapter 5](../05-oop-classes-and-objects/README.md#56-access-modifiers). |
-| Optional specifiers | No | `static`, `final`, `abstract`, `synchronized`, `native`, `strictfp` (the last has had no effect since Java 17). |
-| Return type | **Yes** | Any type, or `void`. Constructors are the only "methods" without one. |
+| Access modifier | No | `public`, `protected`, `private`, or none (= package-private: visible only inside the same package). Explained in [Chapter 5](../05-oop-classes-and-objects/README.md#56-access-modifiers). |
+| Optional specifiers | No | `static` (belongs to the class), `final` (cannot be overridden), `abstract` (no body; subclasses supply one), `synchronized` (one thread at a time), `native` (written in C or similar), `strictfp` (the last has had no effect since Java 17). |
+| Return type | **Yes** | Any type, or `void`. Constructors (special methods that set up a new object) are the only "methods" without one. |
 | Name | **Yes** | By convention a verb in lowerCamelCase: `calculateTotal`, `isEmpty`, `toString`. |
 | Parameter list | **Yes** (parentheses) | Can be empty `()`. Each parameter has a type and a name. |
-| `throws` clause | No | Lists checked exceptions the method may throw ([Chapter 8](../08-exceptions/README.md)). |
+| `throws` clause | No | Lists checked exceptions (error types the compiler forces callers to handle; an *exception* is an error object signalled with `throw`) the method may throw ([Chapter 8](../08-exceptions/README.md)). |
 | Body | Yes, unless `abstract`/`native` | The code in `{ }`. |
 
 The **method signature** is the *name plus the parameter types in order* — for example `area(double, double)`. The return type, parameter names and modifiers are **not** part of the signature. That matters for overloading (§4.3): two methods in one class cannot have the same signature.
@@ -62,21 +62,21 @@ The **method signature** is the *name plus the parameter types in order* — for
 Steps when a method is called:
 
 1. The caller evaluates each argument expression, left to right.
-2. The JVM creates a new **stack frame** — a private workspace holding the method's parameters and local variables.
+2. The JVM (Java Virtual Machine — the program that runs your compiled code) creates a new **stack frame** — a private workspace holding the method's parameters and local variables.
 3. Each argument value is **copied** into the matching parameter.
 4. The body runs until a `return` statement or the closing brace.
 5. The frame is discarded; the return value (if any) replaces the call expression in the caller.
 
-**Parameters vs arguments.** A *parameter* is the variable in the declaration (`width`); an *argument* is the actual value passed at the call site (`3`).
+**Parameters vs arguments.** A *parameter* is the variable in the declaration (`width`); an *argument* is the actual value passed at the call site (the place in the code where the method is called; here `3`).
 
 ### `return` and `void`
 - A method with a non-`void` return type must `return` a value of a compatible type on **every** path; the compiler checks this ("missing return statement").
 - A `void` method returns nothing. It may use a bare `return;` to leave early.
 - The caller may ignore a return value — `area(1, 1);` is legal; the result is thrown away.
-- A method returns exactly one value. To return several, return an object (a record, [Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#68-records)) or, for small same-typed results, an array.
+- A method returns exactly one value. To return several, return an object (a record — a compact data-carrying class, [Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#68-records)) or, for small same-typed results, an array.
 
 ### Static vs instance methods
-- A **`static` method** belongs to the class. Call it as `ClassName.method()` (or just `method()` from inside the same class). It has no `this` object, so it cannot touch instance fields directly.
+- A **`static` method** belongs to the class. Call it as `ClassName.method()` (or just `method()` from inside the same class). It has no `this` object (`this` means "the current object"), so it cannot touch instance fields (variables stored inside each object) directly.
 - An **instance method** (no `static`) runs *on an object* and can read and write that object's fields: `counter.countCall()`.
 
 Chapter 5 explains `static` fully ([§5.5](../05-oop-classes-and-objects/README.md#55-static-members)). For now: helper utilities (`Math.max`, `Integer.parseInt`) are static; behaviour of a particular object (`list.add`, `account.deposit`) is instance.
@@ -128,13 +128,13 @@ calls = 2
 - A parameter can be marked `final` to stop the body reassigning it: `void log(final String msg)`. It is optional documentation, not a performance trick.
 
 ### Common mistakes
-- **Forgetting that the result must be used.** `name.toUpperCase();` alone does nothing useful — strings are immutable and the new string is discarded. Write `name = name.toUpperCase();`.
+- **Forgetting that the result must be used.** `name.toUpperCase();` alone does nothing useful — strings are immutable (cannot be changed once created) and the new string is discarded. Write `name = name.toUpperCase();`.
 - **Calling an instance method from `static main`** without an object: "non-static method cannot be referenced from a static context". Create an object first, or make the helper `static`.
 - **Methods that do too much.** If you need "and" to describe it (`validateAndSaveAndEmail`), split it. See clean-code guidance in the LLD handbook: [Clean code](../../../lld/chapters/06-clean-code/README.md).
-- **Boolean flag parameters** (`print(report, true, false)`) make call sites unreadable; prefer two well-named methods or an enum.
+- **Boolean flag parameters** (`print(report, true, false)`) make call sites unreadable; prefer two well-named methods or an enum (a type with a fixed set of named constants).
 
 ### Real-world examples
-`Math.max(a, b)`, `Integer.parseInt(s)`, `String.valueOf(x)` are static utilities; `list.size()`, `map.get(k)`, `builder.append(x)` are instance methods. Frameworks like Spring and JUnit discover your methods by name and annotations and call them for you.
+`Math.max(a, b)`, `Integer.parseInt(s)`, `String.valueOf(x)` are static utilities; `list.size()`, `map.get(k)`, `builder.append(x)` are instance methods. Frameworks (large libraries that call *your* code, rather than the other way round) like Spring and JUnit discover your methods by name and annotations (`@`-markers such as `@Test` attached to code) and call them for you.
 
 ### Self-check
 1. Which parts make up a method signature? → The name and the ordered list of parameter types. Not the return type, not parameter names, not modifiers.
@@ -155,7 +155,7 @@ When you call a method, Java **copies the value of each argument into the parame
 | Variable type | What the variable holds | What gets copied |
 |---|---|---|
 | Primitive (`int`, `double`, `boolean` …) | The number/boolean itself | The number — the method gets its own copy |
-| Reference (`int[]`, `String`, `List`, any object) | A **reference** (think: the address of an object on the heap) | The reference — the method gets a copy of the *address*, which still points at the *same object* |
+| Reference (`int[]`, `String`, `List`, any object) | A **reference** (think: the address of an object on the heap, the memory area where objects live) | The reference — the method gets a copy of the *address*, which still points at the *same object* |
 
 Analogy: you give a friend a photocopy of your house address. They can go to your house and repaint the door (mutate the object) and you will see it. But if they scribble a different address on their photocopy (reassign the parameter), your own copy still says your address.
 
@@ -206,7 +206,7 @@ The classic C-style `swap(a, b)` is impossible in Java: the method only swaps it
 ### Common mistakes
 - Saying "objects are passed by reference". They are not; *references are passed by value*. Interviewers probe exactly this difference with the swap example.
 - Expecting `s = s.trim()` inside a method to change the caller's string. Return the new value instead.
-- Returning `null` to signal "no results" from a method that returns an array or list; return an empty one (`new int[0]`, `List.of()`) so callers can loop safely (*Effective Java*, Item 54).
+- Returning `null` to signal "no results" from a method that returns an array or list; return an empty one (`new int[0]`, `List.of()`) so callers can loop safely (*Effective Java* — Joshua Bloch's widely read book of Java best practices — Item 54).
 
 ### In the interview
 **30-second answer:** "Java is strictly pass-by-value. For primitives the value is the number. For objects the value is a reference, so the method gets a copy of the reference: it can mutate the shared object, but reassigning the parameter never affects the caller's variable. That's why a swap method can't work in Java."
@@ -227,7 +227,7 @@ Everything is passed by value. For references, the value is the reference: mutat
 ## 4.3 Overloading
 
 ### What it is
-**Overloading** means declaring several methods with the **same name but different parameter lists** in the same class (or inherited into it). The compiler picks which one to call at **compile time** from the argument types. This is sometimes called *compile-time* or *static polymorphism* (contrast with overriding in [Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#63-overriding)).
+**Overloading** means declaring several methods with the **same name but different parameter lists** in the same class (or inherited into it — received from a parent class). The compiler picks which one to call at **compile time** from the argument types. This is sometimes called *compile-time* or *static polymorphism* (contrast with overriding — a subclass replacing an inherited method — in [Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md#63-overriding)).
 
 Examples you already use: `System.out.println` has ten overloads (`println(int)`, `println(String)`, `println(Object)`, …); `Math.max` has `int`, `long`, `float` and `double` versions.
 
@@ -238,12 +238,12 @@ Examples you already use: `System.out.println` has ten overloads (`println(int)`
 | Types: `sum(int,int)` vs `sum(double,double)` | Only parameter *names* differ |
 | Order of types: `f(int,String)` vs `f(String,int)` | Only modifiers / `throws` differ |
 | | `f(int[])` vs `f(int...)` — the same signature to the compiler |
-| | Generic types that erase to the same type, e.g. `f(List<String>)` vs `f(List<Integer>)` ([Chapter 9](../09-generics/README.md)) |
+| | Generic types that erase (lose their `<…>` type information at compile time) to the same type, e.g. `f(List<String>)` vs `f(List<Integer>)` ([Chapter 9](../09-generics/README.md)) |
 
 ### How it works — how the compiler chooses
-The Java Language Specification (JLS §15.12.2) resolves an overloaded call in **three phases**. It stops at the first phase that finds any applicable method:
+The Java Language Specification (JLS §15.12.2 — the official rulebook for the language) resolves an overloaded call in **three phases**. It stops at the first phase that finds any applicable method:
 
-1. **Phase 1 — exact match or primitive widening / reference subtyping.** No boxing, no varargs. `byte → short → int → long → float → double`, `char → int`, `String → Object`.
+1. **Phase 1 — exact match or primitive widening / reference subtyping (passing a more specific type where a more general one is expected).** No boxing (wrapping a primitive in its object type, `int` → `Integer`), no varargs. `byte → short → int → long → float → double`, `char → int`, `String → Object`.
 2. **Phase 2 — allow boxing and unboxing** (`int ↔ Integer`), still no varargs.
 3. **Phase 3 — allow varargs.**
 
@@ -298,7 +298,7 @@ Reading the output: `describe(b)` with a `byte` finds `int` in phase 1 (widening
 ### Self-check
 1. `void f(long x)` and `void f(Integer x)`; which runs for `f(3)`? → `f(long)` — widening in phase 1 beats boxing.
 2. Can `int f()` and `void f()` coexist? → No, same signature.
-3. When does a varargs overload get chosen? → Only if no fixed-arity method applies, even with boxing.
+3. When does a varargs overload get chosen? → Only if no fixed-arity (fixed number of parameters) method applies, even with boxing.
 
 ### TL;DR
 Overloads share a name and differ in parameter types, count or order. The compiler picks at compile time: exact/widening → boxing → varargs, then most specific.
@@ -349,12 +349,12 @@ inspect((Object[]) null):
 The last two calls show the one real subtlety: with an `Object...` parameter, `(Object) null` means "one argument that happens to be null", while `(Object[]) null` means "the whole array is null". Code that accepts varargs from outside should tolerate a `null` array.
 
 ### Real-world examples
-`String.format(String, Object...)`, `System.out.printf`, `List.of(E...)`, `Arrays.asList(T...)`, `Path.of(String, String...)`, SLF4J's `log.info("{} {}", a, b)`.
+`String.format(String, Object...)`, `System.out.printf`, `List.of(E...)`, `Arrays.asList(T...)`, `Path.of(String, String...)`, SLF4J's (a popular logging library) `log.info("{} {}", a, b)`.
 
 ### Trade-offs and when not to use it
-- Each call allocates an array. In hot paths, JDK APIs add fixed-arity overloads for the common small cases — `List.of` has overloads for 0 to 10 elements plus a varargs one for exactly this reason (*Effective Java*, Item 53).
+- Each call allocates (reserves memory for) an array. In hot paths (code that runs extremely often), JDK APIs add fixed-arity overloads for the common small cases — `List.of` has overloads for 0 to 10 elements plus a varargs one for exactly this reason (*Effective Java*, Item 53).
 - If a method needs **at least one** argument, declare it: `min(int first, int... rest)` — the compiler then enforces it instead of a runtime check.
-- Mixing varargs with generics (`T...`) triggers "possible heap pollution" warnings; `@SafeVarargs` suppresses them for methods that don't store or expose the array ([Chapter 9](../09-generics/README.md)).
+- Mixing varargs with generics (`T...`) triggers "possible heap pollution" (a generic variable ending up holding an object of the wrong type) warnings; `@SafeVarargs` suppresses them for methods that don't store or expose the array ([Chapter 9](../09-generics/README.md)).
 
 ### Self-check
 1. What is `numbers.length` in `sum()` called with no arguments? → 0.
@@ -378,7 +378,7 @@ Every correct recursive method has:
 Analogy: Russian nesting dolls. You open a doll to find a smaller doll, and keep going until you reach the solid one in the middle (the base case). Then you close them back up in reverse order — that's the "return" phase.
 
 ### How it works — the call stack
-Each call pushes a new **stack frame** with its own parameters and locals onto the thread's **call stack**. When a call returns, its frame is popped and the caller continues where it left off.
+Each call pushes a new **stack frame** with its own parameters and locals onto the thread's (a *thread* is one independent path of execution inside a program) **call stack**. When a call returns, its frame is popped and the caller continues where it left off.
 
 ```mermaid
 sequenceDiagram
@@ -394,7 +394,7 @@ sequenceDiagram
     F3-->>M: 3 * 2 = 6
 ```
 
-The stack has a fixed size per thread (set with `-Xss`; the default is platform-dependent, typically on the order of 1 MB on 64-bit systems). Recursion that never reaches a base case — or simply goes very deep — throws **`StackOverflowError`**. Java does **not** perform tail-call elimination, so even a "tail-recursive" method uses one frame per call.
+The stack has a fixed size per thread (set with the JVM option `-Xss`; the default is platform-dependent, typically on the order of 1 MB on 64-bit systems). Recursion that never reaches a base case — or simply goes very deep — throws **`StackOverflowError`**. Java does **not** perform tail-call elimination (reusing the current frame when the very last action of a method is a call), so even a "tail-recursive" method uses one frame per call.
 
 ```java
 // code/ch04/methods/Recursion.java (key parts)
@@ -443,27 +443,29 @@ StackOverflowError after roughly 38000+ calls
 Notes on the output:
 - The overflow depth depends on the JVM, the platform, `-Xss` and the frame size.
 - `20!` is the largest factorial that fits in a `long`; `21!` silently overflows (integer overflow, [Chapter 2](../02-basics-types-and-operators/README.md)). Use `BigInteger` for bigger values ([Chapter 7](../07-core-apis/README.md)).
-- `fibNaive(n)` makes roughly 1.6ⁿ calls — `fibNaive(30)` already makes about 2.7 million calls because the same subproblems are recomputed. **Memoization** (caching results of previous calls) cuts it to O(n) calls. This idea is the heart of *dynamic programming*.
+- `fibNaive(n)` makes roughly 1.6ⁿ calls — `fibNaive(30)` already makes about 2.7 million calls because the same subproblems are recomputed. **Memoization** (caching results of previous calls) cuts it to O(n) calls. This idea is the heart of *dynamic programming* (solving a problem by combining stored answers to smaller, overlapping subproblems).
+
+> **Key term — Big-O notation:** a way to describe how the work (time or memory) an algorithm needs grows as the input size *n* grows, ignoring constant factors. O(1) means constant — the same cost whatever *n* is; O(n) means it grows in proportion to *n*; O(n²) grows with the square; O(log n) grows very slowly (each doubling of *n* adds one step); O(2ⁿ) is exponential and explodes quickly.
 
 ### Trade-offs — recursion vs iteration
 | | Recursion | Iteration (loops) |
 |---|---|---|
-| Fits naturally | Trees, nested structures, divide-and-conquer (merge sort, quicksort), backtracking, grammars | Linear scans, counters, simple accumulations |
+| Fits naturally | Trees, nested structures, divide-and-conquer (split the problem, solve the parts, combine: merge sort, quicksort), backtracking (try a choice, undo it on a dead end), grammars | Linear scans, counters, simple accumulations |
 | Readability | Often shorter and mirrors the definition | Can need an explicit stack for tree-like problems |
 | Memory | One stack frame per active call; risk of `StackOverflowError` for deep inputs | Constant stack usage |
 | Speed | Slight call overhead; exponential if subproblems repeat without memoization | Usually fastest |
 
 ### When not to use it
-- When depth grows with input size and inputs can be large (a recursive walk of a 1-million-node linked list will overflow). Convert to a loop or use an explicit `ArrayDeque` as a stack.
+- When depth grows with input size and inputs can be large (a recursive walk of a 1-million-node linked list will overflow). Convert to a loop or use an explicit `ArrayDeque` (Java's resizable double-ended queue class) as a stack.
 - When a simple loop is just as clear (factorial, sum of an array).
 
 ### Common mistakes
 - Missing or unreachable base case → infinite recursion → `StackOverflowError`.
 - Recursive step that doesn't shrink the problem (`f(n)` calling `f(n)`), or shrinks past the base case (`n - 2` skipping `n == 1` when the base case is only `n == 1`).
-- Catching `StackOverflowError` to "recover" in real code — it is an `Error`, signalling a bug or an unsuitable algorithm. (The demo catches it only to print a message.)
+- Catching `StackOverflowError` to "recover" in real code — it is an `Error` (the category of serious problems programs are not expected to catch), signalling a bug or an unsuitable algorithm. (The demo catches it only to print a message.)
 
 ### Real-world examples
-Directory trees are recursive structures (`Files.walkFileTree` visits them depth-first); JSON parsers are typically recursive-descent; compilers walk syntax trees recursively; `Arrays.sort` for objects uses a merge-based algorithm (TimSort) that is divide-and-conquer at heart.
+Directory trees are recursive structures (`Files.walkFileTree` visits them depth-first — all the way down one branch before the next); JSON parsers are typically recursive-descent (one method per grammar rule, calling each other); compilers walk syntax trees (tree representations of source code) recursively; `Arrays.sort` for objects uses a merge-based algorithm (TimSort) that is divide-and-conquer at heart.
 
 ### In the interview
 **30-second answer:** "A recursive method calls itself on a smaller input until it hits a base case. Each call gets a stack frame, so depth costs memory, and Java has no tail-call optimization — very deep recursion throws StackOverflowError. For overlapping subproblems like Fibonacci I add memoization, turning exponential time into linear."
@@ -484,13 +486,13 @@ Recursion = base case + smaller self-call. Each call costs a stack frame; too de
 ## 4.6 Arrays
 
 ### What it is
-An **array** is a fixed-size, ordered container of elements that all have the same type, stored in one contiguous block and accessed by an integer **index** starting at 0. In Java an array is an **object**: it lives on the heap, a variable of array type holds a reference to it, and it has a `length` field.
+An **array** is a fixed-size, ordered container of elements that all have the same type, stored in one contiguous (side-by-side in memory) block and accessed by an integer **index** starting at 0. In Java an array is an **object**: it lives on the heap, a variable of array type holds a reference to it, and it has a `length` field.
 
 Analogy: a row of numbered lockers. The number of lockers is fixed when the row is built; each locker holds one item of the declared kind; you open locker *i* directly without walking past the others.
 
 ### Why it matters
 - **Speed**: reading or writing `a[i]` is O(1) — the address is computed from the index.
-- **Foundation**: `ArrayList`, `HashMap`, `ArrayDeque`, `String` (internally a byte array) are all built on arrays.
+- **Foundation**: `ArrayList` (resizable list), `HashMap` (key→value lookup table), `ArrayDeque`, `String` (internally a byte array) are all built on arrays.
 - **Primitives without boxing**: an `int[]` stores raw ints; a `List<Integer>` stores objects. For large numeric data an array is several times smaller and faster.
 
 ### How it works
@@ -546,7 +548,7 @@ empty array length = 0
 
 Things to notice:
 - `52.980000000000004` is ordinary binary floating-point rounding ([Chapter 2](../02-basics-types-and-operators/README.md)); use `BigDecimal` for money.
-- Printing an array directly prints something like `[I@1b6d3586` — the type code `[I` ("array of int") plus a hash. Use `Arrays.toString(a)` (or `Arrays.deepToString` for nested arrays).
+- Printing an array directly prints something like `[I@1b6d3586` — the type code `[I` ("array of int") plus a hash (a number derived from the object's identity). Use `Arrays.toString(a)` (or `Arrays.deepToString` for nested arrays).
 - `==` compares references; use `Arrays.equals` to compare contents.
 - The enhanced `for` gives you a *copy* of each element; assigning to the loop variable does not change the array. Use an index loop to modify elements.
 
@@ -554,7 +556,7 @@ Things to notice:
 | Technique | Result | Notes |
 |---|---|---|
 | `b = a` | Same array, two names | No copy at all |
-| `a.clone()` | New array, same length | **Shallow**: for an array of objects, both arrays share the element objects |
+| `a.clone()` | New array, same length | **Shallow** (copies references, not the objects they point to): for an array of objects, both arrays share the element objects |
 | `Arrays.copyOf(a, n)` | New array of length `n` | Truncates or pads with defaults |
 | `Arrays.copyOfRange(a, from, to)` | New array of elements `[from, to)` | `to` is exclusive |
 | `System.arraycopy(src, srcPos, dst, dstPos, len)` | Copies into an **existing** array | Fastest low-level copy; handles overlapping ranges correctly |
@@ -576,7 +578,7 @@ min=-2 max=17
 [] is an empty array, never return null for 'no results'
 ```
 
-Generic collections are *invariant* instead (`List<String>` is not a `List<Object>`), which turns this runtime failure into a compile error — one reason *Effective Java* (Item 28) says to prefer lists to arrays in APIs. See [Chapter 9](../09-generics/README.md).
+Generic collections are *invariant* instead (`List<String>` is not a `List<Object>`), which turns this runtime failure into a compile error — one reason *Effective Java* (Item 28) says to prefer lists to arrays in APIs (the public methods a class or library offers to callers). See [Chapter 9](../09-generics/README.md).
 
 ### Trade-offs — array vs `ArrayList`
 | | Array (`int[]`, `String[]`) | `ArrayList<E>` ([Chapter 10](../10-collections/README.md)) |
@@ -670,12 +672,12 @@ Arrays.equals: false, Arrays.deepEquals: true
 `Arrays.equals` on a 2-D array compares the *row references* (different objects → false); `Arrays.deepEquals` compares contents recursively.
 
 ### Real-world examples
-Game boards (chess, tic-tac-toe, Sudoku), images as pixel grids, matrices in numeric code, dynamic-programming tables (`dp[i][j]` for edit distance or longest common subsequence), adjacency matrices for small graphs.
+Game boards (chess, tic-tac-toe, Sudoku), images as pixel grids, matrices (rectangular grids of numbers) in numeric code, dynamic-programming tables (`dp[i][j]` for edit distance or longest common subsequence), adjacency matrices for small graphs (a grid recording which nodes of a network are connected).
 
 ### Common mistakes
 - Using `grid.length` for the column count — use `grid[r].length` (rows may differ).
 - `NullPointerException` from a jagged array whose rows were never allocated.
-- Looping column-first over a big 2-D array: each row is a separate array, so iterating row by row (`for r … for c …`) is much more cache-friendly.
+- Looping column-first over a big 2-D array: each row is a separate array, so iterating row by row (`for r … for c …`) is much more cache-friendly (the CPU loads memory in blocks into a fast cache, so reading neighbouring elements in order is quicker).
 - `Arrays.fill(grid, 0)` on an `int[][]` compiles (it picks `fill(Object[], Object)`) but throws `ArrayStoreException` at runtime, because each slot must hold an `int[]`. Fill each row instead: `for (int[] row : grid) Arrays.fill(row, 0);`.
 
 ### Self-check
@@ -695,8 +697,8 @@ A 2-D array is an array of row arrays; rows can differ in length (jagged). Use `
 | Method | What it does | Notes |
 |---|---|---|
 | `toString(a)` / `deepToString(a)` | Readable text `[1, 2, 3]` | Use `deep…` for nested arrays |
-| `sort(a)` / `sort(a, from, to)` | Sorts in place, ascending | Primitives: Dual-Pivot Quicksort, O(n log n) typical. Objects: TimSort — **stable**, O(n log n) worst case |
-| `sort(a, comparator)` | Sort objects by a `Comparator` | Comparators in [Chapter 10](../10-collections/README.md) and [Chapter 11](../11-lambdas-and-functional-programming/README.md) |
+| `sort(a)` / `sort(a, from, to)` | Sorts in place, ascending | Primitives: Dual-Pivot Quicksort, O(n log n) typical. Objects: TimSort — **stable** (equal elements keep their original order), O(n log n) worst case |
+| `sort(a, comparator)` | Sort objects by a `Comparator` (an object that decides which of two values comes first) | Comparators in [Chapter 10](../10-collections/README.md) and [Chapter 11](../11-lambdas-and-functional-programming/README.md) |
 | `parallelSort(a)` | Sorts using multiple threads | Only pays off for large arrays |
 | `binarySearch(a, key)` | O(log n) search in a **sorted** array | Returns the index, or `-(insertionPoint) - 1` if absent. Unsorted input → undefined result |
 | `fill(a, v)` | Sets every element to `v` | For objects, every slot gets the *same* reference |
@@ -704,7 +706,7 @@ A 2-D array is an array of row arrays; rows can differ in length (jagged). Use `
 | `copyOf`, `copyOfRange` | New array (truncate/pad, or a slice) | |
 | `equals(a, b)` / `deepEquals` | Content equality | |
 | `hashCode(a)` / `deepHashCode` | Content-based hash | Matches `equals` |
-| `compare(a, b)` | Lexicographic comparison: negative, 0, positive | Java 9 |
+| `compare(a, b)` | Lexicographic (dictionary-style, element by element) comparison: negative, 0, positive | Java 9 |
 | `mismatch(a, b)` | Index of first difference, or -1 | Java 9 |
 | `asList(T...)` | Fixed-size `List` view **backed by** the array | Writes go through; `add`/`remove` throw |
 | `stream(a)` | A stream over the array (`IntStream` for `int[]`) | Streams in [Chapter 12](../12-streams/README.md) |
@@ -747,7 +749,7 @@ List.of copy:  [z, b, c]
 
 Reading it:
 - `binarySearch(nums, 20)` returns `-4`: 20 would be inserted at index 3, so the result is `-(3) - 1`. A negative result always means "not found".
-- String natural order is by UTF-16 code unit, so uppercase `F` (70) sorts before lowercase `a` (97). Use `CASE_INSENSITIVE_ORDER` or a `Collator` for human-friendly order.
+- String natural order (the default ordering a type defines for itself) is by UTF-16 code unit (the 16-bit number Java stores for each character), so uppercase `F` (70) sorts before lowercase `a` (97). Use `CASE_INSENSITIVE_ORDER` or a `Collator` (a language-aware text comparer) for human-friendly order.
 - `Arrays.asList` is a *view*: changes to the list show in the array and vice versa, and its size is fixed. `List.of(array)` takes a *copy* and is fully unmodifiable — the later `backing[1] = "changed"` did not affect it. Wrap with `new ArrayList<>(Arrays.asList(a))` when you need a growable list.
 
 ### Common mistakes
@@ -776,14 +778,14 @@ public static void main(String[] args)
 
 - `public` — the launcher, outside your class, must be able to call it.
 - `static` — no object exists yet when the program starts.
-- `void` — the program's exit status is set with `System.exit(code)`, not by returning.
+- `void` — the program's exit status (a number handed back to the operating system; 0 means success) is set with `System.exit(code)`, not by returning.
 - `String[] args` — the **command-line arguments**: the words typed after the class name. `String... args` is also accepted.
 
 ### How it works — arguments
 1. `java ch04.args.CommandLineArgs 3 7 --verbose` → `args` is `{"3", "7", "--verbose"}`.
 2. With no arguments, `args` is an **empty array** (length 0), never `null`.
 3. Every argument is a `String`; convert with `Integer.parseInt`, `Double.parseDouble`, etc., and handle `NumberFormatException`.
-4. The shell splits on spaces; quote to keep spaces: `java App "New York"` gives one argument.
+4. The shell (the command-line program that runs your commands) splits on spaces; quote to keep spaces: `java App "New York"` gives one argument.
 5. The program name is **not** in `args` (unlike C's `argv[0]`).
 
 ```java
@@ -819,7 +821,7 @@ Real command-line tools use a parser library (picocli, JCommander) instead of ha
 [Chapter 1, §1.10](../01-java-and-the-jvm/README.md#110-launching-source-files-directly) introduced JEP 512 (final in Java 25). The parts that matter for `main`:
 
 - `main` no longer has to be `public` or `static`, and the `String[]` parameter is optional. If a class has both, the launcher picks `main(String[])`; if the chosen method is an instance method, the launcher first creates an object with the class's non-private no-argument constructor.
-- A **compact source file** holds just methods and fields; the compiler wraps them in an implicit `final` class that other code cannot name, and imports all of `java.base` for you. `IO.println`/`IO.readln` handle simple console I/O.
+- A **compact source file** holds just methods and fields; the compiler wraps them in an implicit `final` class that other code cannot name, and imports all of `java.base` (the JDK's core module, holding `java.lang`, `java.util` and friends) for you. `IO.println`/`IO.readln` handle simple console I/O.
 
 ```java
 // code/HelloCompact.java — the entire file

@@ -1,8 +1,8 @@
 # Chapter 8 — Exceptions
 
-Programs fail: files go missing, users type "forty-two" where a number belongs, networks time out, and code has bugs. An **exception** is Java's way of reporting that something went wrong *without* forcing every method to return an error code. This chapter explains the mechanism (how an exception travels up the call stack), the type hierarchy (checked vs unchecked vs errors), every piece of syntax (`try`/`catch`/`finally`, multi-catch, try-with-resources, `throw`, `throws`), how to design your own exceptions, and the practices that separate robust code from code that hides its failures.
+Programs fail: files go missing, users type "forty-two" where a number belongs, networks time out (give up after waiting too long for an answer), and code has bugs. An **exception** is Java's way of reporting that something went wrong *without* forcing every method to return an error code. This chapter explains the mechanism (how an exception travels up the call stack — the chain of method calls currently in progress), the type hierarchy (checked vs unchecked vs errors), every piece of syntax (`try`/`catch`/`finally`, multi-catch, try-with-resources, `throw`, `throws`), how to design your own exceptions, and the practices that separate robust code from code that hides its failures.
 
-You've already met exceptions in passing: `NumberFormatException` from `Integer.parseInt`, `ArithmeticException` from `Math.addExact` ([Chapter 2](../02-basics-types-and-operators/README.md)), `ArrayIndexOutOfBoundsException` ([Chapter 4](../04-methods-and-arrays/README.md)), and the rule that an overriding method can't throw broader checked exceptions ([Chapter 6 §6.3](../06-oop-inheritance-interfaces-and-more/README.md#63-overriding)).
+You've already met exceptions in passing: `NumberFormatException` from `Integer.parseInt`, `ArithmeticException` from `Math.addExact` ([Chapter 2](../02-basics-types-and-operators/README.md)), `ArrayIndexOutOfBoundsException` ([Chapter 4](../04-methods-and-arrays/README.md)), and the rule that an overriding method (a subclass's replacement for an inherited method) can't throw broader checked exceptions ([Chapter 6 §6.3](../06-oop-inheritance-interfaces-and-more/README.md#63-overriding)).
 
 **What you'll learn**
 
@@ -13,22 +13,22 @@ You've already met exceptions in passing: `NumberFormatException` from `Integer.
 | 8.3 | Handle or declare | satisfy the compiler for checked exceptions with `try`/`catch` or `throws` |
 | 8.4 | `finally` and control flow | predict exactly what runs, and what gets returned, in every case |
 | 8.5 | Multi-catch, catch order, rethrow | write compact handlers that compile |
-| 8.6 | try-with-resources | close files, sockets and locks correctly, including suppressed exceptions |
+| 8.6 | try-with-resources | close files, sockets (network connection endpoints) and locks (objects that make threads take turns) correctly, including suppressed exceptions |
 | 8.7 | Throwing and custom exceptions | choose a standard exception or design your own |
 | 8.8 | Chaining and translation | wrap low-level causes without losing them |
 | 8.9 | Reading stack traces | find the real cause in a trace in seconds |
-| 8.10 | Best practices and anti-patterns | apply the *Effective Java* rules and avoid swallowed or misused exceptions |
+| 8.10 | Best practices and anti-patterns | apply the *Effective Java* (Joshua Bloch's best-practice book) rules and avoid swallowed (caught and silently ignored) or misused exceptions |
 
 All runnable code is in [`code/`](code/) (package `ch08.*`), compiled with `javac --release 25` and run on JDK 26. Outputs are pasted from real runs.
 
-> **Exam depth.** "Does this compile?" puzzles about unreachable catch blocks, `finally` return values, try-with-resources scope and suppressed exceptions, plus overriding and `throws`: [OCP Chapter 11 — Exceptions and localization](../../../../ocp-java21-study/chapters/11-exceptions-localization/README.md) (sections 1–4). For error-handling *strategy* in services (retries, error codes at API boundaries, logging), see [LLD Clean Code §6 Error handling](../../../lld/chapters/06-clean-code/README.md#6-error-handling) and [§16 Error-handling strategy](../../../lld/chapters/06-clean-code/README.md#16-error-handling-strategy-best-practices-for-real-services).
+> **Exam depth.** "Does this compile?" puzzles about unreachable catch blocks, `finally` return values, try-with-resources scope and suppressed exceptions, plus overriding and `throws`: [OCP Chapter 11 — Exceptions and localization](../../../../ocp-java21-study/chapters/11-exceptions-localization/README.md) (sections 1–4). For error-handling *strategy* in services (retries — automatically trying a failed operation again, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) — error codes at API boundaries, logging), see [LLD Clean Code §6 Error handling](../../../lld/chapters/06-clean-code/README.md#6-error-handling) and [§16 Error-handling strategy](../../../lld/chapters/06-clean-code/README.md#16-error-handling-strategy-best-practices-for-real-services).
 
 ---
 
 ## 8.1 What an exception is
 
 ### What it is
-An **exception** is an object that describes an abnormal event, plus the act of **throwing** it: the JVM stops executing the current code and jumps to the nearest matching **handler** (a `catch` block). If no method on the call stack handles it, the thread dies and the JVM prints a **stack trace**.
+An **exception** is an object that describes an abnormal event, plus the act of **throwing** it: the JVM stops executing the current code and jumps to the nearest matching **handler** (a `catch` block). If no method on the call stack handles it, the thread (an independent path of execution; every program has at least the `main` thread) dies and the JVM prints a **stack trace** (a list of the method calls that were active when the error happened, §8.9).
 
 Analogy: a factory production line. When a worker finds a defect they can't fix, they don't carry on building; they pull the alarm cord (throw). Supervisors up the chain (callers) each get a chance to deal with it (catch). If nobody does, the line stops (the thread terminates).
 
@@ -36,15 +36,15 @@ Analogy: a factory production line. When a worker finds a defect they can't fix,
 Without exceptions (as in C), every function returns an error code that every caller must check — and forgetting one check silently corrupts data. Exceptions:
 1. **Separate** normal logic from error handling.
 2. **Can't be silently ignored** by forgetting a check — an unhandled exception is loud.
-3. **Propagate automatically** to the level that knows what to do (a web request handler, a UI, a retry loop).
+3. **Propagate automatically** to the level that knows what to do (a web request handler, a UI — user interface — a retry loop).
 4. **Carry information**: type, message, cause, and the exact call path (stack trace).
 
 ### How it works
-1. Something goes wrong: the JVM detects it (division by zero, `null` dereference, bad array index) or your code executes `throw new SomeException(...)`.
+1. Something goes wrong: the JVM detects it (division by zero, `null` dereference — trying to use the object behind a `null` reference — bad array index) or your code executes `throw new SomeException(...)`.
 2. Execution of the current block stops immediately — remaining statements are skipped.
 3. The JVM looks for an enclosing `try` whose `catch` type matches (the thrown object is an instance of it). If found, that catch block runs, then execution continues **after** the whole `try` statement.
 4. If not found in this method, the method ends abruptly and the exception is re-thrown in the **caller**, at the point of the call. This repeats up the stack (**stack unwinding**), running `finally` blocks on the way.
-5. If it reaches the top of a thread's stack, the thread's *uncaught exception handler* prints the stack trace and the thread ends. If that was the `main` thread and no other non-daemon threads are running, the program exits with status 1.
+5. If it reaches the top of a thread's stack, the thread's *uncaught exception handler* prints the stack trace and the thread ends. If that was the `main` thread and no other non-daemon threads (daemon threads are background helpers that don't keep the JVM alive) are running, the program exits with status 1 (the exit code reported to the operating system; non-zero means failure).
 
 [`code/ch08/basics/FirstException.java`](code/ch08/basics/FirstException.java) (key parts):
 ```java
@@ -124,7 +124,7 @@ sequenceDiagram
     L1->>L1: catch block runs, then level1 end
 ```
 
-The message says `"<parameter1>"` because the runner compiles without debug info. Compile with **`javac -g`** (IDEs and Maven/Gradle do this by default) and the same line reads `because "s" is null`. These **helpful NullPointerException messages** arrived in Java 14 (JEP 358) and are on by default since Java 15.
+The message says `"<parameter1>"` because the runner compiles without debug info (extra data mapping compiled code back to variable names and line numbers). Compile with **`javac -g`** (IDEs and Maven/Gradle — the common build tools — do this by default) and the same line reads `because "s" is null`. These **helpful NullPointerException messages** arrived in Java 14 (JEP 358 — a numbered JDK Enhancement Proposal) and are on by default since Java 15.
 
 ### Self-check
 1. After a `catch` block finishes, where does execution continue? → After the entire `try` statement, not back at the throw point.
@@ -141,8 +141,8 @@ Only objects of class **`java.lang.Throwable`** (or its subclasses) can be throw
 - **`Exception`** — conditions a program might want to handle. Its subclass **`RuntimeException`** is special.
 
 The compiler divides throwables into two kinds:
-- **Checked exceptions**: `Exception` and its subclasses, *except* `RuntimeException` and its subclasses. The compiler **forces** you to handle or declare them (§8.3). They model problems outside the program's control that a caller can reasonably recover from: I/O failures, network errors, "file not found", `InterruptedException`.
-- **Unchecked exceptions**: `RuntimeException` and its subclasses, **plus** `Error` and its subclasses. No compiler enforcement. `RuntimeException`s usually signal **programming errors** — a violated precondition such as a `null` argument, a bad index, an illegal state.
+- **Checked exceptions**: `Exception` and its subclasses, *except* `RuntimeException` and its subclasses. The compiler **forces** you to handle or declare them (§8.3). They model problems outside the program's control that a caller can reasonably recover from: I/O (input/output) failures, network errors, "file not found", `InterruptedException` (thrown when a waiting thread is asked to stop).
+- **Unchecked exceptions**: `RuntimeException` and its subclasses, **plus** `Error` and its subclasses. No compiler enforcement. `RuntimeException`s usually signal **programming errors** — a violated precondition (a condition that must be true before a method is called) such as a `null` argument, a bad index, an illegal state.
 
 ```mermaid
 classDiagram
@@ -212,21 +212,21 @@ OutOfMemoryError [error, unchecked]
 ### The exceptions you'll meet most
 | Exception | Kind | Typical cause |
 |---|---|---|
-| `NullPointerException` | unchecked | calling a method/field on `null`, unboxing `null` |
+| `NullPointerException` | unchecked | calling a method/field on `null`, unboxing (converting a wrapper like `Integer` to a primitive) `null` |
 | `IllegalArgumentException` | unchecked | a method rejects an argument's value |
 | `NumberFormatException` | unchecked (IAE subclass) | `Integer.parseInt("abc")` |
 | `IllegalStateException` | unchecked | a call at the wrong time (e.g. `iterator.remove()` twice, using a closed object) |
 | `IndexOutOfBoundsException` (+ `Array…`, `String…`) | unchecked | bad index |
-| `ClassCastException` | unchecked | invalid downcast |
+| `ClassCastException` | unchecked | invalid downcast (cast to a more specific type) |
 | `ArithmeticException` | unchecked | integer `/ 0`, `*Exact` overflow, non-terminating `BigDecimal` division |
 | `UnsupportedOperationException` | unchecked | modifying an immutable collection (`List.of(...).add(x)`) |
 | `ConcurrentModificationException` | unchecked | changing a collection while iterating it ([Chapter 10](../10-collections/README.md)) |
-| `NoSuchElementException` | unchecked | `iterator.next()` past the end, `Optional.get()`/`orElseThrow()` on empty |
+| `NoSuchElementException` | unchecked | `iterator.next()` past the end, `Optional.get()`/`orElseThrow()` on empty (`Optional` is a box that may or may not hold a value) |
 | `DateTimeException`, `DateTimeParseException` | unchecked | invalid date values/text ([Chapter 7](../07-core-apis/README.md)) |
 | `IOException` (+ `FileNotFoundException`, `NoSuchFileException`…) | checked | file/network I/O failures |
 | `InterruptedException` | checked | a blocked thread was interrupted ([Chapter 14](../14-concurrency-1/README.md)) |
-| `SQLException` | checked | database errors (JDBC) |
-| `ExecutionException`, `TimeoutException` | checked | a `Future` task failed / waited too long |
+| `SQLException` | checked | database errors (JDBC, Java's standard database API) |
+| `ExecutionException`, `TimeoutException` | checked | a `Future` (a handle to the result of a task running in the background) task failed / waited too long |
 | `ExceptionInInitializerError` | error | exception in a `static` initialiser |
 | `StackOverflowError`, `OutOfMemoryError` | error | runaway recursion; heap exhausted |
 
@@ -236,10 +236,10 @@ OutOfMemoryError [error, unchecked]
 | Compiler enforcement | Must catch or declare | None |
 | Signals | Recoverable external condition | Programming error (bug) or unrecoverable state |
 | API cost | Every caller must deal with it — even when they can't do anything useful | Callers can ignore it; documentation (`@throws`) matters more |
-| Works with lambdas/streams | Poorly — `java.util.function` interfaces declare no checked exceptions ([Chapter 11](../11-lambdas-and-functional-programming/README.md)) | Fine |
+| Works with lambdas/streams (short inline functions / data-processing pipelines) | Poorly — `java.util.function` interfaces declare no checked exceptions ([Chapter 11](../11-lambdas-and-functional-programming/README.md)) | Fine |
 | Examples | `IOException`, `SQLException` | `IllegalArgumentException`, `NullPointerException` |
 
-Java is unusual in having checked exceptions (C#, Kotlin, Python, JavaScript don't). *Effective Java* Items 70–71: use checked exceptions for conditions the caller can **recover** from, runtime exceptions for programming errors, and avoid checked exceptions when the caller can't do anything useful anyway. Most modern frameworks (Spring, JPA/Hibernate) wrap checked exceptions in unchecked ones for this reason.
+Java is unusual in having checked exceptions (C#, Kotlin, Python, JavaScript don't). *Effective Java* Items 70–71: use checked exceptions for conditions the caller can **recover** from, runtime exceptions for programming errors, and avoid checked exceptions when the caller can't do anything useful anyway. Most modern frameworks (Spring, an application framework; JPA/Hibernate, database-mapping libraries) wrap checked exceptions in unchecked ones for this reason.
 
 ### In the interview
 **30-second answer:** "Everything thrown is a `Throwable`. `Error`s are JVM-level problems you don't catch. `Exception`s are either checked — the compiler forces catch-or-declare, used for recoverable external failures like `IOException` — or unchecked `RuntimeException`s, used for programming errors like `IllegalArgumentException` or `NullPointerException`. I use unchecked for precondition violations and checked only when the caller can genuinely recover."
@@ -266,7 +266,7 @@ The **handle-or-declare rule** (sometimes called "catch or specify"): if code in
 
 Otherwise the program doesn't compile: *"unreported exception IOException; must be caught or declared to be thrown"*.
 
-`throw` vs `throws`: **`throw`** is a statement that throws one exception object now (`throw new IOException("x")`). **`throws`** is part of a method signature listing exception *types* the method may throw (`void read() throws IOException, SQLException`).
+`throw` vs `throws`: **`throw`** is a statement that throws one exception object now (`throw new IOException("x")`). **`throws`** is part of a method signature (the method's declaration line) listing exception *types* the method may throw (`void read() throws IOException, SQLException`).
 
 ### How it works
 [`code/ch08/checked/CheckedDemo.java`](code/ch08/checked/CheckedDemo.java):
@@ -317,7 +317,7 @@ bad number 'forty-two': For input string: "forty-two"
 | Unchecked exceptions *may* be declared | useful as documentation, but the compiler ignores it; document with Javadoc `@throws` |
 | You can't catch a checked exception that the `try` body can't throw | *"exception IOException is never thrown in body of corresponding try statement"* — except `Exception` and `Throwable`, which could always hide an unchecked one |
 | Overriding methods may not throw **new or broader** checked exceptions | they may throw fewer, narrower, or any unchecked ones ([Chapter 6 §6.3](../06-oop-inheritance-interfaces-and-more/README.md#63-overriding)) |
-| Lambdas | a lambda body can throw a checked exception only if the functional interface's method declares it; `Runnable`, `Function` etc. don't ([Chapter 11](../11-lambdas-and-functional-programming/README.md)) |
+| Lambdas | a lambda body can throw a checked exception only if the functional interface's (an interface with one abstract method, which the lambda implements) method declares it; `Runnable`, `Function` etc. don't ([Chapter 11](../11-lambdas-and-functional-programming/README.md)) |
 | Initialiser blocks | a `static` initialiser may not throw a checked exception (unchecked ones are wrapped in `ExceptionInInitializerError`); an instance initialiser may, only if every constructor declares it |
 
 ### When to handle vs declare
@@ -481,7 +481,7 @@ In a multi-catch, the variable's static type is the closest common supertype of 
 ### What it is
 A **resource** is an object that must be closed when you're done — files, sockets, database connections, streams, locks wrapped as closeables. **try-with-resources** (Java 7) declares resources in parentheses after `try`; Java closes them automatically when the block ends, however it ends.
 
-Any class implementing **`java.lang.AutoCloseable`** (single method `void close() throws Exception`) can be used. **`java.io.Closeable`** is the older sub-interface for I/O, whose `close()` throws `IOException` and must be idempotent (safe to call twice).
+Any class implementing **`java.lang.AutoCloseable`** (single method `void close() throws Exception`) can be used. **`java.io.Closeable`** is the older sub-interface for I/O, whose `close()` throws `IOException` and must be idempotent (safe to call twice — calling it again has no further effect; the same idea matters a lot in distributed systems, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
 
 ### Why it matters
 Before Java 7, correct cleanup needed a `finally` with a null check and a nested `try` around `close()`, and a failure in `close()` could *replace* the real error. try-with-resources fixes both. *Effective Java* Item 9: "Prefer try-with-resources to try-finally."
@@ -492,7 +492,7 @@ Before Java 7, correct cleanup needed a `finally` with a null check and a nested
 3. When the body finishes (normally or by exception), resources are **closed in reverse order** of declaration — **before** any `catch` or `finally` block of the same statement runs.
 4. If a resource's initialisation failed, only the ones already opened are closed; `null` resources are skipped.
 5. If the body throws *and* `close()` throws, the body's exception is the **primary** one; the close exceptions are attached to it as **suppressed** exceptions (`getSuppressed()`), never lost.
-6. Java 9: you can use an existing **effectively final** variable directly: `try (reader) { ... }`.
+6. Java 9: you can use an existing **effectively final** (never reassigned after it is first set) variable directly: `try (reader) { ... }`.
 
 [`code/ch08/resources/TryWithResources.java`](code/ch08/resources/TryWithResources.java) (key parts):
 ```java
@@ -561,9 +561,9 @@ try (Connection con = dataSource.getConnection();
 
 ### Common mistakes
 - Opening a resource *outside* the `try (...)` without passing it in — it won't be closed if something fails in between.
-- Returning a resource (e.g. a `Stream` from `Files.lines`) out of the `try` — it's closed by the time the caller uses it. Stream-returning I/O methods like `Files.lines`/`Files.walk` must themselves be used in try-with-resources ([Chapter 13](../13-io-and-nio/README.md)).
+- Returning a resource (e.g. a `Stream` — a lazily read sequence — from `Files.lines`) out of the `try` — it's closed by the time the caller uses it. Stream-returning I/O methods like `Files.lines`/`Files.walk` must themselves be used in try-with-resources ([Chapter 13](../13-io-and-nio/README.md)).
 - Reassigning a resource variable: *"auto-closeable resource r may not be assigned"*.
-- Wrapping streams: `try (var in = new BufferedReader(new FileReader(f)))` closes the outer reader, which closes the inner one; but if the *outer* constructor throws, the inner one leaks. For strictness, declare each as its own resource.
+- Wrapping streams: `try (var in = new BufferedReader(new FileReader(f)))` closes the outer reader, which closes the inner one; but if the *outer* constructor throws, the inner one leaks (is never closed). For strictness, declare each as its own resource.
 
 ### In the interview
 **30-second answer:** "try-with-resources closes any `AutoCloseable` automatically, in reverse order, before catch and finally run. If both the body and `close` throw, the body's exception wins and the close failures are attached as suppressed exceptions, so nothing is lost. It replaced error-prone `finally { if (x != null) x.close(); }` code."
@@ -601,9 +601,9 @@ Don't throw `Exception`, `RuntimeException`, `Throwable` or `Error` directly —
 ### When to write your own
 Create a custom exception when callers need to **distinguish** it (catch it specifically) or when it should **carry data** (an account ID, a shortfall amount, an error code). Guidelines:
 1. Name it `…Exception`.
-2. Extend `RuntimeException` for programming/state errors and most domain rule violations in modern code; extend `Exception` only if callers are expected to recover and you want the compiler to remind them.
+2. Extend `RuntimeException` for programming/state errors and most domain (business) rule violations in modern code; extend `Exception` only if callers are expected to recover and you want the compiler to remind them.
 3. Provide the standard constructors you need: `(String message)` and `(String message, Throwable cause)`; the cause constructor is essential for chaining (§8.8).
-4. Make added fields `final` and expose getters. Exceptions are `Serializable`; strict linting (`-Xlint:serial`) asks for a `serialVersionUID`.
+4. Make added fields `final` and expose getters. Exceptions are `Serializable` (convertible to bytes for storage or transfer); strict linting (extra compiler warnings, `-Xlint:serial`) asks for a `serialVersionUID` (a version number for the serialised form).
 5. Build a message with the failure-capture details (*Effective Java* Item 75): the values that caused it, not "Error occurred". Never include passwords or personal data.
 
 [`code/ch08/custom/CustomExceptions.java`](code/ch08/custom/CustomExceptions.java) (key parts):
@@ -649,7 +649,7 @@ classDiagram
     PaymentException <|-- FraudSuspectedException
     PaymentException <|-- GatewayTimeoutException
 ```
-Keep it shallow; three or four types that callers actually handle differently beat twenty that nobody catches individually. A sealed interface or an error-code enum field can also work.
+Keep it shallow; three or four types that callers actually handle differently beat twenty that nobody catches individually. A sealed interface (one that lists all its allowed implementations) or an error-code enum field can also work.
 
 ### Self-check
 1. Which exception for `setAge(-5)`? → `IllegalArgumentException`.
@@ -661,7 +661,7 @@ Keep it shallow; three or four types that callers actually handle differently be
 ## 8.8 Chaining and exception translation
 
 ### What it is
-**Exception chaining** stores the original exception as the **cause** of a new one: `new ReportException("could not build report", e)`. **Exception translation** (*Effective Java* Item 73) means a higher layer catches low-level exceptions and throws ones that make sense at *its* level of abstraction — a `ReportService` shouldn't leak `SQLException` or `IOException` to its callers.
+**Exception chaining** stores the original exception as the **cause** of a new one: `new ReportException("could not build report", e)`. **Exception translation** (*Effective Java* Item 73) means a higher layer (a tier of the program, such as web → service → data access) catches low-level exceptions and throws ones that make sense at *its* level of abstraction — a `ReportService` shouldn't leak `SQLException` or `IOException` to its callers.
 
 Chaining keeps the full story: the stack trace prints the high-level exception, then **"Caused by:"** with the original.
 
@@ -744,14 +744,14 @@ caught StackOverflowError (an Error: normally you do NOT catch these)
 2. **Frames below it**: *where*, most recent call first. The first frame in **your** code is usually where to look (`loadPort`, line 17).
 3. **"Caused by:"**: the underlying exception. **Scroll to the last "Caused by:"** — the root cause is usually the real problem (`"80a"` isn't a number, from `parsePort` line 10).
 4. **`... 1 more`**: the remaining frames are identical to the enclosing trace's frames, so they're elided.
-5. **`java.base/`** prefix: the module the class belongs to ([Chapter 16](../16-jvm-internals-and-performance/README.md)). `$` in a class name means a nested class.
+5. **`java.base/`** prefix: the module (a named group of packages) the class belongs to ([Chapter 16](../16-jvm-internals-and-performance/README.md)). `$` in a class name means a nested class.
 6. **"Suppressed:"** sections list exceptions attached by try-with-resources (§8.6).
 
 ### Tools
 | API | Use |
 |---|---|
 | `e.getMessage()`, `e.toString()` | message; class name + message |
-| `e.printStackTrace()` | to `System.err` — fine for learning; in applications use a logger (`log.error("msg", e)`) which records the trace |
+| `e.printStackTrace()` | to `System.err` — fine for learning; in applications use a logger (a library that writes timestamped diagnostic messages: `log.error("msg", e)`) which records the trace |
 | `e.getStackTrace()` | `StackTraceElement[]` for programmatic inspection |
 | `e.getCause()`, `e.getSuppressed()` | navigate the chain |
 | `StackWalker` (Java 9) | lazily inspect the *current* thread's stack without creating an exception |
@@ -773,7 +773,7 @@ The stack trace is captured when the exception object is **constructed**, which 
 |---|---|---|
 | 1 | **Use exceptions only for exceptional conditions** (Item 69) — never for normal control flow such as ending a loop | Slower (stack capture), obscures logic, can hide real bugs |
 | 2 | **Checked for recoverable conditions, runtime for programming errors** (Item 70); avoid needless checked exceptions (Item 71) | Don't force callers to catch what they can't handle |
-| 3 | **Prefer standard exceptions** (Item 72) | Familiar semantics |
+| 3 | **Prefer standard exceptions** (Item 72) | Familiar semantics (meaning) |
 | 4 | **Throw exceptions appropriate to the abstraction** (Item 73) — translate and chain | Layers stay decoupled; the cause is preserved |
 | 5 | **Document every exception** with `@throws` (Item 74), including unchecked ones that callers should know about | The compiler can't tell callers about unchecked ones |
 | 6 | **Put failure details in the message** (Item 75): the offending values | Traces become self-explanatory |
@@ -809,6 +809,7 @@ try {
     ...
 }
 ```
+(The *interrupt flag* is a per-thread marker meaning "someone asked this thread to stop"; catching `InterruptedException` clears it, so you set it again.)
 Output:
 ```text
 findUser(3) -> guest
@@ -851,11 +852,11 @@ catch (InterruptedException e) { }          // callers can no longer see the int
 If ignoring really is correct (e.g., closing something during shutdown), name the variable `ignored` or `_` and add a comment explaining why.
 
 ### Assertions — a note
-`assert condition : "message";` throws `AssertionError` if the condition is false, **but only when the JVM runs with `-ea`** (enable assertions); they're off by default. Use them for internal invariants during development and testing, never for validating arguments of public methods or for anything with side effects.
+`assert condition : "message";` throws `AssertionError` if the condition is false, **but only when the JVM runs with `-ea`** (enable assertions); they're off by default. Use them for internal invariants (conditions that must always be true) during development and testing, never for validating arguments of public methods or for anything with side effects (changes beyond computing a result, such as writing a file or modifying a field).
 
 ### Real-world examples
-- Web frameworks (e.g. Spring's `@ControllerAdvice`) catch exceptions at the request boundary and map them to HTTP statuses: `IllegalArgumentException` → 400, a custom `NotFoundException` → 404, anything else → 500 with a logged trace.
-- JDBC and file APIs throw checked exceptions; frameworks translate them into unchecked hierarchies (Spring's `DataAccessException`) so business code isn't cluttered.
+- Web frameworks (e.g. Spring's `@ControllerAdvice`) catch exceptions at the request boundary and map them to HTTP statuses (the numeric result codes of web responses; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)): `IllegalArgumentException` → 400, a custom `NotFoundException` → 404, anything else → 500 with a logged trace.
+- JDBC and file APIs throw checked exceptions; frameworks translate them into unchecked hierarchies (Spring's `DataAccessException`) so business code (the code implementing the application's actual rules) isn't cluttered.
 - `Objects.requireNonNull` at the top of constructors is used throughout the JDK itself.
 
 ### In the interview

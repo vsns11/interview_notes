@@ -1,6 +1,6 @@
 # Chapter 19 — Java for Coding Interviews
 
-A coding interview (the "LeetCode-style" round) checks two things: do you recognise the classic **data-structure and algorithm (DSA) patterns**, and can you write them correctly in your language under time pressure? Java is a strong interview language — fast, predictable collections and a compiler that catches type slips — but it is verbose, and a few Java-specific traps (integer overflow, `Integer` compared with `==`, `Stack` instead of `ArrayDeque`, an `a - b` comparator) quietly fail hidden test cases.
+A coding interview (the "LeetCode-style" round, named after LeetCode, a popular website of practice problems) checks two things: do you recognise the classic **data-structure and algorithm (DSA) patterns** (a *data structure* is a way of organising data in memory, such as an array, a list or a tree; an *algorithm* is a step-by-step recipe that solves a problem), and can you write them correctly in your language under time pressure? Java is a strong interview language — fast, predictable collections and a compiler that catches type slips — but it is verbose, and a few Java-specific traps (integer overflow, `Integer` compared with `==`, `Stack` instead of `ArrayDeque`, an `a - b` comparator) quietly fail hidden test cases (extra inputs the judge runs but never shows you). *Integer overflow* is a result too big for its type silently wrapping round to a wrong value; a *comparator* is the function that decides which of two values sorts first.
 
 This chapter has three parts:
 
@@ -9,6 +9,8 @@ This chapter has three parts:
 3. **Java interview Q&A** (19.29): 42 short, correct answers to the language questions interviewers ask, each linked to the section of this book that teaches it properly.
 
 It assumes you know Java basics (Chapters 2–6), collections ([Chapter 10](../10-collections/README.md)) and lambdas ([Chapter 11](../11-lambdas-and-functional-programming/README.md)). The same patterns in Python are in [Python Handbook, Chapter 19](../../../python/chapters/19-python-for-coding-interviews/README.md) — reading both side by side is a good way to separate the *algorithm* from the *language*.
+
+> **Key term — complexity (Big-O):** interviewers ask "what is the complexity?" meaning how the running time (and extra memory) grows as the input size *n* grows. O(1) means constant — the same cost for any n; O(log n) grows very slowly (halving each step); O(n) grows in step with n; O(n log n) is the cost of a good sort; O(n²) means a loop inside a loop. Constants are ignored, so O(2n) is just O(n). §19.7 collects the numbers for every Java collection.
 
 **What you'll learn**
 
@@ -31,7 +33,9 @@ It assumes you know Java basics (Chapters 2–6), collections ([Chapter 10](../1
 | 19.28 | Talking through a solution | — |
 | 19.29 | 42 Java interview questions | `qa/InterviewFacts.java` |
 
-**How the code was run.** Every program is in [`code/`](code/), compiled with `javac --release 25` and run on OpenJDK 26 (`bash tools_run_java.sh java` from the repository root). Every pattern program ends with a line such as `10 checks passed`; the output shown is real.
+> **Key terms — the pattern names in the table and diagram:** each is taught in its own section, but in one line: a **graph** is a set of *nodes* (points) joined by *edges* (links), and a **tree** is a graph with one *root* and no loops, where each node has children below it. **BFS** (breadth-first search) explores a graph ring by ring outward; **DFS** (depth-first search) follows one path as deep as possible before backing up. **Dijkstra** finds cheapest routes when edges have costs. **Topological sort** orders tasks so every prerequisite comes first. **Union-find** tracks which items are in the same group. **DP** (dynamic programming) reuses answers to smaller sub-problems; **backtracking** tries choices and undoes them; **greedy** always takes the best-looking step now. A **trie** is a tree of letters for prefix lookups; a **heap** keeps the smallest (or largest) item instantly available; a **BST** (binary search tree) keeps smaller keys to the left and larger to the right; the **LCA** (lowest common ancestor) is the deepest node above two given nodes. **Quickselect** finds the k-th smallest item without sorting everything.
+
+**How the code was run.** Every program is in [`code/`](code/), compiled with `javac --release 25` (the Java compiler, told to produce code for Java 25) and run on OpenJDK 26, the free, open-source build of Java (`bash tools_run_java.sh java` from the repository root). Every pattern program ends with a line such as `10 checks passed`; the output shown is real.
 
 ```mermaid
 flowchart TD
@@ -67,7 +71,7 @@ flowchart TD
 ## 19.1 Testing your solutions: `assert` is off, use a helper
 
 ### What it is
-Interview practice means writing a function and checking it against a few inputs. Java has an `assert` statement, but the JVM **ignores it unless you start it with `-ea`** (enable assertions). Run a program normally and a failing `assert` does nothing at all, so a "passing" run proves nothing. This chapter therefore uses a ten-line helper, `ch19.Check`, whose `eq(actual, expected, label)` always runs, compares arrays by content, prints `ok …`, and throws `AssertionError` on a mismatch.
+Interview practice means writing a function and checking it against a few inputs. Java has an `assert` statement, but the JVM (Java Virtual Machine — the program that runs compiled Java) **ignores it unless you start it with `-ea`** (enable assertions). Run a program normally and a failing `assert` does nothing at all, so a "passing" run proves nothing. This chapter therefore uses a ten-line helper, `ch19.Check`, whose `eq(actual, expected, label)` always runs, compares arrays by content, prints `ok …`, and throws `AssertionError` (an error object that stops the program and reports the message) on a mismatch.
 
 ```java
 // code/ch19/toolkit/AssertKeywordDemo.java (key part)
@@ -92,13 +96,13 @@ Check.eq failed loudly: deliberately wrong: expected 3 but got 2
 
 With `java -ea` the first line becomes `true` and the second `assert` throws `AssertionError: never reported without -ea`.
 
-In a real project you'd write JUnit tests instead ([Chapter 18](../18-testing-build-and-tooling/README.md)); in an interview you'd just run `main` with a few calls. Use `assert` in production code only for internal invariants you're happy to have switched off — never for argument validation.
+In a real project you'd write JUnit tests (JUnit is Java's standard library for automated tests) instead ([Chapter 18](../18-testing-build-and-tooling/README.md)); in an interview you'd just run `main` with a few calls. Use `assert` in production code (the code that ships to real users) only for internal invariants (conditions your own code guarantees are always true) you're happy to have switched off — never for argument validation.
 
 ---
 
 ## 19.2 Arrays, strings and char arithmetic
 
-Arrays are fixed-size and zero-based; `java.util.Arrays` is the toolbox of static helpers ([§4.6](../04-methods-and-arrays/README.md#46-arrays), [§4.8](../04-methods-and-arrays/README.md#48-the-javautilarrays-toolbox)). `String` is immutable ([§7.1](../07-core-apis/README.md#71-strings-immutability-the-pool-and-memory)); build strings with `StringBuilder` ([§7.3](../07-core-apis/README.md#73-stringbuilder-stringbuffer-and-stringjoiner)). A `char` is an unsigned 16-bit number, so `c - 'a'` turns a lowercase letter into 0–25 — the basis of the `int[26]` frequency table used in dozens of string problems.
+Arrays are fixed-size and zero-based (the first element is index 0); `java.util.Arrays` is the toolbox of static helpers (methods called on the class itself, like `Arrays.sort(a)`) ([§4.6](../04-methods-and-arrays/README.md#46-arrays), [§4.8](../04-methods-and-arrays/README.md#48-the-javautilarrays-toolbox)). `String` is immutable — it can never change after it is created ([§7.1](../07-core-apis/README.md#71-strings-immutability-the-pool-and-memory)); build strings with `StringBuilder` ([§7.3](../07-core-apis/README.md#73-stringbuilder-stringbuffer-and-stringjoiner)). A `char` is an unsigned 16-bit number (a whole number from 0 to 65,535 that stands for one character), so `c - 'a'` turns a lowercase letter into 0–25 — the basis of the `int[26]` frequency table used in dozens of string problems.
 
 ```java
 // code/ch19/toolkit/ArraysAndStrings.java (key parts)
@@ -151,10 +155,10 @@ parse       -41 1010 10
 |---|---|---|
 | Length | `arr.length`, `s.length()`, `list.size()` | Field, method, method — a classic compile error |
 | Print an array | `Arrays.toString(a)`, `Arrays.deepToString(grid)` | `println(a)` prints `[I@1b6d3586` |
-| Compare arrays | `Arrays.equals(a, b)` | `a == b` and `a.equals(b)` compare references |
+| Compare arrays | `Arrays.equals(a, b)` | `a == b` and `a.equals(b)` compare references (same object?), not contents |
 | Character at i | `s.charAt(i)` | O(1); `s.toCharArray()` copies (O(n)) — fine once, not in a loop |
 | Substring | `s.substring(from, to)` | End exclusive; copies, O(to − from) |
-| Split on whitespace | `s.trim().split("\\s+")` | `split` takes a **regex**; trailing empty strings are dropped |
+| Split on whitespace | `s.trim().split("\\s+")` | `split` takes a **regex** (a text-pattern language); trailing empty strings are dropped |
 | Letter test | `Character.isLetterOrDigit`, `isDigit`, `isLetter`, `toLowerCase` | |
 | Build a string | `StringBuilder.append`, `insert`, `reverse`, `setCharAt`, `deleteCharAt`, `setLength` | `s += x` in a loop is O(n²) |
 | Number ↔ text | `Integer.parseInt(s)`, `Integer.parseInt(s, 2)`, `String.valueOf(n)`, `Integer.toBinaryString(n)` | |
@@ -166,7 +170,7 @@ parse       -41 1010 10
 
 ## 19.3 `HashMap` and `HashSet` idioms
 
-A `HashMap` gives O(1) average `get`/`put`/`containsKey`; a `HashSet` is a `HashMap` with only keys ([§10.4](../10-collections/README.md#104-maps-hashmap-linkedhashmap-treemap), internals in [§10.5](../10-collections/README.md#105-hashmap-internals)). Since Java 8 the `Map` interface has default methods that turn the old "if key present … else …" into one line:
+A `HashMap` gives O(1) average `get`/`put`/`containsKey`; a `HashSet` is a `HashMap` with only keys ([§10.4](../10-collections/README.md#104-maps-hashmap-linkedhashmap-treemap), internals in [§10.5](../10-collections/README.md#105-hashmap-internals)). Since Java 8 the `Map` interface (a contract listing the methods every map class provides) has default methods (methods that come with a ready-made body inside the interface) that turn the old "if key present … else …" into one line:
 
 | Idiom | One-liner | Replaces |
 |---|---|---|
@@ -201,33 +205,33 @@ record key   contains? true
 linked order [to, be, or, not]
 ```
 
-**Keys.** A key must have `equals` and `hashCode` based on its *value* ([§6.13](../06-oop-inheritance-interfaces-and-more/README.md#613-object-methods-equals-hashcode-and-tostring)). `int[]` doesn't, so `Set<int[]>` can't find an equal array. Use `List.of(r, c)`, a `record Cell(int r, int c)`, a `String` like `r + "," + c`, or encode a grid cell as the `int` `r * cols + c` (fastest). Never mutate an object while it is a key.
+**Keys.** A key must have `equals` and `hashCode` based on its *value* (`hashCode` turns an object into an `int` that picks its bucket; `equals` then decides whether two objects count as the same) ([§6.13](../06-oop-inheritance-interfaces-and-more/README.md#613-object-methods-equals-hashcode-and-tostring)). `int[]` doesn't, so `Set<int[]>` can't find an equal array. Use `List.of(r, c)`, a `record Cell(int r, int c)` (a *record* is a compact class for plain data whose `equals`/`hashCode` compare the field values), a `String` like `r + "," + c`, or encode a grid cell as the `int` `r * cols + c` (fastest). Never mutate an object while it is a key.
 
-**Order.** `HashMap` iteration order is unspecified and can change between runs or JDK versions — don't let an answer depend on it. Use `LinkedHashMap` (insertion order) or `TreeMap` (sorted) when order matters, as in `Hashing.firstUnique` (§19.10).
+**Order.** `HashMap` iteration order is unspecified and can change between runs or JDK versions (the JDK, Java Development Kit, is the compiler, tools and standard library) — don't let an answer depend on it. Use `LinkedHashMap` (insertion order) or `TreeMap` (sorted) when order matters, as in `Hashing.firstUnique` (§19.10).
 
-**Arrays beat maps for small dense keys.** When keys are lowercase letters or values 0–1000, an `int[26]` or `int[1001]` is faster than a `HashMap<Character, Integer>` (no boxing, no hashing).
+**Arrays beat maps for small dense keys.** When keys are lowercase letters or values 0–1000, an `int[26]` or `int[1001]` is faster than a `HashMap<Character, Integer>` (no boxing — wrapping each `int` in an `Integer` object — and no hashing, i.e. computing a hash code and finding its bucket).
 
 ---
 
 ## 19.4 `ArrayDeque`, `PriorityQueue` and `TreeMap`
 
 ### `ArrayDeque` for stacks and queues — and why not `Stack`
-`ArrayDeque` is a resizable circular array with amortised O(1) operations at both ends ([§10.6](../10-collections/README.md#106-queues-deques-and-priority-queues)). Use it for **both** stacks and queues:
+`ArrayDeque` is a resizable circular array (an array whose end wraps round to its start, so both ends can grow cheaply) with amortised O(1) operations (O(1) on average over many calls — see §19.7) at both ends ([§10.6](../10-collections/README.md#106-queues-deques-and-priority-queues)). Use it for **both** stacks and queues:
 
 | Role | Add | Remove | Look | Empty remove |
 |---|---|---|---|---|
-| Stack (LIFO) | `push(x)` | `pop()` | `peek()` | `pop()` throws `NoSuchElementException` |
-| Queue (FIFO) | `offer(x)` | `poll()` | `peek()` | `poll()` returns `null` |
+| Stack (LIFO: last in, first out) | `push(x)` | `pop()` | `peek()` | `pop()` throws `NoSuchElementException` |
+| Queue (FIFO: first in, first out) | `offer(x)` | `poll()` | `peek()` | `poll()` returns `null` |
 
 Declare the variable as `Deque<Integer>` (a stack) or `Queue<Integer>`/`Deque<Integer>` (a queue). `ArrayDeque` rejects `null` elements.
 
-Why not `java.util.Stack`? It dates from Java 1.0, extends `Vector` (every method is `synchronized`, which costs time for nothing in single-threaded code), exposes index methods like `get(0)` that break the stack abstraction, and iterates **bottom-to-top** — the opposite of `ArrayDeque`. Its own Javadoc recommends `Deque` instead. `LinkedList` also implements `Deque` but allocates a node per element; `ArrayDeque` is faster.
+Why not `java.util.Stack`? It dates from Java 1.0, extends `Vector` (every method is `synchronized` — locked so only one thread can run it at a time — which costs time for nothing in single-threaded code; a *thread* is one independent path of execution inside a program), exposes index methods like `get(0)` that break the stack abstraction, and iterates **bottom-to-top** — the opposite of `ArrayDeque`. Its own Javadoc (the official API documentation) recommends `Deque` instead. `LinkedList` also implements `Deque` but allocates a node (a small object holding one value plus links to its neighbours) per element; `ArrayDeque` is faster.
 
 ### `PriorityQueue` — a binary heap
-`PriorityQueue` is a **min-heap** by default: `peek()` is O(1), `offer`/`poll` are O(log n). For a max-heap pass `Comparator.reverseOrder()`. For arrays like `{distance, node}` use `Comparator.comparingInt(x -> x[0])`. Printing or iterating a `PriorityQueue` shows **heap order, not sorted order**; only repeated `poll()` gives sorted output. `contains` and `remove(Object)` are O(n).
+`PriorityQueue` is a **min-heap** by default (a tree-shaped structure, stored in an array, that always keeps the smallest element at the top — the *root*): `peek()` is O(1), `offer`/`poll` are O(log n). For a max-heap pass `Comparator.reverseOrder()`. For arrays like `{distance, node}` use `Comparator.comparingInt(x -> x[0])`. Printing or iterating a `PriorityQueue` shows **heap order, not sorted order**; only repeated `poll()` gives sorted output. `contains` and `remove(Object)` are O(n).
 
 ### `TreeMap` / `TreeSet` — sorted with navigation
-A red-black tree: O(log n) `get`/`put`/`remove`, and navigation methods a hash map can't offer. Remember the four: **`floor`** (≤), **`ceiling`** (≥), **`lower`** (<), **`higher`** (>). On a `TreeMap` they are `floorKey`/`floorEntry` and so on; all return `null` when nothing qualifies. Typical uses: finding the nearest booking before a given time, detecting clashes in a calendar, ranking players on a leaderboard, and medians over a moving window.
+A red-black tree (a self-balancing binary search tree, so it never becomes lopsided): O(log n) `get`/`put`/`remove`, and navigation methods a hash map can't offer. Remember the four: **`floor`** (≤), **`ceiling`** (≥), **`lower`** (<), **`higher`** (>). On a `TreeMap` they are `floorKey`/`floorEntry` and so on; all return `null` when nothing qualifies. Typical uses: finding the nearest booking before a given time, detecting clashes in a calendar, ranking players on a leaderboard, and medians over a moving window.
 
 ```java
 // code/ch19/toolkit/DequesHeapsTrees.java (key parts)
@@ -262,11 +266,11 @@ TreeSet floor(10)=9 ceiling(10)=16 pollFirst=1 descending=[16, 9, 4]
 
 | What you sort | Call | Algorithm and guarantees |
 |---|---|---|
-| `int[]`, `long[]`, `char[]` … | `Arrays.sort(a)` | Dual-Pivot Quicksort; the Javadoc promises O(n log n) on all inputs. Ascending only — there is no comparator overload for primitives |
-| `Integer[]`, `String[]`, `int[][]`, objects | `Arrays.sort(a, comparator)` | Stable (equal elements keep their order), TimSort-based merge sort, O(n log n) |
+| `int[]`, `long[]`, `char[]` … | `Arrays.sort(a)` | Dual-Pivot Quicksort (quicksort splitting around two pivot values, §19.25); the Javadoc promises O(n log n) on all inputs. Ascending only — there is no comparator overload for primitives |
+| `Integer[]`, `String[]`, `int[][]`, objects | `Arrays.sort(a, comparator)` | Stable (equal elements keep their order), TimSort-based merge sort (a merge sort tuned for partly sorted data), O(n log n) |
 | `List` | `list.sort(cmp)` or `Collections.sort(list, cmp)` | Same stable sort; `Collections.sort` just calls `List.sort` |
 
-Build comparators from parts instead of writing `compare` by hand ([§10.8](../10-collections/README.md#108-ordering-comparable-and-comparator)): `Comparator.comparingInt(Person::age).reversed().thenComparing(Person::name)`. For `int[]` rows the lambda needs a type witness: `Comparator.<int[]>comparingInt(x -> x[0]).thenComparingInt(x -> x[1])` — otherwise the compiler infers `Object` once you chain.
+Build comparators from parts (`Person::age` is a *method reference*, shorthand for the lambda `p -> p.age()`) instead of writing `compare` by hand ([§10.8](../10-collections/README.md#108-ordering-comparable-and-comparator)): `Comparator.comparingInt(Person::age).reversed().thenComparing(Person::name)`. For `int[]` rows the lambda (a short anonymous function written `x -> …`) needs a type witness (the type argument written explicitly in angle brackets before the method name): `Comparator.<int[]>comparingInt(x -> x[0]).thenComparingInt(x -> x[1])` — otherwise the compiler infers `Object` once you chain.
 
 ```java
 // code/ch19/toolkit/SortingDemo.java (key parts)
@@ -299,7 +303,7 @@ The `(a, b) -> a - b` comparator is the most common silent bug: `1 - Integer.MIN
 
 ## 19.6 Numeric and equality pitfalls
 
-These are the bugs that pass the sample tests and fail the hidden ones. Background: overflow in [§2.10](../02-basics-types-and-operators/README.md#210-integer-overflow), wrappers and caching in [§7.6](../07-core-apis/README.md#76-wrapper-classes-and-autoboxing).
+These are the bugs that pass the sample tests and fail the hidden ones. Background: overflow in [§2.10](../02-basics-types-and-operators/README.md#210-integer-overflow), wrappers (object versions of primitives, such as `Integer` for `int`) and caching in [§7.6](../07-core-apis/README.md#76-wrapper-classes-and-autoboxing).
 
 ```java
 // code/ch19/toolkit/NumericPitfalls.java (key parts)
@@ -343,13 +347,13 @@ removeIf           [1, 3]
 | Midpoint | `lo + hi` can overflow | `lo + (hi - lo) / 2` |
 | `Math.abs(Integer.MIN_VALUE)` | +2³¹ doesn't fit in `int` | Work in `long`, or `Math.absExact` (Java 15) to get an exception |
 | `Integer.MAX_VALUE` as "infinity" | `INF + 1` wraps to a negative number | Guard before adding (see coin change, §19.19) or use `Integer.MAX_VALUE / 2` |
-| `-7 % 3 == -1` | `%` keeps the dividend's sign | `Math.floorMod(x, m)` for a non-negative index (circular arrays, hashing) |
+| `-7 % 3 == -1` | `%` keeps the dividend's (the number being divided) sign | `Math.floorMod(x, m)` for a non-negative index (circular arrays, hashing) |
 | `7 / 2 == 3` | Integer division truncates toward zero | Cast one side: `7 / 2.0`, or `(double) a / b` |
 | `Integer == Integer` | Compares references; only −128…127 are guaranteed cached by `Integer.valueOf` | `.equals`, `Integer.compare`, or unbox to `int`. Especially `map.get(a) == map.get(b)` |
 | Unboxing `null` | `int x = map.get(missing)` | `getOrDefault`, or keep it as `Integer` and check |
 | `list.remove(int)` | `List<Integer>` has `remove(int index)` and `remove(Object)` | `remove(Integer.valueOf(v))` to remove a value |
-| Removing in for-each | Fail-fast iterator throws `ConcurrentModificationException` | `removeIf`, an explicit `Iterator.remove()`, or build a new list |
-| Deep recursion | Default thread stack overflows around 10⁴–10⁵ frames (depends on frame size) | Iterate with an explicit `ArrayDeque` stack for big grids/lists (see islands, §19.16) |
+| Removing in for-each | Fail-fast iterator (it checks for changes) throws `ConcurrentModificationException` | `removeIf`, an explicit `Iterator.remove()`, or build a new list |
+| Deep recursion | Default thread stack overflows around 10⁴–10⁵ frames (one frame per active call; depends on frame size) | Iterate with an explicit `ArrayDeque` stack for big grids/lists (see islands, §19.16) |
 
 ---
 
@@ -363,8 +367,8 @@ Big-O describes how cost grows with input size n; "amortised" means averaged ove
 | `ArrayList` | O(1) `get(i)`, O(n) `contains` | O(1) amortised at end, O(n) in middle | O(n) (shifts), O(1) at end | Default list |
 | `LinkedList` | O(n) `get(i)` | O(1) at ends | O(1) at ends | Rarely the right choice |
 | `ArrayDeque` | O(1) `peek` at ends | O(1) amortised `push`/`offer` | O(1) `pop`/`poll` | Stack and queue |
-| `HashMap` / `HashSet` | O(1) average | O(1) average | O(1) average | Worst case O(log n) with treeified buckets of `Comparable` keys |
-| `LinkedHashMap` | O(1) average | O(1) | O(1) | Keeps insertion (or access) order — LRU cache |
+| `HashMap` / `HashSet` | O(1) average | O(1) average | O(1) average | Worst case O(log n) with treeified (crowded bucket turned into a tree) buckets of `Comparable` keys |
+| `LinkedHashMap` | O(1) average | O(1) | O(1) | Keeps insertion (or access) order — LRU (least-recently-used) cache |
 | `TreeMap` / `TreeSet` | O(log n) | O(log n) | O(log n) | `floor`/`ceiling`/`first`/`last` also O(log n) |
 | `PriorityQueue` | O(1) `peek` | O(log n) `offer` | O(log n) `poll`, O(n) `remove(obj)` | Build from a collection in O(n) |
 | `String` | O(1) `charAt` | `+` copies: O(n) | `substring` copies | `StringBuilder.append` amortised O(1) |
@@ -376,10 +380,10 @@ Big-O describes how cost grows with input size n; "amortised" means averaged ove
 | BFS / DFS on V vertices, E edges | O(V + E) | O(V) |
 | Dijkstra with a binary heap | O((V + E) log V) | O(V + E) |
 | Topological sort (Kahn) | O(V + E) | O(V) |
-| Union-find with path compression + union by size | ≈ O(1) per op (inverse Ackermann) | O(n) |
+| Union-find with path compression + union by size | ≈ O(1) per op (inverse Ackermann, §19.18) | O(n) |
 | Subsets / permutations | O(2ⁿ · n) / O(n! · n) | O(n) recursion depth |
 
-Rough budget: about 10⁸ simple operations per second in Java once the JIT has warmed up, so n = 10⁵ needs O(n log n) or better and n ≤ 20 allows O(2ⁿ).
+Rough budget: about 10⁸ simple operations per second in Java once the JIT (just-in-time compiler, which turns frequently run code into fast machine code while the program runs) has warmed up, so n = 10⁵ needs O(n log n) or better and n ≤ 20 allows O(2ⁿ).
 
 ---
 
@@ -390,7 +394,7 @@ Each pattern follows the same shape: **what it is**, **recognise it when** (the 
 ## 19.8 Two pointers
 
 ### What it is
-Two indexes move through the data in a coordinated way so that one pass replaces a nested loop. Three flavours: **opposite ends** moving inward (sorted arrays, palindromes), **read/write** pointers moving the same way (in-place filtering), and **fast/slow** pointers moving at different speeds (linked lists). Analogy: two people searching a sorted bookshelf from both ends and meeting in the middle.
+Two indexes move through the data in a coordinated way so that one pass replaces a nested loop. Three flavours: **opposite ends** moving inward (sorted arrays, palindromes — text that reads the same backwards), **read/write** pointers moving the same way (in-place filtering, i.e. changing the input array itself rather than building a new one), and **fast/slow** pointers moving at different speeds (linked lists — chains of nodes, each pointing to the next; §19.22). Analogy: two people searching a sorted bookshelf from both ends and meeting in the middle.
 
 **Recognise it when**: the input is sorted; you need a pair/triple with a target sum; "in place, O(1) extra space"; palindrome; linked-list middle, cycle, or k-th from the end.
 
@@ -460,16 +464,16 @@ ok  reverse -> 3->2->1
 - Using opposite-end pointers on **unsorted** input — use hashing (§19.10) instead.
 - `while (left <= right)` for pairs — an element would pair with itself.
 - In fast/slow, checking `fast.next.next` without first checking `fast != null && fast.next != null`.
-- For 3Sum, forgetting to skip duplicate values after sorting.
+- For 3Sum (find all triples that add up to zero), forgetting to skip duplicate values after sorting.
 
 ---
 
 ## 19.9 Sliding window
 
 ### What it is
-A special two-pointer pattern for **contiguous** ranges: keep a window `[left, right]` and a running summary of it (sum, counts, distinct characters). Moving `right` adds one element; moving `left` removes one — each element enters and leaves once, so the work is O(n) instead of O(n²) for re-examining every subarray.
+A special two-pointer pattern for **contiguous** ranges (elements next to each other, with no gaps): keep a window `[left, right]` and a running summary of it (sum, counts, distinct characters). Moving `right` adds one element; moving `left` removes one — each element enters and leaves once, so the work is O(n) instead of O(n²) for re-examining every subarray (a contiguous slice of an array).
 
-**Recognise it when**: "longest/shortest substring or subarray such that…", "at most k distinct", "window of size k", and the condition changes monotonically as the window grows (for sums, this needs non-negative numbers — otherwise use prefix sums, §19.11).
+**Recognise it when**: "longest/shortest substring or subarray such that…", "at most k distinct", "window of size k", and the condition changes monotonically (only ever in one direction) as the window grows (for sums, this needs non-negative numbers — otherwise use prefix sums, §19.11).
 
 ### How it works (variable-size window)
 1. For each `right`, add `a[right]` to the window state.
@@ -541,7 +545,7 @@ ok  2 distinct eceba -> 3
 ### What it is
 Store what you've seen in a `HashMap`/`HashSet` so the question "have I seen X?" or "how many X so far?" costs O(1) instead of a scan. You trade O(n) memory for a factor of n in time.
 
-**Recognise it when**: pairs with a target sum in **unsorted** data, duplicates, counting frequencies, grouping by a signature (anagrams), "first unique", "longest consecutive run".
+**Recognise it when**: pairs with a target sum in **unsorted** data, duplicates, counting frequencies, grouping by a signature (anagrams — words with the same letters, like *tea* and *eat*), "first unique", "longest consecutive run".
 
 ### How it works (Two Sum)
 1. Walk the array once.
@@ -658,7 +662,7 @@ ok  difference array -> [0, 2, 5, 5, 3]
 **Complexity**: O(n) to build, O(1) per query; 2D is O(rows · cols) to build.
 
 ### Common mistakes
-- Off-by-one: the `n + 1` length and the `prefix[0] = 0` sentinel exist precisely so that `l = 0` needs no special case.
+- Off-by-one (an index one too high or too low): the `n + 1` length and the `prefix[0] = 0` sentinel (a dummy value placed to remove a special case) exist precisely so that `l = 0` needs no special case.
 - Forgetting `seen.put(0, 1)` — misses subarrays that start at index 0.
 - `int` prefix sums of large inputs overflowing — use `long`.
 
@@ -717,7 +721,7 @@ static int[] windowMax(int[] a, int k) {
 }
 ```
 
-The file also evaluates Reverse Polish Notation (`"4 13 5 / +"` = 6) with an arrow-label `switch` ([§3.3](../03-control-flow/README.md#33-arrow-labels-and-switch-expressions-java-14)).
+The file also evaluates Reverse Polish Notation (postfix notation, where each operator follows its operands: `"4 13 5 / +"` = 6) with an arrow-label `switch` ([§3.3](../03-control-flow/README.md#33-arrow-labels-and-switch-expressions-java-14)).
 
 Output:
 
@@ -736,7 +740,7 @@ ok  RPN -> 6
 ### Common mistakes
 - Storing values instead of indexes when you need distances.
 - Forgetting the final `stack.isEmpty()` check (`"(("` would pass).
-- Popping in RPN in the wrong order: the **second** pop is the left operand.
+- Popping in RPN in the wrong order: the **second** pop is the left operand (the value on the left of the operator).
 - Using `java.util.Stack` (§19.4).
 
 ---
@@ -746,7 +750,7 @@ ok  RPN -> 6
 ### What it is
 A heap (`PriorityQueue`) always hands you the smallest (or largest) element in O(log n) per change. The key trick for "top k" is counter-intuitive: to keep the k **largest**, use a **min**-heap of size k — its root is the weakest of the current top k, the one to evict when something bigger arrives.
 
-**Recognise it when**: "k-th largest/smallest", "k most frequent", "k closest points", "merge k sorted lists", "running median" and "maximise capital" (two heaps, below), scheduling by earliest end time, Dijkstra.
+**Recognise it when**: "k-th largest/smallest", "k most frequent", "k closest points", "merge k sorted lists", "running median" (the median of everything seen so far, updated as each value arrives) and "maximise capital" (two heaps, below), scheduling by earliest end time, Dijkstra.
 
 ### How it works (k-th largest)
 1. Offer each element into a min-heap.
@@ -812,7 +816,7 @@ ok  maximizeCapital nothing affordable -> 0
 ### Two heaps
 Some problems need the best element from **two different groups** at once. Keep one heap per group and move elements across the boundary as the situation changes. Two shapes come up:
 
-- **Split one stream into halves** (running median). A max-heap `low` holds the smaller half, a min-heap `high` the larger half, and the invariant is `low.size() == high.size()` or one more. The median is then `low.peek()` or the average of both roots — O(1) — and each `add` costs O(log n). Every new value passes through `low` into `high` and, if `high` got too big, one value comes back; that keeps every element of `low` ≤ every element of `high` without a special case (`MedianFinder` above).
+- **Split one stream into halves** (running median). A max-heap `low` holds the smaller half, a min-heap `high` the larger half, and the invariant (the rule kept true after every step) is `low.size() == high.size()` or one more. The median is then `low.peek()` or the average of both roots — O(1) — and each `add` costs O(log n). Every new value passes through `low` into `high` and, if `high` got too big, one value comes back; that keeps every element of `low` ≤ every element of `high` without a special case (`MedianFinder` above).
 - **Locked vs available** (maximise capital, scheduling). A min-heap orders items by the threshold that **unlocks** them; a max-heap holds the unlocked ones by **value**. Each round: move everything whose threshold is now met from the first heap to the second, then take the best from the second. Example: you may run at most k projects; project i needs `capital[i]` to start and pays `profit[i]`; start with `start` money.
 
 ```java
@@ -854,7 +858,7 @@ Halve a sorted search space each step: O(log n). Beyond "find x in a sorted arra
 1. Decide the range and write down the **invariant** (what's true about `lo` and `hi` at every step).
 2. Compute `mid = lo + (hi - lo) / 2` (never `(lo + hi) / 2`, §19.6).
 3. Discard the half that cannot contain the answer, keeping the invariant.
-4. Two templates cover almost everything: **closed** `[lo, hi]` with `while (lo <= hi)` for "find exactly", and **half-open / first-true** with `while (lo < hi)`, `hi = mid` for "first index where the condition holds".
+4. Two templates cover almost everything: **closed** `[lo, hi]` with `while (lo <= hi)` for "find exactly", and **half-open / first-true** (the range includes `lo` but not `hi`) with `while (lo < hi)`, `hi = mid` for "first index where the condition holds".
 
 ```java
 // code/ch19/patterns/BinarySearch.java (key parts)
@@ -984,9 +988,9 @@ ok  minRooms back-to-back -> 1
 ## 19.16 BFS and DFS: trees, grids and graphs
 
 ### What it is
-Two ways to visit every node reachable from a start. **Breadth-first search (BFS)** uses a **queue** and visits nodes in rings of increasing distance — so in an unweighted graph the first time it reaches a node is via a shortest path. **Depth-first search (DFS)** uses a **stack** (or recursion, which uses the call stack) and goes as deep as possible before backing up — good for "explore everything", connected components, cycle detection and path enumeration. **Dijkstra's algorithm** is BFS generalised to non-negative edge weights, with a priority queue instead of a plain queue.
+Two ways to visit every node reachable from a start. **Breadth-first search (BFS)** uses a **queue** and visits nodes in rings of increasing distance — so in an unweighted graph (one whose edges all cost the same) the first time it reaches a node is via a shortest path. **Depth-first search (DFS)** uses a **stack** (or recursion, which uses the call stack) and goes as deep as possible before backing up — good for "explore everything", connected components (groups of nodes that can all reach each other), cycle detection and path enumeration. **Dijkstra's algorithm** is BFS generalised to non-negative edge weights (a cost on each edge, such as a distance), with a priority queue instead of a plain queue.
 
-A graph is usually given as an edge list; build an **adjacency list** `List<List<Integer>>` (node → neighbours). A grid is an implicit graph: each cell's neighbours are the four cells reached by the `DIRS` offsets.
+A graph is usually given as an edge list; build an **adjacency list** `List<List<Integer>>` (for each node, the list of nodes it links to). A grid is an implicit graph: each cell's neighbours are the four cells reached by the `DIRS` offsets.
 
 **Recognise it when**: tree depth or level order; "number of islands/regions"; "fewest moves/steps" (BFS); "can you reach"; weighted "cheapest route" (Dijkstra).
 
@@ -1063,7 +1067,7 @@ static long[] dijkstra(int n, int[][] edges, int src) {   // edges = {from, to, 
 }
 ```
 
-`islands` in the same file counts connected groups of `'1'` cells with an **explicit `ArrayDeque` stack** instead of recursion, so a 1000 × 1000 grid can't cause `StackOverflowError`; `dfs` shows the recursive adjacency-list version. Java's `PriorityQueue` has no "decrease key", so Dijkstra re-inserts a node with its new distance and skips stale entries on the way out ("lazy deletion").
+`islands` in the same file counts connected groups of `'1'` cells with an **explicit `ArrayDeque` stack** instead of recursion, so a 1000 × 1000 grid can't cause `StackOverflowError` (thrown when the call stack, the JVM's record of active method calls, runs out of space); `dfs` shows the recursive adjacency-list version. Java's `PriorityQueue` has no "decrease key", so Dijkstra re-inserts a node with its new distance and skips stale entries on the way out ("lazy deletion").
 
 Output:
 
@@ -1084,15 +1088,15 @@ ok  dijkstra -> [0, 3, 1, 4]
 - Marking a cell seen when it's **polled** rather than when it's **offered** — the same cell gets queued many times.
 - `new boolean[rows][cols]` vs `[cols][rows]` swapped; `r < rows` vs `c < cols` bound mix-ups.
 - Recursive DFS on huge inputs → `StackOverflowError`.
-- Dijkstra with negative edge weights (wrong answers — use Bellman-Ford); forgetting the stale-entry check (still correct, but slower).
-- Building an undirected graph with only one direction of each edge.
+- Dijkstra with negative edge weights (wrong answers — use Bellman-Ford, a slower shortest-path algorithm that allows them); forgetting the stale-entry check (still correct, but slower).
+- Building an undirected graph (edges work in both directions) with only one direction of each edge.
 
 ---
 
 ## 19.17 Topological sort
 
 ### What it is
-An ordering of a **directed acyclic graph** (DAG) in which every edge `u → v` puts u before v — a valid order to take courses, run build steps or apply database migrations. It exists only if there's no cycle, so the same algorithm doubles as cycle detection.
+An ordering of a **directed acyclic graph** (DAG) in which every edge `u → v` puts u before v — a valid order to take courses, run build steps or apply database migrations (ordered, scripted changes to a database's structure). It exists only if there's no cycle, so the same algorithm doubles as cycle detection.
 
 **Recognise it when**: prerequisites, dependencies, "order of tasks", "can all courses be finished", build systems, alien-dictionary letter order.
 
@@ -1144,7 +1148,7 @@ ok  dfs cycle -> []
 4 checks passed
 ```
 
-Both `[0, 1, 2, 3]` and `[0, 2, 1, 3]` are valid — a DAG usually has many topological orders. If the problem wants the *smallest* order lexicographically, swap the queue for a `PriorityQueue`.
+Both `[0, 1, 2, 3]` and `[0, 2, 1, 3]` are valid — a DAG usually has many topological orders. If the problem wants the *smallest* order lexicographically (in dictionary order), swap the queue for a `PriorityQueue`.
 
 **Complexity**: O(V + E) time and space.
 
@@ -1159,7 +1163,7 @@ Both `[0, 1, 2, 3]` and `[0, 2, 1, 3]` are valid — a DAG usually has many topo
 ### What it is
 A structure that tracks which elements belong to the same group and merges groups quickly. Each group is a tree; its root is the group's representative. `find(x)` walks to the root; `union(a, b)` links one root under the other. With **path compression** (make nodes point closer to the root while finding) and **union by size** (hang the smaller tree under the larger), each operation costs effectively O(1) — formally O(α(n)), the inverse Ackermann function, which is below 5 for any realistic n.
 
-**Recognise it when**: "number of connected components" with edges arriving over time; "does adding this edge create a cycle?"; grouping accounts/emails that share an attribute; Kruskal's minimum spanning tree.
+**Recognise it when**: "number of connected components" with edges arriving over time; "does adding this edge create a cycle?"; grouping accounts/emails that share an attribute; Kruskal's minimum spanning tree (the cheapest set of edges that connects every node without forming a cycle).
 
 ### How it works
 1. Start with every element as its own root (`parent[i] = i`).
@@ -1219,7 +1223,7 @@ ok  kruskal MST -> 19
 ## 19.19 Dynamic programming
 
 ### What it is
-**Dynamic programming (DP)** solves a problem by combining answers to smaller versions of the same problem, computing each smaller answer **once**. It applies when a problem has **optimal substructure** (the best answer is built from best answers to subproblems) and **overlapping subproblems** (plain recursion would recompute the same subproblem many times — e.g. naive Fibonacci is exponential).
+**Dynamic programming (DP)** solves a problem by combining answers to smaller versions of the same problem, computing each smaller answer **once**. It applies when a problem has **optimal substructure** (the best answer is built from best answers to subproblems) and **overlapping subproblems** (plain recursion would recompute the same subproblem many times — e.g. naive Fibonacci — the sequence 1, 1, 2, 3, 5, … where each number is the sum of the two before — is exponential, roughly doubling in cost with each step of n).
 
 Two ways to write it:
 
@@ -1231,9 +1235,9 @@ Two ways to write it:
 | Risk in Java | `StackOverflowError` on deep recursion; `HashMap` memo boxes keys | Off-by-one indexes |
 | Space optimisation | Hard | Easy — keep only the rows you need |
 
-Java has no `@cache` decorator (unlike Python's `functools.cache`); use an array (fast; pick a sentinel such as 0 or -1 that can't be a real answer) or a `HashMap` keyed by a record for multi-part states. Don't use `computeIfAbsent` with a recursive mapping function on a `HashMap` — modifying the map inside its own mapping function throws `ConcurrentModificationException` since Java 9 (memoisation note in [§11.8](../11-lambdas-and-functional-programming/README.md#118-functional-style-in-everyday-java)); use get-then-put as in `editDistance`.
+Java has no `@cache` decorator (unlike Python's `functools.cache`, a one-line wrapper that remembers a function's results); use an array (fast; pick a sentinel such as 0 or -1 that can't be a real answer) or a `HashMap` keyed by a record for multi-part states. Don't use `computeIfAbsent` with a recursive mapping function on a `HashMap` — modifying the map inside its own mapping function throws `ConcurrentModificationException` since Java 9 (memoisation note in [§11.8](../11-lambdas-and-functional-programming/README.md#118-functional-style-in-everyday-java)); use get-then-put as in `editDistance`.
 
-**Recognise it when**: "number of ways", "minimum/maximum cost", "longest/shortest … subsequence", "can you reach/make", choices at each step whose effects add up, and a brute force that branches.
+**Recognise it when**: "number of ways", "minimum/maximum cost", "longest/shortest … subsequence" (elements kept in their original order but not necessarily adjacent), "can you reach/make", choices at each step whose effects add up, and a brute force (try-every-possibility solution) that branches.
 
 ### How to design a DP (the five questions)
 1. **State**: what does `dp[i]` (or `dp[i][j]`) mean, in words?
@@ -1316,7 +1320,7 @@ Note `coinChange({1, 5, 11}, 15) = 3` (5 + 5 + 5): a greedy "largest coin first"
 - Undefined state ("dp[i] is… something about i") — write the sentence first.
 - 0/1 knapsack with the capacity loop going **up** (items get reused — that's the unbounded version).
 - `Integer.MAX_VALUE + 1` as "impossible + one coin" wrapping to negative.
-- `int` answers for counting problems that exceed 2³¹ — use `long` or the requested modulus (`% 1_000_000_007`).
+- `int` answers for counting problems that exceed 2³¹ — use `long` or the requested modulus (report the remainder after dividing by a big prime, `% 1_000_000_007`).
 
 ---
 
@@ -1325,7 +1329,7 @@ Note `coinChange({1, 5, 11}, 15) = 3` (5 + 5 + 5): a greedy "largest coin first"
 ### What it is
 A systematic search that builds a candidate one choice at a time, recurses, then **undoes** the choice to try the next one. Think of walking a maze with chalk: mark a turn, explore, and rub the mark out when you come back. Pruning (abandoning a branch as soon as it can't succeed) is what makes it fast enough.
 
-**Recognise it when**: "all subsets / permutations / combinations", "all valid arrangements", N-Queens, Sudoku, word search in a grid, partitioning a string; small n (≤ ~20).
+**Recognise it when**: "all subsets / permutations / combinations", "all valid arrangements", N-Queens (place N chess queens so that none attacks another), Sudoku, word search in a grid, partitioning a string; small n (≤ ~20).
 
 ### How it works (template)
 1. If the current path is a complete answer, record a **copy** of it.
@@ -1392,7 +1396,7 @@ ok  8 queens -> 92
 ## 19.21 Tries
 
 ### What it is
-A **trie** (prefix tree, pronounced "try") stores strings character by character: each node has one child per possible next character and a flag saying "a word ends here". Words sharing a prefix share the path, so "does any word start with `car`?" costs O(length of `car`) no matter how many words are stored. Real uses: autocomplete, spell-check, IP routing tables (longest-prefix match), word games.
+A **trie** (prefix tree, pronounced "try") stores strings character by character: each node has one child per possible next character and a flag saying "a word ends here". Words sharing a prefix share the path, so "does any word start with `car`?" costs O(length of `car`) no matter how many words are stored. Real uses: autocomplete, spell-check, IP routing tables (longest-prefix match: a router picks the most specific matching network address), word games.
 
 **Recognise it when**: many prefix queries; autocomplete; "word search II" (many words in one grid); replacing words by their shortest root.
 
@@ -1567,7 +1571,7 @@ A **binary search tree (BST)** keeps every key in the left subtree smaller and e
 1. **Validate a BST (top-down)**: each node must lie strictly inside a range `(low, high)`. Going left, the node's value becomes the new `high`; going right, the new `low`. Use `long` bounds so a key equal to `Integer.MIN_VALUE` or `Integer.MAX_VALUE` is still allowed.
 2. **LCA (bottom-up)**: return the node itself if it is p or q; otherwise ask both children. If both sides found something, this node is where p and q split — it is the LCA. Otherwise pass up whichever side found something.
 3. **Maximum path sum (bottom-up with a side result)**: a call returns the best path going **down** from its node (a parent can extend only one branch); at each node also record the best path that **bends** through it (left + node + right). Negative branches are replaced by 0 — better not to take them.
-4. **Serialise**: preorder (node, left, right) and write `#` for every `null`. The null markers make the shape unambiguous, so one traversal is enough. **Deserialise** reads tokens in the same order with a queue.
+4. **Serialise**: preorder (visit the node, then its left subtree, then its right) and write `#` for every `null`. The null markers make the shape unambiguous, so one traversal is enough. **Deserialise** reads tokens (the separate pieces of the string) in the same order with a queue.
 
 ```java
 // code/ch19/patterns/Trees.java (key parts)
@@ -1629,7 +1633,7 @@ ok  empty tree -> null
 11 checks passed
 ```
 
-**Complexity**: each is O(n) time — every node visited once — and O(h) stack space, where the height h is O(log n) for a balanced tree and O(n) for a degenerate one (a "linked list" tree of 10⁵ nodes can throw `StackOverflowError`; then use an explicit `ArrayDeque`, §19.16).
+**Complexity**: each is O(n) time — every node visited once — and O(h) stack space, where the height h is O(log n) for a balanced tree (every node's left and right sides have similar heights) and O(n) for a degenerate one (a "linked list" tree of 10⁵ nodes can throw `StackOverflowError`; then use an explicit `ArrayDeque`, §19.16).
 
 ### Common mistakes
 - Validating a BST by comparing each node only with its direct children — a grandchild can break the rule (the second check above).
@@ -1731,7 +1735,7 @@ You normally call `Arrays.sort` (§19.5), but interviews ask you to **write** th
 
 - **Partition**: rearrange an array around a **pivot** value so that everything smaller is on its left. It is the core of **quicksort** (partition, then sort both sides) and of **quickselect** (partition, then continue on the **one** side that holds the k-th element — average O(n), no full sort). The **Lomuto** partition used here keeps a `store` index: everything left of it is `< pivot`.
 - **Three-way partition** (the **Dutch national flag** problem, named by Edsger Dijkstra after the flag's three stripes): sort an array of only 0s, 1s and 2s in one pass.
-- **Merge sort** splits in half, sorts each half and **merges** two sorted runs. It needs no random access, so it is the natural way to sort a **linked list** in O(n log n).
+- **Merge sort** splits in half, sorts each half and **merges** two sorted runs. It needs no random access (jumping straight to any index in O(1)), so it is the natural way to sort a **linked list** in O(n log n).
 
 **Recognise it when**: "k-th largest/smallest" without needing the rest sorted; "sort colors", "move all x to the end", "partition around a value"; "sort a linked list"; "median without sorting"; "count inversions" (a merge-sort variant).
 
@@ -1781,7 +1785,7 @@ static Node mergeSort(Node head) {                         // merge sort on a li
 }
 ```
 
-`quickSort` is the three-line recursion around `partition`, and `merge` is the classic two-pointer merge with `<=` so equal values keep their order (stable). `RNG` is a `Random` with a fixed seed so runs are repeatable.
+`quickSort` is the three-line recursion around `partition`, and `merge` is the classic two-pointer merge with `<=` so equal values keep their order (stable). `RNG` is a `Random` with a fixed seed (the starting value of the random-number generator — the same seed gives the same sequence) so runs are repeatable.
 
 Output:
 
@@ -1810,7 +1814,7 @@ ok  merge sort odd length -> [-1, 0, 3, 4, 5]
 ## 19.26 Bit manipulation
 
 ### What it is
-An `int` is 32 bits in **two's complement** (the top bit is the sign; `-x == ~x + 1`). Bitwise operators work on all 32 bits at once in one CPU instruction: `&` (and), `|` (or), `^` (xor: 1 when the bits differ), `~` (not), `<<` (shift left, × 2 per step), `>>` (arithmetic shift right, copies the sign bit) and `>>>` (logical shift right, fills with 0) — see [§2.8](../02-basics-types-and-operators/README.md). Interview problems use a handful of identities:
+An `int` is 32 bits in **two's complement** (the top bit is the sign; `-x == ~x + 1`). Bitwise operators work on all 32 bits at once in one CPU instruction (a single basic step of the processor): `&` (and), `|` (or), `^` (xor: 1 when the bits differ), `~` (not), `<<` (shift left, × 2 per step), `>>` (arithmetic shift right, copies the sign bit) and `>>>` (logical shift right, fills with 0) — see [§2.8](../02-basics-types-and-operators/README.md). Interview problems use a handful of identities:
 
 | Identity | Meaning |
 |---|---|
@@ -1823,7 +1827,7 @@ An `int` is 32 bits in **two's complement** (the top bit is the sign; `-x == ~x 
 
 Java also has the library calls `Integer.bitCount`, `Integer.highestOneBit`, `Integer.numberOfTrailingZeros` and `Integer.toBinaryString` — say you'd use them in real code.
 
-**Recognise it when**: "every element appears twice except one"; "without extra space" with integers; count 1-bits; powers of two; "swap without a temp"; subsets of up to ~20 items (a bitmask per subset); flags packed into one number.
+**Recognise it when**: "every element appears twice except one"; "without extra space" with integers; count 1-bits; powers of two; "swap without a temp"; subsets of up to ~20 items (a bitmask — an integer whose bits act as on/off flags — per subset); flags packed into one number.
 
 ### How it works
 1. **Single number**: xor everything together — pairs cancel and the lone value remains. O(n), O(1) space, no `HashSet`.
@@ -1899,9 +1903,9 @@ ok  subsets by mask -> [[], [1], [2], [1, 2]]
 ## 19.27 Math and geometry
 
 ### What it is
-A small family of problems where the trick is arithmetic or coordinates rather than a data structure: walking a matrix in a spiral, reversing an integer's digits **without overflow**, counting points on one straight line, and closed-form or recurrence answers such as the **Josephus problem** (n people in a circle, every k-th is removed; who survives?). The Java-specific part is almost always **overflow** (§19.6) and **exact arithmetic** — avoid `double` for anything you compare for equality.
+A small family of problems where the trick is arithmetic or coordinates rather than a data structure: walking a matrix in a spiral, reversing an integer's digits **without overflow**, counting points on one straight line, and closed-form (a direct formula) or recurrence (each answer computed from the previous one) answers such as the **Josephus problem** (n people in a circle, every k-th is removed; who survives?). The Java-specific part is almost always **overflow** (§19.6) and **exact arithmetic** — avoid `double` for anything you compare for equality.
 
-**Recognise it when**: "spiral order", "rotate the matrix"; "reverse the digits", "string to integer", "return 0 if it overflows"; "points on the same line", slopes; "circle of people, every k-th"; GCD/LCM, primes (sieve), modular arithmetic `mod 1_000_000_007`.
+**Recognise it when**: "spiral order", "rotate the matrix"; "reverse the digits", "string to integer", "return 0 if it overflows"; "points on the same line", slopes; "circle of people, every k-th"; GCD/LCM (greatest common divisor / least common multiple), primes (sieve — crossing out multiples to leave the primes), modular arithmetic (working with remainders) `mod 1_000_000_007`.
 
 ### How it works
 1. **Spiral order**: keep four boundaries `top`, `bottom`, `left`, `right`. Walk the top row left→right, then the right column down, then (if a row remains) the bottom row right→left, then (if a column remains) the left column up — shrinking the boundary after each side. The two `if`s stop a single remaining row or column being printed twice.
@@ -2000,11 +2004,11 @@ Interviewers grade communication as much as code. A dependable rhythm:
 1. **Clarify** (2 min): input sizes, value ranges (overflow?), duplicates, empty input, sorted?, what to return when there's no answer.
 2. **Examples**: work one small example by hand, plus one edge case.
 3. **Brute force first**, state its complexity, then name the pattern that improves it ("sorted → two pointers", "subarray sum with negatives → prefix sums + map").
-4. **Code** with clear names and a signature like the platform's (`public int[] twoSum(int[] nums, int target)`). Say out loud why you pick `ArrayDeque`, `long`, or `Integer.compare`.
+4. **Code** with clear names and a signature (the method's name and parameter list) like the platform's (`public int[] twoSum(int[] nums, int target)`). Say out loud why you pick `ArrayDeque`, `long`, or `Integer.compare`.
 5. **Test** by tracing your example through the code, then the edge cases: empty, one element, all equal, negatives, `Integer.MAX_VALUE`.
 6. **State time and space** complexity, including the sort and the recursion stack.
 
-Java-specific polish: import `java.util.*`; declare interface types (`Map<String, Integer> m = new HashMap<>()`); prefer `var` only where the type is obvious ([§2.6](../02-basics-types-and-operators/README.md#26-var--local-variable-type-inference-java-10)); return `new int[0]` or `List.of()` rather than `null`; and don't reach for streams in tight loops — a plain loop is clearer to trace and avoids boxing (see Q28).
+Java-specific polish: import `java.util.*`; declare interface types (`Map<String, Integer> m = new HashMap<>()`); prefer `var` only where the type is obvious ([§2.6](../02-basics-types-and-operators/README.md#26-var--local-variable-type-inference-java-10)); return `new int[0]` or `List.of()` rather than `null`; and don't reach for streams (Java's pipeline API for processing collections, Chapter 12) in tight loops — a plain loop is clearer to trace and avoids boxing (see Q28).
 
 ---
 
@@ -2012,45 +2016,45 @@ Java-specific polish: import `java.util.*`; declare interface types (`Map<String
 
 ## 19.29 Java interview Q&A
 
-Short, correct answers — say the first sentence, then add detail if asked. Each "→" link goes to the section of this book that teaches the topic in full; for certification-level traps see the OCP Java 21 study notes (e.g. [collections and generics](../../../../ocp-java21-study/chapters/09-collections-generics/README.md)), and for design-level questions the [LLD handbook](../../../lld/chapters/01-lld-interview-approach/README.md). The claims marked ✔ are demonstrated in `code/ch19/qa/InterviewFacts.java`, whose output is at the end of this section.
+Short, correct answers — say the first sentence, then add detail if asked. Each "→" link goes to the section of this book that teaches the topic in full; for certification-level traps see the OCP (Oracle Certified Professional exam) Java 21 study notes (e.g. [collections and generics](../../../../ocp-java21-study/chapters/09-collections-generics/README.md)), and for design-level questions (LLD, low-level design: how to shape classes and objects) the [LLD handbook](../../../lld/chapters/01-lld-interview-approach/README.md). The claims marked ✔ are demonstrated in `code/ch19/qa/InterviewFacts.java`, whose output is at the end of this section.
 
 ### Strings, objects and the language
 
-**Q1. Why is `String` immutable?** A `String`'s characters can never change after construction; "modifying" methods return new strings. This makes strings safe to share between threads without locks, safe as `HashMap` keys (the hash can be cached in the object and never goes stale), safe to pool (many variables can point at one literal), and secure for things like file paths and class names that are checked and then used. → [§7.1](../07-core-apis/README.md#71-strings-immutability-the-pool-and-memory)
+**Q1. Why is `String` immutable?** A `String`'s characters can never change after construction; "modifying" methods return new strings. This makes strings safe to share between threads without locks (mechanisms that let only one thread use something at a time), safe as `HashMap` keys (the hash can be cached in the object and never goes stale), safe to pool (many variables can point at one literal), and secure for things like file paths and class names that are checked and then used. → [§7.1](../07-core-apis/README.md#71-strings-immutability-the-pool-and-memory)
 
-**Q2. What is the string pool, and how many objects does `new String("hi")` create?** The pool (intern pool) is a JVM table, on the heap since Java 7, holding one shared `String` per distinct literal and compile-time constant. `new String("hi")` always creates a **new** heap object, plus the pooled `"hi"` literal if the class hadn't already caused it to be created — so "one or two". `==` compares references, so `"hi" == new String("hi")` is false; `intern()` returns the pooled copy. Concatenation at run time produces a new object; `"h" + "i"` with literals is folded at compile time and pooled. ✔ → [§7.1](../07-core-apis/README.md#71-strings-immutability-the-pool-and-memory)
+**Q2. What is the string pool, and how many objects does `new String("hi")` create?** The pool (intern pool) is a JVM table, on the heap (the memory area where all objects live) since Java 7, holding one shared `String` per distinct literal (a value written directly in the code, like `"hi"`) and compile-time constant. `new String("hi")` always creates a **new** heap object, plus the pooled `"hi"` literal if the class hadn't already caused it to be created — so "one or two". `==` compares references, so `"hi" == new String("hi")` is false; `intern()` returns the pooled copy. Concatenation at run time produces a new object; `"h" + "i"` with literals is folded at compile time and pooled. ✔ → [§7.1](../07-core-apis/README.md#71-strings-immutability-the-pool-and-memory)
 
 **Q3. `String` vs `StringBuilder` vs `StringBuffer`?** `String` is immutable; `StringBuilder` is a mutable, unsynchronised buffer (use it to build strings in loops — `+=` in a loop is O(n²)); `StringBuffer` is the old synchronised version, rarely useful because a single string is rarely built by several threads. → [§7.3](../07-core-apis/README.md#73-stringbuilder-stringbuffer-and-stringjoiner)
 
-**Q4. What is the `equals`/`hashCode` contract, and what breaks if you override only `equals`?** Equal objects **must** have equal hash codes (unequal objects may collide); `equals` must be reflexive, symmetric, transitive, consistent and `false` for `null`. Override only `equals` and two "equal" objects get different identity hash codes, land in different buckets, and `HashSet.contains`/`HashMap.get` fail to find them. ✔ → [§6.13](../06-oop-inheritance-interfaces-and-more/README.md#613-object-methods-equals-hashcode-and-tostring)
+**Q4. What is the `equals`/`hashCode` contract, and what breaks if you override only `equals`?** Equal objects **must** have equal hash codes (unequal objects may collide); `equals` must be reflexive, symmetric, transitive, consistent and `false` for `null` (x equals x; if x equals y then y equals x; if x equals y and y equals z then x equals z; and the answer doesn't change while the objects don't). Override only `equals` and two "equal" objects get different identity hash codes, land in different buckets (slots of the hash table's internal array), and `HashSet.contains`/`HashMap.get` fail to find them. ✔ → [§6.13](../06-oop-inheritance-interfaces-and-more/README.md#613-object-methods-equals-hashcode-and-tostring)
 
 **Q5. `==` vs `equals`?** `==` compares primitive values or, for objects, **references** (same object?); `equals` compares logical content if the class overrides it (`String`, wrappers, collections, records do; arrays don't). With wrappers, `Integer a = 127, b = 127; a == b` is true only because `Integer.valueOf` caches −128…127; with 128 it's false. → [§7.6](../07-core-apis/README.md#76-wrapper-classes-and-autoboxing), §19.6
 
 **Q6. Is Java pass-by-value or pass-by-reference?** Always pass-by-value. For objects the *value* passed is a copy of the reference: the method can mutate the object the caller sees, but reassigning the parameter doesn't affect the caller's variable. ✔ → [§4.2](../04-methods-and-arrays/README.md#42-parameters--java-is-always-pass-by-value)
 
-**Q7. `final` vs `finally` vs `finalize`?** `final` is a modifier: a final variable can't be reassigned, a final method can't be overridden, a final class can't be extended. `finally` is the block after `try` that runs whether or not an exception was thrown (a `return` inside it overrides the try's return — never do that ✔). `finalize()` was a GC callback on `Object`; it's unpredictable and has been deprecated for removal since Java 18 (JEP 421) — use try-with-resources or `Cleaner`. → [§5.8](../05-oop-classes-and-objects/README.md#58-the-final-keyword), [§8.4](../08-exceptions/README.md#84-try--catch--finally-and-control-flow)
+**Q7. `final` vs `finally` vs `finalize`?** `final` is a modifier: a final variable can't be reassigned, a final method can't be overridden, a final class can't be extended. `finally` is the block after `try` that runs whether or not an exception was thrown (a `return` inside it overrides the try's return — never do that ✔). `finalize()` was a GC callback (a method the garbage collector called before freeing an object) on `Object`; it's unpredictable and has been deprecated for removal since Java 18 (JEP 421 — a JEP, JDK Enhancement Proposal, is the numbered design document for a Java change) — use try-with-resources or `Cleaner`. → [§5.8](../05-oop-classes-and-objects/README.md#58-the-final-keyword), [§8.4](../08-exceptions/README.md#84-try--catch--finally-and-control-flow)
 
-**Q8. How do you make a class immutable?** Make the class `final` (or give it private constructors), make all fields `private final`, set everything in the constructor, provide no setters, **defensively copy** mutable inputs and outputs (e.g. `List.copyOf`), and don't let `this` escape during construction. A `record` gives you most of this, but its fields are only *shallowly* immutable. → [§5.9](../05-oop-classes-and-objects/README.md#59-immutability-basics), [§6.8](../06-oop-inheritance-interfaces-and-more/README.md#68-records)
+**Q8. How do you make a class immutable?** Make the class `final` (or give it private constructors), make all fields `private final`, set everything in the constructor, provide no setters, **defensively copy** mutable inputs and outputs (keep your own copy so the caller can't change it later) (e.g. `List.copyOf`), and don't let `this` escape during construction. A `record` gives you most of this, but its fields are only *shallowly* immutable. → [§5.9](../05-oop-classes-and-objects/README.md#59-immutability-basics), [§6.8](../06-oop-inheritance-interfaces-and-more/README.md#68-records)
 
 **Q9. Interface vs abstract class?** An interface is a contract a class can implement *many* of; it has no instance state (only constants), and can have `default`, `static` (Java 8) and `private` (Java 9) methods. An abstract class can have fields, constructors and any access level, but a class can extend only one. Use an interface for a capability ("is `Comparable`"), an abstract class for sharing state and code among closely related classes. → [§6.5](../06-oop-inheritance-interfaces-and-more/README.md#65-abstract-classes), [§6.6](../06-oop-inheritance-interfaces-and-more/README.md#66-interfaces), [§6.12](../06-oop-inheritance-interfaces-and-more/README.md#612-choosing-abstract-class-interface-record-enum-or-plain-class)
 
-**Q10. What is a record (Java 16), and what are its limits?** A concise, transparent data carrier: `record Point(int x, int y) {}` generates private final fields, a canonical constructor, accessors `x()`/`y()`, and `equals`/`hashCode`/`toString` based on the components. Records are implicitly `final`, can't extend another class (they extend `java.lang.Record`) and can't declare extra instance fields, but they can implement interfaces, have static members, extra methods and a compact constructor for validation. → [§6.8](../06-oop-inheritance-interfaces-and-more/README.md#68-records)
+**Q10. What is a record (Java 16), and what are its limits?** A concise, transparent data carrier: `record Point(int x, int y) {}` generates private final fields, a canonical constructor (one taking every component), accessors `x()`/`y()`, and `equals`/`hashCode`/`toString` based on the components. Records are implicitly `final`, can't extend another class (they extend `java.lang.Record`) and can't declare extra instance fields, but they can implement interfaces, have static members, extra methods and a compact constructor (written without a parameter list) for validation. → [§6.8](../06-oop-inheritance-interfaces-and-more/README.md#68-records)
 
-**Q11. What are sealed classes (Java 17) for?** `sealed interface Shape permits Circle, Square` restricts which classes may extend or implement a type. Each permitted subclass must be `final`, `sealed` or `non-sealed`. The benefit: the compiler knows every subtype, so a pattern-matching `switch` over a sealed type can be **exhaustive** without a `default`, and adding a new subtype makes non-exhaustive switches fail to compile. → [§6.7](../06-oop-inheritance-interfaces-and-more/README.md#67-sealed-classes-and-interfaces-java-17), [§3.6](../03-control-flow/README.md#36-pattern-matching-for-switch-java-21)
+**Q11. What are sealed classes (Java 17) for?** `sealed interface Shape permits Circle, Square` restricts which classes may extend or implement a type. Each permitted subclass must be `final`, `sealed` or `non-sealed`. The benefit: the compiler knows every subtype, so a pattern-matching `switch` over a sealed type can be **exhaustive** (handle every possible case) without a `default`, and adding a new subtype makes non-exhaustive switches fail to compile. → [§6.7](../06-oop-inheritance-interfaces-and-more/README.md#67-sealed-classes-and-interfaces-java-17), [§3.6](../03-control-flow/README.md#36-pattern-matching-for-switch-java-21)
 
 **Q12. Overloading vs overriding?** Overloading = same name, different parameter lists, chosen at **compile time** from the static argument types. Overriding = a subclass redefines an inherited instance method with the same signature, chosen at **run time** from the object's actual class (dynamic dispatch). Static methods can't be overridden — a same-signature static method in a subclass *hides* the parent's. → [§4.3](../04-methods-and-arrays/README.md#43-overloading), [§6.3](../06-oop-inheritance-interfaces-and-more/README.md#63-overriding)
 
 ### Collections
 
-**Q13. How does `HashMap` work internally?** An array of buckets (default capacity 16, load factor 0.75). `put` computes `hashCode()`, mixes the high bits into the low bits, and uses `hash & (capacity − 1)` as the bucket index. Colliding entries form a linked list; since Java 8, a bucket that grows past 8 entries becomes a red-black tree if the table has at least 64 buckets (otherwise the table resizes instead). When size exceeds capacity × load factor, the table doubles and entries are redistributed. Lookup compares the hash, then `equals`. Average O(1); worst case O(log n) for a tree bucket. → [§10.5](../10-collections/README.md#105-hashmap-internals)
+**Q13. How does `HashMap` work internally?** An array of buckets (default capacity 16, load factor 0.75 — how full the table may get before it doubles). `put` computes `hashCode()`, mixes the high bits into the low bits, and uses `hash & (capacity − 1)` as the bucket index. Colliding entries form a linked list; since Java 8, a bucket that grows past 8 entries becomes a red-black tree if the table has at least 64 buckets (otherwise the table resizes instead). When size exceeds capacity × load factor, the table doubles and entries are redistributed. Lookup compares the hash, then `equals`. Average O(1); worst case O(log n) for a tree bucket. → [§10.5](../10-collections/README.md#105-hashmap-internals)
 
 **Q14. What happens if you mutate a key after putting it in a `HashMap`?** Its hash code changes but the entry stays in the bucket computed from the old hash, so `get` with the same object (or an equal one) usually returns `null` and the entry is effectively lost until you iterate. Use immutable keys (`String`, records of immutable values). → [§10.5](../10-collections/README.md#105-hashmap-internals)
 
-**Q15. `HashMap` vs `Hashtable` vs `Collections.synchronizedMap` vs `ConcurrentHashMap`?** `HashMap`: not thread-safe, allows one `null` key and `null` values. `Hashtable`: legacy, every method synchronized, no nulls. `synchronizedMap`: a wrapper with one lock around every call — you must still lock manually while iterating or doing check-then-act. `ConcurrentHashMap`: designed for concurrency, scales with many threads, offers atomic compound operations (`merge`, `compute`, `putIfAbsent`), no nulls. → [§14.12](../14-concurrency-1/README.md#1412-concurrent-collections)
+**Q15. `HashMap` vs `Hashtable` vs `Collections.synchronizedMap` vs `ConcurrentHashMap`?** `HashMap`: not thread-safe (unsafe to change from several threads at once), allows one `null` key and `null` values. `Hashtable`: legacy, every method synchronized, no nulls. `synchronizedMap`: a wrapper with one lock around every call — you must still lock manually while iterating or doing check-then-act (test a condition, then act on it — another thread can change things in between). `ConcurrentHashMap`: designed for concurrency, scales with many threads, offers atomic (all-in-one, indivisible) compound operations (`merge`, `compute`, `putIfAbsent`), no nulls. → [§14.12](../14-concurrency-1/README.md#1412-concurrent-collections)
 
 **Q16. How is `ConcurrentHashMap` thread-safe?** Since Java 8: reads are lock-free (they read volatile fields); an insert into an empty bucket uses a CAS (compare-and-set) instruction; an update to a non-empty bucket locks only that bucket's first node with `synchronized`; resizing is done cooperatively by the threads that notice it. So writers to different buckets don't block each other. (Java 7 and earlier used a fixed number of locked "segments".) Iterators are **weakly consistent** — they never throw `ConcurrentModificationException` and may or may not reflect concurrent updates; `size()` is an estimate under concurrent change. Nulls are forbidden because `get` returning `null` must unambiguously mean "absent". → [§14.12](../14-concurrency-1/README.md#1412-concurrent-collections), [§14.10](../14-concurrency-1/README.md#1410-atomic-variables)
 
-**Q17. `ArrayList` vs `LinkedList`?** `ArrayList` is a growable array: O(1) random access, amortised O(1) append, O(n) insert/remove in the middle, cache-friendly. `LinkedList` is doubly linked: O(1) at the ends or at an iterator's position, O(n) to reach an index, more memory per element. Default to `ArrayList`; for a queue or stack use `ArrayDeque`. → [§10.2](../10-collections/README.md#102-lists-arraylist-and-linkedlist)
+**Q17. `ArrayList` vs `LinkedList`?** `ArrayList` is a growable array: O(1) random access, amortised O(1) append, O(n) insert/remove in the middle, cache-friendly (elements sit side by side in memory, which the CPU cache loads quickly). `LinkedList` is doubly linked (each node points to both neighbours): O(1) at the ends or at an iterator's position, O(n) to reach an index, more memory per element. Default to `ArrayList`; for a queue or stack use `ArrayDeque`. → [§10.2](../10-collections/README.md#102-lists-arraylist-and-linkedlist)
 
 **Q18. `HashMap` vs `LinkedHashMap` vs `TreeMap`? How would you build an LRU cache?** Unordered O(1); insertion- or access-ordered O(1); sorted O(log n) with navigation (`floorKey`, `ceilingKey`). LRU cache: `new LinkedHashMap<>(16, 0.75f, true)` (access order) and override `removeEldestEntry` to return `size() > capacity`. → [§10.4](../10-collections/README.md#104-maps-hashmap-linkedhashmap-treemap)
 
@@ -2060,15 +2064,15 @@ Short, correct answers — say the first sentence, then add detail if asked. Eac
 
 **Q21. Why prefer `ArrayDeque` to `Stack`?** `Stack` extends `Vector`: every call is synchronised (cost for nothing), it exposes list methods such as `get(i)` that break LIFO, and it iterates bottom-to-top. `ArrayDeque` is an unsynchronised circular array with O(1) `push`/`pop`, and the `Stack` Javadoc itself recommends `Deque`. → §19.4, [§10.6](../10-collections/README.md#106-queues-deques-and-priority-queues)
 
-**Q22. `List.of` vs `Arrays.asList` vs `Collections.unmodifiableList`?** `List.of` (Java 9) is truly unmodifiable and rejects nulls. `Arrays.asList` is a fixed-size **view** of an array: `set` works (and writes through to the array), `add`/`remove` throw. `unmodifiableList` is a read-only **view**: you can't change it through the view, but changes to the backing list show through. `List.copyOf` (Java 10) takes an unmodifiable snapshot. ✔ → [§10.10](../10-collections/README.md#1010-unmodifiable-and-immutable-collections)
+**Q22. `List.of` vs `Arrays.asList` vs `Collections.unmodifiableList`?** `List.of` (Java 9) is truly unmodifiable and rejects nulls. `Arrays.asList` is a fixed-size **view** of an array: `set` works (and writes through to the array), `add`/`remove` throw. `unmodifiableList` is a read-only **view**: you can't change it through the view, but changes to the backing list (the original it reads from) show through. `List.copyOf` (Java 10) takes an unmodifiable snapshot. ✔ → [§10.10](../10-collections/README.md#1010-unmodifiable-and-immutable-collections)
 
 ### Exceptions
 
 **Q23. Checked vs unchecked exceptions?** Checked exceptions (subclasses of `Exception` but not `RuntimeException`, e.g. `IOException`) must be caught or declared with `throws` — the compiler enforces it; use them for recoverable conditions the caller should handle. Unchecked exceptions (`RuntimeException` and subclasses, e.g. `IllegalArgumentException`, `NullPointerException`) signal programming errors and needn't be declared. `Error`s (`OutOfMemoryError`) are serious JVM problems you normally don't catch. → [§8.2](../08-exceptions/README.md#82-the-throwable-hierarchy-checked-unchecked-and-errors), [§8.3](../08-exceptions/README.md#83-handle-or-declare-checked-exceptions-and-throws)
 
-**Q24. How does try-with-resources work?** Any `AutoCloseable` declared in `try (…)` is closed automatically when the block exits, normally or by exception, in **reverse** order of declaration ✔. If the body throws and `close()` also throws, the body's exception is propagated and the close exception is attached as a *suppressed* exception (`getSuppressed()`), instead of replacing it as a hand-written `finally` would. → [§8.6](../08-exceptions/README.md#86-try-with-resources)
+**Q24. How does try-with-resources work?** Any `AutoCloseable` (an object with a `close()` method) declared in `try (…)` is closed automatically when the block exits, normally or by exception, in **reverse** order of declaration ✔. If the body throws and `close()` also throws, the body's exception is propagated and the close exception is attached as a *suppressed* exception (`getSuppressed()`), instead of replacing it as a hand-written `finally` would. → [§8.6](../08-exceptions/README.md#86-try-with-resources)
 
-**Q25. Can a `finally` block not run?** Only if the JVM stops or the thread never leaves the `try`: `System.exit`, a JVM crash or kill, an infinite loop or deadlock inside the `try`, or a daemon thread killed at JVM shutdown. An exception or `return` in the `try` doesn't skip it. → [§8.4](../08-exceptions/README.md#84-try--catch--finally-and-control-flow)
+**Q25. Can a `finally` block not run?** Only if the JVM stops or the thread never leaves the `try`: `System.exit`, a JVM crash or kill, an infinite loop or deadlock inside the `try`, or a daemon thread (a background thread that doesn't keep the JVM alive) killed at JVM shutdown. An exception or `return` in the `try` doesn't skip it. → [§8.4](../08-exceptions/README.md#84-try--catch--finally-and-control-flow)
 
 ### Generics, lambdas and streams
 
@@ -2076,7 +2080,7 @@ Short, correct answers — say the first sentence, then add detail if asked. Eac
 
 **Q27. What does `? extends` vs `? super` mean (PECS)?** "Producer `extends`, consumer `super`": a `List<? extends Number>` can be read as `Number`s but you can't add to it; a `List<? super Integer>` accepts `Integer`s but reads come back as `Object`. Example: `Collections.copy(List<? super T> dest, List<? extends T> src)`. → [§9.6](../09-generics/README.md#96-invariance-wildcards-and-pecs)
 
-**Q28. Streams vs loops — which is faster, which is better?** For simple work on small collections a loop is usually as fast or faster (no pipeline objects, no boxing if you use primitives). Streams win on readability for declarative transforms (filter–map–group) and make parallelism a one-word change — though parallel streams only pay off for large, CPU-bound, easily split work. Loops are better for early exits with complex state, checked exceptions, and index arithmetic (most DSA code). → [§12.11](../12-streams/README.md#1211-streams-vs-loops-and-a-real-world-pipeline), [§12.8](../12-streams/README.md#128-parallel-streams)
+**Q28. Streams vs loops — which is faster, which is better?** For simple work on small collections a loop is usually as fast or faster (no pipeline objects, no boxing if you use primitives). Streams win on readability for declarative (say what you want, not how to loop) transforms (filter–map–group) and make parallelism a one-word change — though parallel streams only pay off for large, CPU-bound (limited by computation rather than by waiting), easily split work. Loops are better for early exits with complex state, checked exceptions, and index arithmetic (most DSA code). → [§12.11](../12-streams/README.md#1211-streams-vs-loops-and-a-real-world-pipeline), [§12.8](../12-streams/README.md#128-parallel-streams)
 
 **Q29. How do you misuse `Optional`?** Calling `get()` without checking (it throws `NoSuchElementException` ✔ — use `orElse`, `orElseGet`, `orElseThrow`, `map`, `ifPresent`); using it for fields, method parameters or collection elements (it's designed as a *return type* for "maybe no result"); returning `Optional<List<…>>` instead of an empty list; returning `null` from a method declared to return `Optional`; and `orElse(expensiveCall())` when `orElseGet(() -> expensiveCall())` would avoid evaluating it every time. → [§11.7](../11-lambdas-and-functional-programming/README.md#117-optional)
 
@@ -2084,31 +2088,31 @@ Short, correct answers — say the first sentence, then add detail if asked. Eac
 
 ### Concurrency
 
-**Q31. `volatile` vs `synchronized`?** `volatile` on a field guarantees **visibility and ordering**: every read sees the latest write, and writes before a volatile write are visible to a thread that later reads it. It does **not** make compound actions like `count++` atomic. `synchronized` gives **mutual exclusion** (one thread in the block per lock) *and* visibility on lock release/acquire. Use `volatile` for a flag or a safely published reference, locks or atomics (`AtomicInteger`) for read-modify-write. → [§14.6](../14-concurrency-1/README.md#146-synchronized-and-intrinsic-locks), [§14.7](../14-concurrency-1/README.md#147-volatile-and-visibility)
+**Q31. `volatile` vs `synchronized`?** `volatile` on a field guarantees **visibility and ordering**: every read sees the latest write, and writes before a volatile write are visible to a thread that later reads it. It does **not** make compound actions like `count++` atomic. `synchronized` gives **mutual exclusion** (one thread in the block per lock) *and* visibility on lock release/acquire. Use `volatile` for a flag or a safely published reference (one other threads are guaranteed to see fully built), locks or atomics (`AtomicInteger`) for read-modify-write. → [§14.6](../14-concurrency-1/README.md#146-synchronized-and-intrinsic-locks), [§14.7](../14-concurrency-1/README.md#147-volatile-and-visibility)
 
-**Q32. What is "happens-before"?** The Java Memory Model's rule for when one thread's write is guaranteed visible to another thread's read. Key edges: program order within a thread; unlocking a monitor → later locking of the same monitor; a volatile write → later read of that variable; `Thread.start()` → the started thread's actions; a thread's actions → another thread's successful `join()`. Without such an edge, the JIT and CPU may reorder or cache writes and the other thread may never see them. → [§15.8](../15-concurrency-2-modern/README.md#158-the-java-memory-model-and-happens-before)
+**Q32. What is "happens-before"?** The Java Memory Model's rule for when one thread's write is guaranteed visible to another thread's read. Key edges: program order within a thread; unlocking a monitor (the lock built into every object) → later locking of the same monitor; a volatile write → later read of that variable; `Thread.start()` → the started thread's actions; a thread's actions → another thread's successful `join()`. Without such an edge, the JIT and CPU may reorder or cache writes and the other thread may never see them. → [§15.8](../15-concurrency-2-modern/README.md#158-the-java-memory-model-and-happens-before)
 
-**Q33. What is a deadlock and how do you prevent it?** Two or more threads each hold a lock and wait for a lock another holds, forever. Prevent it by acquiring locks in one global order, holding them briefly, using `tryLock` with a timeout, or avoiding shared locks (immutable data, message passing). Diagnose with a thread dump (`jstack`), which reports found deadlocks. → [§15.9](../15-concurrency-2-modern/README.md#159-liveness-deadlock-livelock-starvation)
+**Q33. What is a deadlock and how do you prevent it?** Two or more threads each hold a lock and wait for a lock another holds, forever. Prevent it by acquiring locks in one global order, holding them briefly, using `tryLock` with a timeout, or avoiding shared locks (immutable data, message passing). Diagnose with a thread dump (a snapshot of what every thread is doing; `jstack`), which reports found deadlocks. → [§15.9](../15-concurrency-2-modern/README.md#159-liveness-deadlock-livelock-starvation)
 
-**Q34. What are virtual threads (Java 21), and when do they help?** Lightweight threads scheduled by the JVM onto a small pool of OS ("carrier") threads. When a virtual thread blocks on I/O it unmounts, freeing the carrier, so you can run hundreds of thousands of simple blocking-style tasks (`Executors.newVirtualThreadPerTaskExecutor()`). They help **I/O-bound, high-concurrency** servers; they don't make CPU-bound work faster. Don't pool them; limit access to scarce resources with a `Semaphore`. Before Java 24 a virtual thread blocking inside `synchronized` pinned its carrier; JEP 491 (Java 24) removed that case, though native calls back into Java and class initialisation still pin. → [§15.4](../15-concurrency-2-modern/README.md#154-virtual-threads), [§15.5](../15-concurrency-2-modern/README.md#155-pinning-and-jep-491)
+**Q34. What are virtual threads (Java 21), and when do they help?** Lightweight threads scheduled by the JVM onto a small pool of OS (operating-system, "carrier") threads. When a virtual thread blocks on I/O (input/output — waiting for a disk, network or database) it unmounts, freeing the carrier, so you can run hundreds of thousands of simple blocking-style tasks (`Executors.newVirtualThreadPerTaskExecutor()`). They help **I/O-bound, high-concurrency** servers; they don't make CPU-bound work faster. Don't pool them; limit access to scarce resources with a `Semaphore` (a counter of permits that caps how many threads may enter). Before Java 24 a virtual thread blocking inside `synchronized` pinned its carrier; JEP 491 (Java 24) removed that case, though native calls (calls into non-Java code such as C) back into Java and class initialisation still pin. → [§15.4](../15-concurrency-2-modern/README.md#154-virtual-threads), [§15.5](../15-concurrency-2-modern/README.md#155-pinning-and-jep-491)
 
 **Q35. `Runnable` vs `Callable`; `Future` vs `CompletableFuture`?** `Runnable.run()` returns nothing and can't throw checked exceptions; `Callable.call()` returns a value and can. A `Future` is a handle whose only way to get the result is a blocking `get()`. `CompletableFuture` (Java 8) can be completed explicitly and composed without blocking — `thenApply`, `thenCompose`, `thenCombine`, `allOf`, `exceptionally`/`handle`. → [§15.1](../15-concurrency-2-modern/README.md#151-future-and-its-limits), [§15.2](../15-concurrency-2-modern/README.md#152-completablefuture)
 
-**Q36. Why use an `ExecutorService` instead of `new Thread()`?** It reuses a bounded number of platform threads (creation is expensive and unbounded threads exhaust memory), queues tasks, returns `Future`s, and gives one place to shut everything down. Size CPU-bound pools near the core count; for blocking I/O prefer virtual threads. Always shut executors down (they're `AutoCloseable` since Java 19). → [§14.11](../14-concurrency-1/README.md#1411-executors-and-thread-pools)
+**Q36. Why use an `ExecutorService` instead of `new Thread()`?** It reuses a bounded number of platform threads (ordinary threads backed one-to-one by OS threads) (creation is expensive and unbounded threads exhaust memory), queues tasks, returns `Future`s, and gives one place to shut everything down. Size CPU-bound pools near the core count; for blocking I/O prefer virtual threads. Always shut executors down (they're `AutoCloseable` since Java 19). → [§14.11](../14-concurrency-1/README.md#1411-executors-and-thread-pools)
 
 ### The JVM
 
-**Q37. What are the JVM's memory areas?** The **heap** (all objects and arrays, shared, garbage-collected, usually split into young and old generations); one **stack per thread** (frames with local variables and partial results — `StackOverflowError` when too deep); **metaspace** (class metadata in native memory, replaced PermGen in Java 8); the **code cache** (JIT-compiled machine code); plus direct buffers and other native memory. → [§16.3](../16-jvm-internals-and-performance/README.md#163-runtime-memory-areas), [§1.8](../01-java-and-the-jvm/README.md#18-memory-and-garbage-collection--an-overview)
+**Q37. What are the JVM's memory areas?** The **heap** (all objects and arrays, shared, garbage-collected, usually split into young and old generations); one **stack per thread** (frames with local variables and partial results — `StackOverflowError` when too deep); **metaspace** (class metadata in native memory, replaced PermGen in Java 8); the **code cache** (JIT-compiled machine code); plus direct buffers and other native memory (memory outside the Java heap, managed by the OS). → [§16.3](../16-jvm-internals-and-performance/README.md#163-runtime-memory-areas), [§1.8](../01-java-and-the-jvm/README.md#18-memory-and-garbage-collection--an-overview)
 
-**Q38. How does garbage collection work, and which collector is the default?** An object is garbage when it's no longer **reachable** from GC roots (thread stacks, static fields, JNI references). Collectors are **generational**: most objects die young, so the young generation is collected often and cheaply by copying survivors, and long-lived objects are promoted to the old generation. G1 is the default since Java 9 (Serial on very small machines until JDK 27 made G1 the default everywhere); Parallel maximises throughput; ZGC (generational-only since Java 24) and Shenandoah keep pauses at or below about a millisecond by working concurrently. → [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms), [§16.7](../16-jvm-internals-and-performance/README.md#167-gc-tuning-basics)
+**Q38. How does garbage collection work, and which collector is the default?** An object is garbage when it's no longer **reachable** from GC roots (thread stacks, static fields, JNI references — JNI is the Java Native Interface for calling C code). Collectors are **generational**: most objects die young, so the young generation is collected often and cheaply by copying survivors, and long-lived objects are promoted to the old generation. G1 is the default since Java 9 (Serial on very small machines until JDK 27 made G1 the default everywhere); Parallel maximises throughput (total work done per second); ZGC (generational-only since Java 24) and Shenandoah keep pauses at or below about a millisecond by working concurrently. → [§16.5](../16-jvm-internals-and-performance/README.md#165-garbage-collection-algorithms), [§16.7](../16-jvm-internals-and-performance/README.md#167-gc-tuning-basics)
 
-**Q39. Can Java leak memory?** Yes — the GC only frees *unreachable* objects, so anything you still reference stays: ever-growing static maps and caches without eviction, listeners never unregistered, `ThreadLocal` values on pooled threads, mutated `HashMap` keys, and class-loader leaks in app servers. Confirm with heap-after-GC growth; find them with class histograms, JFR old-object samples, or a heap dump (`jcmd <pid> GC.heap_dump`) in Eclipse MAT. → [§16.11](../16-jvm-internals-and-performance/README.md#1611-memory-leaks)
+**Q39. Can Java leak memory?** Yes — the GC only frees *unreachable* objects, so anything you still reference stays: ever-growing static maps and caches without eviction (removing old entries), listeners never unregistered, `ThreadLocal` values (per-thread variables) on pooled threads, mutated `HashMap` keys, and class-loader leaks in app servers. Confirm with heap-after-GC growth; find them with class histograms, JFR (JDK Flight Recorder, a built-in low-overhead profiler) old-object samples, or a heap dump (a file listing every object in memory; `jcmd <pid> GC.heap_dump`) in Eclipse MAT (a heap-dump analyser). → [§16.11](../16-jvm-internals-and-performance/README.md#1611-memory-leaks)
 
-**Q40. How does the JVM run bytecode — interpreter, JIT, class loading?** Class loaders load classes lazily (delegating to their parent first), then the JVM verifies, links and initialises them. Bytecode starts in the interpreter; methods that become hot are compiled to machine code by the tiered JIT compilers (C1 quickly, C2 with heavy optimisations like inlining and escape analysis), which is why Java "warms up". → [§1.7](../01-java-and-the-jvm/README.md#17-how-the-jvm-runs-your-code-class-loading-interpreter-jit), [§16.2](../16-jvm-internals-and-performance/README.md#162-class-loading-in-depth), [§16.8](../16-jvm-internals-and-performance/README.md#168-jit-compilation-inlining-and-escape-analysis)
+**Q40. How does the JVM run bytecode — interpreter, JIT, class loading?** Bytecode is the portable instruction set inside `.class` files. Class loaders load classes lazily (only when first needed) (delegating to their parent first), then the JVM verifies, links and initialises them. Bytecode starts in the interpreter; methods that become hot are compiled to machine code by the tiered JIT compilers (C1 quickly, C2 with heavy optimisations like inlining — copying a called method's body into the caller — and escape analysis — proving an object never leaves a method so it needn't be allocated on the heap), which is why Java "warms up". → [§1.7](../01-java-and-the-jvm/README.md#17-how-the-jvm-runs-your-code-class-loading-interpreter-jit), [§16.2](../16-jvm-internals-and-performance/README.md#162-class-loading-in-depth), [§16.8](../16-jvm-internals-and-performance/README.md#168-jit-compilation-inlining-and-escape-analysis)
 
 **Q41. What's `static`, and when is a static initialiser run?** A `static` member belongs to the class, not to instances — one copy shared by all. Static initialisers and static field initialisers run once, when the class is first initialised (first instance created, static method called or non-constant static field used). → [§5.5](../05-oop-classes-and-objects/README.md#55-static-members), [§5.10](../05-oop-classes-and-objects/README.md#510-initialisation-order)
 
-**Q42. What changed in modern Java that you'd use in an interview?** `var` (10), switch expressions (14), text blocks (15), records and `instanceof` patterns (16), sealed types (17), pattern matching for `switch`, record patterns, virtual threads and sequenced collections with `getFirst`/`getLast`/`removeLast` (21), unnamed variables `_` (22), stream gatherers (24), and compact source files with instance `main` methods (25). → [§17.2](../17-modern-java-17-to-25/README.md#172-the-version-table)
+**Q42. What changed in modern Java that you'd use in an interview?** `var` (10), switch expressions (14), text blocks (multi-line string literals, 15), records and `instanceof` patterns (16), sealed types (17), pattern matching for `switch`, record patterns, virtual threads and sequenced collections with `getFirst`/`getLast`/`removeLast` (21), unnamed variables `_` (22), stream gatherers (custom stream steps, 24), and compact source files with instance `main` methods (25). → [§17.2](../17-modern-java-17-to-25/README.md#172-the-version-table)
 
 ### Proof of the ✔ claims
 
@@ -2132,7 +2136,7 @@ ok  get() on empty throws NoSuchElementException -> true
 16 checks passed
 ```
 
-`BadPoint` overrides `equals` but not `hashCode`; `javac -Xlint` even warns about it (`[overrides] Class BadPoint overrides equals, but neither it nor any superclass overrides hashCode method`).
+`BadPoint` overrides `equals` but not `hashCode`; `javac -Xlint` (the compiler with extra warnings switched on) even warns about it (`[overrides] Class BadPoint overrides equals, but neither it nor any superclass overrides hashCode method`).
 
 ### Self-check
 1. Why does `new PriorityQueue<Integer>((a, b) -> b - a)` risk wrong answers? → `b - a` overflows for values far apart; use `Comparator.reverseOrder()`.

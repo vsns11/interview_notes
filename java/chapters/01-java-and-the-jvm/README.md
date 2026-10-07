@@ -1,6 +1,6 @@
 # Chapter 1 — Java and the JVM
 
-This chapter explains what Java is and what actually happens between typing `javac` and seeing output. You will set up a JDK, write, compile and run programs three different ways, look inside a `.class` file, watch the Just-In-Time compiler and the garbage collector at work, experiment in `jshell`, and learn how Java versions and long-term-support releases work, so you can choose the right JDK for a project.
+This chapter explains what Java is and what actually happens between typing `javac` (the Java compiler) and seeing output. You will set up a JDK (Java Development Kit — the compiler plus the other developer tools), write, **compile** (translate human-written source code into a form a machine can execute) and run programs three different ways, look inside a `.class` file, watch the Just-In-Time compiler (the part of the JVM that turns frequently run code into fast machine code while the program is running) and the garbage collector (the automatic cleaner that frees memory your program no longer uses) at work, experiment in `jshell` (an interactive prompt for typing Java line by line), and learn how Java versions and long-term-support releases (versions that vendors keep patching for many years) work, so you can choose the right JDK for a project.
 
 **What you'll learn**
 
@@ -26,47 +26,49 @@ All code lives in [`code/`](code/). It was compiled with `javac --release 25` (t
 ## 1.1 What Java is
 
 ### What it is
-Java is a **general-purpose, statically typed, object-oriented programming language** together with a **runtime platform** (the Java Virtual Machine) that runs compiled Java programs.
+Java is a **general-purpose, statically typed, object-oriented programming language** together with a **runtime platform** (the Java Virtual Machine) that runs compiled Java programs. A **runtime** is the software that must be present while a program is running to execute it and provide services such as memory management.
 
 - *General-purpose*: not tied to one domain — the same language builds banking back-ends, Android apps (historically), big-data engines and command-line tools.
 - *Statically typed*: every variable has a type known at compile time, so the compiler rejects `int n = "five";` before the program ever runs.
-- *Object-oriented*: code is organised into **classes** (blueprints) and **objects** (instances built from them). Modern Java also supports functional style (lambdas, streams — Chapters 11–12).
+- *Object-oriented*: code is organised into **classes** (blueprints) and **objects** (instances built from them). Modern Java also supports functional style (lambdas — short, unnamed functions you can pass around as values; streams — pipelines that filter and transform collections of data — Chapters 11–12).
 
-Analogy: Java source is like a recipe written in one standard language; the JVM is a professional kitchen installed in every restaurant (Windows, macOS, Linux, containers). Write the recipe once and any kitchen can cook it. That is the origin of the slogan *"write once, run anywhere"*.
+Analogy: Java source is like a recipe written in one standard language; the JVM is a professional kitchen installed in every restaurant (Windows, macOS, Linux, containers — lightweight, isolated packages such as Docker images that bundle an app with everything it needs to run). Write the recipe once and any kitchen can cook it. That is the origin of the slogan *"write once, run anywhere"*.
 
 ### A short history
 
 | Year | Event |
 |---|---|
 | 1991 | James Gosling and a small team at Sun Microsystems start the "Green Project" for consumer devices. The language is first called **Oak**. |
-| 1995 | Renamed **Java** and announced publicly (May 1995); browser "applets" make it famous. |
+| 1995 | Renamed **Java** and announced publicly (May 1995); browser "applets" (small Java programs embedded in web pages) make it famous. |
 | 1996 | JDK 1.0 released (January 1996). |
 | 2004 | J2SE 5.0: generics, enhanced `for`, autoboxing, enums, annotations, varargs — the biggest language update until Java 8. |
-| 2006–07 | Sun open-sources the JDK as **OpenJDK** (GPL v2 with the Classpath Exception). |
+| 2006–07 | Sun open-sources the JDK as **OpenJDK** (GPL v2 — a free, open-source licence — with the Classpath Exception). |
 | 2010 | Oracle acquires Sun and becomes Java's steward. |
 | 2014 | Java 8: lambdas, streams, `java.time`. Still widely deployed. |
-| 2017 | Java 9: the module system (JPMS) and `jshell`. |
+| 2017 | Java 9: the module system (JPMS — groups packages into named, sealed-off modules) and `jshell`. |
 | 2018 | Java 10 starts the **six-month release cadence** (a new feature release every March and September). |
 | 2021 | Java 17 LTS; long-term-support releases now every **two years**. |
 | 2023 | Java 21 LTS: virtual threads, pattern matching for `switch`, record patterns. |
 | 2025 | **Java 25 LTS** (16 Sept 2025): compact source files and instance `main`, flexible constructor bodies, module imports, scoped values. |
 | 2026 | Java 26 (March) and Java 27 (15 Sept 2026) — non-LTS feature releases. |
 
+Don't worry if feature names in this table (generics, enums, lambdas, virtual threads, records, pattern matching …) are new to you — each one is explained in its own later chapter.
+
 ### Design traits
 
 | Trait | What it means in practice | Honest caveat |
 |---|---|---|
-| Platform independence | Compiled bytecode runs on any OS/CPU that has a JVM. | You still need a JVM (or a native-image build) on the target. |
-| Static typing | Type errors are caught by the compiler; IDEs can refactor safely. | More declarations than Python or JavaScript (softened by `var`, records). |
-| Automatic memory management | A garbage collector frees unused objects; no `free()`/`delete`. | GC uses CPU and memory; you can still leak by keeping references. |
-| Backward compatibility | Code compiled for Java 8 usually runs unchanged on Java 25. | Old APIs linger (e.g. `Date`, `Vector`) and old habits persist. |
-| Rich standard library | Collections, concurrency, networking, HTTP client, `java.time`, crypto — all built in. | Large; learning which API is the modern one takes time. |
-| Performance | The JIT compiler turns hot code into optimised machine code; long-running servers are fast. | Start-up and warm-up are slower than native languages (mitigated by AOT caches, native images). |
-| Safety | No pointer arithmetic, array bounds are checked, bytecode is verified. | Checks have a (small) cost. |
+| Platform independence | Compiled bytecode (the JVM's portable instruction format) runs on any OS/CPU that has a JVM. | You still need a JVM (or a native-image build — a program pre-compiled into a stand-alone executable) on the target. |
+| Static typing | Type errors are caught by the compiler; IDEs (code editors with built-in tools) can refactor (restructure code without changing behaviour) safely. | More declarations than Python or JavaScript (softened by `var`, records). |
+| Automatic memory management | A garbage collector frees unused objects; no `free()`/`delete`. | GC uses CPU and memory; you can still leak by keeping references (handles that point to objects). |
+| Backward compatibility | Code compiled for Java 8 usually runs unchanged on Java 25. | Old APIs (the classes and methods a library exposes for you to call) linger (e.g. `Date`, `Vector`) and old habits persist. |
+| Rich standard library (ready-made code shipped with Java) | Collections, concurrency (running several tasks at once), networking, HTTP client, `java.time`, crypto — all built in. | Large; learning which API is the modern one takes time. |
+| Performance | The JIT compiler turns hot code (code that runs very often) into optimised machine code (instructions the CPU executes directly); long-running servers are fast. | Start-up and warm-up are slower than native languages (mitigated by AOT — ahead-of-time — caches, native images). |
+| Safety | No pointer arithmetic (computing raw memory addresses by hand), array bounds are checked, bytecode is verified. | Checks have a (small) cost. |
 
 ### Where Java is used (real-world examples)
-- **Enterprise back-ends**: banks, insurers, airlines and retailers run large Spring Boot / Jakarta EE services.
-- **Big data and streaming**: Apache Kafka, Apache Cassandra, Elasticsearch, Apache Hadoop and much of Apache Flink run on the JVM (written in Java and Scala).
+- **Enterprise back-ends** (the server-side part of an application that holds the business logic and data): banks, insurers, airlines and retailers run large Spring Boot / Jakarta EE services (popular **frameworks** — big reusable libraries that give an application its structure).
+- **Big data and streaming**: Apache Kafka (moves streams of events between systems), Apache Cassandra (a distributed database), Elasticsearch (a search engine), Apache Hadoop and much of Apache Flink (large-scale data processing) run on the JVM (written in Java and Scala).
 - **Developer tools**: IntelliJ IDEA, Eclipse, Maven, Gradle, Jenkins.
 - **Android**: apps were historically written in Java (Android uses the Java *language* and much of its library, but its own runtime, ART, not the JVM); Google has recommended Kotlin first since 2019.
 - **Games**: Minecraft: Java Edition.
@@ -86,16 +88,16 @@ Java = a statically typed, object-oriented language + a portable runtime (the JV
 
 | Name | What it is |
 |---|---|
-| **Java SE** (Standard Edition) | The *specification* of the language, JVM and core library (`java.lang`, `java.util`, …). Each version (SE 25) is defined through the Java Community Process. |
+| **Java SE** (Standard Edition) | The *specification* of the language, JVM and core library (`java.lang`, `java.util`, …). Each version (SE 25) is defined through the Java Community Process (the formal process through which companies and individuals agree on changes to Java). |
 | **JDK** (Java Development Kit) | A concrete *implementation* of Java SE plus tools (`javac`, `jshell`, `jar`, `javadoc`, `jlink`…). |
-| **OpenJDK** | The open-source project where the reference JDK is developed (openjdk.org). Almost every JDK you can download is built from it. |
+| **OpenJDK** | The open-source (source code public and free to use and modify) project where the reference JDK is developed (openjdk.org). Almost every JDK you can download is built from it. |
 | **Vendor builds** | Oracle JDK, Eclipse Temurin (Adoptium), Amazon Corretto, Azul Zulu, Microsoft Build of OpenJDK, Red Hat build of OpenJDK, BellSoft Liberica, SAP Machine. Same code base, different support/licensing and extras. |
-| **Jakarta EE** (formerly Java EE) | Specifications for enterprise APIs (servlets, JPA persistence, CDI…) run on top of Java SE. Moved from Oracle to the Eclipse Foundation (2017) and renamed. |
+| **Jakarta EE** (formerly Java EE) | Specifications for enterprise APIs (servlets — handle web requests; JPA persistence — save objects to databases; CDI — wires objects together…) run on top of Java SE. Moved from Oracle to the Eclipse Foundation (2017) and renamed. |
 | **Java ME / Java Card** | Small-device and smart-card editions. |
-| **GraalVM** | A JDK distribution from Oracle with the Graal compiler and **Native Image**, which compiles Java ahead of time into a standalone native executable. |
+| **GraalVM** | A JDK distribution from Oracle with the Graal compiler and **Native Image**, which compiles Java ahead of time into a standalone native executable (a program file the OS runs directly, with no JVM needed). |
 
 ### Which vendor should I install?
-For learning, any OpenJDK build of version 25 is fine; **Eclipse Temurin** is a common neutral choice. Companies pick a vendor by support contract, cloud (Corretto on AWS, Microsoft's build on Azure) or licensing. Oracle JDK 17 and later are released under the *Oracle No-Fee Terms and Conditions*, which allow free production use for a limited period (for JDK 25, updates are free until September 2028), after which later updates need a paid licence; OpenJDK builds from other vendors are GPL-licensed.
+For learning, any OpenJDK build of version 25 is fine; **Eclipse Temurin** is a common neutral choice. Companies pick a vendor by support contract, cloud (Corretto on AWS, Microsoft's build on Azure) or licensing. Oracle JDK 17 and later are released under the *Oracle No-Fee Terms and Conditions*, which allow free **production** use (running the real, live system that users depend on) for a limited period (for JDK 25, updates are free until September 2028), after which later updates need a paid licence; OpenJDK builds from other vendors are GPL-licensed.
 
 ### Common mistakes
 - Thinking "OpenJDK" is lower quality than "Oracle JDK" — they are built from the same source.
@@ -128,7 +130,7 @@ flowchart TB
 *Virtual machine* here means a program that pretends to be a CPU with its own instruction set (bytecode). It is not a VM like VirtualBox that emulates a whole computer.
 
 ### Why the JRE "disappeared"
-Since JDK 11, Oracle no longer ships a separate JRE download. Java 9's module system introduced **`jlink`**, which builds a **custom runtime** containing only the modules your application needs. Some vendors (for example Temurin) still publish JRE-only builds for convenience, mainly for containers.
+Since JDK 11, Oracle no longer ships a separate JRE download. Java 9's module system introduced **`jlink`**, which builds a **custom runtime** containing only the modules (named groups of packages, such as `java.base`) your application needs. Some vendors (for example Temurin) still publish JRE-only builds for convenience, mainly for containers.
 
 A real example from this machine — a runtime containing only `java.base` is enough to run `HelloWorld`:
 
@@ -158,12 +160,13 @@ Arguments received: 0
 ## 1.4 Installing a JDK and checking it works
 
 ### How it works
-1. **Download** an OpenJDK 25 build (e.g. Temurin from adoptium.net) or use a version manager such as **SDKMAN!** (`sdk list java`, then `sdk install java <identifier>`) on macOS/Linux, or your OS package manager.
-2. **Set `JAVA_HOME`** to the JDK folder and put `$JAVA_HOME/bin` on your `PATH`. Build tools (Maven, Gradle) and IDEs read `JAVA_HOME`.
+1. **Download** an OpenJDK 25 build (e.g. Temurin from adoptium.net) or use a version manager such as **SDKMAN!** (`sdk list java`, then `sdk install java <identifier>`) on macOS/Linux, or your OS package manager (a tool such as `apt` or Homebrew that installs software for you).
+2. **Set `JAVA_HOME`** to the JDK folder and put `$JAVA_HOME/bin` on your `PATH`. Build tools (Maven, Gradle — programs that automate compiling, downloading libraries, testing and packaging) and IDEs read `JAVA_HOME`.
+   - An **environment variable** is a named setting (like `JAVA_HOME=/path/to/jdk`) that the operating system passes to every program it starts. `PATH` is the environment variable listing the folders the shell searches when you type a command such as `java`.
    - macOS: `export JAVA_HOME=$(/usr/libexec/java_home -v 25)`
    - Linux: `export JAVA_HOME=/usr/lib/jvm/<jdk-folder>`
    - Windows: *System Properties → Environment Variables*, then add `%JAVA_HOME%\bin` to `Path`.
-3. **Verify** in a new terminal:
+3. **Verify** in a new terminal (the command-line window where you type commands):
 
 ```bash
 java -version
@@ -221,7 +224,7 @@ public class HelloWorld {
 | `/** … */` | A **Javadoc comment**; the `javadoc` tool turns these into HTML API docs. `//` is a line comment, `/* … */` a block comment. |
 | `public class HelloWorld` | Declares a class. A file may contain at most one **public** top-level class, and the file must be named after it (`HelloWorld.java`). |
 | `public static void main(String[] args)` | The **entry point** the launcher calls. `public` = callable from anywhere; `static` = no object needed; `void` = returns nothing; `args` = command-line arguments ([Chapter 4](../04-methods-and-arrays/README.md)). |
-| `System.out.println(...)` | Prints a line to **standard output**. `System` is a class in `java.lang` (imported automatically), `out` is its static `PrintStream` field. |
+| `System.out.println(...)` | Prints a line to **standard output** (the program's normal text output — the terminal, by default). `System` is a class in `java.lang` (imported automatically — an *import* lets you use a class by its short name), `out` is its static `PrintStream` field (a variable belonging to the class itself, holding an object that writes text). |
 | `;` and `{ }` | Every statement ends with a semicolon; braces group statements into blocks. Java ignores indentation, but you should not. |
 
 Since Java 25 a class may also declare a simpler `void main()` (no `static`, no parameters) — see [1.10](#110-launching-source-files-directly). Traditional `public static void main(String[] args)` remains the standard for applications and works in every version.
@@ -239,7 +242,7 @@ Arguments received: 0
 Hello, World!
 Arguments received: 3
 ```
-1. `javac` parses the file, checks types and writes `out/ch01/hello/HelloWorld.class` (the folder structure mirrors the package).
+1. `javac` parses the file (reads the text and works out its grammatical structure), checks types and writes `out/ch01/hello/HelloWorld.class` (the folder structure mirrors the package).
 2. `java` starts a JVM; `-cp` (class path) tells it where to look for classes.
 3. The JVM loads `ch01.hello.HelloWorld`, finds `main`, and calls it with the arguments.
 
@@ -268,7 +271,7 @@ Launcher errors happen when `java` cannot find the class:
 | `java HelloWorld` (class is in a package) | `Could not find or load main class HelloWorld` | Use the fully qualified name and the right `-cp`. |
 
 ### Packaging a JAR
-A **JAR** (Java ARchive) is a ZIP file of classes plus a manifest. With a `Main-Class` entry it becomes runnable:
+A **JAR** (Java ARchive) is a ZIP file of classes plus a manifest (a small text file of metadata, i.e. data describing the archive). With a `Main-Class` entry it becomes runnable:
 ```bash
 jar --create --file hello.jar --main-class ch01.hello.HelloWorld -C out .
 java -jar hello.jar one two
@@ -298,12 +301,12 @@ Real projects let Maven or Gradle build JARs ([Chapter 18](../18-testing-build-a
 ## 1.6 Bytecode and class files
 
 ### What it is
-**Bytecode** is the instruction set of the JVM: compact, one-byte opcodes (`iload`, `iadd`, `invokevirtual` …) for a **stack machine** — instructions push values onto an operand stack and pop them to compute. A `.class` file holds one class's bytecode plus a **constant pool** (names, strings, method references) and metadata.
+**Bytecode** is the instruction set of the JVM: compact, one-byte opcodes (operation codes — numbered instructions such as `iload`, `iadd`, `invokevirtual` …) for a **stack machine** — instructions push values onto an operand stack and pop them to compute. A `.class` file holds one class's bytecode plus a **constant pool** (names, strings, method references) and metadata.
 
 ### Why it matters
 - It is the unit of portability: the same `.class` runs on every JVM.
 - The JVM verifies it before running (no forged pointers, no operand-stack overflow or underflow, no jumps into the middle of an instruction from malformed code).
-- Tools (profilers, mocking libraries, frameworks like Spring and Hibernate) read or generate bytecode at run time.
+- Tools (profilers — measure where time and memory go; mocking libraries — create fake objects for tests; frameworks like Spring and Hibernate) read or generate bytecode at run time.
 
 ### Looking inside with `javap`
 [`code/Calculator.java`](code/Calculator.java):
@@ -321,7 +324,7 @@ public class Calculator {
     }
 }
 ```
-`javap -c -cp out ch01.bytecode.Calculator` (disassembler shipped with the JDK):
+`javap -c -cp out ch01.bytecode.Calculator` (a disassembler — turns bytecode back into readable instructions — shipped with the JDK):
 ```text
 public class ch01.bytecode.Calculator {
   public ch01.bytecode.Calculator();
@@ -351,13 +354,13 @@ public class ch01.bytecode.Calculator {
 }
 ```
 How to read it:
-1. `javac` added a **default constructor** (`Calculator()`) that calls `Object`'s constructor — you did not write it.
+1. `javac` added a **default constructor** (a constructor is the special method that sets up a new object; this one is `Calculator()`) that calls `Object`'s constructor — you did not write it.
 2. `add`: `iload_0`/`iload_1` push the two `int` parameters, `iadd` pops both and pushes the sum, `ireturn` returns it. (`i` = int.)
 3. `main`: pushes constants 2 and 3, calls `add` (`(II)I` = takes two ints, returns int), stores the result in local slot 1.
 4. String concatenation compiles to `invokedynamic … makeConcatWithConstants` (since Java 9), which lets the JVM choose the fastest concatenation strategy at run time.
 
 ### Class-file version
-Every class file starts with the magic number `CAFEBABE`, then a **major version** that says which Java produced it: major = 44 + Java version.
+Every class file starts with the magic number `CAFEBABE` (fixed bytes that identify the file type), then a **major version** that says which Java produced it: major = 44 + Java version.
 
 | Java | 8 | 11 | 17 | 21 | 25 | 26 |
 |---|---|---|---|---|---|---|
@@ -402,6 +405,8 @@ flowchart TB
 | 1–3 | **C1** ("client") compiler | Compiles fast with light optimisation; tier 3 adds profiling (which types and branches actually occur) |
 | 4 | **C2** ("server") compiler | Uses the profile for aggressive optimisation: inlining, loop unrolling, escape analysis, dead-code removal |
 
+Those optimisations in plain words: **inlining** copies a small method's body into its caller to skip the call; **loop unrolling** repeats a loop body several times per iteration to cut loop overhead; **escape analysis** spots objects that never leave a method so they need not live on the heap; **dead-code removal** deletes work whose result is never used.
+
 6. **Speculation and deoptimization.** C2 optimises for what it has *seen* (e.g. "this call always hits `ArrayList`"). If that assumption later breaks, the JVM throws away the compiled code ("uncommon trap") and falls back to the interpreter, then may recompile.
 
 ### Watching the JIT
@@ -433,17 +438,17 @@ Columns: milliseconds since start, compile ID, flags, **tier**, method. `square`
 
 ### Start-up and warm-up: AOT caching
 Because the JVM starts in the interpreter, a Java service is slower for its first seconds (**warm-up**). Recent JDKs attack this with an **ahead-of-time (AOT) cache** recorded from a training run:
-- JDK 24 (JEP 483): classes can be loaded and linked ahead of time into a cache.
+- JDK 24 (JEP 483 — a *JEP* is a numbered JDK Enhancement Proposal, see [1.12](#112-java-releases-lts-and-jeps)): classes can be loaded and linked ahead of time into a cache.
 - JDK 25 (JEP 514): one-step cache creation, `java -XX:AOTCacheOutput=app.aot …` on a training run, then `java -XX:AOTCache=app.aot …` in production.
 - JDK 25 (JEP 515): the cache also stores method profiles, so the JIT can start optimising sooner.
 
-Separately, **GraalVM Native Image** compiles the whole application to a native executable before it runs: very fast start-up and small memory, at the cost of long builds and restrictions on reflection and dynamic class loading.
+Separately, **GraalVM Native Image** compiles the whole application to a native executable before it runs: very fast start-up and small memory, at the cost of long builds and restrictions on reflection (code inspecting classes and calling methods by name at run time) and dynamic class loading.
 
 ### Trade-offs: interpreted vs JIT vs AOT
 
 | Approach | Start-up | Peak speed | Portability | Example |
 |---|---|---|---|---|
-| Pure interpretation | Instant | Slow | High | Early JVMs, CPython |
+| Pure interpretation | Instant | Slow | High | Early JVMs, CPython (the standard Python interpreter) |
 | JIT (HotSpot) | Slower (warm-up) | Very high — uses live profiles | High (bytecode) | Normal `java` |
 | AOT cache (JDK 24+) | Faster | Same as JIT | High | `-XX:AOTCache` |
 | Native image | Very fast | Good, often a bit lower without profile data | One binary per OS/CPU | GraalVM `native-image` |
@@ -452,7 +457,7 @@ Separately, **GraalVM Native Image** compiles the whole application to a native 
 **Q: Is Java compiled or interpreted?** Both. `javac` compiles source to bytecode ahead of time; the JVM then interprets that bytecode and JIT-compiles hot methods to native code at run time, using profiling data. That is why long-running Java services get faster after warm-up.
 - *What is tiered compilation?* Interpreter → C1 (fast compile, profiling) → C2 (optimising compile using the profile).
 - *What is deoptimization?* Discarding compiled code whose speculative assumption became false and returning to the interpreter.
-- *Why is a microbenchmark with a simple timing loop misleading?* It mixes interpreted, C1 and C2 phases and the JIT may remove "useless" work; use JMH ([Chapter 16](../16-jvm-internals-and-performance/README.md)).
+- *Why is a microbenchmark with a simple timing loop misleading?* It mixes interpreted, C1 and C2 phases and the JIT may remove "useless" work; use JMH (Java Microbenchmark Harness, a tool for accurate small-scale timing; [Chapter 16](../16-jvm-internals-and-performance/README.md)).
 
 ### Self-check
 1. When is a class loaded? → Lazily, the first time it is actively used.
@@ -468,11 +473,13 @@ This section gives the picture you need now; algorithms, tuning and profiling ar
 ### What it is
 The JVM divides memory into areas:
 
+> **Key term — thread:** a thread is one independent sequence of instructions running inside a program. A program can have many threads running at the same time (for example, one per incoming web request), and each has its own call stack but shares the heap with the others. Threads are covered properly in the concurrency chapters.
+
 | Area | Holds | Lifetime |
 |---|---|---|
 | **Stack** (one per thread) | *Frames* for each method call: local variables, parameters, partial results. Primitive locals live here; for objects, only the **reference** (a pointer-like handle) lives here. | Frame disappears when the method returns |
 | **Heap** (shared) | All objects and arrays (`new …`). | Until the garbage collector reclaims them |
-| **Metaspace** | Class metadata (methods, field layouts), in native memory. | While the class loader is alive |
+| **Metaspace** | Class metadata (methods, field layouts), in native memory (memory the JVM takes from the OS outside the Java heap). | While the class loader is alive |
 | **Code cache** | JIT-compiled machine code. | Until evicted/deoptimized |
 
 **Garbage collection (GC)** is automatic reclamation of heap objects that are no longer **reachable**. An object is reachable if a chain of references leads to it from a **GC root** — a local variable in an active frame, a static field, an active thread and a few JVM-internal references. Anything not reachable is garbage, even if it still points to other objects (so reference cycles are collected too).
@@ -481,9 +488,9 @@ Analogy: a stadium cleaner removes any seat cushion no ticket-holder is still at
 
 ### How it works (the common core)
 1. **Mark**: starting from the roots, follow references and mark every reachable object.
-2. **Sweep / compact / copy**: free the unmarked memory; many collectors also move live objects together to avoid fragmentation.
+2. **Sweep / compact / copy**: free the unmarked memory; many collectors also move live objects together to avoid fragmentation (free memory scattered in many small gaps that are too small to use).
 3. **Generations**: most objects die young (the *weak generational hypothesis* — think temporary strings in a request). Generational collectors therefore split the heap into a **young generation**, collected often and cheaply, and an **old generation** for survivors, collected rarely.
-4. **Pauses**: some work needs application threads stopped (**stop-the-world** pause); modern collectors do most work **concurrently** with your threads.
+4. **Pauses**: some work needs application threads stopped (**stop-the-world** pause); modern collectors do most work **concurrently** (at the same time as) with your threads.
 
 ```mermaid
 flowchart LR
@@ -499,14 +506,14 @@ flowchart LR
 
 | Collector | Flag | Design | Good for |
 |---|---|---|---|
-| **G1** (Garbage-First) | `-XX:+UseG1GC` | Generational, region-based, mostly concurrent marking; aims for a pause-time goal (default 200 ms) | **The default** — general-purpose servers and desktops |
-| **ZGC** | `-XX:+UseZGC` | Concurrent, generational (the only mode since JDK 24); pauses typically under a millisecond regardless of heap size | Large heaps, latency-sensitive services |
+| **G1** (Garbage-First) | `-XX:+UseG1GC` | Generational, region-based (heap split into many equal-sized chunks), mostly concurrent marking; aims for a pause-time goal (default 200 ms) | **The default** — general-purpose servers and desktops |
+| **ZGC** | `-XX:+UseZGC` | Concurrent, generational (the only mode since JDK 24); pauses typically under a millisecond regardless of heap size | Large heaps, latency-sensitive services (where the time each request takes matters) |
 | **Shenandoah** | `-XX:+UseShenandoahGC` | Concurrent compacting; generational mode became a product feature in JDK 25 | Low latency; included in many OpenJDK builds (not Oracle JDK) |
-| **Parallel** | `-XX:+UseParallelGC` | Stop-the-world, many threads; maximises throughput | Batch jobs where pauses do not matter |
+| **Parallel** | `-XX:+UseParallelGC` | Stop-the-world, many threads; maximises throughput (total work done per second) | Batch jobs where pauses do not matter |
 | **Serial** | `-XX:+UseSerialGC` | Single-threaded, stop-the-world | Tiny heaps, small containers |
 | **Epsilon** | experimental | Allocates, never collects | Testing and very short-lived jobs |
 
-The JVM picks G1 unless the machine looks "small" (fewer than 2 CPUs or under 1792 MB of memory), where it chooses Serial; JDK 27 (JEP 523) makes G1 the default everywhere. By default the maximum heap is ¼ of physical memory — `WhereAmI` below reports 12 288 MiB on a 48 GiB machine.
+The JVM picks G1 unless the machine looks "small" (fewer than 2 CPUs or under 1792 MB of memory), where it chooses Serial; JDK 27 (JEP 523) makes G1 the default everywhere. By default the maximum heap is ¼ of physical memory — `WhereAmI` below reports 12 288 MiB on a 48 GiB machine (MiB/GiB are binary units: 1 MiB = 1024 × 1024 bytes, 1 GiB = 1024 MiB). **Latency** and **throughput** are system-design terms you will meet again; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
 
 ### Watching the GC
 [`code/GarbageMaker.java`](code/GarbageMaker.java) creates 200 000 short-lived 1 KiB arrays and keeps ten 1 MiB arrays:
@@ -556,10 +563,10 @@ Note the program was *compiled* for Java 25 but *runs* on JDK 26 — newer JVMs 
 - Believing Java cannot leak memory. A static `Map` cache that only grows keeps every entry reachable forever — a **memory leak**.
 - Calling `System.gc()` to "free memory": it is only a request, and usually hurts.
 - Relying on `finalize()` for cleanup: deprecated for removal (JEP 421, Java 18). Use try-with-resources ([Chapter 8](../08-exceptions/README.md)).
-- Setting `-Xmx` larger than a container's memory limit (the JVM reads container limits automatically; let it, or size explicitly).
+- Setting `-Xmx` (the flag for the maximum heap size) larger than a container's memory limit (the JVM reads container limits automatically; let it, or size explicitly).
 
 ### In the interview
-**Q: How does Java garbage collection decide what to free?** By reachability, not reference counting: anything not reachable from GC roots (thread stacks, static fields, JNI handles) is garbage, so cycles are collected. Most collectors are generational because most objects die young.
+**Q: How does Java garbage collection decide what to free?** By reachability, not reference counting (keeping a count of how many references point at each object): anything not reachable from GC roots (thread stacks, static fields, JNI handles — references held by native C code via the Java Native Interface) is garbage, so cycles are collected. Most collectors are generational because most objects die young.
 - *Default GC?* G1 since Java 9 on server-class machines.
 - *When would you use ZGC?* Large heaps or strict latency targets, where sub-millisecond pauses matter more than a little throughput.
 - *Stack vs heap?* Stack: per-thread frames with locals, freed on return. Heap: shared objects, freed by GC.
@@ -654,14 +661,14 @@ Output:
 ```text
 Hello from launcher, compiled in memory
 ```
-On Linux/macOS a single-file program can even start with a **shebang** line (`#!/usr/bin/env -S java --source 25`) in a file *without* the `.java` extension and be run as a script.
+On Linux/macOS a single-file program can even start with a **shebang** line (a first line starting with `#!` that tells Unix which program should run the file) (`#!/usr/bin/env -S java --source 25`) in a file *without* the `.java` extension and be run as a script.
 
 ### Compact source files and instance `main` — Java 25
-JEP 512 (final in **Java 25**, after previews in 21–24) removes the ceremony for small programs:
-- A **compact source file** may declare methods and fields with no enclosing class; the compiler wraps them in an implicit, unnamed-to-you `final` class.
-- `main` may be an **instance method** with no parameters: `void main()`.
+JEP 512 (final in **Java 25**, after previews — opt-in trial versions, see [1.12](#112-java-releases-lts-and-jeps) — in 21–24) removes the ceremony for small programs:
+- A **compact source file** may declare methods and fields with no enclosing class; the compiler wraps them in an implicit, unnamed-to-you `final` class (a class that cannot be extended).
+- `main` may be an **instance method** (a method that runs on an object rather than on the class itself) with no parameters: `void main()`.
 - A compact source file automatically imports every public class of the `java.base` module (as if it began with `import module java.base;`), so `List`, `Map`, `Path` … need no imports.
-- The new class **`java.lang.IO`** offers `IO.println(…)`, `IO.print(…)`, `IO.println()` and `IO.readln(prompt)`/`IO.readln()` for simple console I/O (built on `System.out` and `System.in`).
+- The new class **`java.lang.IO`** offers `IO.println(…)`, `IO.print(…)`, `IO.println()` and `IO.readln(prompt)`/`IO.readln()` for simple console I/O (input/output — reading what the user types and printing text; built on `System.out` and `System.in`).
 
 [`code/compact/HelloCompact.java`](code/compact/HelloCompact.java) — the whole file:
 ```java
@@ -698,7 +705,7 @@ How the launcher chooses `main`: if the class has a `main(String[])`, that is us
 ## 1.11 IDEs, editors and build tools
 
 ### What they are
-An **IDE** (Integrated Development Environment) combines an editor, compiler integration, debugger, refactoring and test runner.
+An **IDE** (Integrated Development Environment) combines an editor, compiler integration, debugger (a tool that pauses a running program so you can step through it and inspect variables), refactoring and test runner.
 
 | Tool | Notes |
 |---|---|
@@ -707,7 +714,7 @@ An **IDE** (Integrated Development Environment) combines an editor, compiler int
 | **VS Code** + Microsoft's *Extension Pack for Java* | Lightweight; good for mixed-language work. |
 | **Apache NetBeans** | Free, open source. |
 
-**Build tools** automate compiling, dependency download, testing and packaging: **Maven** (XML `pom.xml`, fixed lifecycle) and **Gradle** (Groovy/Kotlin DSL, flexible and incremental). Both read `JAVA_HOME` and support *toolchains* to pin a JDK version. Details: [Chapter 18](../18-testing-build-and-tooling/README.md).
+**Build tools** automate compiling, dependency download, testing and packaging: **Maven** (XML `pom.xml`, fixed lifecycle) and **Gradle** (Groovy/Kotlin DSL — a small domain-specific language for writing build scripts — flexible and incremental, i.e. rebuilds only what changed). A **dependency** is an external library your project uses; build tools download the right versions for you. Both read `JAVA_HOME` and support *toolchains* to pin a JDK version. Details: [Chapter 18](../18-testing-build-and-tooling/README.md).
 
 ### Recommended starting workflow
 1. Chapters 1–3: plain `javac`/`java`, `java File.java` and `jshell` — you learn what the tools really do.
@@ -758,7 +765,7 @@ This book marks every modern feature with the version that **finalised** it (e.g
 |---|---|
 | New project, or learning | **Java 25 LTS** |
 | Existing Java 17/21 service | Stay on it while supported; plan an upgrade to 25 (mostly smooth — run tests with the new JDK first) |
-| Legacy Java 8 | Upgrade path 8 → 11 → 17 → 21/25 needs attention to removed Java EE modules and strong encapsulation of JDK internals |
+| Legacy Java 8 | Upgrade path 8 → 11 → 17 → 21/25 needs attention to removed Java EE modules and strong encapsulation of JDK internals (your code may no longer reach the JDK's private implementation classes) |
 | Library you publish | Compile with `--release` of the *oldest* Java you support |
 
 ### In the interview

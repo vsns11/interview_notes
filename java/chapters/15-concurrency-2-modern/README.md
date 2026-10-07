@@ -1,6 +1,6 @@
 # Chapter 15 — Concurrency II: Modern Concurrency
 
-[Chapter 14](../14-concurrency-1/README.md) gave you threads, locks, atomics, thread pools and concurrent collections. This chapter covers how concurrent Java is written **today**: composing asynchronous results with `CompletableFuture`, splitting CPU work with Fork/Join, handling huge numbers of blocking tasks with **virtual threads** (Java 21), passing context safely with **scoped values** (final in Java 25), and grouping related tasks with **structured concurrency** (still a preview feature). It then goes underneath all of them — the **Java Memory Model** and *happens-before*, which explain *why* the Chapter 14 tools work — and ends with the ways concurrent programs stop making progress: deadlock, livelock and starvation.
+[Chapter 14](../14-concurrency-1/README.md) gave you threads, locks, atomics, thread pools and concurrent collections. This chapter covers how concurrent Java is written **today**: composing **asynchronous** results (results of work that finishes later, while the caller carries on) with `CompletableFuture`, splitting CPU work with Fork/Join, handling huge numbers of **blocking** tasks (tasks that spend time waiting, e.g. for a network reply) with **virtual threads** (Java 21), passing context safely with **scoped values** (final in Java 25), and grouping related tasks with **structured concurrency** (still a **preview** feature — shipped in the JDK for feedback but switched off unless you pass `--enable-preview`, and still allowed to change). It then goes underneath all of them — the **Java Memory Model** (the rules for when one thread's writes become visible to another) and *happens-before* (the ordering guarantee those rules are built on), which explain *why* the Chapter 14 tools work — and ends with the ways concurrent programs stop making progress: deadlock, livelock and starvation.
 
 **What you'll learn**
 
@@ -17,7 +17,7 @@
 | 15.9 | Liveness: deadlock, livelock, starvation | produce, detect and prevent each one |
 | 15.10 | Best practices and choosing a model | pick the right concurrency tool for a job |
 
-All runnable code is in [`code/`](code/) (package `ch15.*`), compiled with `javac --release 25` and run on JDK 26 on a 14-core Apple-silicon laptop. As in Chapter 14, lines tagged `[nondeterministic]` vary between runs and `[machine-dependent]` lines depend on your hardware; timing numbers are rounded. The structured-concurrency example (§15.7) uses a **preview** API, so it lives only in this README and was run separately with `--enable-preview` on JDK 25 and JDK 26.
+All runnable code is in [`code/`](code/) (package `ch15.*`), compiled with `javac --release 25` (the Java compiler, targeting Java 25) and run on JDK 26 (the Java Development Kit) on a 14-core Apple-silicon (Apple's own ARM-based processors) laptop. As in Chapter 14, lines tagged `[nondeterministic]` vary between runs and `[machine-dependent]` lines depend on your hardware; timing numbers are rounded. The structured-concurrency example (§15.7) uses a **preview** API, so it lives only in this README and was run separately with `--enable-preview` on JDK 25 and JDK 26.
 
 > **Related material — linked, not repeated.** Virtual threads, `Future`, parallel-stream and thread-problem exam traps: [OCP Chapter 13 — Concurrency](../../../../ocp-java21-study/chapters/13-concurrency/README.md). Deadlock, livelock and starvation with more diagrams and the dining philosophers: [LLD §12.17–12.19](../../../lld/chapters/12-concurrency-concepts/README.md#1217-deadlock) and [LLD §13.5](../../../lld/chapters/13-concurrency-problems/README.md#135-dining-philosophers-leetcode-1226). Fork/Join merge sort: [LLD §13.10](../../../lld/chapters/13-concurrency-problems/README.md#1310-multi-threaded-merge-sort-forkjoin). Parallel streams: [Chapter 12](../12-streams/README.md).
 
@@ -29,11 +29,11 @@ All runnable code is in [`code/`](code/) (package `ch15.*`), compiled with `java
 A **`Future<V>`** (Java 5, [Chapter 14 §14.11](../14-concurrency-1/README.md#1411-executors-and-thread-pools)) is a handle to a result that will exist later. You can `get()` it (blocking), poll `isDone()`, `cancel()` it, and since Java 19 read `state()` / `resultNow()` / `exceptionNow()` without blocking.
 
 ### The problem it doesn't solve
-Real work is a *pipeline*: "fetch the user, **then** fetch their orders, **combined with** today's exchange rate, **falling back** to a cached value on error, **giving up** after 2 seconds". With a plain `Future`:
+Real work is a *pipeline* (a chain of steps, each feeding the next): "fetch the user, **then** fetch their orders, **combined with** today's exchange rate, **falling back** to a **cached** value (a saved copy from earlier) on error, **giving up** after 2 seconds". With a plain `Future`:
 1. The only way to use the result is **`get()`, which blocks** the calling thread — so "then do X" means parking a thread just to wait.
 2. There's **no way to chain** a next step, combine two futures, or react to "whichever finishes first".
 3. **Error handling** is a `try/catch (ExecutionException)` around each `get()`.
-4. You can't **complete it yourself** (e.g. from a callback-based library).
+4. You can't **complete it yourself** (e.g. from a callback-based library — one that reports results by calling a function you gave it).
 
 `CompletableFuture` (Java 8) fixes all four.
 
@@ -45,7 +45,7 @@ Real work is a *pipeline*: "fetch the user, **then** fetch their orders, **combi
 **`CompletableFuture<T>`** implements both `Future<T>` and **`CompletionStage<T>`**, an interface of ~40 methods for saying *what should happen when this completes* — without blocking. Analogy: instead of standing at the counter waiting for your coffee (`get()`), you leave your phone number and a list of instructions: "when it's ready, add milk, then bring it to table 5; if they're out of beans, bring tea".
 
 ### How it works
-1. **Start** async work: `supplyAsync(supplier[, executor])` (returns a value) or `runAsync(runnable[, executor])`. Or create an already-finished one with `completedFuture(v)` / `failedFuture(ex)` (9), or an empty one with `new CompletableFuture<>()` that you later `complete(v)` / `completeExceptionally(ex)` — a **promise**.
+1. **Start** async work: `supplyAsync(supplier[, executor])` (returns a value) or `runAsync(runnable[, executor])`. Or create an already-finished one with `completedFuture(v)` / `failedFuture(ex)` (9), or an empty one with `new CompletableFuture<>()` that you later `complete(v)` / `completeExceptionally(ex)` — a **promise** (a placeholder for a result that some code promises to fill in later).
 2. **Attach stages**; each returns a *new* `CompletableFuture`, so calls chain:
 
 | Method | Input → output | Stream analogy |
@@ -61,9 +61,9 @@ Real work is a *pipeline*: "fetch the user, **then** fetch their orders, **combi
 
 3. **Handle errors**: `exceptionally`, `handle`, `whenComplete`, `exceptionallyCompose` (12).
 4. **Time out** (Java 9): `orTimeout(t, unit)` fails with `TimeoutException`; `completeOnTimeout(value, t, unit)` substitutes a default.
-5. **Get the result at the edge** of your program: `join()` (unchecked `CompletionException`) or `get()` (checked `ExecutionException`), or hand the `CompletableFuture` to a framework that accepts it (Spring MVC controllers can return one).
+5. **Get the result at the edge** of your program: `join()` (unchecked `CompletionException` — *unchecked* means the compiler doesn't force you to catch it) or `get()` (checked `ExecutionException` — one you must catch or declare), or hand the `CompletableFuture` to a framework that accepts it (Spring MVC **controllers** — the classes in the Spring web framework that handle incoming HTTP requests — can return one).
 
-**Which thread runs a stage?** A non-async stage (`thenApply`) runs on whichever thread completes the previous stage — or immediately on the *calling* thread if it's already complete. Every method has an **`…Async`** twin (`thenApplyAsync(fn[, executor])`) that submits the stage to an executor. **Without an executor argument, async methods use `ForkJoinPool.commonPool()`** — shared by the whole JVM and sized for CPU work, so **always pass your own executor for blocking I/O** (or a virtual-thread executor, §15.4).
+**Which thread runs a stage?** A non-async stage (`thenApply`) runs on whichever thread completes the previous stage — or immediately on the *calling* thread if it's already complete. Every method has an **`…Async`** twin (`thenApplyAsync(fn[, executor])`) that submits the stage to an **executor** (an object that runs tasks on its threads, usually a thread pool — [Chapter 14 §14.11](../14-concurrency-1/README.md#1411-executors-and-thread-pools)). **Without an executor argument, async methods use `ForkJoinPool.commonPool()`** — shared by the whole JVM and sized for CPU work, so **always pass your own executor for blocking I/O** (or a virtual-thread executor, §15.4).
 
 [`code/ch15/cf/CompletableFutureBasics.java`](code/ch15/cf/CompletableFutureBasics.java) (key parts; each `fetch…` sleeps to simulate a remote call):
 ```java
@@ -105,16 +105,16 @@ Output:
 9 thenApplyAsync(fn, io) ran on our pool
 ```
 - `allOf` returns `CompletableFuture<Void>` — it only signals "all done". Collect the values by calling `join()` on each original future inside the next stage; by then they're complete, so `join()` doesn't block.
-- The three price lookups ran **in parallel**: total time ≈ the slowest (300 ms), not the sum (750 ms). This fan-out/fan-in is the most common real use (price comparison, aggregating microservice calls).
+- The three price lookups ran **in parallel**: total time ≈ the slowest (300 ms), not the sum (750 ms). This **fan-out/fan-in** (send several requests at once, then gather all the answers) is the most common real use (price comparison, aggregating **microservice** calls — a microservice being a small, separately deployed service that owns one business area).
 
 ### Error handling
-When a stage throws, all later *transforming* stages are skipped and the exception travels down the chain until a handler deals with it — like an exception unwinding a call stack.
+When a stage throws, all later *transforming* stages are skipped and the exception travels down the chain until a handler deals with it — like an exception unwinding a **call stack** (the chain of method calls currently in progress).
 
 | Method | Runs when | Can change the result? | Use for |
 |---|---|---|---|
 | `exceptionally(ex -> fallback)` | only on failure | yes — recovers | default value |
 | `handle((val, ex) -> …)` | always | yes | map success and failure into one result |
-| `whenComplete((val, ex) -> …)` | always | no — passes the original through | logging, metrics, cleanup |
+| `whenComplete((val, ex) -> …)` | always | no — passes the original through | logging, metrics (counters and timings a service records about itself), cleanup |
 | `exceptionallyCompose(ex -> otherCf)` (12) | only on failure | yes, asynchronously | retry / call a backup service |
 
 [`code/ch15/cf/CompletableFutureErrors.java`](code/ch15/cf/CompletableFutureErrors.java) (key parts):
@@ -158,7 +158,7 @@ Output:
 | | `Future` + pool | `CompletableFuture` | Virtual threads + plain blocking code |
 |---|---|---|---|
 | Composition | none | rich | ordinary sequential code |
-| Readability | simple | chains can get long; stack traces are fragmented | simplest |
+| Readability | simple | chains can get long; **stack traces** (the printed list of calls at an error) are fragmented | simplest |
 | Threads blocked while waiting | yes | no (callbacks) | yes, but they're cheap |
 | Best for | simple fire-and-get | fan-out/fan-in, async APIs, callbacks | most request/response I/O (Java 21+) |
 
@@ -170,7 +170,7 @@ Output:
 - Swallowing errors with `exceptionally(ex -> null)`.
 
 ### In the interview
-**30-second answer:** "`CompletableFuture` is a composable, completable `Future`. I start work with `supplyAsync` on a dedicated executor, chain with `thenApply`/`thenCompose`, combine with `thenCombine`/`allOf`, recover with `exceptionally`/`handle`, and bound latency with `orTimeout`. Non-async stages run on the completing thread; async variants default to the common pool, so for I/O I always pass an executor."
+**30-second answer:** "`CompletableFuture` is a composable, completable `Future`. I start work with `supplyAsync` on a dedicated executor, chain with `thenApply`/`thenCompose`, combine with `thenCombine`/`allOf`, recover with `exceptionally`/`handle`, and bound **latency** (how long a call takes, start to finish) with `orTimeout`. Non-async stages run on the completing thread; async variants default to the common pool, so for I/O I always pass an executor."
 - *`thenApply` vs `thenCompose`?* → `map` vs `flatMap`: use `thenCompose` when the function itself returns a `CompletableFuture`.
 - *`join` vs `get`?* → Same result; `join` throws unchecked `CompletionException`, `get` throws checked `ExecutionException`/`InterruptedException` and has a timeout overload.
 - *How do you wait for a list of futures?* → `allOf(...).thenApply(v -> list.stream().map(CompletableFuture::join).toList())`.
@@ -185,7 +185,7 @@ Output:
 ## 15.3 Fork/Join
 
 ### What it is
-The **Fork/Join framework** (Java 7) runs **divide-and-conquer** algorithms in parallel: split a big problem into halves recursively until pieces are small, solve the pieces, and combine the answers. Its **`ForkJoinPool`** uses **work stealing**: each worker thread has its own double-ended queue (deque) of tasks; when a worker runs out, it **steals** tasks from the other end of a busy worker's deque, keeping all cores busy with little contention. Analogy: a team splitting a stack of exam papers — whoever finishes their pile grabs half of a colleague's remaining pile.
+The **Fork/Join framework** (Java 7) runs **divide-and-conquer** algorithms (split a problem into smaller copies of itself, solve those, combine the answers) in parallel: split a big problem into halves recursively until pieces are small, solve the pieces, and combine the answers. Its **`ForkJoinPool`** uses **work stealing**: each worker thread has its own double-ended queue (deque) of tasks; when a worker runs out, it **steals** tasks from the other end of a busy worker's deque, keeping all cores busy with little **contention** (threads competing for the same lock or data). Analogy: a team splitting a stack of exam papers — whoever finishes their pile grabs half of a colleague's remaining pile.
 
 ### How it works
 1. Extend **`RecursiveTask<V>`** (returns a value) or **`RecursiveAction`** (no value) and implement `compute()`.
@@ -218,12 +218,12 @@ round 2: correct=true  sequential 11 ms, fork/join 1 ms, parallel stream 0 ms   
 round 3: correct=true  sequential 5 ms, fork/join 1 ms, parallel stream 0 ms   [timings machine-dependent]
 tasks stolen between workers so far > 0: true
 ```
-- Round 1 is *slower* in parallel: thread start-up and JIT compilation dominate. Parallelism pays off only once warmed up and for enough data — measure with a proper benchmark harness (JMH, [Chapter 16](../16-jvm-internals-and-performance/README.md)) before concluding anything.
+- Round 1 is *slower* in parallel: thread start-up and JIT compilation (the JVM's *just-in-time* compiler turning frequently used bytecode into machine code at run time) dominate. Parallelism pays off only once **warmed up** (after the JIT has optimised the hot code) and for enough data — measure with a proper **benchmark harness** (a tool that runs timing experiments correctly — warm-up, repetition, statistics; JMH, the Java Microbenchmark Harness, [Chapter 16](../16-jvm-internals-and-performance/README.md)) before concluding anything.
 - The order `fork` one half → `compute` the other → `join` matters: calling `left.fork(); right.fork(); left.join(); right.join();` wastes the current thread.
 
 ### When to use it / when not
-- **Use** for CPU-bound, recursively splittable work on large in-memory data: sorting, searching, image processing, tree traversal. Most of the time, a **parallel stream** ([Chapter 12 §12.8](../12-streams/README.md)) gives you the same engine with one method call.
-- **Don't** do blocking I/O in Fork/Join tasks (or parallel streams): the common pool is shared by the whole JVM and has few threads. (`ForkJoinPool.ManagedBlocker` exists for special cases.) For I/O concurrency use virtual threads.
+- **Use** for **CPU-bound** (limited by processing, not by waiting), recursively splittable work on large in-memory data: sorting, searching, image processing, tree traversal. Most of the time, a **parallel stream** ([Chapter 12 §12.8](../12-streams/README.md)) gives you the same engine with one method call.
+- **Don't** do blocking I/O in Fork/Join tasks (or parallel streams): the common pool is shared by the whole JVM and has few threads. (`ForkJoinPool.ManagedBlocker` exists for special cases.) For I/O (input/output — disk, network) concurrency use virtual threads.
 - **Don't** make the threshold too small (task overhead dominates) or too large (not enough tasks to balance). Thousands of elements per leaf is a typical starting point.
 
 ### Self-check
@@ -236,26 +236,26 @@ tasks stolen between workers so far > 0: true
 ## 15.4 Virtual threads
 
 ### What it is
-A **virtual thread** (final in **Java 21, JEP 444**; previews in 19 and 20) is a `java.lang.Thread` that is **not tied to an operating-system thread**. The JVM schedules many virtual threads onto a small pool of OS threads called **carrier threads**. When a virtual thread performs a blocking operation (sleep, socket read, `BlockingQueue.take`, lock wait…), the JVM **unmounts** it — saves its stack to the heap — and the carrier is free to run another virtual thread. When the operation completes, the virtual thread is **mounted** again on some carrier and continues.
+A **virtual thread** (final in **Java 21, JEP 444** — a JEP, *JDK Enhancement Proposal*, is the numbered design document for a Java feature; previews in 19 and 20) is a `java.lang.Thread` that is **not tied to an operating-system thread**. The JVM schedules many virtual threads onto a small pool of OS threads called **carrier threads**. When a virtual thread performs a blocking operation (sleep, socket read, `BlockingQueue.take`, lock wait…), the JVM **unmounts** it — saves its stack to the **heap** (the JVM's memory area for objects) — and the carrier is free to run another virtual thread. When the operation completes, the virtual thread is **mounted** again on some carrier and continues.
 
 Analogy: platform threads are like giving every restaurant customer a dedicated waiter who stands by the table even while the customer reads the menu. Virtual threads are like a few waiters serving hundreds of tables, going to whichever table actually needs something.
 
 | | Platform thread | Virtual thread |
 |---|---|---|
-| Backed by | one OS thread, 1:1 | carrier threads, M:N |
+| Backed by | one OS thread, 1:1 | carrier threads, M:N (many virtual threads share a few OS threads) |
 | Creation cost | expensive (OS call, 1–2 MB stack reserved) | cheap (a small heap object; stack grows/shrinks on the heap) |
 | How many | thousands | millions |
 | Blocking | holds the OS thread | unmounts; carrier is released |
 | Pool them? | yes | **no** — create one per task |
-| Daemon / priority | configurable | always daemon, normal priority |
+| Daemon / priority | configurable | always daemon (doesn't keep the JVM alive), normal priority |
 | API | same `Thread` API | same `Thread` API (`isVirtual()`) |
 
 ### Why it matters
-A server that handles each request on its own thread ("**thread-per-request**") is the easiest style to write and debug: plain sequential code, readable stack traces, `try/catch` works. But with platform threads, if each request spends 100 ms waiting on a database, a server with 200 threads can handle only ~2,000 requests per second, no matter how idle the CPU is. **Little's law** says concurrency = throughput × latency: 10,000 requests/s × 0.1 s = 1,000 requests in flight — more than a platform-thread pool comfortably holds. The previous fix was asynchronous/reactive code (`CompletableFuture` chains, reactive libraries), which scales but is harder to write, read and debug. Virtual threads let simple blocking code scale like async code.
+A server that handles each request on its own thread ("**thread-per-request**") is the easiest style to write and debug: plain sequential code, readable stack traces, `try/catch` works. But with platform threads, if each request spends 100 ms waiting on a database, a server with 200 threads can handle only ~2,000 requests per second, no matter how idle the CPU is. **Little's law** says concurrency = **throughput** (requests completed per second) × latency (both explained in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)): 10,000 requests/s × 0.1 s = 1,000 requests in flight — more than a platform-thread pool comfortably holds. The previous fix was asynchronous/**reactive** code (a style where code is written as reactions to streams of events, never blocking — `CompletableFuture` chains, reactive libraries), which scales but is harder to write, read and debug. Virtual threads let simple blocking code scale like async code.
 
 ### How it works
 1. Create one: `Thread.ofVirtual().name("vt-1").start(runnable)`, `Thread.startVirtualThread(runnable)`, or — most commonly — **`Executors.newVirtualThreadPerTaskExecutor()`**, which starts a new virtual thread for every submitted task.
-2. The default scheduler is a `ForkJoinPool` (FIFO mode) whose parallelism equals the number of cores.
+2. The default **scheduler** (the component that decides which virtual thread runs on which carrier next) is a `ForkJoinPool` (FIFO — first in, first out — mode) whose parallelism equals the number of cores.
 3. When the virtual thread blocks in a JDK operation that supports it (almost all of `java.io`, `java.net`, `java.util.concurrent`, `Thread.sleep`), its stack frames are copied to the heap and the carrier moves on.
 4. When unblocked, it's rescheduled on any free carrier.
 
@@ -290,25 +290,25 @@ Output:
 - Note that virtual threads don't make anything *faster* per task: each still took 100 ms. They raise **throughput** for tasks that **wait**.
 
 ### When they help
-- Servers and clients with **many concurrent, mostly-waiting tasks**: HTTP handlers, calls to databases and other services, message consumers. Spring Boot (3.2+) enables them for request handling with `spring.threads.virtual.enabled=true`; Tomcat, Jetty and Helidon support them.
+- Servers and clients with **many concurrent, mostly-waiting tasks**: HTTP handlers (code that answers web requests), calls to databases and other services, message consumers (code that processes items from a message queue). Spring Boot (3.2+; the most popular Java framework for building services) enables them for request handling with `spring.threads.virtual.enabled=true`; Tomcat, Jetty and Helidon (Java web servers / frameworks) support them.
 - Replacing complex async code with straightforward blocking code.
 - Concurrent mapping inside a stream: the `Gatherers.mapConcurrent(n, fn)` gatherer (Java 24) runs `fn` on virtual threads with at most `n` in flight ([Chapter 12 §12.9](../12-streams/README.md#129-stream-gatherers-java-24)).
 
 ### When they don't help (and pitfalls)
 1. **CPU-bound work** — there are still only as many cores as there are. Use a platform pool sized to the cores, Fork/Join or parallel streams.
-2. **Don't pool virtual threads.** A pool exists to limit an expensive resource; virtual threads aren't expensive. To limit access to a scarce resource (a database allowing 10 connections, a rate-limited API), use a **`Semaphore`** or a bounded connection pool, as in line 5.
+2. **Don't pool virtual threads.** A pool exists to limit an expensive resource; virtual threads aren't expensive. To limit access to a scarce resource (a database allowing 10 connections, a **rate-limited** API that accepts only so many calls per second), use a **`Semaphore`** (a counter of permits; [Chapter 14 §14.13](../14-concurrency-1/README.md#1413-synchronizers-countdownlatch-cyclicbarrier-semaphore-phaser)) or a bounded **connection pool** (a fixed set of reusable, already-open database connections), as in line 5.
 3. **Heavy `ThreadLocal` caching**: code that caches expensive objects per thread (one parser per thread) was fine with 200 pooled threads, but with a million short-lived virtual threads you get a million copies, each used once (§15.6).
 4. **Pinning** on Java 21–23 when blocking inside `synchronized` (§15.5).
-5. Your downstream systems still have limits: 10,000 concurrent requests may overwhelm a database that could handle 200 at a time.
+5. Your **downstream** systems (the services and databases your code calls) still have limits: 10,000 concurrent requests may overwhelm a database that could handle 200 at a time.
 
 ### Observing virtual threads
-`jcmd <pid> Thread.dump_to_file -format=json dump.json` writes a thread dump that includes virtual threads (the older `jstack` output shows only platform threads). JDK Flight Recorder (JFR) has `jdk.VirtualThreadStart`/`End` (off by default), `jdk.VirtualThreadPinned` and `jdk.VirtualThreadSubmitFailed` events.
+`jcmd <pid> Thread.dump_to_file -format=json dump.json` (`pid` = the OS process id of the JVM) writes a **thread dump** (a snapshot of every thread and what it's doing) that includes virtual threads (the older `jstack` output shows only platform threads). JDK Flight Recorder (JFR, the JVM's built-in low-overhead event recorder) has `jdk.VirtualThreadStart`/`End` (off by default), `jdk.VirtualThreadPinned` and `jdk.VirtualThreadSubmitFailed` events.
 
 ### In the interview
-**30-second answer:** "Virtual threads, final in Java 21, are JVM-managed threads multiplexed onto a few carrier threads. When one blocks on I/O it unmounts and frees the carrier, so millions of blocking tasks can be in flight and simple thread-per-request code scales like async code. They help I/O-bound, high-concurrency workloads, not CPU-bound ones; you don't pool them — you create one per task and limit scarce resources with semaphores."
+**30-second answer:** "Virtual threads, final in Java 21, are JVM-managed threads **multiplexed** (many sharing a few) onto a few carrier threads. When one blocks on I/O it unmounts and frees the carrier, so millions of blocking tasks can be in flight and simple thread-per-request code scales like async code. They help I/O-bound, high-concurrency workloads, not CPU-bound ones; you don't pool them — you create one per task and limit scarce resources with semaphores."
 - *Are virtual threads faster?* → Not per task; they give higher throughput for waiting tasks.
 - *How many carrier threads?* → By default one per core.
-- *What replaces a pool size limit?* → A `Semaphore` or a bounded resource pool (e.g. HikariCP).
+- *What replaces a pool size limit?* → A `Semaphore` or a bounded resource pool (e.g. HikariCP, the most common Java database connection pool).
 - *Does existing code need to change?* → Usually not: same `Thread` API; switch the executor.
 
 ### Self-check
@@ -324,7 +324,7 @@ Output:
 A virtual thread is **pinned** when it blocks but *cannot* unmount, so it holds its carrier thread hostage for the whole wait. If all carriers are pinned, no other virtual thread can run — throughput collapses back to "one task per carrier", and in the worst case the application deadlocks.
 
 ### What changed in Java 24
-In Java 21–23, a virtual thread was pinned when it blocked **inside a `synchronized` block or method** (including `Object.wait()`), because the JVM's monitor implementation tracked lock ownership by carrier thread. The advice at the time was "replace `synchronized` with `ReentrantLock` around blocking operations". **JEP 491 (Java 24) re-implemented monitors so virtual threads can acquire, hold and release them independently of their carrier.** Blocking inside `synchronized` — and `Object.wait()` — now unmounts normally, so that advice no longer applies on Java 24+ (including Java 25 LTS).
+In Java 21–23, a virtual thread was pinned when it blocked **inside a `synchronized` block or method** (including `Object.wait()`), because the JVM's **monitor** (the built-in lock behind `synchronized`) implementation tracked lock ownership by carrier thread. The advice at the time was "replace `synchronized` with `ReentrantLock` around blocking operations". **JEP 491 (Java 24) re-implemented monitors so virtual threads can acquire, hold and release them independently of their carrier.** Blocking inside `synchronized` — and `Object.wait()` — now unmounts normally, so that advice no longer applies on Java 24+ (including Java 25 LTS — a *long-term support* release that receives updates for years).
 
 [`code/ch15/virtual/PinningDemo.java`](code/ch15/virtual/PinningDemo.java) uses only Java 21 APIs, so it was also compiled and run on JDK 21 for comparison:
 ```java
@@ -340,7 +340,7 @@ Output on JDK 26 (the runner):
 Java 26: 1000 virtual threads sleeping 50 ms inside synchronized took 63 ms   [machine-dependent]
 if every carrier were pinned: ~3600 ms with 14 carriers
 ```
-Output of the same program on JDK 21 (Amazon Corretto 21.0.10, run by hand):
+Output of the same program on JDK 21 (Amazon Corretto 21.0.10 — Amazon's free build of the JDK — run by hand):
 ```text
 Java 21: 1000 virtual threads sleeping 50 ms inside synchronized took 3869 ms   [machine-dependent]
 if every carrier were pinned: ~3600 ms with 14 carriers
@@ -349,10 +349,10 @@ On Java 21 every sleeping virtual thread pinned its carrier, so only 14 could sl
 
 ### What still pins (Java 24+)
 According to JEP 491, a virtual thread still pins its carrier when:
-1. It calls **native code** (JNI or the Foreign Function & Memory API) and that native code calls back into Java code that blocks.
-2. It blocks while **loading a class** (resolving a symbolic reference) or **inside a class initializer** (`static { … }`), or waits for another thread to finish initialising a class.
+1. It calls **native code** (code compiled for the machine, typically C, reached via JNI — the Java Native Interface — or the Foreign Function & Memory API) and that native code calls back into Java code that blocks.
+2. It blocks while **loading a class** (resolving a symbolic reference — turning a class/method *name* in bytecode into the real thing in memory) or **inside a class initializer** (`static { … }`, code that runs once when a class is first used), or waits for another thread to finish initialising a class.
 
-These are rare in application code. The JFR event **`jdk.VirtualThreadPinned`** (on by default, reported when the pin lasts over 20 ms) now also records the *reason* and the carrier thread. The old diagnostic system property `jdk.tracePinnedThreads` was removed by JEP 491 and has no effect.
+These are rare in application code. The JFR event **`jdk.VirtualThreadPinned`** (on by default, reported when the pin lasts over 20 ms) now also records the *reason* and the carrier thread. The old diagnostic **system property** (a `-Dname=value` setting passed to the JVM) `jdk.tracePinnedThreads` was removed by JEP 491 and has no effect.
 
 ### Takeaway
 On Java 21–23: avoid long blocking operations inside `synchronized` in virtual-thread code (use `ReentrantLock` there). On Java 24+: choose `synchronized` or `ReentrantLock` on their merits ([Chapter 14 §14.9](../14-concurrency-1/README.md#149-explicit-locks-reentrantlock-condition-readwritelock-stampedlock)); watch JFR for the remaining native/class-initialisation cases.
@@ -362,18 +362,18 @@ On Java 21–23: avoid long blocking operations inside `synchronized` in virtual
 ## 15.6 `ThreadLocal` and scoped values
 
 ### The problem
-Code deep in a call stack often needs *context* that was established near the top: the current user, a request id for logging, a transaction. Passing it as a parameter through every method is noisy, especially through framework code you don't own. Java has two ways to pass it **implicitly**.
+Code deep in a call stack often needs *context* that was established near the top: the current user, a request id for logging, a **transaction** (a group of database operations that succeed or fail together). Passing it as a parameter through every method is noisy, especially through framework code you don't own. Java has two ways to pass it **implicitly**.
 
 ### `ThreadLocal` (Java 1.2)
-A **`ThreadLocal<T>`** is a variable with a separate value **per thread**: `set(v)`, `get()`, `remove()`, `ThreadLocal.withInitial(supplier)`. Uses: per-request context in older frameworks (Spring Security's `SecurityContextHolder`, logging MDC), and per-thread caches of non-thread-safe objects (the classic being `SimpleDateFormat` — which `java.time.DateTimeFormatter`, being immutable, made unnecessary).
+A **`ThreadLocal<T>`** is a variable with a separate value **per thread**: `set(v)`, `get()`, `remove()`, `ThreadLocal.withInitial(supplier)`. Uses: per-request context in older frameworks (Spring Security's `SecurityContextHolder`, logging MDC — *Mapped Diagnostic Context*, key/value pairs automatically added to every log line), and per-thread caches of non-thread-safe objects (the classic being `SimpleDateFormat` — which `java.time.DateTimeFormatter`, being immutable, made unnecessary).
 
 Problems:
 1. **Unconstrained mutability** — any code can `set` it at any time; data flow is hard to follow.
-2. **Unbounded lifetime** — the value lives until `remove()` or the thread dies. With **thread pools, a forgotten `remove()` leaks** the value into the next, unrelated task (a security bug if it's a user identity) and can leak memory.
+2. **Unbounded lifetime** — the value lives until `remove()` or the thread dies. With **thread pools, a forgotten `remove()` leaks** the value into the next, unrelated task (a security bug if it's a user identity) and can **leak memory** (keep objects alive that nothing needs any more, so the garbage collector can't free them).
 3. **Expensive inheritance** — `InheritableThreadLocal` copies values into every child thread; with millions of virtual threads that's costly.
 
 ### Scoped values (final in Java 25, JEP 506)
-A **`ScopedValue<T>`** is an **immutable** value **bound for the duration of a method call**. You bind it with `ScopedValue.where(KEY, value).run(runnable)` (or `.call(callable)` for a result); any code called — directly or indirectly — from inside that call can `KEY.get()` it; when the call returns, the binding is gone automatically. There is no `set`. Code can **rebind** it for a nested call, which shadows the outer value only inside that call. History: incubator in Java 20 (JEP 429), previews in 21–24 (JEPs 446, 464, 481, 487), **final in Java 25 (JEP 506)** — so it's usable without flags in Java 25 LTS.
+A **`ScopedValue<T>`** is an **immutable** value **bound for the duration of a method call**. You bind it with `ScopedValue.where(KEY, value).run(runnable)` (or `.call(callable)` for a result); any code called — directly or indirectly — from inside that call can `KEY.get()` it; when the call returns, the binding is gone automatically. There is no `set`. Code can **rebind** it for a nested call, which shadows the outer value only inside that call. History: **incubator** in Java 20 (JEP 429; an incubator module is an even earlier experimental stage than preview), previews in 21–24 (JEPs 446, 464, 481, 487), **final in Java 25 (JEP 506)** — so it's usable without flags in Java 25 LTS.
 
 Analogy: a `ThreadLocal` is a whiteboard in each worker's office — anyone can scribble on it and it stays until someone wipes it. A scoped value is a visitor badge handed out at the door for one meeting: everyone in the meeting can read it, nobody can change it, and it's collected when the meeting ends.
 
@@ -423,7 +423,7 @@ Output:
 | Lifetime | until `remove()` / thread death | exactly the `run`/`call` |
 | Leak risk with pools | yes | none |
 | Inheritance | `InheritableThreadLocal` copies | shared (no copy) with structured-concurrency subtasks |
-| Good for | per-thread caches of mutable objects; legacy frameworks | request context: user, tenant, trace id, transaction |
+| Good for | per-thread caches of mutable objects; legacy frameworks | request context: user, tenant (the customer account in a multi-customer system), trace id (an id following one request across services), transaction |
 
 ### Common mistakes
 - Not calling `remove()` in a `finally` when using `ThreadLocal` with pools.
@@ -446,7 +446,7 @@ Structured concurrency is **still a preview API** — not final — in Java 25 a
 | 21, 22, 23, 24 | 453, 462, 480, 499 | preview 1–4 |
 | **25 (LTS)** | **505** | fifth preview — API redesigned around `StructuredTaskScope.open()` and `Joiner` |
 | **26** | **525** | sixth preview — small changes (e.g. `Joiner.anySuccessfulResultOrThrow()` renamed `anySuccessfulOrThrow()`, `allSuccessfulOrThrow()` now returns a list of results, new `Joiner.onTimeout()`) |
-| 27 (GA 15 Sept 2026) | 533 | seventh preview — built-in joiners make `join()` throw `ExecutionException`, a third type parameter for the exception type, `awaitAll()` removed, timeouts reworked |
+| 27 (GA — general availability, the official release — 15 Sept 2026) | 533 | seventh preview — built-in joiners make `join()` throw `ExecutionException`, a third type parameter for the exception type, `awaitAll()` removed, timeouts reworked |
 
 Because it's a preview, you must compile and run with `--enable-preview` (and the exact API can still change between releases), so the runnable code in this book doesn't depend on it. Details below use the part of the API that is the same in Java 25 and 26.
 
@@ -509,7 +509,7 @@ join -> FailedException, cause: orders service down; returned after ~50 ms, not 
 - The forked `fetchProfile` read `USER` — scoped values flow into subtasks.
 - When `fetchOrdersBroken` failed after 50 ms, the scope **interrupted** `slowProfile` immediately instead of letting it run for 5 s, and `join()` threw `FailedException` carrying the original cause.
 
-Other built-in policies (`Joiner` factory methods): all must succeed (the default policy of `open()`; `allSuccessfulOrThrow` also collects the results), first success wins and cancels the rest (`anySuccessfulOrThrow` in 26 — "hedged" requests to replicas), wait for all regardless of outcome (`awaitAll`), and a predicate-based `allUntil`. Timeouts are set through the configuration function passed to `open`. Check the Javadoc of the JDK you run, since names changed between previews (Java 27's seventh preview removes `awaitAll` and has the built-in joiners make `join()` throw `ExecutionException`).
+Other built-in policies (`Joiner` factory methods): all must succeed (the default policy of `open()`; `allSuccessfulOrThrow` also collects the results), first success wins and cancels the rest (`anySuccessfulOrThrow` in 26 — "hedged" requests: sending the same request to several **replicas**, i.e. identical copies of a service, and taking the fastest answer), wait for all regardless of outcome (`awaitAll`), and a predicate-based `allUntil`. Timeouts are set through the configuration function passed to `open`. Check the Javadoc of the JDK you run, since names changed between previews (Java 27's seventh preview removes `awaitAll` and has the built-in joiners make `join()` throw `ExecutionException`).
 
 ### When to use it
 Once final, for any "call several things concurrently, then combine" code in a request handler — the fan-out that §15.2 did with `CompletableFuture.allOf`, but with automatic cancellation and ordinary blocking code. Until then: use it for experiments, or use `CompletableFuture`/executors in production and cancel manually.
@@ -522,9 +522,9 @@ Once final, for any "call several things concurrently, then combine" code in a r
 ## 15.8 The Java Memory Model and happens-before
 
 ### What it is
-The **Java Memory Model (JMM)** — JLS chapter 17, redesigned in Java 5 (JSR-133) — is the contract that says **which values a read of a shared variable is allowed to return** when several threads run. It exists because compilers, JIT and CPUs all **reorder** and **cache** memory operations to go faster. Within a single thread these optimisations are invisible (the thread always sees its own actions in program order), but *another* thread can observe writes late or in a surprising order.
+The **Java Memory Model (JMM)** — JLS chapter 17 (the JLS is the *Java Language Specification*, the official rulebook), redesigned in Java 5 (JSR-133, a *Java Specification Request*, the older name for a formal spec change) — is the contract that says **which values a read of a shared variable is allowed to return** when several threads run. It exists because compilers, JIT and CPUs all **reorder** (run independent instructions in a different order) and **cache** (keep private, faster copies of) memory operations to go faster. Within a single thread these optimisations are invisible (the thread always sees its own actions in program order), but *another* thread can observe writes late or in a surprising order.
 
-The JMM's central idea is the **happens-before** relation. If action A *happens-before* action B, then A's effects (and everything before A in its thread) are **guaranteed visible** to B. If two conflicting accesses (same variable, at least one write, different threads) are **not** ordered by happens-before, the program has a **data race**, and the read can see stale or reordered values.
+The JMM's central idea is the **happens-before** relation. If action A *happens-before* action B, then A's effects (and everything before A in its thread) are **guaranteed visible** to B. If two conflicting accesses (same variable, at least one write, different threads) are **not** ordered by happens-before, the program has a **data race**, and the read can see **stale** (out-of-date) or reordered values.
 
 ### The happens-before rules
 
@@ -554,7 +554,7 @@ Output:
 plain arrays:          (0,0) seen 1,041 times in 50,000,000 trials   [nondeterministic - varies run to run; any value > 0 proves reordering]
 AtomicIntegerArray:    (0,0) seen 0 times in 50,000,000 trials   [always 0 - forbidden by the JMM]
 ```
-Each CPU core put its write into a *store buffer* and read the other variable before its own write became visible to the other core — both reads saw 0. With volatile semantics the JMM forbids that outcome, and it never occurred.
+Each CPU core put its write into a *store buffer* (a small per-core queue of pending writes) and read the other variable before its own write became visible to the other core — both reads saw 0. With volatile semantics the JMM forbids that outcome, and it never occurred.
 
 ```mermaid
 sequenceDiagram
@@ -603,10 +603,10 @@ Output:
 64 threads raced: Registry constructed 1 time(s), Heavy constructed 1 time(s)
 reader sees fully built config: Config[url=jdbc:postgresql://db/shop, poolSize=10]
 ```
-Without `volatile`, double-checked locking is **broken**: the write of the reference can become visible before the writes inside the constructor, so a second thread skips the lock and uses a half-built object. The holder idiom is usually simpler — the JVM initialises `Holder` exactly once, on first use, under its internal class-initialisation lock. For singletons, an `enum` with one constant is simplest of all (*Effective Java* Item 3; see [LLD Chapter 8](../../../lld/chapters/08-patterns-creational/README.md)).
+Without `volatile`, double-checked locking is **broken**: the write of the reference can become visible before the writes inside the constructor, so a second thread skips the lock and uses a half-built object. The holder idiom is usually simpler — the JVM initialises `Holder` exactly once, on first use, under its internal class-initialisation lock. For **singletons** (classes meant to have exactly one instance), an `enum` with one constant is simplest of all (*Effective Java* Item 3; see [LLD Chapter 8](../../../lld/chapters/08-patterns-creational/README.md)).
 
 ### Common mistakes
-- Believing "it worked in testing" proves correctness — reorderings depend on CPU architecture (ARM, as on this laptop, reorders more than x86), JIT decisions and load.
+- Believing "it worked in testing" proves correctness — reorderings depend on CPU architecture (ARM, as on this laptop, reorders more than x86 — the Intel/AMD chip family), JIT decisions and load.
 - Synchronising writes but reading without the lock (no happens-before for the reader).
 - Using `volatile` for a reference to a *mutable* object and assuming later changes to its fields are visible — only the reference write is covered.
 
@@ -630,7 +630,7 @@ More: [LLD §12.6](../../../lld/chapters/12-concurrency-concepts/README.md#126-j
 | **Starvation** | one thread never gets the resource because others keep taking it | runnable but never lucky | the polite customer never served at a crowded bar |
 
 ### Deadlock
-Four conditions (the **Coffman conditions**) must all hold: **mutual exclusion**, **hold and wait** (holding one lock while waiting for another), **no preemption** (locks can't be taken away), and **circular wait**. Break any one and deadlock is impossible — in practice, you break *circular wait* or *hold-and-wait*.
+Four conditions (the **Coffman conditions**) must all hold: **mutual exclusion**, **hold and wait** (holding one lock while waiting for another), **no preemption** (locks can't be taken away), and **circular wait** (A waits for B, B waits for A, or a longer loop). Break any one and deadlock is impossible — in practice, you break *circular wait* or *hold-and-wait*.
 
 [`code/ch15/liveness/DeadlockDemo.java`](code/ch15/liveness/DeadlockDemo.java) (key parts):
 ```java
@@ -660,7 +660,7 @@ t1 alive=true, t2 alive=true (stuck forever; only a restart helps)
 lock ordering: finished, total money = 2000
 tryLock + back-off: finished, total money = 2000
 ```
-- `ThreadMXBean.findDeadlockedThreads()` (also what `jstack` and `jcmd Thread.print` report as "Found one Java-level deadlock") detects cycles among `synchronized` monitors and `java.util.concurrent` locks. Java can't *recover* from a deadlock — the threads can't be forced to release their locks — so prevention is the only real strategy. (The demo marks the stuck threads as daemons so the program can still exit.)
+- `ThreadMXBean.findDeadlockedThreads()` (`ThreadMXBean` is the JVM's built-in monitoring interface for threads; this is also what `jstack` and `jcmd Thread.print` report as "Found one Java-level deadlock") detects cycles among `synchronized` monitors and `java.util.concurrent` locks. Java can't *recover* from a deadlock — the threads can't be forced to release their locks — so prevention is the only real strategy. (The demo marks the stuck threads as daemons so the program can still exit.)
 - Both fixes completed 2,000 opposite-direction transfers with money conserved.
 
 **Prevention checklist:**
@@ -671,7 +671,7 @@ tryLock + back-off: finished, total money = 2000
 5. **Thread-starvation deadlock** in pools: tasks waiting for other tasks in the same bounded pool ([Chapter 14 §14.11](../14-concurrency-1/README.md#1411-executors-and-thread-pools)) — use separate pools, `CompletableFuture` composition, or virtual threads.
 
 ### Livelock
-Threads aren't blocked; they're busy responding to each other. Typical cause: every thread detects a conflict and backs off **in exactly the same way at the same time** — e.g. the `tryLock` version above *without* the random sleep can end up with both threads repeatedly grabbing their first lock, failing on the second, releasing, and trying again in lock-step. The fix is **randomised back-off** (as in Ethernet collision handling) or an ordering rule that decides who goes first. Also found in message processing: a message that always fails is put back at the head of the queue and retried forever (use a dead-letter queue).
+Threads aren't blocked; they're busy responding to each other. Typical cause: every thread detects a conflict and backs off **in exactly the same way at the same time** — e.g. the `tryLock` version above *without* the random sleep can end up with both threads repeatedly grabbing their first lock, failing on the second, releasing, and trying again in lock-step. The fix is **randomised back-off** (wait a random, growing delay before retrying — as in Ethernet collision handling, where network cards that collide each wait a random time) or an ordering rule that decides who goes first. Also found in message processing: a message that always fails is put back at the head of the queue and retried forever (use a **dead-letter queue** — a side queue where messages that keep failing are parked for a human to inspect).
 
 ### Starvation
 A thread is ready to run but never gets the lock or CPU time:
@@ -684,7 +684,7 @@ Detailed walk-throughs and the dining philosophers: [LLD §12.17 Deadlock](../..
 
 ### In the interview
 **30-second answer:** "Deadlock needs mutual exclusion, hold-and-wait, no preemption and a circular wait; I prevent it with a global lock order or `tryLock` with timeouts and back-off, and by not calling foreign code while holding locks. I diagnose it with a thread dump, which reports Java-level deadlocks. Livelock is threads busily retrying in lock-step — fixed with randomised back-off. Starvation is a thread never getting a resource — fairness settings, separate pools, or less contention fix it."
-- *How do you find a deadlock in production?* → `jstack <pid>` / `jcmd <pid> Thread.print` (or `ThreadMXBean` in a health check).
+- *How do you find a deadlock in production?* → `jstack <pid>` / `jcmd <pid> Thread.print` (or `ThreadMXBean` in a **health check** — an endpoint or job that regularly reports whether the service is working).
 - *Deadlock vs livelock CPU usage?* → ~0% vs high.
 
 ### Self-check
@@ -699,7 +699,7 @@ Detailed walk-throughs and the dining philosophers: [LLD §12.17 Deadlock](../..
 ### Best practices (JCIP, *Effective Java* Items 78–84, JDK guidance)
 1. **Minimise shared mutable state.** Prefer immutable objects (records), confinement and message passing.
 2. **Synchronise all access to shared mutable data** — reads and writes — with the same lock (Item 78).
-3. **Keep synchronised regions small; never call alien code inside them** (Item 79).
+3. **Keep synchronised regions small; never call alien code** (code you don't control, e.g. callbacks or overridable methods) **inside them** (Item 79).
 4. **Prefer executors, tasks and streams to raw threads** (Item 80); prefer **concurrency utilities to `wait`/`notify`** (Item 81).
 5. **Document thread safety** of every class you publish (Item 82).
 6. **Lazy initialisation**: only when needed; use the holder idiom or volatile double-checked locking (Item 83).
@@ -722,14 +722,14 @@ Detailed walk-throughs and the dining philosophers: [LLD §12.17 Deadlock](../..
 | Producer-consumer pipeline | `BlockingQueue` + executor (virtual threads are fine as consumers) |
 | Shared counters, caches, registries | atomics, `LongAdder`, `ConcurrentHashMap` |
 | Callback-based library integration | `CompletableFuture` as a promise (`complete`) |
-| Very high-throughput event streaming with back-pressure | reactive libraries (Project Reactor, RxJava) or messaging systems — beyond this book |
+| Very high-throughput event streaming with back-pressure (consumers signalling producers to slow down) | reactive libraries (Project Reactor, RxJava) or messaging systems — beyond this book |
 
 ### Real-world examples
-- **Web servers**: Tomcat/Jetty with virtual threads let each request run plain blocking JDBC code at high concurrency.
-- **API gateways / BFFs**: fan out to several microservices per request (`CompletableFuture.allOf` with per-call `orTimeout` and fallbacks).
+- **Web servers**: Tomcat/Jetty with virtual threads let each request run plain blocking JDBC (Java Database Connectivity, the standard low-level database API) code at high concurrency.
+- **API gateways / BFFs** (a gateway is the single entry point in front of many services; a BFF, *Backend For Frontend*, is a gateway tailored to one app — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)): fan out to several microservices per request (`CompletableFuture.allOf` with per-call `orTimeout` and fallbacks).
 - **Batch analytics**: parallel streams over large in-memory collections; Fork/Join merge sorts.
-- **Caches**: Caffeine builds on `ConcurrentHashMap` and `CompletableFuture` (async loading).
-- **Observability**: request ids carried in logging context (MDC, `ThreadLocal`-based today, scoped values in newer designs).
+- **Caches**: Caffeine (a popular in-memory caching library) builds on `ConcurrentHashMap` and `CompletableFuture` (async loading).
+- **Observability** (being able to see what a running system is doing through logs, metrics and traces): request ids carried in logging context (MDC, `ThreadLocal`-based today, scoped values in newer designs).
 
 ---
 

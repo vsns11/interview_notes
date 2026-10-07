@@ -1,6 +1,6 @@
 # Chapter 3 — Control Flow
 
-By default a program runs statements top to bottom, once each. **Control flow** statements change that: they *choose* between paths (`if`, `switch`), *repeat* work (`for`, `while`, `do`), and *jump* (`break`, `continue`, `return`). Modern Java (16–21) also added **pattern matching**, which lets one construct both test the shape of a value and pull data out of it — turning long `if`/cast chains into short, compiler-checked `switch` expressions.
+By default a program runs statements top to bottom, once each. **Control flow** statements change that: they *choose* between paths (`if`, `switch`), *repeat* work (`for`, `while`, `do`), and *jump* (`break`, `continue`, `return`). Modern Java (16–21) also added **pattern matching**, which lets one construct both test the shape of a value and pull data out of it — turning long `if`/cast (an explicit type conversion written `(Type) value`) chains into short, compiler-checked `switch` expressions.
 
 **What you'll learn**
 
@@ -17,19 +17,19 @@ By default a program runs statements top to bottom, once each. **Control flow** 
 | 3.9 | `break`, `continue` and labels | exit and skip iterations, including nested loops |
 | 3.10 | Loop pitfalls | spot off-by-one, concurrent modification and other silent bugs |
 
-Code: [`code/`](code/), compiled with `javac --release 25`, output pasted from real runs. Records and sealed interfaces appear here only as data for patterns; they are taught properly in [Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md). For exam-level traps (which types a `switch` accepts, pattern-variable scope puzzles, loop-label trickery, unreachable code), see the OCP repo's [Chapter 3 — Making Decisions](../../../../ocp-java21-study/chapters/03-making-decisions/README.md).
+Code: [`code/`](code/), compiled with `javac --release 25`, output pasted from real runs. Records (compact classes whose job is to carry data) and sealed interfaces (an *interface* declares methods that classes promise to provide; a *sealed* one lists every type allowed to implement it) appear here only as data for patterns; they are taught properly in [Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md). For exam-level traps (which types a `switch` accepts, pattern-variable scope puzzles, loop-label trickery, unreachable code), see the OCP repo's [Chapter 3 — Making Decisions](../../../../ocp-java21-study/chapters/03-making-decisions/README.md).
 
 ---
 
 ## 3.1 `if`, `else if`, `else`
 
 ### What it is
-`if (condition) statement` runs the statement only when the **boolean** condition is `true`; an optional `else` runs otherwise. Chaining `else if` tests several conditions in order and runs the **first** branch whose condition holds.
+`if (condition) statement` runs the statement only when the **boolean** (true/false) condition is `true`; an optional `else` runs otherwise. Chaining `else if` tests several conditions in order and runs the **first** branch whose condition holds.
 
 Analogy: a receptionist checking a list top to bottom — the first rule that matches decides where you go.
 
 ### How it works
-1. Evaluate the condition — it must have type `boolean` (or `Boolean`). Unlike C or JavaScript, `if (x)` with an `int x` is a compile error: *incompatible types: int cannot be converted to boolean*.
+1. Evaluate the condition — it must have type `boolean` (or `Boolean`, its wrapper-object form). Unlike C or JavaScript, `if (x)` with an `int x` is a compile error: *incompatible types: int cannot be converted to boolean*.
 2. If `true`, run the `if` body and skip every `else`.
 3. Otherwise try the next `else if`; if none match, run the final `else` (if present).
 
@@ -141,20 +141,20 @@ b is a consonant
 ### What can you switch on?
 | Selector type | Since | Case labels |
 |---|---|---|
-| `char`, `byte`, `short`, `int` and their wrappers | Java 1.0 / 5 | compile-time constants that fit the type (`'a'`, `42`, `final` constants) |
-| `enum` | Java 5 | constant names (`case SAT`); qualified names (`case Day.SAT`) also allowed since Java 21 |
+| `char`, `byte`, `short`, `int` and their wrappers (object versions such as `Integer`) | Java 1.0 / 5 | compile-time constants (values fixed when compiling) that fit the type (`'a'`, `42`, `final` constants) |
+| `enum` (a type with a fixed set of named constants) | Java 5 | constant names (`case SAT`); qualified names (`case Day.SAT`) also allowed since Java 21 |
 | `String` | Java 7 | string literals; compared with `equals` (case-sensitive) |
-| **Any reference type** with patterns | Java 21 | type/record patterns, `null` ([3.6](#36-pattern-matching-for-switch-java-21)) |
-| `long`, `float`, `double`, `boolean` | not allowed | (primitive patterns are only a *preview* — JEP 507 in Java 25, still preview in 27) |
+| **Any reference type** (any non-primitive type) with patterns | Java 21 | type/record patterns, `null` ([3.6](#36-pattern-matching-for-switch-java-21)) |
+| `long`, `float`, `double`, `boolean` | not allowed | (primitive patterns are only a *preview* — an opt-in trial feature; JEP 507, a numbered JDK Enhancement Proposal, in Java 25, still preview in 27) |
 
-Labels must be unique, and a `String`/boxed selector that is `null` throws `NullPointerException` unless there is a `case null` (Java 21).
+Labels must be unique, and a `String`/boxed (wrapper-object) selector that is `null` throws (raises as an error — see [Chapter 8](../08-exceptions/README.md)) `NullPointerException` unless there is a `case null` (Java 21).
 
 ### When fall-through is useful — and when not
 Intentional fall-through (shared code for several labels, or cumulative steps like the perks example) is rare. Forgetting a `break` is a far more common bug, which is why the arrow form below exists. If you do fall through on purpose, comment it (`// fall through`).
 
 ### In the interview
 **Q: What is fall-through in a `switch`?** In colon-style `switch`, execution continues from the matched label into the following labels' statements until a `break`. It is a frequent source of bugs; arrow labels (`case X ->`) never fall through.
-- *Can you switch on a `String`? How does it compare?* Yes (Java 7); with `equals`, after a `hashCode` jump.
+- *Can you switch on a `String`? How does it compare?* Yes (Java 7); with `equals`, after a `hashCode` jump (`hashCode` is a number computed from the string's characters, used to narrow down the candidate labels quickly).
 - *What happens with a `null` selector?* `NullPointerException`, unless a `case null` label is present (Java 21+).
 
 ---
@@ -167,13 +167,13 @@ Java 14 (JEP 361) finalised two related improvements:
 - **`switch` expressions** — a `switch` that **produces a value**, so you can write `int x = switch (…) { … };` or `return switch (…) { … };`.
 
 ### Why it matters
-Classic `switch` used to compute a value needs a pre-declared variable, an assignment in every case, a `break` in every case and a `default` to keep the compiler happy about definite assignment. Each of those is a chance for a bug. The expression form removes all of them, and the compiler checks that **every possible value is handled** (*exhaustiveness*).
+Classic `switch` used to compute a value needs a pre-declared variable, an assignment in every case, a `break` in every case and a `default` to keep the compiler happy about definite assignment (the compiler's check that a variable surely has a value before it is read). Each of those is a chance for a bug. The expression form removes all of them, and the compiler checks that **every possible value is handled** (*exhaustiveness*).
 
 ### How it works
 1. The selector is evaluated; the matching label is chosen.
 2. For `case … -> expression;` the expression's value becomes the switch's value.
 3. For `case … -> { … }` the block must end by **`yield value;`** (or throw). `yield` means "this is the result of the switch" — it is not `return`, which would leave the whole method.
-4. The switch expression must be **exhaustive**: for `int`/`String` selectors that means a `default`; for an `enum` it is enough to list every constant; for sealed types, every permitted subtype ([3.6](#36-pattern-matching-for-switch-java-21)).
+4. The switch expression must be **exhaustive**: for `int`/`String` selectors that means a `default`; for an `enum` it is enough to list every constant; for sealed types, every permitted subtype (a class or record that extends or implements the type; [3.6](#36-pattern-matching-for-switch-java-21)).
 
 [`code/SwitchExpression.java`](code/SwitchExpression.java):
 ```java
@@ -258,9 +258,9 @@ You cannot mix colon and arrow labels in one `switch`.
 | One variable compared to many constants | `switch` with arrow labels | Readable, no fall-through |
 | Compute a value from many cases | `switch` expression | Exhaustive, no temporary variable |
 | Branch on the **type/shape** of an object | pattern `switch` (Java 21) | Replaces `instanceof` chains; compiler-checked for sealed types |
-| Behaviour that varies per subtype and grows over time | **Polymorphism** (a method on each class) | The OOP alternative; see [Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md) and the [LLD handbook](../../../lld/) |
+| Behaviour that varies per subtype and grows over time | **Polymorphism** (a method on each class; each class supplies its own version) | The OOP (object-oriented programming) alternative; see [Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md) and the [LLD (low-level design) handbook](../../../lld/) |
 
-The last two rows are a genuine design choice. A pattern `switch` over a *sealed* hierarchy keeps an operation in one place and makes adding an **operation** easy; virtual methods keep each type's code together and make adding a **type** easy. This is known as the *expression problem*.
+The last two rows are a genuine design choice. A pattern `switch` over a *sealed* hierarchy keeps an operation in one place and makes adding an **operation** easy; virtual methods (methods whose version is picked at run time from the object's actual class) keep each type's code together and make adding a **type** easy. This is known as the *expression problem*.
 
 ---
 
@@ -279,7 +279,7 @@ if (o instanceof String) {
 ```
 
 ### How it works — flow scoping
-A pattern variable is in scope **only where the compiler can prove the match succeeded**:
+A pattern variable is in scope (usable by name) **only where the compiler can prove the match succeeded**:
 1. Inside the `if` body when the condition is `o instanceof T t`.
 2. On the right-hand side of `&&` (`o instanceof String s && !s.isEmpty()`), because `&&` only evaluates its right side when the left is true.
 3. **After** the `if` when the `if` tests the *negation* and exits (`if (!(o instanceof String s)) return 0; … s.length()`).
@@ -321,7 +321,7 @@ Notes:
 - An *unconditional* pattern — testing a `String` variable with `instanceof String s`, which can only fail for `null` — was a compile error in Java 16–20 and is allowed since Java 21.
 
 ### Real-world examples
-`equals(Object)` implementations (as above), handling heterogeneous JSON nodes (`if (node instanceof ObjectNode obj)`), and exception handling code that inspects causes (`if (e.getCause() instanceof SQLException sql)`).
+`equals(Object)` implementations (as above), handling heterogeneous (mixed-type) JSON (a text format for structured data) nodes (`if (node instanceof ObjectNode obj)`), and exception (error-object, [Chapter 8](../08-exceptions/README.md)) handling code that inspects causes (`if (e.getCause() instanceof SQLException sql)`).
 
 ---
 
@@ -332,8 +332,8 @@ Java 21 (JEP 441) lets `case` labels contain **patterns**, not just constants. A
 
 ### How it works
 1. **Type pattern** — `case Integer i ->` matches when the selector is an `Integer` and binds `i`.
-2. **Guard** — `case Integer i when i < 0 ->` adds a boolean condition (`when` is a contextual keyword). The case only matches if the pattern matches **and** the guard is true.
-3. **`case null`** — without it, a `null` selector throws `NullPointerException` (backward compatible with old `switch`). `case null, default ->` combines both.
+2. **Guard** — `case Integer i when i < 0 ->` adds a boolean condition (`when` is a contextual keyword — a keyword only in this position, still usable as a name elsewhere). The case only matches if the pattern matches **and** the guard is true.
+3. **`case null`** — without it, a `null` selector throws `NullPointerException` (backward compatible — behaves exactly as old `switch` code expects). `case null, default ->` combines both.
 4. **Order and dominance** — cases are tried top to bottom. A label is a compile error if an earlier label already matches everything it would (e.g. `CharSequence cs` before `String s`), so write **specific cases before general ones**, and guarded cases before the unguarded case of the same type.
 5. **Exhaustiveness** — a pattern `switch` (expression *or* statement) must cover every possible value: add `default`, or cover all permitted subtypes of a **sealed** type.
 
@@ -399,7 +399,7 @@ B.java:10: error: the switch statement does not cover all possible input values
 | Polymorphic method | Adding a type touches one place | Adding an operation touches every class |
 
 ### When not to use it
-For a genuinely open hierarchy (plug-ins, user-defined subclasses) you cannot list the cases; a `default` branch or polymorphism fits better. And for equality against constants, the simple constant `switch` is still clearer.
+For a genuinely open hierarchy (plug-ins, user-defined subclasses — classes that extend another class) you cannot list the cases; a `default` branch or polymorphism fits better. And for equality against constants, the simple constant `switch` is still clearer.
 
 ### In the interview
 **Q: What does pattern matching for `switch` give you over `instanceof` chains?** Type test, cast and binding in one label; guards with `when`; explicit `null` handling; and compile-time exhaustiveness and dominance checks — especially powerful with sealed hierarchies and records, where adding a subtype makes the compiler flag every switch that must be updated.
@@ -417,9 +417,9 @@ For a genuinely open hierarchy (plug-ins, user-defined subclasses) you cannot li
 ## 3.7 Record patterns (Java 21) and unnamed patterns (Java 22)
 
 ### What it is
-A **record** is a compact class whose purpose is to carry data (Java 16; [Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md)): `record Point(int x, int y) {}` gets a constructor, accessors `x()`/`y()`, `equals`, `hashCode` and `toString` automatically. A **record pattern** (JEP 440, Java 21) matches a record **and deconstructs it** into its components in one step: `o instanceof Point(int x, int y)`.
+A **record** is a compact class whose purpose is to carry data (Java 16; [Chapter 6](../06-oop-inheritance-interfaces-and-more/README.md)): `record Point(int x, int y) {}` gets a constructor (the method that builds a new object), accessors `x()`/`y()` (methods that return each stored value), `equals`, `hashCode` and `toString` (the standard methods for comparing, hashing and printing an object) automatically. A **record pattern** (JEP 440, Java 21) matches a record **and deconstructs it** into its components (the values it carries) in one step: `o instanceof Point(int x, int y)`.
 
-The **unnamed pattern** `_` (JEP 456, Java 22) matches anything and binds nothing — use it for components you do not care about. `_` can also name unused variables (`catch (Exception _)`, `for (var _ : list)`, lambda parameters `(_, v) -> v`).
+The **unnamed pattern** `_` (JEP 456, Java 22) matches anything and binds nothing — use it for components you do not care about. `_` can also name unused variables (`catch (Exception _)`, `for (var _ : list)`, lambda parameters `(_, v) -> v` — a lambda is a short inline function, [Chapter 11](../11-lambdas-and-functional-programming/README.md)).
 
 ### How it works
 1. The value is tested against the record type (`null` never matches).
@@ -458,7 +458,7 @@ only care about x: 3
 (2 + 3 * -4) = -10
 0 * (1 + 2) = 0
 ```
-The `Mul(Num(var v), _) when v == 0` case short-circuits multiplication by zero without evaluating the right side — a nested pattern reads like the data's shape. This style (sealed interface + records + exhaustive pattern switch) is how modern Java models **algebraic data types**: ASTs in compilers, JSON values, commands/events, and results such as `Success | Failure`.
+The `Mul(Num(var v), _) when v == 0` case short-circuits multiplication by zero without evaluating the right side — a nested pattern reads like the data's shape. This style (sealed interface + records + exhaustive pattern switch) is how modern Java models **algebraic data types** (a type defined as a fixed set of alternative shapes, each carrying its own data): ASTs (abstract syntax trees — the tree a compiler builds from source code) in compilers, JSON values, commands/events, and results such as `Success | Failure`.
 
 ### Still in preview (don't rely on it yet)
 **Primitive types in patterns, `instanceof` and `switch`** — e.g. `switch` on a `long` or `case int i` matching a `double` that fits — is a preview feature (JEP 507 in Java 25; still preview in 26 and 27). Without `--enable-preview`, switching on a `long` fails: *primitive patterns are a preview feature and are disabled by default*.
@@ -473,14 +473,14 @@ The `Mul(Num(var v), _) when v == 0` case short-circuits multiplication by zero 
 ## 3.8 Loops
 
 ### What it is
-A **loop** repeats a statement (the *body*) while a condition holds, or once per element of a collection. Each run of the body is an **iteration**.
+A **loop** repeats a statement (the *body*) while a condition holds, or once per element of a collection (a group of objects such as a list or set). Each run of the body is an **iteration**.
 
 | Loop | Checks condition | Runs at least once? | Typical use |
 |---|---|---|---|
 | `while (cond) body` | before each iteration | no | unknown number of repetitions: reading until end of input, waiting for a state |
 | `do body while (cond);` | after each iteration | **yes** | menus, retry-until-success, input validation |
 | `for (init; cond; update) body` | before each iteration | no | counting, index-based access |
-| `for (T x : iterable) body` (enhanced for, Java 5) | — | no | visit every element of an array or `Iterable` |
+| `for (T x : iterable) body` (enhanced for, Java 5) | — | no | visit every element of an array or `Iterable` (anything that can be looped over) |
 
 ```mermaid
 flowchart TB
@@ -550,14 +550,14 @@ apple:3 fig:7 pear:0
 4. **Update** runs after each body (several expressions separated by commas are allowed), then back to step 2.
 
 ### The enhanced `for` in detail
-`for (T x : source)` works for **arrays** and anything that implements **`Iterable`** (all collections). The compiler turns it into an index loop for arrays and an `Iterator` loop for collections. Use it whenever you need each element and not its index. Its limits:
+`for (T x : source)` works for **arrays** and anything that implements **`Iterable`** (all collections). The compiler turns it into an index loop for arrays and an `Iterator` (an object that walks a collection one element at a time with `hasNext()`/`next()`) loop for collections. Use it whenever you need each element and not its index. Its limits:
 - No index (use a classic `for`, or `IntStream.range` — [Chapter 12](../12-streams/README.md)).
 - The loop variable is a **copy** for primitives: assigning to it does not change the array.
 - You must not add/remove elements of the collection being iterated ([3.10](#310-loop-pitfalls)).
-- Iterating a `Map` directly is impossible — iterate `entrySet()`, `keySet()` or `values()`.
+- Iterating a `Map` (a key→value lookup table) directly is impossible — iterate `entrySet()`, `keySet()` or `values()`.
 
 ### Loops vs streams
-Many loops that filter, transform and aggregate can be written as streams ([Chapter 12](../12-streams/README.md)): `Arrays.stream(temps).max()`. Loops remain the right tool when you need early exits with complex state, index arithmetic, or maximum performance on primitive arrays; streams read better for pipelines of transformations.
+Many loops that filter, transform and aggregate (combine into one result, such as a sum or maximum) can be written as streams (pipelines of data-processing steps) ([Chapter 12](../12-streams/README.md)): `Arrays.stream(temps).max()`. Loops remain the right tool when you need early exits with complex state, index arithmetic, or maximum performance on primitive arrays; streams read better for pipelines of transformations.
 
 ### In the interview
 **Q: `while` vs `do-while`?** `while` tests before the first iteration and may run zero times; `do-while` tests after, so it runs at least once — useful for "prompt until valid" loops.
@@ -682,13 +682,13 @@ stray semicolon: block ran 1 time(s)
 | Pitfall | Why it happens | Fix |
 |---|---|---|
 | **Off-by-one** (`<=` with `length`) | Indexes run 0 … length−1 | `i < a.length`; prefer enhanced `for` |
-| **`ConcurrentModificationException`** | Collections like `ArrayList` are *fail-fast*: their iterator detects structural changes made behind its back ([Chapter 10](../10-collections/README.md)). Detection is best-effort — removing the second-to-last element can even end the loop silently without the exception, leaving a wrong result. | `Iterator.remove()`, `removeIf`, or build a new list |
+| **`ConcurrentModificationException`** | Collections like `ArrayList` are *fail-fast*: their iterator detects structural changes (elements added or removed) made behind its back ([Chapter 10](../10-collections/README.md)). Detection is best-effort — removing the second-to-last element can even end the loop silently without the exception, leaving a wrong result. | `Iterator.remove()`, `removeIf`, or build a new list |
 | **Floating-point loop counter** | 0.1 is inexact, so `d` never equals 1.0 ([Chapter 2](../02-basics-types-and-operators/README.md#211-floating-point-numbers)) | Loop over an `int` and compute `i * 0.1` |
 | **Assigning the for-each variable** | It is a copy of the element | Index loop: `values[i] *= 10` |
 | **Stray semicolon** after `for (…)` / `while (…)` | `;` is an empty statement that becomes the body | Always use braces; IDEs warn |
 | **Infinite loop** | Condition never becomes false (forgot `i++`, or `while (x != 10)` when `x` jumps from 9 to 11) | Update the loop variable; prefer `<`/`>` over `!=` |
 | **Integer overflow of the counter** | `for (int i = 0; i <= Integer.MAX_VALUE; i++)` never ends — `i` wraps negative | Use `<` or a `long` |
-| **Expensive condition** | `for (int i = 0; i < list.size(); i++)` on a `LinkedList` with `get(i)` is O(n²) | Enhanced `for`/iterator |
+| **Expensive condition** | `for (int i = 0; i < list.size(); i++)` on a `LinkedList` (a chain of linked nodes, slow to index) with `get(i)` is O(n²) (Big-O notation: time grows with the square of the list size) | Enhanced `for`/iterator |
 
 ### Self-check
 1. Why can removing inside a for-each fail? → The fail-fast iterator sees the list changed structurally and throws `ConcurrentModificationException`.

@@ -1,17 +1,17 @@
 # Chapter 10 — Collections
 
-Almost every real program holds *groups* of things: the items in a cart, the users online, the word counts of a document, the jobs waiting to run. Arrays ([Chapter 4](../04-methods-and-arrays/README.md#46-arrays)) have a fixed length and almost no behaviour. The **Java Collections Framework** (in `java.util`) gives you resizable lists, duplicate-free sets, key→value maps, queues, stacks and priority queues — all sharing a small set of interfaces so you can swap one implementation for another without rewriting code.
+Almost every real program holds *groups* of things: the items in a cart, the users online, the word counts of a document, the jobs waiting to run. Arrays ([Chapter 4](../04-methods-and-arrays/README.md#46-arrays)) have a fixed length and almost no behaviour. The **Java Collections Framework** (in `java.util`) gives you resizable lists, duplicate-free sets, key→value maps, queues (first-in, first-out waiting lines), stacks (last-in, first-out piles) and priority queues — all sharing a small set of interfaces (contracts that list the methods a type must offer) so you can swap one implementation (a concrete class that fulfils the contract) for another without rewriting code.
 
-This chapter teaches what each collection is, **how it works inside** (so the big-O costs make sense rather than being memorised), which one to pick, and the traps that cause real bugs. It leans on generics (`List<String>`, `? extends T`) from [Chapter 9](../09-generics/README.md) and on `equals`/`hashCode` from [§6.13](../06-oop-inheritance-interfaces-and-more/README.md#613-object-methods-equals-hashcode-and-tostring). Lambdas such as `n -> n % 2 == 0` appear in a few examples; they are explained fully in [Chapter 11](../11-lambdas-and-functional-programming/README.md) — for now read them as "a small function".
+This chapter teaches what each collection is, **how it works inside** (so the big-O costs — how an operation's running time grows as the collection gets bigger, explained in §10.12 — make sense rather than being memorised), which one to pick, and the traps that cause real bugs. It leans on generics (`List<String>`, `? extends T`) from [Chapter 9](../09-generics/README.md) and on `equals`/`hashCode` from [§6.13](../06-oop-inheritance-interfaces-and-more/README.md#613-object-methods-equals-hashcode-and-tostring). Lambdas such as `n -> n % 2 == 0` appear in a few examples; they are explained fully in [Chapter 11](../11-lambdas-and-functional-programming/README.md) — for now read them as "a small function".
 
 **What you'll learn**
 
 1. The collection hierarchy: `Iterable`, `Collection`, `List`, `Set`, `Queue`, `Deque`, and why `Map` stands apart.
 2. `ArrayList` vs `LinkedList` — internals, costs and the classic traps.
 3. `HashSet`, `LinkedHashSet`, `TreeSet` and navigation queries.
-4. The `Map` API (`merge`, `computeIfAbsent`, …), `LinkedHashMap` (LRU cache), `TreeMap`.
+4. The `Map` API (`merge`, `computeIfAbsent`, …), `LinkedHashMap` (LRU cache — a cache that throws out the Least Recently Used entry when full; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), `TreeMap`.
 5. **`HashMap` internals**: hashing, buckets, load factor, resizing, treeification — with a measured collision demo.
-6. `Queue`, `Deque` (`ArrayDeque` as stack and queue) and `PriorityQueue` (a heap).
+6. `Queue`, `Deque` (`ArrayDeque` as stack and queue) and `PriorityQueue` (a heap — a tree-shaped structure that always keeps the smallest item on top; unrelated to the JVM's memory heap).
 7. Iterators, fail-fast behaviour and safe removal.
 8. `Comparable` vs `Comparator` and comparator composition.
 9. The `Collections` utility class, unmodifiable views vs immutable copies (`List.of`, `copyOf`).
@@ -30,7 +30,7 @@ All runnable code is in [`code/`](code/) (package `ch10.*`), compiled with `java
 A **collection** is an object that groups other objects (its **elements**). The **Collections Framework** is three things:
 
 1. **Interfaces** — abstract contracts such as `List` ("ordered, indexable, duplicates allowed") and `Set` ("no duplicates").
-2. **Implementations** — concrete classes such as `ArrayList` and `HashSet` that fulfil those contracts with a particular data structure.
+2. **Implementations** — concrete classes such as `ArrayList` and `HashSet` that fulfil those contracts with a particular data structure (a way of organising data in memory).
 3. **Algorithms** — reusable static methods (sorting, searching, shuffling) in `Collections` and `Arrays`.
 
 Analogy: the interface is the job description, the implementation the person hired — you can hire someone else without rewriting the description.
@@ -94,18 +94,18 @@ classDiagram
 | `Collection<E>` | A group of elements: `add`, `remove`, `contains`, `size`, `iterator`, `stream` | (root of the element-based types) |
 | `List<E>` | Ordered by index, duplicates allowed | `ArrayList`, `LinkedList` |
 | `Set<E>` | No duplicates (by `equals`) | `HashSet`, `LinkedHashSet`, `TreeSet`, `EnumSet` |
-| `Queue<E>` | Elements wait to be processed, usually FIFO | `ArrayDeque`, `LinkedList`, `PriorityQueue` |
+| `Queue<E>` | Elements wait to be processed, usually FIFO (first in, first out) | `ArrayDeque`, `LinkedList`, `PriorityQueue` |
 | `Deque<E>` | "Double-ended queue": add/remove at both ends; also a stack | `ArrayDeque`, `LinkedList` |
 | `Map<K,V>` | Unique keys, each mapped to one value | `HashMap`, `LinkedHashMap`, `TreeMap`, `EnumMap` |
 | `SequencedCollection` / `SequencedMap` (21) | Has a defined first and last element | `List`, `Deque`, `LinkedHashSet`, `TreeSet`, `LinkedHashMap`, `TreeMap` (§10.11) |
 
 Key terms used throughout:
 - **Ordered / encounter order** — iteration visits elements in a defined sequence (index order, insertion order or sorted order).
-- **Sorted** — ordered by comparing elements (natural order or a `Comparator`, §10.8).
+- **Sorted** — ordered by comparing elements (natural order — the type's own built-in ordering — or a `Comparator`, §10.8).
 - **Structural modification** — a change in size (add/remove), as opposed to replacing an element with `set`.
 - **Optional operation** — an interface method an implementation may reject with `UnsupportedOperationException` (e.g. `add` on an unmodifiable list).
 
-**`Map` is not a `Collection`.** A map stores pairs, so `add(E)` makes no sense for it. Instead it offers three **views** that *are* collections: `keySet()`, `values()` and `entrySet()`.
+**`Map` is not a `Collection`.** A map stores pairs, so `add(E)` makes no sense for it. Instead it offers three **views** (live windows onto the map's data — changes show through both ways) that *are* collections: `keySet()`, `values()` and `entrySet()`.
 
 ### Program to the interface
 
@@ -139,7 +139,7 @@ Map is a Collection? false
 Declaring variables and parameters as `List`, `Set`, `Map` (not `ArrayList`…) means the method works with any implementation and you can change your mind in one place. Use the concrete type only when you need its extra methods (e.g. `TreeMap.floorKey`, `LinkedList.addFirst` before Java 21).
 
 ### Legacy classes you will still meet
-`Vector` (synchronized `ArrayList`), `Stack` (extends `Vector`), `Hashtable` (synchronized map, no nulls) and `Enumeration` date from Java 1.0. They still work but every method takes a lock, and `Stack` inherits index methods a stack should not have. Use `ArrayList`, `ArrayDeque`, `HashMap`, and — when threads share the collection — the `java.util.concurrent` classes ([Chapter 14](../14-concurrency-1/README.md)).
+`Vector` (synchronized `ArrayList`), `Stack` (extends `Vector`), `Hashtable` (synchronized map, no nulls) and `Enumeration` date from Java 1.0. They still work but every method takes a lock (only one thread at a time may run it, which costs time), and `Stack` inherits index methods a stack should not have. Use `ArrayList`, `ArrayDeque`, `HashMap`, and — when threads (independent paths of execution running at the same time) share the collection — the `java.util.concurrent` classes ([Chapter 14](../14-concurrency-1/README.md)).
 
 ### Self-check
 1. Which interface lets a class be used in a for-each loop? → `Iterable`.
@@ -157,7 +157,7 @@ Interfaces (`List`, `Set`, `Queue`, `Deque`, `Map`) describe behaviour; classes 
 A **`List`** is an ordered sequence you can index into (`get(i)`), like a numbered shopping list. It allows duplicates and (for most implementations) `null`.
 
 - **`ArrayList`** — a resizable array. Analogy: a row of numbered lockers; jumping to locker 500 is instant, but inserting a new locker at position 0 means shifting every locker one place.
-- **`LinkedList`** — a **doubly linked list**: each element sits in a small *node* object holding pointers to the previous and next node. Analogy: a treasure hunt — each clue tells you where the next one is, so reaching clue 500 means following 500 clues.
+- **`LinkedList`** — a **doubly linked list**: each element sits in a small *node* object holding pointers (references) to the previous and next node. Analogy: a treasure hunt — each clue tells you where the next one is, so reaching clue 500 means following 500 clues.
 
 ### How `ArrayList` works
 1. It holds an internal `Object[] elementData` and an `int size`.
@@ -172,8 +172,8 @@ A **`List`** is an ordered sequence you can index into (`get(i)`), like a number
 1. Each element is wrapped in a `Node { item, prev, next }`; the list keeps `first`, `last` and `size`.
 2. Adding or removing at either end rewires two pointers: **O(1)**.
 3. `get(i)` walks from whichever end is closer: **O(n)**.
-4. Inserting in the middle is O(1) *only once you are already there* (via a `ListIterator`); getting there is O(n).
-5. Each node is a separate heap object (about 24 bytes of overhead each on a typical 64-bit JVM with compressed pointers), and nodes are scattered in memory, which defeats the CPU cache.
+4. Inserting in the middle is O(1) *only once you are already there* (via a `ListIterator`, an iterator that can move both ways and insert — §10.7); getting there is O(n).
+5. Each node is a separate heap object (about 24 bytes of overhead each on a typical 64-bit JVM with compressed pointers — references squeezed into 32 bits to save memory), and nodes are scattered in memory, which defeats the CPU cache (a small, very fast memory beside the processor that works best when data sits side by side).
 
 `LinkedList` also implements `Deque`, so it can act as a queue or stack — but `ArrayDeque` does that job faster (§10.6). In practice **`ArrayList` is the right default for almost every list**; the measured demo in §10.12 shows why.
 
@@ -219,8 +219,8 @@ ArrayList equals LinkedList? true
 ```
 
 Notes on the output:
-- `remove(1)` on a `List<Integer>` picks the **`remove(int index)`** overload because `1` is an `int` and no boxing is needed ([overload resolution, §4.3](../04-methods-and-arrays/README.md#43-overloading)). Box explicitly to remove by value.
-- Natural `String` order compares UTF-16 code units, so every uppercase letter sorts before every lowercase one.
+- `remove(1)` on a `List<Integer>` picks the **`remove(int index)`** overload because `1` is an `int` and no boxing (wrapping a primitive in its object type, `int` → `Integer`) is needed ([overload resolution, §4.3](../04-methods-and-arrays/README.md#43-overloading)). Box explicitly to remove by value.
+- Natural `String` order compares UTF-16 code units (the 16-bit numbers Java stores for each character), so every uppercase letter sorts before every lowercase one.
 - `List.equals` is defined by the interface: same elements in the same order, regardless of implementation.
 
 ### Trade-offs
@@ -233,7 +233,7 @@ Notes on the output:
 | insert/remove in middle | O(n) shift | O(n) to find + O(1) to link |
 | `contains` / `indexOf` | O(n) | O(n) |
 | Memory per element | one reference (+ spare capacity) | node object ≈ 24 B + reference |
-| Cache friendliness | high (contiguous) | low (pointer chasing) |
+| Cache friendliness | high (contiguous — side by side in memory) | low (pointer chasing — hopping from node to node) |
 
 ### When not to use them
 - Frequent "is x in here?" checks → use a `Set` (O(1) or O(log n)) instead of `list.contains` (O(n)).
@@ -272,13 +272,13 @@ A **`Set`** holds each element at most once — "at most once" meaning no two el
 |---|---|---|---|---|
 | `HashSet` | a `HashMap` (elements are the keys) | none guaranteed | **O(1)** average | one `null` allowed |
 | `LinkedHashSet` | a `LinkedHashMap` | insertion order | O(1) average | one `null` |
-| `TreeSet` | a `TreeMap` (red-black tree) | sorted | **O(log n)** | no `null` with natural order |
-| `EnumSet` | a bit vector | enum declaration order | O(1), extremely fast | no `null` ([§6.9](../06-oop-inheritance-interfaces-and-more/README.md#69-enums)) |
+| `TreeSet` | a `TreeMap` (red-black tree, see below) | sorted | **O(log n)** | no `null` with natural order |
+| `EnumSet` | a bit vector (one bit per enum constant) | enum declaration order | O(1), extremely fast | no `null` ([§6.9](../06-oop-inheritance-interfaces-and-more/README.md#69-enums)) |
 
 ### How it works
 - **`HashSet`** literally stores each element as a key in an internal `HashMap`, with a shared dummy object as the value. So everything in §10.5 applies: it uses `hashCode()` to find a bucket and `equals()` to confirm a match.
 - **`LinkedHashSet`** adds a doubly linked list through the entries, remembering insertion order (re-adding an existing element does not move it).
-- **`TreeSet`** keeps elements in a **red-black tree**, a self-balancing binary search tree whose height stays O(log n). It never calls `equals` or `hashCode`: two elements are "the same" when `compareTo`/`compare` returns 0.
+- **`TreeSet`** keeps elements in a **red-black tree**, a self-balancing binary search tree (each node's left subtree holds smaller values and its right subtree larger ones) whose height stays O(log n). It never calls `equals` or `hashCode`: two elements are "the same" when `compareTo`/`compare` returns 0.
 
 ### Code
 
@@ -323,7 +323,7 @@ The mutated-key line is the most important bug in this section: after `key.add("
 - Relying on `HashSet` print order in tests — it can change between JDK versions or after a resize.
 
 ### Real-world examples
-Unique visitors per day (`HashSet<UserId>`), de-duplicating while keeping first-seen order (`LinkedHashSet`), a leaderboard or an index of time-stamped events that needs "next event after t" (`TreeSet.ceiling`), feature flags (`EnumSet`).
+Unique visitors per day (`HashSet<UserId>`), de-duplicating while keeping first-seen order (`LinkedHashSet`), a leaderboard or an index of time-stamped events that needs "next event after t" (`TreeSet.ceiling`), feature flags (on/off switches for features; `EnumSet`).
 
 ### Self-check
 1. Which set gives insertion order? → `LinkedHashSet`.
@@ -356,7 +356,7 @@ A **`Map<K,V>`** associates each unique **key** with one **value** — a diction
 | `forEach((k, v) -> …)`, `replaceAll((k, v) -> …)` | iterate / transform all values | — |
 | `keySet()`, `values()`, `entrySet()` | live views | collections |
 
-The `merge`/`compute*` methods arrived in Java 8 and replace most "get, check for null, put" boilerplate.
+The `merge`/`compute*` methods arrived in Java 8 and replace most "get, check for null, put" boilerplate (repetitive code).
 
 ### Code
 
@@ -416,16 +416,16 @@ HashMap null key -> 0
 | `null` key | one allowed | one allowed | not with natural ordering |
 | Extras | — | `removeEldestEntry` hook → LRU cache | `floorKey`, `ceilingEntry`, `headMap`, `tailMap`, `subMap`, `firstKey`, `descendingMap` |
 
-Other maps worth knowing: **`EnumMap`** (enum keys, backed by an array indexed by `ordinal()` — very fast), **`IdentityHashMap`** (compares keys with `==`, used for object-graph algorithms like serialization), **`WeakHashMap`** (keys held weakly, so an entry disappears once nothing else references its key — for caches of metadata), **`ConcurrentHashMap`** (thread-safe, no null keys/values — [Chapter 14](../14-concurrency-1/README.md); a simplified build is in [LLD §13.7](../../../lld/chapters/13-concurrency-problems/README.md#137-design-a-simplified-concurrent-hashmap--lock-striping)).
+Other maps worth knowing: **`EnumMap`** (enum keys, backed by an array indexed by `ordinal()` — very fast), **`IdentityHashMap`** (compares keys with `==`, used for object-graph algorithms like serialization — turning objects into bytes), **`WeakHashMap`** (keys held weakly — through references that don't stop garbage collection — so an entry disappears once nothing else references its key — for caches of metadata), **`ConcurrentHashMap`** (thread-safe — safe for many threads at once — no null keys/values — [Chapter 14](../14-concurrency-1/README.md); a simplified build is in [LLD §13.7](../../../lld/chapters/13-concurrency-problems/README.md#137-design-a-simplified-concurrent-hashmap--lock-striping)).
 
 ### Common mistakes
 - `if (map.get(k) != null)` to test presence — wrong if `null` values are allowed; use `containsKey`.
 - `for (K k : map.keySet()) use(map.get(k))` — two lookups per entry; iterate `entrySet()` or use `map.forEach`.
 - `map.get(k) + 1` when `k` is absent → `NullPointerException` from unboxing `null`. Use `merge` or `getOrDefault`.
-- In `computeIfAbsent`, the mapping function must not modify the same map (for `HashMap` this throws `ConcurrentModificationException` since Java 9). This bites recursive memoisation — see [§11.8](../11-lambdas-and-functional-programming/README.md#118-functional-style-in-everyday-java).
+- In `computeIfAbsent`, the mapping function must not modify the same map (for `HashMap` this throws `ConcurrentModificationException` since Java 9). This bites recursive memoisation (caching the results of earlier calls) — see [§11.8](../11-lambdas-and-functional-programming/README.md#118-functional-style-in-everyday-java).
 
 ### Real-world examples
-HTTP headers and configuration (`Map<String,String>`), caches keyed by ID, word or event counts (`merge`), grouping orders by customer (`computeIfAbsent`), an LRU cache for thumbnails (`LinkedHashMap`), time-series lookups and rate tables (`TreeMap.floorEntry`).
+HTTP headers (key–value metadata sent with each web request) and configuration (`Map<String,String>`), caches keyed by ID, word or event counts (`merge`), grouping orders by customer (`computeIfAbsent`), an LRU cache for thumbnails (`LinkedHashMap`), time-series (data points indexed by time) lookups and rate tables (`TreeMap.floorEntry`).
 
 ### Self-check
 1. What does `map.put(k, v)` return when `k` was already present? → The previous value.
@@ -441,7 +441,7 @@ Map = unique keys → values. `HashMap` default, `LinkedHashMap` for predictable
 ## 10.5 `HashMap` internals
 
 ### What it is
-`HashMap` is a **hash table**: an array of **buckets** (also called *bins*), where a key's **hash code** decides which bucket it goes into. Analogy: a coat check with 16 numbered hooks. The attendant computes a number from your ticket, hangs your coat on that hook, and later goes straight to that hook — no searching through every coat. If two coats land on the same hook, they hang one behind the other, and the attendant checks each ticket on that hook.
+`HashMap` is a **hash table**: an array of **buckets** (also called *bins*), where a key's **hash code** (an `int` computed from the key's contents by `hashCode()`) decides which bucket it goes into. Analogy: a coat check with 16 numbered hooks. The attendant computes a number from your ticket, hangs your coat on that hook, and later goes straight to that hook — no searching through every coat. If two coats land on the same hook, they hang one behind the other, and the attendant checks each ticket on that hook.
 
 ### Why it matters
 Average **O(1)** `get`/`put` makes `HashMap`/`HashSet` the most-used collections — and a favourite interview topic. The internals also explain real bugs: slow maps from bad `hashCode`, lost keys from mutation, surprising iteration order, wasted resizes.
@@ -461,8 +461,8 @@ flowchart LR
 ```
 
 1. **Hash.** `put(key, value)` calls `key.hashCode()` (a 32-bit `int`). A `null` key is given hash 0 (so it lives in bucket 0).
-2. **Spread.** `HashMap.hash()` XORs the high 16 bits into the low 16: `h ^ (h >>> 16)`. The next step only looks at the low bits, and without spreading, keys whose hash codes differ only in high bits would all collide.
-3. **Index.** The table length `n` is always a **power of two** (default **16**), so `hash & (n − 1)` equals `hash mod n` but is a single cheap AND instruction.
+2. **Spread.** `HashMap.hash()` XORs (bitwise exclusive-or: a result bit is 1 where the two input bits differ) the high 16 bits into the low 16: `h ^ (h >>> 16)`. The next step only looks at the low bits, and without spreading, keys whose hash codes differ only in high bits would all collide.
+3. **Index.** The table length `n` is always a **power of two** (default **16**), so `hash & (n − 1)` equals `hash mod n` (the remainder after dividing by n) but is a single cheap AND (bitwise and: keeps only bits set in both) instruction.
 4. **Store.** Each bucket holds a chain of `Node{hash, key, value, next}`. If the bucket is empty, the node goes straight in. Otherwise the map walks the chain: a node matches when **the hashes are equal and** (`==` or `equals`). A match gets its value replaced (and `put` returns the old value); no match → a new node is appended at the tail.
 5. **Load factor and resize.** The **load factor** (default **0.75**) is the fullness at which the table grows. The **threshold** = capacity × load factor (16 × 0.75 = **12**). When `size` exceeds the threshold, the table **doubles** (16 → 32 → 64 …) and every node is redistributed. Because capacity is a power of two, each node either stays at index `i` or moves to `i + oldCapacity`, decided by one bit of its hash (`hash & oldCapacity`), so the split is cheap and keeps chain order.
 6. **Treeification (Java 8).** If a single bucket's chain reaches **8** nodes (`TREEIFY_THRESHOLD`) and another is added, the chain is converted into a **red-black tree** of `TreeNode`s, turning that bucket's worst case from O(n) into **O(log n)**. But if the whole table is smaller than **64** buckets (`MIN_TREEIFY_CAPACITY`), the map **resizes instead**, because a small table crowded in one bucket is better fixed by spreading keys out. When a resize split leaves a tree bucket with **≤ 6** nodes (`UNTREEIFY_THRESHOLD`), it turns back into a list. With a decent hash function and load factor 0.75, a bucket of 8 is astronomically unlikely (the JDK source comment estimates about 6 in 100 million), so trees are a defence against bad or malicious hash codes, not a normal case.
@@ -551,7 +551,7 @@ constant hash, not Comparable      n=20,000  3n lookups:   1648.2 ms
 
 - **Good hash:** keys spread across buckets → O(1) each.
 - **Constant hash + `Comparable`:** one giant bucket, but it was treeified and ordered by `compareTo` → O(log n) each; ~10× slower than good hashing, still fast.
-- **Constant hash, not `Comparable`:** the tree can't order equal-hash keys, so lookups degrade toward a linear scan → O(n) each, **thousands of times slower**. This is the scenario hash-flooding denial-of-service attacks exploit, and the reason Java 8 added treeification (and why `String` — being `Comparable` — is well protected as a key).
+- **Constant hash, not `Comparable`:** the tree can't order equal-hash keys, so lookups degrade toward a linear scan → O(n) each, **thousands of times slower**. This is the scenario hash-flooding denial-of-service attacks (sending a server many keys with colliding hashes to make it grind to a halt) exploit, and the reason Java 8 added treeification (and why `String` — being `Comparable` — is well protected as a key).
 
 ### Sizing a map correctly
 `new HashMap<>(100)` does **not** mean "room for 100 entries". The argument is an initial *capacity*, rounded up to a power of two (128); the threshold is then 128 × 0.75 = 96, so the 97th `put` still triggers a resize. To pre-size for an expected number of **entries**, use the Java 19 factories, which do the load-factor maths for you:
@@ -562,7 +562,7 @@ Set<String> seen        = HashSet.newHashSet(100);        // also LinkedHashMap.
 ```
 
 ### Thread safety
-`HashMap` is **not** thread-safe. Concurrent `put`s can lose entries or corrupt a bucket (in Java 7 and earlier, a concurrent resize could even link a chain into a cycle so `get` spun forever). Use `ConcurrentHashMap` for shared maps ([Chapter 14](../14-concurrency-1/README.md)). `Collections.synchronizedMap` works but locks the whole map on every call.
+`HashMap` is **not** thread-safe. Concurrent `put`s can lose entries or corrupt a bucket (in Java 7 and earlier, a concurrent resize could even link a chain into a cycle so `get` spun forever). Use `ConcurrentHashMap` (a thread-safe map) for shared maps ([Chapter 14](../14-concurrency-1/README.md)). `Collections.synchronizedMap` works but locks the whole map on every call.
 
 ### Trade-offs
 
@@ -616,7 +616,7 @@ hashCode → spread → `& (n−1)` → bucket; match by hash then `equals`. Loa
 
 ### How the implementations work
 - **`ArrayDeque`** — a resizable **circular array** with `head` and `tail` indexes that wrap around. Adding/removing at either end is amortised **O(1)** with no node allocations. It rejects `null` (because `null` is how `poll` signals "empty"). The Javadoc notes it is likely faster than `Stack` as a stack and faster than `LinkedList` as a queue. **Use it for both.**
-- **`PriorityQueue`** — a **binary min-heap** stored in an array: a complete binary tree where each parent ≤ its children, and element *i*'s children sit at *2i+1* and *2i+2*. `offer` appends at the end and "sifts up"; `poll` moves the last element to the root and "sifts down". Both are **O(log n)**; `peek` is O(1); `contains`/`remove(Object)` are O(n). Building one from a collection (heapify) is O(n). The array is *not* sorted — only the root is guaranteed smallest — so `toString()` and the iterator show heap order, not sorted order.
+- **`PriorityQueue`** — a **binary min-heap** stored in an array: a complete binary tree (every level full except possibly the last, which fills left to right) where each parent ≤ its children, and element *i*'s children sit at *2i+1* and *2i+2*. `offer` appends at the end and "sifts up"; `poll` moves the last element to the root and "sifts down". Both are **O(log n)**; `peek` is O(1); `contains`/`remove(Object)` are O(n). Building one from a collection (heapify) is O(n). The array is *not* sorted — only the root is guaranteed smallest — so `toString()` and the iterator show heap order, not sorted order.
 
 ### Code
 
@@ -658,7 +658,7 @@ top-3 = [99, 77, 42]
 The top-k trick keeps a heap of only *k* elements: each new element costs O(log k), and the smallest of the current top k is evicted. Total O(n log k) instead of sorting everything in O(n log n) — a staple of coding interviews ([Chapter 19](../19-java-for-coding-interviews/README.md)).
 
 ### When not to use them
-- Threads producing and consuming → a `BlockingQueue` (`ArrayBlockingQueue`, `LinkedBlockingQueue`) that waits instead of returning `null` ([Chapter 14](../14-concurrency-1/README.md)).
+- Threads producing and consuming (the producer–consumer pattern: some threads add work, others take it) → a `BlockingQueue` (`ArrayBlockingQueue`, `LinkedBlockingQueue`) that waits instead of returning `null` ([Chapter 14](../14-concurrency-1/README.md)).
 - You need all elements in sorted order once → just sort a list; a heap shines when elements keep arriving.
 - Changing an element's priority after insertion is not supported — remove and re-add it (O(n)), or insert a new entry and skip stale ones when polled.
 
@@ -686,7 +686,7 @@ An **`Iterator<E>`** is a cursor over a collection with three methods: `hasNext(
 ### How fail-fast works
 Most `java.util` collections keep a **modification counter** (`modCount`) that increments on every structural change. An iterator records the count when created and re-checks it on each `next()`. If the collection was changed by anything *other than the iterator itself*, `next()` throws **`ConcurrentModificationException`** (CME). Despite the name, this happens in single-threaded code too. It is "best effort": it catches bugs early but is not a thread-safety guarantee.
 
-**Fail-safe** iterators (in `java.util.concurrent`) iterate over a snapshot or a weakly consistent view and never throw CME. `CopyOnWriteArrayList` copies the whole array on every write, so it suits read-mostly lists like event listeners.
+**Fail-safe** iterators (in `java.util.concurrent`) iterate over a snapshot (a frozen copy) or a weakly consistent view (one that may or may not show concurrent changes, but never fails) and never throw CME. `CopyOnWriteArrayList` copies the whole array on every write, so it suits read-mostly lists like event listeners (objects notified when something happens).
 
 ### Code
 
@@ -748,7 +748,7 @@ Sorting needs a rule for "which comes first".
 Both return a **negative** number if the first comes before the second, **zero** if they tie, and **positive** if it comes after. Only the sign matters.
 
 ### The contract
-`compareTo`/`compare` must be **antisymmetric** (sign of `a.compareTo(b)` is the opposite of `b.compareTo(a)`), **transitive**, and ideally **consistent with equals** (`compareTo == 0` exactly when `equals` is true). Sorted collections (`TreeSet`, `TreeMap`) use the comparison *instead of* `equals`, so an inconsistent comparator makes them drop or merge elements. (`BigDecimal` is a famous JDK exception: `2.0` and `2.00` compare equal but aren't `equals`.)
+`compareTo`/`compare` must be **antisymmetric** (sign of `a.compareTo(b)` is the opposite of `b.compareTo(a)`), **transitive** (if a comes before b and b before c, then a comes before c), and ideally **consistent with equals** (`compareTo == 0` exactly when `equals` is true). Sorted collections (`TreeSet`, `TreeMap`) use the comparison *instead of* `equals`, so an inconsistent comparator makes them drop or merge elements. (`BigDecimal` is a famous JDK exception: `2.0` and `2.00` compare equal but aren't `equals`.)
 
 ### Building comparators (Java 8+)
 
@@ -798,7 +798,7 @@ stable (dept, then previous name order): [Bo, Cy, Dee, Ana]
 - `reversed()` applies to **everything chained before it**; to reverse only one key, pass `Comparator.reverseOrder()` as that key's comparator (as done for salary).
 - `a - b` overflows for large magnitudes (`MIN_VALUE − 1` wraps to `MAX_VALUE`). Always use `Integer.compare`, `Long.compare`, `Double.compare` or `comparingInt`.
 - The `TreeSet` ordered by length considers `"kiwi"`, `"pear"` and `"plum"` duplicates (length 4 ties), keeping only the first. Add a tie-breaker: `comparingInt(String::length).thenComparing(Comparator.naturalOrder())`.
-- **Stability.** `List.sort`/`Collections.sort` (TimSort, O(n log n)) are **stable**: equal elements keep their relative order. That's why sorting by name, then by dept, leaves each dept sorted by name.
+- **Stability.** `List.sort`/`Collections.sort` (TimSort — a merge-sort-based algorithm — O(n log n)) are **stable**: equal elements keep their relative order. That's why sorting by name, then by dept, leaves each dept sorted by name.
 
 ### Common mistakes
 - Subtraction comparators; comparing `double` fields with `<`/`>` and forgetting `NaN` (use `Double.compare`).
@@ -806,7 +806,7 @@ stable (dept, then previous name order): [Bo, Cy, Dee, Ana]
 - Putting non-`Comparable` objects into a `TreeSet` without a comparator → `ClassCastException` on the first add.
 
 ### In the interview
-**30-second answer:** "Comparable is the class's single natural order via compareTo; Comparator is an external strategy for any number of orders. Since Java 8 I build comparators with comparing, thenComparing and reversed, use primitive variants to avoid boxing, and never subtract to compare. Sorted collections treat compare == 0 as equality, so the order should be consistent with equals."
+**30-second answer:** "Comparable is the class's single natural order via compareTo; Comparator is an external strategy (a plug-in object holding one way of doing something) for any number of orders. Since Java 8 I build comparators with comparing, thenComparing and reversed, use primitive variants to avoid boxing, and never subtract to compare. Sorted collections treat compare == 0 as equality, so the order should be consistent with equals."
 
 - *Follow-up: Is `Collections.sort` stable?* → Yes (TimSort for objects).
 - *Follow-up: How do you sort descending by one key but ascending by another?* → `comparing(a).thenComparing(b, reverseOrder())`.
@@ -864,7 +864,7 @@ sync 1 sync 2
 | Read-only wrappers (views) | `unmodifiableList/Set/Map/Collection`, `unmodifiableSequencedCollection/Set/Map` (21), sorted/navigable variants |
 | Synchronized wrappers | `synchronizedList/Set/Map/...` — each call locks; you must lock manually around iteration |
 | Constants and singletons | `emptyList/Set/Map`, `singletonList/singleton/singletonMap` (immutable) |
-| Type-checked wrappers | `checkedList(list, String.class)` — catches heap pollution from raw types at insertion time ([Chapter 9](../09-generics/README.md)) |
+| Type-checked wrappers | `checkedList(list, String.class)` — catches heap pollution (a generic collection ending up with the wrong type inside) from raw types (generics used without `<…>`) at insertion time ([Chapter 9](../09-generics/README.md)) |
 | Other | `reverseOrder()`, `newSetFromMap(map)`, `list(enumeration)`, `enumeration(coll)` |
 
 `binarySearch` returns the index if found, otherwise `-(insertionPoint) - 1` — always negative, so "not found" can't be confused with index 0. Here 4 would be inserted at index 3, so the result is −4.
@@ -883,7 +883,7 @@ sync 1 sync 2
 - A **view** is a wrapper over another collection; it can be unmodifiable yet still change when the underlying collection changes.
 
 ### Why it matters
-Returning an immutable collection from a method (or storing one in a record) means callers can't corrupt your object's state, the collection is automatically safe to share across threads, and intent is explicit. *Effective Java* Item 17 ("minimise mutability") and Item 50 ("make defensive copies when needed") both point here.
+Returning an immutable collection from a method (or storing one in a record) means callers can't corrupt your object's state, the collection is automatically safe to share across threads, and intent is explicit. *Effective Java* (Joshua Bloch's best-practice book) Item 17 ("minimise mutability") and Item 50 ("make defensive copies when needed" — private copies so outsiders can't change your data) both point here.
 
 ### The factory methods
 
@@ -960,7 +960,7 @@ Prefer `List.of`/`Set.of`/`Map.of` for constants and `List.copyOf` for defensive
 Before Java 21 "get the first/last element" or "iterate in reverse" had a different spelling for every type: `list.get(0)` and `list.get(list.size() - 1)`, `deque.getFirst()`, `sortedSet.first()`/`last()`, and for a `LinkedHashSet` no direct way to get the last element at all. There was also no common type meaning "a collection with a defined order".
 
 ### What it is
-**JEP 431** (final in Java 21) added three interfaces that capture "has a well-defined encounter order":
+**JEP 431** (a JEP is a numbered JDK Enhancement Proposal; final in Java 21) added three interfaces that capture "has a well-defined encounter order":
 
 | Interface | New methods | Retrofitted onto |
 |---|---|---|
@@ -1050,7 +1050,7 @@ Java 21 gives every ordered collection the same `getFirst/getLast/addFirst/addLa
 \* amortised. † average; worst case O(log n) for a treeified bucket (or O(n) for non-`Comparable` keys with colliding hashes).
 
 ### Measured demo
-`CollectionBenchmark` times a few operations once after a warm-up run. It is a *demonstration*, not a rigorous benchmark — use JMH for real measurements ([Chapter 16](../16-jvm-internals-and-performance/README.md)). **Timings are machine-dependent** (this run: Apple M4 Pro, JDK 26); what matters is the ratio within each row.
+`CollectionBenchmark` times a few operations once after a warm-up run (running the code first so the JIT compiler has optimised it). It is a *demonstration*, not a rigorous benchmark — use JMH (Java Microbenchmark Harness) for real measurements ([Chapter 16](../16-jvm-internals-and-performance/README.md)). **Timings are machine-dependent** (this run: Apple M4 Pro, JDK 26); what matters is the ratio within each row.
 
 ```java
 // code/ch10/perf/CollectionBenchmark.java (key parts)
@@ -1076,8 +1076,8 @@ What each row shows:
 1. **Indexing** — `LinkedList.get(i)` walks up to 50,000 nodes per call: >1000× slower.
 2. **Front inserts** — `ArrayList.add(0, x)` shifts everything (O(n²) total); `ArrayDeque.addFirst` is O(1).
 3. **Membership** — list scan vs hashing vs a ~17-level tree walk.
-4. **Iteration** — both O(n); these freshly allocated nodes happen to sit close together, so the gap is small. In long-running apps with fragmented heaps, linked structures usually iterate noticeably slower.
-5. **Pre-sizing** — skipping ~30 grow-and-copy steps (and their garbage) is several times faster.
+4. **Iteration** — both O(n); these freshly allocated nodes happen to sit close together, so the gap is small. In long-running apps with fragmented heaps (free memory scattered in many small gaps), linked structures usually iterate noticeably slower.
+5. **Pre-sizing** — skipping ~30 grow-and-copy steps (and their garbage — discarded arrays the garbage collector must clean up) is several times faster.
 
 ---
 

@@ -1,10 +1,10 @@
 # Chapter 9 — Generics
 
-Every time you write `List<String>` or `Map<Long, Order>`, you're using **generics**: types and methods that take *other types* as parameters. Generics (Java 5) let one piece of code — a list, a cache, a repository, a `max` function — work with many types while the compiler still checks that you never put an `Integer` where a `String` belongs. They're the reason modern Java code has almost no casts.
+Every time you write `List<String>` or `Map<Long, Order>`, you're using **generics**: types and methods that take *other types* as parameters. Generics (Java 5) let one piece of code — a list, a cache (a store that keeps recently used values for quick reuse; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), a repository (an object that saves and loads data), a `max` function — work with many types while the compiler still checks that you never put an `Integer` where a `String` belongs. They're the reason modern Java code has almost no casts (explicit `(Type) value` conversions).
 
-This chapter covers writing your own generic classes, interfaces and methods; restricting type parameters with bounds; making APIs flexible with wildcards (and the **PECS** rule); and **type erasure** — how generics are implemented, which explains every strange restriction (no `new T()`, no `new List<String>[10]`, no `instanceof List<String>` on an `Object`). It ends with the design rules from *Effective Java* (Items 26–33) and how to read intimidating JDK signatures like `<T extends Comparable<? super T>>`.
+This chapter covers writing your own generic classes, interfaces and methods; restricting type parameters with bounds (limits on which types are allowed); making APIs flexible with wildcards (`?`, standing for an unknown type) (and the **PECS** rule); and **type erasure** — the compiler removing generic type information after checking it, which is how generics are implemented, which explains every strange restriction (no `new T()`, no `new List<String>[10]`, no `instanceof List<String>` on an `Object`). It ends with the design rules from *Effective Java* (Joshua Bloch's best-practice book; Items 26–33) and how to read intimidating JDK signatures like `<T extends Comparable<? super T>>`.
 
-Collections are the main *users* of generics; they get their own chapter ([Chapter 10](../10-collections/README.md)). Arrays' covariance and why generics are invariant was previewed in [Chapter 4 §4.6](../04-methods-and-arrays/README.md#46-arrays).
+Collections are the main *users* of generics; they get their own chapter ([Chapter 10](../10-collections/README.md)). Arrays' covariance (a `String[]` counts as an `Object[]`) and why generics are invariant (a `List<String>` does not count as a `List<Object>`) was previewed in [Chapter 4 §4.6](../04-methods-and-arrays/README.md#46-arrays).
 
 **What you'll learn**
 
@@ -57,7 +57,7 @@ raw: ADA
 raw list -> ClassCastException: class java.lang.Integer cannot be cast to class java.lang.String (java.lang.Integer and java.lang.String are in module java.base of loader 'bootstrap')
 generic: ADA
 ```
-Generics move the error from **run time** (a `ClassCastException` in production) to **compile time** (a red underline in your IDE), and remove the casts.
+Generics move the error from **run time** (a `ClassCastException` — the error thrown when a cast fails — in production, the live system real users depend on) to **compile time** (a red underline in your IDE), and remove the casts.
 
 ### Vocabulary
 | Term | Example | Meaning |
@@ -67,7 +67,7 @@ Generics move the error from **run time** (a `ClassCastException` in production)
 | Type argument | `String` in `Box<String>` | the concrete type supplied by the user |
 | Parameterized type | `Box<String>` | generic type + arguments |
 | Raw type | `Box` | the generic type used **without** arguments — legacy only |
-| Diamond | `new Box<>("x")` | let the compiler infer the type arguments (Java 7; with anonymous classes since Java 9) |
+| Diamond | `new Box<>("x")` | let the compiler infer the type arguments (Java 7; with anonymous classes — unnamed one-off classes — since Java 9) |
 | Generic method | `static <T> T first(List<T> xs)` | a method with its own type parameter |
 | Bound | `<T extends Number>` | a restriction on the type parameter |
 | Wildcard | `List<?>`, `List<? extends Number>` | an unknown type argument at the use site |
@@ -75,7 +75,7 @@ Generics move the error from **run time** (a `ClassCastException` in production)
 ### Raw types
 A **raw type** exists only for compatibility with pre-2004 code. Using one turns off generic checking for that expression and produces "unchecked" warnings. *Effective Java* Item 26: **don't use raw types** in new code. If you truly don't care about the element type, use the unbounded wildcard `List<?>` (§9.6), which stays type-safe (you can't add arbitrary things to it).
 
-Two exceptions where the raw name is required: class literals (`List.class`, not `List<String>.class`) and `instanceof` checks against a non-reifiable type (write `instanceof List<?>` or `instanceof List`).
+Two exceptions where the raw name is required: class literals (`List.class`, not `List<String>.class` — the object that represents a class at run time) and `instanceof` checks against a non-reifiable type (one whose full generic type isn't known at run time, §9.7) (write `instanceof List<?>` or `instanceof List`).
 
 ### Self-check
 1. What does `<>` do in `new HashMap<>()`? → Asks the compiler to infer the type arguments from the context.
@@ -90,7 +90,7 @@ Two exceptions where the raw name is required: class literals (`List.class`, not
 1. Declare type parameters in angle brackets after the class name: `class Box<T>`, `class Pair<K, V>`.
 2. Inside the class, use `T` like any type: field types, parameter types, return types, local variables.
 3. Users supply the arguments: `Box<String>`, `Pair<String, Integer>`. With `var` or the diamond you rarely write them twice.
-4. Type arguments must be **reference types** — `Box<int>` doesn't compile (*"unexpected type"*); use `Box<Integer>` (autoboxing, [Chapter 7 §7.6](../07-core-apis/README.md#76-wrapper-classes-and-autoboxing)).
+4. Type arguments must be **reference types** (class, interface or array types — not primitives) — `Box<int>` doesn't compile (*"unexpected type"*); use `Box<Integer>` (autoboxing, [Chapter 7 §7.6](../07-core-apis/README.md#76-wrapper-classes-and-autoboxing)).
 5. Records (Java 16) and enums' surrounding classes can be generic too; enums themselves can't declare type parameters.
 
 ### Naming conventions
@@ -101,7 +101,7 @@ Two exceptions where the raw name is required: class literals (`List.class`, not
 | `K`, `V` | Key, Value | `Map<K, V>` |
 | `R` | Result/return type | `Function<T, R>` |
 | `N` | Number | |
-| `ID` or longer names | when single letters confuse | `Repository<T, ID>` (Spring Data style) |
+| `ID` or longer names | when single letters confuse | `Repository<T, ID>` (Spring Data style — a library that generates database repositories) |
 
 [`code/ch09/classes/GenericClasses.java`](code/ch09/classes/GenericClasses.java) (key parts):
 ```java
@@ -153,7 +153,7 @@ What to notice:
 Interfaces take type parameters exactly like classes: `Comparable<T>`, `Iterable<T>`, `Function<T, R>`, `Repository<T, ID>`. A class implementing one can:
 1. **Fix the type argument** — `class StringStack implements Container<String>` (the class is not generic);
 2. **Pass its own type parameter through** — `class Queue<T> implements Container<T>` (the class stays generic);
-3. Be an **anonymous class or lambda** with the type inferred.
+3. Be an **anonymous class or lambda** (a short inline function) with the type inferred.
 
 [`code/ch09/interfaces/GenericInterfaces.java`](code/ch09/interfaces/GenericInterfaces.java) (key parts):
 ```java
@@ -208,7 +208,7 @@ Output:
 findById: Effective Java | missing: false | titles: [Effective Java, Java Concurrency in Practice]
 numbers: [100]
 ```
-This is the shape of Spring Data's `CrudRepository<T, ID>`: write the persistence logic once, reuse it for every entity type. On the design side, a repository is the class that owns persistence so domain classes don't have to — see the `EmployeeRepository` example in the LLD handbook's [Single Responsibility Principle section](../../../lld/chapters/04-solid-principles/README.md#42-single-responsibility-principle-srp).
+This is the shape of Spring Data's `CrudRepository<T, ID>`: write the persistence (saving to and loading from a database) logic once, reuse it for every entity type (a class whose objects are stored as database rows). On the design side, a repository is the class that owns persistence so domain classes (classes modelling the business concepts) don't have to — see the `EmployeeRepository` example in the LLD handbook's [Single Responsibility Principle section](../../../lld/chapters/04-solid-principles/README.md#42-single-responsibility-principle-srp).
 
 ### Why `Comparable<Version>` and not raw `Comparable`
 Implementing `Comparable<Version>` gives `compareTo(Version o)` — no cast, and comparing a `Version` to a `String` is a compile error. Raw `Comparable` would force `compareTo(Object o)` with a cast inside. `Comparable` and `Comparator` are covered fully in [Chapter 10](../10-collections/README.md); functional interfaces like `Function<T, R>` in [Chapter 11](../11-lambdas-and-functional-programming/README.md).
@@ -231,7 +231,7 @@ A **generic method** declares its own type parameters, written in angle brackets
 2. Call normally: `repeat("hi", 3)` — `T` is inferred as `String` from the argument.
 3. With no arguments to infer from, the target type decides: `List<String> empty = Collections.emptyList();`.
 4. If needed, give an explicit **type witness**: `GenericMethods.<Number>repeat(1, 2)` (the class or `this.` prefix is required before `<…>`).
-5. When arguments have different types, the compiler infers their most specific common supertype, which may be an *intersection type* like `Number & Comparable<…>`.
+5. When arguments have different types, the compiler infers their most specific common supertype, which may be an *intersection type* (a type that is several types at once) like `Number & Comparable<…>`.
 
 [`code/ch09/methods/GenericMethods.java`](code/ch09/methods/GenericMethods.java) (key parts):
 ```java
@@ -258,7 +258,7 @@ Without the witness, `repeat(1, 2)` would infer `List<Integer>` — then `add(2.
 
 ### Common mistakes
 - Putting `<T>` in the wrong place: it goes **after modifiers and before the return type** — `public static <T> T pick(...)`, not `public static T <T> pick(...)`.
-- Declaring a method `<T>` in a generic class `Box<T>` — the method's `T` **shadows** the class's `T`; they're unrelated. Use a different letter.
+- Declaring a method `<T>` in a generic class `Box<T>` — the method's `T` **shadows** (hides) the class's `T`; they're unrelated. Use a different letter.
 - Writing `<T> void print(List<T> list)` when `T` is used once — `void print(List<?> list)` says the same thing more simply.
 
 ### Self-check
@@ -271,7 +271,7 @@ Without the witness, `repeat(1, 2)` would infer `List<Integer>` — then `add(2.
 
 ### What it is
 An unbounded `T` could be anything, so inside the code you can only call `Object` methods on it. A **bound** restricts which types are allowed — and in exchange lets you use the bound's methods:
-- **Upper bound** `<T extends Number>`: `T` must be `Number` or a subtype, so `t.doubleValue()` compiles. (`extends` is used for both classes and interfaces here.)
+- **Upper bound** `<T extends Number>`: `T` must be `Number` or a subtype (a class that extends it or implements it), so `t.doubleValue()` compiles. (`extends` is used for both classes and interfaces here.)
 - **Multiple bounds** `<T extends Number & Comparable<T>>`: `T` must satisfy all. At most one class, and it must come **first**; the rest are interfaces.
 - **Recursive bound** `<T extends Comparable<T>>`: "T can be compared with itself" — the pattern behind sorting and `max`.
 
@@ -430,7 +430,7 @@ Generics are invariant. Producer → `extends`, consumer → `super`, both → e
 ## 9.7 Type erasure: how generics really work
 
 ### What it is
-Java implements generics by **type erasure**: the compiler checks the generic types, then **removes** (erases) them from the bytecode. At run time, `List<String>` and `List<Integer>` are both just `ArrayList` — the JVM has no idea what the type argument was. Generic types are therefore **non-reifiable** (their full type isn't available at run time), unlike arrays, which *are* reified (`String[]` knows it holds `String`s).
+Java implements generics by **type erasure**: the compiler checks the generic types, then **removes** (erases) them from the bytecode (the compiled instructions the JVM runs). At run time, `List<String>` and `List<Integer>` are both just `ArrayList` — the JVM has no idea what the type argument was. Generic types are therefore **non-reifiable** (their full type isn't available at run time), unlike arrays, which *are* reified (`String[]` knows it holds `String`s).
 
 Why? **Migration compatibility.** When generics arrived in Java 5 (2004), billions of lines of code and existing class files used raw collections. Erasure let new generic code and old non-generic code call each other, and let the JVM stay unchanged.
 
@@ -469,10 +469,10 @@ o instanceof List<?>: true
 compareTo(Node) bridge=false
 compareTo(Object) bridge=true
 ```
-`Comparable<T>` erases to `Comparable` with method `compareTo(Object)`. Our `compareTo(Node)` doesn't override that erased method, so the compiler adds a **bridge** `compareTo(Object o) { return compareTo((Node) o); }` to keep polymorphism working. You'll occasionally see bridge methods in stack traces.
+`Comparable<T>` erases to `Comparable` with method `compareTo(Object)`. Our `compareTo(Node)` doesn't override that erased method, so the compiler adds a **bridge** `compareTo(Object o) { return compareTo((Node) o); }` to keep polymorphism (calling the right override for the object's actual class) working. You'll occasionally see bridge methods in stack traces (the list of active method calls printed with an error).
 
 ### What survives erasure
-Erasure removes type arguments from *objects and local variables*, but generic **declarations** keep their signatures in the class file (the `Signature` attribute). That's why reflection can tell you a field is declared `List<String>`, and why frameworks like Jackson and Gson use the **super type token** trick (`new TypeReference<List<User>>() {}`) — an anonymous subclass records its generic superclass, which *is* preserved.
+Erasure removes type arguments from *objects and local variables*, but generic **declarations** keep their signatures in the class file (the `Signature` attribute). That's why reflection (code that inspects classes, fields and methods at run time) can tell you a field is declared `List<String>`, and why frameworks like Jackson and Gson (JSON libraries) use the **super type token** trick (`new TypeReference<List<User>>() {}`) — an anonymous subclass records its generic superclass, which *is* preserved.
 
 ### Trade-offs — erasure vs reification (e.g. C#)
 | | Java (erasure) | C# (reified generics) |
@@ -482,7 +482,7 @@ Erasure removes type arguments from *objects and local variables*, but generic *
 | Primitives as type arguments | No (boxing) | Yes (`List<int>` without boxing) |
 | Old/new code interoperability | Seamless | Separate generic collection types were added |
 
-Project Valhalla (OpenJDK) is working toward value types and better generics over primitives, but in Java 25 type arguments must still be reference types.
+Project Valhalla (OpenJDK) is working toward value types (objects without identity, stored as compactly as primitives) and better generics over primitives, but in Java 25 type arguments must still be reference types.
 
 ### Self-check
 1. What is `List<String>` at run time? → A plain `List`/`ArrayList` — type arguments are erased.
@@ -498,7 +498,7 @@ Every restriction below follows from "the type argument doesn't exist at run tim
 | You can't… | `javac` says | Workaround |
 |---|---|---|
 | Use primitives: `List<int>` | *unexpected type* | Wrapper types (`List<Integer>`) or primitive specialisations (`IntStream`, `int[]`) |
-| Create an instance: `new T()` | *unexpected type* | Pass a `Supplier<T>` (`StringBuilder::new`) or a `Class<T>` token |
+| Create an instance: `new T()` | *unexpected type* | Pass a `Supplier<T>` (a function that produces a value: `StringBuilder::new`) or a `Class<T>` token |
 | Create a generic array: `new T[10]`, `new List<String>[10]` | *generic array creation* | Use `List<T>`/`ArrayList<T>`; or `Array.newInstance(type, n)` with a `Class<T>`; or `(T[]) new Object[n]` inside a class that never exposes it (as `ArrayList` does) |
 | Use `T` in a static context: `static T shared;` | *non-static type variable T cannot be referenced from a static context* | Static generic methods declare their own `<T>` |
 | `instanceof` a parameterized type from an unrelated static type: `o instanceof List<String>` | *Object cannot be safely cast to List<String>* | `o instanceof List<?>`; (since Java 16, `instanceof ArrayList<String>` **is** allowed when the static type is already `List<String>`, because it's provably safe) |
@@ -529,7 +529,7 @@ newArray component type: String[2]
 ```
 
 ### Heap pollution and unchecked warnings
-**Heap pollution** is when a variable of a parameterized type refers to an object that isn't of that type — e.g. a `List<Integer>` that actually contains a `String`. It can only happen through **unchecked** operations (raw types, unchecked casts, generic varargs), which is exactly why the compiler warns about them. The failure appears later, at an innocent-looking line where the compiler's inserted cast runs.
+**Heap pollution** is when a variable of a parameterized type refers to an object that isn't of that type — e.g. a `List<Integer>` that actually contains a `String`. It can only happen through **unchecked** operations (ones the compiler can't verify: raw types, unchecked casts, generic varargs — `T...` parameters that accept any number of arguments), which is exactly why the compiler warns about them. The failure appears later, at an innocent-looking line where the compiler's inserted cast runs.
 
 ```java
 List<Object> objs = new ArrayList<>(List.of("text"));
@@ -582,19 +582,19 @@ static <T> List<T> listOf(T... items) { return new ArrayList<>(Arrays.asList(ite
 | 30 | Favour generic methods | especially static utilities and factories |
 | 31 | Use bounded wildcards to increase API flexibility | PECS on parameters; never wildcards in return types |
 | 32 | Combine generics and varargs judiciously | `@SafeVarargs` only when truly safe |
-| 33 | Consider typesafe heterogeneous containers | `Map<Class<?>, Object>` keyed by `Class<T>` tokens, e.g. `<T> T get(Class<T> key)` |
+| 33 | Consider typesafe heterogeneous containers (holding values of many different types safely) | `Map<Class<?>, Object>` keyed by `Class<T>` tokens, e.g. `<T> T get(Class<T> key)` |
 
 More guidelines:
 - **Type parameter vs wildcard:** if a type parameter appears only once in the signature, replace it with a wildcard (`void printAll(List<?> xs)` instead of `<T> void printAll(List<T> xs)`). Use a type parameter when it links two things — a parameter and the return type, or two parameters.
 - **Return concrete generic types**, not wildcards.
 - **Prefer `List<T>` over `T[]`** in public APIs.
-- Keep type parameter lists short; three or more parameters is a smell unless it's a genuine tuple/function type (`BiFunction<T, U, R>`).
+- Keep type parameter lists short; three or more parameters is a smell (a hint the design could be simpler) unless it's a genuine tuple (fixed group of values)/function type (`BiFunction<T, U, R>`).
 
 ### Reading JDK signatures
 | Signature | How to read it |
 |---|---|
 | `static <T> void sort(List<T> list, Comparator<? super T> c)` | Sort a list of `T` using a comparator that can compare `T` or any supertype (a `Comparator<Object>` or `Comparator<Fruit>` works for a `List<Apple>`) |
-| `static <T extends Object & Comparable<? super T>> T max(Collection<? extends T> coll)` | Elements must be comparable to themselves or a supertype; `& Object` is there so the *erasure* of `T` stays `Object` for binary compatibility with pre-Java-5 code |
+| `static <T extends Object & Comparable<? super T>> T max(Collection<? extends T> coll)` | Elements must be comparable to themselves or a supertype; `& Object` is there so the *erasure* of `T` stays `Object` for binary compatibility (already compiled code keeps working without recompiling) with pre-Java-5 code |
 | `<R> Stream<R> map(Function<? super T, ? extends R> mapper)` | The function may accept any supertype of `T` (consumer of `T`) and return any subtype of `R` (producer of `R`) — PECS on a function |
 | `static <T, U extends Comparable<? super U>> Comparator<T> comparing(Function<? super T, ? extends U> keyExtractor)` | Build a `Comparator<T>` from a function extracting a comparable key `U` from each `T` |
 | `boolean addAll(Collection<? extends E> c)` | Accept any collection whose elements are `E` or subtypes |
@@ -609,14 +609,14 @@ Once PECS clicks, these stop being noise: every `? super` is something that **ta
 - Forgetting that generics give **no runtime checks** — data from reflection, serialization or raw-typed legacy code can still pollute the heap. `Collections.checkedList(list, String.class)` adds runtime checks when you need to find where bad data enters.
 
 ### Real-world examples
-- `Optional<T>`, `CompletableFuture<T>`, `Stream<T>`, `Map<K, V>` — the whole modern JDK API is generic.
-- Spring Data `JpaRepository<T, ID>`, Jackson `TypeReference<T>`, JUnit's `assertThrows(Class<T> expectedType, Executable)` returning `T` — note the `Class<T>` token letting the method return the right exception type without a cast.
-- Event buses and dependency-injection containers use typesafe heterogeneous containers keyed by `Class<T>` (Item 33).
+- `Optional<T>`, `CompletableFuture<T>` (the future result of background work), `Stream<T>`, `Map<K, V>` — the whole modern JDK API is generic.
+- Spring Data `JpaRepository<T, ID>`, Jackson `TypeReference<T>`, JUnit's (the standard Java testing library) `assertThrows(Class<T> expectedType, Executable)` returning `T` — note the `Class<T>` token letting the method return the right exception type without a cast.
+- Event buses (objects that deliver events to subscribers) and dependency-injection containers (frameworks that create objects and hand each one the objects it needs) use typesafe heterogeneous containers keyed by `Class<T>` (Item 33).
 
 ### In the interview
 **30-second answer:** "Generics give compile-time type safety and remove casts. They're implemented by erasure: type arguments are checked and then removed, so at run time a `List<String>` is just a `List`. That's why you can't do `new T()`, create generic arrays, use primitives as type arguments, or overload on `List<String>` vs `List<Integer>`. They're invariant, so I use bounded wildcards with PECS to make APIs flexible."
 
-- *Follow-up: What is a bridge method?* → A synthetic method the compiler generates so that overriding still works after erasure changes a signature.
+- *Follow-up: What is a bridge method?* → A synthetic (not written by you) method the compiler generates so that overriding still works after erasure changes a signature.
 - *Follow-up: How do libraries get the full generic type at run time?* → Super type tokens — an anonymous subclass of `TypeReference<List<User>>` keeps its generic superclass in the class file, readable via reflection.
 - *Follow-up: `<T extends Comparable<T>>` vs `<T extends Comparable<? super T>>`?* → The second also accepts types that inherit `compareTo` from a supertype (e.g. `Apple extends Fruit implements Comparable<Fruit>`).
 

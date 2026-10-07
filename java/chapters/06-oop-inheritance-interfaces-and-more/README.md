@@ -1,8 +1,8 @@
 # Chapter 6 — OOP: Inheritance, Interfaces and More
 
-Chapter 5 showed how to build a single class. This chapter is about **relationships between types**: how one class extends another, how different classes share a contract through interfaces, and how Java calls the right code at runtime (polymorphism). Then it covers the modern type kinds every Java developer now uses daily — **sealed** hierarchies, **records** and **enums** — plus nested classes and the three `Object` methods (`equals`, `hashCode`, `toString`) that every class should get right.
+Chapter 5 showed how to build a single class. This chapter is about **relationships between types**: how one class extends another, how different classes share a contract (a promise about which methods a type provides) through interfaces, and how Java calls the right code at runtime (polymorphism). Then it covers the modern type kinds every Java developer now uses daily — **sealed** hierarchies (with a closed list of allowed subtypes), **records** (compact data-carrying classes) and **enums** (types with a fixed set of named constants) — plus nested classes and the three `Object` methods (`equals`, `hashCode`, `toString`) that every class should get right.
 
-This chapter is about the *language mechanics*. For *design* — when to inherit vs compose, SOLID, the Liskov Substitution Principle, and patterns built on these features — follow the links to the LLD handbook rather than re-reading it here.
+This chapter is about the *language mechanics*. For *design* — when to inherit vs compose, SOLID (five classic object-oriented design principles), the Liskov Substitution Principle (a subclass must work anywhere its parent is expected), and patterns (named, reusable design solutions) built on these features — follow the links to the LLD handbook rather than re-reading it here.
 
 **What you'll learn**
 
@@ -100,14 +100,14 @@ classDiagram
 | | Inheritance (`extends`) | Composition (hold a reference to another object) |
 |---|---|---|
 | Relationship | is-a | has-a / uses-a |
-| Coupling | Tight: subclass depends on parent's implementation details | Loose: depends only on the other object's public API |
+| Coupling (how strongly one piece of code depends on another) | Tight: subclass depends on parent's implementation details | Loose: depends only on the other object's public API (the methods it exposes) |
 | Flexibility | Fixed at compile time; one parent only | Can swap the part at runtime; combine many |
-| Risk | **Fragile base class** — a change in the parent can break subclasses | Some forwarding boilerplate |
+| Risk | **Fragile base class** — a change in the parent can break subclasses | Some forwarding boilerplate (repetitive code that just passes calls on) |
 
 *Effective Java* Item 18 — "favour composition over inheritance" — and Item 19 — "design and document for inheritance or else prohibit it" (make classes `final` unless designed for extension). The full treatment, with worked examples, is in [LLD §2.11 Composition over inheritance](../../../lld/chapters/02-oop-fundamentals/README.md#211-composition-over-inheritance) and [LLD §3.6 Generalization](../../../lld/chapters/03-relationships-and-uml/README.md#36-generalization-inheritance).
 
 ### When not to use it
-- Only to reuse code, when the "is-a" sentence is false (`Stack extends Vector` in the JDK is the classic regret: a stack exposes `insertElementAt`).
+- Only to reuse code, when the "is-a" sentence is false (`Stack extends Vector` — `Vector` is an old, synchronised list class — in the JDK is the classic regret: a stack exposes `insertElementAt`).
 - When a subclass would need to *disable* inherited behaviour (throwing `UnsupportedOperationException` from overrides is a Liskov violation — [LLD §4.8](../../../lld/chapters/04-solid-principles/README.md#48-liskov-substitution-principle-lsp)).
 - Across package/team boundaries on classes not designed for it.
 
@@ -146,19 +146,19 @@ A quick reference of what inheritance does with each kind of member:
 | Method | Purpose | Override? |
 |---|---|---|
 | `toString()` | Text form; default `ClassName@hexHash` | Usually yes (§6.13) |
-| `equals(Object)` | Logical equality; default is identity (`==`) | For value-like classes (§6.13) |
-| `hashCode()` | Hash for `HashMap`/`HashSet`; must match `equals` | Whenever you override `equals` |
+| `equals(Object)` | Logical equality; default is identity (`==`, "the very same object") | For value-like classes (§6.13) |
+| `hashCode()` | Hash (an `int` used to place objects) for `HashMap`/`HashSet` (hash-based lookup collections); must match `equals` | Whenever you override `equals` |
 | `getClass()` | Runtime class object | `final`, can't |
-| `clone()` | Field-by-field copy (needs `Cloneable`) | Rarely; prefer copy constructors/factories (*Effective Java*, Item 13) |
-| `wait()`, `notify()`, `notifyAll()` | Low-level thread coordination | `final`; see [Chapter 14](../14-concurrency-1/README.md) |
-| `finalize()` | Cleanup before GC | Deprecated for removal (JEP 421, Java 18) — use try-with-resources / `Cleaner` |
+| `clone()` | Field-by-field copy (needs the `Cloneable` marker interface) | Rarely; prefer copy constructors (constructors that copy another instance)/factories (*Effective Java*, Item 13) |
+| `wait()`, `notify()`, `notifyAll()` | Low-level thread (independent path of execution) coordination | `final`; see [Chapter 14](../14-concurrency-1/README.md) |
+| `finalize()` | Cleanup before GC (garbage collection) | Deprecated for removal (JEP 421, Java 18) — use try-with-resources / `Cleaner` |
 
 ---
 
 ## 6.3 Overriding
 
 ### What it is
-**Overriding** means a subclass provides its own implementation of an inherited **instance** method with the **same signature**. At runtime, the JVM calls the version that belongs to the object's **actual (runtime) class**, not the variable's declared type. This is **dynamic dispatch**, also called *runtime polymorphism* (contrast with overloading, which is resolved at compile time — [Chapter 4 §4.3](../04-methods-and-arrays/README.md#43-overloading)).
+**Overriding** means a subclass provides its own implementation of an inherited **instance** method with the **same signature** (same name and parameter types). At runtime, the JVM calls the version that belongs to the object's **actual (runtime) class**, not the variable's declared type. This is **dynamic dispatch**, also called *runtime polymorphism* (contrast with overloading, which is resolved at compile time — [Chapter 4 §4.3](../04-methods-and-arrays/README.md#43-overloading)).
 
 ### The rules
 For `Dog.m` to override `Animal.m`:
@@ -166,14 +166,14 @@ For `Dog.m` to override `Animal.m`:
 | # | Rule | Example that fails |
 |---|---|---|
 | 1 | Same name and same parameter types | `speak(String)` vs `speak()` is an overload, not an override |
-| 2 | Return type the same, or a **subtype** (covariant return) for reference types; identical for primitives | Returning `Object` where parent returns `Animal` |
+| 2 | Return type the same, or a **subtype** (covariant return — a more specific return type) for reference types; identical for primitives | Returning `Object` where parent returns `Animal` |
 | 3 | Access **the same or wider** (`protected` → `public` is fine) | `private Dog reproduce()` overriding a `protected` method |
-| 4 | Checked exceptions: none new, none broader (fewer or narrower is fine); unchecked are unrestricted | Parent throws `IOException`, child declares `Exception` |
+| 4 | Checked exceptions (ones the compiler forces callers to handle): none new, none broader (fewer or narrower is fine); unchecked (`RuntimeException` and its subclasses) are unrestricted | Parent throws `IOException`, child declares `Exception` |
 | 5 | Can't override `final` methods | `String dna()` when parent's is `final` |
 | 6 | `static` methods are **hidden**, not overridden; `private` methods aren't inherited at all | — |
 | 7 | An instance method cannot "override" a static one, or vice versa | compile error |
 
-Always write **`@Override`** — the compiler then *checks* that you really override something. Without it, a typo (`tostring()`) or a wrong parameter type (`equals(Book)` instead of `equals(Object)`) silently creates a new method.
+Always write **`@Override`** (an annotation — a marker the compiler reads) — the compiler then *checks* that you really override something. Without it, a typo (`tostring()`) or a wrong parameter type (`equals(Book)` instead of `equals(Object)`) silently creates a new method.
 
 ```java
 // code/ch06/overriding/OverridingRules.java (key parts)
@@ -252,7 +252,7 @@ Override = same signature, compatible return, same-or-wider access, no broader c
 ## 6.4 Polymorphism and casting
 
 ### What it is
-**Polymorphism** ("many forms") means one piece of code can work with objects of many different classes through a common supertype, and each object responds in its own way. You write `shape.area()` once; circles, rectangles and squares each compute their own area.
+**Polymorphism** ("many forms") means one piece of code can work with objects of many different classes through a common supertype (a parent class or interface they all share), and each object responds in its own way. You write `shape.area()` once; circles, rectangles and squares each compute their own area.
 
 Key vocabulary:
 - **Declared (static) type** — the type of the variable: `Shape s`.
@@ -295,7 +295,7 @@ ClassCastException: class ch06.polymorphism.Shapes$Square cannot be cast to clas
 ```
 
 ### Why it matters
-Polymorphism is what makes code **open for extension**: add a `Triangle` class and the loop works unchanged. This is the Open/Closed Principle and the basis of most design patterns (Strategy, State, Command…) — see [LLD §2.6 Polymorphism](../../../lld/chapters/02-oop-fundamentals/README.md#26-polymorphism-and-the-full-bank-example) and [LLD §4.7 OCP](../../../lld/chapters/04-solid-principles/README.md#47-openclosed-principle-ocp).
+Polymorphism is what makes code **open for extension**: add a `Triangle` class and the loop works unchanged. This is the Open/Closed Principle (code should be open to extension but closed to modification) and the basis of most design patterns (Strategy, State, Command…) — see [LLD §2.6 Polymorphism](../../../lld/chapters/02-oop-fundamentals/README.md#26-polymorphism-and-the-full-bank-example) and [LLD §4.7 OCP](../../../lld/chapters/04-solid-principles/README.md#47-openclosed-principle-ocp).
 
 ### When not to use casting
 Chains of `if (x instanceof A) … else if (x instanceof B) …` over an *open* hierarchy are usually a sign the behaviour belongs in an overridden method. The modern exception: a **sealed** hierarchy with a `switch` over patterns (§6.7), where the compiler checks that every case is handled.
@@ -374,7 +374,7 @@ one-off content
 ```
 
 ### Real-world examples
-`java.util.AbstractList` (implement `get` and `size`, get a whole `List`), `java.io.InputStream` (implement `read()`), `HttpServlet` (override `doGet`/`doPost`). Template Method in depth: [LLD §11.4 Template Method](../../../lld/chapters/11-patterns-behavioral-2/README.md#114-template-method).
+`java.util.AbstractList` (implement `get` and `size`, get a whole `List`), `java.io.InputStream` (implement `read()`), `HttpServlet` (the base class for handling web requests; override `doGet`/`doPost`). Template Method in depth: [LLD §11.4 Template Method](../../../lld/chapters/11-patterns-behavioral-2/README.md#114-template-method).
 
 ### Self-check
 1. Can an abstract class have a constructor? → Yes; subclasses call it with `super(...)`.
@@ -410,9 +410,10 @@ No constructors, no instance state. An interface can `extend` several other inte
 1. Declare: `interface Payable { double amount(); }`.
 2. Implement: `class Invoice implements Payable, Printable, Shippable { … }` — must implement all abstract methods (or be `abstract`). Implementations must be `public` (the interface methods are public).
 3. Use the interface as a type: `List<Payable> bills`.
-4. An interface with **exactly one abstract method** is a **functional interface** and can be implemented by a **lambda** (`() -> value`) — details in [Chapter 11](../11-lambdas-and-functional-programming/README.md). `@FunctionalInterface` asks the compiler to check this.
+4. An interface with **exactly one abstract method** is a **functional interface** and can be implemented by a **lambda** (a short inline function, `() -> value`) — details in [Chapter 11](../11-lambdas-and-functional-programming/README.md). `@FunctionalInterface` asks the compiler to check this.
 
 ### Multiple inheritance and the diamond rules
+The name comes from the *diamond* shape you get when one class inherits the same method along two different paths.
 A class can inherit the same default method from two interfaces. Java resolves conflicts with three rules:
 1. **Classes win.** A method declared in the class or any superclass beats any interface default.
 2. **More specific interface wins.** If `B extends A` and both define `m()`, `B`'s version wins.
@@ -457,12 +458,12 @@ Invoice is a Printable? true
 ```
 
 ### Real-world examples
-`Comparable<T>`, `Comparator<T>`, `Runnable`, `AutoCloseable` (try-with-resources), `Iterable<T>` (for-each), `List`/`Set`/`Map` ([Chapter 10](../10-collections/README.md)), `java.util.function.*` ([Chapter 11](../11-lambdas-and-functional-programming/README.md)). JDBC is almost entirely interfaces (`Connection`, `ResultSet`) implemented by each database driver.
+`Comparable<T>`, `Comparator<T>`, `Runnable`, `AutoCloseable` (try-with-resources), `Iterable<T>` (for-each), `List`/`Set`/`Map` ([Chapter 10](../10-collections/README.md)), `java.util.function.*` ([Chapter 11](../11-lambdas-and-functional-programming/README.md)). JDBC (Java Database Connectivity, the standard database API) is almost entirely interfaces (`Connection`, `ResultSet`) implemented by each database driver (the library that talks to one specific database product).
 
 ### Common mistakes
 - Implementing an interface method with default (package) access → "attempting to assign weaker access privileges; was public".
 - Trying to call an interface's static method through an implementing class or instance (`invoice.of(1)`) — static interface methods aren't inherited.
-- Using an interface only to hold constants ("constant interface" anti-pattern, *Effective Java* Item 22) — use a final class or an enum.
+- Using an interface only to hold constants ("constant interface" anti-pattern — a common but harmful practice — *Effective Java* Item 22) — use a final class or an enum.
 - Putting state-like logic into default methods; defaults can't hold state and are meant for convenience/evolution.
 
 ### Self-check
@@ -483,7 +484,7 @@ A **sealed** class or interface restricts **which** classes may extend or implem
 Analogy: a club with a fixed guest list. The bouncer (compiler) knows everyone who can possibly be inside.
 
 ### Why it matters
-- Between "anyone may extend" (normal class) and "nobody may extend" (`final`), sealing gives a **closed, known set** of subtypes — ideal for domain concepts like payment methods, AST nodes, or API results (`Success | Failure`).
+- Between "anyone may extend" (normal class) and "nobody may extend" (`final`), sealing gives a **closed, known set** of subtypes — ideal for domain (the real-world area the software models) concepts like payment methods, AST (abstract syntax tree — the tree a compiler builds from code) nodes, or API results (`Success | Failure`).
 - It makes **`switch` over patterns exhaustive**: if every permitted subtype is handled, no `default` is needed — and if you later add a subtype, every non-exhaustive `switch` fails to compile, pointing you at the code to update.
 
 ### How it works
@@ -492,7 +493,7 @@ Analogy: a club with a fixed guest list. The bouncer (compiler) knows everyone w
    - **`final`** — no further subclasses (records and enums are implicitly final),
    - **`sealed`** — with its own `permits` list,
    - **`non-sealed`** — reopens the hierarchy below it to any subclass.
-3. Permitted subclasses must be in the **same module** — or, if the code is not in a named module, in the **same package**.
+3. Permitted subclasses must be in the **same module** (a named group of packages under the Java module system) — or, if the code is not in a named module, in the **same package**.
 4. If all subclasses are in the same source file, the `permits` clause can be omitted; the compiler infers it.
 5. Combine with **records** (§6.8) and **pattern matching for `switch`** (Java 21, JEP 441) including **record patterns** (Java 21, JEP 440) — see [Chapter 3](../03-control-flow/README.md) for the `switch` syntax.
 
@@ -526,7 +527,7 @@ rectangle 2.0x5.0
 Shape is sealed? true, permitted: 3
 ```
 
-Sealed interfaces + records give Java **algebraic data types**: records are the "and" (a rectangle has a width *and* a height), sealed interfaces are the "or" (a shape is a circle *or* a rectangle *or* …). This style is sometimes called *data-oriented programming*.
+Sealed interfaces + records give Java **algebraic data types** (types built by combining "and" and "or"): records are the "and" (a rectangle has a width *and* a height), sealed interfaces are the "or" (a shape is a circle *or* a rectangle *or* …). This style is sometimes called *data-oriented programming*.
 
 ### Trade-offs
 | Use sealed when… | Avoid when… |
@@ -547,7 +548,7 @@ Sealed interfaces + records give Java **algebraic data types**: records are the 
 ## 6.8 Records
 
 ### What it is
-A **record** (Java 16, JEP 395) is a special kind of class for **transparent, immutable data carriers**. You declare the **components** in the header; the compiler generates the rest:
+A **record** (Java 16, JEP 395) is a special kind of class for **transparent, immutable data carriers** (their data is fully visible and can't change after creation). You declare the **components** in the header; the compiler generates the rest:
 
 `record Point(int x, int y) {}` gives you:
 1. `private final` fields `x` and `y`,
@@ -567,10 +568,10 @@ What would be ~40 lines of a hand-written immutable class (like `Money` in [Chap
 | Add constructors — which must delegate to the canonical one with `this(...)` | Have setters that change components (fields are `final`) |
 | Override any generated member (`toString`, accessor, `equals`) | Be `abstract` |
 | Be nested (implicitly `static`) or **local** inside a method | |
-| Be generic: `record Pair<A, B>(A first, B second) {}` | |
+| Be generic (take type parameters such as `<A, B>`): `record Pair<A, B>(A first, B second) {}` | |
 
 ### How it works — the compact constructor
-To validate or normalise, write a **compact canonical constructor**: the record name with **no parameter list**. Its parameters are implicit, and the fields are assigned automatically **after** its body runs. You can reassign the *parameters* (e.g. to make a defensive copy), but you don't assign `this.x` yourself.
+To validate or normalise (convert to a standard form), write a **compact canonical constructor**: the record name with **no parameter list**. Its parameters are implicit, and the fields are assigned automatically **after** its body runs. You can reassign the *parameters* (e.g. to make a defensive copy — a private copy of a mutable input so outside changes can't affect the record), but you don't assign `this.x` yourself.
 
 ```java
 // code/ch06/records/RecordsDemo.java (key parts)
@@ -613,13 +614,13 @@ local record: [Pair[key=a, count=1]]
 ```
 
 ### Why it matters / Real-world examples
-DTOs (data transfer objects) for REST APIs, query results, map keys (`record CacheKey(String user, LocalDate day)`), multiple return values (`record MinMax(int min, int max)`), events and messages, and the "and" half of sealed hierarchies. Jackson (≥ 2.12) serialises records; Spring Boot binds configuration to them.
+DTOs (data transfer objects) for REST APIs (web services that expose resources at URLs and use HTTP verbs such as GET and POST — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), query results, map keys (`record CacheKey(String user, LocalDate day)`), multiple return values (`record MinMax(int min, int max)`), events and messages, and the "and" half of sealed hierarchies. Jackson (≥ 2.12; a JSON library) serialises (converts to and from text) records; Spring Boot (a popular application framework) binds configuration to them.
 
 ### Trade-offs — record vs regular class
 | Choose a record when… | Choose a class when… |
 |---|---|
 | The type *is* its data: two instances with equal components are interchangeable | Objects have identity and a lifecycle (a `BankAccount`, a `User` session) |
-| Immutable is fine | You need mutable state or JPA entities (JPA requires a no-arg constructor and non-final fields) |
+| Immutable is fine | You need mutable state or JPA entities (objects that JPA, the Java Persistence API, maps to database tables; JPA requires a no-arg constructor and non-final fields) |
 | All components should be public via accessors | You need to hide the representation |
 
 ### Common mistakes
@@ -631,7 +632,7 @@ DTOs (data transfer objects) for REST APIs, query results, map keys (`record Cac
 **30-second answer:** "A record is a final, immutable data carrier (Java 16). From the component list the compiler generates private final fields, the canonical constructor, accessors, and equals/hashCode/toString based on all components. I use a compact constructor for validation and defensive copies. Records can implement interfaces and have static members and methods, but can't extend classes or add instance fields. They pair with sealed interfaces and record patterns for data-oriented code."
 
 - *Follow-up: Are records deeply immutable?* → Only if their components are; copy mutable components in the compact constructor.
-- *Follow-up: Can a record be a JPA entity?* → Not with standard JPA (needs no-arg constructor and mutable proxies); records work well as DTOs/projections instead.
+- *Follow-up: Can a record be a JPA entity?* → Not with standard JPA (needs no-arg constructor and mutable proxies — generated stand-in subclasses); records work well as DTOs/projections (read-only views of selected columns) instead.
 
 ### Self-check
 1. What's the accessor for component `name`? → `name()`.
@@ -646,7 +647,7 @@ DTOs (data transfer objects) for REST APIs, query results, map keys (`record Cac
 ## 6.9 Enums
 
 ### What it is
-An **enum** (enumerated type, Java 5) is a class with a **fixed set of named instances** — its constants — created once when the enum class initialises: `enum Day { MON, TUE, … }`. Each constant is a full object (a singleton of its kind), so enums can have fields, constructors, methods, and even per-constant behaviour.
+An **enum** (enumerated type, Java 5) is a class with a **fixed set of named instances** — its constants — created once when the enum class initialises: `enum Day { MON, TUE, … }`. Each constant is a full object (a singleton — the one and only instance — of its kind), so enums can have fields, constructors, methods, and even per-constant behaviour.
 
 Analogy: a restaurant menu printed once. The dishes are fixed; you can't invent a new dish at the table, but each dish carries its own price and description.
 
@@ -655,7 +656,7 @@ Compared to `int` or `String` constants (`static final int MONDAY = 0`):
 - **Type safety** — a method taking `Day` can't be passed `42` or `"Mnday"`.
 - **Namespaced, printable** — `Day.MON` prints `MON`.
 - **Can carry data and behaviour** — a `Planet` knows its mass; an `Operation` knows how to apply itself.
-- **Safe with `==`** — each constant exists exactly once (per class loader).
+- **Safe with `==`** — each constant exists exactly once (per class loader, the JVM component that loads classes).
 - **Great tooling** — `switch`, `EnumSet`, `EnumMap`.
 
 ### How it works
@@ -668,14 +669,14 @@ Compared to `int` or `String` constants (`static final int MONDAY = 0`):
 |---|---|
 | `values()` (static) | A **new** array of all constants in declaration order |
 | `valueOf(String)` (static) | Constant with that exact name, or `IllegalArgumentException` |
-| `name()` | The declared name (`"FRI"`) — use this for persistence rather than `toString`, which can be overridden |
+| `name()` | The declared name (`"FRI"`) — use this for persistence (saving to a database or file) rather than `toString`, which can be overridden |
 | `ordinal()` | Zero-based position — don't persist or rely on it (*Effective Java* Item 35); reordering constants changes it |
-| `compareTo(e)` | Order by ordinal (enums are `Comparable`) |
+| `compareTo(e)` | Order by ordinal (enums are `Comparable`, i.e. have a natural order) |
 
 5. **Constant-specific bodies:** a constant can have its own class body `{ … }` to override methods — commonly implementing an `abstract` method declared in the enum.
 6. **`switch`** on an enum uses bare constant names (`case SAT, SUN ->`). A `switch` *expression* must be exhaustive; covering all constants satisfies that without `default`.
-7. **`EnumSet`** (bit-vector set) and **`EnumMap`** (array-backed map) are the fastest, most compact collections for enum keys.
-8. A single-element enum is the simplest robust **singleton** (*Effective Java*, Item 3) — safe against reflection and serialisation tricks. See [LLD Singleton](../../../lld/chapters/08-patterns-creational/README.md#88-singleton).
+7. **`EnumSet`** (bit-vector set — one bit per constant) and **`EnumMap`** (array-backed map) are the fastest, most compact collections for enum keys.
+8. A single-element enum is the simplest robust **singleton** (*Effective Java*, Item 3) — safe against reflection (code that inspects and creates objects at run time) and serialisation (turning objects into bytes and back) tricks. See [LLD Singleton](../../../lld/chapters/08-patterns-creational/README.md#88-singleton).
 
 ```java
 // code/ch06/enums/EnumsDemo.java (key parts)
@@ -722,7 +723,7 @@ weekdays=[MON, TUE, WED, THU, FRI] hours={MON=8, TUE=8, WED=8, THU=8, FRI=6}
 ```
 
 ### Real-world examples
-`java.time.DayOfWeek`, `Month`, `ChronoUnit`; `java.util.concurrent.TimeUnit` (each constant converts durations); `RetentionPolicy`; order/state machines (`OrderStatus.PLACED → SHIPPED`, see [LLD state machines](../../../lld/chapters/03-relationships-and-uml/README.md#314-state-machine-diagrams)); HTTP methods in web frameworks. Enums with fields and behaviour in design: [LLD §2.10](../../../lld/chapters/02-oop-fundamentals/README.md#210-enums-with-fields-and-behaviour).
+`java.time.DayOfWeek`, `Month`, `ChronoUnit`; `java.util.concurrent.TimeUnit` (each constant converts durations); `RetentionPolicy`; order/state machines (models where something moves between a fixed set of states: `OrderStatus.PLACED → SHIPPED`, see [LLD state machines](../../../lld/chapters/03-relationships-and-uml/README.md#314-state-machine-diagrams)); HTTP methods (`GET`, `POST`… — the verbs of web requests) in web frameworks. Enums with fields and behaviour in design: [LLD §2.10](../../../lld/chapters/02-oop-fundamentals/README.md#210-enums-with-fields-and-behaviour).
 
 ### Common mistakes
 - Persisting `ordinal()` to a database — inserting a new constant in the middle silently corrupts data. Store `name()` or an explicit code field.
@@ -748,7 +749,7 @@ A **nested class** is a class declared inside another class. There are four kind
 | Kind | Declared | Tied to an outer *instance*? | Typical use |
 |---|---|---|---|
 | **Static nested class** | As a member, with `static` | No | Helpers that belong with the outer class: `Map.Entry`, builders, `Node` in a linked list |
-| **Inner class** (non-static member) | As a member, no `static` | **Yes** — each instance holds a hidden reference to an outer instance | Iterators and views that read the outer object's state |
+| **Inner class** (non-static member) | As a member, no `static` | **Yes** — each instance holds a hidden reference to an outer instance | Iterators (objects that step through a collection) and views that read the outer object's state |
 | **Local class** | Inside a method/block | Yes if declared in an instance context | One-off helper used only in that method (§6.11) |
 | **Anonymous class** | Inside an expression, no name | Yes if in an instance context | One-off implementation of an interface/abstract class (§6.11) |
 
@@ -789,7 +790,7 @@ c@list1 b@list1 a@list1
 ```
 
 ### Common mistakes
-- **Using an inner class when a static nested one would do.** Every inner instance keeps its outer object alive — a classic **memory leak** when inner objects (listeners, tasks) outlive the outer one. *Effective Java* Item 24: "favour static member classes over nonstatic". Default to `static`.
+- **Using an inner class when a static nested one would do.** Every inner instance keeps its outer object alive — a classic **memory leak** (memory that can't be freed because something still references it) when inner objects (listeners, tasks) outlive the outer one. *Effective Java* Item 24: "favour static member classes over nonstatic". Default to `static`.
 - Trying `new Outer.Inner()` from a static context without an outer instance → compile error.
 
 ---
@@ -831,11 +832,11 @@ lambda reversed: [banana, kiwi, fig]
 | Can have state (fields) | Yes | No |
 | `this` means | The anonymous object | The enclosing instance |
 | Verbosity | High | Low |
-| Use when | Several methods to implement, extending a class (like `new Report("Ad hoc") {…}` in §6.5), or needing own state | Single-method callbacks, comparators, stream operations |
+| Use when | Several methods to implement, extending a class (like `new Report("Ad hoc") {…}` in §6.5), or needing own state | Single-method callbacks (code handed over to be called later), comparators, stream operations |
 
 ### Common mistakes
 - Modifying a captured local variable (`size++`) inside a local/anonymous class or lambda → "local variables referenced from an inner class must be final or effectively final".
-- Serialising anonymous/inner classes — they carry hidden references to the outer instance and synthetic names; avoid.
+- Serialising anonymous/inner classes — they carry hidden references to the outer instance and synthetic (compiler-generated) names; avoid.
 
 ### Self-check (6.10–6.11)
 1. Which nested kind has no hidden reference to an outer instance? → Static nested (and nested records/enums/interfaces).
@@ -859,7 +860,7 @@ Static nested = grouping, no outer link (default choice). Inner = tied to an out
 | Immutable data where equal values are interchangeable | **Record** | Minimal code, correct `equals`/`hashCode` |
 | Mutable object with identity and lifecycle | **Class** (usually `final` unless designed for extension) | Full control over encapsulation |
 
-Abstract class vs interface in one line: **an interface says what a type *can do*; an abstract class says what a family of classes *is* and shares.** Modern Java style is "interface first", with an optional skeletal abstract class (`AbstractList` alongside `List`, *Effective Java* Item 20). For the design discussion, including ISP and DIP, see [LLD §2.9 Abstract classes vs interfaces](../../../lld/chapters/02-oop-fundamentals/README.md#29-abstract-classes-vs-interfaces), [LLD §4.9 ISP](../../../lld/chapters/04-solid-principles/README.md#49-interface-segregation-principle-isp) and [LLD §4.10 DIP](../../../lld/chapters/04-solid-principles/README.md#410-dependency-inversion-principle-dip).
+Abstract class vs interface in one line: **an interface says what a type *can do*; an abstract class says what a family of classes *is* and shares.** Modern Java style is "interface first", with an optional skeletal abstract class (`AbstractList` alongside `List`, *Effective Java* Item 20). For the design discussion, including ISP (Interface Segregation: keep interfaces small) and DIP (Dependency Inversion: depend on abstractions), see [LLD §2.9 Abstract classes vs interfaces](../../../lld/chapters/02-oop-fundamentals/README.md#29-abstract-classes-vs-interfaces), [LLD §4.9 ISP](../../../lld/chapters/04-solid-principles/README.md#49-interface-segregation-principle-isp) and [LLD §4.10 DIP](../../../lld/chapters/04-solid-principles/README.md#410-dependency-inversion-principle-dip).
 
 ### In the interview
 **Question: "Abstract class or interface?"**
@@ -874,13 +875,13 @@ Abstract class vs interface in one line: **an interface says what a type *can do
 ### What it is
 Every class inherits three methods from `Object` that you'll override constantly:
 - **`equals(Object o)`** — "are these two objects *logically* the same?" The default is identity (`this == o`).
-- **`hashCode()`** — an `int` summarising the object, used by hash-based collections to pick a bucket. The default is typically derived from identity.
-- **`toString()`** — a human-readable description, used by `println`, string concatenation, loggers and debuggers. The default is `ClassName@hexHashCode`.
+- **`hashCode()`** — an `int` summarising the object, used by hash-based collections to pick a bucket (one slot in the collection's internal array). The default is typically derived from identity.
+- **`toString()`** — a human-readable description, used by `println`, string concatenation, loggers (libraries that write diagnostic messages) and debuggers. The default is `ClassName@hexHashCode`.
 
 **Identity vs equality:** `a == b` asks "same object in memory?"; `a.equals(b)` asks "same value?". Two `new Book("123", "Dune")` objects are different objects but should be equal.
 
 ### The contracts
-**`equals`** must be (from the `Object` Javadoc):
+**`equals`** must be (from the `Object` Javadoc, the official API documentation):
 1. **Reflexive**: `x.equals(x)` is true.
 2. **Symmetric**: `x.equals(y)` ⇔ `y.equals(x)`.
 3. **Transitive**: if `x.equals(y)` and `y.equals(z)`, then `x.equals(z)`.
@@ -938,7 +939,7 @@ Line 2 is the classic bug: the two `EqualsOnly` objects are `equals`, but their 
 |---|---|---|
 | Subclass instance equal to parent instance? | Can be | Never |
 | Risk | Breaks symmetry/transitivity if a subclass adds fields to `equals` | Breaks Liskov substitution: a harmless subclass is never equal to its parent |
-| Common advice | Use it, and make the class `final` (as `Book`) — records do the equivalent | Used by some frameworks (e.g. Hibernate-proxy-aware code) |
+| Common advice | Use it, and make the class `final` (as `Book`) — records do the equivalent | Used by some frameworks (e.g. code aware of Hibernate proxies — Hibernate is a popular database-mapping library) |
 
 *Effective Java* Item 10: there is no way to extend an instantiable class, add a value component, and keep the `equals` contract — favour composition, or make value classes final.
 
