@@ -8,7 +8,7 @@ A booking problem looks like simple CRUD ("create, read, update, delete") until 
 
 | Theme | The question the interviewer is really asking | Where you will see it |
 |---|---|---|
-| **Inventory** | What exactly is the thing being sold or lent? A title or a copy? A seat or a seat *for one show*? A room or a room *on one night*? | `Book` vs `BookItem` (15.1), `HallSeat` vs `ShowSeat` (15.2), GA count vs numbered seat (15.3), `Room` + booked nights (15.4) |
+| **Inventory** | What exactly is the thing being sold or lent? A title or a copy? A seat or a seat *for one show*? A room or a room *on one night*? | `Book` vs `BookItem` (15.1), `HallSeat` vs `ShowSeat` (15.2), GA (general admission) count vs numbered seat (15.3), `Room` + booked nights (15.4) |
 | **Holds / locks** | How do you keep something for a customer while they pay, without keeping it forever? | Seat lock with a TTL (time-to-live) (15.2), CAS holds + reaper (15.3) |
 | **Double-booking prevention** | What stops two threads (or two servers) from both succeeding? | `synchronized` per item (15.1, 15.4), one monitor per show (15.2), lock-free compare-and-set (15.3) |
 | **Payments** | What happens if payment fails? If it succeeds but the hold was lost meanwhile? | Release on decline, refund as **compensation** (15.2, 15.3) |
@@ -19,6 +19,8 @@ Three words you will meet in every section:
 - **Race condition** — two threads read the same data, both decide "it is free", and both act. One result silently overwrites the other.
 - **Check-then-act** — the pattern "if free, then take it". It is only safe if the check and the act happen as one indivisible (atomic) step.
 - **Hold** (also called a *lock*, *soft lock* or *reservation*) — a temporary claim with an expiry time, so an abandoned checkout does not block the item forever.
+
+> **Key terms — the other words in the table above.** A **thread** is one independent line of execution inside a program; a server runs many at once, and they can all touch the same objects. A **lock** lets only one thread at a time run a piece of code; Java's `synchronized` keyword uses the built-in lock that every object carries, called its **monitor**. **Compare-and-set (CAS)** is a single atomic step that says "change this value to *new*, but only if it still equals *expected*"; code built on CAS instead of locks is called **lock-free**, because no thread ever waits for another. **Contention** means many threads competing for the same item or lock at the same moment. A **reaper** is a background job that sweeps away expired holds. **Compensation** is an action that undoes an earlier step after the fact — for money, a refund.
 
 **What you will learn**
 
@@ -39,11 +41,11 @@ java -cp /tmp/lld_15 lld.ch15.library.Main        # or moviebooking, concert, ho
 
 All four `Main` classes compile with Java 21 (standard library only) and run. The output under each implementation is the real output of that program. In the concurrency demos, *which* thread wins a race changes from run to run; the *number* of winners never does.
 
-> **Code-style note.** To keep each design readable in one place, a file sometimes holds several small package-private types (for example `Model.java` holds the enums and records of the library). That is legal Java. In a production codebase you would usually give each public type its own file. (If you compile with `-Xlint:all`, javac prints `[auxiliaryclass]` warnings for exactly this: a package-private type declared in one file and used from another. They are style warnings, not errors.)
+> **Code-style note.** To keep each design readable in one place, a file sometimes holds several small package-private types (types declared without `public`, visible only inside their own package) (for example `Model.java` holds the enums and records of the library). That is legal Java. In a production codebase you would usually give each public type its own file. (If you compile with `-Xlint:all` — the switch that turns on every optional compiler warning — javac, the Java compiler, prints `[auxiliaryclass]` warnings for exactly this: a package-private type declared in one file and used from another. They are style warnings, not errors.)
 
-> **Money.** Every amount (prices, fines, deposits, refunds) is a `java.math.BigDecimal` built from a string such as `new BigDecimal("0.50")`, never a `double`: binary floating point cannot store 0.10 exactly, so sums drift. Comparisons use `compareTo`/`signum()`, not `equals` (which also compares the number of decimal places), and every rounding step names its `RoundingMode`.
+> **Money.** Every amount (prices, fines, deposits, refunds) is a `java.math.BigDecimal` (Java's exact decimal-number type) built from a string such as `new BigDecimal("0.50")`, never a `double`: binary floating point cannot store 0.10 exactly, so sums drift. Comparisons use `compareTo`/`signum()`, not `equals` (which also compares the number of decimal places), and every rounding step names its `RoundingMode` (the rounding rule, for example half-up).
 
-> **A time trick used in every demo.** Holds expire and fines grow with time. Instead of `Thread.sleep`, every service takes a `java.time.Clock`. The demos pass a tiny `SimClock` (a `Clock` subclass whose `advance(Duration)` moves time forward). This is standard practice for testable time-dependent code: production passes `Clock.systemUTC()`, tests pass a controllable clock.
+> **A time trick used in every demo.** Holds expire and fines grow with time. Instead of `Thread.sleep` (pausing for real time), every service takes a `java.time.Clock`. The demos pass a tiny `SimClock` (a `Clock` subclass whose `advance(Duration)` moves time forward). This is standard practice for testable time-dependent code: production passes `Clock.systemUTC()`, tests pass a controllable clock.
 
 ---
 
@@ -73,7 +75,7 @@ Always clarify scope first. Good questions, with the answers we will design for:
 **Functional**
 
 1. Search the catalog by **title, author, subject category and publication date**.
-2. Each book has a unique identification number (ISBN) and details; each copy has a **rack number** to find it physically.
+2. Each book has a unique identification number (ISBN, the International Standard Book Number printed on every published book) and details; each copy has a **rack number** to find it physically.
 3. A title can have **many copies** (book items); members check out and reserve copies.
 4. Answer **"who took this copy?"** and **"which books does this member have?"**.
 5. Limit: **max 5 books** per member.
@@ -86,7 +88,7 @@ Always clarify scope first. Good questions, with the answers we will design for:
 **Non-functional**
 
 - **Correctness under concurrency:** two members at two desks can never both borrow the last copy; a member can never exceed 5 books even if two librarians scan for them at once.
-- **Fast search:** searches are by far the most common operation, so they should be index lookups, not scans.
+- **Fast search:** searches are by far the most common operation, so they should be index lookups, not scans (an **index** is a lookup structure, such as a map from author name to books, that jumps straight to the matches instead of checking every book).
 - **Extensibility:** fine rules and notification channels change; they should be swappable without editing the lending code.
 
 ### Use cases
@@ -117,9 +119,11 @@ In the figure above, notice the two relationship kinds. `<<include>>` means a us
 | `Fine` (record) | Amount owed for one late return. |
 | `Search` (interface) / `Catalog` | Four search methods; the catalog keeps one index per search and knows every copy of every title. |
 | `LendingService` | The rules: check out, return, renew, reserve, overdue notices. |
-| `FinePolicy` / `PerDayFine` | How much a late return costs (Strategy). |
+| `FinePolicy` / `PerDayFine` | How much a late return costs (Strategy: a swappable rule behind an interface). |
 | `Notifier` / `ConsoleNotifier` | Where messages go (email, SMS… here: console). |
-| `Library` | Facade: owns the catalog and the lending service; only librarians may add stock. |
+| `Library` | Facade (one simple front object for the whole subsystem): owns the catalog and the lending service; only librarians may add stock. |
+
+In the table, a **record** is a short Java class that only carries values; **immutable** means it cannot change after it is created; an **enum** is a type with a fixed list of named constants; an **abstract** class cannot be created directly, only its subclasses can; and a **sealed** type lists exactly which subclasses it allows, so the compiler knows them all.
 
 The course lists the same core classes: **Library** (name, address), **Book**, **BookItem**, **Account** (member or librarian), **LibraryCard**, **BookReservation**, **BookLending**, **Catalog** (searching by title, author, subject, publish date), **Fine**, **Author**, **Rack** (number + location identifier) and **Notification**. We keep every one of them; the only renames are `BookReservation` → a per-title waitlist inside `LendingService` (explained under *Design decisions*) and `Notification` → the `Notifier` interface.
 
@@ -257,7 +261,7 @@ The course gives three activity diagrams — check out, return and renew.
 ![Activity diagram: renew a book](../../assets/O-design-a-library-management-system-5.svg)
 *Figure — Renew: scan card and book, collect a fine if it is already late, check whether another member reserved it (if so, refuse and show an error), otherwise create a new checkout transaction with a new due date (course diagram)*
 
-The same check-out flow as a sequence diagram of our code, including the locks:
+The same check-out flow as a sequence diagram (messages between objects in time order, top to bottom) of our code, including the locks:
 
 ```mermaid
 sequenceDiagram
@@ -280,7 +284,7 @@ sequenceDiagram
     end
 ```
 
-A book copy's life is a small **state machine**:
+A book copy's life is a small **state machine** (a fixed set of states plus the moves allowed between them):
 
 ```mermaid
 stateDiagram-v2
@@ -298,11 +302,11 @@ stateDiagram-v2
 | Decision | Why | Alternative rejected |
 |---|---|---|
 | **`Book` vs `BookItem` split** | A member borrows a *copy*; search works on *titles*. Every later class depends on this split, so say it early. | One `Book` class with a `copies` counter — cannot say *which* copy is late, on which rack, or who has it. |
-| **Composition (`BookItem` has a `Book`)** instead of the course's inheritance | Many copies share one immutable title; with inheritance each copy would duplicate every title field, and changing a title's subject would mean editing every copy. "A copy *is a* title" also fails a strict substitution test: a title has no barcode or status. | `BookItem extends Book` (the course diagram) — works for a small model, and is worth mentioning as the other valid reading. |
+| **Composition (`BookItem` has a `Book`)** instead of the course's inheritance | Many copies share one immutable title; with inheritance each copy would duplicate every title field, and changing a title's subject would mean editing every copy. "A copy *is a* title" also fails a strict substitution test (the Liskov Substitution Principle: a subclass must work wherever its parent is expected): a title has no barcode or status. | `BookItem extends Book` (the course diagram) — works for a small model, and is worth mentioning as the other valid reading. |
 | **Lending rules in `LendingService`, not on `Member`** | The course itself flags that a `Member` doing checkout/return/renew has *two reasons to change* (a person, and the lending rules) — a Single Responsibility violation. Moving the flows to a service keeps `Member` a plain person. | Methods on `Member` (course version) — fine for a first sketch. |
-| **Reservation = FIFO waitlist per *title*** | A member wants "a copy of Dune", not "copy #3". When *any* copy is returned, the first person in line gets it. | Reservation per copy (course's `BookReservation` keyed by barcode) — a member could wait on copy #3 while copy #1 sits on the shelf. |
+| **Reservation = FIFO (first in, first out) waitlist per *title*** | A member wants "a copy of Dune", not "copy #3". When *any* copy is returned, the first person in line gets it. | Reservation per copy (course's `BookReservation` keyed by barcode) — a member could wait on copy #3 while copy #1 sits on the shelf. |
 | **Strategy for fines** (`FinePolicy`) | Fine rules change (caps, student discounts, holidays). The service calls `fine(due, returned)` and does not care how. | `if/else` inside `returnBook`. |
-| **Observer-style `Notifier`** | Lending code announces events; delivery (email, SMS, push) is someone else's job. The course's abstract `Notification` with one subclass per channel is the same idea. | Sending email directly from `LendingService`. |
+| **Observer-style `Notifier`** | (Observer: the sender announces events to whoever subscribed.) Lending code announces events; delivery (email, SMS, push) is someone else's job. The course's abstract `Notification` with one subclass per channel is the same idea. | Sending email directly from `LendingService`. |
 | **Facade (`Library`)** | Desk software calls one object; role checks (only librarians add stock) live there. | Exposing the catalog and service directly to the UI. |
 | **Catalog keeps one index per search** | Every lookup is a map read. The course names the cost: each new way of searching adds another map, whereas a single index keyed by (field, value) would stay one structure. | Scanning all books per search. |
 
@@ -1004,7 +1008,7 @@ What to notice in the output: section 2 refuses the sixth book (requirement 5); 
 
 - **Two members, one last copy.** `checkout` locks the copy (`synchronized (item)`), so "is it available? → mark loaned" is one atomic step. The demo's 8-thread race always has exactly one winner.
 - **Two librarians scanning for the same member.** The quota check and increment happen under `synchronized (member)`, so a member can never end up with 6 books.
-- **Deadlock avoidance.** Every method locks **member first, then item** — a fixed global lock order. Two threads can never each hold one lock while waiting for the other. (`returnBook` reads the loan first to find the member, then locks in the same order and re-checks the loan is still active.)
+- **Deadlock avoidance.** (A **deadlock** is two threads each holding a lock the other needs, so both wait forever.) Every method locks **member first, then item** — a fixed global lock order. Two threads can never each hold one lock while waiting for the other. (`returnBook` reads the loan first to find the member, then locks in the same order and re-checks the loan is still active.)
 - **Renew vs reserve.** Renewal is refused if the title's waitlist is non-empty. The check happens *before* charging any late fine, so a refused renewal never fines the member twice.
 - **A known small window.** `reserve` checks "no free copy" and then joins the queue as two steps. If a copy is returned in between, it goes to the shelf while the member sits first in the queue; the *next* return reaches them. We accept this rather than make `reserve` take the queue lock before the copies' locks, because returns take them in the opposite order (copy, then queue) — mixing the two orders is exactly how deadlocks are born.
 - **Held copy.** A returned copy with a waitlist becomes `RESERVED` for one member only; everybody else is refused at checkout.
@@ -1013,8 +1017,8 @@ What to notice in the output: section 2 refuses the sixth book (requirement 5); 
 
 ### Extensions & follow-up questions
 
-- **"Two members reserve the last copy at the same moment — what happens?"** The course calls this out as unguarded in its own design. In ours, `reserve` appends to a FIFO deque under a lock, so both are queued in a definite order and the first one gets the next copy.
-- **"Where do you keep the number of available copies of a title?"** Don't store a counter that can drift; derive it: `Catalog.availableCopies(isbn)` counts copies with status `AVAILABLE`. If that becomes slow, cache it and update it in the same lock as the status change.
+- **"Two members reserve the last copy at the same moment — what happens?"** The course calls this out as unguarded in its own design. In ours, `reserve` appends to a FIFO deque (double-ended queue) under a lock, so both are queued in a definite order and the first one gets the next copy.
+- **"Where do you keep the number of available copies of a title?"** Don't store a counter that can drift; derive it: `Catalog.availableCopies(isbn)` counts copies with status `AVAILABLE`. If that becomes slow, cache it (keep a ready-made copy for fast reads) and update it in the same lock as the status change.
 - **"What is a `BookLending` for?"** It is the loan record: it answers "who has this copy, since when, due when", drives overdue notices and fines, and is the history of the copy.
 - **"How is the fine paid?"** Add a `FinePayment` / `PaymentService` and block checkouts while unpaid fines exceed a threshold — a one-line rule in `checkout`.
 - **"Hold expiry?"** A held copy should not wait forever: add `heldUntil` to `BookItem` and a daily job that passes the copy to the next person (or shelves it) when the hold lapses — exactly the TTL idea of section 15.2.
@@ -1022,7 +1026,7 @@ What to notice in the output: section 2 refuses the sixth book (requirement 5); 
 
 ### Real-world example
 
-Open-source integrated library systems such as **Koha** and **Evergreen** implement exactly this model: bibliographic *records* (titles) with attached *items* (copies with barcodes and shelf locations), circulation rules per patron category (loan period, maximum items, fine per day), a holds queue per title, and overdue/hold-available notices by email or SMS. Digital lending apps such as **OverDrive's Libby** apply the same waitlist idea to e-books: a library owns a fixed number of licences, borrowers join a holds queue, and when a licence frees up the next person is notified and given a limited window to borrow before it passes on.
+Open-source integrated library systems such as **Koha** and **Evergreen** implement exactly this model: bibliographic *records* (titles) with attached *items* (copies with barcodes and shelf locations), circulation (lending and return) rules per patron (library member) category (loan period, maximum items, fine per day), a holds queue per title, and overdue/hold-available notices by email or SMS. Digital lending apps such as **OverDrive's Libby** apply the same waitlist idea to e-books: a library owns a fixed number of licences, borrowers join a holds queue, and when a licence frees up the next person is notified and given a limited window to borrow before it passes on.
 
 ### In the interview
 
@@ -1055,7 +1059,7 @@ An online movie ticket booking system (think **BookMyShow**, **Fandango**, **AMC
 
 | Question | Answer we assume |
 |---|---|
-| One city or many? | Many cities with affiliate cinemas; the app lists cities. |
+| One city or many? | Many cities with affiliate (partner) cinemas; the app lists cities. |
 | Can a cinema have several halls? Several shows per hall? | Yes and yes — but a hall runs **one show at a time**. |
 | What do customers search by? | Title, language, genre, release date, **city**. |
 | Can a customer pick several seats in one booking? | Yes, from a seat map showing free vs booked seats. |
@@ -1084,8 +1088,8 @@ An online movie ticket booking system (think **BookMyShow**, **Fandango**, **AMC
 
 **Non-functional**
 
-- **Strong consistency on seats**: double booking is the one bug that must never happen.
-- **High read, bursty write**: browsing dwarfs booking, but a blockbuster's first-day shows get many simultaneous seat grabs.
+- **Strong consistency on seats** (every reader sees the latest confirmed state; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)): double booking is the one bug that must never happen.
+- **High read, bursty write** (writes arrive in sudden spikes): browsing dwarfs booking, but a blockbuster's first-day shows get many simultaneous seat grabs.
 - **Hold expiry**: abandoned checkouts must not block seats (the course lists this as a gap in its own design; we implement it).
 - **Failure-safe payments**: a customer must never pay for a seat they don't get.
 
@@ -1113,8 +1117,8 @@ Notice in the figure above that a **Customer is a specialised Guest**: everythin
 | `ShowSeat` | A seat *for this show*: price and `booked` flag. **This is what gets booked.** |
 | `SeatLockProvider` / `InMemorySeatLockProvider` | Temporary, expiring **holds** on show seats; all-or-nothing lock, commit, release. |
 | `Booking` | Customer, show, seat ids, status (`PENDING`, `CONFIRMED`, `CHECKED_IN`, `CANCELED`, `ABANDONED`), payment, coupon. |
-| `BookingService` | hold → pay → commit; cancel; seat map. |
-| `Payment`, `PaymentMethod` (`CardPayment`, `CashPayment`), `PaymentGateway` | Money. The gateway is the boundary to the real provider. |
+| `BookingService` | hold → pay → commit (make final); cancel; seat map. |
+| `Payment`, `PaymentMethod` (`CardPayment`, `CashPayment`), `PaymentGateway` | Money. The gateway (the external service, such as a card processor, that actually moves the money) is the boundary to the real provider. |
 | `Coupon` | Percentage off, applied to the booking amount before payment. |
 | `CancellationPolicy` / `CutoffRefundPolicy` | How much comes back on cancel (Strategy). |
 | `MovieSearch` / `Catalog` | Five searches; "by city" is answered from shows. |
@@ -1301,7 +1305,7 @@ sequenceDiagram
     end
 ```
 
-Why `commit` must re-check inside the lock: the payment call can take seconds. If the hold expires during it and someone else grabs the seat, a naive "mark booked" would double-book. `commit` verifies "these seats are still held by me and not expired" **and** marks them booked in one atomic step. If that fails after money was taken, we run a **compensating action** — a refund — instead of a database-style rollback, because a card charge cannot be "un-happened". This is the essence of the **Saga** idea: each step has an undo.
+Why `commit` must re-check inside the lock: the payment call can take seconds. If the hold expires during it and someone else grabs the seat, a naive "mark booked" would double-book. `commit` verifies "these seats are still held by me and not expired" **and** marks them booked in one atomic step. If that fails after money was taken, we run a **compensating action** — a refund — instead of a database-style rollback (undoing unfinished changes as if they never happened), because a card charge cannot be "un-happened". This is the essence of the **Saga** idea: each step has an undo.
 
 Booking lifecycle:
 
@@ -1325,13 +1329,13 @@ A show seat, as the customer sees it on the map: **free** (`.`), **held** by som
 | Decision | Why | Alternative rejected |
 |---|---|---|
 | **`ShowSeat` per show** (course's key point) | The same physical seat is free in one show and taken in another; prices differ per show. | Booking `HallSeat` directly — breaks the moment there are two shows a day. |
-| **`SeatLockProvider` interface with TTL holds** | Seats are kept only while the customer pays; abandoned checkouts free themselves. The interface lets you swap the in-memory version for **Redis** (`SET key value NX PX 300000` — set only if absent, expire in 300 000 ms) or a database table with an `expires_at` column. | Holding seats until the booking is cancelled (course's version; it names this as the gap). |
+| **`SeatLockProvider` interface with TTL holds** | Seats are kept only while the customer pays; abandoned checkouts free themselves. The interface lets you swap the in-memory version for **Redis** (a fast in-memory key-value store, often used for locks and caches; `SET key value NX PX 300000` — set only if absent, expire in 300 000 ms) or a database table with an `expires_at` column. | Holding seats until the booking is cancelled (course's version; it names this as the gap). |
 | **All-or-nothing lock** | A customer asking for 4 seats together must never be left with 2. Check every seat first, then take all. | Locking seats one by one without rollback. |
-| **One monitor per show** | Shows never block each other; within a show, every decision is serialized. Fine-grained enough for a cinema. | One global lock (the course's single-process lock) — correct but serializes the whole country's bookings. |
+| **One monitor per show** | Shows never block each other; within a show, every decision is serialized (made one at a time). Fine-grained enough for a cinema. | One global lock (the course's single-process lock) — correct but serializes the whole country's bookings. |
 | **Commit re-validates + compensation** | Closes the "lock expired during payment" gap; the customer never pays for a seat they don't get. | Trusting the earlier check. |
-| **Idempotent `pay`** | A double-click or network retry must not charge twice: paying a non-PENDING booking returns it unchanged. Real systems add an **idempotency key** per request. | Charging on every call. |
+| **Idempotent `pay`** (safe to repeat: two calls have the effect of one) | A double-click or network retry must not charge twice: paying a non-PENDING booking returns it unchanged. Real systems add an **idempotency key** per request. | Charging on every call. |
 | **Strategy** for cancellation refunds and **Strategy-like** `PaymentMethod` | Refund rules and payment types vary independently of booking logic. | `if (method == CARD)` chains. |
-| **Adapter boundary** `PaymentGateway` | Wraps the external provider (Stripe, Razorpay…) behind our own interface; tests use `FakeGateway`. | Calling the provider's SDK from `BookingService`. |
+| **Adapter boundary** (a wrapper that turns a foreign interface into ours) `PaymentGateway` | Wraps the external provider (Stripe, Razorpay…) behind our own interface; tests use `FakeGateway`. | Calling the provider's SDK (software development kit: the provider's own client library) from `BookingService`. |
 | **Coupon applied to the booking** | Amount is correct before payment; payment types stay simple. | Each payment type applying coupons. |
 | **Guest has no booking method** | The rule "guests must register to book" is enforced by *types*, not just written down: `hold` takes a `Customer`. | A `Guest.book()` that throws. |
 | **"Search by city" from shows** | A movie is in a city only once a show is scheduled there; the other four searches are indexed when a movie is added. | Storing a city on `Movie`. |
@@ -2080,23 +2084,23 @@ What to notice: section 1 announces each new movie to subscribers (requirement 9
 - **Check-then-act is atomic.** `lock`, `holds`, `commit`, `unlock` and `releaseBooked` for one show all run inside `synchronized` on that show's lock table. "Is the seat free? → take it" can't interleave.
 - **Expired holds are lazy.** There is no background thread; an expired `SeatLock` is simply treated as absent the next time anyone looks. (In Redis, the key's TTL does the same.)
 - **The payment-window race** (hold expires mid-payment) is handled by commit re-validation + refund, as shown in section 6.
-- **Lock granularity.** The booking's own monitor makes `pay`/`cancel` on the same booking serial (no double charge, no pay-while-cancel). The show monitor protects seats. The two are always taken in the order booking → show, never the reverse, so no deadlock.
+- **Lock granularity** (how much data one lock covers)**.** The booking's own monitor makes `pay`/`cancel` on the same booking serial (no double charge, no pay-while-cancel). The show monitor protects seats. The two are always taken in the order booking → show, never the reverse, so no deadlock.
 - **Across many servers** (real BookMyShow), in-process locks are not enough. Options, from simplest:
   1. **Conditional update** (course): `UPDATE show_seat SET status='HELD', held_by=?, held_until=? WHERE show_id=? AND seat_id IN (...) AND (status='FREE' OR held_until < now())`, then check the row count equals the number of seats; if not, roll back.
-  2. **Pessimistic lock**: `SELECT ... FOR UPDATE` on the seat rows inside a transaction.
+  2. **Pessimistic lock** (lock first, then work, assuming conflicts are likely): `SELECT ... FOR UPDATE` on the seat rows inside a transaction (a group of database statements that succeed or fail together).
   3. **Serializable transaction** (course): the result is as if each transaction had run alone, in some order — easiest to reason about, but the slowest option when many buyers collide.
   4. **Optimistic locking**: a `version` column; update `WHERE version = ?`; retry on conflict. Good when conflicts are rare.
-  5. **Unique constraint** on `(show_id, seat_id)` in the confirmed-tickets table as the final safety net.
-  6. **Distributed lock / hold store** in Redis with TTL for the *hold* phase, with the database as the source of truth for *confirmed* seats.
+  5. **Unique constraint** (a database rule that rejects a second row with the same values) on `(show_id, seat_id)` in the confirmed-tickets table as the final safety net.
+  6. **Distributed lock / hold store** (a lock kept in a shared store, so all servers see it) in Redis with TTL for the *hold* phase, with the database as the source of truth (the one copy that wins when copies disagree) for *confirmed* seats.
   The course's point, in short: the in-process lock only makes the common case quick; once there are two servers, correctness comes from the database.
 - **Edge cases:** empty seat list; duplicate seat ids in one request (de-duplicated); unknown seat; blocked customer; overlapping show in a hall; cancelling an abandoned booking (rejected); cancelling too late (no refund).
 
 ### Extensions & follow-up questions
 
-- **"Show the seat map live."** Push seat changes (held/booked/released) to open seat-map pages over WebSockets or server-sent events; the lock provider publishes events (Observer).
+- **"Show the seat map live."** Push seat changes (held/booked/released) to open seat-map pages over WebSockets or server-sent events (two ways for a server to push updates to an open browser page); the lock provider publishes events (Observer).
 - **"Extend the hold when the user reaches the payment page."** Add `extend(show, seats, user, extra)` that refreshes `expiresAt` only if the caller still holds the lock.
 - **"Dynamic pricing / different prices per seat type and time."** Replace the price map with a `PricingStrategy` (base by `SeatType`, surcharge for weekends or premieres).
-- **"Payment succeeded but our server crashed before commit."** Store the booking as `PENDING` with the gateway's transaction id before charging; a reconciliation job queries the gateway for pending bookings and either commits (if the seats are still held) or refunds. Payment providers' **webhooks** notify you of the final result.
+- **"Payment succeeded but our server crashed before commit."** Store the booking as `PENDING` with the gateway's transaction id before charging; a reconciliation job (a periodic task that compares our records with the gateway's and fixes mismatches) queries the gateway for pending bookings and either commits (if the seats are still held) or refunds. Payment providers' **webhooks** (HTTP calls the provider makes to your server when something happens) notify you of the final result.
 - **"Cancel a whole show."** Admin cancels → every confirmed booking of the show is cancelled with a full refund and a notification (iterate bookings by show).
 - **"Loyalty points, food & beverage add-ons."** Extra line items on the booking; points as another `PaymentMethod`.
 - **"Seat gaps rule (no single empty seat left between bookings)."** A validation step in `hold` before locking — a `SeatSelectionRule` chain (Chain of Responsibility).
@@ -2123,7 +2127,7 @@ On **BookMyShow**, after you pick seats the app shows a **countdown timer** on t
 
 ### TL;DR
 
-Book `ShowSeat`s, not seats. Hold (all-or-nothing, TTL) → pay → commit (re-validate atomically) → refund if the hold was lost. Coupon on the booking, gateway behind an interface, refund rule as a Strategy. Per-show lock in one JVM; conditional updates, unique constraints and Redis TTL keys across servers.
+Book `ShowSeat`s, not seats. Hold (all-or-nothing, TTL) → pay → commit (re-validate atomically) → refund if the hold was lost. Coupon on the booking, gateway behind an interface, refund rule as a Strategy. Per-show lock in one JVM (Java Virtual Machine — one running Java process); conditional updates, unique constraints and Redis TTL keys across servers.
 
 ---
 
@@ -2134,8 +2138,8 @@ Book `ShowSeat`s, not seats. Hold (all-or-nothing, TTL) → pay → commit (re-v
 A concert ticketing system (think **Ticketmaster**, **Live Nation**, **SeatGeek**, **BookMyShow Live**) sells tickets for a single, huge, one-off event. The *objects* look like section 15.2 — an event, a venue, seats, bookings, payments — so we reuse those ideas and do **not** repeat them. The *focus* is different: **extreme contention**. A movie show has a few hundred seats and demand spread over days; a stadium tour sells 50,000 tickets in minutes to a million people who all arrive at 10:00:00. That changes three things:
 
 1. **Fairness** — who gets to try first? (a *virtual waiting room*)
-2. **Throughput under contention** — locks that serialize everyone become the bottleneck (so we use *lock-free* compare-and-set)
-3. **Abuse** — scalpers and bots (so *per-user limits*), and what happens to fans who miss out (a *waitlist*)
+2. **Throughput under contention** (throughput = requests completed per second; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) — locks that serialize everyone become the bottleneck (the one point that limits overall speed) (so we use *lock-free* compare-and-set)
+3. **Abuse** — scalpers (people who buy tickets to resell at a markup) and bots (automated scripts) (so *per-user limits*), and what happens to fans who miss out (a *waitlist*)
 
 | Question | Answer we assume |
 |---|---|
@@ -2166,8 +2170,8 @@ Main use cases: join the waiting room → get admitted → **hold** seats or a G
 | `Concert` (record) | Artist, venue, date/time. |
 | `Tier` (enum) | `VIP`, `PREMIUM` (seated) and `GENERAL_ADMISSION` (unseated), each with a price. |
 | `SeatState` (sealed) → `Free`, `Held`, `Sold` | A seat's whole state as one immutable value. |
-| `SeatedInventory` | One `AtomicReference<SeatState>` per numbered seat; claims by **CAS**. |
-| `GaPool` | GA capacity as an `AtomicInteger`; take/give back by CAS. |
+| `SeatedInventory` | One `AtomicReference<SeatState>` (a holder for one object reference that supports CAS) per numbered seat; claims by **CAS**. |
+| `GaPool` | GA capacity as an `AtomicInteger` (an int with atomic updates); take/give back by CAS. |
 | `Hold` (record) | A temporary claim: seats or a GA quantity, amount, expiry. |
 | `Ticket` (record) | One admission: tier and seat id or "GA". |
 | `VirtualWaitingRoom` | Queue numbers in arrival order; admits batches FIFO. |
@@ -2305,11 +2309,11 @@ When inventory is released (expired hold, cancellation), `TicketingService` **of
 | Decision | Why | Alternative rejected |
 |---|---|---|
 | **Lock-free CAS per seat** (`AtomicReference<SeatState>`) | Buyers of *different* seats never wait for each other; on the *same* seat, exactly one `compareAndSet` wins and the losers learn instantly. No thread is ever blocked holding a lock, so there is no deadlock. | One monitor per concert (15.2's approach) — correct, but at 50,000 simultaneous buyers every request queues behind one lock. |
-| **Immutable sealed `SeatState`** | CAS compares *references*; making each state a fresh immutable record means "the state I read" is exactly "the state I replace". Pattern-matching `switch`/`instanceof` on a sealed type is exhaustive and readable. | Mutable fields (`status`, `heldBy`, `expiry`) updated separately — a reader could see a half-updated seat. |
+| **Immutable sealed `SeatState`** | CAS compares *references* (which object it is, not what it contains); making each state a fresh immutable record means "the state I read" is exactly "the state I replace". Pattern-matching `switch`/`instanceof` on a sealed type is exhaustive and readable. | Mutable fields (`status`, `heldBy`, `expiry`) updated separately — a reader could see a half-updated seat. |
 | **Multi-seat hold in sorted order + rollback** | Each seat is claimed independently; on failure we release the ones *we* took (matching our hold id). Sorted order makes two buyers of overlapping sets contend on the same first seat, so one of them fails fast. | Holding several seats with nested locks — deadlock-prone without ordering. |
 | **GA as a counter** | Standing places are interchangeable — there's nothing to name. A CAS loop on an `AtomicInteger` (`if cur < qty fail; else CAS(cur, cur-qty)`) never oversells. | A `Seat` object per standing place — 40,000 objects for no benefit. |
-| **Virtual waiting room** | Fairness and load control: arrival order decides who gets to *try*, and admitting in batches caps the load on inventory. Bots gain nothing by hammering "buy". `join` is `synchronized` so number order and queue order can never disagree. | "Whoever's request lands first" — rewards bots and fast connections, and melts the backend. |
-| **Per-user limit via `ConcurrentHashMap.compute`** | `compute` runs the check-and-update for one key atomically, so two parallel requests from the same user can't both slip under the limit. | `get` then `put` — a classic race. |
+| **Virtual waiting room** | Fairness and load control: arrival order decides who gets to *try*, and admitting in batches caps the load on inventory. Bots gain nothing by hammering "buy". `join` is `synchronized` so number order and queue order can never disagree. | "Whoever's request lands first" — rewards bots and fast connections, and melts the backend (the servers behind the app). |
+| **Per-user limit via `ConcurrentHashMap.compute`** (a thread-safe map; `compute` updates one key atomically) | `compute` runs the check-and-update for one key atomically, so two parallel requests from the same user can't both slip under the limit. | `get` then `put` — a classic race. |
 | **Holds with TTL + a reaper** | Seat holds are also reclaimed lazily (a CAS can overwrite an expired `Held`); GA holds have no per-item state, so a periodic `expireHolds()` returns their count. `holds.remove(id, h)` ensures the reaper and `purchase` never both process one hold. | Holds that never expire. |
 | **Waitlist offers on release** | Released tickets go to the longest-waiting fan (FIFO), not to whoever refreshes fastest. | Returning tickets silently to the pool. |
 | **Compensation on lost hold** | Same as 15.2: if a seat could not be confirmed after payment, release and refund. | Assuming the hold is still valid. |
@@ -2317,7 +2321,7 @@ When inventory is released (expired hold, cancellation), `TicketingService` **of
 
 ### Java implementation
 
-Package `lld.ch15.concert`. Files: `Model.java` (tiers, seat states, hold, ticket, interfaces, clock), `Inventory.java` (CAS seat inventory, GA pool, purchase limiter, waiting room), `TicketingService.java`, `Main.java`. The demos use Java 21 **virtual threads** (`Executors.newVirtualThreadPerTaskExecutor()`), which make 1,000 concurrent buyers cheap.
+Package `lld.ch15.concert`. Files: `Model.java` (tiers, seat states, hold, ticket, interfaces, clock), `Inventory.java` (CAS seat inventory, GA pool, purchase limiter, waiting room), `TicketingService.java`, `Main.java`. The demos use Java 21 **virtual threads** (lightweight threads managed by the JVM rather than the operating system) (`Executors.newVirtualThreadPerTaskExecutor()`), which make 1,000 concurrent buyers cheap.
 
 ```java
 // File: lld/ch15/concert/Model.java
@@ -2873,8 +2877,8 @@ What to notice: section 1 admits the first three in arrival order and refuses so
 - **Hold claimed exactly once.** `purchase` starts with `holds.remove(holdId)`; the reaper uses `holds.remove(id, h)`. Only one of them can get the hold, so inventory is never released twice.
 - **Per-user limit and failures.** Every failure path (sold out, declined, expired, lost seat) gives the limit back, so a user is never locked out by a failed attempt.
 - **Lost hold after payment.** `confirm` fails if the hold expired and someone CASed over it; we release, give back the limit, and refund.
-- **Fair queue scope.** The in-memory queue is fair *within one process*. At real scale the waiting room is a separate service (often at the CDN edge) that hands out signed, time-limited access tokens; inventory servers only check the token.
-- **Across servers.** Seat CAS maps naturally to a database conditional update (`UPDATE seat SET state='HELD', hold_id=?, expires_at=? WHERE id=? AND (state='FREE' OR expires_at < now())`) or Redis `SET NX PX`. GA counts map to Redis `DECRBY` guarded by a Lua script, or to a database row updated with `WHERE available >= ?`.
+- **Fair queue scope.** The in-memory queue is fair *within one process*. At real scale the waiting room is a separate service (often at the CDN edge — a CDN, content delivery network, is a worldwide set of servers placed close to users; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) that hands out signed, time-limited access tokens (short strings the server can verify it issued); inventory servers only check the token.
+- **Across servers.** Seat CAS maps naturally to a database conditional update (`UPDATE seat SET state='HELD', hold_id=?, expires_at=? WHERE id=? AND (state='FREE' OR expires_at < now())`) or Redis `SET NX PX`. GA counts map to Redis `DECRBY` (decrement by an amount) guarded by a Lua script (a small script Redis runs as one atomic step), or to a database row updated with `WHERE available >= ?`.
 
 ### Extensions & follow-up questions
 
@@ -2894,7 +2898,7 @@ What to notice: section 1 admits the first three in arrival order and refuses so
 
 **30-second answer:** "Seated tiers are an `AtomicReference<SeatState>` per seat, claimed by compare-and-set — one winner, no locks. GA is an `AtomicInteger` decremented by a CAS loop so it can't go negative. Everyone enters through a virtual waiting room that admits in arrival order, and a per-user limit is enforced atomically. Holds expire after 10 minutes; a reaper returns expired GA holds; released tickets go to a FIFO waitlist first. If a hold is lost during payment we refund."
 
-**Follow-ups with answers:** *Lock-free vs locks?* Lock-free wins when contention is high and critical sections are tiny (one field swap); locks are simpler when an operation must update many things together. *What if the queue service fails?* Fail closed: pause admissions, don't open the floodgates. *How do you stop one person with 50 accounts?* Verified identity, payment-card fingerprinting, and limits keyed on those.
+**Follow-ups with answers:** *Lock-free vs locks?* Lock-free wins when contention is high and critical sections are tiny (one field swap); locks are simpler when an operation must update many things together. *What if the queue service fails?* Fail closed (on failure, deny rather than allow): pause admissions, don't open the floodgates. *How do you stop one person with 50 accounts?* Verified identity, payment-card fingerprinting (recognising the same card across accounts), and limits keyed on those.
 
 ### Self-check
 
@@ -2971,7 +2975,7 @@ Top use cases: add/remove/edit room; search room (by type and availability); reg
 | `RoomBooking` | Reservation number, guest id, room, check-in/out dates, status, deposit; **owns its `Invoice`**; `refundDue()` holds the cancellation rule. |
 | `BookingStatus` (enum) | `REQUESTED`, `PENDING`, `CONFIRMED`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`, `ABANDONED`. |
 | `Invoice`, `InvoiceItem` | A list of lines; the total is computed from them. |
-| `RoomCharge` (abstract) → `Amenity`, `RoomService`, `KitchenService` | A charge that knows how to write itself onto the invoice (Template Method). |
+| `RoomCharge` (abstract) → `Amenity`, `RoomService`, `KitchenService` | A charge that knows how to write itself onto the invoice (Template Method: the parent fixes the steps, subclasses fill in one). |
 | `Payment` (sealed, abstract) → `CreditCardTransaction`, `CheckTransaction`, `CashTransaction` | Three ways to pay with genuinely different behaviour. |
 | `Person` (sealed) → `Guest`, `Receptionist`, `Server`, `Housekeeper`, `Manager` | Actors; service methods accept only the right actor type. |
 | `FrontDesk` | Every flow of a stay: book, check in, add charge, check out, cancel, housekeeping, reminders, queries. |
@@ -3794,7 +3798,7 @@ What to notice: section 0 — only a `Manager` can add rooms and hire staff (the
 
 ### Real-world example
 
-Property management systems such as **Oracle Hospitality OPERA** run the front desk this way: reservations are made against room types and dates, a specific room is assigned by check-in, the folio (the guest's bill) collects charges from restaurants, minibar and spa as separate postings, and housekeeping status (dirty, clean, inspected) controls whether a room can be assigned. At check-in, the desk encodes an RFID key card with an electronic lock system (for example ASSA ABLOY's VingCard or dormakaba) that is valid only until the check-out time. Online, **Booking.com** shows each rate's cancellation policy (for example "free cancellation until 24 hours before arrival") — exactly the one-method refund rule of this design, but chosen per rate plan.
+Property management systems such as **Oracle Hospitality OPERA** run the front desk this way: reservations are made against room types and dates, a specific room is assigned by check-in, the folio (the guest's bill) collects charges from restaurants, minibar and spa as separate postings, and housekeeping status (dirty, clean, inspected) controls whether a room can be assigned. At check-in, the desk encodes an RFID (radio-frequency identification, a contactless chip) key card with an electronic lock system (for example ASSA ABLOY's VingCard or dormakaba) that is valid only until the check-out time. Online, **Booking.com** shows each rate's cancellation policy (for example "free cancellation until 24 hours before arrival") — exactly the one-method refund rule of this design, but chosen per rate plan.
 
 ### In the interview
 
@@ -3812,7 +3816,7 @@ Property management systems such as **Oracle Hospitality OPERA** run the front d
 
 ### TL;DR
 
-Rooms are sold night by night: each room keeps its booked nights and reserves them atomically. Search lives on the location. The bill is a list of lines filled by `RoomCharge` Template Methods; three payment subclasses; one refund method (24 hours). Keys issued at check-in, killed at check-out; housekeeping is an append-only log.
+Rooms are sold night by night: each room keeps its booked nights and reserves them atomically. Search lives on the location. The bill is a list of lines filled by `RoomCharge` Template Methods; three payment subclasses; one refund method (24 hours). Keys issued at check-in, killed at check-out; housekeeping is an append-only log (entries are only added, never changed or removed).
 
 ---
 

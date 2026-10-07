@@ -1,14 +1,14 @@
 # Chapter 7 — Refactoring
 
-> **What you will learn.** What refactoring is (and is not), when to do it, how tests make it safe, the full catalogue of **code smells** (the signals that tell you *where* to refactor), the full catalogue of **refactorings** from Martin Fowler's *Refactoring* (2nd edition, 2018), a smell → refactoring lookup table, a complete worked example in Java that goes from messy to clean in six compiling steps, and how refactoring leads you toward design patterns.
+> **What you will learn.** What refactoring is (and is not), when to do it, how tests make it safe, the full catalogue of **code smells** (the signals that tell you *where* to refactor), the full catalogue of **refactorings** from Martin Fowler's *Refactoring* (2nd edition, 2018), a smell → refactoring lookup table, a complete worked example in Java that goes from messy to clean in six compiling steps, and how refactoring leads you toward design patterns (named, reusable solutions to recurring design problems; Chapters 8–11).
 >
-> **Why it matters for LLD interviews.** Machine-coding rounds often end with "now add feature X" or "what would you clean up?". Interviewers want to hear you name a smell ("this switch is repeated in three places — a Repeated Switches smell") and name the fix ("Replace Conditional with Polymorphism, which gives us a Strategy"). This chapter gives you that vocabulary.
+> **Why it matters for LLD interviews.** Machine-coding rounds (interview rounds where you build a small working program in about 60–120 minutes; a core part of LLD — low-level design — interviews) often end with "now add feature X" or "what would you clean up?". Interviewers want to hear you name a smell ("this switch is repeated in three places — a Repeated Switches smell") and name the fix ("Replace Conditional with Polymorphism, which gives us a Strategy" — the Strategy pattern puts each interchangeable algorithm in its own class). This chapter gives you that vocabulary.
 
 **Chapter map**
 
 | Part | Content |
 |---|---|
-| 7.1 | Refactoring fundamentals — definition, two hats, why, when, when not, tests, performance, rewrite vs refactor, IDE automation, legacy code |
+| 7.1 | Refactoring fundamentals — definition, two hats, why, when, when not, tests, performance, rewrite vs refactor, IDE (Integrated Development Environment, e.g. IntelliJ IDEA) automation, legacy code |
 | 7.2 | Code smells — the 24 smells of the 2nd edition, grouped the refactoring.guru way |
 | 7.3 | The refactoring catalogue — all 61 named refactorings of the 2nd edition, by book chapter, plus the extra ones on refactoring.com |
 | 7.4 | Smell → refactorings lookup table |
@@ -29,12 +29,12 @@
 
 Two words in that definition do all the work:
 
-- **Behaviour-preserving.** After the change, the program does the same thing from the outside. Same outputs for the same inputs, same side effects, same errors. The only things that may change are *internal* — names, where code lives, how it is split up. (Performance may change a little; see 7.1.9.)
+- **Behaviour-preserving.** After the change, the program does the same thing from the outside. Same outputs for the same inputs, same side effects (changes made besides returning a value, such as writing a file), same errors. The only things that may change are *internal* — names, where code lives, how it is split up. (Performance may change a little; see 7.1.9.)
 - **Small steps.** Each step is so small that it is almost impossible to get wrong, and the code compiles and the tests pass after *every* step. You chain many tiny steps to get a big change. If you ever sit with broken code for an hour, you were not refactoring — you were rewriting.
 
 **Everyday analogy.** Think of reorganising a kitchen while the restaurant stays open. You move one shelf at a time. After each move, the cooks can still make every dish. You never tear the whole kitchen down on a Friday night.
 
-> **Term — observable behaviour.** What a user (or calling code) can see: return values, printed output, data written, exceptions thrown. The *call stack*, the *class structure*, and the *names of private methods* are not observable behaviour.
+> **Term — observable behaviour.** What a user (or calling code) can see: return values, printed output, data written, exceptions thrown. The *call stack* (the chain of method calls currently in progress), the *class structure*, and the *names of private methods* are not observable behaviour.
 
 **What refactoring is NOT.**
 
@@ -57,11 +57,11 @@ Refactoring pays down that debt. It keeps the design good *continuously*, instea
 
 ### How it works
 
-1. **Make sure you have tests** that pin down current behaviour (7.1.7). Run them — they must be green.
+1. **Make sure you have tests** that pin down current behaviour (7.1.7). Run them — they must be green (all passing).
 2. **Spot a smell** — a surface sign that the design could be better (7.2).
 3. **Pick a named refactoring** that cures the smell (7.3, 7.4).
 4. **Apply one small step** of it (ideally with the IDE's automated refactoring).
-5. **Compile and run the tests.** Green? Commit (locally). Red? Undo the step (don't debug) and take a smaller step.
+5. **Compile and run the tests.** Green? Commit (locally) — i.e. save a snapshot of the code in version control such as Git. Red? Undo the step (don't debug) and take a smaller step.
 6. **Repeat** until the code is clean enough for the job at hand.
 
 ```mermaid
@@ -104,8 +104,8 @@ You swap hats often — maybe every few minutes — but you always know which on
 | **Preparatory refactoring** | Refactor *just before* adding a feature, to make the feature easy to add. "Make the change easy, then make the easy change." | Before adding HTML output, split calculation from text formatting (see 7.5, step 3) |
 | **Comprehension refactoring** | Refactor to understand code you are reading. Rename a variable once you understand it; extract a block once you know what it does. The understanding moves into the code. | Rename `d` to `daysOverdue` after working out what it holds |
 | **Litter-pickup refactoring** | You notice mess while working on something else. Fix it if it is quick; if not, note it and come back. The **Boy Scout Rule** — leave the campground cleaner than you found it. | Remove an unused parameter while passing by |
-| **Planned vs opportunistic** | Most refactoring should be *opportunistic* — woven into feature work and bug fixes, not scheduled separately. Planned refactoring episodes are sometimes needed when a team has neglected the code, but they should be rare. | Good: every feature PR contains a few small refactoring commits. Warning sign: a "refactoring sprint" every quarter |
-| **Long-term refactoring** | Big changes (replacing a library, splitting a module) done gradually over weeks, keeping the system working the whole time — e.g. with **Branch by Abstraction** (introduce an abstraction layer, switch callers to it, swap the implementation behind it, delete the old one). | Moving from one ORM to another behind a repository interface |
+| **Planned vs opportunistic** | Most refactoring should be *opportunistic* — woven into feature work and bug fixes, not scheduled separately. Planned refactoring episodes are sometimes needed when a team has neglected the code, but they should be rare. | Good: every feature PR (pull request — a change submitted for review) contains a few small refactoring commits. Warning sign: a "refactoring sprint" (a fixed 1–4-week work period) every quarter |
+| **Long-term refactoring** | Big changes (replacing a library, splitting a module) done gradually over weeks, keeping the system working the whole time — e.g. with **Branch by Abstraction** (introduce an abstraction layer, switch callers to it, swap the implementation behind it, delete the old one). | Moving from one ORM (library mapping objects to database tables) to another behind a repository interface |
 | **During code review** | Reviewing is a natural moment to suggest (or pair on) refactorings. Fowler prefers doing it *with the author*, trying the refactoring ideas as you go, rather than only leaving comments. | "This method has four flag parameters — can we Remove Flag Argument?" |
 
 > **Term — Rule of Three.** A heuristic: do not abstract on the first or second occurrence of a pattern (you do not yet know what varies); abstract on the third, when the shape is clear.
@@ -114,22 +114,22 @@ You swap hats often — maybe every few minutes — but you always know which on
 
 ### 7.1.4 When NOT to refactor
 
-- **Code you never need to touch or understand.** Messy code hidden behind a clean API, that works and never changes, can stay messy. Refactor only what gets in your way.
+- **Code you never need to touch or understand.** Messy code hidden behind a clean API (the set of methods other code calls), that works and never changes, can stay messy. Refactor only what gets in your way.
 - **When rewriting is cheaper** than refactoring (see 7.1.10). This is a judgement call and usually needs experience.
 - **Without a safety net** — if you cannot test it and cannot use safe automated refactorings, first add tests (7.1.11 shows how for legacy code).
 - **On a deadline that truly cannot move**, a big refactoring may wait — but note that the Design Stamina Hypothesis says skipping it usually makes you *slower*, even in the short term. Deadlines are rarely a good excuse for small refactorings.
-- **Published interfaces** that you do not control the callers of (a public library API, a REST endpoint used by other teams). You can still refactor them, but you must keep the old version working for a while and deprecate it (see *Change Function Declaration*, migration mechanics).
+- **Published interfaces** that you do not control the callers of (a public library API, a REST endpoint — a URL of a web API, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) — used by other teams). You can still refactor them, but you must keep the old version working for a while and deprecate it (mark it as outdated and due for removal) (see *Change Function Declaration*, migration mechanics).
 
 ### 7.1.5 Problems and costs of refactoring
 
 | Problem | What goes wrong | Mitigation |
 |---|---|---|
 | Slowing down new features | Refactoring "takes time away" from features | Refactor *because* it speeds features up; focus on code you are about to change |
-| Code ownership | You cannot rename a method whose callers are in another team's repo | Keep the old name as a delegating, `@Deprecated` method; migrate callers later; prefer weak (team-wide) code ownership |
-| Long-lived feature branches | Refactoring renames and moves code, which makes merges painful | **Continuous Integration** / trunk-based development: integrate at least daily, so refactorings conflict less |
+| Code ownership | You cannot rename a method whose callers are in another team's repo (repository — a project's version-controlled code store) | Keep the old name as a delegating, `@Deprecated` method; migrate callers later; prefer weak (team-wide) code ownership |
+| Long-lived feature branches (lines of work kept apart from the main code for a long time) | Refactoring renames and moves code, which makes merges painful | **Continuous Integration** (merge into the shared main line often, with automatic builds and tests) / trunk-based development (everyone works on one main branch): integrate at least daily, so refactorings conflict less |
 | Missing tests | Refactoring without tests is risky | Add tests first; use only IDE-automated, provably-safe refactorings until tests exist |
 | Legacy code | Big, untested, tangled | Feathers' techniques (7.1.11) |
-| Databases | Schema changes are hard to reverse | **Evolutionary database design**: small migration scripts, versioned with the code; use **parallel change** (add new column, copy, switch readers, remove old) |
+| Databases | Schema (table structure) changes are hard to reverse | **Evolutionary database design**: small migration scripts (scripts that change the database structure), versioned with the code; use **parallel change** (add new column, copy, switch readers, remove old) |
 
 > **Term — parallel change (expand / contract).** Make a breaking change in three phases: *expand* (add the new thing alongside the old), *migrate* (move all users to the new thing), *contract* (remove the old thing). At no point is anything broken.
 
@@ -147,13 +147,13 @@ Refactoring is safe only if you can detect a behaviour change immediately. That 
 - **Characterisation tests** (a term from Michael Feathers): for code without tests, write tests that record what the code *currently does* — even if that looks wrong — so you notice if a refactoring changes it. The worked example in 7.5 uses exactly this: a checker that compares every step's output with the original, byte for byte.
 - Consider **mutation testing** (e.g. PIT for Java) to check your tests actually catch changes — it deliberately introduces small bugs and reports any your tests fail to detect.
 
-> **Term — safety net.** Anything that tells you quickly and reliably that you broke something: unit tests, integration tests, the compiler's type checks, and the IDE's automated refactorings (which are proven safe by the tool).
+> **Term — safety net.** Anything that tells you quickly and reliably that you broke something: unit tests (one class tested in isolation), integration tests (several real parts tested together), the compiler's type checks, and the IDE's automated refactorings (which are proven safe by the tool).
 
 ### 7.1.8 IDE automation
 
-Modern IDEs perform many refactorings *automatically and safely*, using the compiler's knowledge of the code (the **syntax tree** and **symbol resolution**), not text search. A text search-and-replace of `name` would also hit comments, strings and unrelated fields; the IDE's Rename only changes that one symbol and all its real references.
+Modern IDEs perform many refactorings *automatically and safely*, using the compiler's knowledge of the code (the **syntax tree** and **symbol resolution** — the parsed structure of the code, and knowing exactly which declaration each name refers to), not text search. A text search-and-replace of `name` would also hit comments, strings and unrelated fields; the IDE's Rename only changes that one symbol and all its real references.
 
-History in one line: Bill Opdyke's 1992 PhD thesis formalised refactorings; John Brant and Don Roberts built the Smalltalk *Refactoring Browser*, the first automated tool; Java IDEs (IntelliJ IDEA, Eclipse) popularised it.
+History in one line: Bill Opdyke's 1992 PhD thesis formalised refactorings; John Brant and Don Roberts built the Smalltalk (an early object-oriented language) *Refactoring Browser*, the first automated tool; Java IDEs (IntelliJ IDEA, Eclipse) popularised it.
 
 | Refactoring | IntelliJ IDEA (Windows/Linux · macOS) | Eclipse (Windows/Linux) |
 |---|---|---|
@@ -168,21 +168,21 @@ History in one line: Bill Opdyke's 1992 PhD thesis formalised refactorings; John
 
 (Shortcuts are the default keymaps; check your IDE if you use a custom keymap.)
 
-Beyond the IDE there are **large-scale automated refactoring tools**, such as OpenRewrite (recipes that, for example, migrate a whole codebase between framework versions) and Google's Refaster templates in Error Prone. These let a company apply the same refactoring across thousands of files.
+Beyond the IDE there are **large-scale automated refactoring tools**, such as OpenRewrite (recipes that, for example, migrate a whole codebase between framework versions) and Google's Refaster templates in Error Prone (Google's bug-finding plugin for the Java compiler). These let a company apply the same refactoring across thousands of files.
 
-> **Caution.** Automated refactorings are safe for statically known calls. They can miss **reflection** (`Class.forName("…")`), names used in **configuration files**, **serialised field names** (JSON/Jackson, JPA column names inferred from field names), and code in other repositories. After an IDE rename of a field that is serialised, the JSON your API returns changes — that *is* an observable behaviour change.
+> **Caution.** Automated refactorings are safe for statically known calls. They can miss **reflection** (`Class.forName("…")` — code that looks up classes or methods by name at runtime), names used in **configuration files**, **serialised field names** (serialising = turning objects into text or bytes, e.g. JSON, a plain-text data format; JSON/Jackson, JPA — Java's standard ORM API — column names inferred from field names), and code in other repositories. After an IDE rename of a field that is serialised, the JSON your API returns changes — that *is* an observable behaviour change.
 
 ### 7.1.9 Performance and refactoring
 
 A common worry: "refactoring adds method calls and small objects, so the program gets slower." Fowler's answer has three parts:
 
-1. **Most refactorings have negligible performance effect.** The JIT compiler inlines small methods; extra method calls are nearly free in modern Java.
-2. **Programs spend most of their time in a small fraction of the code.** Optimising everywhere wastes effort on code that is rarely run. (The book retells a story from Ron Jeffries about Chrysler's slow payroll system: nobody's guesses about the cause were right; profiling found the time going to one unexpected spot, and a small fix there made it fast.)
-3. **Well-factored code is easier to tune.** When you do need speed, you profile, find the hot spot, and — because the code is well-structured — the hot spot is small and isolated, so it is easy to optimise.
+1. **Most refactorings have negligible performance effect.** The JIT (Just-In-Time) compiler — the part of the JVM, Java's runtime, that compiles frequently run code to machine code while the program runs — inlines small methods (copies their body into the caller); extra method calls are nearly free in modern Java.
+2. **Programs spend most of their time in a small fraction of the code.** Optimising everywhere wastes effort on code that is rarely run. (The book retells a story from Ron Jeffries about Chrysler's slow payroll system: nobody's guesses about the cause were right; profiling (measuring where a program actually spends its time) found the time going to one unexpected spot, and a small fix there made it fast.)
+3. **Well-factored code is easier to tune.** When you do need speed, you profile, find the hot spot (the small piece of code where most time goes), and — because the code is well-structured — the hot spot is small and isolated, so it is easy to optimise.
 
 So the recommended order is: **make it work → make it clean (refactor) → make it fast (profile, then optimise only the hot spots)**. Sometimes a refactoring makes code slightly slower; that is fine if it makes the later, targeted optimisation easier.
 
-**Example from this chapter.** In 7.5 step 2 we replace a summing loop with a stream. `DoubleStream.sum()` is allowed to use *compensated summation* (OpenJDK does), so it can give a result that differs in the last bit from a plain loop — a tiny *behaviour change*. To stay a true refactoring we used `reduce(0.0, Double::sum)`, which adds left to right exactly like the loop. Refactoring demands this kind of care.
+**Example from this chapter.** In 7.5 step 2 we replace a summing loop with a stream (Java's pipeline for processing a sequence of elements). `DoubleStream.sum()` is allowed to use *compensated summation* (a technique that tracks rounding errors to make floating-point sums more accurate; OpenJDK, the reference Java implementation, does), so it can give a result that differs in the last bit from a plain loop — a tiny *behaviour change*. To stay a true refactoring we used `reduce(0.0, Double::sum)`, which adds left to right exactly like the loop. Refactoring demands this kind of care.
 
 ### 7.1.10 Refactoring vs rewriting
 
@@ -209,7 +209,7 @@ Michael Feathers (*Working Effectively with Legacy Code*, 2004) defines **legacy
 Other useful techniques from that book:
 
 - **Sprout Method / Sprout Class** — write the new feature as a *new*, fully tested method or class, and call it from the old code with a one-line change.
-- **Wrap Method / Wrap Class** — rename the old method and create a new method with the old name that calls the old one plus the new behaviour (a Decorator-like move).
+- **Wrap Method / Wrap Class** — rename the old method and create a new method with the old name that calls the old one plus the new behaviour (a Decorator-like move — a Decorator wraps an object to add behaviour).
 - Use **safe automated refactorings only** (Rename, Extract Method with the IDE) until tests exist.
 - Do not try to clean everything. Refactor the areas you touch; over time the most-changed code becomes the cleanest.
 
@@ -236,15 +236,15 @@ Knowing *how* to refactor is not enough; you must also know *when* and *where*. 
 
 ### Smell groups (refactoring.guru classification)
 
-refactoring.guru groups smells into five families. It uses mostly the 1st-edition names, so the table maps them to the 2nd-edition names used in this chapter.
+refactoring.guru (a popular website on refactoring and design patterns) groups smells into five families. It uses mostly the 1st-edition names, so the table maps them to the 2nd-edition names used in this chapter.
 
 | Group | Idea | Smells (2nd-ed name; refactoring.guru name in brackets if different) |
 |---|---|---|
 | **Bloaters** | Code, methods and classes that have grown so big they are hard to work with. They usually grow slowly. | Long Function *(Long Method)*, Large Class, Primitive Obsession, Long Parameter List, Data Clumps |
-| **Object-Orientation Abusers** | Incomplete or wrong use of OO principles. | Repeated Switches *(Switch Statements)*, Temporary Field, Refused Bequest, Alternative Classes with Different Interfaces |
+| **Object-Orientation Abusers** | Incomplete or wrong use of OO (object-oriented) principles. | Repeated Switches *(Switch Statements)*, Temporary Field, Refused Bequest, Alternative Classes with Different Interfaces |
 | **Change Preventers** | One change forces many other changes. | Divergent Change, Shotgun Surgery *(also: Parallel Inheritance Hierarchies — a 1st-ed smell)* |
 | **Dispensables** | Something pointless whose removal makes the code cleaner. | Comments, Duplicated Code *(Duplicate Code)*, Lazy Element *(Lazy Class)*, Data Class, Speculative Generality *(also: Dead Code — in the 2nd ed. this is the refactoring Remove Dead Code)* |
-| **Couplers** | Too much coupling between classes, or too much delegation. | Feature Envy, Insider Trading *(Inappropriate Intimacy)*, Message Chains, Middle Man *(also: Incomplete Library Class — a 1st-ed smell)* |
+| **Couplers** | Too much coupling between classes, or too much delegation (handing work off to another object). | Feature Envy, Insider Trading *(Inappropriate Intimacy)*, Message Chains, Middle Man *(also: Incomplete Library Class — a 1st-ed smell)* |
 | *New in the 2nd edition (not in refactoring.guru's five groups)* | | Mysterious Name (a comprehension smell), Global Data and Mutable Data (both about uncontrolled shared state — closest to Couplers/Change Preventers), Loops (closest to Bloaters) |
 
 > **Term — coupling.** How much one piece of code depends on another. High coupling means a change in one place forces changes in others. **Cohesion** is the opposite idea inside one unit: how strongly the things inside a class or module belong together. Good design: low coupling, high cohesion.
@@ -267,7 +267,7 @@ flowchart TB
 
 Below are all 24 smells from the 2nd edition, in the book's order. Each has: **what it is**, **why it hurts**, a small **Java example** (smelly → cured), and **refactorings that fix it** (the ones Fowler names for that smell; anything extra is marked). The names match the catalogue in 7.3.
 
-> **Note on the snippets.** Several short snippets use `double` for prices or balances to stay tiny. Real money should use `BigDecimal` or a `Money` value object — see 7.2.11 and `code/smells/Money.java`.
+> **Note on the snippets.** Several short snippets use `double` for prices or balances to stay tiny. Real money should use `BigDecimal` (Java's exact decimal type) or a `Money` value object (a small immutable object compared by its value) — see 7.2.11 and `code/smells/Money.java`.
 
 ---
 
@@ -363,7 +363,7 @@ Booking book(Hotel hotel, Stay stay, Guests guests, MealPlan mealPlan) { ... }
 
 ### 7.2.5 Global Data
 
-**What it is.** Data that can be read and modified from anywhere: global variables, public static mutable fields, and mutable singletons.
+**What it is.** Data that can be read and modified from anywhere: global variables, public static mutable fields (`static` fields belong to the class and are shared by the whole program), and mutable singletons (classes with exactly one shared instance).
 
 **Why it hurts.** Any code anywhere can change it, and there is no way to find *who* changed it. Bugs appear far away from their cause. Fowler calls it one of the most pungent smells; the problems grow with the size of the program. (Class variables and singletons count too.)
 
@@ -392,7 +392,7 @@ public final class Config {
 
 **What it is.** Data that is changed after creation, especially when it is shared, or when the same variable is updated for different purposes.
 
-**Why it hurts.** A change in one place can break code in another place that assumed the value stayed the same. These bugs are hard to find, especially with threads. Functional programming is built on the idea that data should never change; you do not need to go that far, but you should limit where mutation can happen.
+**Why it hurts.** A change in one place can break code in another place that assumed the value stayed the same. These bugs are hard to find, especially with threads (several paths of execution running at the same time). Functional programming is built on the idea that data should never change; you do not need to go that far, but you should limit where mutation can happen.
 
 ```java
 // Smelly: callers can change the list inside the object, and total is a stored copy that can go stale
@@ -410,7 +410,7 @@ final class Cart {
 }
 ```
 
-**Refactorings.** Encapsulate Variable, Split Variable, Slide Statements, Extract Function, Separate Query from Modifier, Remove Setting Method, Replace Derived Variable with Query, Combine Functions into Class, Combine Functions into Transform, Change Reference to Value (use immutable value objects such as Java records).
+**Refactorings.** Encapsulate Variable, Split Variable, Slide Statements, Extract Function, Separate Query from Modifier, Remove Setting Method, Replace Derived Variable with Query, Combine Functions into Class, Combine Functions into Transform, Change Reference to Value (use immutable value objects such as Java records — compact, immutable data classes).
 
 ---
 
@@ -470,9 +470,9 @@ final class ShippingPolicy {
 
 ### 7.2.9 Feature Envy
 
-**What it is.** A method that is more interested in *another* class's data than in its own — it calls many getters on another object to compute something.
+**What it is.** A method that is more interested in *another* class's data than in its own — it calls many getters (methods that just return a field) on another object to compute something.
 
-**Why it hurts.** The behaviour lives away from the data it uses, so a change to that data needs changes elsewhere. The basic OO rule: **put behaviour next to the data it uses**. (Exception: patterns like Strategy and Visitor deliberately separate them, to allow swapping behaviour.)
+**Why it hurts.** The behaviour lives away from the data it uses, so a change to that data needs changes elsewhere. The basic OO rule: **put behaviour next to the data it uses**. (Exception: patterns like Strategy and Visitor — an object that carries one operation across a group of classes — deliberately separate them, to allow swapping behaviour.)
 
 ```java
 // Smelly: Order computes a line total using only Line's data
@@ -518,7 +518,7 @@ boolean isAvailable(DateRange stay) { ... }
 
 **What it is.** Using primitive types (`int`, `double`, `String`, `boolean`) for domain concepts that deserve their own type: money as `double`, phone numbers as `String`, a status as `"ACTIVE"`, a temperature as a bare `int` without a unit.
 
-**Why it hurts.** No validation (`"banana"` is a valid `String` phone number), no behaviour (formatting and comparing logic is duplicated), easy mix-ups (`transfer(double amount, double fee)` — swap them and nothing complains). Money as `double` also suffers from floating-point error: `0.1 + 0.2` prints `0.30000000000000004` (see the output in 7.8).
+**Why it hurts.** No validation (`"banana"` is a valid `String` phone number), no behaviour (formatting and comparing logic is duplicated), easy mix-ups (`transfer(double amount, double fee)` — swap them and nothing complains). Money as `double` also suffers from floating-point error (binary `double` numbers cannot store most decimal fractions exactly): `0.1 + 0.2` prints `0.30000000000000004` (see the output in 7.8).
 
 ```java
 // Smelly
@@ -537,7 +537,7 @@ void charge(Money amount) { ... }
 
 ### 7.2.12 Repeated Switches
 
-**What it is.** The *same* `switch` (or `if/else if` chain) on the same type code appears in several places. (In the 1st edition this smell was "Switch Statements" — *any* switch. In the 2nd edition Fowler narrowed it: a single switch is fine; the problem is the *repetition*.)
+**What it is.** The *same* `switch` (or `if/else if` chain) on the same type code (a field, such as a string or int, that says which kind of thing an object is) appears in several places. (In the 1st edition this smell was "Switch Statements" — *any* switch. In the 2nd edition Fowler narrowed it: a single switch is fine; the problem is the *repetition*.)
 
 **Why it hurts.** Adding a new case means finding and updating every switch — Shotgun Surgery. Miss one and you have a bug.
 
@@ -554,13 +554,13 @@ sealed interface Bird permits EuropeanSwallow, AfricanSwallow, NorwegianBlueParr
 }
 ```
 
-**Refactorings.** Replace Conditional with Polymorphism. (Java note: with a `sealed` type or an `enum`, a *switch expression* is checked for exhaustiveness by the compiler, which removes much of the risk. A few such switches may be acceptable; polymorphism is still better when the behaviour per case is large.)
+**Refactorings.** Replace Conditional with Polymorphism. (Java note: with a `sealed` type (one that lists all its permitted subtypes) or an `enum` (a fixed set of named constants), a *switch expression* is checked for exhaustiveness — covering every case — by the compiler, which removes much of the risk. A few such switches may be acceptable; polymorphism is still better when the behaviour per case is large.)
 
 ---
 
 ### 7.2.13 Loops
 
-**What it is.** A classic `for`/`while` loop that filters, maps or aggregates a collection, where a pipeline would state the intent more clearly. (New in the 2nd edition — languages now have good first-class functions; in Java, the Stream API since Java 8.)
+**What it is.** A classic `for`/`while` loop that filters, maps or aggregates a collection, where a pipeline would state the intent more clearly. (New in the 2nd edition — languages now have good first-class functions (functions that can be stored in variables and passed around); in Java, the Stream API since Java 8.)
 
 **Why it hurts.** A loop makes the reader simulate the steps to see what it does. A pipeline names each step: *filter*, *map*, *collect*.
 
@@ -748,7 +748,7 @@ class Employee {
 
 **What it is.** Two classes that do the same kind of job but have different method names or signatures, so you cannot substitute one for the other: `EmailSender.sendMail(to, body)` and `SmsGateway.dispatch(msg, phone)`.
 
-**Why it hurts.** You cannot treat them polymorphically, so callers write `if email ... else if sms ...`. It also often hides duplicated code.
+**Why it hurts.** You cannot treat them polymorphically (through one shared interface, without caring which class you have), so callers write `if email ... else if sms ...`. It also often hides duplicated code.
 
 ```java
 // Smelly
@@ -761,15 +761,15 @@ class EmailNotifier implements Notifier { ... }
 class SmsNotifier   implements Notifier { ... }
 ```
 
-**Refactorings.** Change Function Declaration (make signatures match), Move Function (until the protocols match), Extract Superclass (if the implementations then share code). If you cannot edit one of the classes (third-party), wrap it in an **Adapter** (Chapter 9).
+**Refactorings.** Change Function Declaration (make signatures match), Move Function (until the protocols match), Extract Superclass (if the implementations then share code). If you cannot edit one of the classes (third-party), wrap it in an **Adapter** (Chapter 9) — a class that converts one interface into the one you expect.
 
 ---
 
 ### 7.2.22 Data Class
 
-**What it is.** A class with only fields and getters/setters, and no behaviour. Other classes manipulate its data in detail.
+**What it is.** A class with only fields and getters/setters (setters are methods that just overwrite a field), and no behaviour. Other classes manipulate its data in detail.
 
-**Why it hurts.** The behaviour that belongs with the data lives elsewhere (usually as Feature Envy in its clients), often duplicated across several clients. Public setters also allow anyone to break the object's invariants.
+**Why it hurts.** The behaviour that belongs with the data lives elsewhere (usually as Feature Envy in its clients), often duplicated across several clients. Public setters also allow anyone to break the object's invariants (rules that must always hold, e.g. "balance is never negative").
 
 **Important exceptions.** Immutable data carriers are fine and often good: a Java **record** that is the *result* of a computation (e.g. the output of Split Phase), a DTO (Data Transfer Object) crossing a network boundary, or a value object. The smell is about *mutable* data classes whose logic is scattered around them.
 
@@ -797,7 +797,7 @@ class Account {
 
 **What it is.** A subclass inherits methods and data from its parent but does not want or need them — or worse, refuses the parent's *interface* (overrides methods to throw `UnsupportedOperationException`).
 
-**Why it hurts.** The inheritance relationship is wrong. Refusing *implementation* is a mild smell (Fowler says it is often not worth fixing). Refusing the *interface* is serious: it breaks the **Liskov Substitution Principle** (Chapter 4) — code that uses the parent type will fail with this subclass.
+**Why it hurts.** The inheritance relationship is wrong. Refusing *implementation* is a mild smell (Fowler says it is often not worth fixing). Refusing the *interface* is serious: it breaks the **Liskov Substitution Principle** (Chapter 4: a subclass must work anywhere its parent is expected) — code that uses the parent type will fail with this subclass.
 
 ```java
 // Smelly: Stack extends a list type, and so inherits add(index, e), remove(index) ... which break stack rules
@@ -975,7 +975,7 @@ double circum(double radius) { return circumference(radius); }   // delete when 
 
 #### Encapsulate Variable *(aliases: Encapsulate Field, Self-Encapsulate Field)*
 
-**Motivation.** Data is harder to refactor than functions, because every reference must change at once. Wrapping widely accessed data in accessor functions turns "reorganise data" into "reorganise functions" and gives you one place to add validation, logging or change notifications. Always the first step for Global Data.
+**Motivation.** Data is harder to refactor than functions, because every reference must change at once. Wrapping widely accessed data in accessor functions (getter/setter methods) turns "reorganise data" into "reorganise functions" and gives you one place to add validation, logging or change notifications. Always the first step for Global Data.
 
 ```java
 // Before
@@ -1047,7 +1047,7 @@ static EnrichedReading enrichReading(Reading r) {
 
 #### Split Phase
 
-**Motivation.** When code deals with two different things in sequence (e.g. parse input, then compute; or compute, then format), split it into two phases connected by an intermediate data structure. Each phase can then be understood and changed separately — a classic cure for Divergent Change. Compilers are the textbook example (tokenise → parse → generate code). See the worked example, step 3.
+**Motivation.** When code deals with two different things in sequence (e.g. parse input, then compute; or compute, then format), split it into two phases connected by an intermediate data structure. Each phase can then be understood and changed separately — a classic cure for Divergent Change. Compilers are the textbook example (tokenise — split text into words and symbols → parse — build a tree of its structure → generate code). See the worked example, step 3.
 
 ```java
 // Before
@@ -1414,7 +1414,7 @@ class ProductionPlan {
 
 #### Change Reference to Value · inverse: Change Value to Reference
 
-**Motivation.** If an inner object does not need identity (two telephone numbers with the same digits are "the same"), make it an immutable **value object**: replace it wholesale instead of mutating it, and compare by value (`equals`/`hashCode`). Values are safe to share and to use across threads. Java `record`s are ideal.
+**Motivation.** If an inner object does not need identity (being tracked as one specific object) (two telephone numbers with the same digits are "the same"), make it an immutable **value object**: replace it wholesale instead of mutating it, and compare by value (`equals`/`hashCode`). Values are safe to share and to use across threads. Java `record`s are ideal.
 
 ```java
 // Before
@@ -1427,7 +1427,7 @@ person.setTelephone(new TelephoneNumber("020", person.telephone().number()));
 
 #### Change Value to Reference · inverse: Change Reference to Value
 
-**Motivation.** If many objects hold *copies* of the same logical entity (every order holds its own `Customer` copy) and that entity needs to be updated, a change to one copy is not seen by the others. Share **one** reference instead, usually via a **repository** that hands out the single instance per ID.
+**Motivation.** If many objects hold *copies* of the same logical entity (every order holds its own `Customer` copy) and that entity needs to be updated, a change to one copy is not seen by the others. Share **one** reference instead, usually via a **repository** (an object that stores domain objects and looks them up, usually by ID) that hands out the single instance per ID.
 
 ```java
 // Before
@@ -1494,7 +1494,7 @@ double payAmount(Employee e) {
 
 #### Replace Conditional with Polymorphism
 
-**Motivation.** When a switch on a type appears in several places (Repeated Switches), or when there is a base behaviour with variants, create a class per case and let dynamic dispatch pick the behaviour. Adding a new case means adding a class, not editing every switch. This is how you arrive at **Strategy** or **State** (7.6). The worked example's step 5 does exactly this.
+**Motivation.** When a switch on a type appears in several places (Repeated Switches), or when there is a base behaviour with variants, create a class per case and let dynamic dispatch (the runtime choosing which class's method to run from the object's actual type) pick the behaviour. Adding a new case means adding a class, not editing every switch. This is how you arrive at **Strategy** or **State** (7.6) — State gives each state of an object its own class, which supplies the behaviour for that state. The worked example's step 5 does exactly this.
 
 ```java
 // Before
@@ -1660,7 +1660,7 @@ class Person { private final String id; Person(String id) { this.id = id; } Stri
 
 #### Replace Constructor with Factory Function *(alias: Replace Constructor with Factory Method)*
 
-**Motivation.** Constructors have limitations: they must return a new instance of exactly that class, their name is fixed, and `new` is needed. A static factory method can have an intention-revealing name, return a subclass or cached instance, and hide construction details. (Joshua Bloch's *Effective Java*, Item 1, makes the same argument. JDK examples: `List.of`, `Integer.valueOf`, `LocalDate.of`.)
+**Motivation.** Constructors have limitations: they must return a new instance of exactly that class, their name is fixed, and `new` is needed. A static factory method (a `static` method that creates and returns an instance) can have an intention-revealing name, return a subclass or cached instance, and hide construction details. (Joshua Bloch's *Effective Java*, Item 1, makes the same argument. JDK examples: `List.of`, `Integer.valueOf`, `LocalDate.of`.)
 
 ```java
 // Before
@@ -1714,11 +1714,11 @@ double monthCharge = charge(customer, usage);
 
 ### 7.3.7 Dealing with Inheritance (book chapter 12)
 
-Inheritance is powerful and easy to misuse. These refactorings move features up and down a hierarchy and replace inheritance with delegation (composition) where needed.
+Inheritance is powerful and easy to misuse. These refactorings move features up and down a hierarchy and replace inheritance with delegation (composition — one object holding another and forwarding work to it) where needed.
 
 #### Pull Up Method · inverse: Push Down Method
 
-**Motivation.** Duplicate methods in sibling subclasses belong in the superclass. If they are similar but not identical, first make them identical (Parameterize Function), or use a Template Method (7.6).
+**Motivation.** Duplicate methods in sibling subclasses belong in the superclass. If they are similar but not identical, first make them identical (Parameterize Function), or use a Template Method (7.6) — a base-class method that fixes an algorithm's steps and lets subclasses fill some in.
 
 ```java
 // Before
@@ -1742,7 +1742,7 @@ class Employee { protected String name; }
 
 #### Pull Up Constructor Body
 
-**Motivation.** Constructors in subclasses that repeat the same initialisation should call a superclass constructor that does it. In Java 21 `super(...)` must be the first statement of a constructor (Java 25 relaxed this with flexible constructor bodies, JEP 513), so the common code goes into the superclass constructor.
+**Motivation.** Constructors in subclasses that repeat the same initialisation should call a superclass constructor that does it. In Java 21 `super(...)` must be the first statement of a constructor (Java 25 relaxed this with flexible constructor bodies, JEP 513 — a JDK Enhancement Proposal), so the common code goes into the superclass constructor.
 
 ```java
 // Before
@@ -1842,7 +1842,7 @@ class Employee { ... }
 
 #### Replace Subclass with Delegate
 
-**Motivation.** Inheritance has two limits: you can vary only **one** axis (a person cannot be subclassed by both age-group and income-level), and subclasses are tightly coupled to their parent. Delegation (composition) handles both: the varying behaviour moves to a separate delegate object that can be changed at runtime. This is "favour object composition over class inheritance" (GoF), and the core of the **State** and **Strategy** patterns.
+**Motivation.** Inheritance has two limits: you can vary only **one** axis (a person cannot be subclassed by both age-group and income-level), and subclasses are tightly coupled to their parent. Delegation (composition) handles both: the varying behaviour moves to a separate delegate object that can be changed at runtime. This is "favour object composition over class inheritance" (GoF — the "Gang of Four" authors of the 1994 *Design Patterns* book), and the core of the **State** and **Strategy** patterns.
 
 ```java
 // Before
@@ -2091,9 +2091,9 @@ Adding HTML now would mean duplicating everything. So we do **preparatory refact
 
 ### The safety net
 
-Before touching anything we write a **characterisation check** — `lld.ch07.worked.Main`. It runs step 0 to record the "golden" output, then runs every later step and compares the output **byte for byte**. The fixture includes boundary cases (exactly 100 km for STD, exactly 10 kg for FRG) because boundaries are where refactorings most often break behaviour. In a real project this would be a JUnit test; here it is a plain `main` so it runs with the JDK alone.
+Before touching anything we write a **characterisation check** — `lld.ch07.worked.Main`. It runs step 0 to record the "golden" output, then runs every later step and compares the output **byte for byte**. The fixture (the fixed test input data) includes boundary cases (exactly 100 km for STD, exactly 10 kg for FRG) because boundaries are where refactorings most often break behaviour. In a real project this would be a JUnit test (JUnit is the standard Java testing framework); here it is a plain `main` so it runs with the JDK (Java Development Kit — the compiler and runtime) alone.
 
-Each step lives in its own package (`step0` … `step5`) so you can compile and diff them. After *every* step the checker prints `SAME output`.
+Each step lives in its own package (`step0` … `step5`) so you can compile and diff them (compare them line by line). After *every* step the checker prints `SAME output`.
 
 ### Step 1 — Extract Function, Rename Variable/Field, Remove Dead Code
 
@@ -2302,6 +2302,8 @@ Design patterns (Chapters 8–11) are not only designed up front. Very often you
 
 ### How it works
 
+> **Key term — patterns in this table not met earlier in this chapter** (all are covered in Chapters 8–11). **Factory**: an object or method whose only job is creating other objects; a **Builder** assembles one complex object step by step. **Observer**: subscribers register with an object and are notified automatically when it changes. **Bridge**: separates an abstraction from its implementation so the two can vary independently. **Composite**: a tree structure in which single items and groups of items are treated the same way.
+
 | Smell you see | Refactor toward | Via (Fowler's steps) |
 |---|---|---|
 | A switch/if-chain choosing an algorithm (e.g. discount by customer tier) | **Strategy** | Extract Function per branch → Replace Conditional with Polymorphism (Kerievsky: *Replace Conditional Logic with Strategy*) |
@@ -2323,7 +2325,7 @@ The runnable package `lld.ch07.towardpatterns` shows five of these with the **be
 
 ### Replace Conditional Logic with Strategy
 
-**Before:** a `switch (tier)` that every new customer tier must edit. **After:** a `DiscountPolicy` functional interface, one policy per tier (lambdas here; classes if a policy grows), stored in an `EnumMap`. New tiers are *registered*, not coded into a switch.
+**Before:** a `switch (tier)` that every new customer tier must edit. **After:** a `DiscountPolicy` functional interface (an interface with a single abstract method, so a lambda — a short inline function — can implement it), one policy per tier (lambdas here; classes if a policy grows), stored in an `EnumMap` (a map whose keys are enum constants). New tiers are *registered*, not coded into a switch.
 
 ```java
 @FunctionalInterface
@@ -2336,7 +2338,7 @@ double price(Tier tier, double amount) {
 
 ### Replace State-Altering Conditionals with State
 
-**Before:** every method checks `status` strings and changes them — the rules of the lifecycle are scattered across methods. **After:** each state is an enum constant implementing `OrderState`; it overrides only the moves it allows. Default methods reject everything else. `Order` just delegates: `state = state.pay(this)`.
+**Before:** every method checks `status` strings and changes them — the rules of the lifecycle are scattered across methods. **After:** each state is an enum constant implementing `OrderState`; it overrides only the moves it allows. Default methods (interface methods with a built-in body) reject everything else. `Order` just delegates: `state = state.pay(this)`.
 
 ```mermaid
 stateDiagram-v2
@@ -2440,12 +2442,12 @@ outsider tried lines().clear() -> UnsupportedOperationException (collection is e
 ### Real-world examples
 
 - **IntelliJ IDEA, Eclipse, VS Code (Java extension)** — automated Rename, Extract Method, Inline, Change Signature, Move, Pull Up / Push Down: these are direct implementations of catalogue entries.
-- **OpenRewrite** — open-source engine for automated, large-scale source refactoring with "recipes"; used, for example, to migrate codebases between Spring Boot versions or from JUnit 4 to JUnit 5.
-- **Google** — Error Prone with Refaster templates, used for large automated changes across its monorepo.
+- **OpenRewrite** — open-source engine for automated, large-scale source refactoring with "recipes"; used, for example, to migrate codebases between Spring Boot (a popular Java application framework) versions or from JUnit 4 to JUnit 5.
+- **Google** — Error Prone with Refaster templates, used for large automated changes across its monorepo (one giant repository holding most of the company's code).
 - **JDK history.** `java.util.Stack extends Vector` and `java.util.Properties extends Hashtable` are classic, often-cited cases of inheritance where delegation would have been better (Refused Bequest). For new code, the JDK docs recommend `ArrayDeque` (via the `Deque` interface) over `Stack`. `Date` → `java.time` (Java 8) shows Primitive Obsession/Mutable Data being replaced by immutable value types (`LocalDate`, `Instant`, `Duration`) — a new API alongside the old one rather than an in-place refactor, because the old API is published.
 - **Deprecation as migration mechanics.** The JDK and Spring mark old methods `@Deprecated` (Java 9 added `forRemoval`) and keep them delegating for several releases — exactly *Change Function Declaration* with migration mechanics.
 - **Java language features that support refactoring**: records (Encapsulate Record, value objects), `sealed` interfaces + switch pattern matching (safe type hierarchies), streams (Replace Loop with Pipeline), `Optional` (making absence explicit), `List.copyOf` / `Collections.unmodifiableList` (Encapsulate Collection).
-- **Strangler Fig in industry.** Many companies that split a monolith into services (Fowler's own write-ups describe this pattern) route one feature at a time from the old system to the new, instead of a big-bang rewrite.
+- **Strangler Fig in industry.** Many companies that split a monolith (an application built and deployed as one unit) into services (Fowler's own write-ups describe this pattern) route one feature at a time from the old system to the new, instead of a big-bang rewrite.
 
 ### In the interview
 

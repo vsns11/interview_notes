@@ -14,6 +14,8 @@
 
 A **resource** is anything with a limited supply (a car, a table, a seat). A **race condition** is a bug where the result depends on which of two threads runs first — here, two people both "win" the same seat because both checked "free?" before either wrote "taken".
 
+A **thread** is one independent line of execution inside a running program; a server handles many requests at once by running many threads side by side. A step is **atomic** when it happens as one indivisible unit: no other thread can see it half-done or slip in between its parts. **Concurrency** simply means several things are in progress at the same time.
+
 **How to run every example in this chapter**
 
 ```bash
@@ -22,11 +24,11 @@ javac --release 21 -d /tmp/lld_16 $(find . -name '*.java')
 java -cp /tmp/lld_16 lld.ch16.carrental.Main          # or restaurant, airline, courseregistration
 ```
 
-All four `Main` classes compile with Java 21 (standard library only) and run. The output printed under each program is its real output. Where threads race, the *counts* are always the same, but *which* racer wins can differ from run to run.
+`javac` is the Java compiler (it turns `.java` source files into runnable `.class` files), `--release 21` targets Java version 21, and `-cp` (the **classpath**) tells `java` which folder to load compiled classes from. All four `Main` classes compile with Java 21 (standard library only — the classes that ship with Java itself, no extra downloads) and run. The output printed under each program is its real output. Where threads race, the *counts* are always the same, but *which* racer wins can differ from run to run.
 
-> **Code-style note.** To keep each design readable, one file sometimes holds several small package-private types (for example `Types.java` holds the enums and records). That is legal Java. In production you would usually give each top-level type its own file.
+> **Code-style note.** To keep each design readable, one file sometimes holds several small package-private types (visible only to other classes in the same package, i.e. the same folder of code) — for example `Types.java` holds the enums and records. An **enum** is a type with a fixed list of named values (`CAR`, `TRUCK` …); a **record** is a compact Java class that just holds a few fixed values and gets `equals`, `hashCode` and `toString` for free. That is legal Java. In production you would usually give each top-level type its own file.
 
-> **Money.** All prices use `java.math.BigDecimal`, never `double`. A `double` cannot represent 0.1 exactly, so sums of prices drift by fractions of a cent. `BigDecimal` stores exact decimal digits.
+> **Money.** All prices use `java.math.BigDecimal`, never `double`. A `double` is a binary floating-point number (it stores values in base 2 with limited precision); it cannot represent 0.1 exactly, so sums of prices drift by fractions of a cent. `BigDecimal` stores exact decimal digits.
 
 ---
 
@@ -72,7 +74,7 @@ Questions worth asking in the first two minutes, with the answers we assume:
 **Non-functional**
 
 - **Correctness under concurrency:** no double booking of a vehicle for overlapping days.
-- **Extensibility:** adding a new kind of add-on or a new pricing rule should not change the reservation code (Open/Closed Principle).
+- **Extensibility:** adding a new kind of add-on or a new pricing rule should not change the reservation code (the **Open/Closed Principle**: code should be open to extension by adding new classes, but closed to editing what already works).
 - **Auditability:** every charge is a visible bill line, every vehicle event is a log entry.
 
 ### Use cases
@@ -84,12 +86,12 @@ Four **actors** (people or systems that use the software):
 - **Worker** — handles returned vehicles and updates the vehicle log (cleaning, refuelling, damage).
 - **System** — sends notifications (pick-up reminders, overdue alerts, cancellations).
 
-Top use cases: add/remove/edit vehicle; search catalogue by type and availability; register or cancel membership; reserve vehicle; check out (pick up) vehicle; return vehicle; add equipment or services; update the vehicle log.
+A **use case** is one goal an actor can achieve with the system, such as "reserve a vehicle". Top use cases: add/remove/edit vehicle; search catalogue by type and availability; register or cancel membership; reserve vehicle; check out (pick up) vehicle; return vehicle; add equipment or services; update the vehicle log.
 
 ![Car rental use case diagram](../../assets/O-design-a-car-rental-system-2.svg)
 *Figure — Use case diagram: receptionist, member, worker and system and the use cases each triggers (course diagram)*
 
-In the figure above, notice that reserving is shared by the member and the receptionist, while updating the log belongs to the worker.
+A **use case diagram** is a UML (Unified Modeling Language, a standard set of software diagrams) picture: stick figures are actors, ovals are use cases, and lines show who triggers what. In the figure above, notice that reserving is shared by the member and the receptionist, while updating the log belongs to the worker.
 
 ### Core entities
 
@@ -97,21 +99,21 @@ In the figure above, notice that reserving is shared by the member and the recep
 |---|---|
 | `CarRentalSystem` | Top-level object; owns the branches and the reservation service. |
 | `CarRentalLocation` | One branch (name, code) with its own `VehicleInventory`. |
-| `VehicleInventory` | Three indexes over a branch's vehicles: by barcode, by type, by model. Answers "which SUVs are free on these days?". |
+| `VehicleInventory` | Three indexes (lookup maps) over a branch's vehicles: by barcode, by type, by model. Answers "which SUVs are free on these days?". |
 | `Vehicle` | Barcode, plate, make, model, type, seats, parking stall, mileage, **the set of booked days**, and its log. |
 | `VehicleLogEntry` | One event on a vehicle (date, type, note). |
-| `DateRange` | Half-open range of days `[start, end)`; `end` is the due date. |
+| `DateRange` | Half-open range of days `[start, end)` (includes `start`, excludes `end`); `end` is the due date. |
 | `Reservation` | The rental: member, vehicle, dates, pick-up and return branch, add-ons, drivers, bill, status. Holds the business rules. |
 | `ReservationAddOn` (+ `RentalInsurance`, `Equipment`, `Service`) | Anything that adds a charge to a rental. |
 | `AdditionalDriver` | A named extra driver on the rental (no charge in our model). |
 | `Bill`, `BillItem` | The one place that knows what a rental costs: a list of lines. |
-| `PricingStrategy`, `LateFeePolicy` | Pluggable rules for the base charge and the late fee. |
+| `PricingStrategy`, `LateFeePolicy` | Pluggable (swappable without code changes) rules for the base charge and the late fee. |
 | `ReservationService` | Creates reservations atomically, answers the two "who rented what" questions, runs reminders. |
-| `Notifier`, `PaymentMethod` | Ports for sending messages and taking money. |
+| `Notifier`, `PaymentMethod` | Ports (interfaces to outside systems) for sending messages and taking money. |
 
 ### Class diagram
 
-The course builds its model in seven stages: money and messages, add-ons, vehicles, search, reservations, actors, and finally the system and its branches.
+A **class diagram** shows the classes, their fields and methods, and how they relate (owns, refers to, inherits from). The course builds its model in seven stages: money and messages, add-ons, vehicles, search, reservations, actors, and finally the system and its branches.
 
 ![Car rental vehicles stage](../../assets/O-design-a-car-rental-system-8.svg)
 *Figure — Vehicle, its log and the vehicle sub-types (course diagram)*
@@ -124,7 +126,7 @@ The course builds its model in seven stages: money and messages, add-ons, vehicl
 
 In the finished figure above, two ownership chains matter: the system owns its branches and each branch owns its inventory (filled diamonds, **composition** — the part dies with the whole), while the inventory only *refers to* vehicles (plain arrow, **association**). A reservation owns its bill but only refers to the vehicle.
 
-Our Java design follows the same shape, with two deliberate differences: vehicle kinds are an enum (`VehicleType`) rather than five empty subclasses, because the subclasses add no behaviour; and pricing is a strategy object rather than a constant.
+Our Java design follows the same shape, with two deliberate differences: vehicle kinds are an enum (`VehicleType`) rather than five empty subclasses (classes that inherit from a parent class), because the subclasses add no behaviour; and pricing is a strategy object (an object you plug in to decide one varying rule) rather than a constant.
 
 ```mermaid
 classDiagram
@@ -205,7 +207,7 @@ classDiagram
 
 ### Key flows
 
-**Pick up a vehicle.** The receptionist scans the customer's licence (or searches by name), checks there is a valid reservation, scans the vehicle's barcode, and hands over the keys. If there is no reservation, the member can reserve a free vehicle on the spot.
+The figures below are **activity diagrams** — flowcharts of one task, with diamonds for decisions. **Pick up a vehicle.** The receptionist scans the customer's licence (or searches by name), checks there is a valid reservation, scans the vehicle's barcode, and hands over the keys. If there is no reservation, the member can reserve a free vehicle on the spot.
 
 ![Car rental pick-up activity](../../assets/O-design-a-car-rental-system-3.svg)
 *Figure — Activity diagram: picking up a vehicle (course diagram)*
@@ -229,7 +231,7 @@ stateDiagram-v2
     CANCELLED --> [*]
 ```
 
-Reserve flow, including the race we must win:
+Reserve flow, including the race we must win (a **sequence diagram**: each column is an object, and arrows are calls in time order from top to bottom):
 
 ```mermaid
 sequenceDiagram
@@ -259,15 +261,15 @@ sequenceDiagram
 |---|---|---|
 | **Availability comes from the days each vehicle has already sold**, not from a status field | Members ask about future dates ("can I have it from the 10th to the 13th?"). A car that is out on loan right now may be back by then, and a car sitting on the lot today may already be promised to someone else next week. | A `RESERVED` status: cannot answer future-date questions, and a car can only hold one reservation. |
 | Keep `VehicleStatus` too | Staff still need "where is the car right now" (on the lot, loaned, in service, lost). | Dropping status: loses the physical-location answer. |
-| `Vehicle.tryBook` does check **and** book in one `synchronized` method | Closes the check-then-act race (see below). | Separate `isFree()` then `book()` calls: two members can both see "free". |
-| **Template Method** on `ReservationAddOn` | Billing is written once in the `final` method `toBillItem`; subclasses only say what they are (`kind`) and may override the pricing hook (`Service` is a flat fee). A fourth add-on is one new subclass. | A type enum with `switch` in the reservation: every new add-on edits the reservation. |
-| **Strategy** for `PricingStrategy` and `LateFeePolicy` | Seasonal or length-based pricing changes one class, not the reservation. | Hard-coded rate constants. |
-| **Decorator** `WeeklyDiscountPricing` wraps any `PricingStrategy` | Stacks a discount on top of whatever base rule is in place. | A subclass per combination (daily+weekly, seasonal+weekly …). |
+| `Vehicle.tryBook` does check **and** book in one `synchronized` method (Java lets only one thread at a time run it on the same object) | Closes the check-then-act race (see below). | Separate `isFree()` then `book()` calls: two members can both see "free". |
+| **Template Method** (a base class fixes the steps of an algorithm; subclasses fill in some steps) on `ReservationAddOn` | Billing is written once in the `final` (cannot be overridden) method `toBillItem`; subclasses only say what they are (`kind`) and may override the pricing hook (a step meant to be replaced) (`Service` is a flat fee). A fourth add-on is one new subclass. | A type enum with `switch` in the reservation: every new add-on edits the reservation. |
+| **Strategy** (one interface, interchangeable implementations of a rule) for `PricingStrategy` and `LateFeePolicy` | Seasonal or length-based pricing changes one class, not the reservation. | Hard-coded rate constants. |
+| **Decorator** (an object that wraps another of the same type and adds behaviour) `WeeklyDiscountPricing` wraps any `PricingStrategy` | Stacks a discount on top of whatever base rule is in place. | A subclass per combination (daily+weekly, seasonal+weekly …). |
 | `Bill` is the only place charges live | Base, add-ons and late fees are lines on one bill; the total can never be computed in two places and disagree. | Each add-on keeping its own running total. |
-| `ReservationService` separate from `Reservation` | Creating and indexing reservations is a different job from holding one reservation's rules (Single Responsibility). | Static factory on `Reservation`. |
+| `ReservationService` separate from `Reservation` | Creating and indexing reservations is a different job from holding one reservation's rules (Single Responsibility: one class, one reason to change). | Static factory (a `static` method that builds objects) on `Reservation`. |
 | **Actors call the rules, they never compute them** | The course's stage 6: a member calls the reservation service (search, reserve, cancel); a receptionist calls the reservation (hand over, take back, take payment, send reminders). An actor that starts working out fees is doing the reservation's job. In our code the actors are plain data (`Member`) and every rule sits in `Reservation`/`ReservationService`. | `Member.reserve()` / `Receptionist.computeLateFee()` methods. |
-| `Bill` methods are `synchronized` and `settle` is idempotent | A late-fee line can never be added while the bill is being paid, and a double-clicked "pay" charges once. | Unsynchronized list + a second charge on retry. |
-| The course makes `CarRentalSystem` a **Singleton**; we pass it in instead | A singleton is easy to reach but hard to replace in tests. Constructing one and passing it (dependency injection) gives the same "one per app" without a global. | `static getInstance()`. |
+| `Bill` methods are `synchronized` and `settle` is idempotent (calling it twice has the same effect as once) | A late-fee line can never be added while the bill is being paid, and a double-clicked "pay" charges once. | Unsynchronized list + a second charge on retry. |
+| The course makes `CarRentalSystem` a **Singleton** (a class allowed only one global instance); we pass it in instead | A singleton is easy to reach but hard to replace in tests. Constructing one and passing it (dependency injection: an object receives what it needs from outside instead of creating or looking it up itself) gives the same "one per app" without a global. | `static getInstance()`. |
 
 ### Java implementation
 
@@ -894,8 +896,10 @@ What to notice in the output: step 3 has eight threads racing for one car and ex
 
 ### Concurrency & edge cases
 
-- **Double booking.** The course lists this as an open gap in its own design (checking the days and booking them are two separate steps there). Two members call `reserve` for the same car at the same moment. Because `tryBook` is `synchronized` on the vehicle, the check "are all days free?" and the write "mark them booked" happen as one step, so the second caller sees the first caller's days. Locking per vehicle (not one global lock) lets different cars be booked in parallel. In a database-backed system the same idea becomes a unique constraint on `(vehicle_id, day)` or a `SELECT … FOR UPDATE` in one transaction.
-- **Search is advisory.** `search` may say a car is free and then `reserve` fails because someone else won. That is correct: the client simply shows "no longer available". Never reserve based on a stale search result without re-checking.
+> **Key term — lock:** A **lock** (also called a mutex) is a token only one thread can hold at a time; any other thread that wants it waits until it is released. In Java, a `synchronized` method uses the object itself as the lock. A *global lock* guards everything with one token (simple, but everyone queues), while a *per-object lock* (one per vehicle here) lets work on different objects run in parallel.
+
+- **Double booking.** The course lists this as an open gap in its own design (checking the days and booking them are two separate steps there). Two members call `reserve` for the same car at the same moment. Because `tryBook` is `synchronized` on the vehicle, the check "are all days free?" and the write "mark them booked" happen as one step, so the second caller sees the first caller's days. Locking per vehicle (not one global lock) lets different cars be booked in parallel. In a database-backed system the same idea becomes a unique constraint on `(vehicle_id, day)` (the database refuses a second row with the same pair) or a `SELECT … FOR UPDATE` (a read that also locks the rows it returns) in one transaction (a group of database changes that succeed or fail together).
+- **Search is advisory.** `search` may say a car is free and then `reserve` fails because someone else won. That is correct: the client (the app or web page the member is using) simply shows "no longer available". Never reserve based on a stale (out-of-date) search result without re-checking.
 - **Late return collides with the next rental.** If Alice returns two days late and Bob booked the car from the 14th, Bob's car is not on the lot. Real systems keep a buffer (for example a cleaning day) between bookings and, when a car is overdue, reassign the next reservation to another car of the same type.
 - **Early return.** We release the whole booked range; the unused days become bookable. Whether the member is refunded is a policy question.
 - **Cancelling after pick-up** is rejected by the state machine (`CONFIRMED` only).
@@ -908,11 +912,11 @@ What to notice in the output: step 3 has eight threads racing for one car and ex
 
 - **"How do you handle one-way rentals?"** — On return at a different branch, remove the vehicle from the old `VehicleInventory` and add it to the new one inside `returnVehicle`, and log a `TRANSFER` event. Add a one-way fee as another `BillItem`.
 - **"Seasonal or dynamic pricing?"** — Add a `SeasonalPricing` strategy (rate per date) or wrap with another decorator (`SurgePricing`). The reservation does not change.
-- **"Deposits and card holds?"** — A `PaymentMethod.authorize(amount)` at pick-up and `capture(amount)` at return; the difference is released.
+- **"Deposits and card holds?"** — A card *hold* reserves money on the card without taking it yet. A `PaymentMethod.authorize(amount)` at pick-up and `capture(amount)` at return; the difference is released.
 - **"Mileage limits, fuel level, damage claims?"** — Record odometer and fuel at pick-up and return; add `BillItem`s of type `FINE` for extra miles, missing fuel or damage (the course's enum has a `FINE` bill item type for exactly this kind of charge).
-- **"How do reminders run?"** — A scheduler (for example a `ScheduledExecutorService` or a cron job) calls `sendReminders(today)` once a day.
-- **"How would you scale this?"** — Partition vehicles by branch; the booked-days table becomes `(vehicle_id, day)` with a unique key; searches go to a read replica or a search index; reservations are written with a transaction.
-- **"How do workers update the log?"** — `Vehicle.addLog(date, CLEANING, note)` as in step 5; restrict who can call it by role in the service layer.
+- **"How do reminders run?"** — A scheduler (for example a `ScheduledExecutorService`, Java's built-in timer for repeating tasks, or a cron job, an operating-system entry that runs a command on a fixed timetable) calls `sendReminders(today)` once a day.
+- **"How would you scale this?"** — Partition vehicles by branch (split the data so each branch's vehicles live on their own database or server); the booked-days table becomes `(vehicle_id, day)` with a unique key; searches go to a read replica (a read-only copy of the database kept in sync with the main one) or a search index (a separate store built for fast lookups, such as Elasticsearch); reservations are written with a transaction. These scaling ideas are explained in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
+- **"How do workers update the log?"** — `Vehicle.addLog(date, CLEANING, note)` as in step 5; restrict who can call it by role in the service layer (the classes, like `ReservationService`, that sit between callers and the domain objects and enforce who may do what).
 
 ### In the interview
 
@@ -1025,7 +1029,7 @@ In the figure above, each role has a small, separate set of use cases. That is a
 | `ReservationService` | Searches tables (best fit), reserves atomically, cancels, checks in, sends reminders, lists walk-in tables. |
 | `Order` | One per table visit: meals keyed by seat, status with allowed transitions, listeners. |
 | `Meal`, `MealItem` | One meal per seat; a meal item = menu item × quantity. |
-| `Kitchen`, `Chef` | Kitchen hands each order to a chef by a pluggable rule; each chef cooks from a FIFO queue. |
+| `Kitchen`, `Chef` | Kitchen hands each order to a chef by a pluggable rule; each chef cooks from a FIFO (first in, first out) queue. |
 | `Employee` and roles (`Receptionist`, `Waiter`, `Manager`, `Chef`, `Cashier`) | Each role's own operations. |
 | `Check` | The bill: computed from the order (subtotal, tax, total), never stored separately. |
 | `Payment` (`CardPayment`, `CashPayment`, `CheckPayment`) | Three ways to pay with three different behaviours. |
@@ -1208,10 +1212,10 @@ sequenceDiagram
 | **Table keeps held time slots as well as status** | Status answers "now" (walk-ins); slots answer "is it free at 19:00 on Friday" (reservations). A booking holds two hourly slots. | Status only: cannot take future bookings. |
 | **Search lives on `ReservationService`, not on `Table`** | One table only knows about itself; "which tables are free at seven" needs all of them. The course notes an older version had a static search on `Table` that could not work. | Static `Table.search`. |
 | **Best fit** when choosing a table | Smallest table that seats the party keeps large tables free for large parties. | First free table. |
-| **Observer** (`OrderListener`) | The kitchen does not need to know who cares about "ready" — the waiter, a display screen, a delivery app can all subscribe. | Chef calling the waiter directly (tight coupling). |
-| **Strategy** (`ChefAssignment`) | The course's kitchen rotates chefs; that is fair but not load-aware. Swapping to `LeastLoadedAssignment` is one class, not a rewrite — the course's own point about keeping the rule in one place. | Round-robin hard-coded in `Kitchen`. |
+| **Observer** (`OrderListener`; listeners register with a subject and are told when it changes) | The kitchen does not need to know who cares about "ready" — the waiter, a display screen, a delivery app can all subscribe. | Chef calling the waiter directly (tight coupling: classes that know too much about each other to change separately). |
+| **Strategy** (`ChefAssignment`) | The course's kitchen rotates chefs; that is fair but not load-aware (it ignores how busy each chef already is). Swapping to `LeastLoadedAssignment` is one class, not a rewrite — the course's own point about keeping the rule in one place. | Round-robin (taking turns in a fixed rotation) hard-coded in `Kitchen`. |
 | **State machine** in `Order.moveTo` | Illegal moves (adding food after cooking starts, serving before ready) fail loudly. | Free `setStatus`. |
-| Three `Payment` classes behind a `sealed` interface | Card completes at once, cash may be short (declined) and returns change, a cheque must clear (pending). Different behaviour → different classes (Strategy). | One `Payment` class with a `type` field and `if`s. |
+| Three `Payment` classes behind a `sealed` interface (only the listed classes may implement it) | Card completes at once, cash may be short (declined) and returns change, a cheque must clear (pending). Different behaviour → different classes (Strategy). | One `Payment` class with a `type` field and `if`s. |
 | Check computed, not stored | Prices live on menu items; the check is derived, so it cannot disagree with the order. | A stored `Bill` total. |
 | Role classes extend `Employee`; `Customer` is not an employee | Only staff have employee ids and accounts; this keeps an account off the customer. | One `Person` class with a role flag. |
 
@@ -1855,13 +1859,13 @@ Step 2 shows best fit and slot holding (Ben cannot get T2 at 20:00 because Asha'
 ### Concurrency & edge cases
 
 - **Two receptionists book the same table.** `search` is only advisory; `reserve` calls `Table.tryHold`, which is `synchronized` and checks-and-holds both slots in one step. If it fails (someone else won) the loop tries the next table in best-fit order.
-- **Notifying outside the lock.** `Order.moveTo` changes state inside `synchronized` but calls listeners *after* leaving it. Calling unknown code while holding a lock is a classic way to cause deadlocks or long waits.
+- **Notifying outside the lock.** `Order.moveTo` changes state inside `synchronized` but calls listeners *after* leaving it. Calling unknown code while holding a lock is a classic way to cause deadlocks or long waits. A **deadlock** is when two threads each hold a lock the other needs, so both wait forever.
 - **Reminder spam.** The reminder job may run every few minutes; `markReminded` makes it send once per reservation.
 - **Party larger than any table.** Returns "no single table fits". Combining tables is out of scope (see Extensions). The course notes the design already allows it, since a reservation can hold a list of tables.
 - **No-shows.** `NO_SHOW` exists as a status; a job can release tables for bookings not checked in 15 minutes after start.
 - **Party grows after booking.** `updatePeopleCount(6)` on a four-seat table is rejected (step 2 of the output); the receptionist must re-book.
 - **Paying for food that is not ready.** `Cashier.settle` checks the order is `READY` *before* calling the payment, so a refused state change can never happen after the guest's money has been taken.
-- **Unknown reservation id** on cancel or check-in fails with a clear `IllegalArgumentException`, not a `NullPointerException`.
+- **Unknown reservation id** on cancel or check-in fails with a clear `IllegalArgumentException` (Java's standard "you passed a bad value" error), not a `NullPointerException` (the confusing crash you get when code uses a missing object).
 - **Seat number out of range** on an order is rejected.
 - **Cash short** → `DECLINED`, the order stays `READY` and the table stays occupied.
 - **Cheque** → `PENDING`: the meal is served, but the money is not yet confirmed.
@@ -1873,7 +1877,7 @@ Step 2 shows best fit and slot holding (Ben cannot get T2 at 20:00 because Asha'
 - **"Tips and service charge?"** — Add lines to `Check` (percentage or amount chosen at payment).
 - **"Waiting list for walk-ins?"** — A FIFO queue per party size; when a table frees, notify the head.
 - **"Kitchen stock?"** — An `Inventory` of ingredients; each `MenuItem` has a recipe; placing an order reserves ingredients and marks items "86'd" (unavailable) when stock runs out.
-- **"Real concurrency in the kitchen?"** — Each chef becomes a worker thread taking from a `BlockingQueue<Order>`; `take()` blocks until an order arrives.
+- **"Real concurrency in the kitchen?"** — Each chef becomes a worker thread (a thread that loops, picking up jobs) taking from a `BlockingQueue<Order>` (a thread-safe queue whose `take()` waits when it is empty); `take()` blocks until an order arrives.
 - **"Shift schedules?"** — A `Shift` entity (employee, branch, start, end); `Kitchen` only picks chefs on shift.
 
 ### In the interview
@@ -1904,7 +1908,7 @@ Step 2 shows best fit and slot holding (Ben cannot get T2 at 20:00 because Asha'
 - Kitchen assigns chefs by Strategy (round-robin or least-loaded).
 - Check is computed; card/cash/cheque are three payment strategies.
 
-**Real-world example.** Restaurant point-of-sale systems such as Toast send each order to a kitchen display screen as a "ticket", show it by station and in order, and let the front of house see when it is done — the Observer and FIFO queue above. Reservation platforms such as OpenTable model table inventory by time slot and party size, exactly like `Table.heldSlots`.
+**Real-world example.** Restaurant point-of-sale (POS — the till software where orders are entered and paid) systems such as Toast send each order to a kitchen display screen as a "ticket", show it by station and in order, and let the front of house see when it is done — the Observer and FIFO queue above. Reservation platforms such as OpenTable model table inventory by time slot and party size, exactly like `Table.heldSlots`.
 
 ---
 
@@ -1920,7 +1924,7 @@ An **airline management system** runs an airline's operations: scheduling flight
 | Question | Assumed answer |
 |---|---|
 | What does a customer search by? | Date, source airport and destination airport. |
-| One flight or a trip of several? | A customer can build an **itinerary** of several flights. |
+| One flight or a trip of several? | A customer can build an **itinerary** (the full planned trip) of several flights. |
 | Several passengers per booking? | Yes — a reservation seats several passengers (who need not have accounts). |
 | Seat classes? | Economy, economy plus, preferred economy, business, first; seat types regular, accessible, emergency exit, extra legroom. |
 | Who manages flights? | Only the admin adds aircraft, flights and schedules, and cancels flights; everyone affected is notified. |
@@ -1974,7 +1978,7 @@ The one distinction that makes this design work is **four different "seat-ish" a
 | The route | `Flight` | GA212 London → Tokyo, 14 h, base fare 500 |
 | The route on one date | `FlightInstance` | GA212 on 8 Oct 2026 at 10:00 |
 | The physical seat on the aircraft | `Seat` | 12A, extra legroom, economy plus |
-| That seat on that one instance | `FlightSeat` | 12A on GA212 8 Oct — booked by PNR147 |
+| That seat on that one instance | `FlightSeat` | 12A on GA212 8 Oct — booked by PNR147 (PNR = booking reference) |
 
 | Class | Responsibility |
 |---|---|
@@ -1992,7 +1996,7 @@ The one distinction that makes this design work is **four different "seat-ish" a
 | `FlightReservation` | One leg: one instance, map passenger → seat, amount, status. |
 | `Itinerary` | A trip of legs; owns the connection rule; the unit that is paid. |
 | `FareStrategy` | Pluggable pricing: class multiplier, decorated with a last-minute surcharge. |
-| `Airline` | Facade for admin and customer operations; keeps the index instance → reservations. |
+| `Airline` | Facade (one simple front object that hides many classes behind it) for admin and customer operations; keeps the index instance → reservations. |
 
 ### Class diagram
 
@@ -2716,8 +2720,8 @@ Step 3 prices 2 × 400 economy + 2 × (500 × 2.5) business = 3300, and the seco
 - **Booking a cancelled or departed flight** throws.
 - **Idempotent cancel.** `FlightReservation.cancel()` returns `false` if already cancelled, so a customer cancelling while the admin cancels the flight does not double-refund.
 - **Crew double-booking** across overlapping instances is rejected (`assignCrew` is `synchronized` over the scan and the add).
-- **Time zones.** Our example keeps all times in one reference zone. Real systems store departures as `ZonedDateTime` or `Instant` with each airport's zone, because London and Tokyo are 8–9 hours apart.
-- **Seat holds during payment.** Real booking flows put a seat on a short *hold* (for example 10–15 minutes) while the customer pays, and release it automatically if payment fails. Add a `heldUntil` timestamp on `FlightSeat` and a sweeper.
+- **Time zones.** Our example keeps all times in one reference zone. Real systems store departures as `ZonedDateTime` (a date-time plus its time zone) or `Instant` (an exact moment on the global UTC timeline) with each airport's zone, because London and Tokyo are 8–9 hours apart.
+- **Seat holds during payment.** Real booking flows put a seat on a short *hold* (for example 10–15 minutes) while the customer pays, and release it automatically if payment fails. Add a `heldUntil` timestamp on `FlightSeat` and a sweeper (a background job that regularly frees expired holds).
 
 ### Extensions & follow-up questions
 
@@ -2725,9 +2729,9 @@ Step 3 prices 2 × 400 economy + 2 × (500 × 2.5) business = 3300, and the seco
 - **"Check-in and boarding passes?"** — Add `CHECKED_IN` per passenger, a `BoardingPass` (seat, gate, group), and a check-in window.
 - **"Baggage?"** — `Baggage(passenger, weight, tag)` on the reservation; fees as extra lines.
 - **"Change fees and fare rules?"** — Fare class with rules (refundable, change fee); cancellation refund = fare − fee.
-- **"Codeshares?"** — A `MarketingFlight` (partner's number) pointing at the operating `FlightInstance`.
+- **"Codeshares?"** — A codeshare is one physical flight sold under several airlines' flight numbers. A `MarketingFlight` (partner's number) pointing at the operating `FlightInstance`.
 - **"Delays?"** — `FlightInstance.setStatus(DELAYED)` plus a new departure; notify via the same index; re-check itinerary connections and rebook broken ones.
-- **"Scale?"** — Seat inventory per instance is a hot row; use one row per seat with a conditional update (`UPDATE … WHERE reservation IS NULL`) or optimistic locking, and a cache for search.
+- **"Scale?"** — Seat inventory per instance is a hot row (one database row that very many requests try to change at once); use one row per seat with a conditional update (`UPDATE … WHERE reservation IS NULL` — it only changes the row if the condition still holds, so exactly one buyer wins) or optimistic locking (no lock is taken; each row carries a version number and a write fails if the version changed since you read it, so you retry), and a cache (a fast in-memory copy of data that is read often) for search.
 
 ### In the interview
 
@@ -2968,11 +2972,11 @@ flowchart TD
 | Decision | Why | Alternative rejected |
 |---|---|---|
 | **Course vs Section** | Capacity, time and instructor belong to an offering, not the catalogue entry. | Capacity on `Course` (cannot have two sections). |
-| **Seat taken only inside `Section.enroll`**, under a `ReentrantLock` per section | Check-capacity-then-add is atomic; different sections do not block each other. | `synchronized` on the whole registrar (every student in the university waits in one line). |
+| **Seat taken only inside `Section.enroll`**, under a `ReentrantLock` (Java's explicit lock object, which the same thread may re-acquire) per section | Check-capacity-then-add is atomic; different sections do not block each other. | `synchronized` on the whole registrar (every student in the university waits in one line). |
 | **Per-student lock** around rules + enroll | Credit limit and time-conflict checks read the schedule; two tabs registering the same student would both pass without it (step 6 of the output). | Lock only the section (a student could exceed credits via two sections in parallel). |
 | **Fixed lock order: student, then section** | Deadlock needs two threads taking the same two locks in opposite orders. Always taking student before section rules it out. Promotion takes the next student's lock only *after* releasing the dropper's, so two student locks are never held together. | Promoting while still holding the dropper's lock (student → section → student: deadlock risk). |
-| **Rules as objects** (Specification / Chain of Responsibility style) | Each rule is one small class; the registrar runs them in order and stops at the first failure. A new rule ("majors only") is a new class plus one list entry — Open/Closed. The promotion path reuses a *subset* of the same rules. | One long `register` method with nested `if`s. |
-| **Waitlist is a FIFO `Deque`, bounded** | Fair (first come, first served) and prevents unbounded queues. | Unbounded list; priority by year (a valid extension). |
+| **Rules as objects** (Specification / Chain of Responsibility style: each check is its own object, and a request passes along the chain until one rejects it) | Each rule is one small class; the registrar runs them in order and stops at the first failure. A new rule ("majors only") is a new class plus one list entry — Open/Closed. The promotion path reuses a *subset* of the same rules. | One long `register` method with nested `if`s. |
+| **Waitlist is a FIFO `Deque`, bounded** (a double-ended queue with a maximum size) | Fair (first come, first served) and prevents unbounded queues. | Unbounded list; priority by year (a valid extension). |
 | **Re-check on promotion** | A student may have registered for a clashing section while waiting. | Promote blindly (broken timetables). |
 | Time passed in (`now`) | Makes window logic testable without waiting for real dates. | Calling `LocalDateTime.now()` inside rules. |
 | **Singleton?** The GitHub problem uses a singleton `CourseRegistrationSystem`. | We construct one `Registrar` and pass it in: one instance, still testable. | Global `getInstance()`. |
@@ -3421,16 +3425,16 @@ Step 2 shows each rule firing with a clear reason. Step 3 fills two seats and tw
 - **Registration closes while on the waitlist** — promotion does not re-check the window (it is the drop that triggers it). Many universities stop automatic promotion after a deadline; add `WindowRule` to `promotionChecks` if that is the policy.
 - **Dropping a section you are not in** → `IllegalArgumentException`.
 - **Rules with time** — the window uses half-open time (`opens ≤ now < closes`).
-- **Scaling beyond one JVM** — the in-memory locks work for one process. With several app servers, the seat count moves to the database: `UPDATE section SET enrolled = enrolled + 1 WHERE id = ? AND enrolled < capacity` succeeds for exactly `capacity` requests (an atomic conditional update), or use optimistic locking with a version column. A queue in front of hot sections smooths the 09:00 spike.
+- **Scaling beyond one JVM** (Java Virtual Machine — the running program that executes Java code) — the in-memory locks work for one process (one running copy of the program). With several app servers (copies of the application on different machines, usually behind a load balancer that spreads requests among them), the seat count moves to the database: `UPDATE section SET enrolled = enrolled + 1 WHERE id = ? AND enrolled < capacity` succeeds for exactly `capacity` requests (an atomic conditional update), or use optimistic locking with a version column. A queue in front of hot sections smooths the 09:00 spike. (Load balancers, queues and databases at scale are covered in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).)
 
 ### Extensions & follow-up questions
 
-- **"Co-requisites or 'prerequisite OR instructor permission'?"** — Model prerequisites as a small expression tree (`And`, `Or`, `CourseCompleted`, `Permission`) — the Composite pattern — and evaluate it in `PrerequisiteRule`.
+- **"Co-requisites or 'prerequisite OR instructor permission'?"** — Model prerequisites as a small expression tree (a tree whose inner nodes are operators like `And`/`Or` and whose leaves are simple checks: `And`, `Or`, `CourseCompleted`, `Permission`) — the Composite pattern, where a group of objects is treated exactly like a single one — and evaluate it in `PrerequisiteRule`.
 - **"Holds (unpaid fees, advising)?"** — A `HoldRule` that rejects if the student has an active hold.
-- **"Priority waitlists (seniors first)?"** — Replace the `Deque` with a `PriorityQueue` ordered by (year, time joined).
+- **"Priority waitlists (seniors first)?"** — Replace the `Deque` with a `PriorityQueue` (a queue that always hands out the smallest item by some ordering, not the oldest) ordered by (year, time joined).
 - **"Seat reservations for majors?"** — Split capacity into buckets (majors 20, others 10) and check the bucket in `Section.enroll`.
 - **"Linked sections (lecture + lab)?"** — Register both atomically: lock both sections in a fixed order (by id), check both, enrol both.
-- **"Notify by email/SMS?"** — The registrar takes a `Consumer<String>` notifier; swap for an email service or publish an event to a message queue.
+- **"Notify by email/SMS?"** — The registrar takes a `Consumer<String>` notifier (Java's built-in "function that takes a value and returns nothing"); swap for an email service or publish an event to a message queue (a service such as Kafka or RabbitMQ that stores messages until another program reads them).
 - **"Course fees and billing?"** — Add a `Bill` per student per term, a line per enrolled section, recomputed on drop.
 
 ### In the interview
@@ -3448,7 +3452,7 @@ Step 2 shows each rule firing with a clear reason. Step 3 fills two seats and tw
 
 1. **Q:** Why do students register for sections, not courses? **A:** Capacity, time and instructor belong to each offering; a course can have many sections.
 2. **Q:** Which two locks does `register` take and in what order? **A:** The student's schedule lock, then the section's lock — always in that order.
-3. **Q:** Why not simply make `register` `synchronized` on the registrar? **A:** It would be correct but serialise every student in the university; per-section and per-student locks let unrelated requests run in parallel.
+3. **Q:** Why not simply make `register` `synchronized` on the registrar? **A:** It would be correct but serialise (force to run strictly one at a time) every student in the university; per-section and per-student locks let unrelated requests run in parallel.
 4. **Q:** Why re-check rules on promotion? **A:** The student's timetable may have changed while waiting (a clash or the same course in another section).
 5. **Q:** How do you enforce capacity with many servers? **A:** An atomic conditional update in the database (`… WHERE enrolled < capacity`) or optimistic locking.
 
@@ -3460,7 +3464,7 @@ Step 2 shows each rule firing with a clear reason. Step 3 fills two seats and tw
 - Drop → promote waitlist head → re-check → notify.
 - At scale: conditional update in the database.
 
-**Real-world example.** University student-information systems (for example Ellucian Banner, used by many US universities) run priority registration windows by class standing, check prerequisites and time conflicts, and keep section waitlists that notify a student when a seat opens (some schools enrol the student automatically; others give a time-limited window to claim the seat). Registration-day slowdowns at such schools are the 09:00 "thundering herd" this design addresses with per-section locking and, at scale, database conditional updates.
+**Real-world example.** University student-information systems (for example Ellucian Banner, used by many US universities) run priority registration windows by class standing, check prerequisites and time conflicts, and keep section waitlists that notify a student when a seat opens (some schools enrol the student automatically; others give a time-limited window to claim the seat). Registration-day slowdowns at such schools are the 09:00 "thundering herd" (a huge crowd of requests all arriving at the same instant) this design addresses with per-section locking and, at scale, database conditional updates.
 
 ---
 

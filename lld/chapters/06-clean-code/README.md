@@ -1,6 +1,6 @@
 # Chapter 6 — Clean Code
 
-Design principles (Chapters 4–5) decide *which classes exist and how they relate*. **Clean code** is about what happens *inside* those classes: names, functions, comments, error handling, tests. In machine-coding rounds, interviewers read your code line by line — clean code is often what separates "hire" from "no hire" when two candidates reach similar designs.
+Design principles (Chapters 4–5) decide *which classes exist and how they relate*. **Clean code** is about what happens *inside* those classes: names, functions, comments, error handling, tests. In machine-coding rounds (interview rounds where you build a small, working program in about 60–120 minutes), interviewers read your code line by line — clean code is often what separates "hire" from "no hire" when two candidates reach similar designs.
 
 This chapter covers every major topic of Robert C. Martin's *Clean Code* (2008), in the book's order (Chapters 1–17; the two long case studies, Chapters 15–16, are summarised in §13), explained in our own words with runnable Java 21 before/after programs. It finishes with three practical best-practice topics: a **code review checklist**, an **error-handling strategy** for real services and **testing strategies** (unit vs integration tests, test doubles, mocks).
 
@@ -45,10 +45,10 @@ There is no case where unreadable code is a goal. But avoid **gold-plating** —
 
 ### Real-world examples
 - **Google's code review culture** requires reviewer approval for readability, and it has a "readability" certification process per language.
-- **Linters and formatters** in CI (Checkstyle, SpotBugs, SonarQube, google-java-format) enforce parts of clean code automatically.
+- **Linters and formatters** (tools that automatically flag suspicious code or rewrite its layout) running in CI — Continuous Integration, a server that builds and tests every change automatically — (Checkstyle, SpotBugs, SonarQube, google-java-format) enforce parts of clean code automatically.
 
 ### In the interview
-**30-second answer:** "Clean code is code whose intent is obvious and which is cheap to change. In a machine-coding round I use intention-revealing names, small single-purpose functions, clear exceptions instead of error codes, immutable value objects and a few tests — and I leave time to refactor once it works."
+**30-second answer:** "Clean code is code whose intent is obvious and which is cheap to change. In a machine-coding round I use intention-revealing names, small single-purpose functions, clear exceptions instead of error codes, immutable value objects (small objects such as `Money` that never change after creation) and a few tests — and I leave time to refactor once it works."
 
 ### Self-check
 1. Q: What is the Boy Scout Rule? → A: Leave the code a little cleaner than you found it.
@@ -78,11 +78,11 @@ Bad names force readers to keep a **mental map** ("`d` is elapsed days, `i1` is 
 | **Make meaningful distinctions** — no number series or noise words | `a1, a2`; `ProductInfo` vs `ProductData`; `nameString` | `source, destination`; one `Product` |
 | **Use pronounceable names** | `crtdTs` | `createdAt` |
 | **Use searchable names** — avoid single letters and bare numbers except tiny local scopes | `7`, `e` | `MAX_LOGIN_ATTEMPTS`, `employee` |
-| **Avoid encodings** — no Hungarian notation, no `m_` prefixes, no `I` prefix on interfaces | `strName`, `m_desc`, `IShapeFactory` | `name`, `description`, `ShapeFactory` (+ `ShapeFactoryImpl` or better, a specific name) |
+| **Avoid encodings** — no Hungarian notation (type codes in names), no `m_` prefixes, no `I` prefix on interfaces | `strName`, `m_desc`, `IShapeFactory` | `name`, `description`, `ShapeFactory` (+ `ShapeFactoryImpl` or better, a specific name) |
 | **Avoid mental mapping** | `r` for "lower-cased URL without host" | `normalizedPath` |
 | **Class names = nouns** | `Manager`, `Processor`, `Data`, `Info` (vague) | `Customer`, `Invoice`, `AddressParser` |
 | **Method names = verbs**; accessors `get`/`is`/`has` | `data()` | `postPayment()`, `isPosted()` |
-| **Prefer named static factories** to overloaded constructors | `new Money(23)` (rupees? paise?) | `Money.ofRupees(23)` |
+| **Prefer named static factories** (static creation methods like `of...`) to overloaded constructors (several constructors with different parameter lists) | `new Money(23)` (rupees? paise, 1/100 of a rupee?) | `Money.ofRupees(23)` |
 | **Don't be cute** | `yeetAll()`, `nuke()` | `deleteAll()`, `terminate()` |
 | **One word per concept** | `fetch`/`retrieve`/`get` in sibling classes | pick one, e.g. `get` |
 | **Don't pun** (same word, different meaning) | `add` for both "sum" and "append to collection" | `append`, `insert` |
@@ -174,13 +174,13 @@ AFTER findCompletedLongRunningTasks(): [Task[title=Deploy, status=DONE, timeSpen
 Temperature.ofCelsius(25) = 298.15 K, ofFahrenheit(212) = 373.15 K
 ```
 
-The logic is the same shape — filter a list by three conditions — but *after* you can read the rule aloud: "completed tasks that took longer than five hours and aren't archived". Magic numbers became a named constant, a status code became an enum, and `Temperature.ofCelsius(25)` is unambiguous where `new Temperature(25)` would not be.
+The logic is the same shape — filter a list by three conditions — but *after* you can read the rule aloud: "completed tasks that took longer than five hours and aren't archived". Magic numbers (unexplained literal values dropped into code) became a named constant, a status code became an enum (a type with a fixed set of named values), and `Temperature.ofCelsius(25)` is unambiguous where `new Temperature(25)` would not be.
 
 ### Trade-offs
-Longer names cost a few keystrokes (IDEs autocomplete them). Very long names can hint the function does too much — split it rather than abbreviate.
+Longer names cost a few keystrokes (IDEs — Integrated Development Environments such as IntelliJ IDEA — autocomplete them). Very long names can hint the function does too much — split it rather than abbreviate.
 
 ### When not to use it
-Conventional short names are fine where universally understood: `i`/`j` loop indexes in tiny loops, `e` for a caught exception, `x`/`y` for coordinates, `T`/`K`/`V` for generics.
+Conventional short names are fine where universally understood: `i`/`j` loop indexes in tiny loops, `e` for a caught exception, `x`/`y` for coordinates, `T`/`K`/`V` for generics (type parameters, as in `List<T>`, that let one class work with many types).
 
 ### Common mistakes
 - Renaming is cheap — not doing it because "everyone knows what `tmp2` means".
@@ -223,23 +223,23 @@ Long functions mix levels of detail, hide bugs, can't be reused, can't be named 
 2. **Do one thing.** A function does one thing if you can't extract another function from it with a name that isn't just a restatement of its body. If a function has "sections" (declarations, initialisation, processing), it's doing several things.
 3. **One level of abstraction per function.** Don't mix `getHtml()` (high) with `.append("\n")` (low) in the same body.
 4. **The Stepdown Rule.** Code should read top-down like a narrative: each function is followed by the functions it calls, one level of abstraction lower. "To do X, we do A, then B. To do A, we …".
-5. **Switch statements.** A `switch` on a type code tends to be repeated in many places and to grow. Tolerate one only if it appears **once**, is buried in a low-level class (e.g. inside a factory that creates polymorphic objects), and is never repeated. Otherwise replace it with polymorphism (or enum data/behaviour).
+5. **Switch statements.** A `switch` on a type code tends to be repeated in many places and to grow. Tolerate one only if it appears **once**, is buried in a low-level class (e.g. inside a factory — a class or method whose job is creating objects — that creates polymorphic objects, i.e. objects of different classes used through one shared interface), and is never repeated. Otherwise replace it with polymorphism (or enum data/behaviour).
 6. **Use descriptive names.** A long descriptive name beats a short enigmatic one and a long comment. Small functions are easier to name.
 7. **Arguments: fewer is better.** Zero (niladic) is ideal, then one (monadic), then two (dyadic); three (triadic) should be avoided where possible; more than three (polyadic) requires very special justification — and then shouldn't be used anyway. Arguments are hard to read and each one multiplies test cases.
    - Common one-argument forms: asking a question (`isValid(email)`), transforming (`Path resolve(name)`), or an event (`onLoginFailed(attempts)`) — make the kind obvious.
    - **Flag arguments** (`render(true)`) are ugly: they announce the function does two things. Split into two functions or pass an enum.
    - **Argument objects**: when several arguments travel together, wrap them (`book(BookingRequest request)` instead of `book(show, seatType, count, day)`).
-   - **Argument lists** (varargs) count as one argument (`String.format(fmt, args...)`).
+   - **Argument lists** (varargs — a parameter like `Object... args` that accepts any number of values) count as one argument (`String.format(fmt, args...)`).
    - **Verbs and keywords**: encode argument roles in the name (`copyFromTo(source, target)`, `renameFileTo(newName)`).
-8. **Have no side effects.** A function named `checkPassword` must not also initialise the session. Hidden side effects create **temporal coupling** (it only works if called at the right time). If a side effect is necessary, put it in the name — or better, separate it.
+8. **Have no side effects.** A function named `checkPassword` must not also initialise the session (the server-side record of a logged-in user). Hidden side effects create **temporal coupling** (it only works if called at the right time). If a side effect is necessary, put it in the name — or better, separate it.
 9. **Avoid output arguments.** `addSignature(letter)` — does it add a signature *to* the letter, or the letter *to* something? Prefer `letter.addSignature()` (change the state of the owning object).
 10. **Command-Query Separation (CQS).** A function should either *change state* (command, returns `void`) or *return information* (query, no state change), not both. `if (enable("darkMode"))` is confusing: is it asking whether it's enabled, or enabling it?
-11. **Prefer exceptions to returning error codes.** Error codes force immediate `if` checks at every call site and deeply nested code; exceptions separate the happy path from error handling.
+11. **Prefer exceptions to returning error codes.** Error codes force immediate `if` checks at every call site (each place in the code that calls the function) and deeply nested code; exceptions separate the happy path (the normal, no-error flow) from error handling.
 12. **Extract try/catch blocks.** Put the body of a `try` into its own function, so the function that handles errors does *only* error handling ("error handling is one thing": if `try` appears, it should be the first word in the function and nothing should follow the `catch`/`finally` blocks).
 13. **Avoid an "error code magnet".** A central `enum Error` that everything imports forces recompiles and discourages new codes; exception subclasses can be added without touching existing code.
 14. **Don't Repeat Yourself** — duplication is the root of much evil in software (see Chapter 5).
 15. **Structured programming** (Dijkstra's one-entry, one-exit rule: one `return`, no `break`/`continue` in loops, never `goto`) matters mostly for large functions; small functions can use an occasional early `return`, `break` or `continue` when that makes them clearer (but still never `goto`).
-16. **How to get there:** nobody writes clean functions the first time. Write a working rough draft with tests, then refine — split, rename, remove duplication — keeping the tests green.
+16. **How to get there:** nobody writes clean functions the first time. Write a working rough draft with tests, then refine — split, rename, remove duplication — keeping the tests green (green = all tests passing).
 
 ```mermaid
 flowchart TD
@@ -414,17 +414,17 @@ Sorry: seats must be positive, was 0
 | Too-tiny splitting can scatter logic | Mixed abstraction levels |
 
 ### When not to use it
-Don't split a genuinely simple 8-line function into 8 one-liners just to hit a number; the goal is clarity, not a line count. Performance-critical inner loops rarely need manual inlining in Java — the JIT inlines small methods — so size is almost never a real performance excuse.
+Don't split a genuinely simple 8-line function into 8 one-liners just to hit a number; the goal is clarity, not a line count. Performance-critical inner loops rarely need manual inlining (copying a small method's body into its caller) in Java — the JIT (the Just-In-Time compiler inside the JVM, the Java Virtual Machine that runs Java programs, which turns frequently run bytecode into machine code while the program runs) inlines small methods — so size is almost never a real performance excuse.
 
 ### Common mistakes
-- Boolean parameters in public APIs.
+- Boolean parameters in public APIs (the methods and classes other code is meant to call).
 - Getters that change state (breaking CQS and least astonishment).
 - Catching exceptions deep inside and returning `null`.
 - Functions whose name says one thing and body does three.
 
 ### Real-world examples
 - `java.util.Collections.sort(list)` vs `list.sort(comparator)` — command methods return `void`.
-- `Iterator.next()` is a well-known pragmatic CQS exception (it both advances and returns); `Queue.poll()` likewise. Know them, but don't design new APIs that way without reason.
+- `Iterator.next()` (an `Iterator` walks through a collection one element at a time) is a well-known pragmatic CQS exception (it both advances and returns); `Queue.poll()` likewise. Know them, but don't design new APIs that way without reason.
 - `Files.readString`, `Files.writeString` — tiny, single-purpose APIs.
 
 ### In the interview
@@ -468,10 +468,10 @@ becomes `if (order.qualifiesForFreeShipping())` — the comment is no longer nee
 | Kind | Example |
 |---|---|
 | **Legal** | Copyright/licence header |
-| **Informative** | What a regex matches, the format of a returned string |
+| **Informative** | What a regex (text-matching pattern) matches, the format of a returned string |
 | **Explanation of intent** | *Why* a decision was made ("we copy because callers may pass an unmodifiable list") |
 | **Clarification** | Translating an obscure argument or return value from a library you can't change |
-| **Warning of consequences** | "Not thread-safe", "takes 10 minutes to run", "billed per call" |
+| **Warning of consequences** | "Not thread-safe" (unsafe to use from several threads at once), "takes 10 minutes to run", "billed per call" |
 | **TODO** | Work that should be done but can't be now — with an owner; review them regularly |
 | **Amplification** | Stressing the importance of something that looks trivial ("the trim is critical: …") |
 | **Javadoc in public APIs** | Contracts callers depend on: params, return, exceptions |
@@ -484,7 +484,7 @@ becomes `if (order.qualifiesForFreeShipping())` — the comment is no longer nee
 | Redundant | `i++; // increment i` |
 | Misleading | Subtly inaccurate description |
 | Mandated | Javadoc on every function "because the rule says so" (`@param a the a`) |
-| Journal | Change logs at the top of the file — version control does this |
+| Journal | Change logs at the top of the file — version control (a tool such as Git that records every change) does this |
 | Noise | `/** Default constructor. */` |
 | Scary noise | Copy-pasted Javadoc noise with errors |
 | Comment instead of a function/variable | Explaining an expression that could be named |
@@ -494,7 +494,7 @@ becomes `if (order.qualifiesForFreeShipping())` — the comment is no longer nee
 | **Commented-out code** | Others are afraid to delete it; it rots. Delete it — git remembers |
 | HTML comments | Markup inside comments, unreadable in the editor |
 | Nonlocal information | Commenting a system-wide default next to an unrelated function |
-| Too much information | Historical discussions, RFC excerpts |
+| Too much information | Historical discussions, RFC (internet standards document) excerpts |
 | Inobvious connection | A comment that itself needs explaining |
 | Function headers | Short, well-named functions don't need them |
 | Javadoc in non-public code | Formal docs for internal code is usually noise |
@@ -610,7 +610,7 @@ Comments are cheap to write and expensive to maintain. A few precise "why" comme
 
 ### Real-world examples
 - The **JDK's Javadoc** is a model of contract documentation (e.g. `HashMap` explains iteration order is not guaranteed; `ConcurrentHashMap` explains weakly consistent iterators).
-- **SonarQube** flags commented-out code; many teams' linters reject `TODO` without a ticket reference.
+- **SonarQube** (a server that scans code for problems) flags commented-out code; many teams' linters reject `TODO` without a ticket reference (an ID in the team's issue tracker).
 
 ### In the interview
 **30-second answer:** "I prefer expressive code over comments: named functions and constants replace most 'what' comments. I keep comments for why, warnings, legal headers, TODOs with owners and public API contracts, and I delete commented-out code because version control remembers it."
@@ -633,7 +633,7 @@ Formatting is about **communication**: the layout of code tells the reader what 
 *Analogy:* a newspaper. The headline tells you the story, the first paragraph gives the summary, details come further down. You can stop reading at any depth and still understand the gist.
 
 ### The problem it solves
-Inconsistent, cramped or random layout makes readers work to understand structure before they can understand logic. It also produces noisy diffs in code review.
+Inconsistent, cramped or random layout makes readers work to understand structure before they can understand logic. It also produces noisy diffs (the line-by-line view of what changed) in code review (a teammate reading your change before it is accepted; §15).
 
 ### How it works
 **Vertical formatting** (top-to-bottom):
@@ -745,15 +745,15 @@ Both classes behave identically. The *after* uses the newspaper order (fields �
 Almost none — formatting is cheap when automated. The only cost is agreeing on the rules once.
 
 ### When not to use it
-Generated code (e.g. from Protobuf) doesn't need hand formatting; exclude it from formatters.
+Generated code (e.g. from Protobuf, Google's schema-based message format, whose compiler writes classes for you) doesn't need hand formatting; exclude it from formatters.
 
 ### Common mistakes
-- Mixing formatting changes with logic changes in the same commit (unreadable diffs).
+- Mixing formatting changes with logic changes in the same commit (one saved, described change in version control) — it makes the diffs unreadable.
 - Personal styles inside a team codebase.
 - Aligning declarations in columns.
 
 ### Real-world examples
-- **google-java-format**, **Spotless** (Gradle/Maven), **Prettier** (JS), **gofmt** (Go formats all Go code identically — style debates disappear), **Black** (Python).
+- **google-java-format**, **Spotless** (Gradle/Maven — Java build tools), **Prettier** (JS), **gofmt** (Go formats all Go code identically — style debates disappear), **Black** (Python).
 - **EditorConfig** files share indentation settings across editors.
 
 ### In the interview
@@ -773,7 +773,7 @@ Format for the reader: headline first, related things close, concepts separated,
 ### What it is
 There are two fundamentally different kinds of types:
 - An **object** *hides* its data behind abstractions and *exposes behaviour* (functions that operate on that data). Example: an `Order` with `isMetroDelivery()`.
-- A **data structure** *exposes* its data and has *no meaningful behaviour*. Example: a record `Address(city, pincode)`, a DTO.
+- A **data structure** *exposes* its data and has *no meaningful behaviour*. Example: a record `Address(city, pincode)`, a DTO (Data Transfer Object — a plain data carrier).
 
 **Data abstraction:** hiding implementation is not just putting getters and setters on private fields. It means exposing abstract interfaces that let users manipulate the *essence* of the data without knowing its representation (e.g. `fuelPercentRemaining()` rather than `getFuelTankCapacityInLitres()` and `getLitresOfFuel()`).
 
@@ -789,13 +789,13 @@ Confusion between the two creates **hybrids** — half object, half data structu
 | Add a new **function** (e.g. `perimeter`) | **Easy**: add one function; data types untouched | **Hard**: add a method to every class |
 | Add a new **type** (e.g. `Triangle`) | **Hard**: edit every function | **Easy**: add one class; existing code untouched |
 
-So: *everything is an object* is a myth. When you expect **new types**, choose objects and polymorphism. When you expect **new operations** over a stable set of types, data structures with functions (or the Visitor pattern) may be better. Java 21's `sealed` interfaces with records and pattern-matching `switch` make the procedural style safe: the compiler tells you if a `switch` misses a type.
+So: *everything is an object* is a myth. When you expect **new types**, choose objects and polymorphism. When you expect **new operations** over a stable set of types, data structures with functions (or the Visitor pattern, Chapter 11, which adds operations to a set of classes without editing them) may be better. Java 21's `sealed` interfaces (which list exactly which classes may implement them) with records and pattern-matching `switch` (a `switch` that branches on an object's type) make the procedural style safe: the compiler tells you if a `switch` misses a type.
 
 **The Law of Demeter** (Chapter 5, §4) applies to objects: a method should not navigate an object's internals (`order.getCustomer().getAddress().city()`), because that exposes their structure — a **train wreck**. It does *not* strictly apply to data structures, whose whole job is to expose data. The fix for objects is to **hide structure**: ask the object to do the job (`order.isMetroDelivery()`).
 
-**Data Transfer Objects (DTOs):** the purest data structure — public (or record) fields, no behaviour. Used to move data across boundaries: database rows, JSON request/response bodies, messages. *Bean* form (private fields + getters/setters) gives no real encapsulation benefit but is required by some frameworks.
+**Data Transfer Objects (DTOs):** the purest data structure — public (or record) fields, no behaviour. Used to move data across boundaries: database rows, JSON (a plain-text key–value data format) request/response bodies, messages. *Bean* form (private fields + getters/setters) gives no real encapsulation benefit but is required by some frameworks.
 
-**Active Record:** a special DTO that also has navigation methods like `save()` and `find()` and maps to one database row (Rails' ActiveRecord, some Java ORMs). Common mistake: putting business rules into active records, making them hybrids. Keep business rules in separate objects that *use* the active record.
+**Active Record:** a special DTO that also has navigation methods like `save()` and `find()` and maps to one database row (Rails' ActiveRecord, some Java ORMs — Object-Relational Mappers, libraries that map classes to database tables). Common mistake: putting business rules into active records, making them hybrids. Keep business rules in separate objects that *use* the active record.
 
 ### Java example — before/after
 ```java
@@ -904,17 +904,17 @@ The procedural `Geometry` gained `perimeter()` without touching the shapes; the 
 Summarised in the anti-symmetry table above. Choose based on which change you expect more.
 
 ### When not to use it
-Don't force behaviour into DTOs that cross process boundaries — keep them dumb and version them carefully.
+Don't force behaviour into DTOs that cross process boundaries (travel between separately running programs, e.g. over the network) — keep them dumb and version them carefully.
 
 ### Common mistakes
 - Adding getters and setters for every private field by reflex (that's not encapsulation).
 - Hybrids: public mutable fields plus business methods.
-- Business logic inside JPA entities that also serve as API response bodies.
+- Business logic inside JPA (Java's standard ORM API) entities that also serve as API response bodies.
 
 ### Real-world examples
 - Records are Java's official data carriers; `java.awt.Point` has public fields (a data structure).
 - `java.time.LocalDate` is an object: you call `plusDays`, `isLeapYear`; you never see its internal fields.
-- DTOs in Spring REST controllers (`@RequestBody CreateOrderRequest`); Rails ActiveRecord / Spring Data JPA entities.
+- DTOs in Spring (the main Java server framework) REST controllers (classes that handle HTTP API requests) (`@RequestBody CreateOrderRequest`); Rails ActiveRecord / Spring Data JPA entities.
 
 ### In the interview
 **30-second answer:** "Objects hide data and expose behaviour; data structures expose data with no behaviour. OO makes adding types easy and functions hard; procedural does the opposite. I use records for DTOs and value data, rich objects for domain logic, and avoid hybrids and train wrecks."
@@ -941,16 +941,16 @@ Error handling is important, but if it **obscures the logic** it's wrong. Clean 
 *Analogy:* a fire exit plan — clearly marked, separate from normal corridors, and never blocking daily traffic.
 
 ### The problem it solves
-Error codes clutter every caller with `if` checks and are easy to forget; `null` returns cause `NullPointerException`s far away; checked exceptions from low-level libraries leak into every signature; vague messages make debugging slow.
+Error codes clutter every caller with `if` checks and are easy to forget; `null` returns cause `NullPointerException`s far away; checked exceptions (ones the Java compiler forces every caller to catch or declare) from low-level libraries leak into every signature; vague messages make debugging slow.
 
 ### How it works — the rules
 1. **Use exceptions rather than return codes.** The caller's logic stays clean; errors can't be silently ignored.
-2. **Write your `try-catch-finally` statement first** when writing code that can throw. The `try` block is like a transaction: whatever happens inside, the `catch` must leave the program consistent. In Java, prefer **try-with-resources** for anything `AutoCloseable` — the resource is closed even if an exception is thrown.
+2. **Write your `try-catch-finally` statement first** when writing code that can throw. The `try` block is like a transaction (a unit of work that either fully happens or is fully undone): whatever happens inside, the `catch` must leave the program consistent. In Java, prefer **try-with-resources** for anything `AutoCloseable` (any class with a `close()` method, such as a file or connection) — the resource is closed even if an exception is thrown.
 3. **Use unchecked exceptions.** Checked exceptions violate the Open/Closed Principle: if a low-level method starts throwing a new checked exception, every method between it and the handler must change its signature. Modern languages (C#, Kotlin, Python, Scala) have no checked exceptions. Use checked exceptions only when a caller can and must realistically recover (a rare, deliberate choice).
 4. **Provide context with exceptions.** Message should say what failed, with which values, and why (`account 'B' has 100 but 900 was requested`). Keep the original exception as the **cause** when wrapping.
 5. **Define exception classes in terms of the caller's needs.** How will the caller *catch* it? Often one exception type (per area) is enough. **Wrap third-party APIs** so their exceptions are translated into yours; this minimises dependency on the vendor and makes swapping libraries easy.
 6. **Define the normal flow — the Special Case pattern** (Martin Fowler): instead of throwing or returning `null` for an expected "absence" case, return an object that handles that case (`NoMembership` with 0 points, `GuestCustomer`, an empty list). Callers need no special handling.
-7. **Don't return `null`.** Return an empty collection, `Optional`, a special-case object, or throw. Every `null` return is a future `NullPointerException`.
+7. **Don't return `null`.** Return an empty collection, `Optional` (a container that holds a value or is empty), a special-case object, or throw. Every `null` return is a future `NullPointerException`.
 8. **Don't pass `null`.** Unless an API expects it, reject `null` arguments immediately (`Objects.requireNonNull`) — fail fast (Chapter 5).
 
 ```mermaid
@@ -1128,7 +1128,7 @@ could not send SMS to 000123 (cause: socket timeout to sms-gw-3)
 ```
 
 **What each part shows:**
-- *Before*: `transfer` returns `1` without saying which account; `history` returns `null`; `loyaltyPoints` returns `null` that crashes on auto-unboxing.
+- *Before*: `transfer` returns `1` without saying which account; `history` returns `null`; `loyaltyPoints` returns `null` that crashes on auto-unboxing (Java's automatic conversion from `Integer` to `int`, which throws on `null`).
 - *After*: an unchecked hierarchy under `BankingException`, messages with context; `history` returns an empty list; `findBalance` returns `Optional`; `loyaltyOf` returns a **special case** (`NoMembership.INSTANCE`) so callers never check for `null`; the vendor's checked `IOException` is **wrapped** with the original as its cause; `try-with-resources` closes the audit file even when an exception is thrown.
 
 ### Trade-offs
@@ -1139,7 +1139,7 @@ could not send SMS to 000123 (cause: socket timeout to sms-gw-3)
 | Checked exceptions | Compiler-enforced handling | Signature ripple; often caught and swallowed |
 | `Optional` return | Absence visible in the type | Not for fields/parameters; small allocation |
 | Special Case object | No checks at all in callers | Can hide a real problem if absence *should* be noticed |
-| Result/Either type | Expected failures as values, composable | More verbose in Java (see Error-handling strategy) |
+| Result/Either type (holds either a success value or an error) | Expected failures as values, composable | More verbose in Java (see Error-handling strategy) |
 
 ### When not to use it
 Exceptions are for exceptional or error situations, not normal control flow — e.g. don't throw to exit a loop. For *expected, frequent* outcomes (validation of user input rows), returning a result value can be cleaner (see §16).
@@ -1154,7 +1154,7 @@ Exceptions are for exceptional or error situations, not normal control flow — 
 - **Spring's `DataAccessException`** hierarchy translates vendor-specific `SQLException`s into unchecked, meaningful exceptions (e.g. `DuplicateKeyException`) — exactly "wrap third-party APIs, define exceptions by caller's needs".
 - `Collections.emptyList()`, `Optional.empty()` — JDK support for "don't return null".
 - `java.util.Objects.requireNonNull` — "don't pass null".
-- `UncheckedIOException` (Java 8) wraps `IOException` for use in lambdas/streams.
+- `UncheckedIOException` (Java 8) wraps `IOException` for use in lambdas/streams (inline functions and Java's element-processing pipelines, whose standard interfaces cannot throw checked exceptions).
 
 ### In the interview
 **30-second answer:** "I throw unchecked, domain-specific exceptions with context instead of returning codes or null. I wrap third-party exceptions at the boundary, return empty collections or Optional for absence, use a special-case object when absence is normal, validate nulls at entry, and use try-with-resources for cleanup."
@@ -1186,7 +1186,7 @@ Providers of libraries want broad applicability; users want interfaces focused o
 ### How it works
 1. **Wrap boundary types.** Don't pass `Map`, vendor clients or framework types around your application. Hide them inside a class that exposes only what your app needs (`SessionRegistry.open/activeSession/close`). Keep the boundary type **private** or at least out of public APIs.
 2. **Write learning tests.** When adopting a library, write small tests that call its API the way you intend to use it. They document your understanding, cost nothing extra (you had to learn the API anyway), and — re-run on each upgrade — tell you immediately if the library's behaviour changed.
-3. **Use code that does not exist yet.** When another team's API isn't ready, define the interface *you wish you had* (`FraudCheck`), code and test against it with a fake, and later write an **Adapter** (Chapter 9) that bridges it to the real API. This also gives you a clean seam for testing.
+3. **Use code that does not exist yet.** When another team's API isn't ready, define the interface *you wish you had* (`FraudCheck`), code and test against it with a fake, and later write an **Adapter** (Chapter 9) that bridges it to the real API. This also gives you a clean seam (a place where a test can plug in a substitute) for testing.
 4. **Keep boundary knowledge in very few places** so a vendor change touches one adapter.
 
 ### Java example — before/after
@@ -1309,12 +1309,12 @@ Don't wrap stable, universal types used locally (a `Map` used inside one method 
 
 ### Common mistakes
 - Returning vendor types from your interfaces (`PaymentGateway.charge()` returning a `StripeCharge`) — leaks the vendor.
-- Skipping learning tests and discovering library behaviour in production.
+- Skipping learning tests and discovering library behaviour in production (the live system that real users use).
 
 ### Real-world examples
-- **Anti-Corruption Layer** in Domain-Driven Design: a translation layer between your model and a legacy/external system's model.
-- **SLF4J** wraps the actual logging library; **Spring's `RestClient`/`WebClient`** abstractions let you swap the HTTP engine.
-- Contract tests (e.g. Pact) between microservices are a team-level version of learning tests.
+- **Anti-Corruption Layer** in Domain-Driven Design: a translation layer between your model and a legacy (old, still-in-use)/external system's model.
+- **SLF4J** (Simple Logging Facade for Java) wraps the actual logging library; **Spring's `RestClient`/`WebClient`** abstractions let you swap the HTTP engine.
+- Contract tests (e.g. Pact) between microservices (small, independently deployed services) are a team-level version of learning tests.
 
 ### In the interview
 **30-second answer:** "I keep third-party code at the edges: wrap it behind an interface shaped for my domain, don't pass raw library types around, write learning tests when adopting a library, and if a dependency doesn't exist yet I define the interface I need and use a fake until an adapter can bridge to the real API."
@@ -1367,7 +1367,7 @@ A related, coarser description (from Kent Beck's TDD, not from these three laws)
 | **T**imely | Written just before (or with) the production code | TDD cycle |
 
 ### Java example — a JUnit-free runner, clean tests and a dirty one
-Our tiny test framework (`@Test` + `MiniTest`) uses reflection to find annotated methods, runs each on a new instance and reports PASS/FAIL. The production class `Checkout` has four collaborators behind interfaces, so tests can replace them with doubles.
+Instead of JUnit (the standard Java testing framework), our tiny test framework (`@Test` + `MiniTest`) uses reflection (Java's ability to inspect classes and call methods by name at runtime) to find annotated methods (methods tagged with `@Test`), runs each on a new instance and reports PASS/FAIL. The production class `Checkout` has four collaborators behind interfaces, so tests can replace them with doubles.
 
 ```java
 // File: lld/ch06/testing/BeforeStyleTest.java
@@ -1748,11 +1748,11 @@ TOTAL: 8 passed, 0 failed
 | Test code must be maintained too | Faster to write the first time |
 
 ### When not to use it
-TDD is less useful for exploratory spikes (throw them away afterwards) and for pure UI layout. Don't unit-test trivial getters or framework code you don't own (use learning tests for that instead).
+TDD is less useful for exploratory spikes (quick experiments to learn something — throw them away afterwards) and for pure UI layout. Don't unit-test trivial getters or framework code you don't own (use learning tests for that instead).
 
 ### Common mistakes
 - Testing implementation details (private methods, exact call order) so tests break on every refactor.
-- Shared mutable fixtures that make tests order-dependent.
+- Shared mutable fixtures (the data and objects set up before tests) that make tests order-dependent.
 - Using `Thread.sleep` or the real clock/network in unit tests.
 - Test names like `test1`, `testCheckout`.
 
@@ -1791,7 +1791,7 @@ Big "god" classes with many responsibilities are hard to understand, change for 
 
 ### How it works
 1. **Class organisation** (Java convention): public static constants → private static variables → private instance variables → public functions → private helpers right after the public function that uses them (stepdown rule). Public instance variables are rarely justified.
-2. **Encapsulation**: keep fields and helpers private. Loosening to package-private/protected *for tests* is acceptable as a last resort, but look for another way first.
+2. **Encapsulation**: keep fields and helpers private. Loosening to package-private/protected (visible only within the same package, or also to subclasses) *for tests* is acceptable as a last resort, but look for another way first.
 3. **Classes should be small** — measured by *responsibilities*. The class name should describe them; if you can't name it concisely, or the name needs words like *Manager*, *Processor*, *Super*, or you describe it with "and"/"or"/"but", it does too much. You should be able to describe the class in about 25 words.
 4. **Single Responsibility Principle**: a class should have **one reason to change** (Chapter 4). Many small classes are better than a few large ones — the total amount of code is the same; small classes are just better organised, like tools in labelled drawers instead of one big box.
 5. **Cohesion**: a class is maximally cohesive if every method uses every instance variable. Aim for high cohesion. When a subset of methods uses a subset of fields, that subset wants to be its own class — **maintaining cohesion results in many small classes**.
@@ -1971,7 +1971,7 @@ portfolio value (paise) = 2300000
 |---|---|
 | Each is easy to understand and test | Fewer files to navigate |
 | Changes are localised | Every change touches the same class |
-| Need good names and packages to navigate | Merge conflicts, fear of change |
+| Need good names and packages to navigate | Merge conflicts (clashing edits to the same lines), fear of change |
 
 ### When not to use it
 Don't split a small cohesive class into many micro-classes that always change together — that's fragmentation, not SRP.
@@ -2006,23 +2006,23 @@ At the system level, clean code means **separating the startup process (construc
 *Analogy:* building a city. Nobody designs every street up front, and no single person manages everything. Cities work because of abstraction and modularity — water, power, traffic are separate systems with clear interfaces, and they grow over time.
 
 ### The problem it solves
-When objects create their own dependencies (`if (service == null) service = new MyServiceImpl(...)` — lazy initialisation inside business code), the business code is hard-wired to concrete classes, can't be tested in isolation, mixes construction with use, and violates SRP. When logging, security and transactions are copied into every method, every business method becomes noisy and inconsistent.
+When objects create their own dependencies (`if (service == null) service = new MyServiceImpl(...)` — lazy initialisation, i.e. creating something only the first time it is needed, inside business code), the business code is hard-wired to concrete classes, can't be tested in isolation, mixes construction with use, and violates SRP. When logging, security and transactions are copied into every method, every business method becomes noisy and inconsistent.
 
 ### How it works
 1. **Separate construction from use.**
    - **Separation of `main`**: build all objects in `main` (or a module called at startup — the **composition root**) and pass them to the application. The application knows nothing about how its objects were built; dependencies point from `main` toward the application, never back.
-   - **Factories**: when the *application* must decide *when* to create something (e.g. a `LineItem` for each scan), give it an **Abstract Factory** interface; the concrete factory still lives on the `main` side.
-   - **Dependency Injection (DI)**: an object receives its dependencies (constructor, setter or method parameter) instead of creating or looking them up. DI is the application of Inversion of Control to dependency management. Constructor injection is preferred: dependencies are explicit, final, and the object is complete after construction.
-2. **Scale up incrementally.** Build today's system well-modularised; well-separated concerns let the architecture grow (e.g. from a monolith module to a separate service) without a rewrite.
-3. **Cross-cutting concerns** (persistence, transactions, security, logging, caching) cut across many objects. Handle them modularly:
+   - **Factories**: when the *application* must decide *when* to create something (e.g. a `LineItem` for each scan), give it an **Abstract Factory** interface (an interface whose methods create objects, so the caller never names the concrete classes); the concrete factory still lives on the `main` side.
+   - **Dependency Injection (DI)**: an object receives its dependencies (constructor, setter or method parameter) instead of creating or looking them up. DI is the application of Inversion of Control (outside code, often a framework, takes charge of creating objects and driving the flow instead of your class) to dependency management. Constructor injection is preferred: dependencies are explicit, final, and the object is complete after construction.
+2. **Scale up incrementally.** Build today's system well-modularised; well-separated concerns let the architecture grow (e.g. from a monolith — one application deployed as a single unit — module to a separate service) without a rewrite.
+3. **Cross-cutting concerns** (persistence, transactions, security, logging, caching — keeping recent results in fast storage for reuse; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) cut across many objects. Handle them modularly:
    - **Java dynamic proxies** (`java.lang.reflect.Proxy`) wrap an interface and intercept every call — shown in our code.
-   - **Pure-Java AOP frameworks** (Spring AOP) generate proxies for you from annotations/config (`@Transactional`, `@Cacheable`, `@PreAuthorize`).
-   - **AspectJ** — a full aspect-oriented language extension that weaves advice into bytecode.
-   - Also: **decorators** and **servlet filters / interceptors** for simpler cases.
-4. **Test-drive the architecture**: with business logic in plain objects (POJOs) and concerns decoupled, you can start simple and evolve the architecture as needs become clear.
+   - **Pure-Java AOP frameworks** (AOP = aspect-oriented programming: write a concern such as logging once, as an *aspect*, and apply it to many methods; e.g. Spring AOP) generate proxies for you from annotations (`@`-tags on code)/config (`@Transactional`, `@Cacheable`, `@PreAuthorize`).
+   - **AspectJ** — a full aspect-oriented language extension that weaves advice (the aspect's code) into bytecode (the compiled form of Java classes that the JVM runs).
+   - Also: **decorators** and **servlet filters / interceptors** (code that runs before/after every web request) for simpler cases.
+4. **Test-drive the architecture**: with business logic in plain objects (POJOs — Plain Old Java Objects, with no framework dependencies) and concerns decoupled, you can start simple and evolve the architecture as needs become clear.
 5. **Optimise decision making**: postpone decisions until the last responsible moment, when you have the most information; modularity makes postponement possible.
 6. **Use standards wisely** — only when they add demonstrable value (heavyweight standards can bury simple logic).
-7. **Systems need domain-specific languages**: a good DSL (or fluent API) lets code read like the domain (e.g. a test-fixture builder or a routing DSL).
+7. **Systems need domain-specific languages**: a good DSL (domain-specific language — a mini-language tailored to one problem) (or fluent API — methods designed to chain into readable sentences) lets code read like the domain (e.g. a test-fixture builder or a routing DSL).
 
 ```mermaid
 sequenceDiagram
@@ -2177,19 +2177,19 @@ In *before*, the service builds its own repository and repeats logging in every 
 | Cross-cutting code in one place | Duplicated, inconsistent concerns |
 | "Magic" with frameworks; proxies only intercept calls *through* the proxy | Explicit and visible |
 
-A real Spring gotcha that follows from the proxy mechanism: calling a `@Transactional` method *from another method of the same bean* (self-invocation) bypasses the proxy, so no transaction starts.
+A real Spring gotcha that follows from the proxy mechanism: calling a `@Transactional` method *from another method of the same bean* (an object managed by Spring) (self-invocation) bypasses the proxy, so no transaction starts.
 
 ### When not to use it
 Small scripts and tiny interview programs don't need a DI framework — manual constructor injection in `main` is enough (and is what interviewers expect).
 
 ### Common mistakes
-- Service Locator calls (`Registry.get(Foo.class)`) scattered in business code — hides dependencies.
+- Service Locator (a global registry that code asks for its dependencies) calls (`Registry.get(Foo.class)`) scattered in business code — hides dependencies.
 - Field injection with `@Autowired` on private fields — hides dependencies and blocks immutability; prefer constructor injection.
 - Business logic depending on framework annotations everywhere.
 
 ### Real-world examples
 - **Spring IoC container / Spring Boot**, **Google Guice**, **Dagger** (compile-time DI, common on Android), **Jakarta CDI**.
-- **Spring AOP** implements `@Transactional`, `@Cacheable`, `@Async` via JDK dynamic proxies (for interfaces) or CGLIB subclass proxies.
+- **Spring AOP** implements `@Transactional`, `@Cacheable`, `@Async` via JDK dynamic proxies (for interfaces) or CGLIB subclass proxies (generated subclasses that wrap the real class).
 - Servlet filters and Spring `HandlerInterceptor`s for authentication and request logging.
 
 ### In the interview
@@ -2367,32 +2367,32 @@ Tests pass → no duplication → clear intent → nothing extra.
 ## 12. Concurrency
 
 ### What it is
-Concurrency is a **decoupling strategy**: it separates *what* gets done from *when* it gets done. It can improve throughput and structure, but concurrent code is hard to get right. Clean concurrency means keeping concurrency code small, separate and built on well-tested library tools.
+Concurrency — having several tasks in progress at once, usually on separate *threads* (independent paths of execution inside one program) — is a **decoupling strategy**: it separates *what* gets done from *when* it gets done. It can improve throughput (work completed per second; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) and structure, but concurrent code is hard to get right. Clean concurrency means keeping concurrency code small, separate and built on well-tested library tools.
 
 *Analogy:* a restaurant kitchen. Several cooks work at once. It works because each cook has their own station and ingredients; trouble starts when two cooks grab the same pan.
 
 ### The problem it solves
-Myths lead to bugs: *concurrency always improves performance* (only when there's waiting or multiple cores to exploit), *design doesn't change* (it changes a lot), *understanding concurrency doesn't matter with a container like a web server* (you still share state between requests). In reality, concurrency adds overhead, bugs are often not repeatable, and it requires a different design strategy.
+Myths lead to bugs: *concurrency always improves performance* (only when there's waiting or multiple cores — CPU units that can each run a thread at the same moment — to exploit), *design doesn't change* (it changes a lot), *understanding concurrency doesn't matter with a container like a web server* (you still share state between requests). In reality, concurrency adds overhead, bugs are often not repeatable, and it requires a different design strategy.
 
 ### How it works — defence principles
-1. **Single Responsibility**: keep concurrency-related code separate from other code. Our `countWords` is pure single-threaded logic; the executor code is separate.
-2. **Limit the scope of shared data**: encapsulate it and minimise the places that touch it; guard critical sections.
+1. **Single Responsibility**: keep concurrency-related code separate from other code. Our `countWords` is pure single-threaded logic; the executor code (an executor runs tasks on a pool of reusable threads) is separate.
+2. **Limit the scope of shared data**: encapsulate it and minimise the places that touch it; guard critical sections (code that touches shared data and must be run by one thread at a time, usually enforced with a *lock*).
 3. **Use copies of data**: share immutable objects or give each thread its own copy and merge results at the end.
 4. **Threads should be as independent as possible**: each thread processes its own data with no sharing (like each request having its own local variables).
-5. **Know your library**: use thread-safe collections (`ConcurrentHashMap`), the executor framework (`ExecutorService`), non-blocking atomics (`AtomicInteger`, `LongAdder`), and synchronisers (`CountDownLatch`, `Semaphore`, `CyclicBarrier`) instead of hand-made `wait/notify` code.
-6. **Know your execution models** (Chapter 13 covers them in depth): **producer–consumer** (bounded queue between producers and consumers), **readers–writers** (many readers, exclusive writers; balance throughput vs starvation), **dining philosophers** (competing for multiple resources → deadlock, livelock, starvation).
-7. **Beware dependencies between synchronised methods** on the same shared object: if you must call several, use client-based locking, server-based locking (one method that does it all under its lock) or an adapted server.
-8. **Keep synchronised sections small** — locks create contention; lock as little code as possible, but correctness first.
-9. **Writing correct shutdown code is hard** — plan graceful shutdown from the start (`shutdown()` + `awaitTermination()`, then `shutdownNow()`), beware deadlocks where threads wait for signals that never come.
+5. **Know your library**: use thread-safe collections (`ConcurrentHashMap`), the executor framework (`ExecutorService`), non-blocking atomics (`AtomicInteger`, `LongAdder` — classes that update a value in one indivisible step without locks), and synchronisers (`CountDownLatch`, `Semaphore`, `CyclicBarrier`) instead of hand-made `wait/notify` code.
+6. **Know your execution models** (Chapter 13 covers them in depth): **producer–consumer** (bounded queue between producers and consumers), **readers–writers** (many readers, exclusive writers; balance throughput vs starvation), **dining philosophers** (competing for multiple resources → deadlock, livelock, starvation). *Deadlock*: threads wait for each other forever; *starvation*: a thread never gets its turn.
+7. **Beware dependencies between synchronised methods** (`synchronized` methods, which only one thread at a time can run on a given object) on the same shared object: if you must call several, use client-based locking, server-based locking (one method that does it all under its lock) or an adapted server.
+8. **Keep synchronised sections small** — locks create contention (threads queuing for the same lock); lock as little code as possible, but correctness first.
+9. **Writing correct shutdown code is hard** — plan graceful shutdown (letting running tasks finish before the program stops) from the start (`shutdown()` + `awaitTermination()`, then `shutdownNow()`), beware deadlocks where threads wait for signals that never come.
 10. **Testing threaded code:**
     - Treat spurious, one-off failures as potential threading issues — don't dismiss them as "cosmic rays".
     - Get non-threaded code working first.
     - Make threaded code **pluggable** (run with 1, 2, many threads) and **tunable** (thread counts configurable).
     - Run with **more threads than processors** to force more task switching.
     - Run on different platforms.
-    - **Instrument** code to try to force failures (hand-coded or automated "jiggling" — inserting yields/sleeps to change interleavings; tools like jcstress exist for this).
+    - **Instrument** code to try to force failures (hand-coded or automated "jiggling" — inserting yields/sleeps to change interleavings — the order in which different threads' steps happen to mix; tools like jcstress exist for this).
 
-Key vocabulary: **bound resources** (fixed-size resources like connection pools), **mutual exclusion**, **starvation**, **deadlock**, **livelock** (threads keep reacting to each other and make no progress). These are covered in Chapters 12–13. (*Clean Code*'s **Appendix A, "Concurrency II"**, goes deeper into the same ideas: client- vs server-based locking, deadlock's four conditions and how to break them, and testing multithreaded code.)
+Key vocabulary: **bound resources** (fixed-size resources like connection pools — a reusable set of open database connections), **mutual exclusion** (only one thread at a time may use a resource), **starvation**, **deadlock**, **livelock** (threads keep reacting to each other and make no progress). These are covered in Chapters 12–13. (*Clean Code*'s **Appendix A, "Concurrency II"**, goes deeper into the same ideas: client- vs server-based locking, deadlock's four conditions and how to break them, and testing multithreaded code.)
 
 ### Java example — before/after
 ```java
@@ -2497,7 +2497,7 @@ count(the) = 182526 expected 320000 -> lost 137474 updates
 16 thread(s): count(the) = 1280000 expected 1280000
 ```
 
-The *before* shares one `int` among four threads; `theCount++` is a read-modify-write, so concurrent increments overwrite each other and updates are **lost** (the exact number varies from run to run — and on rare runs it may even be correct, which is exactly why such bugs escape testing). The *after* follows the principles: pure logic separate from threading; each task owns its data; results are handed back through `Future.get()` (which guarantees the result is safely visible to the caller) and merged by one thread; the final map is an immutable copy; the pool is shut down properly; and it is tested with 1, 4 and 16 threads (more threads than cores).
+The *before* shares one `int` among four threads; `theCount++` is a read-modify-write, so concurrent increments overwrite each other and updates are **lost** (the exact number varies from run to run — and on rare runs it may even be correct, which is exactly why such bugs escape testing). The *after* follows the principles: pure logic separate from threading; each task owns its data; results are handed back through `Future.get()` (a `Future` is a handle to a result that a task will produce later) (which guarantees the result is safely visible to the caller) and merged by one thread; the final map is an immutable copy; the pool is shut down properly; and it is tested with 1, 4 and 16 threads (more threads than cores).
 
 ### Trade-offs
 
@@ -2508,21 +2508,21 @@ The *before* shares one `int` among four threads; `theCount++` is a read-modify-
 | Needs a merge step | Every access must be correctly synchronised |
 
 ### When not to use it
-Don't add concurrency without a measured need; a single thread is simpler and often fast enough. Prefer higher-level tools (parallel streams for pure CPU work, virtual threads in Java 21 for many blocking I/O tasks) over manual thread management.
+Don't add concurrency without a measured need; a single thread is simpler and often fast enough. Prefer higher-level tools (parallel streams for pure CPU work, virtual threads in Java 21 — lightweight threads managed by the JVM, cheap enough to create one per task — for many blocking I/O tasks, i.e. input/output where the thread just waits, such as a network call) over manual thread management.
 
 ### Common mistakes
 - Sharing a `HashMap`/`ArrayList` between threads without synchronisation.
 - Check-then-act races (`if (!map.containsKey(k)) map.put(k, v)`) — use `putIfAbsent`/`computeIfAbsent`.
 - Forgetting to shut down executors (the JVM may not exit).
-- Holding locks while calling unknown code (callbacks) → deadlock risk.
+- Holding locks while calling unknown code (callbacks — functions passed in to be called later) → deadlock risk.
 
 ### Real-world examples
-- **`java.util.concurrent`** (Doug Lea): `ExecutorService`, `ConcurrentHashMap`, `CompletableFuture`, `ForkJoinPool` (work-stealing; used by parallel streams).
-- **Map-reduce / Hadoop / Spark**: independent workers on partitions + a merge step — the same confinement idea at cluster scale.
-- **Node.js and Redis** use single-threaded event loops for their main processing, avoiding shared-memory races by design.
+- **`java.util.concurrent`** (Doug Lea): `ExecutorService`, `ConcurrentHashMap`, `CompletableFuture`, `ForkJoinPool` (work-stealing — idle threads take queued tasks from busy ones; used by parallel streams).
+- **Map-reduce / Hadoop / Spark** (frameworks that split big-data jobs across many machines): independent workers on partitions + a merge step — the same confinement idea at cluster scale.
+- **Node.js and Redis** (a JavaScript server runtime and an in-memory data store) use single-threaded event loops (one thread that handles ready events one after another) for their main processing, avoiding shared-memory races by design.
 
 ### In the interview
-**30-second answer:** "I keep concurrency separate from business logic, minimise shared mutable state — preferring thread confinement, immutable data and merging results — and use `java.util.concurrent` rather than raw threads. I plan shutdown and test with more threads than cores."
+**30-second answer:** "I keep concurrency separate from business logic, minimise shared mutable state — preferring thread confinement (each piece of data is used by only one thread), immutable data and merging results — and use `java.util.concurrent` rather than raw threads. I plan shutdown and test with more threads than cores."
 
 **Follow-ups:**
 - *Q: Why is `count++` not thread-safe?* A: It's read, add, write — two threads can read the same value and one update is lost. Use `AtomicInteger`/`LongAdder` or a lock.
@@ -2542,14 +2542,14 @@ Separate concurrency code, share as little as possible (copies, immutability, co
 
 Chapters 14–16 of *Clean Code* are long case studies rather than new rules: the author takes real code and cleans it step by step. They matter because they show the *process*.
 
-**Chapter 14 — Successive Refinement** refines a command-line argument parser (`Args`). The lessons, in brief:
+**Chapter 14 — Successive Refinement** refines a command-line argument parser (`Args`) — code that reads the options typed after a program's name, like `-l -p 8080`. The lessons, in brief:
 1. **Write it dirty first, then clean it.** Nobody writes clean code in one pass; a working first draft is normal. What's not acceptable is *stopping* there.
 2. **Stop when it starts to rot.** When adding each new feature (a new argument type) makes the code noticeably messier, stop adding features and restructure.
 3. **Refactor in tiny steps with tests** — after every small change, run the tests; never leave the system broken for long. Large "big-bang" restructurings tend to fail.
 4. **Use design to absorb variation**: in the case study, each argument type became its own class behind a common interface (a polymorphic "marshaler"), so new types didn't touch the parser — the same Open/Closed move as our report formatters.
 5. **Clean the error handling too** — collect error codes and messages into one exception class instead of scattering them.
 
-**Chapter 15 — JUnit Internals** critiques a small class from JUnit (`ComparisonCompactor`, by Kent Beck and Erich Gamma), which was already good and well tested, and still improves it. Lessons:
+**Chapter 15 — JUnit Internals** critiques a small class from JUnit (`ComparisonCompactor`, by Kent Beck and Erich Gamma), which was already good and well tested, and still improves it. Lessons (codes such as N6 and G28 refer to the smells-and-heuristics catalogue in §14):
 - Remove encoding prefixes on fields (`fExpected` → `expected`) — N6.
 - Encapsulate conditionals and prefer positive ones (`if (shouldNotCompact())` → `if (canBeCompacted())`) — G28, G29.
 - Rename a function whose name hides a side effect or a second job (a `compact` method that also formats → `formatCompactedComparison`) — N7, G30.
@@ -2557,8 +2557,8 @@ Chapters 14–16 of *Clean Code* are long case studies rather than new rules: th
 - Tidy `+1`/`-1` boundary arithmetic into well-named variables — G33.
 - The point: even good code can be left a little cleaner — the Boy Scout Rule in action.
 
-**Chapter 16 — Refactoring SerialDate** cleans up a date class from the open-source JCommon library. The process is the lesson:
-1. **First, make it work** — write more tests: coverage rose from about 50% to about 92%, and the new tests exposed real bugs, which were fixed.
+**Chapter 16 — Refactoring SerialDate** cleans up a date class from the open-source (published for anyone to use and modify) JCommon library. The process is the lesson:
+1. **First, make it work** — write more tests: coverage (the share of code lines the tests actually execute) rose from about 50% to about 92%, and the new tests exposed real bugs, which were fixed.
 2. **Then make it right** — rename (`SerialDate` → `DayDate`), replace integer constants with enums (a `Month` enum; J3), move methods to the classes that own the data (G14/G17), introduce an **Abstract Factory** so the base class no longer knows its concrete subclass (G7), and delete dead code, duplication and noise comments (G9, G5, C3).
 3. Every step keeps the tests green.
 
@@ -2590,7 +2590,7 @@ Knowing principles is not enough; you need to *recognise* problems quickly while
 
 | Code | Heuristic | Meaning |
 |---|---|---|
-| E1 | Build requires more than one step | Check out, run one command, get a build |
+| E1 | Build requires more than one step | Check out, run one command, get a build (compiled, packaged program) |
 | E2 | Tests require more than one step | One command (or one click) runs all tests |
 
 **Functions (F)**
@@ -2609,10 +2609,10 @@ Knowing principles is not enough; you need to *recognise* problems quickly while
 | Code | Heuristic | Meaning |
 |---|---|---|
 | G2 | Obvious behaviour is unimplemented | Honour the principle of least surprise; implement what users would expect from the name |
-| G3 | Incorrect behaviour at the boundaries | Test edge and corner cases; don't rely on intuition |
+| G3 | Incorrect behaviour at the boundaries | Test edge and corner cases (inputs at the limits: empty, zero, maximum); don't rely on intuition |
 | G4 | Overridden safeties | Don't turn off compiler warnings, skip failing tests, or ignore errors |
 | G21 | Understand the algorithm | Don't fiddle with ifs until tests pass; know *why* it works |
-| G26 | Be precise | e.g. don't use floating point for currency; handle concurrency, nulls and ties deliberately |
+| G26 | Be precise | e.g. don't use floating point (`double`, inexact for decimals) for currency; handle concurrency, nulls and ties deliberately |
 | G31 | Hidden temporal couplings | If calls must happen in order, make the order explicit (each step returns what the next needs) |
 | G33 | Encapsulate boundary conditions | Put `+1`/`-1` edge logic in one named place (`int lastIndex = size - 1;`) |
 
@@ -2664,7 +2664,7 @@ Knowing principles is not enough; you need to *recognise* problems quickly while
 
 | Code | Heuristic | Meaning |
 |---|---|---|
-| J1 | Avoid long import lists by using wildcards | The book's advice; note many modern style guides (e.g. Google Java Style) forbid wildcard imports — follow your team's standard |
+| J1 | Avoid long import lists by using wildcards (`import java.util.*;`) | The book's advice; note many modern style guides (e.g. Google Java Style) forbid wildcard imports — follow your team's standard |
 | J2 | Don't inherit constants | Don't implement an interface just to get its constants; use static imports |
 | J3 | Constants versus enums | Prefer `enum` (type-safe, can carry data and behaviour) over `public static final int` codes |
 
@@ -2688,7 +2688,7 @@ Knowing principles is not enough; you need to *recognise* problems quickly while
 | T2 | Use a coverage tool | Find untested lines and branches (e.g. JaCoCo) |
 | T3 | Don't skip trivial tests | They're cheap and document behaviour |
 | T4 | An ignored test is a question about an ambiguity | `@Disabled` tests mark unclear requirements — resolve them |
-| T5 | Test boundary conditions | Off-by-one lives at the edges |
+| T5 | Test boundary conditions | Off-by-one errors (one too many or too few) live at the edges |
 | T6 | Exhaustively test near bugs | Bugs cluster; where you find one, look for more |
 | T7 | Patterns of failure are revealing | Which tests fail together often points to the cause |
 | T8 | Test coverage patterns can be revealing | Code not executed by passing tests hints at why failures happen |
@@ -2804,7 +2804,7 @@ Don't block a critical fix on style nits; log them as follow-ups.
 - Ignoring the **Java** notes that are dated (J1): follow your team's style guide.
 
 ### Real-world examples
-Static analysers encode many of these: **SonarQube** (cognitive complexity, duplicated blocks, commented-out code), **PMD** (unused code, god class), **Checkstyle** (naming, magic numbers), **SpotBugs** (bug patterns), **Error Prone** (Google).
+Static analysers (tools that inspect code without running it) encode many of these: **SonarQube** (cognitive complexity — a score for how hard code is to follow, duplicated blocks, commented-out code), **PMD** (unused code, god class), **Checkstyle** (naming, magic numbers), **SpotBugs** (bug patterns), **Error Prone** (Google).
 
 ### In the interview
 **30-second answer:** "When reviewing I look for duplication, long functions, flag and output arguments, magic numbers, negative or complex conditionals, feature envy, train wrecks, misplaced responsibilities, dead code, and weak tests. Most fixes are small refactorings: extract method, introduce constant, replace conditional with polymorphism."
@@ -2822,7 +2822,7 @@ Use the C/E/F/G/J/N/T catalogue as a shared review vocabulary; fix with small, t
 ## 15. Code Review Checklist (best practices)
 
 ### What it is
-A **code review** is a peer reading a change before it's merged, to catch defects, share knowledge and keep the codebase consistent. A checklist makes reviews thorough and fair — and in interviews, it's what you mentally run over your own code before saying "done".
+A **code review** is a peer reading a change before it's merged (combined into the team's main branch), to catch defects, share knowledge and keep the codebase consistent. A checklist makes reviews thorough and fair — and in interviews, it's what you mentally run over your own code before saying "done".
 
 *Analogy:* a pilot's pre-flight checklist — experienced pilots still use it because it catches what memory misses.
 
@@ -2842,22 +2842,22 @@ Unreviewed changes introduce bugs, security holes and inconsistent styles; unfoc
    - Intention-revealing names; small functions; no magic numbers; no flag arguments.
    - Comments explain *why*, not *what*; no commented-out code.
 4. **Tests**
-   - New behaviour covered by tests? Bug fixes include a regression test?
+   - New behaviour covered by tests? Bug fixes include a regression test (one that makes sure the fixed bug can't return)?
    - Tests are F.I.R.S.T., one concept each, readable names?
 5. **Security**
-   - Input validation; no SQL/command injection (parameterised queries); output encoding.
-   - No secrets or credentials in code or logs; sensitive data (PII) masked in logs.
-   - Authorisation checks on every sensitive operation.
+   - Input validation; no SQL/command injection (an attack where user input gets run as part of a database query or shell command; prevented by parameterised queries, which send input separately as plain data); output encoding (escaping data before putting it into HTML so it can't run as script).
+   - No secrets or credentials in code or logs; sensitive data (PII — personally identifiable information such as names, phone numbers, emails) masked in logs.
+   - Authorisation checks (is *this* user allowed to do *this* action?) on every sensitive operation.
 6. **Performance and resources**
-   - Obvious inefficiencies: N+1 queries, repeated work in loops, unbounded collections/caches, missing pagination.
-   - Timeouts on remote calls; connection/stream closing.
+   - Obvious inefficiencies: N+1 queries (one query to load a list, then one more query per item), repeated work in loops, unbounded collections/caches, missing pagination (returning results page by page instead of all at once).
+   - Timeouts (a maximum wait, after which the call gives up) on remote calls; connection/stream closing.
 7. **Operability**
-   - Useful logs at the right level (and not too many); metrics for important events; feature flags for risky changes.
-   - Backwards compatibility of APIs, messages and database migrations.
+   - Useful logs at the right level (and not too many); metrics (counters and timings collected for dashboards and alerts) for important events; feature flags (switches that turn a feature on or off without redeploying) for risky changes.
+   - Backwards compatibility (old clients keep working after the change) of APIs, messages and database migrations (scripted changes to the database's table structure).
 8. **Style and consistency** — ideally automated by formatter/linter so humans focus on the above.
 
 **How to review well (and be reviewed well):**
-- Keep changes **small** (a few hundred lines at most); large diffs get rubber-stamped.
+- Keep changes **small** (a few hundred lines at most); large diffs get rubber-stamped (approved without real reading).
 - Author: write a clear description (what, why, how tested), self-review first.
 - Reviewer: be specific and kind; explain *why*; separate must-fix from optional suggestions ("nit:"); ask questions rather than accuse.
 - Automate the mechanical (formatting, static analysis, tests in CI) so humans review design and logic.
@@ -2869,11 +2869,11 @@ No separate program: every before/after in this chapter is a review finding. For
 Reviews slow merging slightly but catch defects early, spread knowledge and keep style consistent. Too many reviewers or nit-heavy reviews slow teams without adding quality.
 
 ### When not to use it
-Emergency hotfixes may be reviewed after merge (with a follow-up), but should still be reviewed.
+Emergency hotfixes (urgent fixes deployed straight to production) may be reviewed after merge (with a follow-up), but should still be reviewed.
 
 ### Common mistakes
 - Reviewing only style while missing logic and security bugs.
-- Huge pull requests.
+- Huge pull requests (a pull request is a proposed change submitted for review and merging).
 - Personal preferences presented as rules.
 
 ### Real-world examples
@@ -2904,21 +2904,24 @@ Section 6 covered error-handling *rules* inside code. An **error-handling strate
 Without a strategy, each developer invents their own: some return `null`, some throw checked exceptions, some log and rethrow at every layer (same error logged five times), some expose stack traces to users, and some retry everything — including permanent failures, which overloads already-struggling services.
 
 ### How it works
+
+> **Key term — HTTP status codes:** every reply from a web API carries a three-digit status code. **2xx** means success (200 OK); **4xx** means the *client* sent something wrong (400 bad request, 404 not found, 409 conflict with the current state); **5xx** means the *server* failed (500 internal error, 503 service unavailable — often temporary). Retrying usually only makes sense for some 5xx errors and timeouts. See [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
+
 1. **Classify errors:**
    | Class | Examples | Handling |
    |---|---|---|
    | **Validation / client errors** | bad input, missing field | Reject immediately, 4xx, clear message, no retry |
    | **Business rule violations** | insufficient funds, seat already booked | Domain exception or result value, 4xx (e.g. 409 conflict) |
    | **Not found** | unknown id | 404 / empty `Optional` |
-   | **Transient infrastructure** | timeouts, 503, connection reset, deadlock victim | Retry with backoff (only if the operation is **idempotent** — safe to repeat) |
+   | **Transient infrastructure** | timeouts, 503, connection reset, deadlock victim | Retry with backoff — waiting longer between attempts (only if the operation is **idempotent** — safe to repeat) |
    | **Permanent infrastructure** | auth failure to DB, misconfiguration | Fail fast, alert |
    | **Programming bugs** | NPE, index out of bounds | Don't catch locally; generic 500 at the edge, log with details, fix the bug |
 2. **One exception hierarchy** with an error code and a *retryable* flag, so handlers don't need `instanceof` chains on vendor exceptions.
 3. **Translate at boundaries**: adapters convert low-level exceptions (`SocketTimeoutException`, `SQLException`) into domain/infrastructure exceptions, keeping the cause.
-4. **Retry only transient errors**, with a maximum number of attempts, **exponential backoff** and **jitter** (randomness to avoid many clients retrying in sync). Combine with **timeouts** and **circuit breakers** for dependencies.
+4. **Retry only transient errors**, with a maximum number of attempts, **exponential backoff** (each wait doubles: 10 ms, 20 ms, 40 ms…) and **jitter** (randomness to avoid many clients retrying in sync). Combine with **timeouts** and **circuit breakers** (a guard that stops calling a failing dependency for a while after repeated errors) for dependencies.
 5. **Use result values for expected, per-item failures** (e.g. validating 10,000 imported rows — collect all errors instead of stopping at the first).
-6. **Handle globally at the edge**: one handler maps exceptions to responses (status code, stable error code, safe message) and **logs once** with a correlation/request id. Never leak stack traces or internals to clients.
-7. **Keep the system consistent**: use transactions or compensating actions so partial failures don't leave corrupt state; make handlers idempotent.
+6. **Handle globally at the edge**: one handler maps exceptions to responses (status code, stable error code, safe message) and **logs once** with a correlation/request id (a unique ID attached to one request and stamped on all its log lines, so they can be found together). Never leak stack traces or internals to clients.
+7. **Keep the system consistent**: use transactions or compensating actions (follow-up steps that undo an earlier one, e.g. a refund) so partial failures don't leave corrupt state; make handlers idempotent.
 
 ```mermaid
 flowchart TD
@@ -3123,7 +3126,7 @@ Bulk import: collect ALL row errors instead of stopping at the first:
 | Result types | Explicit expected failures | Verbose in Java; mixing with exceptions needs a clear rule |
 
 ### When not to use it
-Don't retry non-idempotent operations (e.g. "charge card") unless you use an **idempotency key**, and never retry validation or authorisation failures.
+Don't retry non-idempotent operations (e.g. "charge card") unless you use an **idempotency key** (a unique ID the client sends with a request so the server can recognise and ignore repeats), and never retry validation or authorisation failures.
 
 ### Common mistakes
 - Log-and-rethrow at every layer.
@@ -3133,8 +3136,8 @@ Don't retry non-idempotent operations (e.g. "charge card") unless you use an **i
 
 ### Real-world examples
 - **Spring `@ControllerAdvice` + `@ExceptionHandler`** — a global exception-to-response mapper; **RFC 9457 "Problem Details"** (successor of RFC 7807) standardises JSON error bodies, supported by Spring's `ProblemDetail`.
-- **Resilience4j** (successor to Netflix Hystrix, which is in maintenance mode): retry, circuit breaker, rate limiter, bulkhead.
-- **AWS SDKs** retry throttling/transient errors with exponential backoff and jitter by default.
+- **Resilience4j** (successor to Netflix Hystrix, which is in maintenance mode): retry, circuit breaker, rate limiter (caps calls per second), bulkhead (isolates resources so one failing part can't exhaust them all).
+- **AWS SDKs** (Amazon Web Services' client libraries) retry throttling ("slow down" responses)/transient errors with exponential backoff and jitter by default.
 - **Stripe's API** supports idempotency keys so clients can safely retry payment requests.
 
 ### In the interview
@@ -3161,7 +3164,7 @@ A **testing strategy** decides *what kinds* of tests to write, *how many* of eac
 *Analogy:* car manufacturing — each part is tested alone (unit), assembled systems are tested together (integration), and finally the whole car is test-driven (end-to-end).
 
 ### The problem it solves
-Too few tests → bugs reach production. The wrong mix (mostly slow end-to-end UI tests) → slow, flaky pipelines that people stop trusting. Over-mocking → tests that pass while the real system is broken, and break on every refactor.
+Too few tests → bugs reach production. The wrong mix (mostly slow end-to-end UI tests) → slow, flaky (sometimes passing, sometimes failing with no code change) pipelines (the automated build-and-test runs in CI) that people stop trusting. Over-mocking → tests that pass while the real system is broken, and break on every refactor.
 
 ### How it works
 
@@ -3170,7 +3173,7 @@ Too few tests → bugs reach production. The wrong mix (mostly slow end-to-end U
 | Kind | Scope | Speed | Catches |
 |---|---|---|---|
 | **Unit** | One class/function, collaborators replaced by doubles | Milliseconds | Logic errors |
-| **Integration** | Several real components together (DB, message broker, your modules) | Seconds | Wiring, queries, serialisation, config |
+| **Integration** | Several real components together (DB, message broker — a server that passes messages between services, your modules) | Seconds | Wiring, queries, serialisation (turning objects into bytes/text and back), config |
 | **Contract** | Agreement between a consumer and a provider service | Fast | API mismatches between services |
 | **End-to-end (E2E)** | The whole system through its UI/API | Slow | User-journey breakage |
 | Others | Performance/load, security, exploratory, property-based, mutation | Varies | Non-functional issues, weak tests |
@@ -3210,7 +3213,7 @@ The code is in §8 (`lld.ch06.testing`): `CheckoutTest` uses all five double typ
 |---|---|
 | Fast, precise failure location | Higher confidence the pieces fit |
 | May miss wiring/config bugs | Slow, flakier, harder to debug |
-| Over-mocking couples tests to implementation | Need environments (DB, containers) |
+| Over-mocking couples tests to implementation | Need environments (DB, containers — isolated runtime packages such as Docker) |
 
 ### When not to use it
 Don't insist on unit tests for thin glue code that only wires frameworks — an integration test covers it better. Don't write E2E tests for every edge case — push those down to unit tests.

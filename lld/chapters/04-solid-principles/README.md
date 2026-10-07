@@ -4,7 +4,7 @@
 >
 > **How to use this chapter.** Read 4.1 first. Then read the principles in order, because each one sets up the next. Section 4.11 runs one class through all five principles, and it is the best single thing to rehearse before an interview. Sections 4.13 and 4.14 are about saying all this out loud.
 
-**Run the code.** All code for this chapter is under `chapters/04-solid-principles/code/`, one package per topic. From that folder:
+**Run the code.** All code for this chapter is under `chapters/04-solid-principles/code/`, one package per topic. From that folder (`javac` is the Java compiler; `java` runs the compiled classes, and `-cp` tells it where they are):
 
 ```bash
 javac --release 21 -d /tmp/lld_04 $(find . -name '*.java')
@@ -23,7 +23,7 @@ java -cp /tmp/lld_04 lld.ch04.srp.Main        # also: cohesion, coupling, soc, o
 | `lld.ch04.dip` | DIP: notifications, dependency injection, service locator, plug-ins |
 | `lld.ch04.checkout` | One checkout class refactored through all five principles |
 
-**A note on money.** Every amount of money in this chapter's code (pay, invoice totals, prices, balances, order totals) is a `java.math.BigDecimal` created from a string (`new BigDecimal("19.99")`), and every result that could gain extra decimal places (a multiplication by a rate) is rounded explicitly with `setScale(2, RoundingMode.HALF_EVEN)` (two decimal places, "banker's rounding"). Adding or subtracting two-decimal amounts stays at two decimals on its own. Never use `double` for money: binary floating point cannot store values such as 0.1 exactly, so `0.1 + 0.2` prints `0.30000000000000004`, and those tiny errors add up in totals. `BigDecimal` also has one trap: `equals` compares the scale too (`2.0` is not equal to `2.00`), so compare amounts with `compareTo` or `signum()`, as the code here does.
+**A note on money.** Every amount of money in this chapter's code (pay, invoice totals, prices, balances, order totals) is a `java.math.BigDecimal` (Java's exact decimal-number type) created from a string (`new BigDecimal("19.99")`), and every result that could gain extra decimal places (a multiplication by a rate) is rounded explicitly with `setScale(2, RoundingMode.HALF_EVEN)` (two decimal places, "banker's rounding": a value exactly halfway, such as 2.345, goes to the neighbour whose last digit is even, 2.34, so rounding errors do not all lean one way). Adding or subtracting two-decimal amounts stays at two decimals on its own. Never use `double` for money: binary floating point cannot store values such as 0.1 exactly, so `0.1 + 0.2` prints `0.30000000000000004`, and those tiny errors add up in totals. `BigDecimal` also has one trap: `equals` compares the scale (the number of decimal places) too (`2.0` is not equal to `2.00`), so compare amounts with `compareTo` or `signum()`, as the code here does.
 
 ---
 
@@ -46,13 +46,14 @@ A few terms first, because the rest of the chapter uses them:
 - A **class** is a blueprint for objects. A **module** is a bigger unit: a package, a library, a service.
 - A **client** (or **caller**) is any code that uses another piece of code.
 - An **interface** is a list of methods a class promises to provide, with no bodies. In Java it is the `interface` keyword. In general design talk it also means "the set of methods a caller can see".
-- An **abstraction** is an interface or abstract class: something that says *what* is done without saying *how*.
+- An **abstraction** is an interface or abstract class (a class marked `abstract` that cannot be created directly and may leave some methods for subclasses to write): something that says *what* is done without saying *how*.
 - A **concrete class** is a class you can actually create with `new`.
+- A **subtype** is a class that extends another class or implements an interface; the type it extends or implements is its **parent** (or base) type.
 
 ![The five SOLID principles side by side, each with the single rule it states](../../assets/S-solid-design-principles-1.svg)
 *Figure — the five principles and the single rule each one states (course diagram)*
 
-In the figure above, look at the bottom line: every principle **limits how far one change spreads through the code**. That is the common thread. SRP limits it by giving each class one owner. OCP limits it by letting you add instead of edit. LSP makes sure a new subclass does not break old callers. ISP stops a change in one method from reaching callers that never use it. DIP stops a change in a low-level detail from reaching business logic.
+In the figure above, look at the bottom line: every principle **limits how far one change spreads through the code**. That is the common thread. SRP limits it by giving each class one owner. OCP limits it by letting you add instead of edit. LSP makes sure a new subclass does not break old callers. ISP stops a change in one method from reaching callers that never use it. DIP stops a change in a low-level detail (a technical part such as a database driver) from reaching business logic (the rules the application exists for, such as pricing).
 
 **A little history.** Robert C. Martin ("Uncle Bob") collected these principles in his writing around 2000, most fully in the paper *Design Principles and Design Patterns* and the book *Agile Software Development: Principles, Patterns, and Practices* (2002). Michael Feathers noticed the initials spelled SOLID. Two of the ideas are older: the Open/Closed Principle comes from Bertrand Meyer (1988), and the Substitution Principle from Barbara Liskov (1987).
 
@@ -72,7 +73,7 @@ Code that works today still has to change tomorrow. Without guidelines, classes 
 1. Treat each principle as a **name for a problem**, not a rule to obey everywhere.
 2. When code is painful to change, find the principle that names the pain.
 3. Apply the fix **when a real change asks for it**, not in advance.
-4. Always say what the fix costs (more classes, more interfaces, more wiring).
+4. Always say what the fix costs (more classes, more interfaces, more wiring, i.e. code that creates objects and connects them).
 
 Applied without judgement, SOLID produces a maze of interfaces that each have one implementation. This chapter shows the cost of every recommendation along with its benefit.
 
@@ -121,7 +122,7 @@ Here is an `Employee` class. Every method is "about employees", so the "one thin
 |---|---|---|
 | `calculatePay` | Finance | "Overtime starts after 38 hours, not 40." |
 | `reportHours` | Operations | "Show the week-ending date in the report." |
-| `save` | Database team | "Move from SQL to a document store." |
+| `save` | Database team | "Move from SQL (table database) to a document store (stores JSON-like documents)." |
 
 So one class has three owners and three independent reasons to change. A new overtime rule from finance means editing `Employee`, which also ships the report code and the storage code again, although neither of those teams wanted anything. If the edit accidentally breaks the report layout, operations pays for a decision it had no part in.
 
@@ -136,7 +137,7 @@ Martin tells a sharper version of this story in *Clean Architecture*. Suppose `c
 2. For each one, name **who** would ask for it to change.
 3. Group the methods by actor.
 4. Move each group into its own class, named after its job.
-5. Keep plain data in a simple data class (a Java `record` is ideal).
+5. Keep plain data in a simple data class (a Java `record` is ideal: a compact class that only holds a fixed set of fields).
 6. Check the split with the three checks below.
 
 ### Java example: splitting `Employee` by actor
@@ -287,7 +288,7 @@ INSERT INTO employees VALUES ('Ada')
 
 What each part does:
 
-- `Employee` is a `record`: an immutable data carrier. No business rule lives there, so no actor needs to edit it for a rule change.
+- `Employee` is a `record`: an immutable (cannot change after creation) data carrier. No business rule lives there, so no actor needs to edit it for a rule change.
 - `PayCalculator` belongs to finance. The overtime threshold and multiplier are named constants, so the next finance request is a one-line change in one class.
 - `HoursReport` belongs to operations. `EmployeeRepository` belongs to the database team.
 - The output is **identical** before and after. Behaviour did not change. What changed is who must be consulted before an edit. Finance can now change the overtime rule without anyone touching the report or the database code.
@@ -321,9 +322,9 @@ classDiagram
 
 A badly applied SRP leaves the code in a **worse** state than no SRP at all. The typical mistake: a large class is chopped up by verb, one class per method or per step, without asking who owns what. The cuts fall in arbitrary places, and the result is a handful of tiny classes that must always be edited as a group, so each change now spreads over half a dozen files. Three checks catch this:
 
-1. **Do the pieces change together?** After a few months, read the version-control log. Two classes that show up in nearly every commit side by side were really one responsibility that got cut in two.
+1. **Do the pieces change together?** After a few months, read the version-control log (the history kept by a tool such as Git, where each **commit** is one saved change). Two classes that show up in nearly every commit side by side were really one responsibility that got cut in two.
 2. **Does each new class have a name that stands on its own?** `EmployeePayCalculator` describes a job. `EmployeeHelper` and `EmployeeUtils` describe nothing. If the name is meaningless without the original class next to it, the class usually is too.
-3. **Could the new class be used from somewhere else?** A pay calculator could serve a payroll export, a quote for a contractor, or a unit test. If you cannot imagine any second caller, question why you split it off.
+3. **Could the new class be used from somewhere else?** A pay calculator could serve a payroll export, a quote for a contractor, or a unit test (a small automated test of one class on its own). If you cannot imagine any second caller, question why you split it off.
 
 **Splitting does not automatically reduce dependencies.** After an extraction the two classes still call each other. If the extracted class was designed around the precise needs of the class it came from, every change to one will drag the other along. So the split is only step one; step two is deciding what each class is allowed to know about the other. Those two questions have names: **cohesion** (4.3) and **coupling** (4.4). SRP usually helps both, but promises neither.
 
@@ -333,7 +334,7 @@ A badly applied SRP leaves the code in a **worse** state than no SRP at all. The
 - **Reuse.** A focused class fits in more places.
 - **Scales with the codebase.** New features add classes instead of bloating old ones.
 - **High cohesion.** Everything in the class serves one purpose.
-- **Opens the door to low coupling, but does not finish the job.** Separating responsibilities gives you a seam. Coupling drops only when the dependency across that seam points at an abstraction (see 4.4).
+- **Opens the door to low coupling, but does not finish the job.** Separating responsibilities gives you a seam (a boundary where one side can be swapped without editing the other). Coupling drops only when the dependency across that seam points at an abstraction (see 4.4).
 
 ### Trade-offs
 
@@ -359,6 +360,8 @@ A badly applied SRP leaves the code in a **worse** state than no SRP at all. The
 
 ### Code smells that point to SRP (from *Refactoring*)
 
+A **code smell** is a surface sign that the design is probably wrong somewhere; *Refactoring* is Martin Fowler's book that names the common smells and the step-by-step fixes (called refactorings) for each.
+
 - **Divergent Change** — one class is edited for many different kinds of reasons. This is SRP broken.
 - **Large Class** — too many fields and methods, often a sign of several jobs.
 - **Shotgun Surgery** — one change forces small edits in many classes. This is often the result of **over-splitting**, the opposite mistake.
@@ -366,13 +369,13 @@ A badly applied SRP leaves the code in a **worse** state than no SRP at all. The
 
 ### Real-world examples
 
-- **Spring layers**: `@Controller` handles HTTP, `@Service` holds business rules, `@Repository` handles persistence. Each layer answers to a different kind of change.
+- **Spring layers** (Spring is a popular Java application framework): `@Controller` handles HTTP (the web's request/response protocol, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), `@Service` holds business rules, `@Repository` handles persistence (saving data permanently, usually in a database). Each layer answers to a different kind of change.
 - **JDK**: `java.time.format.DateTimeFormatter` formats and parses dates; `LocalDate` holds the date. Formatting rules can change without touching the date value type.
-- **Logging frameworks** (Logback, Log4j 2) split the *logger* (what to log), the *appender* (where it goes) and the *layout* (how it looks). A new output format does not touch the destination code.
+- **Logging frameworks** (Logback, Log4j 2: libraries that write a program's log messages) split the *logger* (what to log), the *appender* (where it goes) and the *layout* (how it looks). A new output format does not touch the destination code.
 
 ### In the interview
 
-**30-second answer:** "SRP says a class should have one reason to change. The sharp version is: one actor, one group of people who can request changes. I find the actors by asking who would ask for each method to change. If finance, operations and the DBAs can all ask for edits to `Employee`, I split it into `PayCalculator`, `HoursReport` and `EmployeeRepository`, and keep `Employee` as data. The cost is more classes and some wiring, so I only split when I can name the different groups."
+**30-second answer:** "SRP says a class should have one reason to change. The sharp version is: one actor, one group of people who can request changes. I find the actors by asking who would ask for each method to change. If finance, operations and the DBAs (database administrators) can all ask for edits to `Employee`, I split it into `PayCalculator`, `HoursReport` and `EmployeeRepository`, and keep `Employee` as data. The cost is more classes and some wiring, so I only split when I can name the different groups."
 
 **Follow-ups:**
 
@@ -408,7 +411,7 @@ In the figure above, the mixed bin is a class whose methods have nothing to do w
 
 ### The problem it solves
 
-In a low-cohesion class, someone who wants to change one job has to open, read and redeploy a class that also owns other jobs. Low cohesion also works in the other direction: if the code for **one** job is **scattered** over several classes (say `addUser` in one class and `deleteUser` in another), a change to that job has to hunt for all the pieces. Both are cohesion problems: the first mixes unrelated things, the second separates related things.
+In a low-cohesion class, someone who wants to change one job has to open, read and redeploy (release to production again) a class that also owns other jobs. Low cohesion also works in the other direction: if the code for **one** job is **scattered** over several classes (say `addUser` in one class and `deleteUser` in another), a change to that job has to hunt for all the pieces. Both are cohesion problems: the first mixes unrelated things, the second separates related things.
 
 ### The classic types of cohesion
 
@@ -418,7 +421,7 @@ Structured-design authors (Larry Constantine, Ed Yourdon, Glenford Myers, 1970s)
 |---|---|---|
 | **Coincidental** | Nothing, it just ended up together | `Utils` with `formatDate`, `sendEmail`, `parseCsv` |
 | **Logical** | Same category, chosen by a flag | `handle(type)` with a big `switch` over unrelated actions |
-| **Temporal** | Things that run at the same time | `startup()` that opens the DB, warms caches and prints a banner |
+| **Temporal** | Things that run at the same time | `startup()` that opens the DB, warms caches (fills fast temporary copies of data) and prints a banner |
 | **Procedural** | Steps that follow an order | A method that validates, then logs, then retries |
 | **Communicational** | Work on the same data | `ReportBuilder` methods that all read the same `Order` list |
 | **Sequential** | Output of one step is input to the next | `parse → validate → transform` pipeline in one class |
@@ -629,7 +632,7 @@ In the figure above, the "agreed signal" on the right is exactly what an **inter
 
 With tight coupling:
 
-- you cannot swap an implementation (MySQL → Postgres) without editing the caller,
+- you cannot swap an implementation (MySQL → Postgres, two popular SQL databases) without editing the caller,
 - you cannot unit-test the caller without the real dependency (a running database),
 - a change in how the dependency is **constructed** ripples into every class that builds it.
 
@@ -639,7 +642,7 @@ From structured design again, from worst to best:
 
 | Type (worst → best) | What A knows about B | Java-flavoured example |
 |---|---|---|
-| **Content** | A reaches into B's internals | Reflection that sets B's private field |
+| **Content** | A reaches into B's internals | Reflection (Java's ability to inspect and change classes while running) that sets B's private field |
 | **Common** | A and B share global mutable data | Both read/write a `public static Map` |
 | **External** | Both depend on an external format or device | Both parse the same hand-rolled file format |
 | **Control** | A passes a flag telling B *how* to work | `print(doc, boolean asPdf)` |
@@ -655,7 +658,7 @@ In object-oriented design, the practical goal is: **depend on interfaces, pass o
 2. Ask: does A need *this particular* B, or just *something that does the job*?
 3. If the latter, describe the job as an interface.
 4. Let A accept any object that implements the interface, usually through its constructor.
-5. Let the caller (or the program's entry point) choose which implementation to pass.
+5. Let the caller (or the program's entry point, the `main` method where it starts) choose which implementation to pass.
 
 ### Java example: three steps with `Student`
 
@@ -847,13 +850,13 @@ This final move is the rule **depend on abstractions, not on concrete classes**,
 | Loose coupling gains | Costs |
 |---|---|
 | Swap implementations without editing callers | An extra interface and a constructor parameter |
-| Unit tests with in-memory fakes | Someone must do the wiring (the entry point or a framework) |
+| Unit tests with in-memory fakes (simple stand-ins that keep data in a list instead of a database) | Someone must do the wiring (the entry point or a framework) |
 | Changes stop rippling | "Go to definition" lands on an interface, one more hop to the real code |
 
 ### When not to use it
 
 - Do not put an interface in front of a **stable** class that will never vary and never needs faking (`String`, `LocalDate`, a pure calculation). Coupling to stable things is harmless.
-- An interface with one implementation and no test double is usually just an extra file.
+- An interface with one implementation and no test double (a fake stand-in object used in tests) is usually just an extra file.
 
 ### Common mistakes
 
@@ -863,8 +866,8 @@ This final move is the rule **depend on abstractions, not on concrete classes**,
 
 ### Real-world examples
 
-- **JDBC**: your code talks to `java.sql.Connection`, `Statement` and `ResultSet`, which are interfaces. The MySQL or Postgres driver supplies the implementation.
-- **SLF4J**: code logs through the `org.slf4j.Logger` interface; Logback or Log4j is plugged in at deployment.
+- **JDBC** (Java Database Connectivity, Java's standard way to talk to SQL databases): your code talks to `java.sql.Connection`, `Statement` and `ResultSet`, which are interfaces. The MySQL or Postgres driver (the library that speaks one database's protocol) supplies the implementation.
+- **SLF4J** (a common Java logging facade, i.e. one front for several logging libraries): code logs through the `org.slf4j.Logger` interface; Logback or Log4j is plugged in at deployment (when the program is installed and started).
 - **USB, HTTP, SQL** themselves are "agreed signals", the real-world version of an interface.
 
 ### In the interview
@@ -1023,7 +1026,7 @@ The two are the same instinct applied at different scales. **SRP** is normally d
 | Gains | Costs |
 |---|---|
 | Changes stay local | More modules and boundaries to design |
-| Each concern tested alone | Cross-cutting concerns (logging, security, transactions) still touch many modules; they need special tools such as aspects or decorators |
+| Each concern tested alone | Cross-cutting concerns (logging, security, transactions, i.e. groups of database changes that succeed or fail together) still touch many modules; they need special tools such as aspects (code woven automatically around many methods) or decorators (wrappers that add behaviour) |
 
 ### When not to use it
 
@@ -1031,15 +1034,15 @@ A 50-line script does not need layers. Separate concerns when they change for di
 
 ### Common mistakes
 
-- Validation that quietly happens inside the storage class ("the DAO also checks the email").
+- Validation that quietly happens inside the storage class ("the DAO also checks the email"; a DAO, Data Access Object, is a class that reads and writes one kind of data in the database).
 - Layers that exist on paper but call each other in every direction.
 
 ### Real-world examples
 
-- **MVC** (Model–View–Controller): model = data and rules, view = display, controller = input handling. Spring MVC and most web frameworks follow it.
+- **MVC** (Model–View–Controller): model = data and rules, view = display, controller = input handling. Spring MVC and most web frameworks (libraries that handle the plumbing of web applications) follow it.
 - **HTML / CSS / JavaScript**: structure, style and behaviour are three concerns in three languages.
 - **Layered architecture**: controller → service → repository.
-- **Spring `@Transactional`**: transaction handling (a cross-cutting concern) is separated from business code by a proxy.
+- **Spring `@Transactional`**: transaction handling (a cross-cutting concern) is separated from business code by a proxy (a stand-in object that wraps the real one and adds behaviour before and after each call).
 
 ### In the interview
 
@@ -1098,9 +1101,9 @@ The textbook symptom is an `if/else` chain or `switch` on a type code that keeps
 2. Identify **the part that varies** (here: the invoice format).
 3. Describe it as an interface.
 4. Move each variant into its own class that implements the interface.
-5. Make the stable class **delegate** to the interface instead of branching.
+5. Make the stable class **delegate** (hand the work over) to the interface instead of branching.
 6. Add the next variant as a new class. Nothing existing is opened.
-7. Choose the variant in one place, at the edge of the program (the entry point, a factory, a map, or configuration).
+7. Choose the variant in one place, at the edge of the program (the entry point, a factory, i.e. a method or class whose job is creating objects, a map, or configuration).
 
 ### Java example: invoice formats
 
@@ -1281,7 +1284,7 @@ What to notice:
 
 - `Invoice` has **no branch**. It does not know how many formats exist.
 - `DetailedInvoiceGenerator` is the only new code for format three. `Invoice`, `BasicInvoiceGenerator` and `InternationalInvoiceGenerator` were not opened.
-- `InvoiceGenerator` is a `@FunctionalInterface`, so in Java a **lambda** is also an extension (the pro-forma line in `Main`). That is OCP with zero new files.
+- `InvoiceGenerator` is a `@FunctionalInterface` (an interface with exactly one abstract method), so in Java a **lambda** (a short unnamed function written inline, such as `a -> ...`) is also an extension (the pro-forma line in `Main`). That is OCP with zero new files.
 
 ![With a branch per invoice type, a fourth format means opening the file; with one class per format, it means adding one](../../assets/S-coding-example-1-1.svg)
 *Figure — a branch per type forces an edit to Invoice; one class per format lets a new format be added as a file (course diagram)*
@@ -1307,7 +1310,7 @@ classDiagram
     InvoiceGenerator <|.. DetailedInvoiceGenerator
 ```
 
-This shape (a context object holding an interface-typed field, with interchangeable implementations) is the **Strategy pattern**. Strategy is OCP applied to an algorithm that varies.
+This shape (a context object holding an interface-typed field, with interchangeable implementations) is the **Strategy pattern** (a design pattern, i.e. a named reusable design; Chapters 8–11 cover them all). Strategy is OCP applied to an algorithm that varies.
 
 ### Why not just subclass `Invoice`?
 
@@ -1316,7 +1319,7 @@ Most readers ask this. Writing `class InternationalInvoice extends Invoice` and 
 - **A second dimension of change.** If invoices differ by format **and** by currency, subclassing needs a class for every pairing (3 formats × 4 currencies = 12 classes), while delegation combines two independent objects (3 + 4 = 7 classes).
 - **Deciding while the program runs.** An object's class is fixed at `new`. A generator can be picked once the customer's country is known, and even replaced later on the same invoice.
 
-Inheritance is therefore a legitimate option; delegation simply copes with more situations. (Head First calls this "favour composition over inheritance".)
+Inheritance is therefore a legitimate option; delegation simply copes with more situations. (*Head First Design Patterns*, a popular introductory book, calls this "favour composition over inheritance".)
 
 ### What is still not closed
 
@@ -1327,12 +1330,12 @@ Only invoice *generation* was opened up. `applyDiscount` still lives inside `Inv
 | Approach | How it extends | Pattern / Java feature | Good when |
 |---|---|---|---|
 | **Interface + delegation** | New class implements the interface | Strategy, `Comparator` | The algorithm varies, choose at run time |
-| **Inheritance + overriding** | Subclass overrides a hook method | Template Method, abstract classes | Fixed skeleton, a few steps vary |
+| **Inheritance + overriding** | Subclass overrides a hook method (an overridable step the parent calls) | Template Method, abstract classes | Fixed skeleton, a few steps vary |
 | **Wrapping** | New class wraps the old and adds behaviour | Decorator (`BufferedInputStream`) | Add features around existing behaviour |
 | **Listening** | New subscriber registers | Observer, event listeners | New reactions to existing events |
-| **Plug-ins / registry** | New implementation registers itself in a map or via `ServiceLoader` | Plug-in architecture | Third parties add features |
+| **Plug-ins / registry** | New implementation registers itself in a map or via `ServiceLoader` (Java's built-in way to discover implementations at start-up) | Plug-in architecture | Third parties add features |
 | **Functions** | Pass a lambda | `java.util.function`, `@FunctionalInterface` | Small, one-method variations |
-| **Data / configuration** | New entry in a table or config file | Rules engines, feature flags | Variations that are just different numbers |
+| **Data / configuration** | New entry in a table or config file | Rules engines, feature flags (on/off switches kept in configuration) | Variations that are just different numbers |
 
 The `switch` does not always disappear. It moves to **one** place at the edge of the program, often a factory or a `Map<String, InvoiceGenerator>`, instead of being repeated inside business logic.
 
@@ -1340,7 +1343,7 @@ The `switch` does not always disappear. It moves to **one** place at the edge of
 
 - **Extensibility** — features are added without touching the tested core.
 - **Faster testing** — you test the new class, and the core's tests stay valid.
-- **Fewer regressions** — working code is not edited, so it is not broken.
+- **Fewer regressions** (old features that break after a change) — working code is not edited, so it is not broken.
 - **Adaptability** — the software absorbs new requirements without rewrites.
 
 ### Caution: do not over-engineer
@@ -1359,13 +1362,13 @@ The SOLID principles reinforce one another. OCP pulls the parts that change away
 |---|---|
 | New variants without editing old code | An interface plus one class per variant |
 | Each variant tested on its own | Behaviour is spread over files; reading the whole flow takes more hops |
-| Variants selectable at run time | Someone must choose the variant (factory, map, DI) |
+| Variants selectable at run time | Someone must choose the variant (factory, map, DI, i.e. dependency injection, Section 4.10) |
 
 ### When not to use it
 
 - Nothing has varied yet.
 - The "variants" are just different numbers (use data, not classes).
-- The set of cases is fixed and small and will not grow (e.g. the two values of a boolean). Java 21's **sealed interfaces with pattern-matching `switch`** are a good fit here: the compiler checks every case is handled, which is the opposite trade (easy to add operations, hard to add types).
+- The set of cases is fixed and small and will not grow (e.g. the two values of a boolean). Java 21's **sealed interfaces with pattern-matching `switch`** (a sealed interface lists the only types allowed to implement it, so a `switch` can check it has covered them all) are a good fit here: the compiler checks every case is handled, which is the opposite trade (easy to add operations, hard to add types).
 
 ### Common mistakes
 
@@ -1382,8 +1385,8 @@ The SOLID principles reinforce one another. OCP pulls the parts that change away
 
 - **`Comparator`**: `list.sort(comparator)` never changes; you pass a new comparator for a new ordering.
 - **Java I/O decorators**: `new BufferedInputStream(new FileInputStream(f))` adds buffering without editing `FileInputStream`.
-- **Servlet filters / Spring `HandlerInterceptor`**: new cross-cutting behaviour is a new filter registered in a chain.
-- **JDBC drivers** via `ServiceLoader`: a new database is supported by adding a driver JAR, not by editing `DriverManager`.
+- **Servlet filters / Spring `HandlerInterceptor`** (code that runs before and after every web request in a Java web server): new cross-cutting behaviour is a new filter registered in a chain.
+- **JDBC drivers** via `ServiceLoader`: a new database is supported by adding a driver JAR (a zipped bundle of compiled Java classes), not by editing `DriverManager`.
 - **IDE plug-ins** (IntelliJ, VS Code extensions) and **browser extensions**: the core is closed, the plug-in API is the port.
 
 ### In the interview
@@ -2156,7 +2159,7 @@ Java checks none of the **behavioural** rules. Unchecked exceptions, weakened po
 ### How to check a subclass
 
 1. **List the parent's promises before writing the subclass.** Promises, not method signatures: "the balance never drops below zero", "width and height change independently". Most violations slip in because the promise was never stated, so its breach went unnoticed.
-2. **Write one test against the parent type and run it for every subclass.** `resizeAndCheck(Rectangle)` is such a test: it never mentions `Square`, yet `Square` fails it. Whenever a base-type test fails for some subclass, that subclass violates LSP, regardless of how reasonable its code looks. (In JUnit this is an *abstract contract test* that each subclass's test class extends.)
+2. **Write one test against the parent type and run it for every subclass.** `resizeAndCheck(Rectangle)` is such a test: it never mentions `Square`, yet `Square` fails it. Whenever a base-type test fails for some subclass, that subclass violates LSP, regardless of how reasonable its code looks. (In JUnit, the standard Java testing library, this is an *abstract contract test* that each subclass's test class extends.)
 
 ### Why LSP is important
 
@@ -2192,8 +2195,8 @@ LSP is not optional where you use polymorphism. What you can skip is inheritance
 ### Real-world examples
 
 - **`java.sql.Date extends java.util.Date`**: its time methods such as `getHours()` throw `IllegalArgumentException`, because an SQL date has no time part. Code written against `java.util.Date` can break.
-- **`java.sql.Timestamp`**: its Javadoc warns that its `equals` is not symmetric with `java.util.Date.equals`, and says the inheritance is implementation inheritance, not type inheritance. A textbook LSP warning in the JDK itself.
-- **`java.util.Stack extends Vector`**: a stack inherits `insertElementAt` and `get(int)`, which let callers break stack order. The Javadoc now recommends `Deque` instead.
+- **`java.sql.Timestamp`**: its Javadoc (the official documentation generated from code comments) warns that its `equals` is not symmetric with `java.util.Date.equals`, and says the inheritance is implementation inheritance, not type inheritance. A textbook LSP warning in the JDK itself.
+- **`java.util.Stack extends Vector`**: a stack inherits `insertElementAt` and `get(int)`, which let callers break stack order. The Javadoc now recommends `Deque` (a double-ended queue that adds and removes only at its ends) instead.
 - **`List.of(...)` and `Collections.unmodifiableList(...)`** throw `UnsupportedOperationException` from `add`. The `List` interface marks `add` as an *optional operation*, so this is written into the contract, but it is a known design compromise: a caller holding a `List` cannot know whether `add` works.
 
 ### In the interview
@@ -2632,7 +2635,7 @@ Both designs satisfy ISP. The role-based one is leaner because its interfaces we
 
 **Rule of thumb:** only split an interface when you can **point to the caller** that needs the smaller piece; without such a caller the split is speculation. The converse also holds: two interfaces that are always implemented by the same classes and always consumed by the same callers should probably be merged.
 
-**Languages without an `interface` keyword.** Python and JavaScript have no `interface` keyword, but the interface is still there, just invisible: it is **the set of methods a caller actually calls**. Handing a 20-method object to a function that calls one of them creates exactly the same needless dependency, only no compiler points it out. Testing hides it further: in Java a wide interface forces a long stub, while in Python you can pass a tiny object with one method and the test passes, which is convenient but masks the problem. So check deliberately: look at what a function calls on its argument and ask whether the argument is far bigger than that. Python's `abc` module and `typing.Protocol` let you write the role down when it is worth it; for a role used in only one place, a comment listing the methods the function needs is often enough.
+**Languages without an `interface` keyword.** Python and JavaScript have no `interface` keyword, but the interface is still there, just invisible: it is **the set of methods a caller actually calls**. Handing a 20-method object to a function that calls one of them creates exactly the same needless dependency, only no compiler points it out. Testing hides it further: in Java a wide interface forces a long stub (a fake class with every method filled in), while in Python you can pass a tiny object with one method and the test passes, which is convenient but masks the problem. So check deliberately: look at what a function calls on its argument and ask whether the argument is far bigger than that. Python's `abc` module and `typing.Protocol` (Python's two ways to declare an interface) let you write the role down when it is worth it; for a role used in only one place, a comment listing the methods the function needs is often enough.
 
 ### Five signals of an ISP violation
 
@@ -2717,14 +2720,14 @@ Signals 1 and 2 show up when you read the interface, 3 and 4 when you read its i
 
 - **One interface per method everywhere.** The most common mistake among people who just learned ISP. A fat interface at least makes its cost visible; hundreds of tiny ones cost you slowly, in names and wiring, and are harder to undo.
 - Splitting by the implementer's features instead of the caller's needs.
-- Keeping the fat interface and adding an "adapter" base class with empty methods (like AWT's `MouseAdapter`): convenient, but a symptom that the interface is too wide.
+- Keeping the fat interface and adding an "adapter" base class with empty methods (like AWT's `MouseAdapter`; AWT is Java's original desktop user-interface toolkit): convenient, but a symptom that the interface is too wide.
 
 ### Real-world examples
 
 - **Java's tiny role interfaces**: `Runnable`, `Comparable`, `AutoCloseable`, `Iterable`, `CharSequence`, and the whole `java.util.function` package. `try-with-resources` needs only `AutoCloseable`, not "a file".
 - **AWT `MouseListener`** has five methods; most listeners need one, so the JDK added `MouseAdapter` with empty bodies. Later APIs (JavaFX event handlers) use one-method handlers.
-- **Collections**: `List.of(...)` and unmodifiable views throw on `add`, because `Collection` bundles reading and writing. Kotlin, by contrast, separates `List` (read) and `MutableList` (write).
-- **Spring Data**: `CrudRepository`, `PagingAndSortingRepository`, and the bare `Repository` marker let you expose only the operations a repository needs.
+- **Collections**: `List.of(...)` and unmodifiable views throw on `add`, because `Collection` bundles reading and writing. Kotlin (another language that runs on the JVM), by contrast, separates `List` (read) and `MutableList` (write).
+- **Spring Data** (a Spring library that generates repository code for you): `CrudRepository`, `PagingAndSortingRepository`, and the bare `Repository` marker let you expose only the operations a repository needs.
 
 ### In the interview
 
@@ -2759,7 +2762,7 @@ Robert C. Martin's two statements, paraphrased:
 Terms:
 
 - A **high-level module** holds the business policy: *what* the application does (e.g. "notify the user when an order ships").
-- A **low-level module** handles a technical detail: *how* it is done (SMTP email, SMS gateway, MySQL).
+- A **low-level module** handles a technical detail: *how* it is done (SMTP email, SMTP being the protocol for sending mail; SMS gateway; MySQL).
 - An **abstraction** is the interface in between.
 
 **Why "inversion"?** In traditional layered code, high-level code calls low-level code **and** its source code depends on it (`import com.mail.SmtpClient`). DIP keeps the direction of the call (policy still calls the detail at run time) but **reverses the direction of the source-code dependency**: the detail now imports and implements an interface that belongs to the policy.
@@ -2769,7 +2772,7 @@ Terms:
 ### The problem it solves
 
 - Business logic is tied to one vendor or technology; switching (email → SMS) means editing the business code.
-- Business logic cannot be tested without the real infrastructure (a mail server, a database).
+- Business logic cannot be tested without the real infrastructure (the servers and services the program runs on: a mail server, a database).
 - A change in a low-level library ripples up into the policy.
 
 ### Example: notifications
@@ -3019,9 +3022,9 @@ public class CheckoutFlow {
 }
 ```
 
-This does follow DIP: `CheckoutFlow` names no concrete payment class, and it receives the `Locator` *interface* through its constructor, so even the registry itself can be replaced (for example by a test locator) without touching `CheckoutFlow`. But be aware of the criticism (Martin Fowler compares the two approaches; Mark Seemann calls Service Locator an anti-pattern): the class's **real** dependencies are hidden inside method bodies, so you cannot see from the constructor what it needs, and a missing registration fails only at run time. Prefer constructor injection; use a locator mainly at framework boundaries.
+This does follow DIP: `CheckoutFlow` names no concrete payment class, and it receives the `Locator` *interface* through its constructor, so even the registry itself can be replaced (for example by a test locator) without touching `CheckoutFlow`. But be aware of the criticism (Martin Fowler compares the two approaches; Mark Seemann calls Service Locator an anti-pattern, a common solution that causes more problems than it solves): the class's **real** dependencies are hidden inside method bodies, so you cannot see from the constructor what it needs, and a missing registration fails only at run time. Prefer constructor injection; use a locator mainly at framework boundaries.
 
-**3. Inversion of Control (IoC) containers.** Frameworks such as **Spring** (Java) and the built-in container in **.NET** create objects and inject dependencies for you. In Spring, a class with a single constructor gets its dependencies injected automatically (the `@Autowired` annotation is optional for a single constructor since Spring 4.3):
+**3. Inversion of Control (IoC) containers.** Frameworks such as **Spring** (Java) and the built-in container in **.NET** (Microsoft's application platform) create objects and inject dependencies for you. In Spring, a class with a single constructor gets its dependencies injected automatically (the `@Autowired` annotation, an `@` tag that marks where Spring should inject, is optional for a single constructor since Spring 4.3; a **bean** is an object Spring creates and manages, and the **classpath** is the list of places Java searches for compiled classes and libraries):
 
 ```java
 // Spring version -- NOT part of this chapter's compiled code (needs Spring on the classpath).
@@ -3179,7 +3182,7 @@ Playing audio...
 No plug-in installed for .ogg
 ```
 
-**DI vs plug-in architecture.** At first sight they are the same thing (an implementation of an interface is handed to a core), but they work at different scales. **DI** is a small-scale mechanism: how one class obtains its collaborators. **Plug-in architecture** is a system-level design for extensibility: whole modules, often built by other teams, are added independently and frequently discovered while the program runs (Java's `ServiceLoader`, OSGi, IDE plug-in APIs).
+**DI vs plug-in architecture.** At first sight they are the same thing (an implementation of an interface is handed to a core), but they work at different scales. **DI** is a small-scale mechanism: how one class obtains its collaborators. **Plug-in architecture** is a system-level design for extensibility: whole modules, often built by other teams, are added independently and frequently discovered while the program runs (Java's `ServiceLoader`, OSGi, a Java module system built for plug-ins, IDE plug-in APIs).
 
 ### DIP vs DI vs IoC — do not mix them up
 
@@ -3187,8 +3190,8 @@ No plug-in installed for .ogg
 |---|---|---|---|
 | **Dependency Inversion (DIP)** | Depend on abstractions; the policy owns the abstraction | A **principle** (what good structure looks like) | `NotificationService` depends on `NotificationSender` |
 | **Dependency Injection (DI)** | Pass dependencies in from outside instead of creating them | A **technique** (one way to achieve DIP) | `new NotificationService(new SmsSender())` |
-| **Inversion of Control (IoC)** | The framework calls your code, not the other way round ("don't call us, we'll call you" — the Hollywood Principle) | A broad **idea**; DI is one form of it | Spring creating beans; a servlet container calling `doGet`; JUnit calling your `@Test` methods |
-| **IoC container** | A framework that performs DI for you | A **tool** | Spring `ApplicationContext`, Google Guice |
+| **Inversion of Control (IoC)** | The framework calls your code, not the other way round ("don't call us, we'll call you" — the Hollywood Principle) | A broad **idea**; DI is one form of it | Spring creating beans; a servlet container (a Java web server such as Tomcat) calling `doGet`; JUnit calling your `@Test` methods |
+| **IoC container** | A framework that performs DI for you | A **tool** | Spring `ApplicationContext`, Google Guice (a lightweight DI library) |
 
 Two combinations prove they are different:
 
@@ -3197,13 +3200,13 @@ Two combinations prove they are different:
 
 ### Stable vs volatile dependencies
 
-DIP targets **volatile** dependencies: things that change often or that you want to fake in tests (databases, networks, clocks, third-party APIs, business rules that vary). Depending directly on **stable** concrete classes is fine: `String`, `List`, `LocalDate`, `Math`. Nobody wraps `String` in an interface. (Head First's version of DIP gives guidelines like "no variable should hold a reference to a concrete class", and then admits they are ideals you will break; the stable/volatile distinction is how you decide when.)
+DIP targets **volatile** dependencies: things that change often or that you want to fake in tests (databases, networks, clocks, third-party APIs, i.e. services run by other companies that your code calls, business rules that vary). Depending directly on **stable** concrete classes is fine: `String`, `List`, `LocalDate`, `Math`. Nobody wraps `String` in an interface. (Head First's version of DIP gives guidelines like "no variable should hold a reference to a concrete class", and then admits they are ideals you will break; the stable/volatile distinction is how you decide when.)
 
 ### Importance of DIP
 
 - **Flexibility** — swap implementations without touching business logic.
 - **Maintainability** — detail changes stay in the detail.
-- **Testability** — pass fakes and mocks; no real database or mail server in unit tests.
+- **Testability** — pass fakes and mocks (fakes that also record how they were called, so a test can check it); no real database or mail server in unit tests.
 
 ### How DIP relates to the other principles
 
@@ -3239,7 +3242,7 @@ DIP targets **volatile** dependencies: things that change often or that you want
 
 - Putting the interface in the **low-level** package (e.g. `mysql.MySqlRepository` and `mysql.Repository`). The policy then still depends on the detail's package.
 - Designing the interface around one vendor's API (`sendSmtpMessage(...)`) instead of the policy's need (`send(...)`). Changing vendors then changes the interface too.
-- Breaking the **second** clause ("abstractions should not depend on details"): an interface whose methods return `java.sql.ResultSet` or throw `javax.mail.MessagingException` is technically an abstraction, but it drags the detail's types into the policy. Use the policy's own types (`Optional<Order>`, a domain exception) instead.
+- Breaking the **second** clause ("abstractions should not depend on details"): an interface whose methods return `java.sql.ResultSet` or throw `javax.mail.MessagingException` is technically an abstraction, but it drags the detail's types into the policy. Use the policy's own types (`Optional<Order>`, a box that may or may not hold an order; a domain exception, an error type named in business terms) instead.
 - Believing "we use Spring, so we follow DIP". Spring can inject concrete classes just as happily.
 - Calling `new ConcreteThing()` inside a class "just this once".
 
@@ -3247,9 +3250,9 @@ DIP targets **volatile** dependencies: things that change often or that you want
 
 - **JDBC**: your code depends on `java.sql.Connection` / `DataSource` interfaces; drivers from MySQL, PostgreSQL, Oracle implement them. `DriverManager` finds drivers through `ServiceLoader`.
 - **SLF4J**: the application depends on the logging facade; Logback or Log4j 2 is the plugged-in detail.
-- **Spring** and **Jakarta EE CDI**: IoC containers doing constructor injection.
-- **JPA**: code uses `EntityManager`; Hibernate or EclipseLink implements it.
-- **Hexagonal architecture (ports and adapters)**: the core defines *ports* (interfaces); *adapters* for HTTP, databases and queues implement them. This is DIP applied to a whole service.
+- **Spring** and **Jakarta EE CDI** (the enterprise-Java standard's built-in injection): IoC containers doing constructor injection.
+- **JPA** (Java's standard API for saving objects to SQL databases): code uses `EntityManager`; Hibernate or EclipseLink implements it.
+- **Hexagonal architecture (ports and adapters)**: the core defines *ports* (interfaces); *adapters* for HTTP, databases and queues (message queues, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) implement them. This is DIP applied to a whole service.
 
 ### In the interview
 
@@ -3995,7 +3998,7 @@ Most classic design patterns (Chapters 8–11) exist because of these principles
 | **Factory Method / Abstract Factory** | DIP, OCP | Keeps callers away from concrete constructors; the `switch` lives in one place |
 | **Observer** | OCP, DIP | New reactions are new subscribers; the subject depends only on a listener interface |
 | **Composite** | LSP, OCP | Leaves and groups share one interface, so callers treat them the same |
-| **Proxy** | SRP, OCP | Adds access control, caching or laziness in a separate class |
+| **Proxy** | SRP, OCP | Adds access control, caching or laziness (creating things only when first needed) in a separate class |
 | **Command** | SRP, OCP | Each request is its own object; new commands are new classes |
 | **Visitor** | OCP (for operations) | Easy to add operations, hard to add element types: OCP along a different axis |
 | **Null Object** | LSP | A do-nothing implementation that still keeps the contract, instead of `null` checks |
@@ -4039,7 +4042,7 @@ Two real findings, each explainable in a sentence. That is what a good pass look
 
 ### Naming a design problem out loud
 
-Interviewers seldom ask for a definition of OCP. They ask for a parking lot, a rate limiter or a file store, and then judge whether you can **explain the reasons behind the shape of your design**, which separates someone who memorised five acronyms from someone who uses them. Three things are weighed, most important first:
+Interviewers seldom ask for a definition of OCP. They ask for a parking lot, a rate limiter (a component that caps how many requests are allowed per time window) or a file store, and then judge whether you can **explain the reasons behind the shape of your design**, which separates someone who memorised five acronyms from someone who uses them. Three things are weighed, most important first:
 
 1. **Can you spot and name a problem in the code in front of you?** Shown a class with an ever-growing `if/else` on a type field, can you state the flaw in one crisp sentence?
 2. **Can you defend a choice?** "SOLID says so" earns nothing. "Pricing rules change every quarter, and I don't want every change to reopen the checkout" earns a lot.
@@ -4054,7 +4057,7 @@ Interviewers seldom ask for a definition of OCP. They ask for a parking lot, a r
 *Example: a `ReportGenerator` that formats a report, writes it to disk and emails it.*
 
 - Weak: "It breaks SRP since it does three things; I'd make three classes." Correct, but it sounds like a definition recalled from last night's reading.
-- Strong: "Three different owners can request changes here: marketing controls the wording, the platform team controls where files land, and the email owners control delivery. That means a copy edit redeploys the file-writing code. I'd pull formatting apart from delivery, likely into a formatter and a sink. It costs me two more classes and a little wiring, which pays off because the wording changes frequently." It names the actors, the pain, the fix and its price, and ends in a decision.
+- Strong: "Three different owners can request changes here: marketing controls the wording, the platform team controls where files land, and the email owners control delivery. That means a copy edit redeploys the file-writing code. I'd pull formatting apart from delivery, likely into a formatter and a sink (the destination the output is sent to). It costs me two more classes and a little wiring, which pays off because the wording changes frequently." It names the actors, the pain, the fix and its price, and ends in a decision.
 
 **Say the observation before the principle.** "`Reporting` implements nine methods but calls only two of them, which is an interface segregation problem" shows that you noticed something. Opening with "This violates ISP because…" sounds like you went looking for a place to use the acronym. Do still name the principle at the end, because it hands the interviewer a label for the write-up.
 
@@ -4116,7 +4119,7 @@ Give the two-line version and stop; expand only if asked. Long unprompted answer
 | An interface in front of `String`-like stable classes | DIP | Invert only volatile dependencies |
 | A DI container for a 200-line program | DIP | Wire by hand in `main` |
 
-**YAGNI** ("You Aren't Gonna Need It", from Extreme Programming) is the counterweight to all of SOLID: do not build for requirements you do not have. SOLID tells you **what** a good seam looks like; YAGNI tells you **when** to cut it: when a real change asks for it.
+**YAGNI** ("You Aren't Gonna Need It", from Extreme Programming, an agile method built on small frequent releases and heavy testing) is the counterweight to all of SOLID: do not build for requirements you do not have. SOLID tells you **what** a good seam looks like; YAGNI tells you **when** to cut it: when a real change asks for it.
 
 ---
 

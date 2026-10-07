@@ -1,17 +1,17 @@
 # Chapter 21 — Case Studies: Machine-Coding Round Problems
 
-> **Goal.** Chapters 14–20 taught you to *design* a system on a whiteboard. This chapter trains the harder cousin of that interview: the **machine-coding round**, where you get a written problem statement, 90–120 minutes, and must hand over **running code** that the interviewer will feed their own inputs into. You will learn how the round is scored, a project skeleton you can type from memory, a minute-by-minute time plan, and then eight real problems — each solved end to end with a working, demo-able Java program.
+> **Goal.** Chapters 14–20 taught you to *design* a system on a whiteboard. This chapter trains the harder cousin of that interview: the **machine-coding round**, where you get a written problem statement, 90–120 minutes, and must hand over **running code** that the interviewer will feed their own inputs into. You will learn how the round is scored, a project skeleton you can type from memory, a minute-by-minute time plan, and then eight real problems — each solved end to end with a working, demo-able (ready to run in front of the interviewer) Java program.
 
 **How each problem is laid out:** *Problem & clarifying questions → Requirements → Use cases → Core entities → Class diagram → Key flows → Design decisions & patterns → Java implementation (+ real output) → Concurrency & edge cases → Extensions → In the interview → Self-check → TL;DR.*
 
-All code is Java 21, standard library only, one package per problem under `code/lld/ch21/<name>/`. Run from `chapters/21-case-machine-coding/code`:
+All code is Java 21, standard library only (only the classes that ship with Java, no extra downloads), one package (Java's folder-like grouping of related classes) per problem under `code/lld/ch21/<name>/`. Run from `chapters/21-case-machine-coding/code`:
 
 ```text
 javac --release 21 -d /tmp/lld_21 $(find . -name '*.java')
 java -cp /tmp/lld_21 lld.ch21.taskmgmt.Main       # or wallet, calendar, codingblox, propertyhunt, ledger, inventory, filesearch
 ```
 
-Every demo uses a fixed clock, a seeded random generator, or sorted output, so what you see below is exactly what you get on every run.
+Every demo uses a fixed clock, a seeded random generator (a random-number generator started from a fixed "seed" number, so it produces the same sequence on every run), or sorted output, so what you see below is exactly what you get on every run.
 
 **Problem map**
 
@@ -28,15 +28,17 @@ Every demo uses a fixed clock, a seeded random generator, or sorted output, so w
 
 (Food ordering "FoodKart", another kumaransg/LLD problem, is solved in Chapter 19.)
 
+> **Key terms — the sources and patterns in the map.** *awesome-low-level-design* and *kumaransg/LLD* are public GitHub repositories that collect low-level design (LLD) problems; Geektrust is a hiring platform that sets such coding challenges. The patterns, one line each: a **state machine** is a fixed set of states plus the moves allowed between them (here kept in an enum, a Java type with a fixed list of named values); **Specification** wraps one yes/no rule in an object so rules can be combined with AND / OR / NOT; **Strategy** puts each interchangeable rule in its own class behind one interface (a list of methods with no code, which several classes implement in their own way); **Observer** lets objects sign up to be told when something happens; **Facade** is one simple front class over several others; **Repository** hides how objects are stored behind save / find methods; **Command** turns each action into an object or handler that can be looked up by name; **Builder** assembles an object with many optional settings step by step; **Composite** lets a group of objects be treated like a single one. A few other words from the table: **idempotency keys** are explained in 21.2; **lock ordering** means always taking several locks in the same fixed order, so two threads can never block each other forever (a **thread** is one independent line of execution inside a running program; a **lock** is an object only one thread can hold at a time, while others wait); a **half-open interval** `[start, end)` includes its start but not its end; a **sweep** walks through sorted time points one by one; **unit normalisation** converts every input to one unit (e.g. square feet) as soon as it is read; an **SKU** (stock keeping unit) is the id of one sellable item; **OOD** is object-oriented design; an **Interpreter-style parser** turns text written in a small language into a tree of objects.
+
 ---
 
 ## 21.0 How the machine-coding round works
 
 ### What it is
 
-A **machine-coding round** (also called an *LLD coding round*) is an object-oriented design interview in which **working code is the answer**. The same round is called *object-oriented design* or *low-level design* at other companies; machine coding simply adds the rule that the code must compile and run at the end. You get a one- or two-page problem statement (usually a PDF), a laptop with your own IDE, and 90–120 minutes. Internet use is limited to looking up syntax. There is **no database, no UI and no web framework**: all data lives in memory (maps and lists), and the program is driven by a `main` method, a list of commands, a file, or unit tests.
+A **machine-coding round** (also called an *LLD coding round*) is an object-oriented design (designing a program as classes of objects that hold data and behaviour together) interview in which **working code is the answer**. The same round is called *object-oriented design* or *low-level design* at other companies; machine coding simply adds the rule that the code must compile and run at the end. You get a one- or two-page problem statement (usually a PDF), a laptop with your own IDE (integrated development environment: the code editor plus compiler and debugger, such as IntelliJ IDEA), and 90–120 minutes. Internet use is limited to looking up syntax. There is **no database, no UI (user interface: screens) and no web framework (a library for building websites and web APIs — an API is the set of calls a program or service offers to other programs)**: all data lives in memory (maps and lists), and the program is driven by a `main` method, a list of commands, a file, or unit tests (small automated checks that call one piece of code and compare the result with what is expected).
 
-Do not confuse it with the **system design** interview. That round is about keeping a product alive under millions of users, so the conversation is about servers, databases, caches and message queues. This round never leaves a single program: its vocabulary is **classes** (a *class* is a named code type that bundles some data with the methods that act on that data), their fields and methods, and how the classes relate. Same product, very different zoom level — and practising for one leaves you unready for the other.
+Do not confuse it with the **system design** interview. That round is about keeping a product alive under millions of users, so the conversation is about servers, databases, caches and message queues (see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) if those words are new). This round never leaves a single program: its vocabulary is **classes** (a *class* is a named code type that bundles some data with the methods that act on that data), their fields and methods, and how the classes relate. Same product, very different zoom level — and practising for one leaves you unready for the other.
 
 Everyday analogy: a whiteboard design interview is an architect *describing* a house. A machine-coding round is being asked to *build a small shed* while the inspector watches — then the inspector leans on every wall.
 
@@ -44,19 +46,19 @@ The format is especially common at Indian product companies such as Flipkart, Sw
 
 ### How it is judged
 
-Interviewers use a rubric. The exact wording differs by company, but it always covers the same things. Read the "Expectations" section of any statement in this chapter (Coding Blox, PropertyHunt and Event Calendar all have one) and you will see these repeated almost word for word.
+Interviewers use a rubric (a scoring checklist). The exact wording differs by company, but it always covers the same things. Read the "Expectations" section of any statement in this chapter (Coding Blox, PropertyHunt and Event Calendar all have one) and you will see these repeated almost word for word.
 
 | # | Criterion | What the interviewer checks | How to score well |
 |---|---|---|---|
-| 1 | **Working, demo-able code** | Does it compile? Does the driver run the sample input and print the expected output? Does it survive *their* inputs? | Get a thin end-to-end path working in the first hour. Never finish with code that does not compile. |
+| 1 | **Working, demo-able code** | Does it compile? Does the driver (the small piece of code that feeds input into the program and prints the results) run the sample input and print the expected output? Does it survive *their* inputs? | Get a thin end-to-end path working in the first hour. Never finish with code that does not compile. |
 | 2 | **Functional completeness** | Every *mandatory* requirement done; bonus only after that. | Implement requirements in the statement's order; tick them off. |
-| 3 | **Clean models** | Entities have one job, fields are private, invariants live inside the entity (for example a task refuses an illegal status change). | Use enums for fixed sets, records for values, classes for things that change. |
-| 4 | **Service interfaces / separation of concerns** | Parsing, business logic and storage are in different classes. No `System.out` inside services. | Driver → Service → Repository layers (skeleton below). |
+| 3 | **Clean models** | Entities have one job, fields are private, invariants (rules that must always be true, such as "balance is never negative") live inside the entity (for example a task refuses an illegal status change). | Use enums for fixed sets, records (Java's compact, unchangeable data classes) for values, classes for things that change. |
+| 4 | **Service interfaces / separation of concerns** (each class handles one kind of work) | Parsing, business logic (the product's actual rules) and storage are in different classes. No `System.out` inside services. | Driver → Service → Repository layers (skeleton below). |
 | 5 | **Extensibility** | "Add a new offer / sort order / scoring rule" should mean *adding a class*, not editing `if` chains. | Strategy and Specification for things the statement says "can be X or Y". |
-| 6 | **Edge cases & failure handling** | Unknown IDs, duplicates, invalid input, wrong user, double-run. The program prints a clear error and **keeps going**. | Custom exceptions with good messages; the driver catches them per command. |
+| 6 | **Edge cases & failure handling** | Unknown IDs, duplicates, invalid input, wrong user, double-run. The program prints a clear error and **keeps going**. | Custom exceptions (your own error classes; an exception is how Java signals an error) with good messages; the driver catches them per command. |
 | 7 | **Readability** | Intuitive names, small methods, no copy-paste. | Name classes after nouns in the statement; name methods after verbs in it. |
-| 8 | **Concurrency (when asked)** | Wallets, inventory, booking: can two threads corrupt state? | Say where the lock is and why; demo it with a thread pool if time allows. |
-| 9 | **Tests (bonus)** | Some companies give extra credit for unit tests. | A tiny `assert`-style self-check in `main` is enough if there is no JUnit. |
+| 8 | **Concurrency (when asked)** | Wallets, inventory, booking: can two threads corrupt state? | Say where the lock is and why; demo it with a thread pool (a fixed set of reusable threads) if time allows. |
+| 9 | **Tests (bonus)** | Some companies give extra credit for unit tests. | A tiny `assert`-style self-check in `main` is enough if there is no JUnit (Java's standard unit-testing library). |
 
 ### The five-step method, and how the clock changes it
 
@@ -77,7 +79,7 @@ A whiteboard round usually lasts 45 minutes to an hour. A budget for the 45-minu
 | Requirements | 5–8 | 8–12 written requirements |
 | Actors & use cases | 3–5 | 2–4 actors, 6–10 use cases |
 | Classes | 8–10 | Class list, one responsibility each |
-| Relationships | 8–10 | Class diagram with relationships and multiplicity |
+| Relationships | 8–10 | Class diagram with relationships and multiplicity (how many objects sit on each side, e.g. one-to-many) |
 | Code | 12–15 | 2–3 methods for the main flows |
 
 Two things in that table catch people off guard. The first two steps — which name no class at all — may take as much as a quarter of the time. And coding gets the biggest single slot yet still covers only two or three methods: nobody finishes the whole product, and you are graded on the slice you chose to build well, not on how much ground you covered. **Machine coding keeps the five steps but flips the proportions:** steps 1–4 shrink to about 20 minutes (see the time plan below) and code fills the rest, because now every mandatory feature must actually run.
@@ -92,9 +94,9 @@ Beyond "does it run", the interviewer is watching five things:
 - **Code and model agree** — if the code contains a method your model has no place for, either the model or the code needs fixing.
 - **A trade-off** — the option you took *and* the one you turned down, both said out loud.
 
-Notice what is missing: nobody grades your UML notation or counts how many diagram types you drew. The model is what gets marked; a diagram is just one way of displaying it.
+Notice what is missing: nobody grades your UML notation (UML: the standard box-and-arrow notation for class diagrams) or counts how many diagram types you drew. The model is what gets marked; a diagram is just one way of displaying it.
 
-The single most common failure is **running out of time with nothing that runs**. The second is a "god class": one `Manager` with every map and every method. Both are avoidable with the skeleton and time plan below.
+The single most common failure is **running out of time with nothing that runs**. The second is a "god class" (a class that does everything): one `Manager` with every map and every method. Both are avoidable with the skeleton and time plan below.
 
 ### A reusable project skeleton
 
@@ -113,17 +115,17 @@ src/
 | Layer | Knows about | Must NOT know about | Why |
 |---|---|---|---|
 | **model** | nothing but itself (and other models) | services, storage, console | Entities guard their own invariants (e.g. `Task.changeStatus` rejects `TODO → DONE`). |
-| **repository** | model | services, console | Swapping `HashMap` for a DB later touches only this layer (Dependency Inversion, Chapter 4). |
-| **service** | model, repository *interfaces*, strategy *interfaces* | concrete repositories (injected), console | This is the part the interviewer reads most carefully. |
+| **repository** | model | services, console | Swapping `HashMap` for a DB (database) later touches only this layer (Dependency Inversion — services depend on interfaces, not on concrete classes; Chapter 4). |
+| **service** | model, repository *interfaces*, strategy *interfaces* | concrete repositories (injected — handed in from outside rather than created inside), console | This is the part the interviewer reads most carefully. |
 | **strategy** | model | services | Each "X or Y" rule in the statement becomes one interface + small classes (Open/Closed). |
 | **exception** | — | — | One class per failure *kind*, with a message a user could read. |
 | **driver** | services | repositories' internals | Parsing and printing are replaceable; business logic is not. |
 
 In this book each problem lives in **one Java package** (for example `lld.ch21.wallet`) so the full listing stays short and readable. In the real round, create the sub-packages above — it costs nothing and the interviewer notices. Three reusable building blocks appear again and again:
 
-1. **A generic in-memory repository** — a `ConcurrentHashMap<K, V>` behind an interface with `save / findById / findAll / delete` (see `Repository<K,V>` in Coding Blox, 21.4).
-2. **An ID generator** — an `AtomicInteger` per entity type (`"T" + seq.incrementAndGet()`), thread-safe and predictable, which matches statements that say "auto-increment id starting with 1".
-3. **A command processor** — a `Map<String, Consumer<String[]>>` from command name to handler, fed by a built-in `List<String>` of sample commands (Coding Blox, PropertyHunt, Ledger). Adding a command = adding one map entry (Command pattern, Chapter 10).
+1. **A generic in-memory repository** — a `ConcurrentHashMap<K, V>` (a map that many threads can use at once; `K, V` are type parameters, so the same class works for any key and value type — that is what *generic* means) behind an interface with `save / findById / findAll / delete` (see `Repository<K,V>` in Coding Blox, 21.4).
+2. **An ID generator** — an `AtomicInteger` (an integer threads can increment safely without a lock) per entity type (`"T" + seq.incrementAndGet()`), thread-safe and predictable, which matches statements that say "auto-increment id starting with 1".
+3. **A command processor** — a `Map<String, Consumer<String[]>>` from command name to handler (`Consumer` is a function that takes an argument and returns nothing; a *handler* is the code that deals with one command), fed by a built-in `List<String>` of sample commands (Coding Blox, PropertyHunt, Ledger). Adding a command = adding one map entry (Command pattern, Chapter 10).
 
 ### The 90-minute time plan
 
@@ -134,7 +136,7 @@ In this book each problem lives in **one Java package** (for example `lld.ch21.w
 | 20–60 | Implement mandatory requirements **in order**, running the driver after each one. | Sample input produces the sample output. |
 | 60–75 | Edge cases and validation: unknown ids, duplicates, wrong owner, invalid numbers. Custom exceptions. | Driver prints errors and continues. |
 | 75–85 | Bonus features (only if all mandatory ones work). Thread-safety where money or stock is involved. | Bonus commands in the driver. |
-| 85–90 | Clean up names, delete dead code, run everything one last time. Prepare a 2-minute walkthrough. | Code that compiles, a demo, a story. |
+| 85–90 | Clean up names, delete dead code (code that is never run), run everything one last time. Prepare a 2-minute walkthrough. | Code that compiles, a demo, a story. |
 
 A good rule: **run the program at least every 15 minutes**. A compile error found at minute 88 is a disaster; the same error found at minute 30 is a 20-second fix.
 
@@ -152,23 +154,23 @@ A good rule: **run the program at least every 15 minutes**. A compile error foun
 | Starting with a perfect class diagram for 20 minutes | No time left for code | Enums/records first; the diagram lives in your head and in names |
 | One `Manager` class with 15 maps | Fails "separation of concerns" | One service per area + repositories |
 | `System.out.println` inside the service | Service cannot be reused or tested | Services return data; the driver prints |
-| `double` for money | `0.1 + 0.2 != 0.3` — interviewers test this | `BigDecimal` with a fixed scale (21.2) or whole units (`long` paise) |
-| Crashing on the first bad command | "Fails gracefully" is an explicit criterion | Catch domain exceptions in the driver loop, print, continue |
+| `double` for money | `0.1 + 0.2 != 0.3` — interviewers test this | `BigDecimal` (Java's exact decimal number type) with a fixed scale (number of digits after the decimal point; 21.2) or whole units (`long` paise; a paisa is 1/100 of a rupee) |
+| Crashing on the first bad command | "Fails gracefully" is an explicit criterion | Catch domain exceptions (errors that describe a broken business rule) in the driver loop, print, continue |
 | Implementing bonus before mandatory | Partial credit on the mandatory part | Mandatory in order; bonus last |
-| Writing every class in full detail | Nothing works end to end when time runs out | Make the core flow run first; stub or name the rest |
+| Writing every class in full detail | Nothing works end to end when time runs out | Make the core flow run first; stub (write an empty placeholder for) or name the rest |
 | `Random` without a seed | Output changes every run; hard to demo | Seed it, or put randomness behind a Strategy (21.4) |
-| Hard-coding "today" with `LocalDate.now()` | Demo changes daily | Inject a `java.time.Clock` (21.1, 21.2) |
+| Hard-coding "today" with `LocalDate.now()` | Demo changes daily | Inject a `java.time.Clock` (Java's replaceable source of the current time; 21.1, 21.2) |
 
 ### Real-world examples
 
-The skeleton above is the standard layering of real Java back ends: in a Spring Boot service, controllers play the "driver" role, `@Service` classes hold business rules, and `@Repository` interfaces (Spring Data) hide storage. The in-memory repository you write in the round is exactly the kind of fake that teams use in unit tests for those services.
+The skeleton above is the standard layering of real Java back ends (the server-side part of an application): in a Spring Boot (the most popular Java framework for building services) service, controllers (classes that receive web requests) play the "driver" role, `@Service` classes hold business rules, and `@Repository` interfaces (Spring Data) hide storage. (The `@Something` markers are annotations: labels a framework reads to know what a class is for.) The in-memory repository you write in the round is exactly the kind of fake that teams use in unit tests for those services.
 
 ### In the interview
 
 **30-second answer — "How do you approach a machine-coding problem?"** "I read the statement twice, list mandatory and bonus requirements and ask about anything ambiguous. I set up model / repository / service / strategy / exception / driver packages, put the sample input into the driver, and implement requirements one by one, running after each. Services return data and throw domain exceptions; the driver prints and keeps going. I finish with edge cases, thread-safety where state is shared, and bonus features if time allows."
 
 **Follow-ups**
-- *"Why an interface for an in-memory repository?"* — So services depend on an abstraction; a JDBC or Redis implementation can replace it with no change to business code, and tests can use the in-memory one.
+- *"Why an interface for an in-memory repository?"* — So services depend on an abstraction (an interface rather than a concrete class); a JDBC (Java's standard API for SQL databases) or Redis (a fast in-memory key-value store) implementation can replace it with no change to business code, and tests can use the in-memory one.
 - *"How do you make random behaviour testable?"* — Put it behind an interface (a Strategy) and inject a seeded or scripted implementation for demos and tests.
 - *"How much do you test?"* — At minimum, the driver replays the statement's samples and prints results I can compare with the expected output. With time, a few JUnit tests on the service layer.
 
@@ -189,18 +191,18 @@ Working code first, clean layering second, patterns where the statement asks for
 
 ### Problem & clarifying questions
 
-Build the core of a tool like Jira, Asana or Trello: users create tasks, assign them to people, move them through statuses, comment on them, and search/filter them; the system reminds people about tasks that are due. The awesome-low-level-design version asks for create / update / delete, title + description + due date + priority + status, assignment, reminders, search and filtering (by priority, due date, assignee), marking tasks complete, task history, and safe concurrent access.
+Build the core of a tool like Jira, Asana or Trello (popular team task-tracking apps): users create tasks, assign them to people, move them through statuses, comment on them, and search/filter them; the system reminds people about tasks that are due. The awesome-low-level-design version asks for create / update / delete, title + description + due date + priority + status, assignment, reminders, search and filtering (by priority, due date, assignee), marking tasks complete, task history, and safe concurrent access (several users acting at the same moment without corrupting data).
 
 Questions to ask (with the answers this solution assumes):
 
 | Question | Assumed answer |
 |---|---|
 | Which statuses exist, and can any status go to any other? | TODO, IN_PROGRESS, BLOCKED, DONE, CANCELLED. Only listed transitions are legal (e.g. TODO cannot jump straight to DONE; CANCELLED is final; DONE can be re-opened). |
-| One assignee or many? | One assignee (nullable). A list is an easy extension. |
+| One assignee or many? | One assignee (nullable: the field may be `null`, Java's "no value"). A list is an easy extension. |
 | What does "reminder" mean in a console app? | A method a scheduler would call: "notify owners of open tasks due within N days or overdue". |
 | Should due dates in the past be allowed? | No, not on creation. |
 | How are notifications delivered? | Through a listener interface; the demo prints them. |
-| "View task history" — history of what? | Two readings: each task's audit log (who changed what, when) — built here — and a user's list of finished tasks, which is just a search: `assignedTo(u).and(withStatus(DONE))`. |
+| "View task history" — history of what? | Two readings: each task's audit log (a permanent record of who changed what, when) — built here — and a user's list of finished tasks, which is just a search: `assignedTo(u).and(withStatus(DONE))`. |
 | "Set reminders" — per task, or a sweep? | A sweep over due dates is built here; a per-task reminder time is an extension (below). |
 
 ### Requirements
@@ -233,13 +235,13 @@ Questions to ask (with the answers this solution assumes):
 
 | Class | Kind | Responsibility |
 |---|---|---|
-| `Task` | class | Holds task data; enforces legal status changes; records its own history. All mutators `synchronized`. |
+| `Task` | class | Holds task data; enforces legal status changes; records its own history. All mutators (methods that change state) `synchronized` (only one thread at a time may run them on the same object). |
 | `TaskStatus` | enum | Lists statuses and, for each, which statuses it may move to (a tiny state machine). |
 | `Priority` | enum | LOW < MEDIUM < HIGH < CRITICAL (enum order is used for comparison). |
-| `User`, `Comment`, `Activity` | records | Immutable values. |
+| `User`, `Comment`, `Activity` | records | Immutable (cannot change after creation) values. |
 | `TaskRepository` / `InMemoryTaskRepository` | interface / class | Storage contract and a `ConcurrentHashMap` implementation. |
-| `TaskFilter` | functional interface | Composable predicate (Specification pattern) with factory methods and `and` / `or`. |
-| `TaskSort` | enum | Named comparators (Strategy). `BY_ID` compares the number inside the id, so `T2` sorts before `T10`. |
+| `TaskFilter` | functional interface (an interface with one method, so a short lambda function can implement it) | Composable predicate (a yes/no test; Specification pattern) with factory methods (static methods that create objects) and `and` / `or`. |
+| `TaskSort` | enum | Named comparators (objects that decide which of two items sorts first; Strategy). `BY_ID` compares the number inside the id, so `T2` sorts before `T10`. |
 | `TaskEventListener` / `ConsoleNotifier` | interface / class | Observer for notifications. |
 | `TaskService` | class | Facade with every use case; validates input, uses the clock, fires events. |
 | `NotFoundException`, `InvalidTransitionException` | exceptions | Clear failure messages. |
@@ -374,13 +376,13 @@ sequenceDiagram
 
 | Decision | Pattern | Why | Alternative rejected |
 |---|---|---|---|
-| Transitions stored in the `TaskStatus` enum | State (enum-based) | All rules in one place; `Task` just asks `canMoveTo`. | Full State pattern with one class per status — overkill when states carry no behaviour besides transitions. |
+| Transitions stored in the `TaskStatus` enum | State (enum-based) | All rules in one place; `Task` just asks `canMoveTo`. | Full State pattern (one class per state, each holding that state's behaviour) with one class per status — overkill when states carry no behaviour besides transitions. |
 | `TaskFilter extends Predicate<Task>` with `and/or` | Specification | Any combination of filters without a method per combination; a new filter is one factory method. | `search(String assignee, Status s, Priority p, ...)` with many nullable parameters — grows forever. |
 | `TaskSort` enum of comparators | Strategy | Sort order is data the caller picks. | `switch` on a sort string inside the service. |
 | `TaskEventListener` list | Observer | Email/Slack/push can be added without touching the service. | Calling `System.out` from the service. |
 | `TaskService` as the only entry point | Facade | Driver sees one simple API. | Driver talking to repositories directly. |
-| `Clock` injected | Dependency injection | Deterministic reminders and tests. | `LocalDate.now()` scattered in code. |
-| `synchronized` on `Task` mutators | Monitor per entity | Fine-grained: two different tasks never block each other. | One global lock on the service — simpler but serialises everything. |
+| `Clock` injected | Dependency injection (a class receives the objects it needs from outside instead of creating them) | Deterministic reminders and tests. | `LocalDate.now()` scattered in code. |
+| `synchronized` on `Task` mutators | Monitor per entity (each object's own lock guards its methods) | Fine-grained (many small locks instead of one big one): two different tasks never block each other. | One global lock on the service — simpler but serialises everything (forces all work to run one at a time). |
 
 ### Java implementation
 
@@ -855,12 +857,12 @@ What to notice in the output: self-assignment (`bob` assigning T3 to himself) se
 
 ### Concurrency & edge cases
 
-- **Two users update the same task at once.** Each mutator of `Task` is `synchronized`, so a status change and a reassignment cannot interleave; getters are synchronized too so readers see a consistent value.
+- **Two users update the same task at once.** Each mutator of `Task` is `synchronized`, so a status change and a reassignment cannot interleave (have their steps mixed together); getters (methods that only read a field) are synchronized too so readers see a consistent value.
 - **Storage.** `ConcurrentHashMap` for tasks and users; `findAll()` returns a copy so a search is never disturbed by a concurrent insert.
-- **Listeners** are in a `CopyOnWriteArrayList` — registering a listener while events fire is safe.
+- **Listeners** (objects that asked to be told about events) are in a `CopyOnWriteArrayList` (a list that copies itself on each write, so reading needs no lock) — registering a listener while events fire is safe.
 - **IDs** from an `AtomicInteger` — no duplicates under concurrency.
 - **Edge cases handled:** unknown task / user / actor, blank title, past due date (on create and on update), illegal transition, assigning a closed (DONE/CANCELLED) task, self-assignment (no noise), comment notifications go to "the other party".
-- **Not handled (say so):** lost updates between two *editors of the text fields* (last writer wins). Fix: optimistic locking with a `version` field — reject an update whose version is stale.
+- **Not handled (say so):** lost updates between two *editors of the text fields* (last writer wins). Fix: optimistic locking with a `version` field — reject an update whose version is stale (out of date). Optimistic locking takes no lock up front; it only checks, at save time, that nobody else changed the record in the meantime.
 
 ### Extensions & follow-up questions
 
@@ -869,12 +871,12 @@ What to notice in the output: self-assignment (`bob` assigning T3 to himself) se
 - **Recurring tasks?** A `RecurrenceRule` (daily/weekly) that creates the next task when one is marked DONE.
 - **Custom workflows per project (like Jira)?** Move the transition table from the enum into a `Workflow` object (a `Map<Status, Set<Status>>`) injected per project.
 - **A reminder time chosen by the user?** Store `remindAt` on the task; the scheduler's sweep fires every reminder whose time has passed and clears it.
-- **Real reminders?** A `ScheduledExecutorService` calling `sendDueReminders(1)` every hour; store "already reminded" per task to avoid spam.
-- **Search at scale?** Secondary indexes (`Map<String, Set<Task>>` by assignee, `TreeMap<LocalDate, Set<Task>>` by due date) or a search engine such as Elasticsearch.
+- **Real reminders?** A `ScheduledExecutorService` (Java's tool for running tasks on a timer) calling `sendDueReminders(1)` every hour; store "already reminded" per task to avoid spam.
+- **Search at scale?** Secondary indexes (extra lookup maps keyed by a field other than the id: `Map<String, Set<Task>>` by assignee, `TreeMap<LocalDate, Set<Task>>` by due date; a `TreeMap` keeps its keys sorted) or a search engine such as Elasticsearch (a popular open-source search server).
 
 ### Real-world example
 
-In Jira, each project has a *workflow*: a set of statuses and the transitions allowed between them, and a transition can fire notifications to watchers. Search is done with JQL, a query language that combines conditions like `assignee = currentUser() AND status != Done ORDER BY priority DESC` — the same "compose filters, then sort" idea as `TaskFilter` + `TaskSort`, just with a text syntax on top.
+In Jira, each project has a *workflow*: a set of statuses and the transitions allowed between them, and a transition can fire notifications to watchers. Search is done with JQL, a query language that combines conditions like `assignee = currentUser() AND status != Done ORDER BY priority DESC` (DESC = descending) — the same "compose filters, then sort" idea as `TaskFilter` + `TaskSort`, just with a text syntax on top.
 
 ### In the interview
 
@@ -897,16 +899,18 @@ Task = entity that guards its own state machine and history. Service = facade. F
 
 ### Problem & clarifying questions
 
-Build the core of a wallet like Paytm, PhonePe or PayPal balance: users hold wallets, add money, transfer to other users and see a statement. The awesome-low-level-design statement also lists account and personal-info management, adding and removing payment methods (cards, bank accounts), transfers to *external* accounts, multiple currencies with conversion, security, **concurrent transactions with data consistency**, and scale. Promotional **cashback** is not in that statement; it is added here because wallet machine-coding variants often ask for it, and it is a clean place to show the Strategy pattern and double-entry thinking. In a machine-coding round the interviewer focuses on three things: **money arithmetic**, **no double-spending under concurrency**, and **no double-charging on retries** (idempotency).
+Build the core of a wallet (an app account that stores money for payments) like Paytm, PhonePe or PayPal balance: users hold wallets, add money, transfer to other users and see a statement. The awesome-low-level-design statement also lists account and personal-info management, adding and removing payment methods (cards, bank accounts), transfers to *external* accounts, multiple currencies with conversion, security, **concurrent transactions with data consistency**, and scale. Promotional **cashback** (money given back to the customer after a payment, as a reward) is not in that statement; it is added here because wallet machine-coding variants often ask for it, and it is a clean place to show the Strategy pattern and double-entry thinking (the accounting rule that every amount added somewhere is taken from somewhere else, so the books always balance). In a machine-coding round the interviewer focuses on three things: **money arithmetic**, **no double-spending under concurrency** (spending the same money twice because two requests ran at the same time), and **no double-charging on retries** (idempotency).
+
+> **Key term — idempotency:** an operation is **idempotent** if running it twice has the same effect as running it once. Networks fail in the middle of requests, so clients retry; if "transfer 100" is not idempotent, a retry moves another 100. The usual fix is an **idempotency key**: the client sends a unique id with the request, and the server remembers the result for each id and returns it again for a repeat instead of re-running the work. More in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
 
 | Question | Assumed answer |
 |---|---|
 | Money type? | `BigDecimal` with scale 2 (paise/cents). Inputs with more than 2 decimals are rejected, not silently rounded. |
 | Can a balance go negative? | No. |
-| What if a client retries a request (network timeout)? | Each request carries an **idempotency key**; a repeated key returns the original result and moves no money. |
+| What if a client retries a request (network timeout — it gave up waiting for the reply)? | Each request carries an **idempotency key**; a repeated key returns the original result and moves no money. |
 | Offers? | Cashback strategies: "10% on first transfer, max 50" and "flat 25 on transfers ≥ 1000". Offers do not stack — the best one wins. |
 | Where does cashback money come from? | From a **promotions wallet** (`PROMO`) that marketing tops up. Cashback is an ordinary transfer PROMO → sender, so money is never created from nothing. If the budget is used up, no cashback is paid and the transfer still stands. |
-| Top-up source? | An external bank/card; modelled as a credit with a reference. |
+| Top-up source? | An external bank/card; modelled as a credit (money added to the wallet) with a reference. |
 | Multi-currency? | Out of scope for the 90-minute version; discussed in extensions. |
 
 ### Requirements
@@ -920,7 +924,7 @@ Build the core of a wallet like Paytm, PhonePe or PayPal balance: users hold wal
 6. Idempotent top-up and transfer.
 
 **Non-functional**
-- **Correctness under concurrency:** no lost updates, no negative balances, no deadlocks, total money conserved (only top-ups add money; transfers and cashback only move it).
+- **Correctness under concurrency:** no lost updates (one thread's change silently overwritten by another's), no negative balances, no deadlocks (two threads each waiting forever for a lock the other holds), total money conserved (only top-ups add money; transfers and cashback only move it).
 - Exact decimal arithmetic.
 - New offers added without touching the transfer code.
 
@@ -937,13 +941,13 @@ Build the core of a wallet like Paytm, PhonePe or PayPal balance: users hold wal
 
 | Class | Kind | Responsibility |
 |---|---|---|
-| `Wallet` | class | Balance + own statement + its `ReentrantLock`. `debit` refuses to go below zero. The service owns one special wallet, `PROMO`, that funds cashback. |
-| `Transaction` | record | Immutable ledger line: type, amount, balance after, counterparty, reference. |
+| `Wallet` | class | Balance + own statement + its `ReentrantLock` (Java's explicit lock object). `debit` refuses to go below zero. The service owns one special wallet, `PROMO`, that funds cashback. |
+| `Transaction` | record | Immutable ledger line: type, amount, balance after, counterparty (the other wallet involved), reference. |
 | `TxnType` | enum | TOP_UP, TRANSFER_OUT, TRANSFER_IN, CASHBACK_OUT (on PROMO), CASHBACK_IN (on the user). |
 | `TransferResult` | record | What the caller gets (stored for idempotent replays). |
 | `Money` | utility | Normalises and validates `BigDecimal` amounts. |
 | `Offer` + `FirstTransferOffer`, `BigTransferOffer` | interface + strategies | Compute cashback for a completed transfer. |
-| `WalletService` | class | Facade: creates wallets, orchestrates locking, idempotency, offers. |
+| `WalletService` | class | Facade: creates wallets, orchestrates (calls in the right order) locking, idempotency, offers. |
 | `InsufficientFundsException`, `WalletNotFoundException` | exceptions | Failure reasons. |
 
 ### Class diagram
@@ -1051,14 +1055,14 @@ sequenceDiagram
 |---|---|---|
 | **`BigDecimal`, scale 2, reject > 2 decimals** | `double` cannot represent 0.1 exactly; money must be exact. Rejecting `1.005` avoids silent rounding surprises. | `double` (wrong), `long` paise (also correct, and a fine choice — say so). |
 | **Lock per wallet, acquired in id order** | Two opposite transfers (A→B and B→A) would deadlock if each locked its own source first. A global order (smaller id first) makes a cycle impossible. | One global lock — correct but every transfer in the system serialises. |
-| **Debit before credit, both under both locks** | `debit` throws before any state changes, so a failed transfer leaves both wallets untouched (atomicity). | Credit then debit — would need a compensating action on failure. |
-| **Idempotency via `ConcurrentHashMap.computeIfAbsent`** | The check "seen this key?" and the execution are one atomic step per key, so two concurrent retries cannot both run. If the transfer throws, nothing is stored and the client can retry. | `if (!map.containsKey(k)) { run; put }` — check-then-act race. |
+| **Debit before credit, both under both locks** | `debit` throws before any state changes, so a failed transfer leaves both wallets untouched (atomicity). | Credit then debit — would need a compensating action (a new step that undoes an earlier one) on failure. |
+| **Idempotency via `ConcurrentHashMap.computeIfAbsent`** (creates and stores a value only if the key is missing, as one atomic step) | The check "seen this key?" and the execution are one atomic step per key, so two concurrent retries cannot both run. If the transfer throws, nothing is stored and the client can retry. | `if (!map.containsKey(k)) { run; put }` — check-then-act race (another thread can act between the check and the action). |
 | **Cashback paid from a funded `PROMO` wallet** | Double-entry: every credit has a matching debit, so the sum of all wallets changes only on top-ups — which is exactly what the demo checks. A campaign cannot overspend its budget. | Crediting the user out of thin air — the books no longer balance and nobody can say what a campaign cost. |
 | **Cashback as a second step, after the transfer locks are released** | Only two wallets are ever locked at once, and ordinary transfers never wait on the busy `PROMO` lock. | Locking sender, receiver and PROMO together for every transfer — correct, but every transfer in the system would queue on PROMO. |
 | **`Offer` interface, best one wins** | Strategy: new promotions are new classes; the "no stacking" policy lives in one method. | `if/else` on promotion codes inside `transfer`. |
 | **Statement stored in the wallet** | Reading a wallet's history needs no global scan. | One global transaction list filtered on read — fine for small data, slow at scale. |
 
-`computeIfAbsent` detail worth knowing: the JDK documents that the whole call is atomic, that the mapping function runs only when the key is absent, that an exception from the function is rethrown with no mapping recorded, and that other threads updating the *same map* may block while it runs — so the function should be short and must not update the map itself. Our function only touches wallets, never `processed`, so it is safe. At higher scale, store a `CompletableFuture` with `putIfAbsent` and run the transfer outside the map (extension below).
+`computeIfAbsent` detail worth knowing: the JDK (Java Development Kit: Java's compiler and standard library) documents that the whole call is atomic, that the mapping function runs only when the key is absent, that an exception from the function is rethrown with no mapping recorded, and that other threads updating the *same map* may block while it runs — so the function should be short and must not update the map itself. Our function only touches wallets, never `processed`, so it is safe. At higher scale, store a `CompletableFuture` (a handle to a result that will be ready later) with `putIfAbsent` and run the transfer outside the map (extension below).
 
 ### Java implementation
 
@@ -1493,27 +1497,27 @@ Reading the output: marketing first funds `PROMO` with 100.00; the retried top-u
 
 ### Concurrency & edge cases
 
-- **Race on one wallet:** every read-modify-write of `balance` happens with the wallet's lock held.
-- **Deadlock:** avoided by a global lock order (lexicographic wallet id; `"PROMO"` sorts before `"W1"`). Every two-lock path goes through one helper, `withBoth`, so the order cannot be forgotten. The program never holds more than two wallet locks at a time.
+- **Race on one wallet:** every read-modify-write (read a value, compute a new one, write it back — three steps another thread can slip between) of `balance` happens with the wallet's lock held.
+- **Deadlock:** avoided by a global lock order (lexicographic — dictionary order — wallet id; `"PROMO"` sorts before `"W1"`). Every two-lock path goes through one helper, `withBoth`, so the order cannot be forgotten. The program never holds more than two wallet locks at a time.
 - **Double submit:** idempotency key → at most one execution per key.
-- **Same key, different body** (client bug): today the stored result is returned. Production systems also store a hash of the request and reject a mismatch with an error.
+- **Same key, different body** (client bug): today the stored result is returned. Production systems also store a hash (a short fingerprint computed from the data) of the request and reject a mismatch with an error.
 - **Validation:** non-positive amounts, more than 2 decimals, same source and target, unknown wallet, insufficient funds.
 - **Cashback money source:** a transfer from the `PROMO` wallet, so the books balance (double-entry: every credit has a matching debit). The cashback step runs after the transfer's locks are released, so for a moment the transfer is visible without its cashback — fine for a reward. If the budget cannot cover the offer, the result reports a cashback of zero and the transfer is kept.
 
 ### Extensions & follow-up questions
 
-- **Multi-currency?** Each wallet has a `Currency`; transfers across currencies go through a `FxRateProvider` interface; store both amounts and the rate used in the transaction. Use `java.util.Currency` for codes and decimal places.
-- **Payment methods (card, bank, UPI)?** A `PaymentMethod` interface with `charge(amount)`; top-up calls it first, and only credits the wallet on success (or uses a pending → confirmed state if the gateway is asynchronous). Users add and remove methods on their account.
+- **Multi-currency?** Each wallet has a `Currency`; transfers across currencies go through a `FxRateProvider` (FX = foreign exchange) interface; store both amounts and the rate used in the transaction. Use `java.util.Currency` for codes and decimal places.
+- **Payment methods (card, bank, UPI — India's instant bank-to-bank payment system)?** A `PaymentMethod` interface with `charge(amount)`; top-up calls it first, and only credits the wallet on success (or uses a pending → confirmed state if the gateway is asynchronous). Users add and remove methods on their account.
 - **Transfers to external accounts (withdraw to bank)?** Debit the wallet into a `PENDING_PAYOUT` state, call the bank through a `PayoutGateway` interface, and either confirm, or post a compensating credit if the bank rejects it.
 - **Reversal / refund?** Never edit a past transaction; post a new compensating transaction referencing the original.
-- **Distributed system?** Wallet balances in a database with row locks (`SELECT ... FOR UPDATE`) or optimistic versioning; idempotency keys in a table with a unique constraint; ledgers as double-entry journals.
-- **Long transfers blocking the idempotency map?** Use `putIfAbsent(key, new CompletableFuture<>())`: the winner runs the transfer outside the map and completes the future; duplicates just wait on `future.join()`. On failure, remove the key so a retry can run.
-- **Limits (daily cap, KYC tier)?** A chain of validators (Chain of Responsibility) run before `doTransfer`.
-- **Why not `AtomicReference<BigDecimal>` + CAS?** Works for a single wallet, but a transfer touches two balances that must change together; CAS on two variables is not atomic, so locks are simpler.
+- **Distributed system?** Wallet balances in a database with row locks (`SELECT ... FOR UPDATE` locks the rows it reads until the transaction ends) or optimistic versioning; idempotency keys in a table with a unique constraint (a database rule that refuses a second row with the same value); ledgers as double-entry journals.
+- **Long transfers blocking the idempotency map?** Use `putIfAbsent(key, new CompletableFuture<>())`: the winner runs the transfer outside the map and completes the future; duplicates just wait on `future.join()` (blocks until the result is ready). On failure, remove the key so a retry can run.
+- **Limits (daily cap, KYC tier — KYC, "know your customer", is the identity check that sets how much a user may move)?** A chain of validators (Chain of Responsibility) run before `doTransfer`.
+- **Why not `AtomicReference<BigDecimal>` + CAS (compare-and-set: replace a value only if it still equals what you last read, in one indivisible step)?** Works for a single wallet, but a transfer touches two balances that must change together; CAS on two variables is not atomic, so locks are simpler.
 
 ### Real-world example
 
-Stripe's API accepts an `Idempotency-Key` header: if a request times out and the client retries with the same key, Stripe returns the saved result of the first attempt instead of charging twice. Wallets such as Paytm and PhonePe run cashback campaigns with rules like "X% up to a cap on your first transaction" — exactly the shape of `FirstTransferOffer`.
+Stripe's (a large online-payments company) API accepts an `Idempotency-Key` header (a named piece of metadata sent along with an HTTP request): if a request times out and the client retries with the same key, Stripe returns the saved result of the first attempt instead of charging twice. Wallets such as Paytm and PhonePe run cashback campaigns with rules like "X% up to a cap on your first transaction" — exactly the shape of `FirstTransferOffer`.
 
 ### In the interview
 
@@ -1521,7 +1525,7 @@ Lead with the three risks: exact money, concurrency, retries (and, if offers com
 
 ### Self-check
 
-- **Q:** Why is `new BigDecimal("0.1")` preferred over `new BigDecimal(0.1)`? → **A:** The double constructor captures the binary approximation of 0.1 (a long, inexact decimal); the String constructor is exact.
+- **Q:** Why is `new BigDecimal("0.1")` preferred over `new BigDecimal(0.1)`? → **A:** The double constructor captures the binary approximation of 0.1 (`double` stores numbers in base 2, where 0.1 has no exact form) (a long, inexact decimal); the String constructor is exact.
 - **Q:** Two threads transfer W1→W2 and W2→W1 at once. Why no deadlock? → **A:** Both lock W1 first (smaller id), so one waits for the other instead of each holding what the other needs.
 - **Q:** A transfer fails for insufficient funds. Can the same idempotency key be reused? → **A:** Yes — `computeIfAbsent` stores nothing when the function throws.
 - **Q:** Where would a "max 3 transfers per minute" rule go? → **A:** A validator run before `doTransfer`, not inside the wallet.
@@ -1536,13 +1540,13 @@ Lead with the three risks: exact money, concurrency, retries (and, if offers com
 
 ### Problem & clarifying questions
 
-This is a Flipkart machine-coding statement (kumaransg/LLD, `Event_calendar_flipkart`). In short: onboard users with **working hours**; group users into **teams** (a user belongs to at most one team); create **events** on one day with a start and end time, whose participants are users, teams, or both. A user can be in **only one event at a time**. For team participants the event creator says how many **representatives (N)** each team must send; the system blocks the event against N *available* members of each team, and if any team cannot supply N the event is not created. Required features: create user, create team, create event, **get a user's events in a time range** (including events they were blocked for as a team representative), and **suggest free slots** for a list of users/teams on a day. Bonus: **update event time** (report failure if impossible) and **recurring events** (time, start date, end date, frequency). The statement says: no DB, no UI, no CLI needed — a `main` or tests is enough — and "do not make assumptions, ask".
+This is a Flipkart machine-coding statement (kumaransg/LLD, `Event_calendar_flipkart`). In short: onboard users with **working hours**; group users into **teams** (a user belongs to at most one team); create **events** on one day with a start and end time, whose participants are users, teams, or both. A user can be in **only one event at a time**. For team participants the event creator says how many **representatives (N)** each team must send; the system blocks the event against N *available* members of each team, and if any team cannot supply N the event is not created. Required features: create user, create team, create event, **get a user's events in a time range** (including events they were blocked for as a team representative), and **suggest free slots** for a list of users/teams on a day. Bonus: **update event time** (report failure if impossible) and **recurring events** (time, start date, end date, frequency). The statement says: no DB, no UI, no CLI (command-line interface: a program you type commands into) needed — a `main` or tests is enough — and "do not make assumptions, ask".
 
 Clarifying questions (and the answers this solution uses):
 
 | Question | Answer used |
 |---|---|
-| Is an event that ends at 15:00 in conflict with one that starts at 15:00? | No. Slots are **half-open** `[start, end)`. |
+| Is an event that ends at 15:00 in conflict with one that starts at 15:00? | No. Slots are **half-open** `[start, end)` (the start minute belongs to the slot, the end minute does not). |
 | Must an event lie inside every attendee's working hours? | Yes (the statement's Event5 fails because F starts at 11:00). |
 | Which team members become representatives? | The first N free members in team order (a pluggable strategy). |
 | If a user is invited directly *and* is in an invited team, do they count as a representative? | No — a direct attendee is not picked again as a representative. |
@@ -1583,7 +1587,7 @@ Clarifying questions (and the answers this solution uses):
 | `Team` | record | Name + ordered members. |
 | `Event` | record | One concrete occurrence: date, slot, what was requested (users, teams, N) and who is actually blocked (`attendees`), optional `seriesId`. |
 | `Frequency` | enum | DAILY / WEEKLY — knows the next date. |
-| `EventStore` | class | Repository + index `user → date → events` for fast conflict checks and range queries (`TreeMap.subMap`). |
+| `EventStore` | class | Repository + index `user → date → events` for fast conflict checks and range queries ("everything between X and Y"; `TreeMap.subMap` returns just that slice of a sorted map). |
 | `RepresentativeSelector` | interface | Strategy: pick N free members of a team. |
 | `CalendarService` | class | All use cases; planning (validation + representative choice) separated from saving. |
 | `CalendarException` | exception | Readable reason for every rejection. |
@@ -1706,7 +1710,7 @@ sequenceDiagram
 | Decision | Why | Alternative rejected |
 |---|---|---|
 | **Half-open intervals** | Back-to-back meetings do not conflict; `overlaps` is one line: `a.start < b.end && b.start < a.end`. | Closed intervals — 14:00–15:00 would clash with 15:00–16:00. |
-| **`plan()` separate from `save()`** | Validation + representative choice produce an `Event` without side effects. `createEvent`, `createRecurring` (plan all, then save all) and `updateTime` (plan while ignoring the old event, then swap) all reuse it — all-or-nothing for free. | Saving as you go and rolling back on failure. |
+| **`plan()` separate from `save()`** | Validation + representative choice produce an `Event` without side effects (no change to any stored state). `createEvent`, `createRecurring` (plan all, then save all) and `updateTime` (plan while ignoring the old event, then swap) all reuse it — all-or-nothing for free. | Saving as you go and rolling back (undoing the saved steps) on failure. |
 | **`RepresentativeSelector` strategy** | "Which N members?" is a policy; fairness or least-busy can be plugged in. | Hard-coded loop in the service. |
 | **Index `user → TreeMap<date, events>`** | Conflict checks read only one user's one day; range queries use `subMap`. | Scanning all events each time. |
 | **Sweep over boundaries for free slots** | Exact, simple, no minute-by-minute loops; works for any N. | Checking every 15 or 30 minutes — misses odd times like 11:30 and is slower. |
@@ -2142,16 +2146,16 @@ Checking against the statement: Event2 fails (C is in Event1), Event5 fails (F s
 
 - **Double booking under concurrency:** all mutating and reading methods are `synchronized` on the service, so the "is free?" check and the save are one atomic step.
 - **Edge cases handled:** start ≥ end, unknown user/team, user already in a team, empty participant list, N < 1 with teams, direct attendee also in an invited team (not double-counted), event outside working hours, recurring series with any clash (nothing saved), moving an event onto a slot where it would conflict with *itself* (we ignore the event being moved).
-- **Time zones:** out of scope; everything is local time on one day. Real calendars store instants (UTC) plus the user's zone.
+- **Time zones:** out of scope; everything is local time on one day. Real calendars store instants (exact moments, in UTC — the world reference time zone) plus the user's zone.
 - **Multi-day events:** the statement fixes start and end on the same day; extension would split an event into per-day `TimeSlot`s.
 
 ### Extensions & follow-up questions
 
 - **Invites with accept/decline?** Add `InviteStatus {PENDING, ACCEPTED, DECLINED}` per attendee; a declined attendee no longer blocks the slot.
 - **Fair representative choice?** A `LeastBusySelector` that sorts free members by number of events this week.
-- **Recurring events at scale?** Store one *rule* (like the iCalendar RRULE) and expand occurrences lazily for the queried range instead of materialising every occurrence.
+- **Recurring events at scale?** Store one *rule* (like the iCalendar RRULE — the standard text format for "repeats every Tuesday until June") and expand occurrences lazily (only when asked) for the queried range instead of materialising (creating and storing) every occurrence.
 - **Rooms?** Treat a room like a user with "working hours" = building hours; the same availability logic applies.
-- **Faster free-slot search for big teams?** For each team, a sweep counting free members per piece is O(members × events); with many members, use a count array or segment tree over minutes.
+- **Faster free-slot search for big teams?** For each team, a sweep counting free members per piece is O(members × events); with many members, use a count array or segment tree (a tree that answers "how many in this range?" quickly) over minutes.
 
 ### Real-world example
 
@@ -2178,7 +2182,7 @@ Half-open `TimeSlot`s, per-user day index, a side-effect-free `plan()` reused by
 
 ### Problem & clarifying questions
 
-A Flipkart SDE-2 machine-coding statement (kumaransg/LLD, `leetcode-lld-flipkart-coding-blox`). Coding Blox lets users sign up, create contests, and take part in contests hosted by others. Questions and contests each have a level — LOW, MEDIUM or HIGH — and a contest of a level uses **all questions of that level** (the question list is independent of the contest). The platform is driven by commands:
+A Flipkart SDE-2 (Software Development Engineer, level 2: a mid-level role) machine-coding statement (kumaransg/LLD, `leetcode-lld-flipkart-coding-blox`). Coding Blox lets users sign up, create contests, and take part in contests hosted by others. Questions and contests each have a level — LOW, MEDIUM or HIGH — and a contest of a level uses **all questions of that level** (the question list is independent of the contest). The platform is driven by commands:
 
 | Command | Meaning |
 |---|---|
@@ -2193,7 +2197,7 @@ A Flipkart SDE-2 machine-coding statement (kumaransg/LLD, `leetcode-lld-flipkart
 | Bonus `ContestHistory <contestId>` | Per-contest leaderboard: user, points, solved question ids. |
 | Bonus `WithdrawContest <contestId> <user>` | Leave before the contest runs; the creator cannot withdraw. |
 
-Expectations in the statement: create the sample data yourself, demo through a driver or tests, modular OO design with interfaces, extensible, graceful edge-case handling, DRY.
+Expectations in the statement: create the sample data yourself, demo through a driver or tests, modular OO (object-oriented) design with interfaces, extensible, graceful edge-case handling, DRY ("don't repeat yourself": each piece of logic written once).
 
 | Question | Answer used |
 |---|---|
@@ -2230,7 +2234,7 @@ Expectations in the statement: create the sample data yourself, demo through a d
 | `SolveSimulator` / `RandomSolveSimulator` | interface / class | Strategy for "who solved what". |
 | `Repository<K,V>` | generic class | In-memory storage reused for users, questions and contests. |
 | `CodingBloxService` | class | Business rules for every command. |
-| `CommandProcessor` | class | Parses a line, dispatches to a handler from a map, prints output/errors. |
+| `CommandProcessor` | class | Parses (splits and reads) a line, dispatches to (calls) a handler from a map, prints output/errors. |
 | `BloxException` | exception | Readable failure. |
 
 ### Class diagram
@@ -2345,7 +2349,7 @@ stateDiagram-v2
 | Decision | Pattern | Why | Alternative rejected |
 |---|---|---|---|
 | Command name → handler map | Command | Adding a command is one `put`; no giant `switch`. Parsing and printing stay out of the service. | Parsing inside the service. |
-| Scoring rule inside `Level` enum | Strategy (enum-per-constant data) | The rule depends only on the level; a new level brings its own rule. | `if (level == LOW) ... else if ...` in `runContest`. |
+| Scoring rule inside `Level` enum | Strategy (each enum constant carries its own data) | The rule depends only on the level; a new level brings its own rule. | `if (level == LOW) ... else if ...` in `runContest`. |
 | `SolveSimulator` interface | Strategy | Randomness is replaceable: seeded for demo, scripted for tests, a real judge later. | `new Random()` inside the service — untestable. |
 | `Contest.complete` checks status | Entity guards invariant | "Run once" enforced where the state lives, so scores are never applied twice. | Checking in the driver. |
 | Generic `Repository<K,V>` | Repository | Three stores, one class (DRY — the statement asks for it). | Three copy-pasted maps with lookup code. |
@@ -2812,10 +2816,10 @@ Checking the arithmetic: contest 1 is LOW, so each participant gets `points − 
 ### Extensions & follow-up questions
 
 - **Pick a fixed number of questions per contest?** A `QuestionSelectionStrategy` (random k of level, or by tags) called at contest creation; store the chosen ids in the contest.
-- **Real submissions?** Replace `SolveSimulator` with a judge that returns verdicts per submission; add `Submission(user, question, verdict, time)` and score by time/penalty like ICPC.
-- **Elo-style ratings?** A `RatingStrategy` interface taking all participants' results (ratings depend on opponents), selected per contest type.
+- **Real submissions?** Replace `SolveSimulator` with a judge that returns verdicts per submission; add `Submission(user, question, verdict, time)` and score by time/penalty like ICPC (the International Collegiate Programming Contest).
+- **Elo-style ratings?** (Elo is the chess rating system: beating a stronger player earns more points.) A `RatingStrategy` interface taking all participants' results (ratings depend on opponents), selected per contest type.
 - **Scheduled contests?** Add `startTime/endTime`, a `SCHEDULED → RUNNING → COMPLETED` state machine, and a scheduler that triggers `run`.
-- **Leaderboard at scale?** Keep a `TreeSet` sorted by (score, name) or a Redis sorted set; update on each rating change instead of sorting on every query.
+- **Leaderboard at scale?** Keep a `TreeSet` (a set that keeps its items sorted) sorted by (score, name) or a Redis sorted set; update on each rating change instead of sorting on every query.
 
 ### Real-world example
 
@@ -2842,7 +2846,7 @@ Command map in the driver, rules in the service, invariants in `Contest`, scorin
 
 ### Problem & clarifying questions
 
-A ClearTrip machine-coding statement (kumaransg/LLD, `PropertyHunt`). The folder holds two versions: a text `readme.md` and a longer version as screenshots in `Question Image/`; the summary below follows the longer one, which adds ViewSold, the range rules and the "shortlist *other users'* property" wording. Build a console application for a property platform where users can: **register**; **list a property** they want to sell or rent; **view their own listings**; **shortlist** other users' properties; **view shortlisted** properties (sold ones still appear, with status SOLD); **search** available properties with any combination of **location** (case-insensitive exact match), **price range**, **listing type** (sell/rent), **size range**, **number of rooms** (1BHK/2BHK/3BHK), and **sort by** price or size (ascending); **mark sold** (only the owner); and **view sold** properties. Ranges: `X-Y` inclusive; a single `X` means "at least X" for size and "at most X" for price. **Bonus:** sizes in sq ft / sq m / sq yd (buyer and seller may use different units); **nearby locations** on a listing, with nearby matches shown last; prices like `40000`, `40k`, `60L`, `2Cr`; comma-separated values for location and rooms in search. The statement asks for in-memory storage, graceful errors ("Property does not exist"), and a clean, extensible OO design.
+A ClearTrip machine-coding statement (kumaransg/LLD, `PropertyHunt`). The folder holds two versions: a text `readme.md` and a longer version as screenshots in `Question Image/`; the summary below follows the longer one, which adds ViewSold, the range rules and the "shortlist *other users'* property" wording. Build a console application (a text-only program run in a terminal) for a property platform where users can: **register**; **list a property** they want to sell or rent; **view their own listings**; **shortlist** other users' properties; **view shortlisted** properties (sold ones still appear, with status SOLD); **search** available properties with any combination of **location** (case-insensitive — capital and small letters treated the same — exact match), **price range**, **listing type** (sell/rent), **size range**, **number of rooms** (1BHK/2BHK/3BHK — bedroom, hall, kitchen: 1BHK is one bedroom), and **sort by** price or size (ascending); **mark sold** (only the owner); and **view sold** properties. Ranges: `X-Y` inclusive; a single `X` means "at least X" for size and "at most X" for price. **Bonus:** sizes in sq ft / sq m / sq yd (buyer and seller may use different units); **nearby locations** on a listing, with nearby matches shown last; prices like `40000`, `40k`, `60L`, `2Cr` (k = thousand; L = lakh = 100,000; Cr = crore = 10,000,000 — the Indian number units); comma-separated values for location and rooms in search. The statement asks for in-memory storage, graceful errors ("Property does not exist"), and a clean, extensible OO design.
 
 | Question | Answer used |
 |---|---|
@@ -2983,7 +2987,7 @@ stateDiagram-v2
 
 | Decision | Pattern | Why | Alternative rejected |
 |---|---|---|---|
-| All-optional `SearchCriteria` with a Builder | Builder | Eight optional fields; a constructor call with eight nulls is unreadable. | Telescoping constructors / overloads. |
+| All-optional `SearchCriteria` with a Builder | Builder | Eight optional fields; a constructor call with eight nulls is unreadable. | Telescoping constructors (a chain of constructors, each taking one more parameter) / overloads (several methods with the same name but different parameters). |
 | Each criterion becomes a `Predicate<Property>`, reduced with `and` | Specification | Any combination works; a new filter is one line; no nested `if` pyramid. | One `if` per combination. |
 | `SortBy` enum of comparators | Strategy | Adding "sort by rooms" is one constant. | `switch` inside search. |
 | Normalise at the boundary (rupees, sq ft) | — | Business code compares plain numbers; units only matter while parsing. | Storing strings like "90L" and comparing them. |
@@ -3501,14 +3505,14 @@ Things to notice: 70 sq m was stored as 753 sq ft and 400 sq yd as 3600 sq ft; t
 ### Concurrency & edge cases
 
 - **Storage:** `ConcurrentHashMap`s; each user's shortlist is a concurrent set; `Property.markSold` is `synchronized` so two "mark sold" calls cannot both succeed.
-- **A search racing a sale** may still show a property that is being sold at that instant — acceptable for listings (eventual consistency); a purchase flow would re-check status under a lock.
+- **A search racing a sale** may still show a property that is being sold at that instant — acceptable for listings (eventual consistency: different readers may briefly see different values, but they all catch up soon); a purchase flow would re-check status under a lock.
 - **Edge cases handled:** duplicate registration, unregistered user, unknown property, own-property shortlist, duplicate shortlist, shortlisting a sold property, non-owner mark sold, double sale, bad price/size/unit/type, non-positive values, missing fields.
 
 ### Extensions & follow-up questions
 
 - **Descending sort / multiple sort keys?** `SortBy` holds a comparator; add a direction flag and `.reversed()`, or accept a list of keys and chain `thenComparing`.
-- **Fuzzy location ("Bellandur Road")?** Normalise locations to ids through a `LocationResolver` interface (gazetteer / geocoding).
-- **"Within 5 km"?** Store latitude/longitude and filter by haversine distance; at scale use a geo-index (geohash, R-tree) or a search engine with geo queries.
+- **Fuzzy location ("Bellandur Road")?** Normalise locations to ids through a `LocationResolver` interface (gazetteer / geocoding — a directory of place names / turning an address into map coordinates).
+- **"Within 5 km"?** Store latitude/longitude and filter by haversine distance (the standard formula for the distance between two points on a sphere); at scale use a geo-index (a lookup structure for finding things by location: geohash, R-tree) or a search engine with geo queries.
 - **Fast search over millions?** Secondary indexes (by location, type, rooms) or Elasticsearch/OpenSearch; price and size as numeric range fields.
 - **Notifications on price drop for shortlisted items?** Observer on `Property` price changes → notify users who shortlisted it.
 
@@ -3537,11 +3541,11 @@ Normalise price and size at the edges, turn every optional criterion into a pred
 
 ### Problem & clarifying questions
 
-This problem (kumaransg/LLD, `ledger_company_navi`) is the Geektrust "Ledger Co" backend challenge; the repository files it under Navi, which has used it as a hiring exercise. Banks lend money to borrowers; borrowers repay in **EMIs** (Equated Monthly Instalments — the same amount every month) and may also pay a **lump sum** at any point. The program reads commands and answers balance questions:
+This problem (kumaransg/LLD, `ledger_company_navi`) is the Geektrust "Ledger Co" backend (server-side logic, no screens) challenge; the repository files it under Navi, which has used it as a hiring exercise. Banks lend money to borrowers; borrowers repay in **EMIs** (Equated Monthly Instalments — the same amount every month) and may also pay a **lump sum** (a one-off extra payment) at any point. The program reads commands and answers balance questions:
 
 | Command | Meaning |
 |---|---|
-| `LOAN BANK BORROWER P N R` | Borrower takes principal `P` for `N` years at `R`% simple interest per year. |
+| `LOAN BANK BORROWER P N R` | Borrower takes principal `P` (the amount borrowed) for `N` years at `R`% simple interest (interest charged only on the original principal, never on interest) per year. |
 | `PAYMENT BANK BORROWER LUMP_SUM EMI_NO` | A lump sum paid right after EMI number `EMI_NO`. |
 | `BALANCE BANK BORROWER EMI_NO` | Print `BANK BORROWER AMOUNT_PAID EMIS_LEFT` as of (after) EMI number `EMI_NO`. |
 
@@ -3552,7 +3556,7 @@ Rules from the statement: interest `I = P × N × R / 100` (R is a percentage); 
 | Can amount paid exceed `A`? | No — capped at `A` (then EMIs left = 0). This is also the "last EMI shrinks" rule: the final payment is only what is left. |
 | Is interest a whole number? | The statement defines rounding only for the EMI and the EMI count. We *assume* interest is also rounded up to a whole unit (say so to the interviewer); every official sample has whole-number interest, so both samples come out the same either way. |
 | One loan per bank-borrower pair? | Yes — the pair identifies the loan; a second `LOAN` for the same pair is an error. |
-| `EMI_NO` beyond the tenure? | Error. `EMI_NO = 0` is valid (before any EMI). |
+| `EMI_NO` beyond the tenure (the loan's total length)? | Error. `EMI_NO = 0` is valid (before any EMI). |
 
 ### Requirements
 
@@ -3571,7 +3575,7 @@ Rules from the statement: interest `I = P × N × R / 100` (R is a percentage); 
 
 | Class | Kind | Responsibility |
 |---|---|---|
-| `LoanKey` | record | (bank, borrower) — the loan's identity; a perfect `Map` key because records implement `equals/hashCode`. |
+| `LoanKey` | record | (bank, borrower) — the loan's identity; a perfect `Map` key because records implement `equals/hashCode` (the two methods a map uses to decide whether two keys are the same). |
 | `Loan` | class | Computes `A` and EMI once; stores lump sums; derives a `Balance` for any EMI number. |
 | `LumpSum` | record | amount + "after EMI number". |
 | `Balance` | record | Output line: bank, borrower, amount paid, EMIs left. |
@@ -3662,8 +3666,8 @@ sequenceDiagram
 |---|---|---|
 | **Derive balance from facts** (A, EMI, lump sums) on every query | Queries can ask about *any* EMI number, even one before a later payment. Storing a running balance would need replays. | Mutable `remaining` field updated per command — breaks when a BALANCE asks about an earlier EMI. |
 | `InterestPolicy` Strategy | Simple interest today; reducing-balance or compound tomorrow without touching `Loan`. | Formula hard-coded in `Loan`. |
-| `LoanKey` record as map key | Value semantics for free (`equals/hashCode`). | Concatenated string `"IDIDI#Dale"` — fragile. |
-| `BigDecimal` + explicit `RoundingMode.CEILING` | The statement's rounding is "always up"; ceiling on integers is exact. | `Math.ceil` on doubles — fine for small numbers but floating error can bite (e.g. a value like 4.000000001 ceils to 5). |
+| `LoanKey` record as map key | Value semantics (two keys with the same fields count as equal) for free (`equals/hashCode`). | Concatenated string `"IDIDI#Dale"` — fragile. |
+| `BigDecimal` + explicit `RoundingMode.CEILING` | The statement's rounding is "always up"; ceiling on integers is exact. | `Math.ceil` on doubles — fine for small numbers but floating error (tiny inaccuracies of binary floating-point numbers) can bite (e.g. a value like 4.000000001 ceils to 5). |
 | Driver returns `List<String>` | Easy to compare with the expected output in a test. | Printing inside the service. |
 
 ### Java implementation
@@ -3947,14 +3951,14 @@ The first two blocks are exactly the expected outputs of the two official Geektr
 
 ### Extensions & follow-up questions
 
-- **Reducing-balance (amortised) EMI like real banks?** New `InterestPolicy`/`EmiCalculator`: `EMI = P·r·(1+r)^n / ((1+r)^n − 1)` with monthly rate `r`; balance after k months uses the amortisation schedule. The `Loan` API stays the same.
+- **Reducing-balance (amortised) EMI like real banks?** (Reducing-balance: each month's interest is charged only on what is still owed; amortised: spread into equal payments that cover interest and principal.) New `InterestPolicy`/`EmiCalculator`: `EMI = P·r·(1+r)^n / ((1+r)^n − 1)` with monthly rate `r`; balance after k months uses the amortisation schedule. The `Loan` API stays the same.
 - **Lump sum that should reduce the EMI instead of the tenure?** Make that a `PrepaymentPolicy` (REDUCE_TENURE / REDUCE_EMI) chosen per loan.
 - **Late payments and penalties?** Record actual payment events with dates instead of assuming EMIs are paid on time; derive "EMIs paid" from them.
 - **Read from a file?** `Files.readAllLines(Path.of(args[0]))` fed into the same `run` method — the driver's job, no core change.
 
 ### Real-world example
 
-Indian lenders such as Navi, banks and NBFCs show borrowers an EMI schedule and let them "part-prepay" a loan; most offer a choice between reducing the tenure (fewer EMIs, the Ledger Co rule) or reducing the EMI amount. Real loans use reducing-balance interest rather than the flat simple interest in this puzzle — a good point to raise when asked about extensions.
+Indian lenders such as Navi, banks and NBFCs (non-banking financial companies: lenders that are not licensed banks) show borrowers an EMI schedule and let them "part-prepay" a loan; most offer a choice between reducing the tenure (fewer EMIs, the Ledger Co rule) or reducing the EMI amount. Real loans use reducing-balance interest rather than the flat simple interest in this puzzle — a good point to raise when asked about extensions.
 
 ### In the interview
 
@@ -3965,7 +3969,7 @@ Show the three formulas first and compute one sample by hand — it proves you u
 - **Q:** Why ceil the EMI? → **A:** A floor would leave a shortfall at the end; rounding up guarantees N × 12 EMIs cover `A` (the final instalment may be smaller).
 - **Q:** A `PAYMENT` after EMI 10 — does `BALANCE ... 5` include it? → **A:** No; only lump sums with `afterEmi ≤ 5` count.
 - **Q:** Why is the balance computed rather than stored? → **A:** Queries may ask about any EMI number in any order; derivation is always consistent.
-- **Q:** Where do you add compound interest? → **A:** A new `InterestPolicy` implementation injected into `LedgerService`.
+- **Q:** Where do you add compound interest (interest that is also charged on earlier interest)? → **A:** A new `InterestPolicy` implementation injected into `LedgerService`.
 
 ### TL;DR
 
@@ -3977,7 +3981,7 @@ EMI = ⌈(P + PNR/100) / 12N⌉. Store loan facts and lump sums; derive paid and
 
 ### Problem & clarifying questions
 
-A very common machine-coding and OOD question (asked in e-commerce and quick-commerce interviews): track **products** (SKUs — stock keeping units, one id per sellable item) stored in several **warehouses**; record every **stock movement** (goods received, shipped, transferred between warehouses, adjusted after a physical count); fulfil orders by choosing warehouses; and raise **reorder alerts** when stock runs low.
+A very common machine-coding and OOD question (asked in e-commerce — online shopping — and quick-commerce — groceries delivered in minutes — interviews): track **products** (SKUs — stock keeping units, one id per sellable item) stored in several **warehouses**; record every **stock movement** (goods received, shipped, transferred between warehouses, adjusted after a physical count); fulfil orders by choosing warehouses; and raise **reorder alerts** when stock runs low.
 
 | Question | Answer used |
 |---|---|
@@ -4000,9 +4004,9 @@ A very common machine-coding and OOD question (asked in e-commerce and quick-com
 7. Reorder alerts to subscribers.
 
 **Non-functional**
-- **No overselling** under concurrent orders.
+- **No overselling** (selling more units than are in stock) under concurrent orders.
 - Operations on different products run in parallel.
-- Full audit trail (every change is a movement).
+- Full audit trail (a complete record of every change; here every change is a movement).
 
 ### Use cases
 
@@ -4128,12 +4132,12 @@ stateDiagram-v2
 
 | Decision | Pattern | Why | Alternative rejected |
 |---|---|---|---|
-| **One lock per SKU** | Lock striping by key | An order for one SKU touches several warehouses; a per-SKU lock covers all of them with no lock-ordering puzzle, while different SKUs never contend. | One lock per (SKU, warehouse) — needs lock ordering for multi-warehouse orders; one global lock — no parallelism. |
+| **One lock per SKU** | Lock striping by key (a separate lock for each group of keys) | An order for one SKU touches several warehouses; a per-SKU lock covers all of them with no lock-ordering puzzle, while different SKUs never contend. | One lock per (SKU, warehouse) — needs lock ordering for multi-warehouse orders; one global lock — no parallelism. |
 | **Plan, then apply** in `ship` | — | Check total first and build the full plan before changing anything → all-or-nothing. | Deduct warehouse by warehouse and roll back on shortage. |
 | **`AllocationStrategy`** | Strategy | Business wants different policies (speed vs fewer split parcels); each is a small class. | `if (mode == ...)` in `ship`. |
-| **Append-only `StockMovement` ledger** | Event log / audit | Every change is explainable; levels can be rebuilt by replaying; adjustments record the delta, not just the new number. | Updating quantities with no history. |
-| **`ReorderListener` with once-per-dip** | Observer + edge-triggering | Purchasing is notified once when stock crosses the threshold, not on every sale. | Level-triggered alerts on every movement — spam. |
-| **Strategy gets a snapshot copy** | Defensive copy | A strategy cannot accidentally modify live stock. | Passing the live map. |
+| **Append-only `StockMovement` ledger** | Event log / audit | Every change is explainable; levels can be rebuilt by replaying; adjustments record the delta (the change, e.g. −3), not just the new number. | Updating quantities with no history. |
+| **`ReorderListener` with once-per-dip** | Observer + edge-triggering (fire once when a value crosses a line) | Purchasing is notified once when stock crosses the threshold, not on every sale. | Level-triggered alerts (fire every time while the value is below the line) on every movement — spam. |
+| **Strategy gets a snapshot copy** | Defensive copy (hand out a copy so the receiver cannot change your original) | A strategy cannot accidentally modify live stock. | Passing the live map. |
 
 ### Java implementation
 
@@ -4530,8 +4534,8 @@ Reading the output: the Bengaluru order drained BLR-1 then BLR-2 before touching
 
 - **Overselling:** check-total → plan → apply runs under the SKU's `ReentrantLock`; concurrent orders for the same SKU are serialised.
 - **Parallelism:** different SKUs use different locks.
-- **Ledger:** a `ConcurrentLinkedQueue` — lock-free appends from many SKU threads at once, insertion order kept, and iteration never throws `ConcurrentModificationException`. (A `CopyOnWriteArrayList` would copy the whole ledger on every movement — right for rarely-changing lists, wrong for an append-heavy log.)
-- **Listeners:** `CopyOnWriteArrayList` — read on every alert, changed almost never, which is exactly its use case. Listener calls happen while holding the SKU lock — fine for quick callbacks; for slow ones (email), hand off to an executor so the lock is not held during I/O.
+- **Ledger:** a `ConcurrentLinkedQueue` (a thread-safe queue that needs no lock) — lock-free appends from many SKU threads at once, insertion order kept, and iteration never throws `ConcurrentModificationException` (the error Java raises when a collection changes while it is being looped over). (A `CopyOnWriteArrayList` would copy the whole ledger on every movement — right for rarely-changing lists, wrong for an append-heavy log.)
+- **Listeners:** `CopyOnWriteArrayList` — read on every alert, changed almost never, which is exactly its use case. Listener calls happen while holding the SKU lock — fine for quick callbacks; for slow ones (email), hand off to an executor (a pool of threads that runs submitted tasks) so the lock is not held during I/O (input/output, such as network or disk calls).
 - **Edge cases handled:** unknown SKU/warehouse, non-positive quantities, negative counted quantity, transfer to the same warehouse, transfer or order larger than stock, invalid product thresholds, duplicate SKU/warehouse, "no change" adjustments (not logged).
 
 ### Extensions & follow-up questions
@@ -4539,12 +4543,12 @@ Reading the output: the Bengaluru order drained BLR-1 then BLR-2 before touching
 - **Reservations (cart holds)?** Track `onHand` and `reserved` per (SKU, warehouse); available = onHand − reserved; reservations expire after a timeout; shipping converts a reservation into an OUTBOUND.
 - **Batches / expiry dates (groceries, medicines)?** Stock per batch with expiry; allocate FEFO (first-expiry-first-out) — just another `AllocationStrategy`.
 - **Distances instead of cities?** `NearestFirst` sorting by a `DistanceService` result.
-- **Automatic purchase orders?** A `ReorderListener` that creates a PO for `max − current` and marks it pending so a second alert does not create a duplicate.
-- **Multiple services / database?** Stock rows with optimistic versioning (`UPDATE ... SET qty = qty - ? WHERE qty >= ? AND version = ?`), and the movement ledger as an event stream (e.g. Kafka) consumed by analytics.
+- **Automatic purchase orders?** A `ReorderListener` that creates a PO (purchase order: a formal request to a supplier) for `max − current` and marks it pending so a second alert does not create a duplicate.
+- **Multiple services / database?** Stock rows with optimistic versioning (`UPDATE ... SET qty = qty - ? WHERE qty >= ? AND version = ?`), and the movement ledger as an event stream (e.g. Kafka, a system that stores and delivers an ordered log of events) consumed by analytics.
 
 ### Real-world example
 
-Amazon's fulfilment network and Flipkart's warehouses decide which fulfilment centre ships each order based on factors like proximity and stock, and may split an order across centres — the job of `AllocationStrategy`. Shopify lets merchants hold inventory at multiple locations and set a fulfilment priority order among them. Quick-commerce apps (Blinkit, Zepto, Swiggy Instamart) run many small "dark stores", where accurate per-store stock and fast reorder alerts are essential.
+Amazon's fulfilment network and Flipkart's warehouses decide which fulfilment centre ships each order based on factors like proximity and stock, and may split an order across centres — the job of `AllocationStrategy`. Shopify lets merchants hold inventory at multiple locations and set a fulfilment priority order among them. Quick-commerce apps (Blinkit, Zepto, Swiggy Instamart) run many small "dark stores" (warehouses closed to the public that only serve online orders), where accurate per-store stock and fast reorder alerts are essential.
 
 ### In the interview
 
@@ -4567,20 +4571,20 @@ Stock per (SKU, warehouse), every change is a ledger movement, a lock per SKU pr
 
 ### Problem & clarifying questions
 
-The Unix `find` command walks a directory tree and prints every entry that passes a set of tests, for example `find /var/log -type f -size +10M -mtime +7` ("regular files under /var/log bigger than 10 MiB, last changed more than 7 days ago"). The machine-coding version asks you to build a small `find`: a file-system model, a set of **filters**, a way to **combine** them with AND / OR / NOT, and a clean API for the search options. It is a favourite because the obvious solution (one method with ten optional parameters and a pile of `if`s) is exactly what the interviewer wants you to avoid.
+The Unix (the operating-system family that includes Linux and macOS) `find` command walks a directory tree (folders inside folders) and prints every entry that passes a set of tests, for example `find /var/log -type f -size +10M -mtime +7` ("regular files under /var/log bigger than 10 MiB, last changed more than 7 days ago"; 1 MiB = 1,048,576 bytes). The machine-coding version asks you to build a small `find`: a file-system model, a set of **filters**, a way to **combine** them with AND / OR / NOT, and a clean API for the search options. It is a favourite because the obvious solution (one method with ten optional parameters and a pile of `if`s) is exactly what the interviewer wants you to avoid.
 
 Three words used below: a **predicate** (or *test*) is a yes/no question about one entry ("is its name `*.log`?"); a **glob** is a filename pattern with wildcards (`*` = any characters, `?` = one character, `[0-9]` = one character from a set); **depth** is how many levels below the start directory an entry sits (the start itself is depth 0).
 
 | Question | Answer used |
 |---|---|
-| Real disk or in-memory? | In-memory tree, so runs are identical; a `java.nio` adapter is an extension. |
+| Real disk or in-memory? | In-memory tree, so runs are identical; a `java.nio` (Java's file and I/O library) adapter (a class that wraps one API to fit another interface) is an extension. |
 | Which tests? | Name glob (case-sensitive and insensitive), type (file / directory), size, modification age, owner, empty. |
-| How are tests combined? | AND, OR, NOT and parentheses, with `find`'s precedence: NOT binds tightest, then AND, then OR. Two tests side by side mean AND. |
-| Size semantics? | Like GNU `find`: the size is **rounded up** to the unit before comparing, so `-size -1M` matches only empty files. Size tests apply to files only. |
-| Other options? | `mindepth`, `maxdepth`, a result limit, and **pruning** (skip whole directories such as `node_modules`). |
-| API or command line? | Both: a fluent **Builder** API for code, and a parser for `find`-style command lines. |
-| Output order? | Pre-order depth-first (a directory before its contents), children in name order. |
-| Huge trees? | Stream results as they are found; no recursion (deep trees must not overflow the stack); a parallel variant as an extension. |
+| How are tests combined? | AND, OR, NOT and parentheses, with `find`'s precedence (which operator is applied first when there are no parentheses): NOT binds tightest, then AND, then OR. Two tests side by side mean AND. |
+| Size semantics? | Like GNU `find` (the standard version on Linux, from the GNU project): the size is **rounded up** to the unit before comparing, so `-size -1M` matches only empty files. Size tests apply to files only. |
+| Other options? | `mindepth`, `maxdepth`, a result limit, and **pruning** (skip whole directories such as `node_modules`, a JavaScript project's often huge folder of downloaded libraries). |
+| API or command line? | Both: a fluent (written as one chain of method calls, `a().b().c()`) **Builder** API for code, and a parser for `find`-style command lines. |
+| Output order? | Pre-order depth-first (go as deep as possible down one branch before the next; a directory is listed before its contents), children in name order. |
+| Huge trees? | Stream results as they are found; no recursion (a method calling itself; deep trees must not overflow the stack — the limited memory that holds pending method calls); a parallel variant as an extension. |
 
 ### Requirements
 
@@ -4601,22 +4605,22 @@ Three words used below: a **predicate** (or *test*) is a yes/no question about o
 | Actor | Use cases |
 |---|---|
 | **Developer (API user)** | build criteria with the Builder, run a search, stream results |
-| **Shell user** | type a `find` command line, see matching paths or a clear error |
-| **Ops script** | find big old logs (`-size +10M -mtime +7`) to archive, find empty directories to clean |
+| **Shell user** (someone typing commands into a terminal) | type a `find` command line, see matching paths or a clear error |
+| **Ops script** (an operations team's automation script) | find big old logs (`-size +10M -mtime +7`) to archive, find empty directories to clean |
 
 ### Core entities
 
 | Class | Kind | Responsibility |
 |---|---|---|
-| `Node` | abstract sealed class | **Composite** component: name, parent, owner, modified time, `path()`, `size()`, `totalSize()`. |
-| `FileNode` / `DirectoryNode` | classes | Leaf and container; a directory keeps its children sorted in a `ConcurrentSkipListMap`. |
+| `Node` | abstract sealed class (cannot be created directly, and only the listed subclasses may extend it) | **Composite** component: name, parent, owner, modified time, `path()`, `size()`, `totalSize()`. |
+| `FileNode` / `DirectoryNode` | classes | Leaf and container; a directory keeps its children sorted in a `ConcurrentSkipListMap` (a sorted map that many threads can use at once). |
 | `FileSystem` | class | Root, `mkdirs`, `createFile`, `resolve(path)`. |
 | `FileFilter` | interface | **Specification**: `matches(node)`, `describe()`, and default `and` / `or` / `negate`. |
 | `AndFilter`, `OrFilter`, `NotFilter` | records | **Composite** filters: a tree of filters that is itself a filter. |
 | `Filters` | factory | Leaf tests: name/iname glob, type, size, mtime, owner, empty, match-all. |
 | `SearchCriteria` + `Builder` | class | Immutable search description (start, filter, depths, limit, prune set), built fluently and validated once. |
-| `FileSearcher` | class | Iterative DFS with an explicit stack; streams results to a `Consumer`; optional fork/join version. |
-| `FindCommandParser` | class | Recursive-descent parser for `find` expressions → `SearchCriteria`. |
+| `FileSearcher` | class | Iterative DFS (depth-first search) with an explicit stack (a last-in, first-out list); streams results to a `Consumer`; optional fork/join version (Java's framework that splits a task into subtasks run in parallel, then joins the results). |
+| `FindCommandParser` | class | Recursive-descent parser (one method per grammar rule, the methods calling each other) for `find` expressions → `SearchCriteria`. |
 | `SearchException` | exception | Readable failure. |
 
 ### Class diagram
@@ -4724,13 +4728,13 @@ flowchart TD
 | Decision | Pattern | Why | Alternative rejected |
 |---|---|---|---|
 | Each test is a small class with `matches(node)` | **Specification** | A new test is one record; the search loop never changes (Open/Closed) | `search(name, ext, minSize, maxSize, type, …)` with a growing list of `if`s |
-| `AndFilter` / `OrFilter` / `NotFilter` hold other filters | **Composite** | Arbitrary nesting (`(a OR b) AND NOT c`) with one interface; the parser's output *is* this tree; `describe()` prints it | Lambdas only (`a.and(b)`) — work, but cannot be printed or inspected (compare §21.1's `TaskFilter`) |
-| `Node` / `FileNode` / `DirectoryNode` | **Composite** | The searcher and `totalSize()` treat files and directories uniformly | `instanceof` checks everywhere, or separate file and directory lists |
+| `AndFilter` / `OrFilter` / `NotFilter` hold other filters | **Composite** | Arbitrary nesting (`(a OR b) AND NOT c`) with one interface; the parser's output *is* this tree; `describe()` prints it | Lambdas (short anonymous functions) only (`a.and(b)`) — work, but cannot be printed or inspected (compare §21.1's `TaskFilter`) |
+| `Node` / `FileNode` / `DirectoryNode` | **Composite** | The searcher and `totalSize()` treat files and directories uniformly | `instanceof` ("is this object of type X?") checks everywhere, or separate file and directory lists |
 | `SearchCriteria.Builder` | **Builder** | Many optional settings; named calls; validation (`mindepth ≤ maxdepth`) once in `build()`; immutable result | Telescoping constructors or a mutable settings bag |
 | Recursive-descent `FindCommandParser` | Interpreter-style parser | One method per precedence level makes precedence explicit and testable | Splitting on `-o` with string hacks |
-| Iterative DFS with an explicit `ArrayDeque` | — | No `StackOverflowError` on very deep trees; easy to add a limit | Recursion |
+| Iterative DFS with an explicit `ArrayDeque` | — | No `StackOverflowError` (the crash when the call stack runs out) on very deep trees; easy to add a limit | Recursion |
 | Results go to a `Consumer<Node>` | Streaming / callback | Prints as it finds, like `find`; memory does not grow with the result count | Always building a full `List` |
-| AND / OR short-circuit | — | Put cheap tests first (`-name` before a size lookup on a real disk) | Evaluating every test |
+| AND / OR short-circuit (stop as soon as the answer is known) | — | Put cheap tests first (`-name` before a size lookup on a real disk) | Evaluating every test |
 | `ConcurrentSkipListMap` for children | Concurrent collection | Sorted (deterministic output) and safe to iterate while files are added | `TreeMap` (throws `ConcurrentModificationException`) |
 
 ### Java implementation
@@ -5574,22 +5578,22 @@ $ find /var/log -name 'app.log.[0-9]'
    sequential=1600 parallel=1600 same order=true first=/data/d000/sub0/f060.csv last=/data/d199/sub4/f099.csv
 ```
 
-Reading the output: `-size +1M` kept the two large photos and dropped the 900 KB one; the prune option skipped `node_modules`, so only the two Java files match `*.java OR *.js`; `-size -1M` found only the empty `todo.md` — the rounding gotcha, even though `notes.txt` is only 2 KB; `-mindepth 2 -maxdepth 2 -type d` lists directories exactly two levels below `/home/asha`; the bracket glob `app.log.[0-9]` matches the rotated log but not `app.log`. Every bad input produced a one-line message. The composite `totalSize()` gives `du`-style totals, and on a generated tree of 20,000 files the sequential and parallel searches returned the same 1,600 paths in the same order.
+Reading the output: `-size +1M` kept the two large photos and dropped the 900 KB one; the prune option skipped `node_modules`, so only the two Java files match `*.java OR *.js`; `-size -1M` found only the empty `todo.md` — the rounding gotcha, even though `notes.txt` is only 2 KB; `-mindepth 2 -maxdepth 2 -type d` lists directories exactly two levels below `/home/asha`; the bracket glob `app.log.[0-9]` matches the rotated log but not `app.log`. Every bad input produced a one-line message. The composite `totalSize()` gives `du`-style totals (`du` is the Unix disk-usage command), and on a generated tree of 20,000 files the sequential and parallel searches returned the same 1,600 paths in the same order.
 
 ### Concurrency & edge cases
 
-- **Adding files during a search:** children live in a `ConcurrentSkipListMap`, whose iterators are *weakly consistent* — they never throw, and may or may not show an entry added after the iteration started (like `find` on a live disk).
+- **Adding files during a search:** children live in a `ConcurrentSkipListMap`, whose iterators are *weakly consistent* — iterators (the objects that step through a collection) never throw, and may or may not show an entry added after the iteration started (like `find` on a live disk).
 - **Parallel search:** tasks only read the tree and each builds its own list; there is no shared mutable state, so no locks are needed.
-- **Deep trees:** the sequential walk uses a heap-allocated stack. (The fork/join version recurses one task per directory; fine for normal depths.)
-- **Symbolic links / cycles** (real file systems): track visited `(device, inode)` pairs or do not follow links by default — GNU `find` does not follow symbolic links unless asked (`-L`).
+- **Deep trees:** the sequential walk uses a heap-allocated stack (an ordinary object in main memory, not the limited call stack). (The fork/join version recurses one task per directory; fine for normal depths.)
+- **Symbolic links / cycles** (real file systems): track visited `(device, inode)` pairs (an inode is the file system's internal id for a file; a symbolic link is a file that points to another path) or do not follow links by default — GNU `find` does not follow symbolic links unless asked (`-L`).
 - **Edge cases handled:** start path missing or a file; `mindepth > maxdepth`; unknown predicate; missing argument; bad `-size`/`-mtime`/`-type` values; unbalanced parentheses; an unclosed `[` in a glob is treated as a literal; limit reached mid-walk.
 
 ### Extensions & follow-up questions
 
 - **Search a real disk?** An adapter that wraps `java.nio.file.Path` + `BasicFileAttributes` as `Node`s, or use `Files.walkFileTree` with a `FileVisitor` that returns `SKIP_SUBTREE` for pruned directories.
-- **Actions (`-delete`, `-exec`)?** A `Consumer<Node>` per action (Command pattern); `-delete` must walk depth-first *post-order* so children go before their directory.
-- **Content search (`grep -r`)?** A `ContainsTextFilter` — put it last in the AND so cheap name/size tests reject most files first.
-- **Faster repeated searches?** Build an index (name → paths, like `locate`/`updatedb`) and accept that it can be stale.
+- **Actions (`-delete`, `-exec`)?** A `Consumer<Node>` per action (Command pattern); `-delete` must walk depth-first *post-order*, meaning children are visited before their directory.
+- **Content search (`grep -r`, the Unix tool that searches inside files)?** A `ContainsTextFilter` — put it last in the AND so cheap name/size tests reject most files first.
+- **Faster repeated searches?** Build an index (name → paths, like `locate`/`updatedb`, Unix tools that pre-build a filename database) and accept that it can be stale.
 - **More tests (`-newer file`, `-perm`, `-regex`)?** One record each in `Filters` plus one `case` in the parser.
 - **Sort by size or date?** Collect, then sort with a `Comparator` — a Strategy, as in PropertyHunt (§21.5).
 

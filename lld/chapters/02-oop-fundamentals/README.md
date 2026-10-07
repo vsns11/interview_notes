@@ -16,6 +16,8 @@
 **How to run all examples:**
 `cd chapters/02-oop-fundamentals/code && javac --release 21 -d /tmp/lld_02 $(find . -name '*.java') && java -cp /tmp/lld_02 lld.ch02.<package>.Main`
 
+(`javac` is the Java compiler: it turns `.java` source files into `.class` files. `java` runs them on the **JVM**, the Java Virtual Machine, the program that executes compiled Java code; `-cp` says where the compiled classes live.)
+
 **Concept checklist** (the commonly listed "must-know OOP concepts" and where each is covered):
 
 | Concept | Section | Concept | Section |
@@ -76,18 +78,18 @@ As the figure above summarises, each pillar answers one design question:
 - A **constructor** is special code that runs when an object is created. It has the class's name and **no return type**. Its job: put the new object into a **valid** state.
 - **`this`** is a reference to **the current object** inside its own instance methods and constructors.
 - **`static`** means "belongs to the **class**, shared by all objects". Without `static`, a member is an **instance** member: each object has its own copy.
-- **`final`** means "cannot change": a `final` variable is assigned once, a `final` method cannot be overridden, a `final` class cannot be extended.
+- **`final`** means "cannot change": a `final` variable is assigned once, a `final` method cannot be overridden (replaced by a child class with its own version), a `final` class cannot be extended (used as the parent of another class; Section 2.5).
 
 Examples: the `Account` class defines what any account looks like, while account `S-1` (owner Ada, balance 50,000 cents) is a single object of it. In an online shop, `Customer` is the class, and the particular shopper behind order 4192 from last Tuesday is an object.
 
 ### How it works
 
-1. `new Account("S-1", "Ada", 50_000)` allocates memory for the fields, sets them to defaults (0, `null`, `false`), then runs the constructor.
-2. **Initialisation order:** static initialisers run **once**, when the class is initialised (just before its first real use, such as the first `new` or the first static method call). For each `new`: the parent constructor runs first (`super(...)`, implicit if you do not write it), then instance field initialisers and instance initialiser blocks in source order, then the rest of the constructor body.
+1. `new Account("S-1", "Ada", 50_000)` allocates memory for the fields, sets them to defaults (0, `null` meaning "no object", `false`), then runs the constructor.
+2. **Initialisation order:** static initialisers (`static` field assignments and `static { ... }` blocks of set-up code) run **once**, when the class is initialised (just before its first real use, such as the first `new` or the first static method call). For each `new`: the parent constructor runs first (`super(...)`, implicit if you do not write it), then instance field initialisers and instance initialiser blocks (plain `{ ... }` blocks inside the class body) in source order, then the rest of the constructor body.
 3. If you write **no constructor**, the compiler adds a public no-argument **default constructor**. If you write any constructor, it does not.
-4. **Overloaded constructors** (same name, different parameters) should **chain** to one canonical constructor with `this(...)`, so validation lives in one place. In Java 21, `this(...)` or `super(...)` must be the **first statement**. (Java 25 relaxes this with "flexible constructor bodies", JEP 513: statements that do not use the object under construction may come before the call. This book targets Java 21, so keep the call first.)
+4. **Overloaded constructors** (same name, different parameters) should **chain** to one canonical constructor (the single "main" constructor that all the others call) with `this(...)`, so validation lives in one place. In Java 21, `this(...)` or `super(...)` must be the **first statement**. (Java 25 relaxes this with "flexible constructor bodies", JEP 513 (a JDK Enhancement Proposal, the numbered documents that describe new Java features): statements that do not use the object under construction may come before the call. This book targets Java 21, so keep the call first.)
 5. Uses of `this`: disambiguate a field from a parameter (`this.id = id`), pass the current object to another method, chain constructors (`this(...)`), and return the object for **fluent chaining** (`return this`).
-6. `static` methods have **no `this`**: they cannot touch instance fields directly. Use them for utilities and factories.
+6. `static` methods have **no `this`**: they cannot touch instance fields directly. Use them for utilities (small helper functions such as `Math.max`) and factories (methods that create and return objects).
 7. Variables of class type hold **references** (like an address), not the object itself. `Account alias = a;` copies the reference: both names now point to the **same** object.
 
 ### Java example
@@ -182,8 +184,8 @@ accounts opened: 2 (failed construction did not count)
 
 | Choice | Benefit | Cost |
 |---|---|---|
-| Static members | Shared, no object needed | Global state: hard to test and dangerous with threads |
-| Many constructor overloads | Convenient | Confusing beyond 3–4; use a **Builder** (Chapter 8) or static factory methods |
+| Static members | Shared, no object needed | Global state (reachable from anywhere): hard to test and dangerous with threads (parts of a program running at the same time) |
+| Many constructor overloads | Convenient | Confusing beyond 3–4; use a **Builder** (Chapter 8; a helper that collects settings step by step, then creates the object) or static factory methods |
 | `final` fields | Safer, thread-friendlier | Must be set in every constructor |
 
 ### Common mistakes
@@ -199,7 +201,7 @@ accounts opened: 2 (failed construction did not count)
 
 ### In the interview
 
-**30-second answer:** "A class is the blueprint, an object is an instance with its own state. Constructors put an object into a valid state; I chain overloads with `this(...)` so validation lives once. Static members belong to the class and are shared, so I keep them for constants, utilities and factories and avoid mutable static state."
+**30-second answer:** "A class is the blueprint, an object is an instance with its own state. Constructors put an object into a valid state; I chain overloads with `this(...)` so validation lives once. Static members belong to the class and are shared, so I keep them for constants, utilities and factories and avoid mutable (changeable) static state."
 
 - *"What happens if you define a constructor with arguments only?"* — The default no-arg constructor is no longer generated; `new X()` stops compiling.
 - *"Can a static method use `this`?"* — No; there is no current object in a static context.
@@ -233,9 +235,9 @@ The left side of the figure shows unprotected, public fields: **code in any file
 ### How it works
 
 1. Make fields `private` (and `final` where possible).
-2. Expose **behaviour** (`deposit`, `withdraw`), not raw setters (`setBalance`).
+2. Expose **behaviour** (`deposit`, `withdraw`), not raw setters (`setBalance`; methods that simply overwrite a field).
 3. Validate inside those methods: the rule lives **once**.
-4. Return copies or unmodifiable views of internal collections (never the live list).
+4. Return copies or unmodifiable views (read-only wrappers that throw if someone tries to change them) of internal collections (never the live list).
 5. For every field, settle **which code may modify it**. When the honest answer is "nobody but this class", state it aloud in the interview: it turns a list of fields into a visible design decision.
 
 ### Java example
@@ -251,20 +253,20 @@ The `Account` class of the bank example in Section 2.6 (package `lld.ch02.bank`)
 
 ### When not to use it (strictly)
 
-Plain data carriers with no rules (DTOs, events) do not need hand-written getters and validation; a **record** gives you private final fields and accessors for free.
+Plain data carriers with no rules (DTOs, Data Transfer Objects that only carry data between parts of a system; events, records of something that happened) do not need hand-written getters and validation; a **record** gives you private final fields and accessors for free.
 
 ### Common mistakes
 
-- **Getter/setter for every field** ("anemic" objects): the data is technically private but anyone can still set anything. That is not encapsulation.
+- **Getter/setter for every field** (a getter is a method that just returns a field; "anemic" objects): the data is technically private but anyone can still set anything. That is not encapsulation.
 - Returning a mutable internal list (`return items;`), so callers modify your state behind your back.
 
 ### Real-world examples
 
-`java.lang.String` hides its internal byte array; `ArrayList` hides its backing array and `size`; `LocalDate` exposes only validated factory methods (`LocalDate.of(2026, 2, 30)` throws).
+`java.lang.String` hides its internal byte array; `ArrayList` hides its backing array (the plain array that actually stores the elements) and `size`; `LocalDate` exposes only validated factory methods (`LocalDate.of(2026, 2, 30)` throws).
 
 ### In the interview
 
-**30-second answer:** "Encapsulation hides state behind methods, and those methods are the single home of every rule about that state. For each field I ask who may change it; if only this class, it is private and changed through intention-revealing methods like `withdraw`, not a setter."
+**30-second answer:** "Encapsulation hides state behind methods, and those methods are the single home of every rule about that state. For each field I ask who may change it; if only this class, it is private and changed through intention-revealing methods (named after the business action they perform) like `withdraw`, not a setter."
 
 - *"Are getters and setters encapsulation?"* — Only partly. A setter with no rule is a public field in disguise. Prefer behaviour methods that enforce rules.
 
@@ -295,7 +297,7 @@ In the course diagram `Account` has seven public operations (it includes a `labe
 
 1. Decide the **smallest set of operations** a caller needs.
 2. Name them after **what** they do (`transfer`), not how.
-3. Put them on an interface or the public surface of a class; keep everything else private.
+3. Put them on an interface (a named list of methods with no code, which classes promise to provide; Section 2.8) or the public surface of a class; keep everything else private.
 4. Callers depend on that surface only.
 
 ### Java example
@@ -316,13 +318,13 @@ In the course diagram `Account` has seven public operations (it includes a `labe
 
 ### Real-world examples
 
-`java.util.List` (callers do not care whether it is an `ArrayList` or `LinkedList`); JDBC's `Connection`/`Statement` (same code for different databases); `java.io.InputStream`.
+`java.util.List` (callers do not care whether it is an `ArrayList` or `LinkedList`); JDBC's `Connection`/`Statement` (JDBC, Java Database Connectivity, is Java's standard way to talk to SQL databases; same code for different databases); `java.io.InputStream`.
 
 ### In the interview
 
 **30-second answer:** "Abstraction is exposing only what the caller needs. My test is the sentence 'the caller does not need to know that': whenever I can honestly say it, something moves behind the interface, the design shrinks, and I can change the implementation freely."
 
-- *"Encapsulation vs abstraction?"* — Encapsulation hides and protects **data** with access control; abstraction hides **complexity and decisions** behind a small set of operations. They work together.
+- *"Encapsulation vs abstraction?"* — Encapsulation hides and protects **data** with access control (keywords such as `private` that decide who may see a member, Section 2.14); abstraction hides **complexity and decisions** behind a small set of operations. They work together.
 
 ### Self-check
 
@@ -358,11 +360,13 @@ Savings accounts earn interest; checking accounts take a monthly fee unless thei
 | Rule | Detail |
 |---|---|
 | Same signature | Same method name and parameter types |
-| Return type | Same, or a **subtype** for reference types (*covariant return*); primitives must match exactly |
-| Access | Same or **wider** (protected → public is fine; public → protected is not) |
+| Return type | Same, or a **subtype** (a type that extends or implements it) for reference types (*covariant return*); primitives (`int`, `long`, `boolean`...) must match exactly |
+| Access | Same or **wider** (protected, i.e. visible to subclasses, → public is fine; public → protected is not) |
 | Checked exceptions | May throw fewer or narrower checked exceptions, never new or broader ones; unchecked are free |
 | Cannot override | `final` methods, `static` methods (they are **hidden**, not overridden), `private` methods (not inherited) |
-| Annotation | Always write `@Override`: the compiler then catches typos and wrong signatures |
+| Annotation | Always write `@Override` (an annotation is an `@` tag that gives the compiler extra information): the compiler then catches typos and wrong signatures |
+
+(About the exceptions row: a **checked exception**, such as `IOException`, is one the compiler forces callers to catch or declare; an **unchecked exception**, such as `IllegalArgumentException`, extends `RuntimeException` and needs no declaration.)
 
 6. Every class ultimately extends `java.lang.Object`, which is why every object has `toString`, `equals`, `hashCode` and `getClass`.
 7. **The is-a test:** the sentence "a SavingsAccount **is an** Account" must be true in every situation. A car is not an engine, so `Car` should **hold** an `Engine` (Section 2.11).
@@ -375,8 +379,8 @@ See `SavingsAccount` and `CheckingAccount` in Section 2.6 (each calls `super(...
 
 | Benefit | Cost |
 |---|---|
-| Reuse of shared state and behaviour | **Tight coupling**: child depends on parent internals (fragile base class) |
-| Enables polymorphism | Hierarchy is fixed at compile time; single parent only |
+| Reuse of shared state and behaviour | **Tight coupling** (a change in one class forces changes in another): child depends on parent internals (fragile base class) |
+| Enables polymorphism | Hierarchy is fixed at compile time (when the code is compiled, before it runs); single parent only |
 | Natural for true "is-a" families | Deep hierarchies (more than 2–3 levels) are hard to reason about |
 
 ### When not to use it
@@ -393,7 +397,7 @@ See `SavingsAccount` and `CheckingAccount` in Section 2.6 (each calls `super(...
 
 ### Real-world examples
 
-Good: `FileInputStream extends InputStream`; Spring's `AbstractController`-style base classes. Known mistakes in the JDK itself: `java.util.Stack extends Vector` (a stack exposes random-access `insertElementAt`), and `java.util.Properties extends Hashtable` (lets you put non-string entries).
+Good: `FileInputStream extends InputStream`; Spring's (Spring is a popular Java application framework) `AbstractController`-style base classes. Known mistakes in the JDK (Java Development Kit: the compiler plus the standard library) itself: `java.util.Stack extends Vector` (a stack, which should only add and remove at the top, exposes random-access `insertElementAt`, which reaches any position), and `java.util.Properties extends Hashtable` (lets you put non-string entries).
 
 ### In the interview
 
@@ -433,7 +437,7 @@ In the figure, the month-end loop sends the identical request to each account an
 1. Declare the method on the parent type (or interface).
 2. Each child overrides it.
 3. Callers hold the **parent type** (`Account a`) and call the method.
-4. At run time the JVM looks at the **actual class of the object** and runs that class's version: **dynamic dispatch** (also called late binding).
+4. At run time (while the program is running) the JVM looks at the **actual class of the object** and runs that class's version: **dynamic dispatch** (also called late binding).
 
 ### Java example: the bank (encapsulation + abstraction + inheritance + polymorphism)
 
@@ -656,27 +660,27 @@ month end:
 - **Abstraction:** `Bank.transfer` only uses `id()`, `withdraw()`, `deposit()`.
 - **Inheritance:** each child calls `super(...)` and adds one or two fields.
 - **Polymorphism:** `monthEnd()` calls `a.monthlyUpdate()`: three accounts, one method name, three results (interest 0.25% of $400 = $1.00; checking balance $180 is below the $500 waiver so $2.50 is charged; the plain account uses the parent's "no change"). **No `if` asks which is which.**
-- **Why `long` cents and not `BigDecimal` here:** money must never be a `double` (binary floating point cannot store 0.10 exactly, so sums drift). A `long` count of whole **cents** is exact too, and keeps this example about the four pillars rather than about arithmetic. Its limit is that it cannot hold a fraction of a cent: `balanceCents() * monthlyRateBasisPoints / 10_000` uses integer division, which **truncates** (rounds toward zero). With 40,000 cents at 25 bp the result is exactly 100 cents, but for 40,001 cents the 0.0025-cent remainder would be dropped. When a domain needs fractional amounts or an explicit rounding rule (interest, tax, currency conversion), use `BigDecimal` with a stated `RoundingMode`, as the `Money` value object in Section 2.13 does. Interest is in **basis points** (1 bp = 0.01%).
+- **Why `long` cents and not `BigDecimal` here:** money must never be a `double` (binary floating point cannot store 0.10 exactly, so sums drift). A `long` count of whole **cents** is exact too, and keeps this example about the four pillars rather than about arithmetic. Its limit is that it cannot hold a fraction of a cent: `balanceCents() * monthlyRateBasisPoints / 10_000` uses integer division, which **truncates** (rounds toward zero). With 40,000 cents at 25 bp the result is exactly 100 cents, but for 40,001 cents the 0.0025-cent remainder would be dropped. When a domain needs fractional amounts or an explicit rounding rule (interest, tax, currency conversion), use `BigDecimal` (Java's exact decimal-number type) with a stated `RoundingMode`, as the `Money` value object (a small object defined only by its values, Section 2.12) in Section 2.13 does. Interest is in **basis points** (1 bp = 0.01%).
 
 ### How the four fit together
 
-Encapsulation and abstraction guard a class: they settle **what is hidden** and what outsiders may see. Inheritance and polymorphism let the design expand: they make **a new requirement show up as an added class** rather than as surgery on an existing one. Designs that apply all four tend to look alike: hidden state, a small public API, a parent for the common parts, and subclasses that each override one method.
+Encapsulation and abstraction guard a class: they settle **what is hidden** and what outsiders may see. Inheritance and polymorphism let the design expand: they make **a new requirement show up as an added class** rather than as surgery on an existing one. Designs that apply all four tend to look alike: hidden state, a small public API (application programming interface: the set of methods other code is allowed to call), a parent for the common parts, and subclasses that each override one method.
 
 ### Trade-offs
 
 | Benefit | Cost |
 |---|---|
 | Removes type switches; open to new types | Behaviour is spread over several classes; you must look at the runtime type to know what runs |
-| Enables Strategy, State, Command and most patterns | A virtual call is marginally slower than a direct call (almost never matters) |
+| Enables Strategy, State, Command and most patterns (named, reusable designs; Chapters 8–11) | A virtual call (one resolved at run time) is marginally slower than a direct call (almost never matters) |
 
 ### Common mistakes
 
-- Long `if/else` or `switch` over a type: almost always where polymorphism belongs. **Pointing this out to the interviewer earns more credit than actually refactoring it.**
-- Using `instanceof` chains to decide behaviour (fine for occasional data inspection, e.g. pattern matching in Java 21, but not as the main dispatch mechanism in an OO model).
+- Long `if/else` or `switch` over a type: almost always where polymorphism belongs. **Pointing this out to the interviewer earns more credit than actually refactoring (restructuring without changing behaviour) it.**
+- Using `instanceof` chains to decide behaviour (fine for occasional data inspection, e.g. pattern matching in Java 21, which tests a type and binds a variable in one step, but not as the main dispatch mechanism in an OO model).
 
 ### Real-world examples
 
-`List.add` behaves differently for `ArrayList` and `LinkedList`; `Runnable.run()` executed by any `Executor`; Spring injecting any implementation of an interface; `Comparator.compare` in `Collections.sort`.
+`List.add` behaves differently for `ArrayList` and `LinkedList`; `Runnable.run()` executed by any `Executor` (a Java object that runs tasks, often on background threads); Spring injecting (handing in from outside) any implementation of an interface; `Comparator.compare` in `Collections.sort`.
 
 ### In the interview
 
@@ -709,9 +713,9 @@ Hold the parent type, call the method, let the object decide. Type switches are 
 ### How it works: overload resolution
 
 The compiler picks an overload in three phases and stops at the first phase that finds a match:
-1. Exact match or **widening** of primitives/references (`int` → `long` → `double`, `Circle` → `Shape`), no boxing, no varargs.
-2. Allow **boxing/unboxing** (`int` ↔ `Integer`).
-3. Allow **varargs** (`int...`).
+1. Exact match or **widening** (automatic conversion to a bigger or more general type) of primitives/references (`int` → `long` → `double`, `Circle` → `Shape`), no boxing, no varargs.
+2. Allow **boxing/unboxing** (`int` ↔ `Integer`: wrapping a primitive value in its object form, and back).
+3. Allow **varargs** (`int...`: a parameter that accepts any number of arguments).
 If several candidates remain in a phase, the **most specific** wins; if none is most specific, it is a compile error (ambiguous call).
 
 **Not polymorphic:** fields (resolved by the static type; a child field with the same name **hides** the parent's), `static` methods (hidden, chosen by the static type), and `private` methods.
@@ -834,12 +838,12 @@ pattern-matched a circle: I am a shape with area 3.14 (radius 1.0)
 - `s.kind` is `"shape"`: fields are not polymorphic. Inside `Shape.who()`, `kind` also means `Shape.kind`, which is why the output says "I am a shape". Lesson: **never hide fields**; use private fields plus overridable methods.
 - `Circle copy()` overrides `Shape copy()` with a **covariant return type**.
 - `super.who()` reuses the parent's text and appends the radius.
-- `s instanceof Circle c` is **pattern matching for instanceof** (Java 16+): test and cast in one step.
+- `s instanceof Circle c` is **pattern matching for instanceof** (Java 16+): test and cast (treat the value as the more specific type) in one step.
 
 ### Common mistakes
 
-- Expecting overloads to be picked by runtime type (they are not; that would require double dispatch, see the Visitor pattern in Chapter 11).
-- Writing `public boolean equals(Point p)`: an **overload**, not an override of `equals(Object)`, so collections never call it. `@Override` would have caught it.
+- Expecting overloads to be picked by runtime type (they are not; that would require double dispatch, choosing a method by the runtime types of two objects; see the Visitor pattern in Chapter 11).
+- Writing `public boolean equals(Point p)`: an **overload**, not an override of `equals(Object)`, so collections (Java's built-in containers such as `List`, `Set` and `Map`) never call it. `@Override` would have caught it.
 
 ### In the interview
 
@@ -870,11 +874,11 @@ Key facts:
 - **Default methods** (Java 8+): a method with a body that implementers inherit and may override. Added so interfaces can evolve without breaking every implementer (for example `Collection.stream()`, `Iterable.forEach`).
 - **Static methods** (Java 8+): belong to the interface; called as `Notifier.console()`; **not inherited** by implementing classes.
 - **Private methods** (Java 9+): helpers shared by default methods, invisible to implementers.
-- A **functional interface** has **exactly one abstract method** (methods inherited from `Object`, like `equals`, do not count; default and static methods do not count). It can be implemented by a **lambda** or **method reference**. `@FunctionalInterface` asks the compiler to enforce the rule.
+- A **functional interface** has **exactly one abstract method** (methods inherited from `Object`, like `equals`, do not count; default and static methods do not count). It can be implemented by a **lambda** (a short unnamed function written inline, such as `(to, msg) -> ...`) or **method reference** (a pointer to an existing method, such as `String::isBlank`). `@FunctionalInterface` asks the compiler to enforce the rule.
 
 ### The problem it solves
 
-Callers depend on **what** can be done, not on a concrete class. New implementations can be added without touching callers (open/closed), and tests can pass fakes (dependency inversion). Interfaces also give Java a safe form of multiple inheritance (of **type**, not state).
+Callers depend on **what** can be done, not on a concrete class. New implementations can be added without touching callers (open/closed: open to extension, closed to modification), and tests can pass fakes, simple stand-in objects (dependency inversion: depend on interfaces, not concrete classes; both are covered in Chapter 4). Interfaces also give Java a safe form of multiple inheritance (one class inheriting from several parents; here of **type**, not state).
 
 ### How it works
 
@@ -1007,19 +1011,19 @@ total: 12345 cents
 -- end of Sales --
 ```
 
-**Explaining each part:** `Notifier` has one abstract method, so it is also usable with lambdas (`sms`). `sendAll` is a default method that uses the private helper `clean`. `Notifier.console()` is a static factory on the interface. `DiscountRule` is an explicit `@FunctionalInterface` with a default combinator `then` (like `Function.andThen`). `Predicate<String>` is one of the JDK's built-in functional interfaces (`java.util.function`: `Function`, `Supplier`, `Consumer`, `Predicate`, `BiFunction`, `UnaryOperator`...). `Report`/`SalesReport` show an **abstract class** (Section 2.9).
+**Explaining each part:** `Notifier` has one abstract method, so it is also usable with lambdas (`sms`). `sendAll` is a default method that uses the private helper `clean`. `Notifier.console()` is a static factory on the interface. `DiscountRule` is an explicit `@FunctionalInterface` with a default combinator (a method that joins two functions into one) `then` (like `Function.andThen`). `Predicate<String>` is one of the JDK's built-in functional interfaces (`java.util.function`: `Function`, `Supplier`, `Consumer`, `Predicate`, `BiFunction`, `UnaryOperator`...). `Report`/`SalesReport` show an **abstract class** (Section 2.9).
 
 ### Trade-offs
 
 | Benefit | Cost |
 |---|---|
-| Loose coupling, easy testing, multiple implementations | One more type to read; pointless if only one implementation will ever exist |
+| Loose coupling (classes know little about each other), easy testing, multiple implementations | One more type to read; pointless if only one implementation will ever exist |
 | Multiple inheritance of type | Cannot hold instance state |
 | Default methods allow evolution | Overusing defaults turns interfaces into mini base classes |
 
 ### When not to use it
 
-An interface with a single implementation and no realistic second one (and no test-double need) is indirection without benefit. Add it when the second implementation appears.
+An interface with a single implementation and no realistic second one (and no test-double need, i.e. no fake version for tests) is indirection (an extra layer between caller and code) without benefit. Add it when the second implementation appears.
 
 ### Common mistakes
 
@@ -1028,7 +1032,7 @@ An interface with a single implementation and no realistic second one (and no te
 
 ### Real-world examples
 
-`Comparable`, `Comparator`, `Runnable`, `Callable`, `Iterable`, `AutoCloseable` (enables try-with-resources), `List`/`Map`; Spring's `Repository` interfaces; SLF4J's `Logger`.
+`Comparable`, `Comparator`, `Runnable`, `Callable`, `Iterable`, `AutoCloseable` (enables try-with-resources, a `try (...)` block that closes files or connections automatically), `List`/`Map`; Spring's `Repository` interfaces; SLF4J's (a common Java logging library) `Logger`.
 
 ### In the interview
 
@@ -1067,7 +1071,7 @@ In the `interfaces` package above, `Report` holds state (`title`), has a constru
 | How many can a class extend/implement? | **One** | **Many** |
 | Relationship expressed | "is a" (shared identity and state) | "can do" (capability / role) |
 | Evolution | Add concrete methods freely | Add `default` methods |
-| Typical use | Shared state + partial implementation for a close family | Contracts, roles, strategies, test seams |
+| Typical use | Shared state + partial implementation for a close family | Contracts, roles, strategies, test seams (points where a test can swap in a fake) |
 
 ### Rule of thumb
 
@@ -1107,12 +1111,12 @@ String or int constants (`"PAID"`, `2`) allow typos and invalid values and carry
 
 1. Every enum implicitly extends `java.lang.Enum` and cannot extend anything else; it can implement interfaces.
 2. Constructors are always private; constants are created once when the enum class is initialised.
-3. Built-ins: `values()`, `valueOf(String)` (throws `IllegalArgumentException` for unknown names), `name()`, `ordinal()` (position, 0-based; do **not** persist it, reordering changes it), `compareTo` (by ordinal).
+3. Built-ins: `values()`, `valueOf(String)` (throws `IllegalArgumentException` for unknown names), `name()`, `ordinal()` (position, 0-based; do **not** persist it, i.e. save it to a database or file, since reordering changes it), `compareTo` (by ordinal).
 4. Compare with `==` (each constant is a single instance).
-5. Constant-specific bodies (`PAID { ... }`) let each constant override an abstract method: a tiny state machine or strategy.
+5. Constant-specific bodies (`PAID { ... }`) let each constant override an abstract method: a tiny state machine (a fixed set of states plus the allowed moves between them) or strategy.
 6. `EnumMap` / `EnumSet` are compact, fast collections keyed by enums.
 7. `switch` expressions over an enum that cover every constant are **exhaustive**: no `default` needed, and adding a constant makes the compiler flag missing cases.
-8. A single-element enum is the simplest thread-safe, serialization-safe **Singleton** (Chapter 8).
+8. A single-element enum is the simplest thread-safe, serialization-safe (serialization turns an object into bytes to store or send) **Singleton** (a class allowed exactly one instance; Chapter 8).
 
 ### Java example
 
@@ -1390,7 +1394,7 @@ City: electric motor hum
 | Relationship | is-a | has-a |
 | Coupling | Tight (to parent internals) | Loose (to an interface) |
 | Change at run time | No | Yes |
-| Boilerplate | Low | Forwarding methods |
+| Boilerplate (repetitive filler code) | Low | Forwarding methods |
 | Polymorphism | Built in | Via the interface the parts implement |
 
 ### When not to use it
@@ -1404,7 +1408,7 @@ When there is a **genuine is-a relationship** designed for extension (e.g. exten
 
 ### Real-world examples
 
-`java.io.BufferedReader` wraps any `Reader` (Decorator = composition); `Collections.unmodifiableList` wraps a list; Spring beans are composed via dependency injection; strategy objects such as `Comparator` passed into `TreeMap`.
+`java.io.BufferedReader` wraps any `Reader` (Decorator, a wrapper that adds behaviour around an object = composition); `Collections.unmodifiableList` wraps a list; Spring beans (objects the framework creates) are composed via dependency injection (the framework hands each object the collaborators it needs); strategy objects such as `Comparator` passed into `TreeMap`.
 
 ### In the interview
 
@@ -1435,6 +1439,8 @@ Analogy: two printed copies of the same book are **equal** (same content) but no
 
 Hash-based collections (`HashMap`, `HashSet`) first use `hashCode()` to pick a bucket, then `equals()` to compare inside the bucket. If you get either wrong, objects "disappear" from sets and maps.
 
+> **Key term — hash table:** A `HashMap` or `HashSet` keeps its entries in an array of slots called **buckets**. To store or find an object it computes the object's **hash code** (an `int` derived from its fields), uses that number to jump straight to one bucket, and only then compares the few objects in that bucket with `equals`. This is why lookups are fast, and why two equal objects must produce the same hash code: otherwise the search starts in the wrong bucket.
+
 ### How it works: the contracts
 
 **`equals` must be:**
@@ -1449,7 +1455,7 @@ Hash-based collections (`HashMap`, `HashSet`) first use `hashCode()` to pick a b
 2. Return **equal hash codes for equal objects**.
 3. Unequal objects **may** share a hash code (collisions are allowed, just slower).
 
-**So: whenever you override `equals`, override `hashCode` using the same fields.** Records and IDE generators do this for you.
+**So: whenever you override `equals`, override `hashCode` using the same fields.** Records and IDE generators (the "generate equals/hashCode" command in a code editor) do this for you.
 
 ### Java example
 
@@ -1544,7 +1550,7 @@ BrokenPoint equals: true, but set.contains(equal one): false
 Integer 1000 equals: true  (never compare boxed numbers with ==)
 ```
 
-**Explaining each part:** `Point` overrides both methods on the same fields, so the set treats `a` and `b` as one element. `BrokenPoint` overrides only `equals`; its inherited identity-based `hashCode` (almost always different for two distinct objects) sends an equal object to a different bucket, so `contains` fails. `javac -Xlint` even warns about this (`[overrides] ... overrides equals, but neither it nor any superclass overrides hashCode`); `BrokenPoint` carries `@SuppressWarnings("overrides")` only because it exists to show the bug. In real code, treat that warning as an error. Strings and boxed numbers must be compared with `equals`: `Integer` caches only small values (at least −128 to 127), so `==` on boxed numbers happens to work for small values and fails for large ones.
+**Explaining each part:** `Point` overrides both methods on the same fields, so the set treats `a` and `b` as one element. `BrokenPoint` overrides only `equals`; its inherited identity-based `hashCode` (almost always different for two distinct objects) sends an equal object to a different bucket, so `contains` fails. `javac -Xlint` (the compiler run with extra warnings switched on) even warns about this (`[overrides] ... overrides equals, but neither it nor any superclass overrides hashCode`); `BrokenPoint` carries `@SuppressWarnings("overrides")` only because it exists to show the bug. In real code, treat that warning as an error. Strings and boxed numbers must be compared with `equals`: `Integer` caches (keeps ready-made, reused objects for) only small values (at least −128 to 127), so `==` on boxed numbers happens to work for small values and fails for large ones.
 
 ### Trade-offs / design choice
 
@@ -1562,7 +1568,7 @@ Integer 1000 equals: true  (never compare boxed numbers with ==)
 
 ### Real-world examples
 
-`String`, `Integer`, `BigDecimal` (note: `new BigDecimal("1.0").equals(new BigDecimal("1.00"))` is false because scale is part of equality; use `compareTo` for numeric comparison), `LocalDate`, `List.equals` (element-wise).
+`String`, `Integer`, `BigDecimal` (note: `new BigDecimal("1.0").equals(new BigDecimal("1.00"))` is false because scale (the number of decimal places) is part of equality; use `compareTo` for numeric comparison), `LocalDate`, `List.equals` (element-wise).
 
 ### In the interview
 
@@ -1720,12 +1726,12 @@ items() is unmodifiable: UnsupportedOperationException
 
 | Benefit | Cost |
 |---|---|
-| Thread-safe without locks; safe hash keys; no defensive reasoning needed | New object per change (usually cheap; can matter in hot loops) |
+| Thread-safe without locks; safe hash keys; no defensive reasoning needed | New object per change (usually cheap; can matter in hot loops, i.e. code that runs millions of times) |
 | Records remove boilerplate | Records cannot hide their components or extend classes |
 
 ### When not to use it
 
-Entities whose identity persists while state changes (a `ParkingSpot` becoming occupied, an `Account` balance) are naturally **mutable**, with encapsulated changes. Make them immutable only if you adopt an event-sourced or copy-on-write style deliberately.
+Entities whose identity persists while state changes (a `ParkingSpot` becoming occupied, an `Account` balance) are naturally **mutable**, with encapsulated changes. Make them immutable only if you adopt an event-sourced (state rebuilt from a stored list of past events) or copy-on-write (every change makes a new copy) style deliberately.
 
 ### Common mistakes
 
@@ -1735,7 +1741,7 @@ Entities whose identity persists while state changes (a `ParkingSpot` becoming o
 
 ### Real-world examples
 
-`String`, boxed primitives (`Integer`, `Long`), `BigDecimal`, `BigInteger`, all of `java.time` (`LocalDate`, `Instant`, `Duration`), `List.of`/`Map.of` collections; Kafka messages and event-sourcing events are treated as immutable facts.
+`String`, boxed primitives (`Integer`, `Long`), `BigDecimal`, `BigInteger`, all of `java.time` (`LocalDate`, `Instant`, `Duration`), `List.of`/`Map.of` collections; Kafka (a widely used message-streaming system) messages and event-sourcing events are treated as immutable facts.
 
 ### In the interview
 
@@ -1776,7 +1782,7 @@ Access modifiers make encapsulation **enforceable by the compiler**. Packages gr
 
 1. Start everything as `private`; widen only when needed.
 2. Group by **feature** (`parking`, `payment`) rather than by layer only.
-3. Keep helper classes package-private; expose a small `public` facade.
+3. Keep helper classes package-private; expose a small `public` facade (one simple front class that hides the others).
 4. `protected` is for members designed for subclasses; note that it **also** grants access to the whole package.
 5. Since Java 9, **modules** (`module-info.java`) add a further level: only exported packages are visible to other modules.
 
@@ -1931,14 +1937,14 @@ private < package-private < protected < public. Default to private; expose a sma
 
 ### The problem it solves
 
-Without generics you store `Object` and cast on every read, discovering mistakes at run time (`ClassCastException`). With generics, mistakes are **compile errors**, and one class (`Repository<ID, T>`) serves every entity, which is extremely handy in machine-coding rounds.
+Without generics you store `Object` (the root type of every class) and cast on every read, discovering mistakes at run time (`ClassCastException`). With generics, mistakes are **compile errors**, and one class (`Repository<ID, T>`) serves every entity, which is extremely handy in machine-coding rounds.
 
 ### How it works
 
 1. **Generic class/interface:** `class Repository<ID, T extends Identifiable<ID>>`.
 2. **Bounded type parameter:** `T extends X` means T must be X or a subtype, so you can call X's methods on T.
 3. **Generic method:** `static <T extends Comparable<? super T>> T max(List<? extends T> items)`.
-4. **Wildcards:** `? extends T` (read-only producer), `? super T` (write-capable consumer), `?` (unknown). Mnemonic **PECS**: *Producer Extends, Consumer Super* (from *Effective Java*).
+4. **Wildcards:** `? extends T` (read-only producer), `? super T` (write-capable consumer), `?` (unknown). Mnemonic **PECS**: *Producer Extends, Consumer Super* (from *Effective Java*, Joshua Bloch's well-known Java best-practice book).
 5. **Diamond operator:** `new Repository<>()` infers the type arguments.
 6. **Type erasure:** type arguments exist only at compile time; at run time `List<String>` and `List<Integer>` are the same class. Consequences: no `new T()`, no `instanceof List<String>`, no primitive type arguments (use `Integer`, not `int`).
 7. **Avoid raw types** (`List` without `<...>`); they switch the checks off.
@@ -2047,7 +2053,7 @@ copied into List<Number>: [3, 1, 2], max int = 3
 same runtime class (type erasure)? true
 ```
 
-**Explaining each part:** one `Repository` class stores `User`s keyed by `String` and `Product`s keyed by `Integer`; `findById` returns `Optional` for a normal "not found". `max` works for any comparable type (`Product` compares by price). `copy` accepts a `List<Integer>` as a producer and a `List<Number>` as a consumer (PECS). The final line demonstrates erasure.
+**Explaining each part:** one `Repository` class stores `User`s keyed by `String` and `Product`s keyed by `Integer`; `findById` returns `Optional` (a box that either holds a value or is empty, used instead of `null`) for a normal "not found". `max` works for any comparable type (`Product` compares by price). `copy` accepts a `List<Integer>` as a producer and a `List<Number>` as a consumer (PECS). The final line demonstrates erasure.
 
 ### Common mistakes
 
@@ -2057,7 +2063,7 @@ same runtime class (type erasure)? true
 
 ### Real-world examples
 
-The entire Collections framework (`List<E>`, `Map<K,V>`), `Optional<T>`, `CompletableFuture<T>`, `Comparator<T>`, Spring Data's `CrudRepository<T, ID>` (the same idea as our `Repository`).
+The entire Collections framework (`List<E>`, `Map<K,V>`), `Optional<T>`, `CompletableFuture<T>` (a result that will arrive later from background work), `Comparator<T>`, Spring Data's `CrudRepository<T, ID>` (the same idea as our `Repository`).
 
 ### In the interview
 
@@ -2123,7 +2129,7 @@ In the figure, steps 1–2 form the analysis (what the system is) and steps 3–
 
 **Step 2, relationships.** The library **owns** its many book records in the strong sense (delete the library and its book records disappear with it): that is **composition**, drawn as the filled diamond. The library also **registers** many members without owning them (people go on existing without the library): a plain **association** arrow. Each loan **points to** a single book and a single member, owning neither.
 
-**Step 3, interfaces.** Library: lend a book, accept a return, report whether a copy is currently out. Book: expose its title and ISBN. Member: report its number of loans. Loan: report whether it is overdue. All other members, every field included, stay private. Pay attention to **which class answers "is this book out?"**: `Book` cannot, since it has no knowledge of loans; `Library` keeps the loans, so only it can answer.
+**Step 3, interfaces.** Library: lend a book, accept a return, report whether a copy is currently out. Book: expose its title and ISBN (the International Standard Book Number printed on every book). Member: report its number of loans. Loan: report whether it is overdue. All other members, every field included, stay private. Pay attention to **which class answers "is this book out?"**: `Book` cannot, since it has no knowledge of loans; `Library` keeps the loans, so only it can answer.
 
 **Step 4, design.** The figure fully answers the original sentence in four steps without a line of code. Our Java version (which adds a `register` operation so members can be checked):
 
@@ -2306,7 +2312,7 @@ A design only helps if another engineer can read it. **UML (Unified Modeling Lan
 
 ### Three ways this goes wrong
 
-1. **Naming classes after tables** (`UserRow`, `OrderTable`, `BookData`). That is a database schema wearing OO clothes. An object pairs data with the behaviour that modifies it, so a class holding only fields and getters should prompt the question: what is it for, what does it **do**?
+1. **Naming classes after tables** (`UserRow`, `OrderTable`, `BookData`). That is a database schema (the layout of tables and columns) wearing OO clothes. An object pairs data with the behaviour that modifies it, so a class holding only fields and getters should prompt the question: what is it for, what does it **do**?
 2. **Missing the connection object** (`Loan`, `Reservation`, `Ticket`). If `borrower` and `dueDate` are drifting onto `Book`, that is the signal that a connection class is missing.
 3. **Listing every operation you can imagine.** Step 3 is about what an object provides **to other objects**, not every conceivable action. Long method lists on every class show that no decisions were made.
 

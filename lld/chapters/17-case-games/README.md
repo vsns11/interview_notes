@@ -2,18 +2,20 @@
 
 > **Where this fits.** Chapters 14–16 designed things that model the real world (an ATM, a parking lot, booking systems). Games are different: the "world" is a set of **rules**, and the rules are exact. That makes games a favourite interview topic. There is nowhere to hide a vague class, because every rule must live *somewhere*, and the interviewer will ask where.
 
+An **LLD** (low-level design) interview asks you to design the classes, their responsibilities and some of the code for one system — as opposed to high-level design, which is about servers, databases and networks.
+
 **What games test in an LLD interview**
 
 | Skill | What it means | Where you see it in this chapter |
 |---|---|---|
-| **Rule encapsulation** | Each rule lives in one obvious class, not spread across `if` statements everywhere. | Blackjack scoring in `BlackjackScoring`; chess legality in `Rules`; 2048 merging in `LineMerger`. |
+| **Rule encapsulation** (hiding a rule inside the class that owns it) | Each rule lives in one obvious class, not spread across `if` statements everywhere. | Blackjack scoring in `BlackjackScoring`; chess legality in `Rules`; 2048 merging in `LineMerger`. |
 | **Turn management** | Whose turn is it, what may they do now, and what happens when the turn ends? | A turn index (tic-tac-toe), a queue of players (snake and ladder), `turn` colour (chess), rounds (blackjack). |
 | **Polymorphic pieces** | Different kinds of objects answer the same question in their own way (*polymorphism* = "many shapes": one method call, many behaviours). | Chess `Piece.targets(...)` overridden by King, Knight, Pawn and the sliding pieces. |
-| **Pluggable strategies** | Behaviour that varies (how a bot plays, how dice roll, when the game ends) sits behind an interface (the **Strategy** pattern, Chapter 10). | `PlayerStrategy`, `DealerPolicy`, `MoveStrategy`, `Dice`, `OverflowRule`, `WinStrategy`, `TileSpawner`. |
-| **Deterministic testing** | Randomness is *injected*. Pass `new Random(seed)` and the "random" sequence is the same on every run, so tests and demos repeat exactly. Or pass a scripted source (stacked shoe, loaded dice). | Every `Main` in this chapter prints the same output every time. |
-| **State and status** | A game moves through states (in progress, won, draw, over). Illegal actions in the wrong state are rejected. | `GameStatus`, `GameState` enums in every game. |
+| **Pluggable strategies** | Behaviour that varies (how a bot plays, how dice roll, when the game ends) sits behind an interface (a list of methods with no fixed implementation; the **Strategy** pattern, Chapter 10). | `PlayerStrategy`, `DealerPolicy`, `MoveStrategy`, `Dice`, `OverflowRule`, `WinStrategy`, `TileSpawner`. |
+| **Deterministic testing** (same input, same result every time) | Randomness is *injected* (handed in from outside). Pass `new Random(seed)` and the "random" sequence is the same on every run, so tests and demos repeat exactly. Or pass a scripted source (stacked shoe, loaded dice). | Every `Main` in this chapter prints the same output every time. |
+| **State and status** | A game moves through states (in progress, won, draw, over). Illegal actions in the wrong state are rejected. | `GameStatus`, `GameState` enums (types with a fixed list of named values) in every game. |
 
-> **Key idea: seeded randomness.** `java.util.Random` is a *pseudo-random* generator: it computes its numbers from a starting value called the **seed**. The same seed always produces the same sequence (the algorithm is fixed by the Java specification). `Collections.shuffle(list, rnd)` is also deterministic for a given `Random`. So the rule for game code is: **never call `new Random()` or `Math.random()` inside the game. Accept a `Random` (or a `Dice`/`Spawner` interface) from outside.** Production passes an unseeded (or `SecureRandom`) source; tests pass a seed. This is plain Dependency Injection (Chapter 5).
+> **Key idea: seeded randomness.** `java.util.Random` is a *pseudo-random* generator: it computes its numbers from a starting value called the **seed**. The same seed always produces the same sequence (the algorithm is fixed by the Java specification). `Collections.shuffle(list, rnd)` is also deterministic for a given `Random`. So the rule for game code is: **never call `new Random()` or `Math.random()` inside the game. Accept a `Random` (or a `Dice`/`Spawner` interface) from outside.** Production passes an unseeded (or `SecureRandom` — a slower generator whose output cannot be predicted, used for security) source; tests pass a seed. This is plain Dependency Injection (Chapter 5): an object receives what it needs from its caller instead of creating it itself.
 
 **Problems in this chapter**
 
@@ -25,6 +27,8 @@
 | 17.4 | Snake and Ladder | board config and validation, seeded dice, rules engine, pluggable win rules |
 | 17.5 | 2048 | slide/merge logic, seeded tile spawns, game-over detection |
 
+> **Key term — Big-O notation:** Expressions like O(1), O(n) and O(N²) describe how an algorithm's work grows as the input grows. **O(1)** ("constant time") means the work stays the same no matter how big the input is; **O(n)** means it grows in step with the input size n; **O(N²)** means doubling N makes the work about four times bigger. Interviewers use it to compare approaches without timing them.
+
 **How to run every example in this chapter**
 
 ```bash
@@ -33,7 +37,7 @@ javac --release 21 -d /tmp/lld_17 $(find . -name '*.java')
 java -cp /tmp/lld_17 lld.ch17.blackjack.Main    # or chess, tictactoe, snakeladder, game2048
 ```
 
-All five `Main` classes compile with Java 21 (standard library only) and run. All randomness is seeded or scripted, so the output shown under each program is exactly what you will see.
+`javac` is the Java compiler and `-cp` (the classpath) tells `java` where the compiled classes are. All five `Main` classes compile with Java 21 (standard library only — just the classes that ship with Java) and run. All randomness is seeded or scripted, so the output shown under each program is exactly what you will see.
 
 **A reusable skeleton for any board/card game.** Almost every game design in an interview has the same five parts. Name them early and the rest of the interview becomes filling in details.
 
@@ -75,9 +79,9 @@ Questions worth asking (with the answers this design assumes):
 | How many players? | One or more players, each against the dealer. |
 | Which player options? | Hit, stand, double down, split (once), insurance. Surrender and side bets are out of scope. |
 | Dealer rule? | Hit on 16 or less, stand on 17 or more. Some casinos also hit a "soft 17" — make it pluggable. |
-| Payouts? | Win 1:1, blackjack 3:2, tie ("push") returns the bet, insurance 2:1. |
-| Money? | Bets are counted in whole **chips** (an `int`), and the ante must be even. Never use `double` for money. |
-| Real UI, network, accounts? | Out of scope. The course model has `Account`/`Person` for sign-in; we keep `Player` minimal and say where it would attach. |
+| Payouts? | Win 1:1, blackjack 3:2, tie ("push") returns the bet, insurance 2:1 (odds like 3:2 mean you win 3 chips for every 2 bet). |
+| Money? | Bets are counted in whole **chips** (an `int`, a whole-number type), and the ante (the starting bet) must be even. Never use `double` (an inexact binary floating-point number) for money. |
+| Real UI (user interface — the screens), network, accounts? | Out of scope. The course model has `Account`/`Person` for sign-in; we keep `Player` minimal and say where it would attach. |
 
 ### Requirements
 
@@ -110,19 +114,19 @@ Questions worth asking (with the answers this design assumes):
 - **Generic deck:** the `Card`/`Deck` classes must work for any card game, not just blackjack.
 - **Deterministic tests:** shuffling uses an injected `Random`; a *stacked* shoe (fixed card order) makes exact scenarios reproducible.
 - **Extensible rules:** dealer rule and player decision-making are pluggable.
-- **Correct money:** bets and balances are whole chips held in an `int`, never a `double`. This is the one place in the handbook where money is not a `BigDecimal`, and it is deliberate: a table only accepts whole chips, and requiring an **even ante** makes every payout a whole number of chips (3:2 on 10 is 15; insurance is exactly half the ante, 5, and pays 2:1 = 10). If the table ever had to pay fractions (a 3:2 payout on an odd ante, or converting chips to currency at the cashier), switch the amounts to `BigDecimal` with an explicit `RoundingMode`.
+- **Correct money:** bets and balances are whole chips held in an `int`, never a `double`. This is the one place in the handbook where money is not a `BigDecimal`, and it is deliberate: a table only accepts whole chips, and requiring an **even ante** makes every payout a whole number of chips (3:2 on 10 is 15; insurance is exactly half the ante, 5, and pays 2:1 = 10). If the table ever had to pay fractions (a 3:2 payout on an odd ante, or converting chips to currency at the cashier), switch the amounts to `BigDecimal` (Java's exact decimal number type) with an explicit `RoundingMode` (the rule for what to do with a leftover fraction, such as "round half up").
 
 ### Use cases
 
 ![Use case diagram](../../assets/O-design-blackjack-and-a-deck-of-cards-2.svg)
 *Figure — Blackjack use cases for the Player and the Dealer, including account management (course diagram)*
 
-In the figure above there are two actors:
+The figure above is a **use case diagram** (UML — Unified Modeling Language — notation: stick figures are *actors*, the people or systems using the software; ovals are *use cases*, the goals they can achieve). In the figure above there are two actors:
 
-- **Player** — places the initial bet; accepts or declines extra bets (insurance, split, double); accepts or declines an offered resolution such as even money; chooses hit, double or stand. The player also has account-level use cases (create account, log in, join or view games), which belong to a lobby service, not the game engine.
+- **Player** — places the initial bet; accepts or declines extra bets (insurance, split, double); accepts or declines an offered resolution such as even money; chooses hit, double or stand. The player also has account-level use cases (create account, log in, join or view games), which belong to a lobby service (the separate part of the app where players sign in and pick a table), not the game engine (the code that enforces the game's rules).
 - **Dealer** — deals cards, plays the house hand by the fixed rule, collects losing bets and pays winners.
 
-The main use cases (note the `<<include>>` arrows in the figure: dealing and payout are part of every round):
+The main use cases (note the `<<include>>` arrows in the figure — an include arrow means one use case always runs another as part of itself: dealing and payout are part of every round):
 
 | Use case | What happens |
 |---|---|
@@ -139,20 +143,20 @@ The main use cases (note the `<<include>>` arrows in the figure: dealing and pay
 ![Activity diagrams](../../assets/O-design-blackjack-and-a-deck-of-cards-3.svg)
 *Figure — Activity diagram for one player's hit-or-stand round against the dealer (course diagram)*
 
-The figure above walks through one round: bet, deal, check for 21 (blackjack pays 3:2), check for bust, hit or stand, then the dealer draws while below 17, and finally the three outcomes — player wins 1:1, player loses, or a tie returns the bet.
+An **activity diagram** is a flowchart of one task, with diamonds for decisions. The figure above walks through one round: bet, deal, check for 21 (blackjack pays 3:2), check for bust, hit or stand, then the dealer draws while below 17, and finally the three outcomes — player wins 1:1, player loses, or a tie returns the bet.
 
 ### Core entities
 
 | Class | Responsibility |
 |---|---|
-| `Suit`, `Rank` (enums) | The fixed values of a French deck. `Rank` stores the *face value* 1–13 (ace = 1, J = 11, Q = 12, K = 13). |
-| `Card` (record) | Rank + suit. Knows **nothing** about blackjack. Immutable. |
-| `Deck<T>` | A generic, shuffleable stack of any card type `T`; `standard52()` factory builds a French deck. |
-| `Shoe` | Several decks shuffled together; deals one card at a time; reshuffles at the **cut card**. `Shoe.stacked(...)` gives a fixed order for tests. |
+| `Suit`, `Rank` (enums) | The fixed values of a French deck (the standard 52-card deck with four suits). `Rank` stores the *face value* 1–13 (ace = 1, J = 11, Q = 12, K = 13). |
+| `Card` (record — a compact class that just holds fixed values) | Rank + suit. Knows **nothing** about blackjack. Immutable (cannot change after creation). |
+| `Deck<T>` | A generic (works for any type `T` you plug in), shuffleable stack of any card type `T`; `standard52()` factory (a method that builds objects) builds a French deck. |
+| `Shoe` | Several decks shuffled together; deals one card at a time; reshuffles at the **cut card** (a marker card placed near the end of the shoe). `Shoe.stacked(...)` gives a fixed order for tests. |
 | `BlackjackScoring` | The blackjack value of a rank (K = 10, ace = 1 hard). The *game* rule, kept off `Card`. |
 | `Hand` | Cards + bet; computes hard/soft/best totals, bust, blackjack, can-split; splits and doubles. |
 | `Action` (enum) | HIT, STAND, DOUBLE, SPLIT. |
-| `PlayerStrategy` (interface) | How a player decides. `BasicStrategy` and `MimicDealerStrategy` are two bots; a UI-backed human would be a third. |
+| `PlayerStrategy` (interface) | How a player decides. `BasicStrategy` and `MimicDealerStrategy` are two bots (computer-controlled players); a UI-backed human would be a third. |
 | `DealerPolicy` (interface) | When the dealer hits. `standOnAll17()` and `hitSoft17()`. |
 | `Player` | Name, chip balance, strategy. |
 | The dealer | Not a class of its own here: during a round the dealer is a `Hand` inside `BlackjackGame` plus the `DealerPolicy` that decides when it draws. (The course has a `Dealer` class next to `Player`, both under `BasePlayer`.) |
@@ -163,7 +167,7 @@ The figure above walks through one round: bet, deal, check for 21 (blackjack pay
 ![The finished class diagram](../../assets/O-design-blackjack-and-a-deck-of-cards-11.svg)
 *Figure — Course class diagram: Card, BlackjackCard, Deck, Shoe, Hand, BasePlayer, Player, Dealer, Game, Account (course diagram)*
 
-In the course model (figure above), `Card` holds a suit and a face value, and a subclass `BlackjackCard` adds the *game value* — because a king has face value 13 but is worth 10 in blackjack. A `Shoe` is composed of several `Deck`s (filled diamonds = composition: the parts belong to the whole). `Hand` scores itself. `Player` and `Dealer` share a `BasePlayer` (balance, hands), which extends `Account`. `Player` adds the bet; `Dealer` adds the "should I hit?" rule. `Game` points at a player, a dealer and a shoe and holds the order of play. Note the `*` from `BasePlayer` to `Hand`: splitting gives one player several hands.
+In the course model (figure above), `Card` holds a suit and a face value, and a subclass `BlackjackCard` adds the *game value* — because a king has face value 13 but is worth 10 in blackjack. A `Shoe` is composed of several `Deck`s (filled diamonds = composition: the parts belong to the whole). A plain arrow is an *association* (one class merely refers to another), and an open triangle is *inheritance* (a subclass extends a parent class). `Hand` scores itself. `Player` and `Dealer` share a `BasePlayer` (balance, hands), which extends `Account`. `Player` adds the bet; `Dealer` adds the "should I hit?" rule. `Game` points at a player, a dealer and a shoe and holds the order of play. Note the `*` from `BasePlayer` to `Hand`: splitting gives one player several hands.
 
 Our Java design keeps the same core idea — **the game value must not live on the generic card** — but implements it with a separate scoring function instead of a subclass, and turns the two things that vary (player decisions, dealer rule) into strategies:
 
@@ -295,14 +299,14 @@ This is O(n) in the number of cards, needs no search over combinations, and give
 | `Card` is a game-agnostic **record** (rank + suit). | A deck of cards is reused by poker, bridge, solitaire. A king's blackjack value (10) is a *rule of this game*, not a fact about the card. | Putting `getValue()` returning 10 for K on `Card` — breaks every other game. |
 | Blackjack value in `BlackjackScoring`, not a `BlackjackCard` subclass. | Records cannot be extended, and the value depends only on the rank. A function is simpler and keeps one card type in the shoe. | The course's `BlackjackCard extends Card` — also valid, and also keeps `Card` clean. Say both in the interview; the important point is the same. |
 | `Deck<T>` is **generic**. | "Design a deck of cards" follow-up: Uno or tarot cards reuse the same shuffle/draw code. | A deck hard-wired to `Card`. |
-| **Strategy** for players (`PlayerStrategy`) and dealer (`DealerPolicy`). | Human UI, bots and test scripts plug in; casino variants (S17 vs H17) are one line. Open/Closed principle. | `if (isHuman) ... else ...` and `if (casino == X)` branches inside the game. |
+| **Strategy** for players (`PlayerStrategy`) and dealer (`DealerPolicy`). | Human UI, bots and test scripts plug in; casino variants (S17 vs H17: dealer stands on soft 17 vs hits soft 17) are one line. Open/Closed principle (add new behaviour with new classes, without editing working code). | `if (isHuman) ... else ...` and `if (casino == X)` branches inside the game. |
 | **Factory methods** `Deck.standard52()`, `Shoe.stacked(...)`, `DealerPolicy.standOnAll17()`. | Named constructors make intent obvious. | Big constructors with flags. |
 | Randomness injected (`Random` passed into `Shoe`). | Seeded shuffles make demos and tests exact. | `Collections.shuffle(list)` with a hidden random source. |
 | `Hand` answers with `hardTotal()`, `bestTotal()` and `isSoft()`. | The course's `Hand` returns *every* possible total (A+6 is both 7 and 17) and lets the caller choose. Because at most one ace can ever count as 11, the hard total plus the soft flag already carries all of that information, and most callers just want `bestTotal()`. | Returning a list of totals that each caller must filter. |
 | Hand stores its **own bet**. | Split and double change the bet *per hand*, not per player. | One bet per player — breaks as soon as a player splits. |
-| The game **validates** a strategy's choice (`canDouble`, `canSplit` passed in, and re-checked). | A buggy or malicious client cannot double without money. | Trusting the client. |
+| The game **validates** a strategy's choice (`canDouble`, `canSplit` passed in, and re-checked). | A buggy or malicious client (the program sending the player's choices) cannot double without money. | Trusting the client. |
 
-**Honest weaknesses (and what a longer design would do).** `BlackjackGame.playRound` owns the whole sequence of play *and* the payout rules. Each new option (surrender, side bets) adds another branch. A larger design would model the round as a **State** machine (one class per state in the diagram above, like the vending machine in Chapter 14) and move payouts into a `PayoutTable`. Say this out loud; interviewers reward knowing where your design will strain.
+**Honest weaknesses (and what a longer design would do).** `BlackjackGame.playRound` owns the whole sequence of play *and* the payout rules. Each new option (surrender, side bets) adds another branch. A larger design would model the round as a **State** machine (a fixed set of states plus the allowed moves between them; the State pattern gives each state its own class — one class per state in the diagram above, like the vending machine in Chapter 14) and move payouts into a `PayoutTable`. Say this out loud; interviewers reward knowing where your design will strain.
 
 ### Java implementation
 
@@ -976,8 +980,8 @@ Round 5:
 
 ### Concurrency & edge cases
 
-- **One table = one thread.** A round is a strict sequence, so the simplest safe design runs each table's rounds on a single thread (or an actor/event loop) and funnels player commands into it. Many tables run in parallel; they share nothing except the wallet service.
-- **Balances are shared across tables** in a real casino app. Move `debit`/`credit` into a wallet service with atomic operations (a database transaction or `AtomicLong`/`synchronized` in memory) and debit *before* dealing.
+- **One table = one thread.** A **thread** is one independent line of execution in a program; a server runs many side by side. A round is a strict sequence, so the simplest safe design runs each table's rounds on a single thread (or an actor/event loop — a single worker that processes incoming messages one at a time from its own queue) and funnels player commands into it. Many tables run in parallel; they share nothing except the wallet service.
+- **Balances are shared across tables** in a real casino app. Move `debit`/`credit` into a wallet service with atomic operations — ones that happen as a single indivisible step no other thread can interrupt (a database transaction, i.e. a group of changes that all succeed or all fail, or `AtomicLong`/`synchronized` in memory; `synchronized` lets only one thread at a time run that code) and debit *before* dealing.
 - **Odd antes and 3:2.** 3:2 on 5 chips is 7.5. We require even antes. Real casinos either round down or use smaller chip units — decide and state it.
 - **Split aces.** Many casinos deal only one card to each split ace, and 21 after a split is *not* a blackjack (our `isBlackjack()` checks `fromSplit`).
 - **Shoe exhaustion.** The cut card triggers a reshuffle *between* rounds; the shoe also refills if emptied mid-round. A stacked test shoe throws instead, so a wrong test fails loudly.
@@ -989,14 +993,14 @@ Round 5:
 - **"Where would even money go?"** — It is the same as insurance for a player holding blackjack: insurance of half the ante plus a blackjack always nets exactly +1× the ante whatever the dealer has. Add `PlayerStrategy.takeEvenMoney(hand)` and, if accepted, settle that hand at 1:1 before the peek.
 - **"Add surrender."** — New `Action.SURRENDER`, allowed only as the first decision; refund half the bet and end the hand.
 - **"Several players at the table?"** — Already supported: the game iterates players in seat order, then the dealer plays once.
-- **"Card counting detection / security?"** — Shoe penetration (cut card) already limits counting. Log every dealt card for audit; never send the hole card to clients until it is revealed.
+- **"Card counting detection / security?"** — Card counting is tracking which cards have gone to guess what is left. Shoe penetration (how deep into the shoe the cut card sits) already limits counting. Log every dealt card for audit (a later independent check of what happened); never send the hole card to clients until it is revealed.
 - **"How would you test the dealer rule?"** — Stacked shoe + `DealerPolicy.hitSoft17()`: deal the dealer A+6 and assert it draws; with `standOnAll17()` assert it stands.
 - **"Make the deck work for Uno."** — `Deck<UnoCard>` with its own factory; nothing else changes.
 - **"Replace the round logic with a state machine."** — One class per state (Betting, Dealing, PlayerTurns, DealerTurn, Settled), each handling only the commands valid in that state; invalid commands are rejected by the current state.
 
 ### Real-world example
 
-Online casino tables (for example live-dealer blackjack products) separate exactly these concerns: a **shuffle/RNG service** that is certified and audited (gambling regulators, for example the UK Gambling Commission, require the random number generator to be independently tested), a **game engine** that enforces the table rules (number of decks, S17 or H17, payout 3:2 or 6:5 — printed on the physical table felt), and a **wallet** service that debits bets atomically. The rule variants are configuration, which is exactly why `DealerPolicy` is a strategy.
+Online casino tables (for example live-dealer blackjack products) separate exactly these concerns: a **shuffle/RNG service** that is certified and audited (gambling regulators, for example the UK Gambling Commission, require the random number generator to be independently tested), a **game engine** that enforces the table rules (number of decks, S17 or H17, payout 3:2 or 6:5 — printed on the physical table felt), and a **wallet** service that debits bets atomically. The rule variants are configuration (settings chosen at deploy time, not code), which is exactly why `DealerPolicy` is a strategy.
 
 ### In the interview
 
@@ -1040,7 +1044,7 @@ Online casino tables (for example live-dealer blackjack products) separate exact
 |---|---|
 | Full international rules? | Yes: every piece's moves, captures, check, checkmate, stalemate, castling, en passant, promotion. |
 | How are sides chosen? | Randomly assigned white or black (`Game.withRandomSides`, with an injected `Random`); **white moves first**; players alternate. |
-| Can players take moves back? | Not in a rated game (course requirement). We still support `undo()` for analysis mode and tests. |
+| Can players take moves back? | Not in a rated game (one that counts toward the players' official ratings; course requirement). We still support `undo()` for analysis mode and tests. |
 | How can a game end? | Checkmate, stalemate (a draw), resignation, or forfeit. |
 | Move log? | Yes — every move by both players is recorded. |
 | Timers, rating, spectators, draw by repetition? | Out of scope; discussed in Extensions. |
@@ -1064,7 +1068,7 @@ Online casino tables (for example live-dealer blackjack products) separate exact
 
 - Adding a new piece type (for a chess variant) should not touch existing pieces (Open/Closed).
 - Legality checks must be correct first; speed is a secondary concern for a two-human game.
-- Online play: the game object must be safe when two player connections call it concurrently.
+- Online play: the game object must be safe when two player connections call it concurrently (at the same time, from different threads).
 
 ### Use cases
 
@@ -1098,14 +1102,14 @@ The figure above shows the full decision chain for one move. We follow the same 
 |---|---|
 | `Color` (enum) | WHITE/BLACK and `opposite()`. |
 | `Position` (record) | A square (file a–h, rank 1–8). Validates bounds; parses "e4". The course calls this a *Box*. |
-| `Piece` (abstract, sealed) | Colour + `targets(board, from)`: where it can move by its own rules. `attacks(...)` for check detection. |
+| `Piece` (abstract — cannot be created directly, only through subclasses; sealed — only listed subclasses allowed) | Colour + `targets(board, from)`: where it can move by its own rules. `attacks(...)` for check detection. |
 | `King`, `Knight`, `Pawn` | Step pieces and the pawn's special forward/diagonal rule. |
 | `SlidingPiece` → `Rook`, `Bishop`, `Queen` | Share one "slide until blocked" loop; each subclass only lists its directions. |
 | `Board` | 8×8 grid of pieces; `copy()`, `kingOf(color)`, `isAttacked(square, byColor)`, `render()`. No turn or history knowledge. |
 | `Move` (record) + `MoveType` (enum) | A move as data: from, to, type (NORMAL, CASTLE_KINGSIDE, CASTLE_QUEENSIDE, EN_PASSANT, PROMOTION), promotion piece. |
 | `CastlingRights` (record) | The four castling permissions; how they change after a move. |
-| `Rules` | Stateless rules engine: pseudo-legal moves, legal moves (king-safety filter), special moves, `apply(board, move)`, `isInCheck`. |
-| `Game` | Turn, status, winner, en passant square, castling rights, move log, undo (Command + Memento), resign, forfeit, random side assignment. Thread-safe. |
+| `Rules` | Stateless (keeps no data between calls) rules engine: pseudo-legal moves (allowed by piece movement, before the king-safety check), legal moves (king-safety filter), special moves, `apply(board, move)`, `isInCheck`. |
+| `Game` | Turn, status, winner, en passant square, castling rights, move log, undo (Command + Memento — patterns explained below), resign, forfeit, random side assignment. Thread-safe (correct even when several threads call it at once). |
 | `Player` (record), `GameStatus` (enum), `IllegalMoveException` | Supporting types. |
 
 ### Class diagram
@@ -1238,20 +1242,20 @@ stateDiagram-v2
 
 This is a one-ply (one move deep) search, which is all the *rules* need. Searching deeper is what a chess *engine* does to choose good moves — not required for enforcing rules.
 
-**Cost:** at most ~200 pseudo-legal moves, each checked with an attack scan over ≤16 pieces — trivial for a human game. A production engine would use bitboards and incremental attack maps; mention it only if asked.
+**Cost:** at most ~200 pseudo-legal moves, each checked with an attack scan over ≤16 pieces — trivial for a human game. A production engine would use bitboards (each piece type's squares packed into one 64-bit number, so set operations become fast bit tricks) and incremental attack maps (attacked squares updated per move instead of recomputed); mention it only if asked.
 
 ### Design decisions & patterns used
 
 | Decision | Why | Alternative rejected |
 |---|---|---|
 | **Polymorphic pieces** (`targets` overridden per piece), **Template-like** `SlidingPiece`. | Each piece's rule lives in its own class; the blocked-path loop is written once for three pieces. | One giant `switch (pieceType)` in the board. |
-| **Sealed** hierarchy (`sealed ... permits`). | The set of chess pieces is closed; the compiler knows all subclasses, so `switch` on type can be exhaustive. | Open hierarchy — fine too for variants; say so. |
-| Pieces are **immutable**; `Board.copy()` copies references only. | Trial moves and snapshots are cheap and safe. | Mutable pieces with `hasMoved` flags — then undo must restore every flag. |
+| **Sealed** hierarchy (`sealed ... permits`). | The set of chess pieces is closed; the compiler knows all subclasses, so `switch` on type can be exhaustive (the compiler checks every case is handled). | Open hierarchy — fine too for variants; say so. |
+| Pieces are **immutable**; `Board.copy()` copies references (pointers to the same piece objects) only. | Trial moves and snapshots are cheap and safe. | Mutable pieces with `hasMoved` flags — then undo must restore every flag. |
 | **History-based rules in `Rules`/`Game`**, not in pieces. | Castling rights and en passant depend on earlier moves. The course notes that a piece seeing only the board cannot know this. | Letting `King` look up history — couples a piece to the game log. |
 | `Move` carries a **`MoveType`**. | One move can move two pieces (castling) or capture off-square (en passant). | Special-casing in `Game` (the course's `move_castling_rook`), which breaks "rules live in one place". |
-| **Command + Memento** for undo. `Move` is the command; `Snapshot` is the memento of the state before it. | Restoring a snapshot is always correct, even for promotion/castling/en passant, with no inverse logic. | Pure Command with `undo()` per move type — works, but every special move needs a hand-written inverse, a common bug source. |
+| **Command + Memento** for undo. `Move` is the command (an action stored as an object); `Snapshot` is the memento (a saved copy of an object's state that can be restored later) of the state before it. | Restoring a snapshot is always correct, even for promotion/castling/en passant, with no inverse logic. | Pure Command with `undo()` per move type — works, but every special move needs a hand-written inverse, a common bug source. |
 | **Factory method** `Piece.create(type, color)`. | Used by board set-up and promotion. | `new` calls scattered around. |
-| `Game` methods are `synchronized`. | Two player connections may call `move`/`resign` at the same time. | No locking — race between a move and a resignation. |
+| `Game` methods are `synchronized`. | Two player connections may call `move`/`resign` at the same time. | No locking — race (result depends on which thread runs first) between a move and a resignation. |
 
 **Memento vs incremental undo — trade-off.** A snapshot of an 8×8 reference array is 64 references (~0.5 KB): nothing for a human game (a few hundred moves). An engine searching millions of positions would instead store only what the move changed (captured piece, old castling rights, old en passant square) and reverse it. Know both.
 
@@ -2117,28 +2121,28 @@ public final class Main {
 
 ### Concurrency & edge cases
 
-- **Two players, one game.** `Game`'s public methods are `synchronized`, so a move and a resignation cannot interleave. For a server with thousands of games, each game gets its own lock (the object's monitor) — games do not block each other.
+- **Two players, one game.** `Game`'s public methods are `synchronized`, so a move and a resignation cannot interleave (have their steps mixed together). For a server with thousands of games, each game gets its own lock (the object's monitor — the built-in lock every Java object carries, which `synchronized` uses) — games do not block each other.
 - **Moving out of turn / game over / empty square** — rejected with a clear message before any rule work.
-- **Pins and discovered checks** — handled automatically by the "apply to a copy and test the king" filter.
+- **Pins and discovered checks** (a *pin* is a piece that cannot move because it shields its king; a *discovered check* is a check revealed when a blocking piece moves away) — handled automatically by the "apply to a copy and test the king" filter.
 - **Castling through check** — explicitly tested for the squares the king crosses and lands on; the rook's crossing square on the queenside (b1/b8) may be attacked — that is legal. Section 4 of the output shows both refusals with their reason (`Rules.whyCannotCastle`): passing through an attacked f1, and castling while in check; once the check is blocked the same castle is accepted.
 - **Castling rights** are lost when the king moves, when that rook moves, or when that rook is **captured** on its corner (we check both `from` and `to`).
 - **En passant expires** after one move: the square is reset on every move unless a pawn just advanced two.
 - **Promotion without a choice** defaults to a queen; underpromotion (knight, rook, bishop) is supported.
-- **Not implemented, but should be named:** draw by threefold repetition, the 50-move rule, insufficient material (e.g. king vs king), clocks/timeouts, draw offers.
+- **Not implemented, but should be named:** draw by threefold repetition (the same position occurs three times), the 50-move rule (50 moves each with no capture or pawn move), insufficient material (e.g. king vs king), clocks/timeouts, draw offers.
 
 ### Extensions & follow-up questions
 
-- **"Add threefold repetition."** — Keep a `Map<PositionKey, Integer>` where the key is (board, side to move, castling rights, en passant square). Production engines hash this with Zobrist hashing. Three occurrences → draw.
-- **"Add a 50-move rule."** — A half-move clock reset on every pawn move or capture; at 100 half-moves either player may claim a draw.
-- **"Add chess clocks."** — A `Clock` per player; the server stamps time on each move; a flag-fall ends the game (Observer notifies both clients).
-- **"Add an AI player."** — A `MoveStrategy` that picks from `legalMoves()`; a real one runs minimax with alpha-beta pruning.
-- **"Support Chess960 or a new piece."** — New `Piece` subclass (e.g. an Archbishop = bishop + knight) and a different starting-position factory; existing pieces are untouched.
-- **"Spectators and UI updates."** — Observer: `GameListener.onMove(notation)`. The course mentions a `GameController` (takes input, calls `Game`) and a `GameView` (redraws) — that is the MVC split from Chapter 11.
-- **"Why is `Position` a record?"** — It is a value: two `e4`s are equal. Records give `equals`/`hashCode` for free, which `List.contains` relies on.
+- **"Add threefold repetition."** — Keep a `Map<PositionKey, Integer>` where the key is (board, side to move, castling rights, en passant square). Production engines hash this (turn it into one compact number for quick comparison) with Zobrist hashing, which combines a random number per piece-and-square. Three occurrences → draw.
+- **"Add a 50-move rule."** — A half-move (one player's move) clock reset on every pawn move or capture; at 100 half-moves either player may claim a draw.
+- **"Add chess clocks."** — A `Clock` per player; the server stamps time on each move; a flag-fall (a player's time running out) ends the game (Observer — listeners register once and are told about every change — notifies both clients).
+- **"Add an AI player."** — A `MoveStrategy` that picks from `legalMoves()`; a real one runs minimax (search ahead, assuming you pick your best move and the opponent picks the move worst for you) with alpha-beta pruning (skipping branches that provably cannot change the answer).
+- **"Support Chess960 (a variant with a shuffled back row) or a new piece."** — New `Piece` subclass (e.g. an Archbishop = bishop + knight) and a different starting-position factory; existing pieces are untouched.
+- **"Spectators and UI updates."** — Observer: `GameListener.onMove(notation)`. The course mentions a `GameController` (takes input, calls `Game`) and a `GameView` (redraws) — that is the MVC (Model–View–Controller: data, display and input handling kept in separate classes) split from Chapter 11.
+- **"Why is `Position` a record?"** — It is a value: two `e4`s are equal. Records give `equals`/`hashCode` (the methods Java uses to decide if two objects are equal and to place them in hash tables) for free, which `List.contains` relies on.
 
 ### Real-world example
 
-Online chess sites such as Lichess and Chess.com treat the **server** as the source of truth: the board in your browser is only a view, and a move counts only after the server has accepted it as legal. Games are exported in PGN (Portable Game Notation — a move log like ours) and positions in FEN (Forsyth–Edwards Notation — one line describing the board, side to move, castling rights and en passant square, i.e. exactly the fields of our `Snapshot`). "Takeback" is offered only when the opponent agrees, and then the server undoes the move — the same `undo()` our `Game` exposes.
+Online chess sites such as Lichess and Chess.com treat the **server** as the source of truth (the one copy whose data wins whenever copies disagree): the board in your browser is only a view, and a move counts only after the server has accepted it as legal. Games are exported in PGN (Portable Game Notation — a move log like ours) and positions in FEN (Forsyth–Edwards Notation — one line describing the board, side to move, castling rights and en passant square, i.e. exactly the fields of our `Snapshot`). "Takeback" is offered only when the opponent agrees, and then the server undoes the move — the same `undo()` our `Game` exposes.
 
 ### In the interview
 
@@ -2323,9 +2327,9 @@ stateDiagram-v2
 | **Strategy** for player moves. | Human, random, rule-based, network or minimax players plug in; `Game` never changes. | `if (player.isComputer())` branches in `Game`. |
 | Counters inside `Board` (not a separate "WinChecker" that scans). | O(1) check, kept next to the data it summarises. | Scanning all lines each move — O(N²) and duplicated for "would win". |
 | Board returns "won?" from `place`. | The only moment a win can appear is right after a move. | Separate `checkWinner()` that the caller might forget to call. |
-| Invalid move → exception from `Board`, caught by `Game`. | The board protects its invariant; the game decides the policy (retry). | Silently ignoring a bad move. |
+| Invalid move → exception from `Board`, caught by `Game`. | The board protects its invariant (a fact that must always stay true, e.g. one mark per cell); the game decides the policy (retry). | Silently ignoring a bad move. |
 | Seeded `Random` injected into `RandomStrategy`. | Repeatable demos/tests. | `Math.random()` inside the bot. |
-| Players as a list + index `current = (current+1) % size`. | Works for any number of players. | Hard-coded X/O toggling. |
+| Players as a list + index `current = (current+1) % size` (`%` is remainder, so the index wraps back to 0). | Works for any number of players. | Hard-coded X/O toggling. |
 
 ### Java implementation
 
@@ -2636,16 +2640,16 @@ public final class Main {
 
 ### Concurrency & edge cases
 
-- **Many games on one server:** each `Game` owns its own `Board`, so games share nothing. Keep them in a `ConcurrentHashMap<gameId, Game>` and process each game's moves one at a time (per-game lock or single-threaded actor).
+- **Many games on one server:** each `Game` owns its own `Board`, so games share nothing. Keep them in a `ConcurrentHashMap<gameId, Game>` (a hash map that many threads can read and write safely at once) and process each game's moves one at a time (per-game lock or single-threaded actor).
 - **Two clicks at once from the same game:** make `playTurn`/a `makeMove(player, cell)` method `synchronized` and check that the caller is the current player.
-- **Edge cases:** move after game over (rejected with `IllegalStateException`); off-board or occupied cell (rejected, same player retries); a scripted strategy running out of moves (returns `null` → fail fast in tests); N = 3 minimum.
+- **Edge cases:** move after game over (rejected with `IllegalStateException`, Java's standard "not allowed right now" error); off-board or occupied cell (rejected, same player retries); a scripted strategy running out of moves (returns `null` → fail fast, i.e. stop with a clear error at once, in tests); N = 3 minimum.
 - **A cell on both diagonals** (the centre of an odd board) updates both diagonal counters — handled by two independent `if`s.
 
 ### Extensions & follow-up questions
 
 - **"Win with K in a row on an N×N board (Gomoku, K = 5)?"** — Counters no longer work because lines are shorter than the board. After each move, walk out from the new cell in the 4 directions (horizontal, vertical, two diagonals) and count consecutive own marks: O(K) per move.
-- **"Unbeatable AI?"** — Minimax over the game tree (tic-tac-toe 3×3 has at most 9! move orders, easily searched); add alpha-beta pruning or memoisation for larger boards. Plug it in as another `MoveStrategy`.
-- **"Undo?"** — Store moves in a stack; undo = clear the cell and **decrement** the counters (counters are reversible, unlike a boolean "won" flag).
+- **"Unbeatable AI?"** — Minimax over the game tree (every possible sequence of moves drawn as a branching tree; tic-tac-toe 3×3 has at most 9! = 362,880 move orders, easily searched); add alpha-beta pruning or memoisation (caching the result for each position already evaluated) for larger boards. Plug it in as another `MoveStrategy`.
+- **"Undo?"** — Store moves in a stack (last in, first out); undo = clear the cell and **decrement** the counters (counters are reversible, unlike a boolean "won" flag).
 - **"Online multiplayer?"** — Server holds the `Game`; clients send `makeMove(gameId, playerId, cell)`; the server broadcasts the new state (Observer).
 - **"Replay a game?"** — The move list plus `ScriptedStrategy` replays it exactly.
 
@@ -2688,7 +2692,7 @@ Google Search has a built-in tic-tac-toe game (search "tic tac toe") with diffic
 | How many dice? | Configurable: count and faces (default one six-sided die). |
 | How many players? | Two or more; all start off the board (square 0). |
 | Overshooting the last square? | Configurable: **exact finish** (stay put) or **bounce back**. |
-| Rolling a six? | Common house rule: roll again; three sixes in a row cancels the whole turn. Configurable on/off. |
+| Rolling a six? | Common house rule (an optional rule some players add): roll again; three sixes in a row cancels the whole turn. Configurable on/off. |
 | When does the game end? | Configurable: **first to finish** wins, or keep playing to **rank everyone**. |
 | Several games at once? | Yes, independent sessions (e.g. many groups online). |
 
@@ -2722,7 +2726,7 @@ Actors: **Player** (rolls the dice — or the system rolls for them), **Game adm
 | `Jump` (record) | A snake or a ladder: `start → end`. One class, because the behaviour is identical ("land on start, move to end"); `isSnake()` is just `end < start`. |
 | `Board` | Size + `Map<start, Jump>` for O(1) lookup; validates configuration. |
 | `Dice` (interface) | `roll()`, `maxRoll()`. `RandomDice` (count, faces, seeded `Random`), `LoadedDice` (scripted rolls for tests). |
-| `OverflowRule` (functional interface) | Where a roll past the end lands: `exactFinish()` or `bounceBack()`. |
+| `OverflowRule` (functional interface — exactly one method, so a lambda, a short unnamed function like `x -> x + 1`, can implement it) | Where a roll past the end lands: `exactFinish()` or `bounceBack()`. |
 | `WinStrategy` (functional interface) | When the game ends: `firstToFinish()` or `rankAll()`. |
 | `Rules` (record) | Bundles a variant: overflow rule, win strategy, six-rolls-again flag, max bonus rolls. |
 | `Player` | Name and position. |
@@ -2730,7 +2734,7 @@ Actors: **Player** (rolls the dice — or the system rolls for them), **Game adm
 
 ### Class diagram
 
-There is no course lesson for this problem; it comes from the *awesome-low-level-design* problem set. That statement asks for: a board of numbered cells (usually 100); predefined snakes and ladders; several players, each with a token; turn-based dice rolls; sliding down a snake's head to its tail and climbing a ladder's foot to its top; a win on reaching the last cell; and many independent game sessions running at once (its reference solution uses a singleton `GameManager` with one thread per session). All of these are covered; part 6 of the output runs eight sessions in parallel.
+There is no course lesson for this problem; it comes from the *awesome-low-level-design* problem set. That statement asks for: a board of numbered cells (usually 100); predefined snakes and ladders; several players, each with a token; turn-based dice rolls; sliding down a snake's head to its tail and climbing a ladder's foot to its top; a win on reaching the last cell; and many independent game sessions running at once (its reference solution uses a singleton — a class with only one global instance — `GameManager` with one thread per session). All of these are covered; part 6 of the output runs eight sessions in parallel.
 
 ```mermaid
 classDiagram
@@ -2825,9 +2829,9 @@ flowchart TD
 | **Strategy** for `Dice`, `OverflowRule`, `WinStrategy`. | House rules vary a lot; each is swappable. Lambdas keep them tiny. | Flags and `if`s in the game loop. |
 | `Rules` record groups a variant. | One object = one rule set ("classic", "kids", "tournament"); easy to pass around. | Many constructor parameters on `Game`. |
 | **Queue** of players. | Natural turn order; finished players simply are not re-queued. | Index arithmetic that must skip finished players. |
-| Event log via `Consumer<String>`. | The engine does not print; the caller decides (console, UI, nothing). A full design would use **Observer** (`GameListener.onMove/onSnake/onLadder/onWin`). | `System.out.println` inside the engine. |
+| Event log via `Consumer<String>` (a built-in "takes a value, returns nothing" function type). | The engine does not print; the caller decides (console, UI, nothing). A full design would use **Observer** (`GameListener.onMove/onSnake/onLadder/onWin`). | `System.out.println` inside the engine. |
 | Validation in the `Board` constructor (fail fast). | The loop can trust the board. | Detecting a loop mid-game. |
-| `play(maxTurns)` guard. | A misconfigured rule set can never hang a server thread. | An unbounded `while (true)`. |
+| `play(maxTurns)` guard. | A misconfigured rule set can never hang (loop forever and never finish) a server thread. | An unbounded `while (true)`. |
 
 ### Java implementation
 
@@ -3247,11 +3251,11 @@ public final class Main {
   same as running each session alone? yes
 ```
 
-**Reading the output.** Part 1 uses loaded dice to force every rule: Ann climbs 4→14, Bob rolls a 6 and gets a bonus roll that lands on the 9→31 ladder, Ann hits the 17→7 snake, and Bob's three sixes void his turn (he goes back to 31). Part 2 compares overflow rules from square 97 with a roll of 5: exact-finish stays, bounce-back goes to 100 and back 2 to 98. Part 3 shows bad boards rejected. Part 4 is a full seeded game; Part 5 replays with different rules and ranks every player. Part 6 runs eight games with different seeds on eight threads at the same time and checks that each winner is exactly what the same seed gives when that game runs alone — proof that sessions share no mutable state.
+**Reading the output.** Part 1 uses loaded dice to force every rule: Ann climbs 4→14, Bob rolls a 6 and gets a bonus roll that lands on the 9→31 ladder, Ann hits the 17→7 snake, and Bob's three sixes void his turn (he goes back to 31). Part 2 compares overflow rules from square 97 with a roll of 5: exact-finish stays, bounce-back goes to 100 and back 2 to 98. Part 3 shows bad boards rejected. Part 4 is a full seeded game; Part 5 replays with different rules and ranks every player. Part 6 runs eight games with different seeds on eight threads at the same time and checks that each winner is exactly what the same seed gives when that game runs alone — proof that sessions share no mutable state (data that can be changed after creation).
 
 ### Concurrency & edge cases
 
-- **Many sessions:** each `Game` owns its players, queue and dice. Give **each game its own `Random`** (sharing one `java.util.Random` across threads is thread-safe but becomes a contention point and breaks per-game reproducibility). Keep games in a `ConcurrentHashMap` and run each game's turns on one thread at a time.
+- **Many sessions:** each `Game` owns its players, queue and dice. Give **each game its own `Random`** (sharing one `java.util.Random` across threads is thread-safe but becomes a contention point — many threads waiting on the same shared object — and breaks per-game reproducibility). Keep games in a `ConcurrentHashMap` and run each game's turns on one thread at a time.
 - **Rolling after the game ends** → `IllegalStateException`.
 - **A player on the last square** is removed from the queue, so they are never asked to roll again.
 - **Bonus roll that finishes the game** stops immediately — no roll after reaching 100.
@@ -3262,9 +3266,9 @@ public final class Main {
 ### Extensions & follow-up questions
 
 - **"Add special cells (skip a turn, extra move, teleport)."** — Generalise `Jump` into a `CellEffect` interface (`apply(player, game)`); snakes and ladders become two implementations.
-- **"Two dice, or a 1–12 die?"** — `new RandomDice(2, 6, rng)`; `maxRoll()` is 12, so the bonus rule triggers on double-max. Note that 2d6 is not uniform (7 is the most likely), which changes game balance.
+- **"Two dice, or a 1–12 die?"** — `new RandomDice(2, 6, rng)`; `maxRoll()` is 12, so the bonus rule triggers on double-max. Note that 2d6 (two six-sided dice added together) is not uniform — not every total is equally likely (7 is the most likely), which changes game balance.
 - **"Players must roll a 6 to enter the board."** — A new rule strategy: `EntryRule` checked when position is 0.
-- **"Pause and resume."** — Serialize the game state (positions, queue order, and the dice's state — or a seed plus number of rolls so far).
+- **"Pause and resume."** — Serialize (turn into bytes or text that can be saved and loaded back) the game state (positions, queue order, and the dice's state — or a seed plus number of rolls so far).
 - **"Real-time UI / spectators?"** — Observer: publish `PlayerMoved`, `SnakeBitten`, `LadderClimbed`, `PlayerFinished` events.
 - **"Random board generation?"** — A `BoardGenerator` with a seed, calling the same validating constructor.
 
@@ -3300,7 +3304,7 @@ Online multiplayer board-game apps (for example Ludo King, which also offers a S
 
 **2048** is a single-player sliding puzzle on a 4×4 grid. Each move (left, right, up, down) slides every tile as far as possible in that direction. Two tiles with the **same value** that collide **merge** into one tile with double the value, and the merged value is added to the **score**. After every move that changes the board, a new tile (a 2 most of the time, sometimes a 4) appears in a random empty cell. You "win" by making a 2048 tile; the game is **over** when no move can change the board.
 
-There is no course lesson for this problem. The problem statement is the common machine-coding version (the "2048" exercise found in LLD practice lists such as Tharun's and on machine-coding sites): start with **two tiles numbered 2** at random positions; after every move insert a random tile in a random empty cell; tiles slide until stopped by another tile or the edge; two equal tiles that collide merge into their sum; if **three** equal tiles line up, the pair **nearest the wall you move toward** merges; if **four** are equal, the first two and the last two merge; win at 2048; lose when there is no empty cell and no two equal neighbours; read moves from the command line as **0 = left, 1 = right, 2 = up, 3 = down**. Every one of those rules is in the design below.
+There is no course lesson for this problem. The problem statement is the common machine-coding (an interview round where you write working code for a small system in 1–2 hours) version (the "2048" exercise found in LLD practice lists such as Tharun's and on machine-coding sites): start with **two tiles numbered 2** at random positions; after every move insert a random tile in a random empty cell; tiles slide until stopped by another tile or the edge; two equal tiles that collide merge into their sum; if **three** equal tiles line up, the pair **nearest the wall you move toward** merges; if **four** are equal, the first two and the last two merge; win at 2048; lose when there is no empty cell and no two equal neighbours; read moves from the command line as **0 = left, 1 = right, 2 = up, 3 = down**. Every one of those rules is in the design below.
 
 | Question | Assumed answer |
 |---|---|
@@ -3338,7 +3342,7 @@ Actor: **Player**. Use cases: *start new game*, *make a move* (includes *slide a
 | Class | Responsibility |
 |---|---|
 | `Direction` (enum) | LEFT, RIGHT, UP, DOWN; `fromKey(0..3)` maps the command-line codes. |
-| `LineMerger` | Pure function: slide and merge **one line toward index 0**; returns the new line and points. |
+| `LineMerger` | Pure function (output depends only on input; changes nothing else): slide and merge **one line toward index 0**; returns the new line and points. |
 | `Board` | N×N values; maps each direction onto lines for `LineMerger`; `slide`, `hasMove`, `maxTile`, `emptyCells`, `render`. |
 | `TileSpawner` (interface) / `RandomTileSpawner` | Adds a new tile; seeded `Random`, 90% twos. `spawnStart` places the two starting tiles (always 2s). |
 | `GameStatus` (enum) | PLAYING, WON, LOST. |
@@ -3448,7 +3452,7 @@ stateDiagram-v2
 | Decision | Why | Alternative rejected |
 |---|---|---|
 | **One pure `LineMerger`** + direction→coordinates mapping. | The tricky rule is written and tested once (DRY — "Don't Repeat Yourself"). | Four copies of nested loops (`moveLeft`, `moveRight`...) — classic bug farm. |
-| `LineMerger` is a **pure function** (no state). | Trivial to unit test (Part 1 of the output). | Merge logic mixed with board mutation. |
+| `LineMerger` is a **pure function** (no state). | Trivial to unit test (test one small piece of code on its own; Part 1 of the output). | Merge logic mixed with board mutation. |
 | **Strategy** for spawning (`TileSpawner`). | Seeded tests, "evil" spawner, different probabilities for variants. | `Math.random()` inside `Board`. |
 | "No change = no turn" detected by comparing each written cell. | Matches the real game; prevents spawning on a no-op. | Always spawning — makes the game unwinnable/unfair. |
 | `Board.of(int[][])` factory for preset boards. | Game-over and edge-case tests without playing to that position. | Only random starts — untestable edge cases. |
@@ -3833,10 +3837,10 @@ public final class Main {
 
 ### Concurrency & edge cases
 
-- Single-player and single-threaded by nature. If a UI thread and an input thread both call `move`, make `move` `synchronized` (or post moves to the UI event queue).
+- Single-player and single-threaded by nature. If a UI thread (the thread that draws the screen) and an input thread both call `move`, make `move` `synchronized` (or post moves to the UI event queue — the list of pending clicks, key presses and redraws that the UI thread handles one by one).
 - **Key repeat / double input:** a no-op move returns `false` and changes nothing, so extra key presses are harmless.
 - **Spawning needs an empty cell:** guaranteed, because a changed board after sliding always has at least one empty cell (tiles only move into gaps or merge, which frees a cell). The spawner still checks and throws if not.
-- **Integer overflow:** not reachable on 4×4 (the maximum possible tile is 2^17 = 131072); a very large board would still fit an `int` for any practical game.
+- **Integer overflow** (a number growing past the largest value its type can hold, so it wraps around to a wrong value): not reachable on 4×4 (the maximum possible tile is 2^17 = 131072); a very large board would still fit an `int` for any practical game.
 - **Merge order matters:** `[2,2,2]` moving left is `[4,2,0]` — the pair nearest the wall merges first.
 
 ### Extensions & follow-up questions
@@ -3850,7 +3854,7 @@ public final class Main {
 
 ### Real-world example
 
-2048 was created by Gabriele Cirulli in 2014 and released as open-source JavaScript; its code has the same separation: a grid model, a game manager that handles moves, merges, score and "keep playing" after a win, and a separate view that animates tiles. Its new tiles are 2 with 90% probability and 4 with 10%, the same rule our `RandomTileSpawner` uses.
+2048 was created by Gabriele Cirulli in 2014 and released as open-source (its code is public for anyone to read and reuse) JavaScript; its code has the same separation: a grid model, a game manager that handles moves, merges, score and "keep playing" after a win, and a separate view that animates tiles. Its new tiles are 2 with 90% probability and 4 with 10%, the same rule our `RandomTileSpawner` uses.
 
 ### In the interview
 

@@ -47,17 +47,17 @@ java -cp /tmp/lld_12 lld.ch12.threads.Main
 ## 12.1 Concurrency vs parallelism
 
 ### What it is
-- **Concurrency** is about *dealing with* many things at once: the program is structured as several tasks whose lifetimes overlap. They may take turns on one CPU core.
+- **Concurrency** is about *dealing with* many things at once: the program is structured as several tasks whose lifetimes overlap. They may take turns on one **CPU core** (one independent processing unit inside the processor; a modern CPU has several).
 - **Parallelism** is about *doing* many things at once: tasks literally execute at the same instant on different CPU cores.
 
 **Analogy.** One chef cooking three dishes, switching between them while each simmers, is *concurrent*. Three chefs each cooking one dish at the same time is *parallel*. A restaurant with three chefs who also switch between dishes is both.
 
 ### The problem it solves
-Programs wait a lot — for disks, networks, databases, users. Concurrency lets the program do useful work while one task waits (better *responsiveness* and *throughput*). Parallelism lets CPU-heavy work (sorting, image processing) finish sooner by using all cores (better *speed-up*).
+Programs wait a lot — for disks, networks, databases, users. Concurrency lets the program do useful work while one task waits (better *responsiveness* and *throughput* — how much work gets finished per second; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)). Parallelism lets CPU-heavy work (sorting, image processing) finish sooner by using all cores (better *speed-up*).
 
 ### How it works
-1. The operating system (OS) *scheduler* gives each runnable thread a short time slice on a core.
-2. When the slice ends, or the thread blocks (for I/O, a lock, `sleep`), the scheduler performs a **context switch**: it saves that thread's registers and loads another's.
+1. The operating system (OS) *scheduler* (the part of the OS that decides which thread runs next) gives each runnable thread a short time slice on a core.
+2. When the slice ends, or the thread blocks (for **I/O** — input/output such as disk or network reads — a lock, `sleep`), the scheduler performs a **context switch**: it saves that thread's **registers** (the CPU's few, fastest storage slots) and loads another's.
 3. On one core, switching fast creates the *illusion* of simultaneity → concurrency.
 4. On many cores, several threads really run at the same instant → parallelism.
 
@@ -65,26 +65,26 @@ Programs wait a lot — for disks, networks, databases, users. Concurrency lets 
 |---|---|---|
 | Core idea | Structure: many tasks in progress | Execution: many tasks running at the same instant |
 | Needs multiple cores? | No | Yes |
-| Main benefit | Responsiveness, overlapping waiting (I/O-bound work) | Speed on CPU-bound work |
+| Main benefit | Responsiveness, overlapping waiting (I/O-bound work: mostly waiting on disk/network) | Speed on CPU-bound work (mostly computing) |
 | Java tools | Threads, executors, virtual threads, `CompletableFuture` | Fork/Join, parallel streams, `Arrays.parallelSort` |
 | Typical example | A web server handling 10,000 connections | Sorting 100 million numbers |
 
 ### Java example
-Section 12.4's `Main` shows both: 10,000 tasks that each *sleep* 50 ms finish in well under a second on virtual threads (concurrency hides waiting). Chapter 13's multi-threaded merge sort uses Fork/Join to split CPU work over cores (parallelism).
+Section 12.4's `Main` shows both: 10,000 tasks that each *sleep* 50 ms finish in well under a second on virtual threads (concurrency hides waiting). Chapter 13's multi-threaded merge sort uses **Fork/Join** (the JDK framework that splits a task into subtasks and runs them on all cores) to split CPU work over cores (parallelism).
 
 ### Trade-offs
 Concurrency adds complexity (races, deadlocks) and some overhead (context switches). Parallelism has a limit: **Amdahl's law** says that if a fraction *s* of the work is inherently sequential, the speed-up with *N* cores can never exceed 1 / (s + (1 − s)/N). With 10% sequential work, even infinite cores give at most 10× speed-up.
 
 ### When not to use it
-Small, fast, CPU-light tasks: splitting them over threads costs more than it saves. A single-threaded design is also a valid choice when it removes all locking (Redis executes commands on one main thread for this reason; Node.js runs JavaScript on one event-loop thread).
+Small, fast, CPU-light tasks: splitting them over threads costs more than it saves. A single-threaded design is also a valid choice when it removes all locking (Redis — an in-memory key-value database — executes commands on one main thread for this reason; Node.js, a server-side JavaScript runtime, runs JavaScript on one **event-loop** thread: a single loop that handles ready events one at a time and never blocks).
 
 ### Common mistakes
 - Saying "concurrent" when you mean "parallel" (and vice versa) in an interview.
 - Expecting more threads to always mean more speed. Past the core count, CPU-bound work gets *slower* from switching.
 
 ### Real-world examples
-- **Concurrency:** Tomcat and Jetty serve many HTTP requests with a pool of threads; Netty and Node.js serve thousands of connections with a few event-loop threads.
-- **Parallelism:** `Arrays.parallelSort`, parallel streams, and Spark/Hadoop jobs splitting data across cores and machines.
+- **Concurrency:** Tomcat and Jetty (Java web servers) serve many HTTP requests with a **pool** of threads (a fixed set of reusable worker threads); Netty (a Java networking library) and Node.js serve thousands of connections with a few event-loop threads.
+- **Parallelism:** `Arrays.parallelSort`, parallel streams, and Spark/Hadoop (distributed data-processing frameworks) jobs splitting data across cores and machines.
 
 ### In the interview
 **30-second answer:** "Concurrency is about structure — several tasks in progress, possibly interleaved on one core. Parallelism is about execution — tasks running at the same instant on several cores. Concurrency helps I/O-bound work; parallelism helps CPU-bound work."
@@ -106,8 +106,8 @@ Concurrency = dealing with many things (structure). Parallelism = doing many thi
 ## 12.2 Processes vs threads
 
 ### What it is
-- A **process** is a running program with its *own* memory space (heap, code, open files). Two processes cannot see each other's memory.
-- A **thread** is a unit of execution *inside* a process. All threads of a process share the process's heap memory, but each thread has its own **stack** (local variables, call frames) and program counter.
+- A **process** is a running program with its *own* memory space (**heap** — the memory area where objects live — code, open files). Two processes cannot see each other's memory.
+- A **thread** is a unit of execution *inside* a process. All threads of a process share the process's heap memory, but each thread has its own **stack** (local variables, call frames) and **program counter** (the address of the next instruction to run).
 
 **Analogy.** A process is a house; threads are people living in it. People in the same house share the kitchen (heap) — fast to share, but they can bump into each other. People in different houses (processes) must phone each other (inter-process communication) — slower, but no bumping.
 
@@ -115,15 +115,15 @@ Concurrency = dealing with many things (structure). Parallelism = doing many thi
 Threads let one program do several things at once while sharing data cheaply. Processes give strong isolation: one crashing does not corrupt the others.
 
 ### How it works
-1. The OS creates a process with a private virtual address space.
+1. The OS creates a process with a private **virtual address space** (the process's own view of memory, which the OS maps onto real RAM).
 2. The process starts with one thread (`main` in Java).
 3. The program can create more threads; they share heap objects, and each gets its own stack.
-4. Communication: threads just read/write shared objects (with synchronization); processes use pipes, sockets, shared-memory segments or message queues.
+4. Communication: threads just read/write shared objects (with synchronization); processes use **pipes** (one-way byte channels between processes), **sockets** (network-style connection endpoints), shared-memory segments or message queues.
 
 | | Process | Thread |
 |---|---|---|
 | Memory | Private address space | Shares the process's heap; own stack |
-| Creation cost | High (new address space) | Lower (platform thread ≈ an OS thread with ~1 MB stack reserved by default on 64-bit JVMs); virtual threads are much cheaper still |
+| Creation cost | High (new address space) | Lower (platform thread ≈ an OS thread with ~1 MB stack reserved by default on 64-bit JVMs — Java Virtual Machines, the programs that run Java bytecode); virtual threads are much cheaper still |
 | Communication | IPC: sockets, pipes, files | Shared objects — fast, but needs synchronization |
 | Failure isolation | Strong: one crash does not kill others | Weak: an unhandled error can bring down the whole process (e.g. `OutOfMemoryError`) |
 | Context switch | Heavier (address-space switch) | Lighter |
@@ -142,10 +142,10 @@ t.join();
 ```
 
 ### Trade-offs
-Threads: fast sharing, but every shared mutable field is a potential bug. Processes: safe isolation, but communication is slower and needs serialization.
+Threads: fast sharing, but every shared mutable field is a potential bug. Processes: safe isolation, but communication is slower and needs **serialization** (turning objects into bytes so they can be sent).
 
 ### When not to use it
-Do not reach for threads when isolation matters more than speed (running untrusted plugins, running a crash-prone native library); use separate processes or containers.
+Do not reach for threads when isolation matters more than speed (running untrusted plugins, running a crash-prone **native library** — machine code, e.g. written in C, called from Java); use separate processes or **containers** (lightweight isolated environments such as Docker).
 
 ### Common mistakes
 - Thinking local variables are shared between threads. They are not: each thread has its own stack. Only objects reachable from shared references are shared.
@@ -153,14 +153,14 @@ Do not reach for threads when isolation matters more than speed (running untrust
 
 ### Real-world examples
 - **Google Chrome** runs tabs in separate *processes* so one crashing page does not take down the browser.
-- **PostgreSQL** uses one process per connection; **MySQL** uses one thread per connection.
-- A **JVM** is one process; your application's threads, garbage-collector threads and JIT-compiler threads all live inside it.
+- **PostgreSQL** (a popular SQL database) uses one process per connection; **MySQL** uses one thread per connection.
+- A **JVM** is one process; your application's threads, **garbage-collector** threads (the GC frees memory that nothing uses any more) and **JIT-compiler** threads (Just-In-Time compiler: turns frequently run bytecode into fast machine code while the program runs) all live inside it.
 
 ### In the interview
 **30-second answer:** "A process is an isolated program with its own memory; a thread is a path of execution inside a process that shares its heap but has its own stack. Threads are cheaper and share data easily but need synchronization; processes are isolated and safer but communicate through IPC."
 
 **Follow-ups:**
-- *What does a thread own privately?* Its stack (locals, call frames), program counter, and `ThreadLocal` values.
+- *What does a thread own privately?* Its stack (locals, call frames), program counter, and `ThreadLocal` values (variables that hold a separate copy per thread).
 - *Why are threads cheaper to switch?* They share the address space, so the CPU's memory mappings stay the same.
 
 ### Self-check
@@ -181,15 +181,15 @@ A Java thread moves through well-defined states. `Thread.getState()` returns one
 |---|---|
 | `NEW` | Created with `new Thread(...)` but `start()` not called yet. |
 | `RUNNABLE` | Started and either running on a CPU or ready to run (waiting only for the scheduler). Java does not distinguish "running" from "ready". A thread blocked in most I/O calls also shows as `RUNNABLE`. |
-| `BLOCKED` | Waiting to *enter* a `synchronized` block/method whose monitor another thread holds. |
-| `WAITING` | Waiting with no time limit for another thread to act: `Object.wait()`, `Thread.join()`, `LockSupport.park()` (which `ReentrantLock`, `Condition`, `CountDownLatch` use). |
+| `BLOCKED` | Waiting to *enter* a `synchronized` block/method whose monitor (the object's built-in lock, §12.7) another thread holds. |
+| `WAITING` | Waiting with no time limit for another thread to act: `Object.wait()`, `Thread.join()`, `LockSupport.park()` (the low-level JDK call that suspends a thread; `ReentrantLock`, `Condition`, `CountDownLatch` use it). |
 | `TIMED_WAITING` | Same, but with a timeout: `Thread.sleep(ms)`, `wait(ms)`, `join(ms)`, `parkNanos`, `tryLock(timeout)`. |
 | `TERMINATED` | `run()` has returned or thrown. A thread cannot be restarted. |
 
 **Analogy.** A customer at a bank: `NEW` = has a ticket but hasn't entered; `RUNNABLE` = at the counter or next in line; `BLOCKED` = the only pen is being used, waiting to grab it; `WAITING` = told "wait until we call you"; `TIMED_WAITING` = "come back in 10 minutes"; `TERMINATED` = left the bank.
 
 ### The problem it solves
-Knowing the states lets you read thread dumps (`jstack`, `jcmd <pid> Thread.print`) and diagnose hangs: many threads `BLOCKED` on the same monitor → lock contention or deadlock; many `WAITING` on a queue → idle pool.
+Knowing the states lets you read **thread dumps** (a snapshot of every thread's state and call stack, taken with `jstack` or `jcmd <pid> Thread.print`, where pid is the process ID) and diagnose hangs: many threads `BLOCKED` on the same monitor → lock contention or **deadlock** (threads waiting on each other forever, §12.17); many `WAITING` on a queue → idle pool.
 
 ### How it works
 
@@ -261,7 +261,7 @@ Five ways to run code concurrently in Java:
 |---|---|---|---|
 | Extend `Thread` | `class T extends Thread { run() }` | No | Almost never — mixes the task with the worker |
 | `Runnable` | `() -> { ... }` passed to `new Thread(r)` or a pool | No | A fire-and-forget task |
-| `Callable<V>` | `() -> value` (may throw checked exceptions) | Yes, via `Future<V>` | You need a result or an exception back |
+| `Callable<V>` | `() -> value` (may throw checked exceptions — ones the compiler forces you to catch or declare) | Yes, via `Future<V>` | You need a result or an exception back |
 | `ExecutorService` | `pool.submit(task)` | `Future<V>` | Default choice: reuse threads, limit concurrency |
 | Virtual threads (Java 21) | `Thread.ofVirtual().start(r)` / `Executors.newVirtualThreadPerTaskExecutor()` | via `Future` | Very many *blocking* (I/O-bound) tasks |
 
@@ -274,8 +274,8 @@ Creating an OS thread per task is expensive and unbounded. Executors separate **
 1. Write the task as a `Runnable` (no result) or `Callable<V>` (result/exception).
 2. Submit it to an `ExecutorService` (e.g. `Executors.newFixedThreadPool(n)`); you get a `Future<V>`.
 3. `future.get()` blocks until the result is ready (or rethrows the task's exception wrapped in `ExecutionException`).
-4. When done, `shutdown()` the pool (stop accepting tasks) and `awaitTermination(...)`; or, since Java 19, use try-with-resources — `ExecutorService.close()` waits for tasks to finish.
-5. **Virtual threads** (final in Java 21, JEP 444) are lightweight threads managed by the JVM. Many virtual threads run on a small pool of OS "carrier" threads (a `ForkJoinPool` sized to the number of cores by default). When a virtual thread blocks on I/O, `sleep`, or a `java.util.concurrent` lock, the JVM *unmounts* it and the carrier runs another virtual thread. The exception is **pinning**: a virtual thread that cannot unmount keeps its carrier busy while it blocks. On Java 21–23 this happens when it blocks inside a `synchronized` block/method (including `Object.wait()`) or inside a native method; JDK 24 (JEP 491) removed the `synchronized` case, leaving mainly native/foreign-function calls (and blocking inside a class initializer) as pinning causes.
+4. When done, `shutdown()` the pool (stop accepting tasks) and `awaitTermination(...)`; or, since Java 19, use **try-with-resources** (a `try (...)` block that closes its resource automatically at the end) — `ExecutorService.close()` waits for tasks to finish.
+5. **Virtual threads** (final in Java 21, JEP 444 — a JEP, JDK Enhancement Proposal, is the numbered design document for a Java feature) are lightweight threads managed by the JVM. Many virtual threads run on a small pool of OS "carrier" threads (a `ForkJoinPool` sized to the number of cores by default). When a virtual thread blocks on I/O, `sleep`, or a `java.util.concurrent` lock, the JVM *unmounts* it and the carrier runs another virtual thread. The exception is **pinning**: a virtual thread that cannot unmount keeps its carrier busy while it blocks. On Java 21–23 this happens when it blocks inside a `synchronized` block/method (including `Object.wait()`) or inside a native method; JDK 24 (JEP 491) removed the `synchronized` case, leaving mainly native/foreign-function calls (and blocking inside a class initializer) as pinning causes.
 
 ### Java example
 
@@ -458,17 +458,17 @@ busy running on a CPU         : RUNNABLE
 - Do not use `Executors.newCachedThreadPool()` for unbounded incoming traffic — it can create unlimited platform threads.
 
 ### Common mistakes
-- Forgetting `shutdown()`: non-daemon pool threads keep the JVM alive after `main` ends.
+- Forgetting `shutdown()`: non-daemon pool threads keep the JVM alive after `main` ends (a **daemon** thread is a background thread that does not keep the JVM running; ordinary threads do).
 - Ignoring the `Future` of a submitted `Runnable`: exceptions thrown inside are captured in the `Future` and silently lost if you never call `get()`.
 - Using `Executors.newFixedThreadPool` for untrusted load: its queue is **unbounded** (`LinkedBlockingQueue`), so a burst can exhaust memory. Build a `ThreadPoolExecutor` with a bounded queue (section 12.21).
 
 ### Real-world examples
 - `Executors` factory methods are the textbook **Factory** pattern in the JDK.
-- Spring's `@Async` runs methods on a `TaskExecutor` (commonly a `ThreadPoolTaskExecutor`).
+- **Spring** (the most widely used Java application framework): its `@Async` runs methods on a `TaskExecutor` (commonly a `ThreadPoolTaskExecutor`).
 - Spring Boot 3.2+ can run request handling on virtual threads with `spring.threads.virtual.enabled=true`; Tomcat and Jetty can be configured to use virtual threads too.
 
 ### In the interview
-**30-second answer:** "I never manage raw threads in business code. I describe work as `Runnable`/`Callable` and submit it to an `ExecutorService` sized for the workload: about cores for CPU-bound work, bounded queue with a rejection policy for incoming traffic. For many blocking I/O tasks on Java 21, I use virtual threads — one per task — and protect scarce resources with a semaphore."
+**30-second answer:** "I never manage raw threads in business code. I describe work as `Runnable`/`Callable` and submit it to an `ExecutorService` sized for the workload: about cores for CPU-bound work, bounded queue with a rejection policy for incoming traffic. For many blocking I/O tasks on Java 21, I use virtual threads — one per task — and protect scarce resources with a semaphore." (A **semaphore** is a counter of permits that caps how many threads may proceed at once — §12.12.)
 
 **Follow-ups:**
 - *`Runnable` vs `Callable`?* `Callable` returns a value and may throw checked exceptions; `Runnable` does neither.
@@ -505,9 +505,9 @@ Understanding races tells you *which* code needs protection and *why* it goes wr
 
 ### How it works
 1. Find all **shared mutable state** (fields reachable by more than one thread and changed after construction).
-2. Find every **invariant** involving it (e.g. "a seat has at most one owner", "balance ≥ 0").
+2. Find every **invariant** (a rule about the data that must always hold true) involving it (e.g. "a seat has at most one owner", "balance ≥ 0").
 3. Mark the code that reads and then updates that state as a **critical section**.
-4. Make each critical section **atomic** — with a lock (`synchronized`, `ReentrantLock`), with a single atomic operation (`AtomicInteger.incrementAndGet`, `ConcurrentHashMap.putIfAbsent`), or by removing the sharing (immutability, confinement).
+4. Make each critical section **atomic** — with a lock (`synchronized`, `ReentrantLock`), with a single atomic operation (`AtomicInteger.incrementAndGet`, `ConcurrentHashMap.putIfAbsent`), or by removing the sharing (immutability — objects that never change; confinement — data only one thread touches; see §12.24).
 
 ### Java example
 
@@ -629,7 +629,7 @@ Don't lock data that is never shared (method locals, objects confined to one thr
 - Believing a race is fixed because tests pass. Races show up rarely and under load.
 
 ### Real-world examples
-- Double-booking in ticketing systems, overselling limited-stock items in flash sales, duplicate payment processing when a user double-clicks "Pay" — all check-then-act races, solved with atomic operations, locks, or database constraints (unique indexes, `SELECT ... FOR UPDATE`, optimistic version columns).
+- Double-booking in ticketing systems, overselling limited-stock items in **flash sales** (short, heavily promoted sales of limited stock), duplicate payment processing when a user double-clicks "Pay" — all check-then-act races, solved with atomic operations, locks, or database constraints (unique indexes that reject duplicate values, `SELECT ... FOR UPDATE` — a SQL read that locks the rows it returns — and optimistic version columns: a version number checked on every update, so a write based on stale data fails).
 
 ### In the interview
 **30-second answer:** "A race condition is when correctness depends on thread timing. The two common shapes are read-modify-write, like `count++`, and check-then-act, like 'if seat is free then book it'. I find the shared mutable state and its invariants, and make each critical section atomic — with a lock, an atomic operation like `putIfAbsent` or `compareAndSet`, or by removing sharing."
@@ -657,7 +657,7 @@ The **Java Memory Model (JMM)** (Java Language Specification, chapter 17) define
 - **Happens-before (HB)**: a guarantee that if action X *happens-before* action Y, then X's effects are visible to Y and X appears ordered before Y.
 - **`volatile`**: a field modifier that makes reads/writes of that field visible to all threads and orders them (no caching in registers, no harmful reordering around it).
 
-**Analogy.** Each thread works from its own notepad (CPU caches, registers) and only sometimes copies to the shared whiteboard (main memory). Happens-before rules are the moments when the notepad is guaranteed to be synced with the whiteboard.
+**Analogy.** Each thread works from its own notepad (**CPU caches** — small, fast memories next to each core — and registers) and only sometimes copies to the shared whiteboard (main memory). Happens-before rules are the moments when the notepad is guaranteed to be synced with the whiteboard.
 
 ### The problem it solves
 The `Worker` loop `while (running) iterations++;` with a *non-volatile* `running` may never stop: the JIT is allowed to read `running` once and turn the loop into `while (true)`. Visibility bugs like this are invisible in code review unless you know the JMM.
@@ -684,7 +684,7 @@ Steps to apply them:
 
 **Safe publication.** An object is *safely published* when the reference to it is made visible through an HB edge: stored in a `volatile` field (or an `AtomicReference`), stored in a `final` field of a properly constructed object, created by a static initializer, put into a concurrent collection, or written under a lock that the reader also takes. Otherwise a reader might see the reference but not the fully constructed object.
 
-**Double-checked locking** (lazy Singleton) is only correct if the instance field is `volatile`:
+**Double-checked locking** (lazy Singleton — a class with exactly one shared instance, created only on first use) is only correct if the instance field is `volatile`:
 
 ```java
 class Config {
@@ -719,13 +719,13 @@ class Config {
 Don't use `volatile` for anything that combines several steps or several variables — use a lock or an atomic class.
 
 ### Common mistakes
-- "It works on my laptop" — x86 CPUs reorder less than ARM ones (e.g. Apple Silicon, AWS Graviton). Code without proper HB edges may fail only on other hardware or after JIT warm-up.
+- "It works on my laptop" — x86 CPUs (Intel/AMD) reorder less than ARM ones (e.g. Apple Silicon, AWS Graviton). Code without proper HB edges may fail only on other hardware or after **JIT warm-up** (once the JIT has compiled and optimised the hot code).
 - Leaking `this` from a constructor (registering a listener, starting a thread in the constructor) — other threads may see a half-built object, and final-field guarantees are lost.
 - Thinking `synchronized` on the writer alone is enough. The reader must use the *same* lock.
 
 ### Real-world examples
 - `volatile boolean running` shutdown flags in server loops and schedulers.
-- `ConcurrentHashMap`, `AtomicInteger`, `CopyOnWriteArrayList` internally use volatile reads/writes and CAS to give HB guarantees without locks for readers.
+- `ConcurrentHashMap`, `AtomicInteger`, `CopyOnWriteArrayList` internally use volatile reads/writes and CAS (compare-and-swap, §12.15) to give HB guarantees without locks for readers.
 - The JDK's `String` is immutable with `final` fields, so strings can be shared across threads freely.
 
 ### In the interview
@@ -780,15 +780,15 @@ void add(Item i) { synchronized (lock) { items.add(i); } }
 | Pros | Cons |
 |---|---|
 | Simplest syntax; auto-release even on exceptions | No timeout, no `tryLock`, not interruptible while waiting |
-| JVM-optimised (uncontended locking is cheap) | One wait-set per object (only one "condition") |
-| Reentrant | No fairness option; on Java 21–23 pins virtual threads when blocking inside |
+| JVM-optimised (uncontended locking is cheap) | One wait-set (the threads parked in `wait()`) per object (only one "condition") |
+| Reentrant | No fairness option (fair = longest-waiting thread goes first); on Java 21–23 pins virtual threads when blocking inside |
 
 ### When not to use it
 When you need a timeout, interruptible waiting, fairness, several condition queues, or read/write separation — use `ReentrantLock`/`ReentrantReadWriteLock`.
 
 ### Common mistakes
 - Synchronizing on a *changing* reference (`synchronized (list)` after `list = new ArrayList<>()`) — different threads lock different objects.
-- Synchronizing on boxed values or string literals (`synchronized ("LOCK")`, `synchronized (Integer.valueOf(1))`) — these may be shared JVM-wide, causing mysterious contention or deadlocks.
+- Synchronizing on **boxed values** (objects such as `Integer` that wrap a primitive) or string literals (`synchronized ("LOCK")`, `synchronized (Integer.valueOf(1))`) — these may be shared JVM-wide, causing mysterious contention or deadlocks.
 - Doing slow I/O while holding the lock.
 
 ### Real-world examples
@@ -1022,7 +1022,7 @@ If you need none of the extra features, `synchronized` is shorter and can't be l
 - Turning on fairness "to be safe" — fair locks are noticeably slower; use them only when starvation is a real problem.
 
 ### Real-world examples
-`ArrayBlockingQueue`, `LinkedBlockingQueue` and `ThreadPoolExecutor` use `ReentrantLock` internally (`CopyOnWriteArrayList` did up to Java 8; since Java 9 it uses `synchronized` on an internal lock object). `ReentrantLock`, `ReentrantReadWriteLock`, `Semaphore` and `CountDownLatch` are all built on `AbstractQueuedSynchronizer` (AQS); `CyclicBarrier` is built on a `ReentrantLock` + `Condition`.
+`ArrayBlockingQueue`, `LinkedBlockingQueue` and `ThreadPoolExecutor` use `ReentrantLock` internally (`CopyOnWriteArrayList` did up to Java 8; since Java 9 it uses `synchronized` on an internal lock object). `ReentrantLock`, `ReentrantReadWriteLock`, `Semaphore` and `CountDownLatch` are all built on `AbstractQueuedSynchronizer` (AQS — the JDK's shared framework for building locks and synchronizers); `CyclicBarrier` is built on a `ReentrantLock` + `Condition`.
 
 ### In the interview
 **30-second answer:** "`ReentrantLock` is an explicit mutex with the same semantics as `synchronized` plus try-lock with timeout, interruptible acquisition, optional fairness, and multiple conditions. Reentrant means the owner can re-acquire it; the hold count must drop to zero to release. I always unlock in `finally`."
@@ -1033,7 +1033,7 @@ If you need none of the extra features, `synchronized` is shorter and can't be l
 
 ### Self-check
 - **Q:** A thread calls `lock()` 3 times and `unlock()` 2 times. Is the lock free? **A:** No; hold count is 1.
-- **Q:** What does `new ReentrantLock(true)` change? **A:** Waiting threads get the lock in roughly FIFO order (fair), at a throughput cost.
+- **Q:** What does `new ReentrantLock(true)` change? **A:** Waiting threads get the lock in roughly FIFO (first in, first out) order (fair), at a throughput cost.
 
 ### TL;DR
 `ReentrantLock` = `synchronized` + tryLock/timeout/interruptible/fairness/conditions. Owner can re-enter. `lock(); try { … } finally { unlock(); }` always.
@@ -1054,7 +1054,7 @@ Plain `lock()` waits forever. That causes hung requests and makes deadlocks perm
 ### How it works
 1. Call `tryLock(timeout)`.
 2. If it returns `true`: `try { work } finally { unlock(); }`.
-3. If it returns `false`: take the fallback path (return an error, retry with back-off, or release other locks you hold).
+3. If it returns `false`: take the fallback path (return an error, retry with **back-off** — waiting a short while before trying again — or release other locks you hold).
 4. When acquiring several locks: if any `tryLock` fails, **release everything you already hold**, back off for a random short time, and retry.
 
 ### Java example
@@ -1065,10 +1065,10 @@ In `locks/Main.java` above: the worker calls `printer.tryLock(100, TimeUnit.MILL
 |---|---|
 | No infinite waits; can report "busy" | Caller must handle failure paths |
 | Breaks deadlock (hold-and-wait) | Retry loops without random back-off can **livelock** |
-| Timeouts give predictable latency | Choosing the timeout is a judgement call |
+| Timeouts give predictable **latency** (time one operation takes) | Choosing the timeout is a judgement call |
 
 ### When not to use it
-When failing is not acceptable and waiting is fine (e.g. a background batch job updating a counter) — plain `lock()` is simpler.
+When failing is not acceptable and waiting is fine (e.g. a background **batch job** — one that processes data in bulk, with no user waiting — updating a counter) — plain `lock()` is simpler.
 
 ### Common mistakes
 - Calling `unlock()` when `tryLock` returned `false` → `IllegalMonitorStateException`.
@@ -1076,7 +1076,7 @@ When failing is not acceptable and waiting is fine (e.g. a background batch job 
 - Expecting untimed `tryLock()` to respect fairness — it *barges* (takes a free lock even if others are queued); `tryLock(0, unit)` respects fairness.
 
 ### Real-world examples
-- Distributed locks (Redis `SET key value NX PX 30000`, Redisson's `tryLock(wait, lease, unit)`, ZooKeeper recipes) follow the same idea: try for a bounded time, give up, or let the lock expire.
+- **Distributed locks** (locks shared by many servers, kept in an external store: Redis `SET key value NX PX 30000` — set only if absent, expire after 30,000 ms — Redisson's (a Java Redis client) `tryLock(wait, lease, unit)`, ZooKeeper (a coordination service for clusters) recipes) follow the same idea: try for a bounded time, give up, or let the lock expire.
 - Seat-hold features on ticketing sites: if the seat is locked by someone else's checkout, you're told immediately rather than made to wait.
 
 ### In the interview
@@ -1101,7 +1101,7 @@ A **read-write lock** is a pair of locks: a shared **read lock** (many readers a
 **Analogy.** A museum exhibit: any number of visitors can look at it together, but when a curator needs to rearrange it, the room is cleared and only the curator is inside.
 
 ### The problem it solves
-With a plain mutex, readers block each other even though reading doesn't change anything. For **read-heavy** data (configuration, caches, price catalogues) a read-write lock lets reads proceed in parallel.
+With a plain mutex, readers block each other even though reading doesn't change anything. For **read-heavy** data (configuration, **caches** — fast copies of data kept for quick reads — price catalogues) a read-write lock lets reads proceed in parallel.
 
 ### How it works
 1. Reader: `readLock().lock()` — succeeds if no writer holds the write lock. Many readers can hold it at once.
@@ -1155,7 +1155,7 @@ Many readers OR one writer. Use for read-heavy shared data. No upgrade in `Reent
 
 ### What it is
 - **Coarse-grained locking**: one lock protects a large amount of state (e.g. the whole parking lot).
-- **Fine-grained locking**: many locks, each protecting a small piece (e.g. one lock per floor, per spot, or per hash bucket).
+- **Fine-grained locking**: many locks, each protecting a small piece (e.g. one lock per floor, per spot, or per **hash bucket** — one slot of the internal array a hash map spreads its entries over).
 
 **Analogy.** One key for an entire office building (coarse) vs a key per room (fine). One key is simple but everyone queues at the front door; room keys let people work in parallel but you must manage many keys.
 
@@ -1182,7 +1182,7 @@ Choosing the right granularity balances **simplicity and safety** against **thro
 - Fine: `Show` in `lldcases/Main.java` (12.25) has **one lock per seat**, taken in sorted order; `StripedHashMap` in chapter 13 has one lock per stripe.
 
 ### Trade-offs
-See table above. Rule of thumb: *correct first, then fine-grained only where profiling shows contention*.
+See table above. Rule of thumb: *correct first, then fine-grained only where **profiling** (measuring where a program really spends its time) shows contention*.
 
 ### When not to use it
 Don't split locks when an invariant spans the parts (e.g. "total seats booked ≤ capacity" across all rows) unless you also handle the cross-part check.
@@ -1190,18 +1190,18 @@ Don't split locks when an invariant spans the parts (e.g. "total seats booked �
 ### Common mistakes
 - Premature fine-graining → complexity and deadlocks without real benefit.
 - Locking fine-grained parts in inconsistent order.
-- "Fine-grained" locks that still funnel through a shared counter everyone updates (the counter becomes the bottleneck — use `LongAdder`).
+- "Fine-grained" locks that still funnel through a shared counter everyone updates (the counter becomes the **bottleneck** — the one slow point that limits the whole system — use `LongAdder`, a counter that spreads updates over several cells, §12.15).
 
 ### Real-world examples
 - `ConcurrentHashMap` (Java 8+) locks only the head node of one bin for writes — extremely fine-grained.
 - Databases use row-level locks (fine) vs table-level locks (coarse).
-- Python's GIL is a famous coarse lock: simple, but one thread runs Python bytecode at a time.
+- Python's GIL (Global Interpreter Lock) is a famous coarse lock: simple, but one thread runs Python **bytecode** (the compiled instructions the interpreter executes) at a time.
 
 ### In the interview
 **30-second answer:** "I start with one lock for correctness, then refine where contention matters: per-floor or per-spot locks for a parking lot, per-show or per-seat locks for booking, striping for maps. Finer locks raise throughput but need a consistent lock order to avoid deadlock."
 
 **Follow-ups:**
-- *Per-show or per-seat locking for BookMyShow?* Per-show is simple and usually enough (contention is per show). Per-seat allows more parallelism but multi-seat bookings must lock seats in sorted order.
+- *Per-show or per-seat locking for BookMyShow (an Indian movie-ticketing site)?* Per-show is simple and usually enough (contention is per show). Per-seat allows more parallelism but multi-seat bookings must lock seats in sorted order.
 
 ### Self-check
 - **Q:** What is lock striping? **A:** Using a fixed array of N locks and mapping each item to one by hash, to get fine-grained locking with bounded lock count.
@@ -1221,7 +1221,7 @@ A **semaphore** holds a number of **permits**. `acquire()` takes one (waiting if
 **Analogy.** A car park with 3 spaces and a display showing free spaces. Cars enter only if the number is above zero; leaving increases it.
 
 ### The problem it solves
-- **Limiting concurrency**: at most N threads use a resource (DB connections, API calls, GPU slots).
+- **Limiting concurrency**: at most N threads use a resource (DB connections, **API** calls — calls to another service's programming interface — GPU slots).
 - **Signaling** between threads: a semaphore with 0 permits acts as "wait until someone signals" (used heavily in chapter 13).
 
 ### How it works
@@ -1420,9 +1420,9 @@ Don't use a semaphore as a mutex around shared data when a lock would do — loc
 - Forgetting to release on exceptions → permits slowly disappear, system stalls.
 
 ### Real-world examples
-- **Bulkhead pattern**: Resilience4j's `SemaphoreBulkhead` (and Hystrix's semaphore isolation) cap concurrent calls to a dependency.
-- Connection pools bound the number of connections handed out (HikariCP enforces its maximum pool size).
-- With virtual threads, a `Semaphore` is the recommended way to limit calls to a slow downstream service.
+- **Bulkhead pattern** (isolating resources per dependency, like watertight compartments in a ship, so one failure can't sink everything): Resilience4j's `SemaphoreBulkhead` (and Hystrix's — Netflix's older fault-tolerance library — semaphore isolation) cap concurrent calls to a dependency.
+- **Connection pools** (sets of open database connections reused across requests) bound the number of connections handed out (HikariCP, a popular JDBC pool, enforces its maximum pool size).
+- With virtual threads, a `Semaphore` is the recommended way to limit calls to a slow **downstream** service (one that your code calls).
 
 ### In the interview
 **30-second answer:** "A semaphore is a permit counter: acquire takes a permit or waits, release returns one. I use it to cap concurrent access to a limited resource — a bulkhead — or with zero initial permits as a signal from one thread to another. Unlike a lock it has no owner."
@@ -1548,7 +1548,7 @@ For "wait for these N tasks and collect results", `ExecutorService.invokeAll` or
 - Using a barrier with fewer threads than parties → everyone waits forever.
 
 ### Real-world examples
-- Test harnesses start N threads and release them together with a `CountDownLatch(1)` to maximise races (JCStress-style tests use stronger tools, but the idea is the same).
+- Test harnesses start N threads and release them together with a `CountDownLatch(1)` to maximise races (JCStress — OpenJDK's harness for testing concurrency correctness — uses stronger tools, but the idea is the same).
 - Application start-up: wait for caches, DB pools, and message consumers to be ready before accepting traffic.
 
 ### In the interview
@@ -1570,12 +1570,12 @@ Latch = one-shot "wait for N events". Barrier = reusable "wait for N threads". P
 ## 12.15 Compare-and-swap (CAS) & atomics
 
 ### What it is
-**Compare-and-swap** is a single CPU instruction (e.g. `LOCK CMPXCHG` on x86; LL/SC or CAS instructions on ARM): "if the value at this address is still `expected`, replace it with `new` and report success; otherwise change nothing and report failure." Java exposes it through `java.util.concurrent.atomic` classes: `AtomicInteger`, `AtomicLong`, `AtomicBoolean`, `AtomicReference`, `AtomicIntegerArray`, `LongAdder`, and through `VarHandle`.
+**Compare-and-swap** is a single CPU instruction (e.g. `LOCK CMPXCHG` on x86; LL/SC — load-linked/store-conditional — or CAS instructions on ARM): "if the value at this address is still `expected`, replace it with `new` and report success; otherwise change nothing and report failure." Java exposes it through `java.util.concurrent.atomic` classes: `AtomicInteger`, `AtomicLong`, `AtomicBoolean`, `AtomicReference`, `AtomicIntegerArray`, `LongAdder`, and through `VarHandle`.
 
 **Analogy.** Editing a shared wiki page: you save only if the page version is still the one you started from. If someone saved first, your save is rejected; you reload and try again.
 
 ### The problem it solves
-Atomic updates **without locks**: no blocking, no deadlock, and usually faster under low-to-moderate contention. It is how lock-free data structures and the JDK's own concurrency utilities are built.
+Atomic updates **without locks** (**lock-free**: no thread ever blocks another, and some thread always makes progress): no blocking, no deadlock, and usually faster under low-to-moderate contention. It is how lock-free data structures and the JDK's own concurrency utilities are built.
 
 ### How it works
 The **CAS retry loop**:
@@ -1720,8 +1720,8 @@ Invariants spanning several variables (move money between two accounts) — a si
 
 ### Real-world examples
 - `ConcurrentHashMap` inserts into empty bins with CAS; `ConcurrentLinkedQueue` is a lock-free (Michael–Scott) queue; `AbstractQueuedSynchronizer` (behind `ReentrantLock`) uses CAS on its state.
-- Optimistic locking in databases and ORMs (JPA `@Version`, `UPDATE ... WHERE version = ?`) is CAS at the database level.
-- LMAX Disruptor uses CAS-based sequences for its lock-free ring buffer.
+- Optimistic locking in databases and ORMs (Object-Relational Mappers — libraries that map objects to database tables; JPA `@Version`, `UPDATE ... WHERE version = ?`) is CAS at the database level.
+- LMAX Disruptor (a high-performance inter-thread messaging library) uses CAS-based sequences for its lock-free **ring buffer** (a fixed-size array used as a circular queue).
 
 ### In the interview
 **30-second answer:** "CAS atomically updates a value only if it still equals what I read; otherwise I retry. Java's atomic classes wrap it, so counters, flags and single references can be updated without locks and without deadlock. It covers one variable at a time, can suffer ABA — fixed with a stamped reference — and under heavy contention I prefer `LongAdder`."
@@ -1747,8 +1747,8 @@ Thread-safe collections in `java.util.concurrent` designed for high concurrency 
 | Need | Use | Key behaviour |
 |---|---|---|
 | Map | `ConcurrentHashMap` | Lock-free reads; writes lock only one bin; atomic `putIfAbsent`, `computeIfAbsent`, `compute`, `merge`; **no null keys/values**; *weakly consistent* iterators (see below) |
-| Sorted map/set | `ConcurrentSkipListMap` / `Set` | Lock-free, sorted, O(log n) |
-| List read ≫ write | `CopyOnWriteArrayList` / `Set` | Each write copies the whole array; iteration uses a snapshot (never throws CME) |
+| Sorted map/set | `ConcurrentSkipListMap` / `Set` | Lock-free, sorted, O(log n) (cost grows very slowly with size) |
+| List read ≫ write | `CopyOnWriteArrayList` / `Set` | Each write copies the whole array; iteration uses a snapshot (never throws CME, `ConcurrentModificationException`) |
 | Queue (non-blocking) | `ConcurrentLinkedQueue` / `Deque` | Lock-free; `poll()` returns null when empty |
 | Queue (blocking) | `ArrayBlockingQueue` (bounded), `LinkedBlockingQueue` (optionally bounded), `PriorityBlockingQueue`, `DelayQueue`, `SynchronousQueue` (no capacity: hand-off), `LinkedTransferQueue` | `put` waits when full, `take` waits when empty; `offer`/`poll` with timeouts |
 
@@ -1759,7 +1759,7 @@ Thread-safe collections in `java.util.concurrent` designed for high concurrency 
 **Analogy.** A supermarket with many tills (ConcurrentHashMap's bins) instead of one till for the whole store (`Hashtable`).
 
 ### The problem it solves
-Wrapping a `HashMap` in one lock serialises every access. Concurrent collections let many threads read and write different parts at the same time and offer **atomic compound operations** so you don't need external locks for common patterns.
+Wrapping a `HashMap` in one lock **serialises** every access (forces accesses to happen one at a time). Concurrent collections let many threads read and write different parts at the same time and offer **atomic compound operations** so you don't need external locks for common patterns.
 
 ### How it works
 1. Pick the collection by access pattern (table above).
@@ -1873,15 +1873,15 @@ If an object is confined to one thread, a plain `HashMap`/`ArrayList` is faster.
 - Unbounded queues that silently grow until `OutOfMemoryError`.
 
 ### Real-world examples
-- Caffeine's cache is built on `ConcurrentHashMap`; Guava's `LocalCache` uses its own segmented design derived from Java 7's `ConcurrentHashMap`.
+- Caffeine's (a Java caching library) cache is built on `ConcurrentHashMap`; Guava's (Google's core Java library) `LocalCache` uses its own segmented design derived from Java 7's `ConcurrentHashMap`.
 - Guava's `EventBus` keeps each event type's subscribers in a `CopyOnWriteArraySet`; listener lists in general are the textbook copy-on-write use case.
-- Log4j2's async appenders and many logging frameworks hand events from app threads to a writer thread through queues.
+- Log4j2's async **appenders** (the components that write log events to a file or other destination) and many logging frameworks hand events from app threads to a writer thread through queues.
 
 ### In the interview
 **30-second answer:** "I use `ConcurrentHashMap` for shared maps and its atomic methods — `putIfAbsent`, `computeIfAbsent`, `merge` — instead of check-then-act. `CopyOnWriteArrayList` for read-mostly lists like listeners. `BlockingQueue`, preferably bounded, to hand work between threads."
 
 **Follow-ups:**
-- *How does Java 8+ `ConcurrentHashMap` achieve concurrency?* Reads are lock-free (volatile reads). Writes CAS into empty bins, otherwise `synchronized` on the bin's first node; long bins become red-black trees; resizing is done cooperatively by several threads. (Java 7 used 16 lock-striped segments by default.)
+- *How does Java 8+ `ConcurrentHashMap` achieve concurrency?* Reads are lock-free (volatile reads). Writes CAS into empty bins, otherwise `synchronized` on the bin's first node; long bins become **red-black trees** (self-balancing sorted binary trees); resizing is done cooperatively by several threads. (Java 7 used 16 lock-striped segments by default.)
 - *Why no nulls?* `get(k) == null` must unambiguously mean "absent"; with concurrency you can't follow up with `containsKey` atomically.
 
 ### Self-check
@@ -1909,7 +1909,7 @@ A **deadlock** is when two or more threads each wait forever for a resource anot
 |---|---|---|---|
 | 1 | **Mutual exclusion** | A resource can be held by only one thread | Use lock-free/immutable data, or shareable resources (read locks) |
 | 2 | **Hold and wait** | A thread holds one resource while waiting for another | Acquire all resources at once, or use `tryLock` and release everything on failure |
-| 3 | **No preemption** | Resources can't be taken away; only the holder releases | Timeouts (`tryLock(timeout)`), lock leases that expire |
+| 3 | **No preemption** | Resources can't be taken away; only the holder releases | Timeouts (`tryLock(timeout)`), lock **leases** (locks that expire automatically after a set time) |
 | 4 | **Circular wait** | A cycle: T1 waits for T2's lock, T2 waits for T1's | **Global lock ordering** (always lock lower id first) |
 
 Break **any one** condition and deadlock is impossible.
@@ -1926,8 +1926,8 @@ flowchart LR
 1. **Prevention by lock ordering (most common):** define a total order over locks (account id, seat id, `System.identityHashCode` with a tie-breaker lock) and always acquire in that order.
 2. **Prevention by try-lock:** `tryLock(timeout)` each lock; if one fails, release all held locks, wait a random short time, retry.
 3. **Avoid nested locks** where possible: call alien code (listeners, callbacks) *outside* your lock.
-4. **Detection:** thread dumps (`jstack`/`jcmd`) print "Found one Java-level deadlock"; programmatically, `ThreadMXBean.findDeadlockedThreads()`.
-5. **Avoidance** (Banker's algorithm) exists in OS theory but is rarely used in application code.
+4. **Detection:** thread dumps (`jstack`/`jcmd`) print "Found one Java-level deadlock"; programmatically, `ThreadMXBean.findDeadlockedThreads()` (`ThreadMXBean` is the JDK's management interface for inspecting threads).
+5. **Avoidance** (Banker's algorithm — grant a request only if the system can still finish every thread) exists in OS theory but is rarely used in application code.
 
 ### Java example
 
@@ -2060,7 +2060,7 @@ N/A — you always want to prevent deadlock. But don't add complicated detection
 - Also *resource* deadlocks: a pool of 10 threads where each task submits a sub-task to the **same** pool and waits for it — when all 10 wait, nothing runs (thread-starvation deadlock).
 
 ### Real-world examples
-- Databases (MySQL InnoDB, PostgreSQL) detect deadlocks between transactions and abort one as a victim — the "detect and recover" strategy.
+- Databases (MySQL InnoDB, PostgreSQL) detect deadlocks between **transactions** (groups of database operations that succeed or fail as one unit) and abort one as a victim — the "detect and recover" strategy.
 - Bank transfer systems lock accounts in id order — the lock-ordering strategy.
 
 ### In the interview
@@ -2109,8 +2109,8 @@ Don't design retry loops that react only to each other with no randomness or tie
 - Retrying forever without a limit or alert.
 
 ### Real-world examples
-- **Ethernet (CSMA/CD)** uses *binary exponential back-off* after collisions for exactly this reason.
-- Retry policies in AWS SDKs and Resilience4j use exponential back-off **with jitter** to stop synchronized retry storms.
+- **Ethernet (CSMA/CD)** (the classic wired-network rule: listen before sending, detect collisions) uses *binary exponential back-off* (doubling the maximum random wait after each collision) after collisions for exactly this reason.
+- Retry policies in AWS SDKs (Amazon Web Services' client libraries) and Resilience4j (a Java fault-tolerance library) use exponential back-off **with jitter** (a small random amount added to each wait) to stop synchronized **retry storms** (crowds of clients all retrying at the same moment).
 
 ### In the interview
 **30-second answer:** "Livelock is when threads keep reacting to each other without progress — like two people side-stepping in a corridor. It often comes from symmetric retry logic; I fix it with randomized or exponential back-off, or remove retries by using a lock order."
@@ -2152,7 +2152,7 @@ Don't make every lock fair "just in case"; use fairness when you've seen or can 
 Confusing starvation with deadlock: in starvation *someone* progresses; in deadlock *nobody* does.
 
 ### Real-world examples
-OS schedulers use *aging* (raising the priority of long-waiting processes); Linux's schedulers (CFS, and its successor EEVDF since kernel 6.6) aim to give every runnable task a fair share of CPU time.
+OS schedulers use *aging* (raising the priority of long-waiting processes); Linux's schedulers (CFS, and its successor EEVDF since **kernel** — the core of the operating system — 6.6) aim to give every runnable task a fair share of CPU time.
 
 ### In the interview
 **30-second answer:** "Starvation is when a thread never gets a resource because others always win — e.g. writers behind endless readers. Fair locks, short critical sections and separate pools fix it, at some throughput cost."
@@ -2384,7 +2384,7 @@ If the "signal" is really "here's a work item", use a `BlockingQueue` (producer-
 - Signalling before the waiter starts waiting with a tool that *forgets* signals (plain `notify()` without a state flag = lost wakeup). Semaphores and latches remember.
 
 ### Real-world examples
-`CompletableFuture` chains in Spring WebFlux/Netty callbacks; start-up gates; "order paid → send confirmation" flows inside one service.
+`CompletableFuture` chains in Spring WebFlux (Spring's non-blocking web framework)/Netty **callbacks** (functions handed to a library so it can call you back later); start-up gates; "order paid → send confirmation" flows inside one service.
 
 ### In the interview
 "Signaling means one thread waits for an event raised by another. I use a zero-permit semaphore for repeated hand-offs, a latch for one-time events, or a `CompletableFuture` when a result travels with the signal."
@@ -2405,7 +2405,7 @@ A fixed set of **worker threads** takes tasks from a shared **queue** and runs t
 **Analogy.** A taxi rank: a few taxis serve a queue of passengers; taxis are reused, and if the queue gets too long, the rank manager turns people away.
 
 ### The problem it solves
-Creating/destroying threads per task is expensive and unbounded concurrency can overwhelm CPU, memory and downstream systems. A pool bounds concurrency and amortises thread creation.
+Creating/destroying threads per task is expensive and unbounded concurrency can overwhelm CPU, memory and downstream systems. A pool bounds concurrency and **amortises** thread creation (spreads its one-time cost over many tasks).
 
 ### How it works
 
@@ -2421,7 +2421,7 @@ flowchart LR
 1. Workers loop: `task = queue.take(); task.run();`.
 2. `submit` puts the task in the queue.
 3. `ThreadPoolExecutor` rules: while fewer than **core** threads run, a new thread is created per task; then tasks go into the **queue**; if the queue is full, extra threads are created up to **max**; if still full, the **rejection policy** runs (`AbortPolicy` throws — default; `CallerRunsPolicy` runs it on the submitting thread, slowing producers; `DiscardPolicy`; `DiscardOldestPolicy`).
-4. Shutdown: stop accepting, let workers drain the queue, then exit (the hand-made pool uses one "poison pill" per worker). The "is it shut down? then enqueue" check in `submit` is a check-then-act, so `submit` and the pill-adding step of shutdown hold the same lock — otherwise a task could be enqueued *behind* the pills and silently never run.
+4. Shutdown: stop accepting, let workers drain the queue, then exit (the hand-made pool uses one "**poison pill**" — a special marker task meaning "stop now" — per worker). The "is it shut down? then enqueue" check in `submit` is a check-then-act, so `submit` and the pill-adding step of shutdown hold the same lock — otherwise a task could be enqueued *behind* the pills and silently never run.
 
 **Sizing:** CPU-bound ≈ number of cores; I/O-bound ≈ cores × (1 + wait/compute) — or virtual threads.
 
@@ -2438,7 +2438,7 @@ flowchart LR
 | Many pools (bulkheads) | Isolation between workloads; more threads overall |
 
 ### When not to use it
-For huge numbers of blocking tasks on Java 21, virtual-thread-per-task is simpler. For fork/join-style recursive CPU work, use `ForkJoinPool` (work stealing).
+For huge numbers of blocking tasks on Java 21, virtual-thread-per-task is simpler. For fork/join-style recursive CPU work, use `ForkJoinPool` (**work stealing**: an idle thread takes queued tasks from a busy thread's queue).
 
 ### Common mistakes
 - Tasks that wait for other tasks in the same bounded pool (thread-starvation deadlock).
@@ -2509,7 +2509,7 @@ When the caller needs the result immediately and synchronously, a direct call is
 - Busy-polling with `poll()` in a loop instead of blocking `take()`.
 
 ### Real-world examples
-Apache **Kafka** is producer-consumer across machines (topics are the buffer; consumer groups scale consumers). Inside the Kafka Java producer, application threads append records to an in-memory accumulator and a background sender thread ships batches. Logging frameworks' async appenders, and `ThreadPoolExecutor` itself (submitters produce, workers consume).
+Apache **Kafka** (a distributed, durable message log) is producer-consumer across machines (topics are the buffer; **consumer groups** — sets of consumers that split a topic's messages between them — scale consumers). Inside the Kafka Java producer, application threads append records to an in-memory accumulator and a background sender thread ships batches. Logging frameworks' async appenders, and `ThreadPoolExecutor` itself (submitters produce, workers consume).
 
 ### In the interview
 "Producer-consumer decouples producers from consumers with a bounded blocking queue: put waits when full, take waits when empty, giving natural back-pressure. I stop consumers with one poison pill each, and scale consumers independently."
@@ -2585,7 +2585,7 @@ Many readers, one writer. RW lock, or immutable snapshot + volatile swap.
 ### What it is
 Two ways to be thread-safe **without any synchronization**:
 - **Immutability**: an object whose state can't change after construction (all fields `final`, no setters, no leaking mutable internals). Examples: `String`, `Integer`, `LocalDate`, `BigDecimal`, records with immutable components, `List.of(...)`.
-- **Thread confinement**: data that only one thread ever touches. Local variables (stack confinement), `ThreadLocal<T>` (one copy per thread), or a design where one thread owns a structure (event loop, actor).
+- **Thread confinement**: data that only one thread ever touches. Local variables (stack confinement), `ThreadLocal<T>` (one copy per thread), or a design where one thread owns a structure (event loop, **actor** — an object with private state that processes messages from its mailbox one at a time).
 
 **Analogy.** Immutability: a printed book — everyone can read it at once, nobody can change it. Confinement: a personal notebook — you write freely because nobody else reads it.
 
@@ -2597,7 +2597,7 @@ Races need *shared* *mutable* state. Remove "mutable" (immutability) or remove "
 1. Make the class `final` (or a `record`) so subclasses can't add mutability.
 2. Make all fields `private final`.
 3. No setters; "modifiers" return new objects (`withItem(...)`).
-4. Defensive-copy mutable inputs in the constructor (`List.copyOf`) and don't expose mutable internals.
+4. **Defensive-copy** (copy, so the caller's later changes can't reach you) mutable inputs in the constructor (`List.copyOf`) and don't expose mutable internals.
 5. Don't let `this` escape during construction.
 
 **Confinement options:**
@@ -2611,7 +2611,7 @@ Races need *shared* *mutable* state. Remove "mutable" (immutability) or remove "
 ### Trade-offs
 | | Immutability | Confinement |
 |---|---|---|
-| Cost | New object per change (GC pressure) | Per-thread copies; ThreadLocal leaks if not cleaned |
+| Cost | New object per change (GC pressure — more garbage for the collector to clean) | Per-thread copies; ThreadLocal leaks if not cleaned |
 | Sharing | Share freely | Not shareable by definition |
 | Reasoning | Easiest possible | Easy, if confinement is really enforced |
 
@@ -2620,14 +2620,14 @@ Very large objects changed at high frequency (copying costs too much) — use a 
 
 ### Common mistakes
 - `final List<String> items` is not immutable if the list itself is mutable and exposed.
-- `ThreadLocal` in thread pools without `remove()` — values leak into the next task; with many virtual threads, heavy `ThreadLocal`s waste memory (*scoped values* are the alternative: a preview in Java 21, final in Java 25 via JEP 506).
+- `ThreadLocal` in thread pools without `remove()` — values leak into the next task; with many virtual threads, heavy `ThreadLocal`s waste memory (*scoped values* are the alternative: a **preview** — an experimental feature you must opt into — in Java 21, final in Java 25 via JEP 506).
 - Sharing `SimpleDateFormat` (mutable, not thread-safe) instead of using immutable `DateTimeFormatter`.
 
 ### Real-world examples
 - `java.time` types and `DateTimeFormatter` are immutable and thread-safe; `SimpleDateFormat` is not.
 - **Netty** and **Vert.x** confine each connection to one event-loop thread, so handler code needs no locks.
 - Redis executes commands on a single main thread (confinement at system level).
-- Spring's `@Transactional` stores the current transaction in `ThreadLocal`s (via `TransactionSynchronizationManager`).
+- Spring's `@Transactional` (marks a method to run inside a database transaction) stores the current transaction in `ThreadLocal`s (via `TransactionSynchronizationManager`).
 
 ### In the interview
 "The easiest thread-safety is none needed: make value objects immutable — final fields, defensive copies, 'with' methods — and confine mutable state to one thread with locals, ThreadLocal, or a single owner thread fed by a queue."
@@ -2658,8 +2658,8 @@ Showing you can turn a single-threaded class diagram into a **thread-safe design
    - one item claimed → atomic op: `queue.poll()`, `map.putIfAbsent`, `AtomicBoolean.compareAndSet`, `AtomicInteger` CAS loop;
    - several items all-or-nothing → per-item locks acquired **in sorted order** (or one per-show/per-floor lock);
    - across processes/servers → database constraints/transactions, optimistic versioning, or a distributed lock.
-5. **Choose granularity:** per floor/show/SKU locks rather than one global lock.
-6. **Handle time:** temporary holds with expiry (seat held 10 minutes during payment), timeouts, and idempotent retries.
+5. **Choose granularity:** per floor/show/SKU (stock-keeping unit — one distinct product) locks rather than one global lock.
+6. **Handle time:** temporary holds with expiry (seat held 10 minutes during payment), timeouts, and **idempotent** retries (safe to repeat, because doing the operation twice has the same effect as doing it once; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
 
 ```mermaid
 classDiagram
@@ -2852,7 +2852,7 @@ inventory: 200 buyers, 50 in stock -> sold 50, left 0
 | Resource | In-memory approach | Across many servers |
 |---|---|---|
 | Parking spot | Lock-free queue per type/floor, or per-floor lock | DB row update `WHERE status='FREE'` + check affected rows |
-| Seat | Per-show or per-seat locks in sorted order; hold with TTL | Unique constraint on (show, seat); short-lived holds in Redis (`SET NX PX`) |
+| Seat | Per-show or per-seat locks in sorted order; hold with TTL (time-to-live, an expiry) | Unique constraint on (show, seat); short-lived holds in Redis (`SET NX PX`) |
 | Inventory | `AtomicInteger` CAS / `compute` | `UPDATE stock SET qty = qty - 1 WHERE sku = ? AND qty >= 1`; reservations with expiry |
 
 ### When not to use it
@@ -2866,7 +2866,7 @@ Don't bolt `synchronized` onto every method of every class — interviewers read
 
 ### Real-world examples
 - **BookMyShow / Ticketmaster-style** checkout: selected seats are *held* for a few minutes while you pay; if payment doesn't complete, the hold expires and the seats return to the pool — a lock with a lease.
-- **Flash sales** (e.g. limited-stock phone launches) decrement stock atomically, often in Redis (`DECR` / Lua scripts) or with conditional SQL updates, to avoid overselling.
+- **Flash sales** (e.g. limited-stock phone launches) decrement stock atomically, often in Redis (`DECR` / Lua scripts, which Redis runs atomically) or with conditional SQL updates, to avoid overselling.
 - **Uber-style dispatch**: offering one driver to one rider at a time is the same "claim a resource atomically" problem.
 
 ### In the interview

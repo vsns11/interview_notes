@@ -1,6 +1,6 @@
 # Chapter 10 — Behavioral Design Patterns (Part 1)
 
-> **What you will learn.** What behavioral patterns are, and six of them in depth: **Chain of Responsibility, Command, Iterator, Mediator, Memento** and **Interpreter**. For each one you get a plain definition, the problem it fixes, the class diagram, Java 21 code that compiles and runs, real products and JDK classes that use it, and interview questions with answers. Chapter 11 covers the other five GoF behavioral patterns (Observer, State, Strategy, Template Method, Visitor) and some important patterns that are not in the GoF book.
+> **What you will learn.** What behavioral patterns are, and six of them in depth: **Chain of Responsibility, Command, Iterator, Mediator, Memento** and **Interpreter**. For each one you get a plain definition, the problem it fixes, the class diagram, Java 21 code that compiles and runs, real products and JDK (Java Development Kit — Java's compiler, tools and standard library) classes that use it, and interview questions with answers. Chapter 11 covers the other five GoF behavioral patterns (Observer, State, Strategy, Template Method, Visitor) and some important patterns that are not in the GoF book.
 
 **How to run the code in this chapter**
 
@@ -23,7 +23,7 @@ Everyday analogy: a restaurant kitchen. The structural question is "which statio
 Behavioral patterns help you to:
 
 - let objects work together in a flexible, efficient way;
-- cut tight coupling between classes, so each class is easier to change and test;
+- cut tight coupling (classes depending heavily on each other's internal details) between classes, so each class is easier to change and test;
 - turn tangled communication between many objects into something simple to follow;
 - change behaviour **while the program runs** (at run time), not only when you compile it.
 
@@ -58,7 +58,7 @@ The "Gang of Four" (GoF) book, *Design Patterns* (Gamma, Helm, Johnson, Vlisside
 
 ### What it is
 
-**Chain of Responsibility (CoR)** sends a request through a row of **handler** objects. Every handler makes one of three choices: deal with the request, reject it (so nobody later sees it), or forward it to its successor. The sender talks only to the first handler and never learns which one finally took care of the request.
+**Chain of Responsibility (CoR)** sends a request through a row of **handler** objects. Every handler makes one of three choices: deal with the request, reject it (so nobody later sees it), or forward it to its successor (the next handler in the row). The sender talks only to the first handler and never learns which one finally took care of the request.
 
 GoF intent, in plain words: *avoid tying the sender of a request to one particular receiver by giving several objects a chance to handle it; link those objects and forward the request until one handles it.* GoF participants: **Handler** (declares the handling method, optionally holds the successor link), **ConcreteHandler** (handles what it is responsible for, otherwise forwards), and **Client** (starts the request at a handler in the chain).
 
@@ -68,11 +68,11 @@ In the figure above, one chain (auth → rate limit → validation → create or
 
 ### The problem it solves
 
-Before an order is created, a request must survive several gates: who is calling (authentication), are they calling too often (rate limit), and is the body well-formed (validation). Written directly, one method does all of them:
+Before an order is created, a request must survive several gates: who is calling (authentication), are they calling too often (rate limit), and is the body (the data sent with the request) well-formed (validation). Written directly, one method does all of them:
 
 - The method grows every time a rule is added.
 - The **order of the checks is hidden inside the method body**, yet it matters: authenticating before rate limiting is a different system from rate limiting before authenticating.
-- Some routes need only two of the checks. Soon there are boolean flags, then a second copy of the method that someone forgets to update.
+- Some routes (the URL paths a server handles, such as `/orders`) need only two of the checks. Soon there are boolean flags, then a second copy of the method that someone forgets to update.
 
 CoR makes **each check its own small object**, and links them into a line. No handler knows how long the line is or what else is on it, so **the line itself is configuration, not logic**: a new rule costs one new class plus one wiring line; changing the order touches only the wiring; each route can be given its own line, assembled when the application starts.
 
@@ -89,7 +89,7 @@ CoR makes **each check its own small object**, and links them into a line. No ha
 ![Chain of Responsibility Pattern - Class Diagram](../../assets/P-chain-of-responsibility-pattern-2.svg)
 *Figure — Class diagram: an abstract Handler holds `next`; concrete handlers extend it; CreateOrderHandler is the tail (course diagram)*
 
-In the class diagram above, notice what is **missing**: no handler refers to another *concrete* handler. Every link is typed as the abstract `Handler`, and that is why the stages can be shuffled freely. `setNext` hands back its argument, which lets the wiring be written as one fluent expression.
+In the class diagram above (a UML — Unified Modeling Language — diagram, the standard notation for classes and their links), notice what is **missing**: no handler refers to another *concrete* handler. Every link is typed as the abstract `Handler`, and that is why the stages can be shuffled freely. `setNext` hands back its argument, which lets the wiring be written as one fluent expression (calls chained with dots, each returning the object for the next call).
 
 > **Our code vs the course pseudocode.** In the course version, `passOn` returns `true` ("success") when there is no next handler. Our `passOn` **throws** instead, because silently reporting success when the chain simply ran out is exactly the kind of invisible failure this pattern is prone to. Either choice is legal; just make it deliberate.
 
@@ -140,9 +140,9 @@ sequenceDiagram
 The package `lld.ch10.chain` shows **four flavours** of the pattern:
 
 1. **Classic linked handlers** (`Handler`, `AuthHandler`, `RateLimitHandler`, `ValidationHandler`, `CreateOrderHandler`). Each handler returns an *explicit* outcome: `false` = rejected, `passOn(...)` = continue. `passOn` **throws** if there is no next handler, so a chain without a terminal handler fails loudly instead of silently "succeeding".
-2. **Approval chain** (`Approver`, `Expense`). A pure CoR: the *first* approver whose limit is high enough approves, and nobody after it sees the request. Note that there is only **one** class — the chain is just data (role + limit). Amounts and limits are `BigDecimal` compared with `compareTo` — never `double` for money.
-3. **Servlet-style filters** (`Filter`, `FilterChain`, `Endpoint`, `HttpRequest`). This is how `jakarta.servlet.Filter` works: the "next" step is passed **in as an argument** (`chain.doFilter(...)`). A filter can act before *and after* the rest of the chain (see the timing filter), or stop the chain by not calling it (the auth filter).
-4. **Logging levels** (`LogHandler`, `ConsoleLog`, `FileLog`, `PagerLog`, `Level`). A common *variant*: each handler acts if the message is severe enough and then **always** passes it on. Several handlers may act. Strictly, when nothing can stop the flow it is closer to a *pipeline*, but textbooks often show logging this way, and it is worth knowing the difference.
+2. **Approval chain** (`Approver`, `Expense`). A pure CoR: the *first* approver whose limit is high enough approves, and nobody after it sees the request. Note that there is only **one** class — the chain is just data (role + limit). Amounts and limits are `BigDecimal` (Java's exact decimal number type) compared with `compareTo` — never `double` for money.
+3. **Servlet-style filters** (`Filter`, `FilterChain`, `Endpoint`, `HttpRequest`). This is how `jakarta.servlet.Filter` (part of the servlet API, Java's standard way to handle web requests) works: the "next" step is passed **in as an argument** (`chain.doFilter(...)`). A filter can act before *and after* the rest of the chain (see the timing filter), or stop the chain by not calling it (the auth filter).
+4. **Logging levels** (`LogHandler`, `ConsoleLog`, `FileLog`, `PagerLog`, `Level`). A common *variant*: each handler acts if the message is severe enough and then **always** passes it on. Several handlers may act. Strictly, when nothing can stop the flow it is closer to a *pipeline* (a fixed series of steps that every item passes through), but textbooks often show logging this way, and it is worth knowing the difference.
 
 ```java
 // File: code/lld/ch10/chain/Handler.java
@@ -556,20 +556,20 @@ Walk through the output:
 
 - Request 1 travels the full chain. Request 2 stops at auth — the rate limiter, validator and order code never run. Request 3 passes auth and the limiter (2 of 2) and stops at validation. Request 4 is the third request from alice, so the limiter stops it.
 - `EXP-2` is escalated once and approved by the Manager. `EXP-3` is above every limit, so the chain gives an explicit "REJECTED" outcome rather than disappearing.
-- The timing filter prints both before and after the rest of the chain. For the unauthenticated request, the auth filter wrote `401` and did not call `next`, so the endpoint never ran.
+- The timing filter prints both before and after the rest of the chain. For the unauthenticated request, the auth filter wrote `401` (the HTTP status code for "not authenticated") and did not call `next`, so the endpoint never ran.
 - A `DEBUG` message only reaches the console; an `ERROR` goes to all three.
 
 ### Trade-offs
 
 | Pros | Cons |
 |---|---|
-| A new stage costs one class and one wiring line; no working class is edited (Open/Closed). | To see the route a request takes you must read the wiring plus several files. |
-| Every stage can be unit-tested on its own against a stub successor. | When a request is refused, you may have to step through several handlers to learn which one refused it. |
+| A new stage costs one class and one wiring line; no working class is edited (Open/Closed — open for extension, closed for modification). | To see the route a request takes you must read the wiring plus several files. |
+| Every stage can be unit-tested (tested in isolation) on its own against a stub (a minimal stand-in) successor. | When a request is refused, you may have to step through several handlers to learn which one refused it. |
 | Each route or environment can get its own chain, assembled at start-up. | No compiler or framework verifies that the chain is complete or correctly ordered. |
 | The sender does not know which object will end up handling its request. | A handler that neither handles nor forwards makes the request vanish without any error. |
-| | Each extra stage adds a call; rarely matters, but can on very hot paths with long chains. |
+| | Each extra stage adds a call; rarely matters, but can on very hot paths (code that runs extremely often) with long chains. |
 
-**The order of the stages is a design decision that no tool verifies.** Auth before rate limiting means the limiter can count per *user*, and requests without valid credentials are turned away before they can use up a real user's quota. Rate limiting before auth means the limiter can only key on something like the IP address — but it shields the (possibly expensive) auth step from floods. Both are reasonable; they behave differently. **Put a comment with the reason beside the wiring** (see `Main`): the order is written down nowhere else.
+**The order of the stages is a design decision that no tool verifies.** Auth before rate limiting means the limiter can count per *user*, and requests without valid credentials are turned away before they can use up a real user's quota (allowed number of requests). Rate limiting before auth means the limiter can only key on something like the IP address (the network address of the calling machine) — but it shields the (possibly expensive) auth step from floods (huge bursts of requests). Both are reasonable; they behave differently. **Put a comment with the reason beside the wiring** (see `Main`): the order is written down nowhere else.
 
 ### When not to use it
 
@@ -588,13 +588,13 @@ Walk through the output:
 
 ### Real-world examples
 
-- **Servlet filters**: `jakarta.servlet.Filter.doFilter(request, response, chain)` — calling `chain.doFilter(...)` *is* "pass on". **Spring Security** is a chain of such filters (`SecurityFilterChain`).
+- **Servlet filters**: `jakarta.servlet.Filter.doFilter(request, response, chain)` — calling `chain.doFilter(...)` *is* "pass on". **Spring Security** (Spring's authentication and authorisation library) is a chain of such filters (`SecurityFilterChain`).
 - **Spring MVC `HandlerInterceptor`**: `preHandle` returns `false` to stop the request.
-- **HTTP middleware** in Express (`next()`), Django, Ruby's Rack, ASP.NET Core, Go (`func(http.Handler) http.Handler`, the usual way to structure a Go web service). **OkHttp** interceptors call `chain.proceed(request)`. **Netty**'s `ChannelPipeline` passes events from handler to handler.
-- **In languages with first-class functions** the chain is usually a list of `(request, next) => ...` functions rather than classes; JavaScript frameworks often build it by folding the list with `Array.reduce`, and in Python several decorators stacked on one view function form a chain written as syntax. Passing `next` explicitly removes the "forgot to pass on" bug by design.
+- **HTTP middleware** (code a web framework runs around every request; HTTP is the web's request/response protocol) in Express (`next()`), Django, Ruby's Rack, ASP.NET Core, Go (`func(http.Handler) http.Handler`, the usual way to structure a Go web service). **OkHttp** interceptors call `chain.proceed(request)`. **Netty**'s `ChannelPipeline` passes events from handler to handler.
+- **In languages with first-class functions** (functions that can be stored and passed around like values) the chain is usually a list of `(request, next) => ...` functions rather than classes; JavaScript frameworks often build it by folding (combining a list into one value step by step) the list with `Array.reduce`, and in Python several decorators (`@` wrappers around a function) stacked on one view function (the function that handles a web request) form a chain written as syntax. Passing `next` explicitly removes the "forgot to pass on" bug by design.
 - **`java.util.logging`**: a `LogRecord` is published to the logger's handlers and then, by default, to its parent logger's handlers; `setUseParentHandlers(false)` stops that. This is why setting a level or handler on a parent logger affects its children.
-- **Exception handling**: each stack frame either catches the exception or lets it travel up — the language's own chain.
-- **DOM event bubbling**: a click event climbs from the clicked element through its parent elements; any listener can call `stopPropagation()` to end the climb.
+- **Exception handling**: each stack frame (one method call in progress) either catches the exception or lets it travel up — the language's own chain.
+- **DOM event bubbling** (the DOM — Document Object Model — is the browser's tree of page elements): a click event climbs from the clicked element through its parent elements; any listener can call `stopPropagation()` to end the climb.
 - **Approval workflows** (expenses, leave requests, loan approvals) where authority is based on amount or role, and **customer-support escalation** tiers.
 
 ### In the interview
@@ -608,7 +608,7 @@ Walk through the output:
 - *How is it different from a pipeline?* A pipeline pushes a value through **all** of its steps and produces a transformed result. A chain *routes* a request to whichever handler takes it. Rule of thumb: if no stage can stop the flow, you have a pipeline.
 - *Combine it with Command?* Yes — the request moving through the handlers is frequently itself a Command object (e.g. a job checked by validation and authorisation handlers before a worker runs it).
 - *What if no handler can handle the request?* Put an explicit terminal handler (e.g. `NoHandlerFound`) that returns an error or logs, so failures are never silent.
-- *How do you test it?* Test each handler with a fake next handler that records whether it was called and with what; then one integration test for the wiring order.
+- *How do you test it?* Test each handler with a fake next handler that records whether it was called and with what; then one integration test (a test of several parts working together) for the wiring order.
 - *Where should rate limiting go, before or after auth?* Explain the trade-off above and say you would document the reason next to the wiring.
 
 ### Self-check
@@ -632,7 +632,7 @@ A request walks a line of handlers; each handles, rejects, or passes on. The cha
 
 ### What it is
 
-**Command** packages a request ("add 2 widgets to the cart") as an **object** containing everything required to perform it later. Once the request is a value you can hold, you can **keep it in a list, put it on a queue, write it to an audit log, run it again, hand it to a worker thread** — and, when it also knows its own inverse, **reverse it**.
+**Command** packages a request ("add 2 widgets to the cart") as an **object** containing everything required to perform it later. Once the request is a value you can hold, you can **keep it in a list, put it on a queue (a first-in, first-out waiting line), write it to an audit log (a permanent record of who did what), run it again, hand it to a worker thread (a background thread — an independent path of execution — that takes jobs and runs them)** — and, when it also knows its own inverse, **reverse it**.
 
 GoF intent, in plain words: *wrap a request in an object, so clients can be given different requests, requests can be queued or logged, and operations can be undone.*
 
@@ -643,10 +643,10 @@ Everyday analogy: a restaurant order slip. The waiter (invoker) does not cook; t
 A plain method call such as `cart.setDiscount(10)` runs immediately and is forgotten the moment it returns. That is not enough once you need any of these:
 
 - **Undo** — "reverse my last two changes".
-- **A queue** — run the work later, on a worker thread, not in the request thread.
+- **A queue** — run the work later, on a worker thread, not in the request thread (the thread serving the user's request).
 - **A log of intent** — an auditor asks which operations were *requested*, not just what state the data ended up in.
 - **Retry** — run a failed action again with the same arguments.
-- **One action, many triggers** — a menu item, a hot-key and an automation script should all fire the same "apply discount".
+- **One action, many triggers** — a menu item, a hot-key (keyboard shortcut) and an automation script should all fire the same "apply discount".
 
 Command gives the request a body that outlives the call.
 
@@ -666,7 +666,7 @@ Steps:
 
 1. The client creates a concrete command, passing the **receiver** and the **arguments**.
 2. It hands the command to the **invoker**.
-3. The invoker calls `execute()` and, if the command is undoable, pushes it on an **undo stack**.
+3. The invoker calls `execute()` and, if the command is undoable, pushes it on an **undo stack** (a stack is a last-in, first-out pile: you add and remove only at the top).
 4. **Undo** = pop the last command and call `undo()`; push it on a **redo stack**.
 5. **Redo** = pop from redo, `execute()` again, push back on undo. **Running a fresh command empties the redo stack**: the branch of history you might have re-applied has been replaced.
 
@@ -746,10 +746,10 @@ sequenceDiagram
 
 Key design points in `lld.ch10.command`:
 
-- `Command` has **one abstract method**, so any lambda or `Runnable`-like block can be a command. Only commands that can *honestly* be reversed implement `UndoableCommand`. `CommandHistory` keeps irreversible commands out of the undo stack.
+- `Command` has **one abstract method**, so any lambda (a short unnamed function) or `Runnable`-like block (`Runnable` is Java's built-in "code to run" interface) can be a command. Only commands that can *honestly* be reversed implement `UndoableCommand`. `CommandHistory` keeps irreversible commands out of the undo stack.
 - `ApplyDiscountCommand` **captures the old value in `execute()`** and restores exactly that in `undo()`. The cart deliberately starts at 5%, to show that "undo = set to 0" would be wrong.
 - `MacroCommand` is a command made of commands (a **Composite** of commands): it executes steps in order and undoes them in **reverse** order.
-- Section 4 of `Main` shows the JDK's own version: `Runnable` is the command interface and an `ExecutorService` is the invoker that runs commands on a worker thread.
+- Section 4 of `Main` shows the JDK's own version: `Runnable` is the command interface and an `ExecutorService` (Java's thread-pool service for running tasks) is the invoker that runs commands on a worker thread.
 
 ```java
 // File: code/lld/ch10/command/Command.java
@@ -1031,7 +1031,7 @@ It is tempting to write a discount undo as "reset to 0" or "calculate what the o
 
 **Undo history is strictly last-in, first-out.** Commands are reversed newest first: the sequence `AddItem, AddItem, ApplyDiscount` is undone as `ApplyDiscount`, then the second `AddItem`, then the first. Reversing them in any other order can produce states that never existed, hence a stack, never a list you can index into at random.
 
-**When undo is a lie.** Some effects escape your system: an email that was sent, a card that was charged, a call made to a partner's API. An `undo()` on those promises something impossible, which is worse than having no undo at all. Two honest options: keep them out of the history (our `SendReceipt`), or use **compensation** — a *new* action that produces a similar end state, like a **refund** for a charge. A refund is not an undo: both events stay in the record.
+**When undo is a lie.** Some effects escape your system: an email that was sent, a card that was charged, a call made to a partner's API (the interface a service exposes for other programs to call). An `undo()` on those promises something impossible, which is worse than having no undo at all. Two honest options: keep them out of the history (our `SendReceipt`), or use **compensation** — a *new* action that produces a similar end state, like a **refund** for a charge. A refund is not an undo: both events stay in the record.
 
 ### Trade-offs
 
@@ -1046,28 +1046,28 @@ It is tempting to write a discount undo as "reset to 0" or "calculate what the o
 
 - **The call is simple and immediate.** A `SaveCommand` class that nobody ever undoes, queues or logs is extra code with no benefit.
 - **Undo is not really possible.** Use compensation and call it that.
-- **You only need deferral.** A lambda (`Runnable`) already is a one-method command. Promote it to a class once you need `undo`, a readable name in logs, or serialization.
-- **Commands must outlive the process.** They then have to be serialized, which drags in format versioning; a durable queue or an event log (Kafka, a jobs table) handles that better than hand-rolled command classes.
+- **You only need deferral.** A lambda (`Runnable`) already is a one-method command. Promote it to a class once you need `undo`, a readable name in logs, or serialization (turning it into bytes or text so it can be stored or sent).
+- **Commands must outlive the process.** They then have to be serialized, which drags in format versioning; a durable queue (one that survives restarts — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) or an event log (Kafka — a durable, distributed message log — or a jobs table) handles that better than hand-rolled command classes.
 
 ### Common mistakes
 
 1. **Recomputing in `undo`** instead of restoring captured state.
 2. **Forgetting to clear the redo stack** when a new command runs.
-3. **Putting business logic in the invoker** (`if (cmd instanceof AddItem) ...`). The invoker should only run and remember.
-4. **Commands that capture a mutable object by reference** and then read it later, when it has changed. Capture values.
+3. **Putting business logic in the invoker** (`if (cmd instanceof AddItem) ...` — `instanceof` checks an object's concrete type). The invoker should only run and remember.
+4. **Commands that capture a mutable object by reference** (mutable = changeable after creation) and then read it later, when it has changed. Capture values.
 5. **Unbounded history** — cap the depth, as editors do.
 
 ### Real-world examples
 
-- **Undo in editors**: word processors, IDEs, Photoshop. The JDK has `javax.swing.undo.UndoManager` with `UndoableEdit` objects that have `undo()`/`redo()`.
+- **Undo in editors**: word processors, IDEs (integrated development environments — code editors such as IntelliJ), Photoshop. The JDK has `javax.swing.undo.UndoManager` with `UndoableEdit` objects that have `undo()`/`redo()`.
 - **`Runnable` / `Callable`** are the JDK's command interfaces; `ExecutorService`, `ScheduledExecutorService` and `Thread` are invokers.
-- **GUI actions**: Swing's `javax.swing.Action` lets one action back a menu item, a toolbar button and a shortcut; WPF's `ICommand` in .NET plays the same role.
-- **Event sourcing** (Chapter 11): recording the *requested changes* instead of only the resulting state is the command idea applied to a whole system.
-- **Job queues**: a Sidekiq/Celery job, a Spring `@Async` task, a message on a Kafka/RabbitMQ queue that asks a worker to "send invoice #42" — a serialized command.
-- **Database migrations** with `up`/`down` (e.g. Liquibase changesets with rollback) mirror `execute`/`undo`.
-- **Redux** actions are command objects: the store dispatches them (invoker role) and reducers apply them to state (receiver role); Redux DevTools' time travel replays them.
-- **In other languages**: in Python, a callable object (one defining `__call__`) with an extra `undo` method works well, and `functools.partial` can bind the arguments; in C#, UI frameworks ship an `ICommand` interface, and a `record` gives you an immutable command in a single line.
-- **Transactional outbox / task tables** in food-delivery or e-commerce back ends store "commands" (send SMS, notify restaurant) to be run reliably by workers.
+- **GUI actions** (GUI = graphical user interface): Swing's (Java's desktop UI toolkit) `javax.swing.Action` lets one action back a menu item, a toolbar button and a shortcut; WPF's `ICommand` in .NET plays the same role.
+- **Event sourcing** (Chapter 11; storing every change as an event and rebuilding state by replaying them): recording the *requested changes* instead of only the resulting state is the command idea applied to a whole system.
+- **Job queues**: a Sidekiq/Celery (background-job libraries for Ruby and Python) job, a Spring `@Async` task, a message on a Kafka/RabbitMQ (message brokers) queue that asks a worker to "send invoice #42" — a serialized command.
+- **Database migrations** (versioned scripts that change a database's structure) with `up`/`down` (e.g. Liquibase changesets with rollback) mirror `execute`/`undo`.
+- **Redux** (a JavaScript state-management library) actions are command objects: the store dispatches them (invoker role) and reducers apply them to state (receiver role); Redux DevTools' time travel replays them.
+- **In other languages**: in Python, a callable object (one defining `__call__`) with an extra `undo` method works well, and `functools.partial` can bind the arguments; in C#, UI frameworks ship an `ICommand` interface, and a `record` gives you an immutable (unchangeable after creation) command in a single line.
+- **Transactional outbox / task tables** (the job is written to a database table in the same transaction — the same all-or-nothing database update — as the data change, so it cannot be lost) in food-delivery or e-commerce back ends store "commands" (send SMS, notify restaurant) to be run reliably by workers.
 
 ### In the interview
 
@@ -1076,11 +1076,11 @@ It is tempting to write a discount undo as "reset to 0" or "calculate what the o
 **Follow-ups:**
 
 - *Command vs Strategy?* Each puts behaviour inside an object. A **Strategy** answers *how* a job is done and is picked and replaced by the caller. A **Command** captures *which* job to do, arguments included, and is held on to so it can run later or be reversed.
-- *Command vs a plain lambda?* A one-method closure already is a command. Write a class only when you also need `undo`, a readable log name, or to serialize it.
+- *Command vs a plain lambda?* A one-method closure (a function that remembers variables from where it was created) already is a command. Write a class only when you also need `undo`, a readable log name, or to serialize it.
 - *Command vs Memento for undo?* Command stores the **action** plus a small piece of state; undo runs the inverse. Memento stores the **whole state**; undo puts a snapshot back. Command is cheaper per step; Memento is always correct. Real systems combine them (snapshot occasionally, replay commands in between).
 - *How do you implement redo?* A second stack; undo moves a command to it; redo moves it back after re-executing; a new command clears it.
-- *How do you make a command queue thread-safe?* Use a `BlockingQueue` or an `ExecutorService`; make commands immutable apart from captured undo state.
-- *How would you persist commands?* Serialize them (JSON with a type field and a version), store in a durable queue or table, make them **idempotent** so a retry is safe.
+- *How do you make a command queue thread-safe (correct when many threads use it at once)?* Use a `BlockingQueue` (a queue whose `take()` waits until an item arrives) or an `ExecutorService`; make commands immutable apart from captured undo state.
+- *How would you persist commands?* Serialize them (JSON — a common text format for structured data — with a type field and a version), store in a durable queue or table, make them **idempotent** (running one twice has the same effect as running it once — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) so a retry is safe.
 
 ### Self-check
 
@@ -1103,20 +1103,20 @@ Make the request an object: **invoker** runs it, **command** knows do/undo, **re
 
 ### What it is
 
-**Iterator** lets you visit the elements of a collection **one at a time, in order, without knowing how the collection stores them** — array, linked list, tree, or a remote API that returns two results per page.
+**Iterator** lets you visit the elements of a collection **one at a time, in order, without knowing how the collection stores them** — array, linked list (elements chained together by references), tree, or a remote API that returns two results per page.
 
-GoF intent, in plain words: *give sequential access to the elements of an aggregate without exposing its internal representation.* GoF participants: **Iterator** (interface for accessing and traversing), **ConcreteIterator** (implements it and tracks the current position), **Aggregate** (interface for creating an iterator) and **ConcreteAggregate** (returns the right ConcreteIterator).
+GoF intent, in plain words: *give sequential access to the elements of an aggregate (GoF's word for a collection) without exposing its internal representation.* GoF participants: **Iterator** (interface for accessing and traversing), **ConcreteIterator** (implements it and tracks the current position), **Aggregate** (interface for creating an iterator) and **ConcreteAggregate** (returns the right ConcreteIterator).
 
 Everyday analogy: a TV remote's "next channel" button. You do not need to know how the channels are stored in the TV; you just press *next* until there are no more.
 
 ### The problem it solves
 
-- Code that loops with `get(i)` quietly assumes the data sits in an array. Move the data into a linked list, a tree or a paginated remote service, and each of those loops must be rewritten.
-- Many sources **cannot be indexed at all**: a tree has several valid visiting orders (depth-first, breadth-first); a graph must remember which nodes were already seen; a search API hands out pages. When each caller writes its own traversal, each caller also re-implements paging — and some implement it wrongly.
+- Code that loops with `get(i)` quietly assumes the data sits in an array. Move the data into a linked list, a tree or a paginated (returns results one page at a time) remote service, and each of those loops must be rewritten.
+- Many sources **cannot be indexed at all**: a tree has several valid visiting orders (depth-first — follow one branch all the way down before the next; breadth-first — level by level); a graph (nodes joined by edges, possibly with loops) must remember which nodes were already seen; a search API hands out pages. When each caller writes its own traversal, each caller also re-implements paging — and some implement it wrongly.
 
 Iterator moves the walking logic **into a separate object** that answers two questions: *are any elements left?* (`hasNext`) and *hand me the following element* (`next`).
 
-**Key detail: the current position is stored inside the iterator object, never in the collection.** So two traversals of one collection can be in progress together without disturbing each other, and every call to `iterator()` must build a **new** iterator instead of rewinding a shared cursor.
+**Key detail: the current position is stored inside the iterator object, never in the collection.** So two traversals of one collection can be in progress together without disturbing each other, and every call to `iterator()` must build a **new** iterator instead of rewinding a shared cursor (a marker of the current position).
 
 ### How it works
 
@@ -1130,7 +1130,7 @@ Iterator moves the walking logic **into a separate object** that answers two que
 ![Iterator Pattern - Class Diagram](../../assets/P-iterator-pattern-2.svg)
 *Figure — Class diagram: SearchResults (aggregate) hands out a SearchResultIterator, which calls SearchApi page by page; the client only calls hasNext/next (course diagram)*
 
-In the diagram above, `hasNext` does real work: once the buffered page runs out, it asks the API for another page. A *lazy* iterator (one that produces elements only on demand) commonly behaves like this — so never assume `hasNext` is cheap or has no side effects.
+In the diagram above, `hasNext` does real work: once the buffered page runs out, it asks the API for another page. A *lazy* iterator (one that produces elements only on demand) commonly behaves like this — so never assume `hasNext` is cheap or has no side effects (effects beyond returning a value, such as a network call).
 
 Our Java design:
 
@@ -1174,10 +1174,10 @@ classDiagram
 
 `lld.ch10.iterator` shows:
 
-1. **A paged remote source behind a plain for-each.** `PagedSearchResults implements Iterable<String>`, so `for (String r : results)` just works. The inner `PagedIterator` fetches a page only when the current one is used up, and follows the `Iterator` contract (`next()` throws `NoSuchElementException` when empty).
-2. **A tree iterator.** `BinarySearchTree` hides an in-order walk behind `hasNext/next` using an explicit stack; two iterators over the same tree run independently.
-3. **External vs internal iteration.** *External*: the **client** drives (`hasNext/next`) and can stop early with `break`. *Internal*: the **collection** drives and calls your code for each element (`forEach(lambda)`, streams).
-4. **Fail-fast vs fail-safe.** Structurally changing an `ArrayList` (adding or removing) while a for-each loop is walking it *usually* makes the next `next()` throw `ConcurrentModificationException`. It is only **best-effort**: the demo also removes the second-to-last element, after which `hasNext()` simply returns `false` — no exception, and the last element is silently never visited. The safe way is `Iterator.remove()` (or `removeIf`). `CopyOnWriteArrayList` iterates over a **snapshot**, so it never throws — but the loop does not see the new elements. ("Fail-safe" is an informal name; the Javadoc talks about *snapshot* and *weakly consistent* iterators.)
+1. **A paged remote source behind a plain for-each.** `PagedSearchResults implements Iterable<String>`, so `for (String r : results)` just works. The inner `PagedIterator` fetches a page only when the current one is used up, and follows the `Iterator` contract (the documented rules every implementation must obey) (`next()` throws `NoSuchElementException` when empty).
+2. **A tree iterator.** `BinarySearchTree` hides an in-order walk (left subtree, then the node, then the right subtree — which yields sorted order) behind `hasNext/next` using an explicit stack; two iterators over the same tree run independently.
+3. **External vs internal iteration.** *External*: the **client** drives (`hasNext/next`) and can stop early with `break`. *Internal*: the **collection** drives and calls your code for each element (`forEach(lambda)`, streams — Java's pipeline API for processing collections).
+4. **Fail-fast vs fail-safe.** Structurally changing an `ArrayList` (adding or removing) while a for-each loop is walking it *usually* makes the next `next()` throw `ConcurrentModificationException`. It is only **best-effort**: the demo also removes the second-to-last element, after which `hasNext()` simply returns `false` — no exception, and the last element is silently never visited. The safe way is `Iterator.remove()` (or `removeIf`). `CopyOnWriteArrayList` iterates over a **snapshot**, so it never throws — but the loop does not see the new elements. ("Fail-safe" is an informal name; the Javadoc (Java's official API documentation) talks about *snapshot* and *weakly consistent* iterators.)
 5. **`Spliterator`** (Java 8): an iterator that can **split** itself (`trySplit`) so parallel streams can process parts on different threads. It reports **characteristics** such as `SIZED` and `ORDERED`.
 
 ```java
@@ -1434,7 +1434,7 @@ public class Main {
 
 ### Hide the shape, not the cost
 
-Look at section 1 of the output: five results, **four** network calls. The last call comes back empty; its only purpose is to find out that the data has ended, because this API reports neither a total nor a "next page" token. That is genuine behaviour, not a bug in the demo. The takeaway: **a tidy loop conceals how much each step costs.** The **N+1 query problem** in ORMs has the same shape (one query for the list, then one more query *per element* as you iterate). Ways to keep the cost visible:
+Look at section 1 of the output: five results, **four** network calls. The last call comes back empty; its only purpose is to find out that the data has ended, because this API reports neither a total nor a "next page" token. That is genuine behaviour, not a bug in the demo. The takeaway: **a tidy loop conceals how much each step costs.** The **N+1 query problem** in ORMs (object-relational mappers: libraries that turn database rows into objects) has the same shape (one query for the list, then one more query *per element* as you iterate). Ways to keep the cost visible:
 
 - **Name the type honestly** (`PagedResults`, `LazySearchResults`, not `List`).
 - **Offer a batch API** for callers who want everything, with bigger pages.
@@ -1451,7 +1451,7 @@ Look at section 1 of the output: five results, **four** network calls. The last 
 | `Spliterator<T>` | `tryAdvance`, `forEachRemaining`, `trySplit` for parallelism, `characteristics()` like `ORDERED`, `SIZED`, `DISTINCT`, `IMMUTABLE`. |
 | `Enumeration<E>` | The old (Java 1.0) version: `hasMoreElements()`, `nextElement()`. Prefer `Iterator`. |
 
-**Fail-fast, weakly consistent, snapshot.** Iterators of `ArrayList`, `HashMap` and friends are **fail-fast**: they detect a structural change made behind their back and throw `ConcurrentModificationException`. The Javadoc says this is done on a **best-effort** basis — never write code that relies on the exception (section 4 of the demo shows a removal that goes unnoticed). Despite its name, the exception is most often caused by **one thread** changing a collection inside its own loop, not by concurrency. `ConcurrentHashMap` iterators are **weakly consistent** (never throw, may or may not show concurrent changes). `CopyOnWriteArrayList` iterators work on a **snapshot** (and their `remove()` throws `UnsupportedOperationException`).
+**Fail-fast, weakly consistent, snapshot.** Iterators of `ArrayList`, `HashMap` and friends are **fail-fast**: they detect a structural change made behind their back and throw `ConcurrentModificationException`. The Javadoc says this is done on a **best-effort** basis — never write code that relies on the exception (section 4 of the demo shows a removal that goes unnoticed). Despite its name, the exception is most often caused by **one thread** changing a collection inside its own loop, not by concurrency (several threads running at the same time). `ConcurrentHashMap` iterators are **weakly consistent** (never throw, may or may not show concurrent changes). `CopyOnWriteArrayList` iterators work on a **snapshot** (and their `remove()` throws `UnsupportedOperationException`).
 
 ### Trade-offs
 
@@ -1460,7 +1460,7 @@ Look at section 1 of the output: five results, **four** network calls. The last 
 | Client code no longer cares whether data lives in an array, in a tree or behind an API. | One more object is created per traversal (only noticeable in extremely hot loops). |
 | One structure can offer several named, reusable visiting orders. | Changing the collection mid-loop is a bug unless you use the iterator's own `remove` or a concurrent collection. |
 | Elements can be produced lazily, so even huge or endless sequences work. | If a lazy iterator owns a file or DB cursor and the loop breaks early, the resource leaks unless it is closed. |
-| Paging, buffering and prefetching disappear behind an ordinary loop. | Per-step cost becomes invisible — the root of N+1 problems. |
+| Paging, buffering and prefetching (loading the next data before it is asked for) disappear behind an ordinary loop. | Per-step cost becomes invisible — the root of N+1 problems. |
 
 ### When not to use it
 
@@ -1472,8 +1472,8 @@ Look at section 1 of the output: five results, **four** network calls. The last 
 ### Common mistakes
 
 1. **Modifying the collection while iterating** (other than through `Iterator.remove`). Collect changes and apply them after the loop, or use `removeIf`.
-2. **Leaking a resource** from a lazy iterator on early `break`. Use try-with-resources (`Files.lines`, `DirectoryStream` and JDBC `ResultSet` are all closeable).
-3. **Reusing a one-shot iterator** or stream a second time: it is already exhausted. A Java `Stream` at least throws `IllegalStateException`; a Python generator just yields nothing the second time, so the bug shows up as missing data. That is why `iterator()` must return a *new* object.
+2. **Leaking a resource** from a lazy iterator on early `break`. Use try-with-resources (Java's `try (...)` form that closes resources automatically) (`Files.lines`, `DirectoryStream` and JDBC (Java's standard database API) `ResultSet` are all closeable).
+3. **Reusing a one-shot iterator** or stream a second time: it is already exhausted. A Java `Stream` at least throws `IllegalStateException`; a Python generator (a function that produces values one at a time with `yield`) just yields nothing the second time, so the bug shows up as missing data. That is why `iterator()` must return a *new* object.
 4. **`next()` without `hasNext()`**, or a `next()` that returns `null` at the end instead of throwing `NoSuchElementException`.
 5. **Storing the cursor in the collection** — then two loops interfere.
 6. **Assuming every language fails loudly.** Java's fail-fast iterators usually throw `ConcurrentModificationException` when you modify a list mid-loop; Python may simply skip elements and finish with a wrong result. Record the intended changes while looping and make them once the loop has finished.
@@ -1482,8 +1482,8 @@ Look at section 1 of the output: five results, **four** network calls. The last 
 
 - **Every for-each loop** in Java, Python, C#, JavaScript (`for...of`).
 - **JDBC `ResultSet`** moves through rows that need not all be loaded at once; **`Scanner`** implements `Iterator<String>`; **`Files.newDirectoryStream`** returns an `Iterable` over directory entries.
-- **Paginated SDKs**: the AWS SDK for Java v2 "paginators" and Stripe's auto-pagination give you an iterable that fetches pages behind the scenes — exactly section 1.
-- **Java `Stream`s** are built on `Spliterator`s; that is how parallel streams split work. C#'s LINQ is likewise a lazy layer over iteration, which is why both can work on endless sequences.
+- **Paginated SDKs** (software development kits — a provider's ready-made client libraries): the AWS (Amazon Web Services) SDK for Java v2 "paginators" and Stripe's auto-pagination give you an iterable that fetches pages behind the scenes — exactly section 1.
+- **Java `Stream`s** are built on `Spliterator`s; that is how parallel streams split work. C#'s LINQ (built-in query syntax for collections) is likewise a lazy layer over iteration, which is why both can work on endless sequences.
 - **Generators**: Python's `yield`, JavaScript's `function*` and C#'s `yield return` let you write an iterator as a *function*; the language remembers the position for you. A generator is the same pattern with less code.
 - **Kafka consumer `poll()` loops**, and **infinite feeds** (Instagram/Twitter timelines) that load the next page as you scroll.
 
@@ -1493,9 +1493,9 @@ Look at section 1 of the output: five results, **four** network calls. The last 
 
 **Follow-ups:**
 
-- *Internal vs external iterator?* External: the client controls stepping (`hasNext/next`) and can stop, pause or interleave two iterators. Internal: the collection controls the loop and calls your function (`forEach`, streams); simpler, easier to parallelise, but harder to stop early or to walk two collections in lock-step.
+- *Internal vs external iterator?* External: the client controls stepping (`hasNext/next`) and can stop, pause or interleave two iterators. Internal: the collection controls the loop and calls your function (`forEach`, streams); simpler, easier to parallelise, but harder to stop early or to walk two collections in lock-step (one element from each at a time).
 - *What is fail-fast?* The iterator checks a modification counter and throws `ConcurrentModificationException` if the collection was structurally changed outside the iterator. Best-effort only.
-- *How do you remove while iterating?* `Iterator.remove()` or `Collection.removeIf(predicate)`.
+- *How do you remove while iterating?* `Iterator.remove()` or `Collection.removeIf(predicate)` (a predicate is a function that returns true or false).
 - *What is a Spliterator?* A splittable iterator used by streams; `trySplit` hands off part of the elements so another thread can process them; characteristics tell the stream framework what it can optimise.
 - *Iterator vs Visitor?* Iterator decides **how you move** through a structure; Visitor decides **what you do** at each element. They are often used together.
 - *Iterator vs Composite?* Composite makes leaves and branches of a tree look alike; an iterator supplies a way to visit them. The two are often used together.
@@ -1621,7 +1621,7 @@ sequenceDiagram
 `lld.ch10.mediator` has three mediators:
 
 1. **Shipping form** (`ShippingFormMediator` + four components). No code except `notify` knows that choosing a country influences the price. Components identify themselves by reference (`sender == country`), not by strings. Shipping rates are `BigDecimal` — money is never stored as `double`.
-2. **Chat room** (`ChatRoom`, `ChatUser`). Users never hold references to each other. The room routes broadcasts and private messages and applies **moderation** rules — rules live in the mediator, not in the users.
+2. **Chat room** (`ChatRoom`, `ChatUser`). Users never hold references to each other. The room routes broadcasts and private messages and applies **moderation** (filtering or blocking unwanted messages) rules — rules live in the mediator, not in the users.
 3. **Air traffic control** (`ControlTower`, `Flight`). Flights only request landing and report "vacated"; the tower owns the runway and the holding queue.
 
 ```java
@@ -1983,7 +1983,7 @@ Both decouple objects. The difference is **what happens to the news**.
 | Pros | Cons |
 |---|---|
 | Every widget depends on exactly one thing, so links grow linearly instead of quadratically. | Every new rule lands in the mediator, so it keeps growing. |
-| All interaction rules sit in one class you can read and unit-test. | Anyone changing the screen changes that same file, so merge conflicts pile up there. |
+| All interaction rules sit in one class you can read and unit-test. | Anyone changing the screen changes that same file, so merge conflicts (clashing edits to the same lines) pile up there. |
 | Widgets are reusable because they no longer pull their neighbours with them. | To learn why a widget changed you read the mediator, not the widget. |
 | A new widget costs one class plus one rule. | It can quietly become a **god object** (a class that knows and does too much). |
 
@@ -2010,12 +2010,12 @@ Both decouple objects. The difference is **what happens to the news**.
 
 ### Real-world examples
 
-- **UI controllers / view-models** coordinating several widgets (MVC controllers, MVVM view-models, Android `ViewModel` wiring). GoF's own example is a dialog box coordinating its widgets.
+- **UI controllers / view-models** coordinating several widgets (MVC — Model–View–Controller — controllers, MVVM — Model–View–ViewModel — view-models, Android `ViewModel` wiring). GoF's own example is a dialog box coordinating its widgets.
 - **Chat servers** (Slack, WhatsApp): clients send messages to the server, which routes them to rooms and people and applies moderation.
 - **Air traffic control** — the classic analogy.
-- **Workflow / saga orchestrators** (e.g. Temporal, Camunda, AWS Step Functions): a checkout orchestrator invokes payment, stock reservation and shipping in sequence and holds the recovery plan for each failure. Ride-hailing dispatch (matching riders and drivers through a central service rather than drivers talking to riders directly) has the same shape.
+- **Workflow / saga orchestrators** (a saga is a multi-step process spread across services, each step with its own undo; e.g. Temporal, Camunda, AWS Step Functions): a checkout orchestrator invokes payment, stock reservation and shipping in sequence and holds the recovery plan for each failure. Ride-hailing dispatch (matching riders and drivers through a central service rather than drivers talking to riders directly) has the same shape.
 - **Redux store** at application scale (components dispatch actions instead of calling each other; reducers hold the rules); **MediatR** in .NET popularised the name on the server side, using it to dispatch each request to its handler.
-- **Message brokers / event buses** at system scale: a service hands messages to the broker rather than calling other services; the broker's routing configuration is the mediator logic — and it can become a god object too.
+- **Message brokers / event buses** (servers that receive messages and deliver them to the right consumers) at system scale: a service hands messages to the broker rather than calling other services; the broker's routing configuration is the mediator logic — and it can become a god object too.
 - **`java.util.Timer` and `Executor`/`ExecutorService`** are often listed (including by the course) as JDK mediators: they stand between submitted tasks and the threads that run them, so neither side knows the other. Treat this as a *loose* fit — they do not coordinate peer colleagues the way the GoF dialog example does, so in an interview lead with UI controllers or orchestrators.
 
 ### In the interview
@@ -2028,7 +2028,7 @@ Both decouple objects. The difference is **what happens to the news**.
 - *Mediator vs Facade?* Facade simplifies a subsystem for outside callers (one-way, subsystem unaware). Mediator coordinates peers that know it (two-way).
 - *How does it relate to Command?* A mediator often creates and dispatches commands.
 - *How do you test a mediator?* Give it fake components and assert which calls it made for each event.
-- *What about in microservices?* Orchestration (a central saga orchestrator) is mediator-style; choreography (services react to each other's events) is observer-style.
+- *What about in microservices (a system split into many small, separately deployed services)?* Orchestration (a central saga orchestrator) is mediator-style; choreography (services react to each other's events) is observer-style.
 
 ### Self-check
 
@@ -2059,12 +2059,12 @@ Everyday analogy: a **save game**. The game writes a save file; the menu lists t
 
 ### The problem it solves
 
-You need a **rollback**: record the deployment configuration just before a risky change, and if the rollout misbehaves, bring the recorded version back.
+You need a **rollback** (a return to the previous working version): record the deployment configuration just before a risky change, and if the rollout (the release of a change to the running servers) misbehaves, bring the recorded version back.
 
 The obvious way — something *outside* reads every field and stores them — breaks two things:
 
-1. **Encapsulation.** The history class must now understand replicas, image names and environment variables. Every new config field forces a change in the history class, and details that were private are now exposed.
-2. **Atomicity.** A restore done one field at a time can stop half-way. If three fields are written and an exception hits before the fourth, the config holds a combination that was never real.
+1. **Encapsulation.** The history class must now understand replicas (copies of the service running side by side), image names (which packaged build to run) and environment variables (named settings passed to a program). Every new config field forces a change in the history class, and details that were private are now exposed.
+2. **Atomicity.** Atomicity means all-or-nothing; a restore done one field at a time can stop half-way. If three fields are written and an exception hits before the fourth, the config holds a combination that was never real.
 
 With Memento the object **takes its own snapshot** and hands it out as a sealed token that **only it can open**. Restoring becomes **one call into the originator**, which is in full control of the restore and can make it all-or-nothing (our `restore` validates the token first, then assigns every field; nothing in between can fail half-way).
 
@@ -2085,7 +2085,7 @@ Steps:
 3. Later, caretaker calls `config.restore(snapshot)`.
 4. The originator copies the state back in one step.
 
-**How opacity is enforced in Java.** GoF describes a **narrow interface** (what the caretaker sees) and a **wide interface** (what the originator sees). Our design does this with types: the public interface `Snapshot` exposes only `label()`; the real data is in a **private nested record** `State` that only `DeploymentConfig` can see. `restore` checks `instanceof State`, so even a forged `Snapshot` (see section 4 of the output) is refused. (Strictly, reflection or a debugger can still peek; Java access control protects against honest code, not a hostile JVM.) Other options by language: package-private accessors in Java; the originator declared a `friend` in C++; a private nested class in C#; Python and JavaScript offer no true enforcement, so it is a naming convention (leading underscore) plus code review — although a JavaScript closure *can* hide the contents in a way a class field cannot.
+**How opacity is enforced in Java.** GoF describes a **narrow interface** (what the caretaker sees) and a **wide interface** (what the originator sees). Our design does this with types: the public interface `Snapshot` exposes only `label()`; the real data is in a **private nested record** `State` that only `DeploymentConfig` can see. `restore` checks `instanceof State`, so even a forged `Snapshot` (see section 4 of the output) is refused. (Strictly, reflection — Java's ability to inspect and call even private members at run time — or a debugger can still peek; Java access control protects against honest code, not a hostile JVM, the Java Virtual Machine that runs the program.) Other options by language: package-private accessors in Java; the originator declared a `friend` in C++; a private nested class in C#; Python and JavaScript offer no true enforcement, so it is a naming convention (leading underscore) plus code review — although a JavaScript closure *can* hide the contents in a way a class field cannot.
 
 ### Structure (UML)
 
@@ -2144,7 +2144,7 @@ sequenceDiagram
 
 Points to notice in `lld.ch10.memento`:
 
-- The `State` record's compact constructor does `env = Map.copyOf(env)`, so the snapshot **owns its own copy**. In section 1 the live map is changed *after* saving (`FEATURE_X`), and the rollback still restores the original.
+- The `State` record's (a record is Java's short syntax for an immutable data class) compact constructor (a constructor with no parameter list that runs on every creation) does `env = Map.copyOf(env)`, so the snapshot **owns its own copy**. In section 1 the live map is changed *after* saving (`FEATURE_X`), and the rollback still restores the original.
 - `DeploymentHistory` is **bounded** (`maxDepth`) and drops the oldest checkpoint when full.
 - Section 3 shows the **shallow-copy bug** in isolation.
 
@@ -2321,9 +2321,9 @@ public class Main {
 
 ### The bug that makes a snapshot useless
 
-If the memento keeps a **pointer to the very map (or list) the originator goes on mutating**, you have not taken a snapshot: the "saved" copy drifts along with the live object, and a restore just re-applies today's state. Nothing throws and nothing looks wrong — until somebody notices the rollback had no effect. Always copy mutable parts (`Map.copyOf`, `new TreeMap<>(...)`, deep copies of nested objects). It is the same shallow-vs-deep copy decision as the Prototype pattern (Chapter 8).
+If the memento keeps a **pointer to the very map (or list) the originator goes on mutating**, you have not taken a snapshot: the "saved" copy drifts along with the live object, and a restore just re-applies today's state. Nothing throws and nothing looks wrong — until somebody notices the rollback had no effect. Always copy mutable parts (`Map.copyOf`, `new TreeMap<>(...)`, deep copies — copies that also duplicate the objects inside — of nested objects). It is the same shallow-vs-deep copy decision as the Prototype pattern (Chapter 8).
 
-**Two more things to bound:** history depth — keep a cap and evict the oldest entry, because a short undo list is useful while an endless one is just a memory leak — and **state that cannot be captured** (live sockets, open files, data owned by another system). A snapshot that claims to cover those will fail, usually long after the mistake was made.
+**Two more things to bound:** history depth — keep a cap and evict the oldest entry, because a short undo list is useful while an endless one is just a memory leak (memory that keeps growing and is never released) — and **state that cannot be captured** (live sockets — open network connections — open files, data owned by another system). A snapshot that claims to cover those will fail, usually long after the mistake was made.
 
 ### Memento or Command undo?
 
@@ -2335,7 +2335,7 @@ If the memento keeps a **pointer to the very map (or list) the originator goes o
 | Correctness risk | Low — the copy was a genuine state | Every reverse operation must be written correctly |
 | Prefer it when | Reversal is tricky or the state is small | Reversal is simple or the state is big |
 
-A drawing app that snapshots the whole canvas on every brush stroke runs out of memory — use Command ("stroke added, here are its points"). A wizard where step 3 changes six interacting fields is the opposite — six correct inverses are hard, one snapshot is easy. **Real systems combine them:** take a snapshot occasionally, log commands in between; to go back, restore the nearest snapshot and replay commands forward. Databases and event-sourced systems (Chapter 11) do exactly this.
+A drawing app that snapshots the whole canvas on every brush stroke runs out of memory — use Command ("stroke added, here are its points"). A wizard (a multi-step form) where step 3 changes six interacting fields is the opposite — six correct inverses are hard, one snapshot is easy. **Real systems combine them:** take a snapshot occasionally, log commands in between; to go back, restore the nearest snapshot and replay commands forward. Databases and event-sourced systems (Chapter 11) do exactly this.
 
 ### Trade-offs
 
@@ -2363,10 +2363,10 @@ A drawing app that snapshots the whole canvas on every brush stroke runs out of 
 
 ### Real-world examples
 
-- **Database transactions**: `BEGIN` ... `ROLLBACK`. The DB keeps enough information (undo logs) to put things back; your code never sees it.
-- **Version control**: a Git commit is a snapshot of the tree; `git checkout` restores it, and the history (the caretaker) does not need to understand file contents to do its job.
-- **Kubernetes Deployments** keep old ReplicaSets as revision history (bounded by `revisionHistoryLimit`, default 10), and `kubectl rollout undo` restores a previous pod template — a bounded caretaker, just like ours.
-- **VM / container snapshots** and infrastructure state files that make `rollback` possible.
+- **Database transactions** (groups of changes that succeed or fail together): `BEGIN` ... `ROLLBACK`. The DB keeps enough information (undo logs) to put things back; your code never sees it.
+- **Version control** (tools that record the history of files): a Git commit is a snapshot of the tree; `git checkout` restores it, and the history (the caretaker) does not need to understand file contents to do its job.
+- **Kubernetes Deployments** (Kubernetes runs and manages containers across many machines) keep old ReplicaSets (the group of identical running copies for each version) as revision history (bounded by `revisionHistoryLimit`, default 10), and `kubectl rollout undo` restores a previous pod template — a bounded caretaker, just like ours.
+- **VM / container snapshots** (VM = virtual machine, a whole computer simulated in software; a container is a lighter, isolated, packaged process) and infrastructure state files that make `rollback` possible.
 - **Game saves and checkpoints**; **form wizards** with a "back" button; **editor undo** for small documents.
 - In Java, `Serializable` or a JSON mapper is often *how* a memento is stored when it must outlive the process; a `record` gives an immutable memento in one line.
 - **Other languages**: in Python, `copy.deepcopy(self.__dict__)` is a quick memento and `dataclasses.replace` covers immutable objects; in JavaScript, `structuredClone(state)` deep-copies plain data.
@@ -2379,7 +2379,7 @@ A drawing app that snapshots the whole canvas on every brush stroke runs out of 
 
 - *How do you enforce that the caretaker can't read the memento in Java?* A narrow public interface (e.g. only a label) implemented by a private nested record; or package-private accessors.
 - *Memento vs Prototype?* Each copies state. A prototype clone becomes a live object you keep working with. A memento does nothing on its own; its sole purpose is to be given back to the originator.
-- *Memento vs a backup?* A backup targets disaster recovery and lives outside the process (disk, another region). A memento is usually an in-memory checkpoint for undo. Same idea, very different lifetime and cost.
+- *Memento vs a backup?* A backup targets disaster recovery (getting systems back after a major failure) and lives outside the process (disk, another region — a separate data-centre location). A memento is usually an in-memory checkpoint for undo. Same idea, very different lifetime and cost.
 - *How would you implement undo for a large document?* Command undo for each edit, plus periodic snapshots so undo far back doesn't replay thousands of commands.
 - *How does it relate to serialization?* Serialization is one common *storage format* for a memento; the pattern itself is about *access* — only the originator may look inside.
 
@@ -2410,7 +2410,7 @@ Everyday analogy: a calculator. `2 + 3 * 4` is a sentence in a tiny language. Th
 Key terms:
 
 - **Grammar** — the rules saying which sentences are valid, e.g. "an expression is terms joined by `+` or `-`".
-- **DSL (domain-specific language)** — a small language for one job: search filters, pricing rules, feature-flag conditions, cron schedules.
+- **DSL (domain-specific language)** — a small language for one job: search filters, pricing rules, feature-flag conditions, cron schedules (a compact text format for repeating times, such as "every weekday at 9").
 - **AST (abstract syntax tree)** — the tree form of a sentence, with operators as inner nodes and numbers/variables as leaves.
 - **Terminal expression** — a leaf rule (a number, a variable).
 - **Nonterminal expression** — a rule made of other expressions (addition, multiplication).
@@ -2418,7 +2418,7 @@ Key terms:
 
 ### The problem it solves
 
-Some problems keep coming back as *sentences*: "price * qty − discount", "age > 18 AND country = IN", "every weekday at 9:00". Hard-coding each rule in Java means a redeploy for every new rule. Letting business users write rules in a tiny language, and interpreting them, turns rules into **data**. Interpreter is the simplest object-oriented way to evaluate such a language when the grammar is **small**.
+Some problems keep coming back as *sentences*: "price * qty − discount", "age > 18 AND country = IN", "every weekday at 9:00". Hard-coding each rule in Java means a redeploy (building and releasing the application again) for every new rule. Letting business users write rules in a tiny language, and interpreting them, turns rules into **data**. Interpreter is the simplest object-oriented way to evaluate such a language when the grammar is **small**.
 
 ### How it works
 
@@ -2429,7 +2429,7 @@ Some problems keep coming back as *sentences*: "price * qty − discount", "age 
    factor := NUMBER | NAME | '(' expr ')' | '-' factor
    ```
 2. **One class per rule**: `Constant` and `Variable` (terminals), `Negate` and `Binary` (nonterminals), all implementing `Expression.interpret(context)`.
-3. **Build the AST.** GoF deliberately leaves **parsing** out of the pattern; any parser will do. We use a small *recursive-descent* parser: one method per grammar rule, which calls the others.
+3. **Build the AST.** GoF deliberately leaves **parsing** (reading text and building a structure such as the AST from it) out of the pattern; any parser will do. We use a small *recursive-descent* parser: one method per grammar rule, which calls the others.
 4. **Interpret**: the root calls `interpret` on its children and combines their results (a *recursive* evaluation).
 5. **Reuse the tree**: parse once, interpret many times with different contexts.
 
@@ -2694,30 +2694,30 @@ Same tree, different contexts (parse once, evaluate many):
   qty=4 -> 950.0
 ```
 
-Notice operator precedence (`2 + 3 * 4` = 14, but `(2 + 3) * 4` = 20) comes from the **grammar**: `term` handles `*` and `/` below `expr`, so they bind tighter.
+Notice operator precedence (which operator binds first) (`2 + 3 * 4` = 14, but `(2 + 3) * 4` = 20) comes from the **grammar**: `term` handles `*` and `/` below `expr`, so they bind tighter.
 
 ### Trade-offs
 
 | Pros | Cons |
 |---|---|
 | Easy to change and extend the grammar: a new rule is a new class. | One class per rule: large grammars become a jungle of classes. |
-| Each rule's evaluation is small and testable. | Tree-walking is slow compared with compiling to bytecode. |
+| Each rule's evaluation is small and testable. | Tree-walking is slow compared with compiling to bytecode (compiled JVM instructions). |
 | Rules become data (stored in a DB, edited by users). | Adding a new *operation* (pretty-print, type-check, optimise) means touching every class — that is where **Visitor** (Chapter 11) comes in. |
 | Parse once, evaluate many times. | You still need a parser, which the pattern does not give you. |
 
 ### When not to use it
 
-- **The grammar is large or complex** (a real programming language, SQL). Use a parser generator such as **ANTLR** and a compiler/visitor design.
+- **The grammar is large or complex** (a real programming language, SQL). Use a parser generator (a tool that writes a parser from a grammar file) such as **ANTLR** and a compiler/visitor design.
 - **Performance matters** and expressions run millions of times — compile to bytecode or use an existing engine.
-- **An existing language fits.** Regular expressions, SpEL, JSONPath, CEL, or a scripting engine may already do the job.
+- **An existing language fits.** Regular expressions (patterns for matching text), SpEL (Spring's expression language), JSONPath (queries into JSON data), CEL (Google's Common Expression Language), or a scripting engine (an embedded interpreter for a full language such as JavaScript) may already do the job.
 - **Security matters.** Never let users run a *general-purpose* script engine on your server; a small, restricted DSL is safer precisely because it can do only what its grammar allows.
 
 ### Common mistakes
 
 1. **Mixing parsing and evaluation** in one pass, so each evaluation re-parses the text.
-2. **Ignoring precedence and associativity** (`8 - 3 - 2` must be `(8 - 3) - 2`; our `expr` loop builds left-associative trees).
+2. **Ignoring precedence and associativity** (associativity decides how operators of equal precedence group: `8 - 3 - 2` must be `(8 - 3) - 2`; our `expr` loop builds left-associative trees).
 3. **Poor error messages** — always report the position.
-4. **Adding many operations to every node** instead of switching to Visitor or pattern matching.
+4. **Adding many operations to every node** instead of switching to Visitor or pattern matching (a `switch` that branches on an object's type and unpacks its fields).
 5. **Growing a "tiny" DSL** until it is an accidental programming language.
 
 ### Real-world examples
@@ -2725,8 +2725,8 @@ Notice operator precedence (`2 + 3 * 4` = 14, but `(2 + 3) * 4` = 20) comes from
 - **`java.util.regex.Pattern`**: compiling a regex builds an internal tree of node objects, and a `Matcher` walks it — a classic interpreter.
 - **Spring Expression Language (SpEL)**: `SpelExpressionParser` parses text like `#user.age > 18` into an AST of `SpelNode`s, and `getValue()` evaluates it against a context. Jakarta Expression Language (EL) is similar.
 - **SQL engines** evaluate `WHERE` clauses as expression trees; **spreadsheet formulas** (`=SUM(A1:A3)*2`) are a DSL.
-- **Rule and pricing engines**: e-commerce promotions ("10% off if cart > 999 and category = electronics"), feature-flag targeting rules, and Google's **CEL** (Common Expression Language) used in Kubernetes validation rules and IAM conditions.
-- **Cron expressions** (`0 9 * * MON-FRI`), e.g. Quartz's `CronExpression`.
+- **Rule and pricing engines**: e-commerce promotions ("10% off if cart > 999 and category = electronics"), feature-flag targeting rules, and Google's **CEL** (Common Expression Language) used in Kubernetes validation rules and IAM (identity and access management — who may do what) conditions.
+- **Cron expressions** (`0 9 * * MON-FRI`), e.g. Quartz's (a Java job-scheduling library) `CronExpression`.
 
 ### In the interview
 

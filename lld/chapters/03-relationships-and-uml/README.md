@@ -1,6 +1,6 @@
 # Chapter 3 — Class Relationships & UML
 
-> **What you will learn.** How two classes can be connected (association, aggregation, composition, dependency, generalization, realization), how each connection looks in Java, how to pick the right one in ten seconds, and how to *draw* a design with UML: use-case, class, sequence, activity and state machine diagrams. The chapter ends with how much UML you should actually draw in a 45-minute interview.
+> **What you will learn.** How two classes can be connected (association, aggregation, composition, dependency, generalization, realization), how each connection looks in Java, how to pick the right one in ten seconds, and how to *draw* a design with UML (Unified Modeling Language, the standard picture notation for software designs; Section 3.9): use-case, class, sequence, activity and state machine diagrams. The chapter ends with how much UML you should actually draw in a 45-minute interview.
 
 **How this chapter is organised**
 
@@ -10,7 +10,7 @@
 | B. UML | 3.9 What UML is · 3.10 Use-case · 3.11 Class · 3.12 Sequence · 3.13 Activity · 3.14 State machine | `lld.ch03.library` (use case → class → sequence → activity), `lld.ch03.statemachine` |
 | C. Interview | 3.15 How much UML to draw · 3.16 Chapter self-check · 3.17 TL;DR | — |
 
-Every package has a `Main` that you can run:
+Every package has a `Main` that you can run (`javac` is the Java compiler, which turns `.java` files into runnable `.class` files; `java` runs them, and `-cp` says where the compiled classes are):
 
 ```bash
 cd chapters/03-relationships-and-uml/code
@@ -52,7 +52,7 @@ There are six relationships you must know. Three of them are "has-a", one is "us
 
 In the figure above, look at the *ends* of each line. The shape at the end (triangle, diamond, arrowhead) and whether the line is solid or dashed is the entire vocabulary. The rest of Part A goes through each line one at a time.
 
-Two small differences between this legend and strict UML, so you are not confused later: the legend draws the **uni-directional association** with a *filled* arrowhead and the **dependency** as a dashed line with *no* head. Standard UML (and this book's Mermaid diagrams) uses an **open** arrowhead (`→`) for both — solid line for association, dashed line for dependency. Either drawing is understood in an interview if you say what you mean.
+Two small differences between this legend and strict UML, so you are not confused later: the legend draws the **uni-directional association** with a *filled* arrowhead and the **dependency** as a dashed line with *no* head. Standard UML (and this book's Mermaid diagrams; Mermaid is a text-based diagram language that renders into pictures) uses an **open** arrowhead (`→`) for both — solid line for association, dashed line for dependency. Either drawing is understood in an interview if you say what you mean.
 
 ### The problem it solves
 
@@ -88,8 +88,8 @@ Objects need to collaborate over time. An `Order` must always know which `Custom
 2. Only make it **bi-directional** if *both* directions are needed by real use cases (e.g. "list a student's courses" *and* "list a course's students").
 3. For a bi-directional link, choose **one side to own the update** and make it update both fields in one method, so the two ends can never disagree.
 4. Write the **multiplicity** at each end of the line, and then **enforce it in code**:
-   - `1` → the field is required: `Objects.requireNonNull` in the constructor.
-   - `0..1` → the field may be empty: expose it as `Optional<T>`.
+   - `1` → the field is required: `Objects.requireNonNull` (throws an error if the value is `null`, i.e. no object) in the constructor.
+   - `0..1` → the field may be empty: expose it as `Optional<T>` (a box that either holds one value or is empty, so callers must check).
    - `*` → a collection; `1..*` → a collection that must never be empty.
    - exact numbers like `2` → check the size in the constructor.
 
@@ -354,7 +354,7 @@ public class Main {
 **What each part shows:**
 
 - `Order` has a `final Customer customer` field and `Customer` has nothing pointing back → **uni-directional**, multiplicity `1` enforced with `requireNonNull`.
-- `Student` and `Course` each hold a `Set` of the other → **bi-directional many-to-many**. Only `Course.enroll/drop` may change the link; `Student.linkCourse` is package-private. This single "owning side" rule is what keeps both ends consistent.
+- `Student` and `Course` each hold a `Set` of the other → **bi-directional many-to-many**. Only `Course.enroll/drop` may change the link; `Student.linkCourse` is package-private (no access keyword, so only classes in the same Java package can call it). This single "owning side" rule is what keeps both ends consistent.
 - `Course(capacity)` turns multiplicity `0..capacity` into a runtime check.
 - `FlightInstance` rejects anything but exactly **2** pilots; `ParkingSpot` exposes **0..1** as `Optional<Vehicle>`.
 - Lifetimes: every object here is created by `Main` and merely *referenced* by the others. Dropping a course does not delete the student.
@@ -384,8 +384,8 @@ Spot 7 vehicle: KA-01-1234
 
 | Choice | Pros | Cons |
 |---|---|---|
-| Uni-directional | Simple; one field; no sync bugs; lower coupling | Reverse question ("which orders does this customer have?") needs a query or repository |
-| Bi-directional | Fast navigation both ways | Two fields to keep in sync; tighter coupling; risk of infinite loops in `toString`/`equals`/JSON serialisation |
+| Uni-directional | Simple; one field; no sync bugs; lower coupling | Reverse question ("which orders does this customer have?") needs a query or repository (a class that stores and looks up objects) |
+| Bi-directional | Fast navigation both ways | Two fields to keep in sync; tighter coupling; risk of infinite loops in `toString`/`equals`/JSON serialisation (turning objects into JSON, a common text data format) |
 | Strict multiplicity checks | Invalid states cannot be created | A little more constructor code |
 
 ### When not to use it
@@ -398,12 +398,12 @@ Spot 7 vehicle: KA-01-1234
 - Making every line bi-directional "just in case".
 - Updating only one side of a bi-directional link (`student.courses.add(c)` without `course.students.add(s)`).
 - Forgetting multiplicity on the line, then forgetting the null-check / non-empty check in the code.
-- Including both sides in `toString()` or `equals()` → stack overflow from infinite recursion.
+- Including both sides in `toString()` or `equals()` → stack overflow from infinite recursion (each object's method calls the other's, forever, until Java runs out of room to track the calls).
 
 ### Real-world examples
 
-- **JPA / Hibernate:** `@ManyToOne` on `Order.customer` is a uni-directional association. A bi-directional `@OneToMany(mappedBy = "customer")` needs an *owning side* (the side with the foreign key) and helper methods that set both ends — exactly the `Course.enroll` rule above.
-- **Spring:** a service with a constructor-injected repository holds an association to it; the Spring container, not the service, creates and destroys the repository.
+- **JPA / Hibernate** (Java's standard API for saving objects into SQL database tables, and its most popular implementation): `@ManyToOne` on `Order.customer` is a uni-directional association. A bi-directional `@OneToMany(mappedBy = "customer")` needs an *owning side* (the side with the foreign key, the column that stores the other row's ID) and helper methods that set both ends — exactly the `Course.enroll` rule above.
+- **Spring** (a popular Java application framework): a service with a constructor-injected repository (one handed in through the constructor) holds an association to it; the Spring container (the part of Spring that creates and wires objects), not the service, creates and destroys the repository.
 - **E-commerce:** an order row stores `customer_id` (Order → Customer); a customer does not store a list of order ids.
 
 ### In the interview
@@ -412,7 +412,7 @@ Spot 7 vehicle: KA-01-1234
 
 **Follow-ups:**
 
-- *Q: How do you keep a bi-directional association consistent?* — A: Pick one owning side and put a single method there (`enroll`) that updates both ends; make the other side's mutators package-private.
+- *Q: How do you keep a bi-directional association consistent?* — A: Pick one owning side and put a single method there (`enroll`) that updates both ends; make the other side's mutators (methods that change state) package-private.
 - *Q: What changes if a parking spot can hold two motorbikes?* — A: The multiplicity changes from `0..1` to `0..2`, so the field becomes a small collection with a size check instead of an `Optional`.
 - *Q: Why not make everything bi-directional?* — A: It doubles the places that must change together and increases coupling; the reverse direction can usually be answered by a repository query.
 
@@ -564,7 +564,7 @@ public class Main {
 }
 ```
 
-**What each part shows:** `Aircraft` objects are built in `Main` *before* any airline exists. `Airline.addAircraft` receives them; `removeAircraft` and `shutDown` hand them back. After `skyways = null` the airline is garbage, but its aircraft are still referenced and join `BlueJet`.
+**What each part shows:** `Aircraft` objects are built in `Main` *before* any airline exists. `Airline.addAircraft` receives them; `removeAircraft` and `shutDown` hand them back. After `skyways = null` the airline is garbage (nothing points to it any more, so Java's garbage collector, which frees the memory of unreachable objects, will reclaim it), but its aircraft are still referenced and join `BlueJet`.
 
 Output:
 
@@ -639,12 +639,12 @@ Some objects make no sense on their own, and letting outsiders create or share t
 ### How it works
 
 1. The whole **creates** the parts itself (in its constructor or an `addX(...)` method that takes *data*, not a ready-made part).
-2. The part's constructor is **not public** (package-private or a private nested class) so nobody else can make one.
+2. The part's constructor is **not public** (package-private or a private nested class, i.e. a class declared inside the whole's class) so nobody else can make one.
 3. The whole **never hands out** its internal collection — only read-only views or copies.
 4. **Removing** the whole (or removing a part from it) drops the only reference, so the part becomes garbage.
 5. In UML, draw a **filled (black) diamond at the whole's end**.
 
-A note on Java: Java has no destructors. "The part dies with the whole" means *logically*: nobody else holds a reference, so when the whole is removed the part becomes unreachable and the garbage collector reclaims it. If you need clean-up (closing files, sockets), the whole's `close()` must close its parts too — for example, closing a `BufferedReader` also closes the `FileReader` it wraps.
+A note on Java: Java has no destructors (methods that run automatically when an object is destroyed, as in C++). "The part dies with the whole" means *logically*: nobody else holds a reference, so when the whole is removed the part becomes unreachable and the garbage collector reclaims it. If you need clean-up (closing files, sockets, i.e. open network connections), the whole's `close()` must close its parts too — for example, closing a `BufferedReader` also closes the `FileReader` it wraps.
 
 ```mermaid
 classDiagram
@@ -869,7 +869,7 @@ Floors left: [0]
 - `java.util.HashMap` creates and manages its internal `Node` entries (a package-private nested class); they are never shared with another map and go away with it.
 - **JPA:** `@OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)` models composition — delete the `Order` and its `OrderLine` rows are deleted too.
 - **Documents:** deleting a Google Doc deletes its comments and revision history.
-- **Operating systems:** killing a process frees its threads and memory pages.
+- **Operating systems:** killing a process (a running program) frees its threads (its parallel lines of execution) and memory pages (the blocks of memory the OS gave it).
 
 ### In the interview
 
@@ -901,7 +901,7 @@ Analogy: a **chef** *uses* a **delivery van** to receive groceries this morning.
 
 ### The problem it solves
 
-It records the weakest possible link: "if B's interface changes, A may have to change", nothing more. Recognising a dependency (instead of an association) keeps classes stateless and loosely coupled — the caller can pass in a different collaborator on every call.
+It records the weakest possible link: "if B's interface changes, A may have to change", nothing more. Recognising a dependency (instead of an association) keeps classes stateless (holding no data between calls) and loosely coupled — the caller can pass in a different collaborator on every call.
 
 ### How it works
 
@@ -1052,7 +1052,7 @@ public class Main {
 }
 ```
 
-**What each part shows:** `CheckoutService` has **no fields at all**. It depends on `Cart` and `PaymentGateway` through parameters, on `TaxCalculator` through a local variable, and on `Receipt` through its return type. `Main` passes a different gateway (even a lambda) on each call — something you cannot do as easily with a stored field. `Money` uses `BigDecimal`, not `double`, because currency needs exact decimal arithmetic.
+**What each part shows:** `CheckoutService` has **no fields at all**. It depends on `Cart` and `PaymentGateway` through parameters, on `TaxCalculator` through a local variable, and on `Receipt` through its return type. `Main` passes a different gateway (even a lambda, a short unnamed function written inline) on each call — something you cannot do as easily with a stored field. `Money` uses `BigDecimal` (Java's exact decimal-number type), not `double` (a binary floating-point number that cannot hold values like 0.10 exactly), because currency needs exact decimal arithmetic.
 
 Output:
 
@@ -1074,7 +1074,7 @@ Receipt: Receipt[txnId=LMB-42, subtotal=Rs 349.50, total=Rs 412.41]
 
 ### When not to use it
 
-If A needs B across many methods and many calls (e.g. a service always uses the same repository), a stored field (association via constructor injection) is cleaner than passing B to every method.
+If A needs B across many methods and many calls (e.g. a service always uses the same repository), a stored field (association via constructor injection, where the collaborator is passed into the constructor once) is cleaner than passing B to every method.
 
 ### Common mistakes
 
@@ -1085,9 +1085,9 @@ If A needs B across many methods and many calls (e.g. a service always uses the 
 ### Real-world examples
 
 - `Collections.sort(list, comparator)` depends on the `Comparator` only during the call.
-- A Spring MVC controller method `handle(HttpServletRequest req)` depends on the request only for that call.
+- A Spring MVC controller method (the code that answers one web request) `handle(HttpServletRequest req)` depends on the request only for that call.
 - `LocalDate.now(Clock clock)` depends on a `Clock` parameter — the JDK's way to make time testable.
-- In build tools (Maven/Gradle) a "dependency" is the same idea at package level: your code uses a library's classes.
+- In build tools (Maven/Gradle, programs that download libraries and compile a Java project) a "dependency" is the same idea at package level: your code uses a library's classes.
 
 ### In the interview
 
@@ -1124,7 +1124,7 @@ When several classes truly share a contract **and** some behaviour, inheritance 
 ### How it works
 
 1. Before extending, run the **substitution test**: *can B be used anywhere A is expected, with no surprises?* If there is any method of A that B would have to refuse or break, the answer is no. (This is the Liskov Substitution Principle — Chapter 4.)
-2. If yes, put the shared state and workflow in A (often `abstract`), and let subclasses override only the varying steps.
+2. If yes, put the shared state and workflow in A (often `abstract`: a class that cannot be instantiated and may leave some methods for subclasses to fill in), and let subclasses override only the varying steps.
 3. If no, **hold instead of extend**: give A a field of an interface type and plug in different behaviour objects.
 4. In UML, draw a **solid line with a hollow triangle pointing at the parent**. An abstract class is shown with its name in *italics* (or `{abstract}` / `«abstract»`); abstract operations are italic too.
 
@@ -1366,7 +1366,7 @@ Penguin walks (behaviour swapped at run time)
 ### When not to use it
 
 - To share a few fields or a helper method ("code reuse" alone is not a reason).
-- When a subclass would have to throw `UnsupportedOperationException` for an inherited method.
+- When a subclass would have to throw `UnsupportedOperationException` (Java's standard "this operation is not supported" error) for an inherited method.
 - When the variation is just data (use a field or enum).
 - When behaviours need to be mixed (fly + swim + walk) — the class count explodes.
 
@@ -1591,21 +1591,21 @@ Email audit trail: [EMAIL to ops@shop.example: Disk usage above 90 percent on db
 
 ### When not to use it
 
-- An interface with exactly one implementation that will never vary, and no testing need, is ceremony. Add it when a second implementation or a test double appears (YAGNI).
-- "Marker" interfaces with no methods are rarely needed now; annotations usually serve better.
+- An interface with exactly one implementation that will never vary, and no testing need, is ceremony. Add it when a second implementation or a test double (a fake stand-in used in tests) appears (YAGNI: "you aren't gonna need it", so don't build things before they are needed).
+- "Marker" interfaces with no methods are rarely needed now; annotations (`@` tags such as `@Override` that attach information to code) usually serve better.
 
 ### Common mistakes
 
 - Solid line instead of dashed (that would mean class inheritance).
-- Fat interfaces that force implementers to stub methods they do not need (breaks the Interface Segregation Principle, Chapter 4).
+- Fat interfaces that force implementers to stub (write empty placeholder versions of) methods they do not need (breaks the Interface Segregation Principle, Chapter 4).
 - Callers declaring variables with the concrete type (`EmailNotifier n = ...`) and losing the benefit.
 
 ### Real-world examples
 
 - `java.util.List` realized by `ArrayList` and `LinkedList`; `Comparable`, `Runnable`, `AutoCloseable`.
-- **JDBC:** `java.sql.Connection` is an interface; each database vendor's driver realizes it, and your code never names the vendor class.
-- **Spring:** you inject `PaymentGateway`; the bean may be a Stripe, Razorpay or mock implementation.
-- **SLF4J** (logging facade): your code calls the `Logger` interface; Logback or Log4j realizes it.
+- **JDBC** (Java Database Connectivity, Java's standard way to talk to SQL databases): `java.sql.Connection` is an interface; each database vendor's driver realizes it, and your code never names the vendor class.
+- **Spring:** you inject `PaymentGateway`; the bean (an object Spring creates) may be a Stripe, Razorpay (online payment providers) or mock (fake, for testing) implementation.
+- **SLF4J** (logging facade, i.e. one simple front for several logging libraries): your code calls the `Logger` interface; Logback or Log4j (two logging libraries) realizes it.
 
 ### In the interview
 
@@ -1732,7 +1732,7 @@ UML 2.5 defines **14 diagram types** in two families:
 | Structural | Package | how classes group into packages/modules | rarely |
 | Structural | Component | deployable parts and their interfaces | system design rounds |
 | Structural | Composite structure | internal parts of one class | rarely |
-| Structural | Deployment | software on hardware nodes | system design rounds |
+| Structural | Deployment | software on hardware nodes (machines) | system design rounds |
 | Structural | Profile | extensions to UML itself | never |
 | Behavioural | **Use case** | actors and what they can achieve | early, often spoken |
 | Behavioural | **Activity** | steps of one flow with branches | one per key flow |
@@ -1740,7 +1740,7 @@ UML 2.5 defines **14 diagram types** in two families:
 | Behavioural → interaction | **Sequence** | who calls whom, in time order | on request |
 | Behavioural → interaction | Communication | same messages, drawn on a network of objects | rarely |
 | Behavioural → interaction | Interaction overview | an activity diagram whose nodes are interactions | rarely |
-| Behavioural → interaction | Timing | state changes against a time axis | embedded / hardware |
+| Behavioural → interaction | Timing | state changes against a time axis | embedded (software inside devices) / hardware |
 
 ```mermaid
 flowchart TD
@@ -1780,11 +1780,11 @@ As the figure above shows, four diagrams carry an object-oriented design intervi
 |---|---|
 | Shared vocabulary, no legend needed | Large spec; easy to over-draw |
 | Forces explicit decisions | Takes whiteboard time from code/discussion |
-| Tool support (PlantUML, Mermaid, draw.io, StarUML) | Diagrams go stale if not kept with code |
+| Tool support (PlantUML, Mermaid, draw.io, StarUML: diagram-drawing tools) | Diagrams go stale if not kept with code |
 
 ### When not to use it
 
-As documentation that nobody maintains, or in full formal detail on a whiteboard. Many teams today use lightweight "sketch" UML, the C4 model for architecture, or text-based tools (Mermaid/PlantUML) kept next to the code. For an interview, UML-lite is exactly right.
+As documentation that nobody maintains, or in full formal detail on a whiteboard. Many teams today use lightweight "sketch" UML, the C4 model for architecture (a simple style that draws a system at four zoom levels), or text-based tools (Mermaid/PlantUML) kept next to the code. For an interview, UML-lite is exactly right.
 
 ### Common mistakes
 
@@ -1793,8 +1793,8 @@ As documentation that nobody maintains, or in full formal detail on a whiteboard
 
 ### Real-world examples
 
-- Mermaid diagrams render natively in GitHub and GitLab Markdown, which is why many design docs (RFCs, ADRs) embed sequence and class diagrams as text.
-- PlantUML is widely used in enterprise wikis (Confluence plug-ins) for sequence diagrams of service calls.
+- Mermaid diagrams render natively in GitHub and GitLab Markdown (a plain-text formatting language), which is why many design docs (RFCs, written design proposals; ADRs, Architecture Decision Records) embed sequence and class diagrams as text.
+- PlantUML is widely used in enterprise wikis (Confluence, a company wiki tool, via plug-ins) for sequence diagrams of service calls.
 
 ### In the interview
 
@@ -1802,7 +1802,7 @@ As documentation that nobody maintains, or in full formal detail on a whiteboard
 
 **Follow-ups:**
 
-- *Q: Is UML outdated?* — A: The full formal UML is rarely used, but its core notations (class, sequence, state) remain the shared language of design discussions and appear in Mermaid/PlantUML in modern repos. You only need the subset.
+- *Q: Is UML outdated?* — A: The full formal UML is rarely used, but its core notations (class, sequence, state) remain the shared language of design discussions and appear in Mermaid/PlantUML in modern repos (code repositories). You only need the subset.
 - *Q: Which diagram maps to code?* — A: The class diagram.
 
 ### Self-check
@@ -1900,7 +1900,7 @@ This is a starting point, not a rule: a use-case method sometimes belongs on a s
 | Pro | Con |
 |---|---|
 | Fast scope agreement; finds forgotten actors | No ordering, no data — it cannot show *how* |
-| Maps to classes and methods | Easy to bloat with UI steps |
+| Maps to classes and methods | Easy to bloat with UI (user interface) steps |
 
 ### When not to use it
 
@@ -2117,8 +2117,8 @@ It does not show *order* or *time* — use sequence/activity/state diagrams for 
 
 ### Real-world examples
 
-- IntelliJ IDEA (Ultimate) can generate class diagrams from code; many teams use them to explore unfamiliar modules.
-- JPA entity diagrams (ER-style) are essentially class diagrams with multiplicities (`@OneToMany` = `1..*`).
+- IntelliJ IDEA (Ultimate), a popular Java IDE (code editor with build and run tools), can generate class diagrams from code; many teams use them to explore unfamiliar modules.
+- JPA entity diagrams (ER-style, i.e. entity-relationship pictures of database tables) are essentially class diagrams with multiplicities (`@OneToMany` = `1..*`).
 
 ### In the interview
 
@@ -2160,7 +2160,7 @@ A class diagram says objects *can* talk; a sequence diagram shows what they *act
 | **Participant / lifeline** | box at top + dashed vertical line | one *object* (strictly `catalog : Catalog`; most people just write the class name) |
 | **Actor** | stick figure at top | a user or external system starting the flow |
 | **Synchronous message** | solid line, **filled** arrowhead | a call; the caller waits for it to finish |
-| **Asynchronous message** | solid line, **open** arrowhead | fire-and-forget; the caller continues (events, queues) |
+| **Asynchronous message** | solid line, **open** arrowhead | fire-and-forget; the caller continues (events, queues: lists of messages waiting to be processed) |
 | **Return (reply)** | dashed line, open arrowhead | the value coming back — draw only when it matters |
 | **Self-message** | arrow looping back to the same lifeline | the object calls its own method |
 | **Activation bar** (execution specification) | thin rectangle on a lifeline | the object is busy executing |
@@ -2175,9 +2175,9 @@ A class diagram says objects *can* talk; a sequence diagram shows what they *act
 | `alt` | alternatives, one runs (sections split by dashed lines, each with a guard, last can be `[else]`) | `if / else if / else` |
 | `opt` | optional, runs only if the guard is true | `if` without `else` |
 | `loop` | repeats while the guard holds (`loop [for each item]`) | `for` / `while` |
-| `par` | sections run in parallel | threads / `CompletableFuture` |
+| `par` | sections run in parallel | threads (independent lines of execution) / `CompletableFuture` (a result that arrives later from background work) |
 | `break` | if guard true, run this and leave the enclosing fragment | early `return` / `break` |
-| `critical` | atomic region, no interleaving | `synchronized` / lock |
+| `critical` | atomic region (runs as one indivisible step), no interleaving | `synchronized` (Java keyword: one thread at a time) / lock |
 | `ref` | reference to another diagram | calling a helper flow |
 
 (UML also has `neg`, `strict`, `seq`, `assert`, `ignore` and `consider`; you will not need them in an interview.)
@@ -2235,7 +2235,7 @@ sequenceDiagram
     end
 ```
 
-Here `->>` is a synchronous call, `-->>` a reply, and `-)` an **asynchronous** message: publishing an event does not wait for subscribers. The order is the point of the diagram: reserve stock *before* charging, and release it if the charge fails.
+Here `->>` is a synchronous call, `-->>` a reply, and `-)` an **asynchronous** message: publishing an event does not wait for subscribers. (An `EventBus` is an object that delivers each published event to everyone subscribed to it; `sku` is a stock-keeping unit, a product's ID. Queues and asynchronous messaging are explained in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).) The order is the point of the diagram: reserve stock *before* charging, and release it if the charge fails.
 
 ### Java code for Example 1 (`lld.ch03.library`)
 
@@ -2569,9 +2569,9 @@ Check the diagram against the code: every arrow is a real method — `Catalog.se
 
 ### Real-world examples
 
-- **OAuth 2.0 / OpenID Connect** login flows (browser → app → authorization server → token endpoint) are almost always documented as sequence diagrams.
-- **Payment integrations** (Stripe, Razorpay) document "create order → redirect → webhook" as sequence diagrams, with the webhook as an asynchronous message.
-- **Microservice sagas** (e.g. a travel booking that reserves a flight, a hotel and a car) are usually explained with sequence diagrams that show the compensating "undo" calls when one step fails.
+- **OAuth 2.0 / OpenID Connect** (standard protocols for "log in with another account") login flows (browser → app → authorization server → token endpoint) are almost always documented as sequence diagrams.
+- **Payment integrations** (Stripe, Razorpay) document "create order → redirect → webhook" (a webhook is an HTTP call the provider makes to your server when something happens) as sequence diagrams, with the webhook as an asynchronous message.
+- **Microservice sagas** (microservices are small, separately deployed services; a saga is a multi-step transaction in which every step has an "undo"; e.g. a travel booking that reserves a flight, a hotel and a car) are usually explained with sequence diagrams that show the compensating "undo" calls when one step fails.
 
 ### In the interview
 
@@ -2727,8 +2727,8 @@ For a straight-line flow ("customer pays and leaves") — there is nothing to de
 
 ### Real-world examples
 
-- **BPMN** (Business Process Model and Notation), used by workflow engines such as Camunda, is a close cousin of UML activity diagrams, with lanes and gateways.
-- **CI/CD pipelines** (GitHub Actions, Jenkins) are activity diagrams in practice: parallel jobs (fork), a job that `needs:` several others (join), conditional steps (guards).
+- **BPMN** (Business Process Model and Notation), used by workflow engines (software that runs business processes step by step) such as Camunda, is a close cousin of UML activity diagrams, with lanes and gateways.
+- **CI/CD pipelines** (Continuous Integration / Continuous Delivery: automatically building, testing and deploying code on every change; e.g. GitHub Actions, Jenkins) are activity diagrams in practice: parallel jobs (fork), a job that `needs:` several others (join), conditional steps (guards).
 - Food-delivery apps (Swiggy, Zomato, DoorDash) typically let the restaurant prepare the food while a delivery partner is being assigned — two parallel branches that join at "order picked up".
 
 ### In the interview
@@ -2774,7 +2774,7 @@ Analogy: a **traffic light**. It is always in exactly one state (red, green, yel
 
 ### The problem it solves
 
-Objects with a lifecycle (orders, tickets, elevators, vending machines, parking spots, TCP connections) are the source of many bugs: shipping a cancelled order, paying twice, refunding an undelivered item. A state diagram lists **every legal transition** so that everything else can be rejected. It also maps directly to code (an `enum` of states plus a transition method, or the **State pattern**, Chapter 11).
+Objects with a lifecycle (orders, tickets, elevators, vending machines, parking spots, TCP connections, TCP being the network protocol for reliable connections, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) are the source of many bugs: shipping a cancelled order, paying twice, refunding an undelivered item. A state diagram lists **every legal transition** so that everything else can be rejected. It also maps directly to code (an `enum` of states plus a transition method, or the **State pattern**, Chapter 11).
 
 ### How it works
 
@@ -2933,7 +2933,7 @@ public class Main {
 }
 ```
 
-**What each part shows:** `OrderState` is the list of states. Amounts are `BigDecimal` (never `double` for money), so the guard `[amount == total]` is written `p.amount().compareTo(total) == 0` — `BigDecimal.equals` would treat `120.0` and `120.00` as different because it also compares scale. `OrderEvent` is a **sealed** interface of event records, so the `switch` in `Order.handle` uses Java 21 **pattern matching with `when` guards** — each `case` line is literally one arrow of the diagram: `event [guard] -> target` with its action. The `default` branch rejects every transition that is not on the diagram.
+**What each part shows:** `OrderState` is the list of states. Amounts are `BigDecimal` (never `double` for money), so the guard `[amount == total]` is written `p.amount().compareTo(total) == 0` — `BigDecimal.equals` would treat `120.0` and `120.00` as different because it also compares scale. `OrderEvent` is a **sealed** interface (only the types listed inside it may implement it) of event records, so the `switch` in `Order.handle` uses Java 21 **pattern matching with `when` guards** — each `case` line is literally one arrow of the diagram: `event [guard] -> target` with its action. The `default` branch rejects every transition that is not on the diagram.
 
 Output:
 
@@ -2979,7 +2979,7 @@ For objects with only a flag or two and no real lifecycle (`active/inactive`). F
 - **TCP** connection states (`LISTEN`, `SYN_SENT`, `ESTABLISHED`, `FIN_WAIT_1`, …) — the classic protocol state machine.
 - **Amazon / Flipkart order tracking** (ordered → packed → shipped → out for delivery → delivered; cancel allowed only before shipping).
 - **Uber trip** (requested → driver assigned → driver arrived → in progress → completed / cancelled).
-- **Spring Statemachine** and AWS Step Functions are libraries/services built around state machines.
+- **Spring Statemachine** and AWS Step Functions (Amazon's cloud workflow service) are libraries/services built around state machines.
 
 ### In the interview
 
@@ -2989,7 +2989,7 @@ For objects with only a flag or two and no real lifecycle (`active/inactive`). F
 
 - *Q: What is a guard?* — A: A boolean condition in `[ ]` that must be true for the transition to fire, e.g. `[amount == total]`.
 - *Q: State machine vs activity diagram?* — A: A state machine is about one object's states over its lifetime; an activity diagram is about the steps of a process, possibly across many objects.
-- *Q: How do you make transitions thread-safe?* — A: Make the transition method `synchronized` (or use a lock / compare-and-set on an `AtomicReference<State>`), so two events cannot both read the old state and both move on.
+- *Q: How do you make transitions thread-safe?* — A: Make the transition method `synchronized` (or use a lock / compare-and-set on an `AtomicReference<State>`; compare-and-set changes a value only if it still equals what you last read, in one atomic step), so two events cannot both read the old state and both move on.
 
 ### Self-check
 
@@ -3051,7 +3051,7 @@ flowchart LR
 
 1. *Q: Name the six relationships from weakest to strongest coupling.* → A: Dependency, association, aggregation, composition, realization, generalization.
 2. *Q: Where does the diamond go, and what does filled vs hollow mean?* → A: At the whole; filled = composition (parts die with it), hollow = aggregation (parts live on).
-3. *Q: Code smell: `CompactSpot`, `LargeSpot` subclasses that only pass a constant to `super`. Fix?* → A: One `ParkingSpot` with a `SpotType` enum field.
+3. *Q: Code smell (a surface sign of a likely design problem): `CompactSpot`, `LargeSpot` subclasses that only pass a constant to `super`. Fix?* → A: One `ParkingSpot` with a `SpotType` enum field.
 4. *Q: Java type for multiplicity `0..1` and `1..*`?* → A: `Optional<T>` (nullable field); a non-empty collection checked in the constructor.
 5. *Q: «include» vs «extend»?* → A: Include = always, arrow from base to included; extend = sometimes (conditional), arrow from extension to base.
 6. *Q: `+ - # ~`?* → A: public, private, protected, package.

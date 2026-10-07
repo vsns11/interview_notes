@@ -5,7 +5,7 @@
 > - The difference between the **object-oriented design (OOD) round** and the **machine-coding round**.
 > - A complete answer, start to finish, before any theory (a music playlist in Java).
 > - A repeatable, step-by-step framework that turns one sentence into working code, with a time budget.
-> - How to turn one line into requirements, how to find classes, how to check a design with SOLID, and which six patterns come up most.
+> - How to turn one line into requirements, how to find classes, how to check a design with SOLID (five rules of thumb that keep classes easy to change), and which six patterns come up most.
 > - What interviewers actually score, how to talk while you design, and the mistakes that cost the most.
 > - A study plan and a map of this handbook (Chapters 1–22).
 > - A second worked mini-example (a small parking lot) run through every step of the framework.
@@ -16,13 +16,13 @@
 
 ### What it is
 
-The **low-level design** round gives you **a single application** to design while an interviewer watches, usually within 45–60 minutes (a machine-coding round stretches this to 90 minutes or 2 hours). The servers underneath are not your concern. What you design is **the set of classes inside the program**: a parking lot, a vending machine, a chess game, Splitwise, an elevator.
+The **low-level design** round gives you **a single application** to design while an interviewer watches, usually within 45–60 minutes (a machine-coding round stretches this to 90 minutes or 2 hours). The servers underneath are not your concern. What you design is **the set of classes inside the program**: a parking lot, a vending machine, a chess game, Splitwise (an app that splits shared expenses between friends), an elevator.
 
 A few words we will use all the time:
 
 | Term | Meaning |
 |---|---|
-| **Class** | A named type in code. It holds some data (fields) and the methods that work on that data. |
+| **Class** | A named type in code. It holds some data (fields) and the methods (functions that belong to the class) that work on that data. |
 | **Object** | One concrete instance of a class, with real values in its fields. |
 | **Responsibility** | The one job a class does, which you should be able to state in a single sentence. |
 | **Relationship** | How two classes are connected: one uses, holds, owns, or extends the other. |
@@ -44,17 +44,17 @@ Plenty of engineers write classes daily and still struggle here, because day-to-
 ![Image](../../assets/O-what-this-course-covers-1.svg)
 *Figure — The four parts of the course material this handbook absorbs: introduction, design and UML notation, the answering method, and the case studies (course diagram)*
 
-The figure above shows the four building blocks of preparation: first understand the round (this chapter), then the notation (UML), then the **method** for answering, then many worked case studies. This handbook follows the same arc but goes wider: it adds full chapters on OOP, SOLID, the classic design principles, clean code, refactoring, all 23 GoF patterns, and concurrency, so that you do not need a second resource.
+The figure above shows the four building blocks of preparation: first understand the round (this chapter), then the notation (UML), then the **method** for answering, then many worked case studies. This handbook follows the same arc but goes wider: it adds full chapters on OOP, SOLID, the classic design principles, clean code, refactoring (improving the structure of code without changing what it does), all 23 GoF patterns (the classic catalogue from the 1994 "Gang of Four" book), and concurrency (several pieces of work running at the same time and sharing data), so that you do not need a second resource.
 
 ### What every case study in this handbook contains
 
 Once you have read one case study you always know what comes next, because each one follows the same template:
 
 - The question, and the requirements chosen to design against (with an out-of-scope list).
-- The actors and their use cases (often as a use case diagram).
+- The actors and their use cases (often as a use case diagram, a picture of who uses the system and for what).
 - The class diagram, built up in stages so you follow the reasoning instead of staring at a finished picture.
-- Diagrams for the most important flows (activity or sequence diagrams).
-- Working Java code with a driver `Main` and its real output.
+- Diagrams for the most important flows (activity diagrams show the steps of a process; sequence diagrams show the messages objects send each other, in time order).
+- Working Java code with a driver `Main` (a small class whose `main` method runs the example) and its real output.
 - The design patterns the answer uses, named, **only where it really uses one**.
 - An "Extensions & follow-up questions" section: the simplifications made, and what to say when the interviewer notices them.
 
@@ -68,10 +68,10 @@ It also pays off outside interviews: the same step-by-step method is how you spl
 
 ### What you need already
 
-- **Some object-oriented language**, well enough that a class with a constructor plus a few methods reads easily to you. Every example here is in **Java 21**.
+- **Some object-oriented language**, well enough that a class with a constructor (the special method that sets up a new object) plus a few methods reads easily to you. Every example here is in **Java 21** (a recent long-term-support release of Java).
 - You do **not** need UML (Chapter 3 teaches it from zero).
-- You do **not** need system design knowledge. That round asks how a product survives millions of users (servers, databases, caches, queues). This round stays **inside one process** (classes, fields, methods, relationships). Practising one round gives you little for the other.
-- You do not need data structures and algorithms beyond the basics (lists, maps, sets, queues, heaps). That is a separate round.
+- You do **not** need system design knowledge. That round asks how a product survives millions of users (servers, databases, caches, queues; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) if those words are new). This round stays **inside one process** (one running program: classes, fields, methods, relationships). Practising one round gives you little for the other.
+- You do not need data structures and algorithms beyond the basics (lists, maps, sets, queues, heaps). That is a separate round. (Quick refresher: a **list** keeps items in order, a **map** looks a value up by its key, a **set** holds no duplicates, a **queue** hands items out first-in, first-out, and a **heap** always gives you the smallest or largest item quickly.)
 
 ### What this handbook will not do
 
@@ -106,19 +106,23 @@ The round has several names, all meaning roughly the same thing:
 | Output | Class diagram + code | Architecture diagram + capacity numbers |
 | Typical question | "Design the classes for a parking lot" | "Design a parking-lot booking service for 10 million users" |
 
+(For the right-hand column: a **load balancer** spreads incoming requests across several servers, and **sharding** splits one big database into pieces stored on different machines. You will not need either in this round.)
+
 ### OOD round vs machine-coding round
 
 | | OOD / LLD discussion round | Machine-coding round |
 |---|---|---|
 | Duration | 45–60 minutes | Usually about 90 minutes of coding (often 2 hours including evaluation) |
-| Where | Whiteboard, shared doc, or IDE | Your own IDE, on your laptop or a remote machine |
+| Where | Whiteboard, shared doc, or IDE (code editor with build and run tools) | Your own IDE, on your laptop or a remote machine |
 | What you produce | Requirements, use cases, class diagram, code for 2–3 main flows | A **complete, running program** implementing the minimum required features |
 | Storage | Not discussed much | **In-memory** (maps and lists); no real database unless asked |
 | Interaction | Continuous conversation with the interviewer | Problem statement up front, mostly silent coding, then a **demo and code walkthrough** |
 | What is judged | Bounding the problem, responsibilities, relationships, trade-offs, patterns | Working code, **data models**, **service interfaces** a client could call, **extensibility** (can a new feature be added without rewriting), readability, edge cases, sometimes tests and thread safety |
 | Common failure | Talking without converging, or coding too early | Not finishing, or finishing with one giant class that cannot be extended |
 
-The machine-coding round, as commonly described by candidates, works like this: you get a problem statement with a **minimum set of features**; within the time window you must choose the data structures, design **service interfaces** that a client (for example a command-line driver) would use, and present **working code** together with the reasoning behind your design and the patterns you used. It is especially common for SDE-1 and SDE-2 hiring.
+The machine-coding round, as commonly described by candidates, works like this: you get a problem statement with a **minimum set of features**; within the time window you must choose the data structures, design **service interfaces** that a client (for example a command-line driver, a small program you run from a terminal) would use, and present **working code** together with the reasoning behind your design and the patterns you used. It is especially common for SDE-1 and SDE-2 hiring (Software Development Engineer job levels: entry level and mid level).
+
+A few words from the table above: **data models** are the classes that hold the problem's data (a `Ticket`, a `Spot`); a **service interface** is the set of public methods a caller uses (`park`, `exit`); **edge cases** are unusual inputs at the boundaries (empty, full, negative, duplicate); **thread safety** means the code stays correct when several **threads** (independent lines of execution inside one program) use it at the same moment.
 
 ### How it works: the five core steps
 
@@ -148,7 +152,7 @@ In the figure above, notice two things. First, up to **a quarter of the hour is 
 | Clarify requirements | 5–8 min | A written list of 8–12 requirements + out-of-scope list |
 | Actors and use cases | 3–5 min | 2–4 actors, 6–10 use cases |
 | Find the classes | 8–10 min | Class list, one responsibility each |
-| Connect the classes | 8–10 min | Class diagram with relationships and multiplicity |
+| Connect the classes | 8–10 min | Class diagram with relationships and multiplicity (how many of each) |
 | Write the code | 12–15 min | 2–3 methods that implement the main flows |
 
 **90-minute machine-coding round** (a budget that works well in practice):
@@ -161,6 +165,8 @@ In the figure above, notice two things. First, up to **a quarter of the hour is 
 | Remaining features + validation + edge cases | 15–20 min | All "must have" features working |
 | Polish: names, exceptions, one extension point, demo script | 5–10 min | Clean output you can demo |
 | Buffer | 5 min | Never zero |
+
+In this table, code that **compiles** is code the Java compiler accepts, so it can run; **enums** are types with a fixed list of named values (more in Section 1.6); the **happy path** is the main flow with valid input and nothing going wrong.
 
 Rule of thumb: **get something running by the halfway mark**. A running partial solution beats a beautiful non-compiling one.
 
@@ -275,6 +281,8 @@ classDiagram
 ```
 
 ### Step 5: the code
+
+> **Key term — reading the Java below:** A `package` line groups related classes, much like a folder. `implements PlayOrder` promises that the class provides every method of that interface, and `@Override` marks a method that fulfils such a promise (the compiler checks it). `final` on a class means no other class may extend it; on a field it means the field is set once and never reassigned. `private` hides a field or method from code outside the class.
 
 ```java
 // File: code/lld/ch01/playlist/InOrder.java
@@ -416,6 +424,8 @@ public class Main {
 
 Run it: `cd chapters/01-lld-interview-approach/code && javac --release 21 -d /tmp/lld_01 $(find . -name '*.java') && java -cp /tmp/lld_01 lld.ch01.playlist.Main`
 
+(`javac` is the Java compiler, which turns `.java` source files into runnable `.class` files; `java` then runs them, and `-cp` (classpath) tells it where those files are.)
+
 Output:
 
 ```
@@ -432,11 +442,11 @@ shuffled:
 ```
 
 **Explaining each part:**
-- `Song` is a Java **record**: an immutable data carrier whose fields, constructor, accessors, `equals`, `hashCode` and `toString` are generated. The compact constructor validates input.
-- `Playlist` keeps its list `private` (encapsulation). Callers can add and read, but cannot replace the list.
-- `PlayOrder` is the variation point. `NONE = -1` is an interface constant meaning "nothing more to play".
-- `Shuffled` is **given** its order instead of generating one with `Random`. This makes the output identical on every run, which makes the design **testable**. (In production you would inject a `Random` with a seed, or a shuffled list produced elsewhere.)
-- `Player` depends on the interface `PlayOrder`, not on a concrete class. One `Player` gives both behaviours, and **nothing in it tests which mode is active**. (Its only `if`s track *where* it is: the first call asks `first`, later calls ask `after`, and once it has reached the end it stays there instead of asking the order again.)
+- `Song` is a Java **record**: an immutable (cannot change after creation) data carrier whose fields, constructor, accessors (getter methods such as `title()`), `equals`, `hashCode` and `toString` (the standard methods for comparing objects, using them as map keys, and printing them) are generated. The compact constructor (a constructor with no parameter list, used just to check the values) validates input.
+- `Playlist` keeps its list `private` (encapsulation: hiding a class's data so it can only be reached through the class's own methods). Callers can add and read, but cannot replace the list.
+- `PlayOrder` is the variation point (the place where different behaviours can be plugged in). `NONE = -1` is an interface constant meaning "nothing more to play".
+- `Shuffled` is **given** its order instead of generating one with `Random`. This makes the output identical on every run, which makes the design **testable**. (In production you would inject a `Random` with a seed, or a shuffled list produced elsewhere. To **inject** something is to hand it in from outside, usually through the constructor; a **seed** is a fixed starting number that makes `Random` produce the same sequence every time.)
+- `Player` depends on the interface `PlayOrder`, not on a concrete class (a real class you can create objects from, as opposed to an interface). One `Player` gives both behaviours, and **nothing in it tests which mode is active**. (Its only `if`s track *where* it is: the first call asks `first`, later calls ask `after`, and once it has reached the end it stays there instead of asking the order again.)
 
 ### What to notice
 
@@ -480,25 +490,27 @@ flowchart TD
 | # | Step | Questions to ask yourself | Output | Core step |
 |---|---|---|---|---|
 | 1 | **Clarify** | Who uses it? What exactly is "a parking lot" here? Single location or many? | Shared understanding | Requirements |
-| 2 | **Requirements** | What must it do (functional)? How well (non-functional: thread-safe, extensible, in-memory, latency)? What is out of scope? | 8–12 numbered lines + out-of-scope list | Requirements |
+| 2 | **Requirements** | What must it do (functional)? How well (non-functional: thread-safe, extensible, in-memory, latency, i.e. response time)? What is out of scope? | 8–12 numbered lines + out-of-scope list | Requirements |
 | 3 | **Use cases** | For each actor, what can they do? | Actor → use case list (or use case diagram) | Actors & use cases |
 | 4 | **Entities** | Which nouns hold state or behaviour? Which are just values (fields/enums)? | Class list with one-sentence responsibilities | Classes |
 | 5 | **Relationships** | Uses, has, owns, or is-a? How many (1, 0..1, *)? | Relationship list | Connect |
 | 6 | **Class diagram** | Fields, key methods, interfaces, enums | UML class diagram | Connect |
-| 7 | **Key flows** | What happens step by step for the 2–3 main use cases? What states does the core object go through? | Sequence / activity / state diagram | Connect |
-| 8 | **Patterns & SOLID** | Is there a rule that varies (Strategy)? A lifecycle (State)? Many listeners (Observer)? Any class with two reasons to change? | Named patterns + rejected alternatives | Check |
+| 7 | **Key flows** | What happens step by step for the 2–3 main use cases? What states does the core object go through? | Sequence / activity / state diagram (states and the moves between them) | Connect |
+| 8 | **Patterns & SOLID** | Is there a rule that varies (Strategy)? A lifecycle (fixed states an object moves through: State)? Many listeners (Observer)? Any class with two reasons to change? | Named patterns + rejected alternatives | Check |
 | 9 | **Code** | Interfaces, enums, models, services, a driver `main` | Running code for main flows | Code |
 | 10 | **Edge cases & concurrency** | Invalid input? Full capacity? Two users grabbing the same seat? | Validation, exceptions, locks | Code |
 | 11 | **Extensions** | What would change if requirement X is added? | Short answers, maybe one extra class | Wrap-up |
+
+(Row 10 in plain words: an **exception** is Java's way of signalling an error that stops the normal flow, and a **lock** lets only one thread at a time run a protected piece of code.)
 
 ### Trade-offs
 
 | Do this | Instead of this | Why |
 |---|---|---|
 | Spend 8–13 minutes on steps 1–3 | Coding at minute 2 | Unbounded scope wastes far more time later |
-| Code 2–3 flows fully | Stub 12 classes | Interviewers judge depth on the chosen part |
-| Name one or two patterns where the signal appears | Apply six patterns | Over-engineering is scored as poor judgement |
-| Pass time into methods (`nowMinute`) and hold money as `BigDecimal` (or whole cents in a `long`) | Call `System.currentTimeMillis()` inside the logic, and use `double` for money | Deterministic and testable; `double` cannot represent values like 0.10 exactly, so sums drift |
+| Code 2–3 flows fully | Stub 12 classes (empty placeholders) | Interviewers judge depth on the chosen part |
+| Name one or two patterns where the signal appears | Apply six patterns | Over-engineering (building more flexibility than the problem needs) is scored as poor judgement |
+| Pass time into methods (`nowMinute`) and hold money as `BigDecimal` (Java's exact decimal type; or whole cents in a `long`) | Call `System.currentTimeMillis()` inside the logic, and use `double` (binary floating-point number) for money | Deterministic (same input, same output) and testable; `double` cannot represent values like 0.10 exactly, so sums drift |
 
 ### When not to use it (rigidly)
 
@@ -633,7 +645,7 @@ A reliable ten-minute method to go from requirements to a class list: **collect 
 | 4 | Does anything **call** it? | Nobody ever asks an `Hour` object a question | Never called → it is a value |
 | 5 | Does it differ in **behaviour** or only in **data**? | Compact vs large spot differ only in which vehicle fits; cash vs card payment behave differently | **Different data → a field. Different behaviour → a class.** |
 
-Applied to the parking-lot nouns, tests one to four cut the list to about fifteen; test five brings it to roughly twelve, removing more than the other four combined. Compact, large and handicapped spots all hold a vehicle, report free or occupied, and carry a number; they differ only in which vehicle kind is allowed. A difference like that is **data**, so a single `ParkingSpot` class gets a `type` field. Paying cash means checking enough money was given; paying by card means calling a provider and waiting for its reply. That difference is **behaviour**, so it earns two classes. Watch for this smell in a diagram: five subclasses whose only content is handing a different constant up to the parent. They are a single field pretending to be classes.
+Applied to the parking-lot nouns, tests one to four cut the list to about fifteen; test five brings it to roughly twelve, removing more than the other four combined. Compact, large and handicapped spots all hold a vehicle, report free or occupied, and carry a number; they differ only in which vehicle kind is allowed. A difference like that is **data**, so a single `ParkingSpot` class gets a `type` field. Paying cash means checking enough money was given; paying by card means calling a provider and waiting for its reply. That difference is **behaviour**, so it earns two classes. Watch for this smell (a surface sign that something is probably wrong) in a diagram: five subclasses (classes that extend another class, their parent) whose only content is handing a different constant up to the parent. They are a single field pretending to be classes.
 
 4. **Give each class one responsibility**, in one sentence with no "and":
 
@@ -650,13 +662,13 @@ Applied to the parking-lot nouns, tests one to four cut the list to about fiftee
 
 `ParkingLot`'s sentence admits two jobs (issuing tickets **and** knowing fullness/assigning spots). In a longer design you would split it into a spot-assignment part and a ticketing part. In 45 minutes, **naming the tension out loud is enough**.
 
-5. **Put each method where the data is.** "Find a free spot" touches the spot collection, which the floor owns → `ParkingFloor`. "Price the stay" touches the rate card → `ParkingRate`. "Take a ticket" touches the ticket store → `ParkingLot`. If a method needs data from three classes, it is probably in the wrong place; move it to the class that owns most of what it touches. (This is the GRASP "Information Expert" idea and the cure for the *Feature Envy* smell, Chapters 5 and 7.)
+5. **Put each method where the data is.** "Find a free spot" touches the spot collection, which the floor owns → `ParkingFloor`. "Price the stay" touches the rate card → `ParkingRate`. "Take a ticket" touches the ticket store → `ParkingLot`. If a method needs data from three classes, it is probably in the wrong place; move it to the class that owns most of what it touches. (This is the GRASP "Information Expert" idea and the cure for the *Feature Envy* smell, Chapters 5 and 7. GRASP is a set of guidelines for deciding which class gets which job; *Feature Envy* is a method that uses another class's data more than its own.)
 
 ### Common mistakes
 
 - One subclass per value (`CompactSpot`, `LargeSpot` ... with no behaviour).
 - Missing the **record-keeping** class (ticket, loan, booking) and the **rule** class (rate, strategy). These two are the classes beginners most often forget.
-- "Manager" god classes that do everything.
+- "Manager" god classes that do everything (a *god class* is one huge class that owns most of the program's logic).
 
 ### Self-check
 
@@ -672,7 +684,7 @@ Nouns → candidate classes, verbs → methods. Cut values, duplicates, stateles
 
 ## 1.7 Connecting the classes (preview)
 
-Once you have the classes, decide for each pair: does one **use** the other briefly (dependency), **hold** a reference (association), **contain** parts that can live alone (aggregation), **own** parts that die with it (composition), or **is** it a kind of the other (inheritance / realization)? Then add **multiplicity** (1, 0..1, 1..*, *). Chapter 3 teaches every relationship and UML symbol in detail. For now, remember the most common beginner error: using **inheritance** where **composition** is right. The test is the sentence "A **is a** B". A car is not an engine, so `Car` has an `Engine`.
+Once you have the classes, decide for each pair: does one **use** the other briefly (dependency), **hold** a reference (association), **contain** parts that can live alone (aggregation), **own** parts that die with it (composition), or **is** it a kind of the other (inheritance, where a class extends another and reuses its code / realization, where a class implements an interface)? Then add **multiplicity** (1, 0..1, 1..*, *). Chapter 3 teaches every relationship and UML symbol in detail. For now, remember the most common beginner error: using **inheritance** where **composition** is right. The test is the sentence "A **is a** B". A car is not an engine, so `Car` has an `Engine`.
 
 ---
 
@@ -695,6 +707,8 @@ Once you have the classes, decide for each pair: does one **use** the other brie
 | **I** — Interface segregation | No class should implement methods it does not use | Empty method bodies | Split the interface until every implementer uses everything |
 | **D** — Dependency inversion | Depend on an interface, not a concrete class | A high-level class constructs or names a low-level one | Could you test the class without the real database/provider? |
 
+(In the **D** row, **high-level** code holds the business rules, while **low-level** code does one technical job such as talking to a database or a payment provider.)
+
 Examples from the parking lot:
 - **S:** a `ParkingLot` that both assigns spots and prints receipts changes when pricing changes **and** when the layout changes → two classes.
 - **O:** pricing written as a switch over rate types means a weekend rate edits the class that prices everything. With pricing behind a small interface, the weekend rate is a new class.
@@ -709,7 +723,7 @@ Examples from the parking lot:
 
 ### When not to use it
 
-- **Do not add an interface for everything.** An interface with one implementer, added "because SOLID", is indirection with no benefit. Add it when a second implementation exists or is clearly coming (or when you need a test double).
+- **Do not add an interface for everything.** An interface with one implementer, added "because SOLID", is indirection (an extra layer between the caller and the real code) with no benefit. Add it when a second implementation exists or is clearly coming (or when you need a test double, a fake stand-in object used in tests).
 - **Do not split beyond what a reader can follow.** Thirty two-method classes are as bad as one god class. The one-sentence test is the boundary.
 
 Each rule targets a **specific problem**. Apply it where your design shows that problem; applying it where the problem is absent only adds cost.
@@ -743,11 +757,11 @@ A **design pattern** is a named solution to a design problem that keeps recurrin
 
 | Pattern | Signal (from the figure above) | Typical place | Parking lot / library example |
 |---|---|---|---|
-| **Strategy** | One operation, several interchangeable rules chosen at run time | Pricing, matching, sorting, ranking, routing | `ParkingRate` interface with `HourlyRate`, `WeekendRate`, `MonthlyPass`. Answers "what if the rules change?", the most common late question |
+| **Strategy** | One operation, several interchangeable rules chosen at run time (while the program runs) | Pricing, matching, sorting, ranking, routing | `ParkingRate` interface with `HourlyRate`, `WeekendRate`, `MonthlyPass`. Answers "what if the rules change?", the most common late question |
 | **Factory** | Creation depends on a type value; caller should not know the concrete class | Vehicles, spots, payments, notifications | A factory turns a type/enum into a `Vehicle`, so the entrance panel does not know every vehicle class. Keep it small: a factory **method** is usually enough |
 | **Observer** | One thing changes, several others must know, and the source should not know them | Display boards, notifications, live updates, event logs | When a spot fills, all boards/panels registered on it update; adding a board changes nothing in the spot. With only **one** listener, a direct call is enough (e.g. notifying the member who reserved a returned book) |
 | **State** | Behaviour depends on the current state, with a fixed set of transitions | Tickets, orders, bookings, loans, vending machines | Ticket: active → paid → closed. Book copy: available, reserved, loaned, lost. Each state class knows what is allowed, so illegal transitions become impossible. For 3–4 states, an **enum + one guarded method** is simpler: say so |
-| **Singleton** | Exactly one instance must exist | The top-level object (`ParkingLot`, `Library`) | Private constructor + one accessor. Say out loud: it must be **thread-safe** (lock or eager creation), and it is **global state**, which hurts testing; many teams inject one shared instance instead |
+| **Singleton** | Exactly one instance must exist | The top-level object (`ParkingLot`, `Library`) | Private constructor + one accessor. Say out loud: it must be **thread-safe** (lock or eager creation, i.e. built when the class loads), and it is **global state** (data any code anywhere can reach and change), which hurts testing; many teams inject one shared instance instead |
 | **Builder** | Many optional fields; the constructor is getting long | A book copy, a booking, a search query | `BookItem` with barcode, price, format, dates, rack: eight constructor args are easy to swap by mistake (two strings side by side compile fine). A builder sets fields **by name**. It is a readability fix, not a structural one |
 
 ### What to say about each one
@@ -783,6 +797,8 @@ Nothing lands better than a **comparison**: "The rate gets Strategy because a se
 - **Singleton:** `java.lang.Runtime.getRuntime()`; Spring beans are singleton-scoped **per container** by default (not the GoF class-enforced singleton).
 - **Builder:** `StringBuilder`, `java.net.http.HttpRequest.newBuilder()`, `Stream.builder()`.
 
+(Names in this list: **Spring** is a popular Java framework whose *container* creates and wires your application objects, called *beans*; **Swing/AWT** are Java's older desktop user-interface toolkits; **TCP** is the network protocol that keeps a reliable connection between two machines, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md); a **thread pool** is a fixed set of reusable worker threads.)
+
 ### TL;DR
 
 Know six by name: Strategy, Factory, Observer, State, Singleton, Builder. Use one or two where their signal appears, and name the one you rejected.
@@ -802,17 +818,17 @@ flowchart LR
     S --> M
 ```
 
-1. **Models** — entities (`ParkingSpot`), value objects (`record Vehicle`), enums (`VehicleType`). Encapsulate state; validate in constructors.
-2. **Repositories** — in-memory `Map<Id, Entity>` behind a small interface, so a database could replace it later.
+1. **Models** — entities (`ParkingSpot`; objects with an identity whose state changes over time), value objects (`record Vehicle`; plain data compared by its values), enums (`VehicleType`). Encapsulate state; validate in constructors.
+2. **Repositories** — classes whose only job is storing and finding objects: an in-memory `Map<Id, Entity>` behind a small interface, so a database could replace it later.
 3. **Strategies / policies** — every rule that might vary (pricing, spot selection, splitting a bill).
 4. **Services** — the use cases (`park`, `exit`, `bookSeats`). This is the **service interface** a client calls.
 5. **Driver** — a `Main` that runs a scripted scenario (or reads commands) and prints clear output for the demo.
 
 **Habits that interviewers notice:**
-- **Pass time in** (`long nowMinute`, `Instant now`) rather than reading the clock inside the method: same input → same output → testable.
+- **Pass time in** (`long nowMinute`, `Instant now`, where `Instant` is Java's type for a point in time) rather than reading the clock inside the method: same input → same output → testable.
 - **Hold money as `BigDecimal`** (built from strings such as `new BigDecimal("3.50")`) or as whole cents in a `long`; never `double`. This handbook uses `BigDecimal` in domain code.
 - **Fail loudly on bad input**: `IllegalArgumentException` for bad arguments, `IllegalStateException` for wrong state, custom exceptions (`SpotNotAvailableException`) where they clarify.
-- **Return `Optional`** when "not found" is a normal outcome.
+- **Return `Optional`** (a box that either holds a value or is empty, used instead of returning `null`) when "not found" is a normal outcome.
 - **Keep fields `private final`** unless they must change.
 - **Name things after the domain** (`ParkingTicket`, not `Data2`).
 
@@ -820,11 +836,13 @@ flowchart LR
 
 | Category | Questions |
 |---|---|
-| Input | null, empty, negative, duplicate IDs, unknown IDs |
+| Input | null (no object at all), empty, negative, duplicate IDs, unknown IDs |
 | Capacity | Full lot, empty playlist, zero seats left, max loans reached |
 | State | Paying twice, exiting without entering, cancelling a delivered order |
 | Time | Exit before entry, bookings expiring, part hours (round up?) |
 | Concurrency | Two threads booking the same seat or taking the same spot: use `synchronized`, a `ReentrantLock`, or atomic structures such as `ConcurrentHashMap.computeIfAbsent`; lock the **smallest** shared thing that keeps the invariant |
+
+> **Key term — threads, locks and atomicity:** A **thread** is one independent line of execution; a server handling two panels at once runs two threads over the same objects. `synchronized` and `ReentrantLock` are Java's ways to let only one thread at a time into a block of code. An **atomic** operation happens all at once from other threads' point of view, with no half-finished moment they can see; `ConcurrentHashMap` is a thread-safe map that offers such operations. An **invariant** is a rule about the data that must always hold, such as "one spot holds at most one vehicle".
 
 Chapters 12 and 13 cover concurrency in depth.
 
@@ -989,9 +1007,9 @@ sequenceDiagram
 |---|---|---|
 | **Strategy** for pricing (`PricingStrategy`) | A second rule (weekend) is explicitly required; new rules = new classes (open/closed) | A `switch` over a rate enum inside `ParkingLot` |
 | Spot and vehicle types as **enums** | They differ in data only | One subclass per spot type |
-| `Ticket` as a **record** | A ticket is a fact that never changes after issue. (A record is only *shallowly* immutable: its fields cannot be reassigned, but the `ParkingSpot` it points to still changes state.) | Mutable ticket with setters |
+| `Ticket` as a **record** | A ticket is a fact that never changes after issue. (A record is only *shallowly* immutable: its fields cannot be reassigned, but the `ParkingSpot` it points to still changes state.) | Mutable ticket with setters (methods that change fields) |
 | Money as `BigDecimal` | Exact decimal arithmetic; `3.50 + 3.50` is exactly `7.00` | `double` (binary fractions, rounding drift) |
-| `synchronized` on `park`/`exit`/`freeSpots` | Two panels must never get the same spot; lot-wide lock is simple and correct for this size | Per-floor locks (better throughput, more complex; mention as an extension) |
+| `synchronized` on `park`/`exit`/`freeSpots` | Two panels must never get the same spot; lot-wide lock is simple and correct for this size | Per-floor locks (better throughput, i.e. more requests handled per second; more complex; mention as an extension) |
 | No Singleton for `ParkingLot` | Injecting one instance keeps it testable | Global `getInstance()` |
 | No State pattern for tickets | Only active/closed; a map of active tickets is enough | State classes per ticket status |
 
@@ -1274,7 +1292,7 @@ Reading the output: the car took the compact spot, the truck the only large spot
 
 ### Concurrency & edge cases
 
-- `park` and `exit` are `synchronized` on the lot, so find-then-occupy is **atomic**: two panels cannot both see the same spot as free and both occupy it (a classic *check-then-act* race).
+- `park` and `exit` are `synchronized` on the lot, so find-then-occupy is **atomic**: two panels cannot both see the same spot as free and both occupy it (a classic *check-then-act* race: a **race condition** is a bug whose result depends on which thread happens to run first).
 - `freeSpots` is read under the **same** lock, so a display never sees a half-finished `park`. `ParkingFloor` itself is not thread-safe; it is only ever called through the lot.
 - `exit` validates the ticket and the time **before** changing anything, so a rejected exit (for example exit before entry) leaves the ticket open.
 - `ParkingSpot.occupy` also throws if the spot is taken: a second line of defence.
@@ -1288,7 +1306,7 @@ Reading the output: the car took the compact spot, the truck the only large spot
 | "Add electric-vehicle spots with charging." | Add `ELECTRIC` to `SpotType`, add an `ELECTRIC_CAR` vehicle type whose fitting list starts with `ELECTRIC`. If charging has **behaviour** (meter, charging fee), then a `ChargingSpot` class or a charging component composed into the spot. |
 | "Choose the nearest spot to the entrance instead of the first free one." | Extract a `SpotSelectionStrategy` interface (Strategy again), injected into `ParkingLot`. |
 | "Update display boards when spots change." | Observer: spots/floors publish "spot freed/occupied" events; boards subscribe. |
-| "Improve throughput with many panels." | Lock per floor (or per spot type) instead of the whole lot; or keep free spots in a `ConcurrentLinkedQueue` per type and `poll()` atomically. |
+| "Improve throughput with many panels." | Lock per floor (or per spot type) instead of the whole lot; or keep free spots in a `ConcurrentLinkedQueue` (a thread-safe queue) per type and `poll()` atomically. |
 | "Add payment by cash or card." | `Payment` interface with `CashPayment`, `CardPayment`; `exit` returns the fee and a `PaymentService` collects it (dependency inversion). |
 
 ### In the interview
@@ -1348,29 +1366,29 @@ More habits:
 - **Do not skip the extensions / "what we left out" section.** It lists the simplifications and their trade-offs, and interviewers ask about exactly these. "I merged these two responsibilities to save time; here is how I would split them" is worth far more than hoping nobody asks.
 - **Do not invent pattern names.** Where plain classes are enough, say so. Labelling a pattern the design does not use loses credibility.
 - **After six or seven case studies, switch to timed runs**: a question you have already done, 45 minutes, blank page. You will not finish; nobody does. Measure two things: did you spend the first ten minutes on requirements and actors, and did you reach running code for at least one flow? These predict the real result better than the number of classes you drew.
-- **Compile and run every example** (`bash tools/compile_all.sh` runs all chapters).
+- **Compile and run every example** (`bash tools/compile_all.sh` runs all chapters; `bash` is the Unix command shell and the `.sh` file is a script of commands).
 
 ### Map of this handbook
 
 | Ch | Title | Use it for |
 |---|---|---|
 | 1 | The LLD interview & how to approach it | The method, time budget, study plan (this chapter) |
-| 2 | OOP fundamentals | Classes, objects, the four pillars, interfaces, enums, equality, immutability, generics, OOA/OOD |
+| 2 | OOP fundamentals | Classes, objects, the four pillars, interfaces, enums, equality, immutability, generics, OOA/OOD (object-oriented analysis / design) |
 | 3 | Relationships & UML | Association, aggregation, composition, dependency; class, use case, activity, sequence, state diagrams |
 | 4 | SOLID principles | The five principles in depth |
-| 5 | Design principles | DRY, KISS, YAGNI, composition over inheritance, Law of Demeter, GRASP and friends |
+| 5 | Design principles | DRY (don't repeat yourself), KISS (keep it simple), YAGNI (you aren't gonna need it), composition over inheritance, Law of Demeter, GRASP and friends |
 | 6 | Clean code | Naming, functions, comments, error handling, tests |
 | 7 | Refactoring | Code smells and the named refactorings that fix them |
 | 8 | Creational patterns | Singleton, Factory Method, Abstract Factory, Builder, Prototype |
 | 9 | Structural patterns | Adapter, Bridge, Composite, Decorator, Facade, Flyweight, Proxy |
-| 10–11 | Behavioural patterns | Strategy, Observer, State, Command, Template Method, Iterator, Chain of Responsibility, Mediator, Memento, Visitor, Interpreter; MVC |
+| 10–11 | Behavioural patterns | Strategy, Observer, State, Command, Template Method, Iterator, Chain of Responsibility, Mediator, Memento, Visitor, Interpreter; MVC (Model-View-Controller) |
 | 12 | Concurrency concepts | Threads, locks, `java.util.concurrent`, thread-safety patterns |
 | 13 | Concurrency problems | Producer–consumer, readers–writers, rate limiters and other classic problems |
 | 14 | Case studies: everyday objects | Parking lot, vending machine, ATM, elevator, traffic signal, coffee machine |
 | 15–16 | Case studies: booking and inventory | Library, movie tickets, concerts, hotels, car rental, restaurant, airline, course registration |
 | 17 | Case studies: games | Chess, tic-tac-toe, snake and ladder, 2048, blackjack |
 | 18–19 | Case studies: platforms | Social and Q&A sites, cricket scores, Amazon-style shopping, food delivery, auctions, stock brokerage and exchange, music streaming |
-| 20 | Case studies: components | Caches (including LRU), logger, rate limiter, pub-sub, notifications, Splitwise, ride sharing and similar |
+| 20 | Case studies: components | Caches (including LRU, which evicts the least recently used item), logger, rate limiter (caps how many requests are allowed per time window), pub-sub (publishers send messages to all subscribers of a topic), notifications, Splitwise, ride sharing and similar |
 | 21 | Case studies: machine coding | 90-minute style problems with runnable solutions: task manager, digital wallet, event calendar, coding contest platform, property listing, loan ledger, inventory |
 | 22 | Cheat sheets & glossary | Last-day revision |
 
@@ -1460,7 +1478,7 @@ Add a seventh, **an in-memory cache (LRU)**, if your target companies ask for a 
 | Missing the record class (ticket/loan/booking) | Data ends up on the wrong class (`dueDate` on `Book`) | Connection that carries data = an object |
 | Inheritance for code reuse ("Car extends Engine") | Wrong "is-a"; fragile | Composition |
 | Pattern stuffing | Looks like memorisation, not judgement | One or two patterns, with the signal |
-| `switch` on type everywhere | Every new type edits many places | Polymorphism / Strategy |
+| `switch` on type everywhere | Every new type edits many places | Polymorphism (one call, different behaviour per class) / Strategy |
 | All twelve classes at equal depth | No flow works end to end | Two or three flows fully |
 | Silent designing | Interviewer cannot credit your reasoning | Narrate each step |
 | Ignoring concurrency when two users share a resource | Double booking | Lock or atomic operation on the shared state |

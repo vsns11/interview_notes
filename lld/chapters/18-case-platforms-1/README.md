@@ -20,9 +20,13 @@ javac --release 21 -d /tmp/lld_18 $(find . -name '*.java')
 java -cp /tmp/lld_18 lld.ch18.stackoverflow.Main       # or cricinfo, cricketdashboard, linkedin, facebook
 ```
 
+`javac` is the Java **compiler** (it turns `.java` source files into `.class` files the Java runtime can execute); `--release 21` says which Java version to target, and `-d` names the output folder. `java -cp` runs a program, where the **classpath** (`-cp`) is the list of folders in which Java looks for compiled classes. The **standard library** is the set of classes that ships with Java itself, so nothing extra has to be downloaded.
+
 All five `Main` classes compile with Java 21 (standard library only) and run. The output printed under each design is the real output of that program.
 
 > **Code-style note.** To keep a whole design readable in one place, a file sometimes holds several small package-private types (for example `Posts.java` holds `Post`, `Question`, `Answer`, `Comment`, `Tag` and `Bounty`). That is legal Java. In a production codebase you would usually give each public top-level type its own file.
+
+> **Key term — Java vocabulary used in this chapter:** A **package** is a named folder of related classes (`lld.ch18.stackoverflow`); a **package-private** type has no `public`/`private` keyword and can be used only by classes in the same package. A **top-level type** is a class, interface, enum or record not nested inside another one. An **interface** lists methods a class promises to provide, without the code; a class that provides them *implements* it. An **abstract class** can never be created directly — only its subclasses can. An **enum** is a type with a fixed list of named values (`OPEN`, `CLOSED`). A **record** is a short way to declare a class that just carries data that never changes. A **sealed** type names exactly which subclasses are allowed, so the compiler knows every possible kind.
 
 ---
 
@@ -43,7 +47,7 @@ Interviewers pick platform problems to check six skills at once. The table names
 | **Rich domain model** | Turning a long list of nouns into classes with clear responsibilities, and knowing which noun is *just data* (a record) and which has *behaviour* | Cricinfo's `Over` knows a wide is not one of its six balls |
 | **User roles** | Different people may do different things: guest, member, moderator, admin, commentator | Stack Overflow's reputation-based privileges; Facebook's admin who blocks members |
 | **Feeds** | A **feed** is a personalised, ranked list of recent content from the people and pages you are linked to | LinkedIn and Facebook feed services with a ranking Strategy |
-| **Notifications** | Telling a user that something happened (new message, friend request, comment) through one or more **channels** (in-app, email, push) | Observer + Strategy in every design |
+| **Notifications** | Telling a user that something happened (new message, friend request, comment) through one or more **channels** (in-app, email, push — a pop-up alert sent to a phone or browser) | Observer + Strategy in every design |
 | **Search** | Finding things by words. Built with an **inverted index**: a map from each word to the items that contain it | Question search, member search, privacy-aware post search |
 | **Reputation / trust** | Numbers that summarise past behaviour and unlock abilities (reputation, badges, endorsements, ratings) | Stack Overflow reputation and badges; LinkedIn endorsements; Facebook page ratings |
 
@@ -51,12 +55,12 @@ Interviewers pick platform problems to check six skills at once. The table names
 
 These ideas repeat in every design in this chapter. Learn them once.
 
-1. **A facade in front.** A **facade** is one class that offers the simple operations the UI needs (`ask`, `vote`, `post`, `invite`) and hides the many classes behind it (Chapter 9). It is also the natural place to check "is this account active?" and "is this person allowed?" before anything changes.
+1. **A facade in front.** A **facade** is one class that offers the simple operations the UI (user interface — the screens and buttons people use) needs (`ask`, `vote`, `post`, `invite`) and hides the many classes behind it (Chapter 9). It is also the natural place to check "is this account active?" and "is this person allowed?" before anything changes.
 2. **Behaviour shared by content goes in a base class.** Questions, answers and comments are all voted on; posts and comments are all liked. Write that once in a base class (`Post`, `SocialContent`) and let the content-specific parts stay in subclasses.
 3. **Store *who*, not *how many*.** Keep likes and votes as a **set of member ids**, not an integer counter. A set blocks double voting, allows "unlike", and still gives the count as `set.size()`.
-4. **Derive, don't store.** If a number can be computed from data you already keep (follower count, a batter's runs, a page's rating), compute it. A stored copy will one day disagree with the source and nobody will know which is right. If it is too slow to compute every time, keep a **cache** that you can always rebuild from the source.
+4. **Derive, don't store.** If a number can be computed from data you already keep (follower count, a batter's runs, a page's rating), compute it. A stored copy will one day disagree with the source and nobody will know which is right. If it is too slow to compute every time, keep a **cache** (a saved copy of a computed answer, kept so it can be read quickly instead of recomputed) that you can always rebuild from the source. See [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) for caches at scale.
 5. **An operation that changes two objects lives in a service.** Accepting a connection or friend request changes *both* members. Put it on neither — put it in a small **service** class (a class whose job is to perform an operation, not to hold data) so there is exactly one place that keeps both sides consistent.
-6. **Notifications through Observer + Strategy.** The domain *publishes* events ("answer posted"); **observers** (Chapter 10) react. How a message is *delivered* (email, push, in-app) is a **Strategy** (Chapter 11) so adding a channel means adding a class, not another `if`.
+6. **Notifications through Observer + Strategy.** The domain *publishes* events ("answer posted"); **observers** (Chapter 10) react. The **Observer** pattern means objects *subscribe* to another object and are called back automatically whenever it announces an event, so the announcer does not need to know who is listening. The **Strategy** pattern means putting each interchangeable way of doing a job (here: each delivery method) behind one interface, so you can swap or add ways without editing the caller. How a message is *delivered* (email, push, in-app) is a **Strategy** (Chapter 11) so adding a channel means adding a class, not another `if`.
 7. **Search is its own class.** An **inverted index** (word → items) belongs in a `SearchIndex`, not on the entity. Rule from the course: every key maps to a *collection*, even when only one item matches, so the second "Sharma" never breaks the index.
 8. **Privacy and permissions are asked in one place.** If both the feed and the search must hide private posts, write `canSee(viewer, post)` once and call it from both.
 
@@ -82,8 +86,8 @@ Do not bring the whole toolkit to a tiny problem. If the interviewer asks only f
 
 ### Real-world examples
 
-- **Kafka** was created at LinkedIn to move activity events (page views, posts, connections) between systems — the industrial version of the Observer idea used here.
-- **Facebook's TAO** is a graph store built to serve the social graph (users, friendships, likes) at very large scale — the production version of our in-memory friend graph.
+- **Kafka** (a system that stores streams of events and delivers them to any program that wants to read them) was created at LinkedIn to move activity events (page views, posts, connections) between systems — the industrial version of the Observer idea used here.
+- **Facebook's TAO** is a graph store (a database built for a **graph** — items joined by links, like people joined by friendships) built to serve the social graph (users, friendships, likes) at very large scale — the production version of our in-memory friend graph.
 - **Stack Overflow** publishes its reputation-to-privilege table on its help pages — exactly the data-driven `Privilege` enum used in 18.1.
 
 ### In the interview
@@ -110,7 +114,7 @@ Platform problems = rich domain model + roles + feed + notifications + search + 
 ![Design Stack Overflow](../../assets/O-design-stack-overflow-1.png)
 *Figure — The Stack Overflow logo that opens this case study (course diagram)*
 
-Stack Overflow is a huge question-and-answer community for programmers. Members can **upvote** or **downvote** questions and answers, and anyone with enough standing can edit posts, much like a wiki. Members earn **reputation** (a points score) and **badges** (named awards) for useful contributions. Higher reputation unlocks **privileges** — voting, commenting anywhere, editing other people's posts, voting to close questions. For scale: an upvote on an answer is worth 10 points to its author. The course says a question upvote is worth 5; that was true until November 2019, when Stack Overflow raised it to 10 as well, and this chapter's code uses today's value.
+Stack Overflow is a huge question-and-answer community for programmers. Members can **upvote** or **downvote** questions and answers, and anyone with enough standing can edit posts, much like a wiki (a website whose pages any permitted reader can edit). Members earn **reputation** (a points score) and **badges** (named awards) for useful contributions. Higher reputation unlocks **privileges** — voting, commenting anywhere, editing other people's posts, voting to close questions. For scale: an upvote on an answer is worth 10 points to its author. The course says a question upvote is worth 5; that was true until November 2019, when Stack Overflow raised it to 10 as well, and this chapter's code uses today's value.
 
 ### Problem & clarifying questions
 
@@ -152,9 +156,9 @@ Plus from the real site (added so the privilege rules have somewhere to live): d
 
 - **Correctness of counts:** one member, one vote per post; reputation changes must be reversible when a vote changes.
 - **Read-heavy performance:** search and "top tags" must not scan every question.
-- **Concurrency:** two members voting on the same post at the same instant must both be counted exactly once.
+- **Concurrency** (several pieces of work running at the same time — for example two requests handled by two **threads**, the independent paths of execution inside one program)**:** two members voting on the same post at the same instant must both be counted exactly once.
 - **Abuse resistance:** you cannot vote on your own post; blocked accounts can do nothing.
-- **Extensibility:** reputation rules, badge rules and notification channels change often — changing them should not touch voting code.
+- **Extensibility** (how easily new features can be added without rewriting old code)**:** reputation rules, badge rules and notification channels change often — changing them should not touch voting code.
 
 ### Use cases
 
@@ -171,7 +175,9 @@ Top use cases: search questions; ask a question (with tags and an optional bount
 ![Use-case Diagram](../../assets/O-design-stack-overflow-2.svg)
 *Figure — Use cases per actor: Guest (search, view, register), Member (add/modify question, answer, comment, bounty, tag), Moderator (close, delete/undelete), Admin (block/unblock), System (send notification, add badge) (course diagram)*
 
-In the figure above, notice the `<<include>>` from "Add question" to "Add tag" (adding a tag is part of asking) and the `<<extend>>` for bounties (an optional extra on a question).
+A **use-case diagram** is a UML picture of the actors (stick figures) and the things each one can do (ovals). In the figure above, notice the `<<include>>` from "Add question" to "Add tag" (adding a tag is part of asking) and the `<<extend>>` for bounties (an optional extra on a question).
+
+An **activity diagram** is a flowchart of the steps and yes/no decisions in one task; a **sequence diagram** shows, top to bottom in time order, the messages objects send to each other.
 
 **Activity — post a new question.** The member clicks *Ask Question*, types a title and body, and adds tags. For each tag, the system checks whether it already exists; if not, it checks whether the member has **enough reputation to create a tag**. Then it validates the question and either saves and posts it or shows an error.
 
@@ -189,7 +195,7 @@ Our Java code follows the same order: `ask()` resolves each tag, creating it onl
 
 | Class | Responsibility |
 |---|---|
-| `Member` (+ `Moderator`, `Admin`) | Identity, reputation (atomic), badges, account status; `hasPrivilege(p)` |
+| `Member` (+ `Moderator`, `Admin`) | Identity, reputation (atomic — safe when updated by many threads at once), badges, account status; `hasPrivilege(p)` |
 | `Privilege` (enum) | The reputation needed for each action — a data table, not scattered `if`s |
 | `Post` (sealed, abstract) | Shared behaviour: author, body, votes per voter, flags, comments |
 | `Question` | Title, tags, answers, status (OPEN / CLOSED / DELETED…), closing remark, close/delete voters, bounty, view count |
@@ -211,10 +217,12 @@ The course builds the class diagram in **five stages**, each adding a few classe
 ![Stage 1: the small pieces](../../assets/O-design-stack-overflow-5.svg)
 *Figure — Stage 1: `Badge`, `Tag` (with daily and weekly usage counters and `record_use`) and abstract `Notification` with its `EmailNotification` subclass (course diagram)*
 
-Stage 1 covers requirements 8, 10 and 13. None of these classes depends on anything yet. The key idea is in `Tag`: it counts its own uses when attached to a question, so "most used tags" becomes a quick read rather than a scan of every question. `Notification` is abstract with one subclass per delivery method — an email notification genuinely is a notification that can be sent, so the inheritance passes the substitution test.
+Stage 1 covers requirements 8, 10 and 13. None of these classes depends on anything yet. The key idea is in `Tag`: it counts its own uses when attached to a question, so "most used tags" becomes a quick read rather than a scan of every question. `Notification` is abstract with one subclass per delivery method — an email notification genuinely is a notification that can be sent, so the inheritance passes the substitution test (the Liskov Substitution Principle: a subclass object must work correctly anywhere its parent class is expected).
 
 ![UML legend](../../assets/O-design-stack-overflow-6.svg)
 *Figure — The UML legend used in these diagrams: class, interface, realization, generalization, dependency, association, aggregation and composition arrows (course diagram)*
+
+**UML** (Unified Modeling Language) is the standard notation for drawing classes and their links. In short: **generalization** is the inheritance arrow ("is a kind of"); **realization** means a class implements an interface; **dependency** means one class merely uses another for a moment; **aggregation** (hollow diamond) means "has, but does not own"; **composition** (filled diamond) and **association** are explained in Stage 3 below.
 
 ![Stage 2: photos and bounties](../../assets/O-design-stack-overflow-7.svg)
 *Figure — Stage 2 adds `Photo` (attachments on questions and answers) and `Bounty` (reputation held until awarded or expired) (course diagram)*
@@ -229,7 +237,7 @@ Stage 3 is the heart of the design. Requirements 5 and 6 say that upvoting and f
 ![Stage 4: finding a question](../../assets/O-design-stack-overflow-9.svg)
 *Figure — Stage 4: the `Search` interface and `QuestionIndex`, which holds (but does not own) questions and tags (course diagram)*
 
-Stage 4 covers search and requirement 13. A tempting first attempt makes search a static method on `Question`, which forces `Question` to know every question in existence — not its job. The index implements `Search` (dashed line with hollow head = realization). Its arrows are plain associations: deleting the index deletes no question.
+Stage 4 covers search and requirement 13. A tempting first attempt makes search a static method (a method that belongs to the class itself rather than to any one object) on `Question`, which forces `Question` to know every question in existence — not its job. The index implements `Search` (dashed line with hollow head = realization). Its arrows are plain associations: deleting the index deletes no question.
 
 ![Stage 5: who is allowed to do what](../../assets/O-design-stack-overflow-10.svg)
 *Figure — Stage 5: `Account`, `Guest`, `Member` (extends Guest), `Moderator` and `Admin` (extend Member); `Member` owns its badges (course diagram)*
@@ -392,7 +400,7 @@ stateDiagram-v2
 | `ReputationListener` + `BadgeAwarder` | **Observer** | Badges, notifications, analytics all react to reputation without the facade knowing them | Calling `awardBadges()` directly inside `vote()` |
 | `Privilege` enum with thresholds | Table-driven design | One place holds the rules; `hasPrivilege` is one comparison | `if (rep >= 125)` scattered across methods |
 | Moderator-only methods take a `Moderator` parameter | Type-level permission | You cannot even call `close(…)` without a moderator object | A runtime role check that someone might forget |
-| `QuestionIndex` separate from `Question` | Single Responsibility | Search can later be swapped for Elasticsearch behind `Search` | Static `Question.search()` |
+| `QuestionIndex` separate from `Question` | Single Responsibility | Search can later be swapped for Elasticsearch (a popular search-engine server) behind `Search` | Static `Question.search()` |
 | `Tag` counts its own uses | Maintain an aggregate at write time | "Top tags" becomes a sort of a small collection | Scanning all questions on every request |
 | `StackOverflow` facade | **Facade** | One entry point that validates, delegates and logs | Letting the UI call `Question`, `Member`, `Bounty` directly |
 | Pattern matching `switch` over the sealed `Post` | Exhaustive dispatch | The compiler forces us to handle each post kind in the policy | `instanceof` chains that silently miss a new type |
@@ -1242,9 +1250,9 @@ final reputation: [alice(162), bob(3525), carol(3260), erin(3100), dave(31)]
 
 **Walking through the important parts**
 
-- `Post.castVote` is `synchronized` and uses `votes.put(...)`, which returns the previous vote. That single call both records the vote and tells us whether this is a *change* (so the facade can undo the old reputation effect). Voting the same way twice throws.
-- `DefaultReputationPolicy` uses a Java 21 **pattern-matching switch** over the sealed `Post`. Because `Post` permits exactly `Question`, `Answer` and `Comment`, the compiler rejects the switch if a case is missing.
-- `Member.changeReputation` uses `AtomicInteger.updateAndGet` so concurrent changes never lose an update, and it enforces the site's floor of 1.
+- `Post.castVote` is `synchronized` (Java lets only one thread at a time run a synchronized method on the same object; others wait their turn) and uses `votes.put(...)`, which returns the previous vote. That single call both records the vote and tells us whether this is a *change* (so the facade can undo the old reputation effect). Voting the same way twice throws.
+- `DefaultReputationPolicy` uses a Java 21 **pattern-matching switch** (a `switch` that picks a branch by the *type* of the value and hands you that typed value) over the sealed `Post`. Because `Post` permits exactly `Question`, `Answer` and `Comment`, the compiler rejects the switch if a case is missing.
+- `Member.changeReputation` uses `AtomicInteger.updateAndGet` (an `AtomicInteger` is a number whose read-change-write happens as one indivisible step) so concurrent changes never lose an update, and it enforces the site's floor of 1.
 - `BadgeAwarder` fires only when a threshold is *crossed* (`oldValue < level && newValue >= level`), so members who already had high reputation are not showered with badges, and each badge is added once (`Set.add` returns `false` for duplicates).
 - `ask()` shows the activity diagram's decision "does the tag exist? has enough reputation?": in the output, Alice (200 rep) cannot create the new tag `hashmap`, so her first attempt is rejected.
 - In section 2 of the output, Erin downvotes Carol's answer (Carol −2, Erin −1), then changes her vote to up: the old effect is reversed (+2, +1) and the new one applied (+10).
@@ -1253,8 +1261,8 @@ final reputation: [alice(162), bob(3525), carol(3260), erin(3100), dave(31)]
 ### Concurrency & edge cases
 
 - **Two votes at the same time on one post.** `castVote`, `score` and `flag` are `synchronized` on the post, so the vote map is never corrupted and each voter is counted once. Reputation uses `AtomicInteger`, so two simultaneous reputation changes to the same author both apply.
-- **Reputation updates are not in the same lock as the vote.** A reader could briefly see the new vote before the author's reputation changes. That is acceptable (eventual consistency for a score). In a database you would put both in one transaction, and enforce "one vote per member per post" with a **unique constraint** on `(post_id, voter_id)`.
-- **Reputation floor.** Because reputation cannot go below 1, reversing a vote on a member who was at the floor is not perfectly symmetric. The real site has the same quirk; if exact reversal matters, keep a ledger of reputation events and recompute.
+- **Reputation updates are not in the same lock as the vote.** A reader could briefly see the new vote before the author's reputation changes. That is acceptable (**eventual consistency** for a score: the copies may disagree for a moment but will match shortly — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)). In a database you would put both in one **transaction** (a group of changes that either all succeed or all fail together), and enforce "one vote per member per post" with a **unique constraint** (a database rule that refuses a second row with the same values) on `(post_id, voter_id)`.
+- **Reputation floor.** Because reputation cannot go below 1, reversing a vote on a member who was at the floor is not perfectly symmetric. The real site has the same quirk; if exact reversal matters, keep a ledger (an append-only list of every change, in order) of reputation events and recompute.
 - **Accepting a different answer.** `Question.accept` returns the previously accepted answer so the facade removes its +15; the asker's +2 is given only once.
 - **Self-actions.** Voting on your own post and awarding your own bounty are rejected.
 - **Closed and deleted questions.** Closed: no new answers. Deleted: hidden from search results.
@@ -1265,11 +1273,11 @@ final reputation: [alice(162), bob(3525), carol(3260), erin(3100), dave(31)]
 
 - **"How do you stop one person voting twice?"** — The per-post map of voter ids (the course's key follow-up). In a database: a unique key on `(post_id, voter_id)`.
 - **"Add edit history."** — Store each version as an immutable `Revision` (author, time, body) in a list on the post; editing appends a revision. This is close to the **Memento** idea: the past states are kept so they can be shown or rolled back.
-- **"Daily reputation cap."** — The real site caps reputation from votes at 200 per day. Wrap the policy: a `CappedReputationPolicy` decorator that tracks today's total per member and trims the delta. No voting code changes.
+- **"Daily reputation cap."** — The real site caps reputation from votes at 200 per day. Wrap the policy: a `CappedReputationPolicy` decorator (the **Decorator** pattern: an object that wraps another object with the same interface and adds behaviour before or after passing the call on) that tracks today's total per member and trims the delta. No voting code changes.
 - **"Mark as duplicate and link."** — Add `duplicateOf: Question` to `Question` and a `ClosingRemark.DUPLICATE`; closing as duplicate sets the link.
 - **"Review queues."** — Flags already reach moderators at a threshold; turn that into a `ReviewQueue` that holds flagged posts, with reviewers voting to keep or delete.
-- **"Hot questions."** — A ranking Strategy over recent votes, answers and views with time decay, just like the feed rankers in 18.3 and 18.4.
-- **"Tag frequency per day and week."** — The course's `Tag` keeps daily and weekly counters. Keep a counter per time bucket and roll the buckets over with a scheduled job.
+- **"Hot questions."** — A ranking Strategy over recent votes, answers and views with time decay (older activity counts for less and less), just like the feed rankers in 18.3 and 18.4.
+- **"Tag frequency per day and week."** — The course's `Tag` keeps daily and weekly counters. Keep a counter per time bucket and roll the buckets over with a scheduled job (a task the system runs automatically at set times, e.g. every midnight).
 
 ### Real-world example
 
@@ -1324,7 +1332,7 @@ Before we start, a two-minute cricket primer, because this design is graded on w
 | **Over** | Six **legal** deliveries by one bowler. A **wide** (too far from the batter) or a **no ball** (illegal delivery, e.g. overstepping the line) gives the batting side a penalty run and must be bowled again, so it does not count toward the six |
 | **Striker / non-striker** | Two batters are in at once. The striker faces the ball; they change ends whenever they complete an odd number of runs (1, 3, 5), and again after every over |
 | **Runs** | Off the bat (credited to the batter) or **extras** — wides, no balls, **byes** and **leg byes** (credited to the team, not the batter) |
-| **Wicket / dismissal** | A batter is out: bowled, caught, LBW, stumped, hit wicket, run out, obstructing the field. A **run out is not credited to the bowler** |
+| **Wicket / dismissal** | A batter is out: bowled, caught, LBW (leg before wicket), stumped, hit wicket, run out, obstructing the field. A **run out is not credited to the bowler** |
 | **Innings** | One team's turn to bat, ending when 10 batters are out ("all out"), the overs run out, or the target is reached |
 | **Formats** | **T20** (20 overs per side), **ODI** (One Day International, 50 overs per side), **Test** (no over limit, two innings per side, over several days) |
 | **Squad / playing eleven** | Before a tournament each team names a **squad**; for every match it chooses exactly **eleven** of those players |
@@ -1336,10 +1344,10 @@ Before we start, a two-minute cricket primer, because this design is graded on w
 | Which formats? | T20, ODI and Test |
 | Who enters the data? | An **Admin** (scorer) records every ball; a **Commentator** adds text for each ball |
 | Do we follow real cricket rules? | Yes — the international rules, at least: six legal balls per over, extras, who gets credit for a wicket, strike rotation, bowler limits |
-| Live updates? | Yes — the scorecard and commentary update after every ball (push to subscribers) |
+| Live updates? | Yes — the scorecard and commentary update after every ball (push to subscribers, i.e. readers who asked for updates) |
 | Stats? | Per player, match and tournament, plus global questions such as "highest wicket taker of all time" |
 | Tournaments? | Yes, with squads and a points table |
-| Out of scope? | The course leaves these out on purpose: rain rules (Duckworth–Lewis–Stern), the follow-on and declarations in a Test, powerplays and fielding restrictions, free hits after a no ball, telling a leg-side wide from an off-side one, partnerships, net run rate, and the site's news articles. (Our code adds a simple `declare()`; several others appear under Extensions) |
+| Out of scope? | The course leaves these out on purpose: rain rules (Duckworth–Lewis–Stern, a formula that resets the target when rain shortens a match), the follow-on and declarations in a Test, powerplays and fielding restrictions, free hits after a no ball, telling a leg-side wide from an off-side one, partnerships, net run rate (a team's scoring rate minus its opponents', used to break ties in a points table), and the site's news articles. (Our code adds a simple `declare()`; several others appear under Extensions) |
 
 ### Requirements
 
@@ -1357,7 +1365,7 @@ Before we start, a two-minute cricket primer, because this design is graded on w
 **Non-functional**
 
 - **Accuracy:** stats must match the ball-by-ball record exactly (a scorer's correction must fix every derived number).
-- **Low-latency live updates:** thousands to millions of readers see a new ball within seconds.
+- **Low-latency live updates** (**latency** = the delay between something happening and the reader seeing it)**:** thousands to millions of readers see a new ball within seconds.
 - **Consistency of recording:** two scorers must not interleave balls in the same match.
 - **Extensibility:** a new stat question, a new format, or a new subscriber (push alerts) should be a new class.
 
@@ -1434,12 +1442,14 @@ The course builds this design in **six stages**.
 ![Stage 6: stats](../../assets/O-design-cricinfo-10.svg)
 *Figure — Stage 6: `PlayerStats`, `StatsService` and the `StatQuery` hierarchy (course diagram)*
 
+> **Key term — Template Method:** a design pattern where a base class writes the fixed outline of an algorithm in one method and leaves one or more steps as abstract methods for subclasses to fill in. Every subclass reuses the outline and changes only its own step. In this design `StatQuery.answer()` is the outline (loop over players, keep the best) and each subclass supplies only `valueOf()` — "runs", "wickets" and so on.
+
 **Stage 6 — stats.** Stats are **worked out from the balls**, not stored beside them. Keep a separate counter and it will drift from the ball record as soon as a scorer fixes a mistake, and after that nobody can say which number is correct. Fifties and hundreds are per-innings milestones, so they are counted after each innings (`countInnings`) next to the per-ball counting (`countBall`). Each global question is one small `StatQuery` subclass.
 
 ![The finished class diagram](../../assets/O-design-cricinfo-11.svg)
 *Figure — The finished Cricinfo class diagram, with every class from the six stages in full colour (course diagram)*
 
-**Our Java design** keeps all six stages and adds what the course flags as missing: **strike rotation** (who is on strike), bowler rules (not two overs in a row; 4 overs per bowler in a T20, 10 in an ODI), the laws about which dismissals are possible off a wide or no ball, a result calculation, and **Observers** for live updates. Instead of separate `Run` objects per run type, a `BallOutcome` record carries bat runs, extra type and extra runs — the same information in one immutable value.
+**Our Java design** keeps all six stages and adds what the course flags as missing: **strike rotation** (who is on strike), bowler rules (not two overs in a row; 4 overs per bowler in a T20, 10 in an ODI), the laws about which dismissals are possible off a wide or no ball, a result calculation, and **Observers** for live updates. Instead of separate `Run` objects per run type, a `BallOutcome` record carries bat runs, extra type and extra runs — the same information in one immutable value (an object that can never be changed after it is created).
 
 ```mermaid
 classDiagram
@@ -1618,17 +1628,17 @@ stateDiagram-v2
 |---|---|---|---|
 | `Player` and `MatchOfficial` hold a `Person` | Composition over inheritance | One human, many roles over time | `Player extends Person` — a player who becomes a commentator must be copied |
 | `Match` abstract; `T20`/`ODI`/`Test` override two numbers | Template-style base class (the course notes it is not a named pattern here) | Only what differs is overridden | Three full `Match` copies |
-| `StatQuery.answer()` final, `valueOf()` abstract | **Template Method** | A new statistic is one tiny subclass; the search loop is written once (Open/Closed) | A `switch (questionType)` inside the service |
+| `StatQuery.answer()` final, `valueOf()` abstract | **Template Method** | A new statistic is one tiny subclass; the search loop is written once (Open/Closed: open to new features, closed to editing old code) | A `switch (questionType)` inside the service |
 | Stats derived from balls | Single source of truth | Corrections fix every number automatically | Stored counters that drift; a cache is fine if it is rebuildable |
-| `Innings` owns the over rule and strike | Information Expert (GRASP) | The class with the data makes the decision | Scorer UI deciding when an over ends |
+| `Innings` owns the over rule and strike | Information Expert (GRASP — guidelines for deciding which class gets a job) | The class with the data makes the decision | Scorer UI deciding when an over ends |
 | `BallOutcome` validates the laws in its constructor | Fail fast, immutable value | Impossible deliveries (bowled off a no ball) never enter the record | Checking later in the stats code |
 | `MatchObserver` with default methods | **Observer** | Commentary feed, live scorecard, push alerts subscribe without the match knowing them | The match printing to the console itself |
-| `Result` is a sealed interface of records | Algebraic data type | `switch` over results is exhaustive (see `Tournament.recordResult`) | Strings like "Team A won" |
-| `Match.bowl` is `synchronized` | Monitor lock per match | Two scorers cannot interleave balls | Unsynchronised updates that corrupt the over |
+| `Result` is a sealed interface of records | Algebraic data type (a value that is exactly one of a closed set of shapes) | `switch` over results is exhaustive (see `Tournament.recordResult`) | Strings like "Team A won" |
+| `Match.bowl` is `synchronized` | Monitor lock (Java's built-in per-object lock) per match | Two scorers cannot interleave balls | Unsynchronised updates that corrupt the over |
 
 ### Java implementation
 
-Package `lld.ch18.cricinfo`. The demo builds two teams, a tournament, squads and elevens (showing both refusals), then plays a scripted first over (a wide and a no ball make it **eight deliveries**; a bowled that counts for the bowler; a run out that does not), and simulates the rest with a fixed random seed so the output is repeatable. An ODI is simulated too, so the global stat queries have data from two formats.
+Package `lld.ch18.cricinfo`. The demo builds two teams, a tournament, squads and elevens (showing both refusals), then plays a scripted first over (a wide and a no ball make it **eight deliveries**; a bowled that counts for the bowler; a run out that does not), and simulates the rest with a fixed random seed (the starting number for the random generator; the same seed always gives the same "random" sequence) so the output is repeatable. An ODI is simulated too, so the global stat queries have data from two formats.
 
 ```java
 // File: lld/ch18/cricinfo/People.java
@@ -2634,7 +2644,7 @@ Points table: [Lions=2, Tigers=0]
 
 ### Machine-coding variant: Cricket Match Dashboard (Udaan)
 
-A **machine-coding round** asks you to write a *working, runnable* program in 60–90 minutes, judged on correctness, readability and extensibility. This problem was set by Udaan (an Indian B2B e-commerce company) and appears in the kumaransg/LLD collection.
+A **machine-coding round** asks you to write a *working, runnable* program in 60–90 minutes, judged on correctness, readability and extensibility. This problem was set by Udaan (an Indian B2B — business-to-business — e-commerce company) and appears in the kumaransg/LLD collection.
 
 #### Problem statement (in our words)
 
@@ -2650,7 +2660,7 @@ Build a cricket **scorecard** for a two-team, limited-overs match.
 
 | Cricinfo class | Machine-coding version | Why it is enough here |
 |---|---|---|
-| `BallOutcome` with extras, wickets, validation | `BallEvent` sealed interface: `Runs`, `Wide`, `NoBall`, `Wicket` with a `parse(token)` factory | Input has only four kinds of token |
+| `BallOutcome` with extras, wickets, validation | `BallEvent` sealed interface: `Runs`, `Wide`, `NoBall`, `Wicket` with a `parse(token)` factory (a method that builds the right object from one input word) | Input has only four kinds of token |
 | `Innings` (strike, over rule, end conditions) | `TeamInnings` — same responsibilities, ints instead of objects | Same rules, no bowler data in the input |
 | `Scorecard` derived from balls | `Batter` counters + `ScorecardPrinter` | Only batting card needed; printer separated so another view could replace it |
 | `Match` + `Result` | `MatchRunner` (reads input, plays two innings, prints result) | One format, two innings |
@@ -2986,7 +2996,7 @@ Result: Team 1 won the match by 4 runs
 ### Concurrency & edge cases
 
 - **Two scorers, one match.** `Match.bowl`, `startOver` and `startInnings` are `synchronized` on the match, so balls are applied one at a time in order. Different matches never block each other.
-- **Many readers.** Observers are held in a `CopyOnWriteArrayList`, which is safe to iterate while another thread subscribes. At web scale, the match would publish each ball to a message broker and readers would receive it over WebSockets or server-sent events; the scorecard would be a cached view rebuilt from balls.
+- **Many readers.** Observers are held in a `CopyOnWriteArrayList` (a list that makes a fresh copy on every change, so readers never see it half-updated), which is safe to iterate while another thread subscribes. At web scale, the match would publish each ball to a **message broker** (a middleman service that receives messages and passes them on to every subscriber) and readers would receive it over **WebSockets** (a connection the browser keeps open so the server can send data at any time) or **server-sent events** (a one-way stream of updates from server to browser); the scorecard would be a cached view rebuilt from balls.
 - **Illegal sequences rejected:** starting an over while one is in progress; the same bowler twice in a row; a bowler over his quota; bowling after the innings ended; a bowler from the batting side; a twelfth player; a player outside the squad.
 - **Impossible dismissals rejected:** bowled, caught, LBW, stumped or hit wicket off a no ball; bowled, caught or LBW off a wide.
 - **Wicket on the last ball of an over:** the new batter comes in, then ends change for the new over — both handled in `Innings.record`.
@@ -3142,7 +3152,7 @@ The course builds LinkedIn in **six stages**.
 ![Stage 3: invitations and notifications](../../assets/O-design-linkedin-8.svg)
 *Figure — Stage 3: `ConnectionInvitation` (with a status) and `Notification` (with a type) (course diagram)*
 
-**Stage 3 — invitations and notifications.** An invitation to connect starts pending and later becomes accepted or rejected. Because it **changes state as time passes**, it deserves its own object rather than a true/false field on a member, and that object can still record, afterwards, that the answer was no. Requirement 9 lists three notification events, but *delivering* them is identical, so the kind is a **field**, not three subclasses. The general rule: **subclass when behaviour differs; use a field when only data differs.**
+**Stage 3 — invitations and notifications.** An invitation to connect starts pending and later becomes accepted or rejected. Because it **changes state as time passes**, it deserves its own object (this is the idea behind the **State** pattern: an object's allowed actions depend on which state it is in, and only certain moves between states are legal) rather than a true/false field on a member, and that object can still record, afterwards, that the answer was no. Requirement 9 lists three notification events, but *delivering* them is identical, so the kind is a **field**, not three subclasses. The general rule: **subclass when behaviour differs; use a field when only data differs.**
 
 ![Stage 4: companies, jobs and groups](../../assets/O-design-linkedin-9.svg)
 *Figure — Stage 4: `Company` owning its `JobPosting`s, with followers as ids; `Group` with members and an owner (course diagram)*
@@ -3162,9 +3172,9 @@ The course builds LinkedIn in **six stages**.
 ![The finished class diagram](../../assets/O-design-linkedin-12.svg)
 *Figure — The finished LinkedIn class diagram, with all six stages in full colour (course diagram)*
 
-The course deliberately omits several features: the feed and how it is ranked, suggested connections, degrees of separation, applying for jobs and tracking applicants, privacy controls, and one member blocking another. It also admits two weak spots a reviewer will probe. First, there is no feed; building one means either gathering the connections' posts at the moment the page loads, or copying each new post into all the connections' feeds when it is written, and which is better depends on how many connections a typical member has. Second, the search index goes stale when a member changes their name, because nothing informs it.
+The course deliberately omits several features: the feed and how it is ranked, suggested connections, degrees of separation, applying for jobs and tracking applicants, privacy controls, and one member blocking another. It also admits two weak spots a reviewer will probe. First, there is no feed; building one means either gathering the connections' posts at the moment the page loads, or copying each new post into all the connections' feeds when it is written, and which is better depends on how many connections a typical member has. Second, the search index goes stale (out of date) when a member changes their name, because nothing informs it.
 
-**Our Java design** follows the six stages and fills the gaps the course names: a **feed** (pull model with a ranking Strategy), **degrees of connection** (breadth-first search), **people you may know**, a **rename that updates the index**, job **applications**, and connection-count derived from the set instead of a stored counter.
+**Our Java design** follows the six stages and fills the gaps the course names: a **feed** (pull model — the feed is gathered when the member opens it — with a ranking Strategy), **degrees of connection** (breadth-first search, described under Key flows), **people you may know**, a **rename that updates the index**, job **applications**, and connection-count derived from the set instead of a stored counter.
 
 ```mermaid
 classDiagram
@@ -4267,7 +4277,7 @@ feed(meera) hides blocked Karan's share: ["Tip: prefer composition over inherita
 
 ### Concurrency & edge cases
 
-- **Symmetric connections:** all graph changes (`invite`, `accept`, `reject`, `withdraw`, `removeConnection`) are `synchronized` on the single service, so two concurrent accepts or an accept racing a withdraw cannot leave a one-way edge. In a distributed system, write both edges in one database transaction (or one row keyed by the ordered pair of ids).
+- **Symmetric connections:** all graph changes (`invite`, `accept`, `reject`, `withdraw`, `removeConnection`) are `synchronized` on the single service, so two concurrent accepts or an accept racing a withdraw cannot leave a one-way edge. In a distributed system (one spread across many machines that talk over a network), write both edges (an **edge** is one link in a graph) in one database transaction (or one row keyed by the ordered pair of ids).
 - **Double invitations** in either direction are refused while one is pending.
 - **Likes, endorsements, applications:** sets and maps keyed by member id make repeats harmless or rejected; their mutators are `synchronized`.
 - **Collections on `Member`** are concurrent sets or `CopyOnWriteArrayList`, and getters return copies, so callers cannot mutate internal state.
@@ -4278,7 +4288,7 @@ feed(meera) hides blocked Karan's share: ["Tip: prefer composition over inherita
 ### Extensions & follow-up questions
 
 - **"Build the feed for 900 million members."** — Two classic strategies. **Fan-out on write (push):** when someone posts, append the post id to each connection's precomputed feed list — fast reads, expensive for members with huge followings. **Fan-out on read (pull):** assemble the feed when it is opened, as our `FeedService` does — cheap writes, slower reads. Large networks use a **hybrid**: push for ordinary members, pull for very popular accounts, merged at read time.
-- **"People you may know at scale."** — Compute suggestions offline on a schedule (friends-of-friends plus signals such as shared companies and schools) and store them; the live page reads the stored list.
+- **"People you may know at scale."** — Compute suggestions offline (in a background batch job, not while the user waits) on a schedule (friends-of-friends plus signals such as shared companies and schools) and store them; the live page reads the stored list.
 - **"Connection limit."** — LinkedIn caps members at 30,000 connections; enforce in `accept`.
 - **"InMail to non-connections."** — A premium credit balance on `Member`; `message` spends a credit instead of rejecting.
 - **"Who viewed my profile."** — Store view events (viewer, time) instead of a bare counter, then derive the count.
@@ -4286,7 +4296,7 @@ feed(meera) hides blocked Karan's share: ["Tip: prefer composition over inherita
 
 ### Real-world example
 
-LinkedIn shows 1st, 2nd and 3rd-degree badges next to names in search results — the exact BFS depth our `degree` computes — and its "People You May Know" panel is driven by shared connections and other signals. Messaging someone who is not a connection usually requires paid **InMail** (some members open their profile to free messages). And the event stream that feeds notifications, analytics and the feed at LinkedIn gave rise to **Apache Kafka**, which LinkedIn open-sourced in 2011.
+LinkedIn shows 1st, 2nd and 3rd-degree badges next to names in search results — the exact BFS depth our `degree` computes — and its "People You May Know" panel is driven by shared connections and other signals. Messaging someone who is not a connection usually requires paid **InMail** (some members open their profile to free messages). And the event stream that feeds notifications, analytics and the feed at LinkedIn gave rise to **Apache Kafka**, which LinkedIn open-sourced (published free, with its source code, for anyone to use) in 2011.
 
 ### In the interview
 
@@ -4620,7 +4630,7 @@ flowchart LR
 
 | Decision | Pattern / principle | Why | Alternative rejected |
 |---|---|---|---|
-| `VisibilityService.canSee` used everywhere | Single point of policy (a **Specification**-like rule object) | The privacy rule is written once; search and feed cannot leak | Checking privacy in each screen |
+| `VisibilityService.canSee` used everywhere | Single point of policy (a **Specification**-like rule object — one object that answers a yes/no business question) | The privacy rule is written once; search and feed cannot leak | Checking privacy in each screen |
 | `Audience` sealed interface of records | Algebraic data type + exhaustive `switch` | Adding an audience forces every decision point to handle it | Integer or string codes |
 | `Post.isAllowedByPrivacyList` + `FriendService.areFriends` | Each object answers what it knows (Information Expert) | Neither half pretends to know the other's data | Post holding a reference to the whole friend graph |
 | `FriendService` owns the graph | Service for two-sided operations | Symmetric friendships; one place for "pending either way" | `member.acceptFriend()` |
@@ -5517,11 +5527,11 @@ Alice's notifications: [NEW_COMMENT, NEW_MESSAGE]
 
 ### Concurrency & edge cases
 
-- **Friend graph:** `sendRequest`, `accept`, `reject` and `unfriend` are `synchronized` on the service, and adjacency sets are concurrent, so an accept cannot leave a one-way friendship. In a database, a friendship is one row keyed by the ordered pair `(min(id), max(id))`, which makes symmetry automatic.
+- **Friend graph:** `sendRequest`, `accept`, `reject` and `unfriend` are `synchronized` on the service, and adjacency sets (each member's set of directly linked members) are concurrent, so an accept cannot leave a one-way friendship. In a database, a friendship is one row keyed by the ordered pair `(min(id), max(id))`, which makes symmetry automatic.
 - **Pending in both directions:** checked by `pendingBetween(a, b)` for both requests and suggestions.
 - **Privacy changes after posting:** because visibility is computed at read time, removing someone from a list or unfriending them hides the post immediately. (A push-model feed that copied posts into feeds would need to re-check `canSee` at read time anyway.)
 - **Shares:** sharing requires seeing the original; a share of a friends-only post should not expose it to the sharer's audience — a production rule would cap the share's audience at the original's.
-- **Deterministic ordering:** suggestions tie-break by id; feeds tie-break by creation time; our logical `Tick` clock makes demo output repeatable.
+- **Deterministic ordering** (the same input always produces the same order)**:** suggestions tie-break by id; feeds tie-break by creation time; our logical `Tick` clock (a counter that goes up by one per event and stands in for real time) makes demo output repeatable.
 - **Blocked or deleted authors:** `canSee` returns false for inactive authors.
 
 ### Extensions & follow-up questions

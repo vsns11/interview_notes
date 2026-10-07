@@ -1,6 +1,6 @@
 # Chapter 14 — Case Studies: Everyday Objects
 
-> **Where this fits.** Chapters 1–13 gave you the tools: OOP, UML, SOLID, clean code, the 23 GoF patterns and concurrency. From this chapter to Chapter 21 you use those tools on real interview questions. This chapter starts with **physical machines you have used yourself**: a parking lot, a vending machine, a coffee machine, an ATM, an elevator, a traffic light and a parcel locker. You already know how they behave, so all your attention can go to the design.
+> **Where this fits.** Chapters 1–13 gave you the tools: OOP (object-oriented programming: building software from objects that bundle data with the methods that act on it), UML (Unified Modeling Language, the standard way to draw classes and their links), SOLID (five principles for designing classes), clean code, the 23 GoF patterns (the "Gang of Four" design patterns, named after the four authors of the 1994 book *Design Patterns*) and concurrency (several pieces of work running at the same time). From this chapter to Chapter 21 you use those tools on real interview questions. This chapter starts with **physical machines you have used yourself**: a parking lot, a vending machine, a coffee machine, an ATM, an elevator, a traffic light and a parcel locker. You already know how they behave, so all your attention can go to the design.
 
 **What you will learn in this chapter**
 
@@ -10,9 +10,11 @@
 | 14.2 | Vending Machine | A **state machine**: the order in which actions are allowed | State |
 | 14.3 | Coffee Vending Machine | **Atomic, all-or-nothing** deduction from a shared inventory; recipes as data | Observer (low-stock alerts), data-driven recipes, sealed result types |
 | 14.4 | ATM | **Security + money correctness**: authenticate, never lose money, never double-spend | State, Chain of Responsibility (cash dispenser), Command (transactions) |
-| 14.5 | Elevator System | **Scheduling** (SCAN/LOOK) and **dispatching** many cars | Strategy (dispatch), State-like modes |
+| 14.5 | Elevator System | **Scheduling** (SCAN/LOOK: sweep orders for visiting stops, see 14.5) and **dispatching** many cars | Strategy (dispatch), State-like modes |
 | 14.6 | Traffic Signal Control | **Timed state machine** with a hard safety invariant and emergency override | State, Strategy (timing), Observer (safety monitor) |
 | 14.7 | Shipping Locker System | **Best-fit allocation + deadlines + a secret**: reserve a door atomically, expire holds and uncollected parcels, single-use hashed pickup codes | Strategy (door choice), Observer (SMS), enum state machines, sealed results |
+
+> **Key terms — the pattern names in this table.** These are design patterns (proven, named shapes for arranging classes) from the earlier chapters. **Strategy**: a swappable rule (how to price, which car to send) hidden behind an interface. **Factory**: one place that creates objects, so callers need not know how they are built. **Observer**: an object keeps a list of listeners and tells each of them when something changes. **State**: each situation a machine can be in is its own class. **Chain of Responsibility**: a request is passed along a line of handlers, each doing what it can. **Command**: an action wrapped in an object, so it can be run, logged or queued. **Sealed result types**: a Java type whose possible variants form a fixed, known list (for example "served" or "refused"), so the compiler can check that callers handle each one.
 
 ### What these problems test
 
@@ -20,7 +22,7 @@ These seven questions look different, but interviewers use them to check three s
 
 1. **State machines.** A machine behaves differently depending on what has happened so far. A vending machine must not dispense before it is paid. An ATM must not allow a withdrawal before the PIN is checked. A traffic light must never go from green straight to green on the crossing road. A **state machine** is a model with a fixed set of situations (states) and rules for moving between them (transitions). The **State pattern** (Chapter 11) turns each state into its own class, so every button has a defined answer in every state.
 2. **Resource allocation.** A limited set of things (parking spots, notes in a cassette, millilitres of milk, elevator cars, locker doors) must be handed out correctly: never twice, never below zero, and fairly.
-3. **Concurrency.** Many actors act at the same moment: several entrance gates, two ATMs on one joint account, ten customers tapping "Latte" at once, a timer thread and an emergency thread. The design must stay correct when calls overlap (Chapters 12–13).
+3. **Concurrency.** Many actors act at the same moment: several entrance gates, two ATMs on one joint account, ten customers tapping "Latte" at once, a timer thread and an emergency thread (a **thread** is one independent line of execution inside a program; many threads can run at once and touch the same objects). The design must stay correct when calls overlap (Chapters 12–13).
 
 > **Key insight.** In every one of these problems, the hardest part is small: one method that picks a spot, one method that makes change, one method that deducts ingredients, one method that picks the next elevator stop. Find that method early, name it out loud, and spend your time there.
 
@@ -37,7 +39,7 @@ The course draws its class diagrams in stages. Classes added in earlier stages a
 ![UML legend](../../assets/O-design-a-parking-lot-4.svg)
 *Figure — Legend for the course class diagrams: interface, class, realization, association, inheritance, composition and the other arrow kinds (course diagram)*
 
-Read the figure above once: a **hollow triangle** means inheritance ("is a"), a **dashed line with a hollow triangle** means "implements an interface", a **filled diamond** means composition (the part dies with the whole), and a **plain arrow** means association (one object refers to another without owning it). Chapter 3 covers these relationships in depth.
+Read the figure above once: a **hollow triangle** means inheritance ("is a"), a **dashed line with a hollow triangle** means "implements an interface" (an **interface** is a list of methods that a class promises to provide, without saying how), a **filled diamond** means composition (the part dies with the whole), and a **plain arrow** means association (one object refers to another without owning it). Chapter 3 covers these relationships in depth.
 
 ### How to run every example in this chapter
 
@@ -47,9 +49,11 @@ javac --release 21 -d /tmp/lld_14 $(find . -name '*.java')
 java -cp /tmp/lld_14 lld.ch14.parkinglot.Main      # or vendingmachine, coffeemachine, atm, elevator, trafficsignal, locker
 ```
 
+Here `javac` is the Java compiler (it turns `.java` source files into `.class` files of bytecode), `--release 21` targets Java 21, `-d` says where to put the compiled classes, and `java -cp` runs a class using the given **classpath** (the folder where the JVM, the Java Virtual Machine that runs bytecode, looks for classes).
+
 All seven `Main` classes compile with Java 21 (standard library only) and run. The output printed under each implementation is the real output of that program.
 
-> **Code-style note.** To keep each design readable in one place, a file sometimes holds several small package-private types (for example `Vehicles.java` holds `SpotType`, `VehicleType` and `Vehicle`). That is legal Java, and the code compiles with no warnings under `-Xlint:all` except the `auxiliaryclass` lint, which exists precisely to flag this style (a type used from outside the file it is declared in). In production you would usually give each top-level type its own file.
+> **Code-style note.** To keep each design readable in one place, a file sometimes holds several small package-private types (types declared without `public`, visible only inside their own package) (for example `Vehicles.java` holds `SpotType`, `VehicleType` and `Vehicle`). That is legal Java, and the code compiles with no warnings under `-Xlint:all` (the compiler switch that turns on every optional warning, or *lint* check) except the `auxiliaryclass` lint, which exists precisely to flag this style (a type used from outside the file it is declared in). In production you would usually give each top-level type its own file.
 
 ---
 
@@ -60,7 +64,7 @@ All seven `Main` classes compile with Java 21 (standard library only) and run. T
 
 A **parking lot** (car park) is an area set aside for parking vehicles. Malls, stadiums, airports and office towers have large multi-floor lots with gates, ticket machines and boards showing free spaces. The photo above is the kind of lot we are modelling: many floors, many spot sizes, and several ways in and out.
 
-This is the most-asked LLD question of all. It looks easy, which is exactly why it is useful to an interviewer: they can watch how you **scope** it, how you **model the fit rule** (which vehicle may use which spot), and whether you notice that **two gates can hand out the same spot** at the same moment.
+This is the most-asked LLD question (low-level design: designing the classes, their responsibilities and how they talk to each other) of all. It looks easy, which is exactly why it is useful to an interviewer: they can watch how you **scope** it, how you **model the fit rule** (which vehicle may use which spot), and whether you notice that **two gates can hand out the same spot** at the same moment.
 
 ### Problem & clarifying questions
 
@@ -98,9 +102,9 @@ Ask these before drawing anything. The answers in the right column are the ones 
 **Non-functional**
 
 - **Correctness under concurrency:** two entrance gates working at the same instant must never be given the same spot, and a ticket must never be paid twice.
-- **Low latency at the gate:** finding a spot must not scan thousands of spots; taking one from a sorted set of free spots is O(log n).
+- **Low latency at the gate:** finding a spot must not scan thousands of spots; taking one from a sorted set of free spots is O(log n). (**Latency** is how long one request takes from start to finish; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md). **O(log n)** is Big-O notation for cost: the work grows with the logarithm of the number of spots *n*, so even 10,000 spots need only about 14 steps.)
 - **Extensibility:** a new pricing rule, a new spot-finding rule or a new vehicle type should be a small, local change.
-- **Testability:** time must be injectable (a fake clock), so fee tests do not wait for hours.
+- **Testability** (how easily automated tests can check the code)**:** time must be injectable (passed in from outside rather than read inside the code, here as a fake clock), so fee tests do not wait for hours.
 
 ### Use cases
 
@@ -136,6 +140,8 @@ In the figure above, notice that the attendant's use cases overlap the customer'
 | `PaymentMethod` | Cash or card. |
 | `ParkingLot` | Ties it together: admit, price, pay, exit. |
 | `EntrancePanel`, `ExitPanel`, `CustomerInfoPortal` | The devices customers touch. They hold **no rules**; they call the lot. |
+
+In the table, an **enum** is a Java type with a fixed list of named constants (such as `SpotType.COMPACT`), and a **record** is a short Java class that only carries a few values and cannot be changed after it is created. **Thread-safe** means an object stays correct even when several threads use it at the same moment.
 
 The course also models **`Account`** with **`Admin`** and **`ParkingAttendant`** subclasses (both sign in). They carry no parking logic, so they are omitted from the code below; the attendant simply uses the same `pay` method as an exit panel.
 
@@ -268,9 +274,11 @@ classDiagram
     SpotFactory ..> ParkingSpot : creates
 ```
 
+In this Mermaid diagram (Mermaid is a text format that renders as a diagram), `-` marks a private field (hidden inside its class), `+` a public method, `~T~` a generic type such as `List<ParkingFloor>`, `*--` composition, `o--` aggregation (a looser "has a" where the parts can live on their own), `-->` association, `<|..` "implements", and `..>` "uses or creates".
+
 ### Key flows
 
-**Entry (take ticket).** The important step is that the spot is taken **atomically**: `pollFirst()` on a concurrent sorted set removes the spot for exactly one caller.
+**Entry (take ticket).** The important step is that the spot is taken **atomically** (as one indivisible step that no other thread can interrupt halfway): `pollFirst()` on a concurrent sorted set removes the spot for exactly one caller. The **sequence diagram** below shows the messages between objects in time order, from top to bottom.
 
 ```mermaid
 sequenceDiagram
@@ -337,14 +345,14 @@ stateDiagram-v2
 
 | Decision | Pattern / principle | Why | Alternative rejected |
 |---|---|---|---|
-| The fit rule lives on `VehicleType` | Information Expert, Open/Closed | Adding a vehicle type is one enum constant; the lot never changes | A big `switch(vehicleType)` inside the lot |
-| Spot type is an **enum field**, not 5 subclasses | Composition over inheritance | The 5 course subclasses carried no behaviour; a new type is one constant | `CompactSpot`, `LargeSpot`… (reviewers flag these as empty classes) |
+| The fit rule lives on `VehicleType` | Information Expert (give a job to the class that owns the data), Open/Closed (extend without editing) | Adding a vehicle type is one enum constant; the lot never changes | A big `switch(vehicleType)` inside the lot |
+| Spot type is an **enum field**, not 5 subclasses | Composition over inheritance (hold a field instead of subclassing) | The 5 course subclasses carried no behaviour; a new type is one constant | `CompactSpot`, `LargeSpot`… (reviewers flag these as empty classes) |
 | How to pick a spot is a `SpotAllocationStrategy` | **Strategy** | Nearest floor, least busy floor, closest to the lift, VIP floors… all swap without touching the lot | `if (mode == NEAREST) … else …` in the lot |
 | How much to charge is a `PricingStrategy` | **Strategy** | The course's "what if pricing changes?" follow-up; admin swaps the rate at run time (the demo swaps to a flat rate) | Hard-coded tiers inside `Ticket` |
 | Electric spots get a `ChargingPanel` in `SpotFactory` | **Factory** (simple static factory) | One place knows the construction rule "electric ⇒ has a panel" | Every caller remembers to attach a panel |
 | Boards subscribe to floors | **Observer** | A floor change updates every board (and could update an app or a sensor light) without the floor knowing who listens | The lot pushing into boards directly |
 | Ticket holds the **spot**, not a count | — | The exit can find and free the exact spot | Counting occupied spots |
-| `ParkingLot` is **not** a hard-coded Singleton | Dependency injection | The course uses a Singleton ("there is one car park"). It is a global in disguise: tests cannot build two lots, and every class that calls `getInstance()` hides a dependency. We create one lot in `main` and pass it to the panels. | `ParkingLot.getInstance()` |
+| `ParkingLot` is **not** a hard-coded Singleton | Dependency injection (pass collaborators in from outside) | The course uses a Singleton ("there is one car park"). It is a global in disguise: tests cannot build two lots, and every class that calls `getInstance()` hides a dependency. We create one lot in `main` and pass it to the panels. | `ParkingLot.getInstance()` |
 | `Clock` is injected | Testability | The demo moves time forward by hours instantly | `Instant.now()` inside the code |
 
 > **Honest note on "Strategy".** The course points out that a cash/card subclass pair is just an abstract base class, and calling it "Strategy" would be loose use of the word. Strategy means an object **holds** a behaviour and can **swap** it. In our code `ParkingLot` holds a `PricingStrategy` and a `SpotAllocationStrategy` and `setPricing(...)` swaps it at run time — that is genuinely Strategy.
@@ -353,7 +361,7 @@ The course also admits that `ParkingLot` does two jobs (finding spots and issuin
 
 ### Java implementation
 
-Package `lld.ch14.parkinglot`. Amounts are in **cents** (`long`) to avoid floating-point rounding.
+Package `lld.ch14.parkinglot`. Amounts are in **cents** (`long`) to avoid floating-point rounding (a `double` stores numbers in binary and cannot hold values such as 0.10 exactly, so sums drift by tiny amounts).
 
 ```java
 // File: lld/ch14/parkinglot/Vehicles.java
@@ -931,12 +939,12 @@ public class Main {
 **How the code works, part by part**
 
 - `Vehicle.preferredSpots()` returns the spot types in order of preference. An accessibility permit puts `HANDICAPPED` first; nobody else can ever get a handicapped spot.
-- `ParkingFloor` keeps a `ConcurrentSkipListSet` of **free** spots per type, sorted by id. `pollFirst()` removes and returns the lowest id **atomically**: if 20 threads call it at once, each spot goes to exactly one of them. The lowest id stands for "nearest to the entrance".
-- `ParkingSpot.tryOccupy` is a second safety net: an `AtomicReference.compareAndSet(null, v)` succeeds only if the spot was empty.
+- `ParkingFloor` keeps a `ConcurrentSkipListSet` (a thread-safe set from `java.util.concurrent` that keeps its elements sorted) of **free** spots per type, sorted by id. `pollFirst()` removes and returns the lowest id **atomically**: if 20 threads call it at once, each spot goes to exactly one of them. The lowest id stands for "nearest to the entrance".
+- `ParkingSpot.tryOccupy` is a second safety net: an `AtomicReference.compareAndSet(null, v)` succeeds only if the spot was empty. This is **CAS** (compare-and-set): "change the value to *v* only if it is still *null*", done as one atomic step without any lock.
 - `NearestFloorFirst` and `LeastBusyFloorFirst` are two interchangeable allocation strategies.
 - `HourlyTieredPricing.standard()` encodes $4 / $3.50 / $3.50 / then $2.50, rounding a started hour up.
-- `ParkingLot.admit` also reserves the **plate** with `putIfAbsent`, so the same car cannot be admitted twice.
-- `ParkingLot.pay` locks **one ticket** (not the whole lot), so payments for different tickets run in parallel while the portal and the exit panel cannot both charge the same ticket.
+- `ParkingLot.admit` also reserves the **plate** with `putIfAbsent` (adds a key to a map only if it is not there yet, atomically), so the same car cannot be admitted twice.
+- `ParkingLot.pay` locks **one ticket** (not the whole lot; a **lock** lets only one thread at a time run a piece of code, and Java's `synchronized` keyword is the built-in lock that every object carries), so payments for different tickets run in parallel while the portal and the exit panel cannot both charge the same ticket.
 - `Main` uses a `TestClock` (a subclass of `java.time.Clock`) to jump forward in time, then races 20 threads for the last 5 car spots.
 
 **Output:**
@@ -990,16 +998,16 @@ Read the output: the truck is turned away because the only large spots are taken
 | Stay of 0 minutes | Fee of $0 | Minimum of one hour (`Math.max(1, minutes)`) |
 | Lock scope | One global lock would serialise all gates | Locks are per spot (CAS) and per ticket; no global lock |
 
-`ConcurrentSkipListSet.size()` is not constant-time and is only an estimate while other threads change the set; that is fine for a display board, but never use it to decide whether a spot is free — use `pollFirst()`.
+`ConcurrentSkipListSet.size()` is not constant-time (it walks the whole set instead of reading a stored number) and is only an estimate while other threads change the set; that is fine for a display board, but never use it to decide whether a spot is free — use `pollFirst()`.
 
 ### Extensions & follow-up questions
 
-1. **"What if pricing changes (weekend rate, per spot type, surge)?"** — Write a new `PricingStrategy` (for example `WeekendPricing`, or a decorator that multiplies another strategy for large spots) and call `setPricing`. No other class changes.
+1. **"What if pricing changes (weekend rate, per spot type, surge)?"** — Write a new `PricingStrategy` (for example `WeekendPricing`, or a decorator (a wrapper object with the same interface that adds behaviour around another object) that multiplies another strategy for large spots) and call `setPricing`. No other class changes.
 2. **"Two cars arrive at the same instant — what happens?"** — Spot handout is atomic (`pollFirst` + CAS). Show the 20-thread race in the output.
 3. **"Add reservations."** — Add a `Reservation(plate, spotType, from, to)` and a reserved set per floor; the allocation strategy checks the reservation first. Hold the spot with a timeout (release it if the car does not arrive within, say, 30 minutes).
 4. **"Add monthly passes / season tickets."** — A `PricingStrategy` that returns 0 for plates with a valid pass, or a `PassHolderPricing` decorator around the normal pricing.
 5. **"Number-plate recognition (ticketless)."** — The entrance camera becomes another kind of entrance panel that calls the same `admit`; the ticket id is keyed by plate. No core class changes.
-6. **"How would you store this in a database?"** — Tables: `floor`, `spot(id, floor_id, type, occupied_by)`, `ticket(id, plate, spot_id, entry_time, status, paid_cents)`, `payment(id, ticket_id, method, amount)`. Claim a spot with a conditional update (`UPDATE spot SET occupied_by=? WHERE id=? AND occupied_by IS NULL`) — the database equivalent of our CAS. Candidates who have been asked this report that interviewers like to see **cardinalities** (a floor has 1..* spots, a spot holds 0..1 vehicles, a ticket has 1 spot) and then add a new entity to see how you rewire the model.
+6. **"How would you store this in a database?"** — Tables: `floor`, `spot(id, floor_id, type, occupied_by)`, `ticket(id, plate, spot_id, entry_time, status, paid_cents)`, `payment(id, ticket_id, method, amount)`. Claim a spot with a conditional update (`UPDATE spot SET occupied_by=? WHERE id=? AND occupied_by IS NULL`) — the database equivalent of our CAS. Candidates who have been asked this report that interviewers like to see **cardinalities** (how many of one thing can link to another; `1..*` means one or more) (a floor has 1..* spots, a spot holds 0..1 vehicles, a ticket has 1 spot) and then add a new entity to see how you rewire the model.
 7. **"Many lots in a city?"** — A `ParkingLot` per site plus a `ParkingNetwork` that routes drivers to the lot with free spots. This is another reason not to make the lot a Singleton.
 8. **"EV idle fees?"** — Add a charging session to `ChargingPanel` (start, end, kWh) and charge a per-minute fee after charging completes.
 
@@ -1024,7 +1032,7 @@ Many modern malls and airports use **parking guidance systems**: a sensor above 
 
 **Follow-ups with answers**
 
-- *"Why not a Singleton?"* — There is one lot in production, but a Singleton is a hidden global: it makes testing two lots impossible. I create one instance and inject it. If the interviewer insists, a lazy holder-class Singleton is thread-safe and simple.
+- *"Why not a Singleton?"* — There is one lot in production, but a Singleton is a hidden global: it makes testing two lots impossible. I create one instance and inject it. If the interviewer insists, a lazy holder-class Singleton (the single instance lives in a nested class that Java loads only on first use, which the JVM makes thread-safe for free) is thread-safe and simple.
 - *"Why is the fit rule on the vehicle?"* — Because it changes when vehicle types change; putting it there keeps the lot closed for modification (OCP).
 - *"How do you make finding a spot fast?"* — Keep only the free spots, indexed by type, in a sorted set; taking one is O(log n) and needs no scan.
 - *"What if the display board and the real count disagree?"* — The board is informational; the atomic `pollFirst` is the source of truth. The board can pull the count on render if needed.
@@ -1296,10 +1304,10 @@ sequenceDiagram
 | Decision | Pattern / principle | Why | Alternative rejected |
 |---|---|---|---|
 | One class per situation behind `VendingState` | **State** | Every button × situation cell is answered; the compiler enforces completeness; no `if (state == …)` | Flags + `if/else` chains (the classic source of double-dispense bugs) |
-| States are shared **stateless singletons** (`INSTANCE`) | Flyweight-style sharing | The course notes that creating a new state object on each transition is readable but wasteful; the states hold no data, so one instance each is enough | `new IdleState()` on every transition |
-| Operator actions are **not** on the state interface | Interface Segregation | Restocking is allowed in every state; forcing five classes to answer it would be noise | Adding `restock` to `VendingState` |
-| Money counted by value in an `EnumMap` | — | The machine never cares which physical quarter it returns | A list of coin objects |
-| Inserted money goes straight into the box | — | Refund = "make change for the balance"; one refund path | A separate escrow pile |
+| States are shared **stateless singletons** (`INSTANCE`; no fields, so one copy serves everyone) | Flyweight-style sharing (one shared object instead of many identical ones) | The course notes that creating a new state object on each transition is readable but wasteful; the states hold no data, so one instance each is enough | `new IdleState()` on every transition |
+| Operator actions are **not** on the state interface | Interface Segregation (no class is forced to implement methods it does not need) | Restocking is allowed in every state; forcing five classes to answer it would be noise | Adding `restock` to `VendingState` |
+| Money counted by value in an `EnumMap` (a fast map keyed by enum constants) | — | The machine never cares which physical quarter it returns | A list of coin objects |
+| Inserted money goes straight into the box | — | Refund = "make change for the balance"; one refund path | A separate escrow pile (a holding area for inserted money) |
 | **Exact** change with dynamic programming | Correctness | Greedy can fail when the box is short of one coin (see output part 6) | Greedy only |
 | Refuse the sale if exact change is impossible | Requirement 7 | Never short-change the customer | Give "close enough" change |
 
@@ -1721,7 +1729,7 @@ public class Main {
 - `SelectedState` and `HasMoneyState` both call `acceptPiece` then `checkPaid`. `checkPaid` either moves to `HasMoney`, or completes the sale (plan change → remove pieces → dispense one → `Dispensing`), or refunds everything if exact change is impossible.
 - `refundAll` is the **single** refund path used by cancel and by "cannot make change". It can never fail, because the pieces just inserted are in the box, so an exact plan always exists.
 - `DispensingState.take` empties the tray and moves to `Idle` or `OutOfStock` — the sale ends when the customer takes the product, which is why `take` is a customer button.
-- All public methods are `synchronized`. A single physical machine has one customer, but a networked controller (remote price change, telemetry, a second input device) must not interleave two actions.
+- All public methods are `synchronized`. A single physical machine has one customer, but a networked controller (remote price change, telemetry — status data sent automatically to a remote server — or a second input device) must not interleave two actions.
 
 **Output:**
 
@@ -1822,7 +1830,7 @@ Read the output: in part 1 the cola is paid exactly, and coins inserted while th
 | Last item sold | `take` moves to `OutOfStock`; only a restock leaves it |
 | Two threads pressing buttons | `synchronized` public methods; states run under the machine's lock |
 | A bank of machines sharing one stock count | The course notes the design is not safe for that; the shared count on `Slot` would then need a lock or an atomic decrement |
-| Power failure mid-sale | Real machines keep a transaction log (credit held) in non-volatile memory; out of scope |
+| Power failure mid-sale | Real machines keep a transaction log (credit held) in non-volatile memory (memory that keeps its contents without power); out of scope |
 
 ### Extensions & follow-up questions
 
@@ -1847,7 +1855,7 @@ Modern vending machines are often retro-fitted with cashless readers such as **N
 **Follow-ups with answers**
 
 - *"Why not an enum with a switch?"* — It works for tiny machines, but every new state means editing every switch; with the State pattern a new state is a new class, and the compiler forces it to answer every button.
-- *"Is greedy change correct?"* — Only for well-stocked canonical coin sets. With limited coins it can fail; use bounded coin-change DP.
+- *"Is greedy change correct?"* — Only for well-stocked canonical coin sets (coin systems such as 1/5/10/25 where taking the largest coin first always gives the fewest coins). With limited coins it can fail; use bounded coin-change DP.
 - *"Where does the operator fit?"* — Outside the state interface; restocking is allowed in any state and can move OutOfStock → Idle.
 
 ### Self-check
@@ -1933,15 +1941,15 @@ flowchart LR
 | Class | Responsibility |
 |---|---|
 | `Ingredient` (enum) | Beans, water, milk, chocolate, sugar — with the unit (g or ml). |
-| `Recipe` (record) | **Data**: name, price, `Map<Ingredient, Integer>` amounts. Immutable. `with(...)` returns a customised copy. |
+| `Recipe` (record) | **Data**: name, price, `Map<Ingredient, Integer>` amounts. Immutable (cannot change after creation). `with(...)` returns a customised copy. |
 | `RecipeBook` | Parses the menu text into recipes; looks drinks up by name. |
 | `IngredientStore` | Levels, thresholds, **one lock**; `tryConsume` = check all + deduct all atomically; alerts listeners. |
 | `LowStockListener` (interface) | Observer called once when an ingredient crosses its threshold. |
 | `OrderRequest` (record) | Drink name + extra shots + sugar grams. |
 | `OrderResult` (sealed) | Either `Served(drink, price, change)` or `Rejected(reason, refund)`. |
-| `CoffeeMachine` | Facade: menu board, `order(...)`, `refill(...)`. |
+| `CoffeeMachine` | Facade (one simple front object hiding the parts behind it): menu board, `order(...)`, `refill(...)`. |
 
-**Mapping to the common problem statement.** The widely used version of this problem (for example in the open-source *awesome-low-level-design* collection) asks for: several coffee types (espresso, cappuccino, latte) each with a price and a recipe, a menu with prices, selection and payment, dispensing with change, ingredient tracking with low-stock notifications, and thread-safe handling of concurrent requests. Its classes map onto ours as follows: `Coffee` (name, price, recipe) → our `Recipe`; `Ingredient` (name + quantity with `synchronized` update methods) → our `Ingredient` enum plus the levels inside `IngredientStore`; `Payment` (amount paid) → the `paidCents` argument and the change/refund in `OrderResult`; `CoffeeMachine` (a Singleton there) → our injected `CoffeeMachine`; concurrent users simulated with an `ExecutorService` → the 10-thread demo in our `Main`. Two deliberate differences: we lock the **whole recipe** rather than each ingredient separately (per-ingredient locking cannot make a multi-ingredient deduction all-or-nothing), and we avoid the Singleton (see the table below).
+**Mapping to the common problem statement.** The widely used version of this problem (for example in the open-source *awesome-low-level-design* collection) asks for: several coffee types (espresso, cappuccino, latte) each with a price and a recipe, a menu with prices, selection and payment, dispensing with change, ingredient tracking with low-stock notifications, and thread-safe handling of concurrent requests. Its classes map onto ours as follows: `Coffee` (name, price, recipe) → our `Recipe`; `Ingredient` (name + quantity with `synchronized` update methods) → our `Ingredient` enum plus the levels inside `IngredientStore`; `Payment` (amount paid) → the `paidCents` argument and the change/refund in `OrderResult`; `CoffeeMachine` (a Singleton there) → our injected `CoffeeMachine`; concurrent users simulated with an `ExecutorService` (a Java pool of worker threads that runs submitted tasks) → the 10-thread demo in our `Main`. Two deliberate differences: we lock the **whole recipe** rather than each ingredient separately (per-ingredient locking cannot make a multi-ingredient deduction all-or-nothing), and we avoid the Singleton (see the table below).
 
 ### Class diagram
 
@@ -1997,7 +2005,7 @@ classDiagram
 
 ### Key flows
 
-**Ordering a drink.** The key point is that the stock check and the deduction happen **inside one critical section**, and alerts are sent **after** the lock is released.
+**Ordering a drink.** The key point is that the stock check and the deduction happen **inside one critical section** (a piece of code that only one thread may run at a time), and alerts are sent **after** the lock is released.
 
 ```mermaid
 sequenceDiagram
@@ -2046,13 +2054,13 @@ stateDiagram-v2
 | Decision | Pattern / principle | Why | Alternative rejected |
 |---|---|---|---|
 | Recipes are **data** parsed from a menu text | Data-driven design, Open/Closed | A new drink is a new line in the menu; no new class, no recompile of logic | One subclass per drink (`Latte extends Coffee`) — class explosion, and recipe tweaks need code changes |
-| Check-and-deduct under **one lock** | Atomicity (Ch. 12) | Prevents two orders both seeing "enough milk" and both deducting (a check-then-act race) | Checking in one call and deducting in another; per-ingredient locks (a multi-ingredient recipe would need all of them, in order) |
-| All-or-nothing | Transaction semantics | Never leave a half-made recipe's ingredients missing | Deduct one by one and "roll back" on failure |
+| Check-and-deduct under **one lock** | Atomicity (Ch. 12) | Prevents two orders both seeing "enough milk" and both deducting (a check-then-act **race**: both check, then both act on an answer that is already stale) | Checking in one call and deducting in another; per-ingredient locks (a multi-ingredient recipe would need all of them, in order) |
+| All-or-nothing | Transaction semantics (all steps take effect together, or none do) | Never leave a half-made recipe's ingredients missing | Deduct one by one and "roll back" on failure |
 | Alerts via `LowStockListener` | **Observer** | Operator app, dashboard, telemetry can subscribe independently | The store calling a specific SMS class |
 | Alert **once per crossing**, re-armed by refill | — | Prevents alert storms (one per drink) | Alerting on every order below threshold |
-| Listeners called **outside** the lock | Concurrency hygiene | A slow listener (network call) must not block every order; it also avoids deadlocks if a listener calls back into the store | Notifying inside the lock |
+| Listeners called **outside** the lock | Concurrency hygiene | A slow listener (network call) must not block every order; it also avoids deadlocks (two threads each waiting forever for a lock the other holds) if a listener calls back into the store | Notifying inside the lock |
 | Customisation returns a **new** immutable `Recipe` | Immutability | The menu recipe can never be corrupted by one order | Mutating the menu recipe; a Decorator chain (works, but heavier than needed for "extra X") |
-| `OrderResult` is a **sealed** interface with records | Algebraic data type (Java 17+ sealed, Java 21 pattern switch) | Callers must handle both Served and Rejected; `switch` is checked for exhaustiveness | Returning `null` or throwing for normal refusals |
+| `OrderResult` is a **sealed** interface with records | Algebraic data type (a value that is exactly one of a fixed set of shapes; Java 17+ sealed, Java 21 pattern switch) | Callers must handle both Served and Rejected; `switch` is checked for exhaustiveness (the compiler complains if a case is missing) | Returning `null` or throwing for normal refusals |
 | No Singleton | Dependency injection | The problem-set solutions often make `CoffeeMachine` a Singleton; we create one and pass it around, so tests can build fresh machines (the demo builds two) | `CoffeeMachine.getInstance()` |
 
 > **Decorator or data?** A classic textbook example (*Head First Design Patterns*) models coffee add-ons with the **Decorator** pattern: `new Whip(new Mocha(new DarkRoast()))`, each wrapper adding cost and description. That is a good fit when each add-on has **behaviour**. Here add-ons only change **quantities and price**, so a data change (`recipe.with(...)`) is simpler. Say both in the interview and pick one for a reason.
@@ -2348,10 +2356,10 @@ public class Main {
 
 **How the code works, part by part**
 
-- `Main.MENU` is a Java text block; `RecipeBook.parse` turns each line into a `Recipe`. Adding "Flat White" is one more line.
-- `Recipe` copies the amounts into an unmodifiable `EnumMap` in its compact constructor, so a recipe can never be changed after creation.
-- `IngredientStore.tryConsume` holds a `ReentrantLock` while it (1) collects shortages, (2) returns immediately if any, (3) deducts every ingredient, (4) records which thresholds were crossed. It releases the lock and **then** calls listeners.
-- `alerted` is an `EnumSet` that remembers which ingredients already raised an alert; `refill` clears the flag when the level goes back above the threshold.
+- `Main.MENU` is a Java text block (a multi-line string written between `"""` marks); `RecipeBook.parse` turns each line into a `Recipe`. Adding "Flat White" is one more line.
+- `Recipe` copies the amounts into an unmodifiable `EnumMap` in its compact constructor (a record constructor written without a parameter list, used for checks and defensive copies), so a recipe can never be changed after creation.
+- `IngredientStore.tryConsume` holds a `ReentrantLock` (an explicit lock object with `lock()` and `unlock()`; *re-entrant* means the thread already holding it may take it again) while it (1) collects shortages, (2) returns immediately if any, (3) deducts every ingredient, (4) records which thresholds were crossed. It releases the lock and **then** calls listeners.
+- `alerted` is an `EnumSet` (a compact set of enum constants) that remembers which ingredients already raised an alert; `refill` clears the flag when the level goes back above the threshold.
 - `CoffeeMachine.order` validates the drink, applies customisation, checks payment, then reserves ingredients. The `switch` in `Main.show` uses Java 21 pattern matching over the sealed `OrderResult`.
 
 **Output:**
@@ -2404,18 +2412,18 @@ Read the output: the rejected latte left the beans at 410 g — nothing is deduc
 | Listener is slow (sends an SMS) | Every order waits on the network | Listeners run after `unlock()` |
 | Many orders below the threshold | Alert storm | One alert per crossing; refill re-arms |
 | Underpayment | Drink made, money short | Payment checked before reserving ingredients |
-| Brewing fails after deduction (hardware fault) | Customer pays, gets nothing | Extension: refund and optionally `refill` the reserved amounts back (compensation) |
+| Brewing fails after deduction (hardware fault) | Customer pays, gets nothing | Extension: refund and optionally `refill` the reserved amounts back (compensation: an action that undoes an earlier step) |
 | Menu displays "available" and then the order fails | A race between display and order | The menu is advisory; `tryConsume` is the source of truth |
 
-A **single lock** is right here: the critical section is tiny (five map operations) and the machine brews one drink at a time anyway. If contention mattered (a cloud-backed inventory shared by many machines), you would move to optimistic concurrency (version numbers / compare-and-set on a snapshot) or a database transaction.
+A **single lock** is right here: the critical section is tiny (five map operations) and the machine brews one drink at a time anyway. If contention (many threads waiting for the same lock) mattered (a cloud-backed inventory shared by many machines), you would move to optimistic concurrency (work without a lock, then check at write time that nobody changed the data, and retry if they did — e.g. version numbers / compare-and-set on a snapshot) or a database transaction (a group of database changes that succeed or fail together).
 
 ### Extensions & follow-up questions
 
 1. **"Add a new drink."** — Add one line to the menu data. No code change.
 2. **"Sizes (small/medium/large)?"** — A `Size` enum with a multiplier; `recipe.scaled(size)` returns a new recipe with scaled amounts and price.
-3. **"Several brewing units?"** — A pool of `Brewer` workers (a `BlockingQueue` of orders consumed by N threads). Inventory stays in the one `IngredientStore`.
+3. **"Several brewing units?"** — A pool of `Brewer` workers (a `BlockingQueue` — a thread-safe queue where a taker waits while it is empty — of orders consumed by N threads). Inventory stays in the one `IngredientStore`.
 4. **"Remote monitoring?"** — Another `LowStockListener` that posts to a telemetry endpoint. The store does not change.
-5. **"Brewing steps differ per drink (grind, tamp, steam milk)?"** — Template Method: a `BrewProcess` with fixed steps and hooks, or a list of `Step` objects in the recipe data (Command).
+5. **"Brewing steps differ per drink (grind, tamp, steam milk)?"** — Template Method (a base class fixes the order of the steps and subclasses fill in some of them): a `BrewProcess` with fixed steps and hooks (optional steps a subclass may override), or a list of `Step` objects in the recipe data (Command).
 6. **"Card payments and change?"** — Reuse the `CashBox` from 14.2 for cash; card payment is another payment device.
 
 ### Real-world example
@@ -2464,7 +2472,7 @@ An **automated teller machine (ATM)** is a cashier-less machine, placed in a pub
 |---|---|
 | Which transactions? | Balance inquiry, cash withdrawal, cash deposit, check deposit, transfer. |
 | Which account types? | Checking and savings. Withdrawal is from checking (and savings within a daily cap). |
-| How is the user identified? | ATM card + PIN. The card is the main security element. |
+| How is the user identified? | ATM card + PIN (personal identification number, a short secret code). The card is the main security element. |
 | Does the ATM talk to the bank? | Yes, on every transaction (assume the network is available). |
 | Are deposits available at once? | A check is **not**: it waits for verification. We keep a *total* and an *available* balance. |
 | Which notes are loaded? | $100, $50, $20, $10 cassettes. |
@@ -2495,7 +2503,7 @@ An **automated teller machine (ATM)** is a cashier-less machine, placed in a pub
 - **Security:** PINs never stored or compared in clear on the ATM; limit PIN attempts.
 - **Consistency:** debit and dispense happen together or not at all (compensate on failure).
 - **Concurrency:** many ATMs act on the same account at once without overdrawing it or deadlocking.
-- **Auditability:** every action is journaled.
+- **Auditability** (every action can be traced afterwards)**:** every action is journaled.
 
 ### Use cases
 
@@ -2534,10 +2542,10 @@ In the transfer diagram above, note the two retry loops: one for "insufficient b
 | `Account` (abstract) | Id, **total** and **available** balance, a lock; the withdrawal rule hook. |
 | `CheckingAccount`, `SavingsAccount` | Savings overrides the rule to add a **daily withdrawal cap** — the only behavioural difference, which is why they are two classes. |
 | `BankService` (interface) | What the ATM needs from the bank: authenticate, balances, withdraw, reverse, deposits, transfer. |
-| `InMemoryBank` | A stand-in bank: PIN hashes, failed-attempt counts, account locks, ordered-lock transfers. |
+| `InMemoryBank` | A stand-in bank: PIN hashes (one-way fingerprints of PINs), failed-attempt counts, account locks, ordered-lock transfers. |
 | `AuthResult` (sealed) | `Ok(accounts)`, `WrongPin(attemptsLeft)` or `Blocked`. |
 | `NoteHandler` + 4 subclasses | **Chain of Responsibility** for $100 → $50 → $20 → $10. |
-| `CashDispenser` | Plans a withdrawal from the chain (dry run), then dispenses; can jam (fault injection). |
+| `CashDispenser` | Plans a withdrawal from the chain (dry run: a trial that changes nothing), then dispenses; can jam (fault injection: a deliberately triggered failure, for testing). |
 | `Transaction` (sealed) + 5 records | **Command**: each transaction has one `execute(ctx)`; its rules live only there. |
 | `AtmState` + 4 states | **State**: Idle → CardInserted → Authenticated → Idle, plus OutOfService. |
 | `Atm` | Has an id (the course also gives it a location); owns its parts, holds the session, forwards buttons to the state, keeps the journal. |
@@ -2719,11 +2727,11 @@ sequenceDiagram
 | Plan first, then dispense | — | The chain's dry run touches nothing; a failed plan leaves the cassettes intact | Removing notes while searching |
 | Each transaction = one class with `execute` | **Command** | The rules of each transaction live in one place; transactions can be journaled, queued or replayed | A big `switch (type)` in the ATM |
 | `Transaction` and `AuthResult` are **sealed** | Java 17+ sealed types | The compiler knows the full list; `switch` over `AuthResult` is exhaustive | Open hierarchies with `instanceof` chains |
-| ATM talks to a `BankService` interface | Dependency Inversion | The ATM does not care whether the bank is in-memory, ISO 8583 over a network, or a test fake | ATM changes balances directly |
+| ATM talks to a `BankService` interface | Dependency Inversion (depend on an interface, not on a concrete class) | The ATM does not care whether the bank is in-memory, ISO 8583 (the standard card-payment message format) over a network, or a test fake | ATM changes balances directly |
 | Total vs available balance | Domain modelling | Makes the check-hold rule correct, not merely convenient | A single balance |
 | Savings is a subclass | Inheritance for **behaviour** | Its withdrawal rule differs (daily cap), so it overrides one hook | A `type` field and `if (type == SAVINGS)` |
 
-> **Debit before or after dispensing?** The course debits **after** the notes are counted out — the safer order for the customer — and admits the weakness: a crash between the two leaves the bank short. Our code does the opposite (debit, then dispense) and adds a **compensating action**: if the dispenser jams, `reverse(txnId)` puts the money back. Both are simplifications of what real systems do: make the pair atomic (a hold/authorisation, then a confirmation after dispensing), and **reconcile** from the ATM's journal when something goes wrong in between. Say this out loud — it is the "power fails halfway through" follow-up.
+> **Debit before or after dispensing?** The course debits **after** the notes are counted out — the safer order for the customer — and admits the weakness: a crash between the two leaves the bank short. Our code does the opposite (debit, then dispense) and adds a **compensating action**: if the dispenser jams, `reverse(txnId)` puts the money back. Both are simplifications of what real systems do: make the pair atomic (a hold/authorisation, then a confirmation after dispensing), and **reconcile** (compare two sets of records afterwards and fix any difference) from the ATM's journal when something goes wrong in between. Say this out loud — it is the "power fails halfway through" follow-up.
 
 > **Cash deposits.** The course assumes all deposits are verified before they count. Many banks make cash that the machine itself has counted available immediately (or up to a limit) and hold checks. Our `depositCash` credits both balances and `depositCheck` credits only the total; changing the policy is a one-line change in the bank, not the ATM.
 
@@ -3365,7 +3373,7 @@ public class Main {
 
 **How the code works, part by part**
 
-- **PIN handling:** the bank stores a SHA-256 hash of card+PIN and counts failures; the third failure returns `Blocked` and the ATM **retains** the card. (The course's code compares the PIN inside `Card` and flags that as a simplification. Real banks never see the clear PIN: the PIN pad encrypts it into a PIN block and a hardware security module (HSM) verifies it. A plain hash of a 4-digit PIN is also easy to brute-force, which is one more reason it is demo-only.)
+- **PIN handling:** the bank stores a SHA-256 hash (a standard one-way function that turns any input into a fixed-length fingerprint that cannot practically be reversed) of card+PIN and counts failures; the third failure returns `Blocked` and the ATM **retains** the card. (The course's code compares the PIN inside `Card` and flags that as a simplification. Real banks never see the clear PIN: the PIN pad encrypts it into a PIN block and a hardware security module (HSM) verifies it. A plain hash of a 4-digit PIN is also easy to brute-force (try every possible value until one matches), which is one more reason it is demo-only.)
 - **Account locks:** each `Account` has its own `ReentrantLock`, shared by every ATM. `withdraw` does check-and-debit under that lock, so two ATMs cannot both spend the same $500.
 - **Transfers** lock both accounts in **id order**. Two opposite transfers (A→B and B→A) therefore always lock in the same order and cannot deadlock (Chapter 13).
 - **Chain of Responsibility:** `HundredHandler → FiftyHandler → TwentyHandler → TenHandler`. `plan` fills a map and returns the uncovered remainder; `take` removes the planned notes.
@@ -3441,7 +3449,7 @@ Cash loaded: $430.00
    card RETAINED ****2222
 ```
 
-Read the output: $280 comes out as 2×$100 + $50 + $20 + $10; $85 is refused (not a multiple of $10); the savings cap refuses $140; after the $500 check, *total* grows but *available* does not until the bank clears it; the jam leaves the balance unchanged; Bob's card is blocked at the bank, so even another ATM refuses the right PIN; two ATMs racing on a $500 joint account hand out only $300; 2,000 opposite transfers finish with no deadlock and the total conserved; ATM-9 refuses the key switch mid-session, pays out its last $180, ejects the card, and only then goes out of service until the operator refills it.
+Read the output: $280 comes out as 2×$100 + $50 + $20 + $10; $85 is refused (not a multiple of $10); the savings cap refuses $140; after the $500 check, *total* grows but *available* does not until the bank clears it; the jam leaves the balance unchanged; Bob's card is blocked at the bank, so even another ATM refuses the right PIN; two ATMs racing on a $500 joint account (one account shared by two people) hand out only $300; 2,000 opposite transfers finish with no deadlock and the total conserved; ATM-9 refuses the key switch mid-session, pays out its last $180, ejects the card, and only then goes out of service until the operator refills it.
 
 ### Concurrency & edge cases
 
@@ -3464,7 +3472,7 @@ Read the output: $280 comes out as 2×$100 + $50 + $20 + $10; $85 is refused (no
 2. **"What if the power fails halfway through a withdrawal?"** — Use a two-phase approach: authorise (hold) at the bank, dispense, then confirm; on restart the ATM reads its journal and either confirms or reverses. The bank reconciles against the journal.
 3. **"Add a daily withdrawal limit for all accounts."** — Move the cap into `Account` or into a policy object the bank consults; the ATM does not change.
 4. **"Receipts and PIN change?"** — Two more `Transaction` records (`PinChange`, and a `Printer` part that formats the journal entry).
-5. **"Other banks' cards?"** — `BankService` gets a routing implementation that forwards to a card network for foreign cards (a Proxy/Adapter in front of the network).
+5. **"Other banks' cards?"** — `BankService` gets a routing implementation that forwards to a card network (such as Visa or Mastercard, which passes requests between banks) for foreign cards (a Proxy — a stand-in object — or an Adapter — a translator between two interfaces — in front of the network).
 6. **"Cardless / mobile withdrawals?"** — A new state path: `enterOneTimeCode` instead of `insertCard` → `enterPin`. The transactions do not change.
 7. **"Bank manager reports?"** — Aggregate the journal (total deposits, total withdrawals, cash left = `dispenser.total()`).
 
@@ -3543,10 +3551,10 @@ An **elevator** (lift) moves people up and down a building. A real building rare
 **Non-functional**
 
 - **Efficiency:** low average wait and ride time; no car runs to the end of the shaft for nothing.
-- **Fairness / no starvation:** every accepted call is eventually served.
+- **Fairness / no starvation** (starvation = a request that waits forever because others keep being chosen first)**:** every accepted call is eventually served.
 - **Safety:** doors, load limit and emergency modes always override scheduling.
 - **Thread safety:** riders press buttons concurrently while a controller thread moves the cars.
-- **Testability:** deterministic stepping.
+- **Testability:** deterministic stepping (the same inputs always give the same results).
 
 ### Use cases
 
@@ -3685,7 +3693,7 @@ classDiagram
 
 ### Key flows
 
-**Scheduling algorithms compared.** "Scheduling" means choosing the order in which one car serves its stops. These algorithms come from disk-arm scheduling in operating systems, which has the same shape (a head moving along a line of requests).
+**Scheduling algorithms compared.** "Scheduling" means choosing the order in which one car serves its stops. These algorithms come from disk-arm scheduling in operating systems (the order in which a hard disk's read head visits requested tracks), which has the same shape (a head moving along a line of requests).
 
 | Algorithm | Rule | Good | Bad |
 |---|---|---|---|
@@ -3769,7 +3777,7 @@ sequenceDiagram
 | Choosing a car is a `DispatchStrategy` | **Strategy** | Different buildings and times of day want different rules; the course admits one implementation normally doesn't justify an interface, but here the *requirement* (swap the rule) does | `if (officeMode) … else …` in the dispatcher |
 | Sweep rule in `StopList`, not in `Elevator` | Single Responsibility | The car drives; the stop list decides. Without this split, `Elevator` would do two jobs | Next-stop logic inside `step()` |
 | Two sets of stops (up/down) | Data modelling | Distinguishes "5 going up" from "5 going down" | One list of floors |
-| `step()` = one action | Deterministic simulation | Every scenario is a list of calls and an expected list of events; no clock, no flakiness | A thread per car with `sleep` |
+| `step()` = one action | Deterministic simulation | Every scenario is a list of calls and an expected list of events; no clock, no flakiness (tests that pass or fail at random) | A thread per car with `sleep` |
 | Modes as an enum inside the car | Lightweight State | Only three modes and a few checks; full State classes would add more code than they save here. If modes grew (fire phase II, independent service, VIP), switch to the State pattern | State classes from day one |
 | Hall calls re-dispatched when a car leaves service | Robustness | A call accepted by a car must not be lost when that car is taken out | Silently clearing the car's stops |
 | Queue calls when no car is available | — | "No car can take the call right now" is not the same as "rejected" | Dropping the call |
@@ -4229,7 +4237,7 @@ public class Main {
 
 **How the code works, part by part**
 
-- `StopList` keeps two `TreeSet<Integer>`s. `ceiling`, `floor`, `first` and `last` give O(log n) answers to "nearest stop at or above/below" — the core of LOOK.
+- `StopList` keeps two `TreeSet<Integer>`s (a `TreeSet` is a sorted set). `ceiling`, `floor`, `first` and `last` give O(log n) answers to "nearest stop at or above/below" — the core of LOOK.
 - `Elevator.step()` checks, in order: maintenance → doors open (overload? fire parked? else close) → ask the stop list → arrive (remove the stop, open the doors) or move one floor. The car never moves with the doors open.
 - `pressFloor` classifies a car call as an up- or down-stop relative to the current floor; during fire recall car buttons are ignored.
 - `takeOutOfService` returns the car's accepted stops; `Building` re-dispatches the ones that are still lit hall calls.
@@ -4336,7 +4344,7 @@ Read the output: in part 1 the car serves 6 and 9 going up, turns at 9 (the high
 3. **"How would you test this?"** — Because one call = one step, every test is: a list of button presses, N steps, and an expected list of events. No sleeps, no flakiness.
 4. **"Destination dispatch?"** — Riders enter their destination in the lobby keypad; the system groups riders with nearby destinations into the same car. Implement as another `DispatchStrategy` that receives (from, to) instead of (floor, direction).
 5. **"Re-evaluate assignments?"** — Each tick, for unserved hall calls, ask the strategy again and move the call if a much better car is free now.
-6. **"Real time?"** — A `ScheduledExecutorService` calls `building.step()` every second (or per car on its own thread, with the car lock guarding the stop list).
+6. **"Real time?"** — A `ScheduledExecutorService` (a Java thread pool that runs tasks on a timer) calls `building.step()` every second (or per car on its own thread, with the car lock guarding the stop list).
 7. **"Emergency stop button inside the car?"** — A new mode that halts movement immediately and raises an alarm; with more modes, refactor modes into State classes.
 8. **"Express cars?"** — A car with a set of floors it may serve (e.g. lobby plus 30–40); the dispatch strategy skips cars whose served set does not include the call floor.
 9. **"Door sensor that reopens for a hand?"** — A `DoorSensor` input; while it reports an obstruction, `step()` reopens the doors instead of closing them (same slot as the overload check).
@@ -4355,7 +4363,7 @@ Modern high-rise buildings use **destination dispatch** systems (for example Sch
 
 - *"Why LOOK and not SSTF?"* — SSTF can starve a distant floor; LOOK serves every accepted stop within one round trip (one sweep up, one sweep down).
 - *"Why two sets and not one?"* — A floor can be requested going up and going down; one set cannot tell which rider to serve on which sweep.
-- *"Where do you put the lock?"* — Around each car's stop list and state (the car's monitor), and around the dispatcher's assignment. No global lock across cars.
+- *"Where do you put the lock?"* — Around each car's stop list and state (the car's monitor — the built-in lock every Java object carries, taken by `synchronized`), and around the dispatcher's assignment. No global lock across cars.
 
 ### Self-check
 
@@ -4407,14 +4415,14 @@ This question tests a **timed state machine** with a **hard safety rule** — *t
 
 **Non-functional**
 
-- **Safety invariant:** never conflicting greens, not even for an instant during a switch.
+- **Safety invariant** (an invariant is a rule that must hold at every moment)**:** never conflicting greens, not even for an instant during a switch.
 - **Deterministic timing:** a tick = one second; testable with a simulated clock.
 - **Thread safety:** a timer thread ticks while sensor and emergency inputs arrive from other threads.
-- **Observability:** displays, logs and monitors can subscribe to light changes.
+- **Observability** (the system's behaviour can be watched from outside)**:** displays, logs and monitors can subscribe to light changes.
 
 ### Use cases
 
-**Actors:** **Timer** (ticks every second), **Vehicle sensors** (report queue lengths), **Emergency vehicle / dispatch** (request and clear pre-emption), **Traffic engineer** (configures phases and timing), **Drivers** (see the lights).
+**Actors:** **Timer** (ticks every second), **Vehicle sensors** (report queue lengths), **Emergency vehicle / dispatch** (request and clear pre-emption — interrupting the normal cycle to serve a priority request), **Traffic engineer** (configures phases and timing), **Drivers** (see the lights).
 
 ```mermaid
 flowchart LR
@@ -4448,7 +4456,7 @@ flowchart LR
 | `SafetyMonitor` | A listener that checks the safety invariant after every change to green. |
 | `TimingPolicy` | **Strategy** for green duration: `FixedTiming`, `QueueAdaptiveTiming`. |
 | `SignalState` + 5 states | **State**: `GreenState`, `YellowState`, `AllRedState`, `EmergencyHoldState`, `FlashingRedState`. |
-| `Intersection` | The State context: phases, lights, timing, sensors, emergency flag; `tick()`. |
+| `Intersection` | The State context (the object that holds the current state and hands it each call): phases, lights, timing, sensors, emergency flag; `tick()`. |
 
 **Mapping to the common problem statement.** The widely used version of this problem (for example in the open-source *awesome-low-level-design* collection) asks for: an intersection with multiple roads, red/yellow/green signals, configurable durations that can adjust to traffic, smooth transitions, handling of emergency vehicles (ambulances, fire trucks), and a scalable, extensible design. Its classes map onto ours as follows: the `Signal` enum → our `Signal`; `Road` (id, name, and the traffic light facing it) → our `Approach` plus the `TrafficLight` stored for it; `TrafficLight` (current signal, durations, notifies observers) → our `TrafficLight` (signal + listeners) with the durations moved into `TimingPolicy` and the yellow/all-red settings; `TrafficController` (a Singleton managing all roads) → our `Intersection`, deliberately **not** a Singleton. What the reference leaves implicit, and we make explicit, is the phase model (which roads may be green together), the all-red clearance interval, and the safety check.
 
@@ -4563,7 +4571,7 @@ sequenceDiagram
 | Green duration comes from a `TimingPolicy` | **Strategy** | Fixed, adaptive (queue sensors), time-of-day plans all swap at run time | Durations hard-coded in `GreenState` |
 | Light changes are published to listeners | **Observer** | Displays, logs, a central monitoring system and the safety monitor subscribe independently | The intersection calling each consumer directly |
 | `showPhaseGreen` turns others **red first**, then turns the phase green | Safety by construction | There is never an instant with conflicting greens | Setting lights in arbitrary order |
-| A separate `SafetyMonitor` checks the invariant | Defence in depth | Mirrors real hardware conflict monitors that force flash if a bug ever causes conflicting greens | Trusting the controller logic alone |
+| A separate `SafetyMonitor` checks the invariant | Defence in depth (several independent safety layers) | Mirrors real hardware conflict monitors that force flash if a bug ever causes conflicting greens | Trusting the controller logic alone |
 | Emergency is a **flag** the states read, not a direct jump | Safety | A request only *shortens* green; yellow and all-red still run in full | Jumping straight to the emergency green (a crash risk) |
 | The awesome-lld reference makes the controller a **Singleton** | Rejected | A city has many intersections, each with its own controller; the demo runs two. A per-city `TrafficControlCenter` can own them | `TrafficController.getInstance()` |
 
@@ -4939,7 +4947,7 @@ public class Main {
 - `AllRedState` chooses the emergency phase if one is pending, else the next phase in order.
 - `QueueAdaptiveTiming` gives `secondsPerCar × waiting cars`, clamped between min and max.
 - `SafetyMonitor` receives every change to GREEN and checks `isSafe()`: all green/yellow approaches must belong to one phase.
-- Part 5 of `Main` drives a second intersection with a real `ScheduledExecutorService` (1 ms stands for 1 s) while a virtual thread fires 20 emergency requests and clears; the synchronized methods keep every transition whole, and the monitor sees zero violations.
+- Part 5 of `Main` drives a second intersection with a real `ScheduledExecutorService` (1 ms stands for 1 s) while a virtual thread (a lightweight Java 21 thread, cheap enough to create by the thousand) fires 20 emergency requests and clears; the synchronized methods keep every transition whole, and the monitor sees zero violations.
 
 **Output:**
 
@@ -4992,16 +5000,16 @@ Read the output: the fixed cycle is 5 s green, 2 s yellow, 1 s all-red; with 12 
 | Emergency for the phase that is already green | `GreenState.onTick` switches to `EmergencyHold` — no needless yellow |
 | Two emergency vehicles from crossing directions | The latest request wins: if it arrives during a hold, `EmergencyHoldState` leaves through yellow and all-red and the new phase is then held. A real system queues requests by priority and arrival and serves them in turn (extension) |
 | Emergency never cleared (lost message) | Add a maximum hold time after which the controller resumes the cycle |
-| Timer thread and sensor thread overlap | All public methods are `synchronized`; listeners are in a `CopyOnWriteArrayList` |
+| Timer thread and sensor thread overlap | All public methods are `synchronized`; listeners are in a `CopyOnWriteArrayList` (a thread-safe list that copies itself on every change) |
 | Adaptive timing starves a quiet road | Minimum green time in `QueueAdaptiveTiming`; every phase still gets its turn in the cycle |
 | Controller bug causes conflicting greens | `SafetyMonitor` detects it; real controllers then force flashing red |
-| Timer drift | `scheduleAtFixedRate` keeps a fixed rate; for real deployments use the controller's hardware clock |
+| Timer drift (small delays adding up so ticks slowly fall behind) | `scheduleAtFixedRate` keeps a fixed rate; for real deployments use the controller's hardware clock |
 
 ### Extensions & follow-up questions
 
 1. **"Pedestrian crossings?"** — Add pedestrian signal heads per phase (WALK during the phase's green, flashing DON'T WALK before yellow) and a push-button input that requests the phase.
 2. **"Left-turn arrows?"** — More phases (e.g. N-S protected left, then N-S through); phases are data, so the state machine does not change.
-3. **"Coordinate many intersections (green wave)?"** — A `TrafficControlCenter` sets each intersection's cycle length and **offset** so that a platoon of cars driving at the speed limit meets greens in sequence.
+3. **"Coordinate many intersections (green wave)?"** — A `TrafficControlCenter` sets each intersection's cycle length and **offset** so that a platoon (group travelling together) of cars driving at the speed limit meets greens in sequence.
 4. **"Emergency corridor?"** — The centre pre-empts the next intersections along the ambulance's route, each through `requestEmergency`.
 5. **"Night mode?"** — A time-of-day `TimingPolicy`, or a flashing-yellow state for the main road with flashing red for the side road.
 6. **"How to test?"** — The tick-driven design is deterministic: call `tick()` N times and assert the snapshot, as `Main` does.
@@ -5076,13 +5084,13 @@ This question looks like the parking lot (§14.1) — hand out a limited set of 
 **Non-functional**
 
 - **Never give one door to two parcels**, even when many carriers reserve at the same moment.
-- **Security**: codes are unpredictable, single-use, stored only as a hash.
+- **Security**: codes are unpredictable, single-use, stored only as a hash (the one-way fingerprint described in the ATM section).
 - **Correct deadlines** without depending on a background timer being on time.
-- **Testable**: time and randomness are injected (a fake clock and a seeded random generator in the demo).
+- **Testable**: time and randomness are injected (a fake clock and a seeded random generator in the demo — one started from a fixed seed, so it produces the same numbers every run).
 
 ### Use cases
 
-**Actors:** **Carrier system** (reserves doors), **Courier** (deposits, collects expired parcels), **Customer** (picks up), **Technician** (takes doors out of service), **Scheduler** (runs the periodic sweep), **Notification service** (SMS/app).
+**Actors:** **Carrier system** (reserves doors), **Courier** (deposits, collects expired parcels), **Customer** (picks up), **Technician** (takes doors out of service), **Scheduler** (a component that runs a job at set times; here it runs the periodic sweep), **Notification service** (SMS/app).
 
 ```mermaid
 flowchart LR
@@ -5118,7 +5126,7 @@ flowchart LR
 | `Parcel` (record) | Parcel id, customer phone, dimensions. |
 | `Compartment` | One door: id, size, `CompartmentState` (FREE, RESERVED, OCCUPIED, OUT_OF_SERVICE) with the legal moves inside `moveTo`. |
 | `Booking` + `BookingStatus` | One parcel's stay in one door: RESERVED → DEPOSITED → PICKED_UP, or → EXPIRED → RETURNED, or RESERVED → CANCELLED. Holds the deadlines and the code **hash**. |
-| `PickupResult` (sealed) | `DoorOpened`, `WrongCode`, `KeypadLocked`, `ParcelExpired` — every keypad outcome is a type, not a magic string. |
+| `PickupResult` (sealed) | `DoorOpened`, `WrongCode`, `KeypadLocked`, `ParcelExpired` — every keypad outcome is a type, not a magic string (a bare text value whose meaning is known only by convention). |
 | `CompartmentSelector` | **Strategy**: `SmallestFit` (default), `FirstFit`. |
 | `LockerListener` | **Observer**: parcel ready (with the code), parcel expired. |
 | `LockerStation` | The station: doors, bookings, code index, lockout counter, clock, random generator; every state change under one lock. |
@@ -5252,11 +5260,11 @@ sequenceDiagram
 | Separate `Compartment` state and `Booking` status | Two small state machines | A door is reused many times; the booking keeps each parcel's history and deadlines | One status field on the door that mixes "free" with "expired parcel inside" |
 | Transitions checked inside `moveTo` (a `switch` over the current state) | Enum state machine | An illegal move (e.g. taking an occupied door out of service) throws at once | Setting the field anywhere |
 | Keypad outcomes as a **sealed** `PickupResult` | Sealed result types | The UI must handle every outcome; the compiler checks the `switch` | Returning `null`, `-1` or strings |
-| Codes: random, single-use, unique per station, stored as a salted **SHA-256** hash | Security by design | A database leak does not reveal live codes; the courier never sees them | Storing the plain code, or deriving it from the parcel id |
-| Notify through `LockerListener` **after** releasing the lock | **Observer** | SMS, app push and audit log are independent; a slow SMS gateway must not block the keypad | Calling the SMS gateway inside `deposit` while holding the lock |
-| **Lazy expiry** at the start of every operation, plus a `sweep()` for notifications | Deadline checking on read | Correct even if the scheduler is late or down; the scheduler only sends messages | A reaper thread as the *only* thing that frees doors |
-| `Clock` and `RandomGenerator` are injected | Dependency injection | Deterministic demo and tests; production passes `Clock.systemUTC()` and a `SecureRandom` | `Instant.now()` and `new Random()` inside the class |
-| One lock per station (`synchronized`) | Monitor | A station has tens of doors and each call is microseconds, so one lock is simple and never the bottleneck; stations never share a lock | Per-door CAS like the parking lot — more code for no gain at this size |
+| Codes: random, single-use, unique per station, stored as a salted (mixed with a random value before hashing) **SHA-256** hash | Security by design | A database leak does not reveal live codes; the courier never sees them | Storing the plain code, or deriving it from the parcel id |
+| Notify through `LockerListener` **after** releasing the lock | **Observer** | SMS, app push and audit log are independent; a slow SMS gateway (the service that actually sends text messages) must not block the keypad | Calling the SMS gateway inside `deposit` while holding the lock |
+| **Lazy expiry** (deadlines checked whenever the data is next touched) at the start of every operation, plus a `sweep()` for notifications | Deadline checking on read | Correct even if the scheduler is late or down; the scheduler only sends messages | A reaper thread (a background thread that cleans up expired items) as the *only* thing that frees doors |
+| `Clock` and `RandomGenerator` are injected | Dependency injection | Deterministic demo and tests; production passes `Clock.systemUTC()` and a `SecureRandom` (Java's cryptographically strong random generator) | `Instant.now()` and `new Random()` inside the class |
+| One lock per station (`synchronized`) | Monitor | A station has tens of doors and each call is microseconds, so one lock is simple and never the bottleneck (the one part that limits overall speed); stations never share a lock | Per-door CAS like the parking lot — more code for no gain at this size |
 
 ### Java implementation
 
@@ -5832,11 +5840,11 @@ Reading the output: the mug (9 × 12 × 12 cm) fits a small door but both were t
 |---|---|
 | Two carriers reserve the last medium door at once | `reserve` is `synchronized`: choose + mark RESERVED is one step; the loser gets "no free compartment" (or a larger door) |
 | Courier arrives after the hold ran out | `deposit` sees CANCELLED and refuses; the carrier system reserves again (possibly at another station) |
-| Same parcel reserved twice (retry after a timeout) | Rejected while it has an active booking — make the carrier's reserve call idempotent by parcel id |
+| Same parcel reserved twice (retry after a timeout) | Rejected while it has an active booking — make the carrier's reserve call idempotent (repeating it has the same effect as calling it once) by parcel id |
 | Two live parcels get the same random code | Generation retries until the code is unique among live codes at this station |
 | Brute-force guessing | 10⁶ possible codes, 5 wrong tries then a 15-minute lockout per station; codes also expire |
 | Scheduler down for an hour | Lazy expiry still frees doors on the next operation; only the "expired" SMS is late |
-| Slow SMS gateway | Listeners run outside the lock; in production they hand off to a queue |
+| Slow SMS gateway | Listeners run outside the lock; in production they hand off to a queue (a buffer that a separate worker drains) |
 | `canFit` says yes but `reserve` then fails (someone else took the door) | Expected: `nearestWithSpace` is a hint; the caller reserves and, on failure, tries the next station |
 | Door jammed / broken | Technician marks a **free** door OUT_OF_SERVICE; an occupied door must be emptied first (`moveTo` enforces it) |
 | Power cut or network loss at the station | Real lockers keep a local copy of live code hashes and sync events later; the design already keeps the station self-contained |
@@ -5847,7 +5855,7 @@ Reading the output: the mug (9 × 12 × 12 cm) fits a small door but both were t
 2. **"Let the customer extend the pickup window?"** — A method that moves `pickupBy` once, only while DEPOSITED; a policy object can decide how many extensions are allowed.
 3. **"Cash on delivery?"** — Payment at the station screen before the door opens: a `PaymentStep` inserted into `pickup` (Chain of Responsibility or a small state machine per session).
 4. **"Fairness when the station is nearly full?"** — Keep a few large doors for large parcels only (a `ReservedCapacitySelector` that refuses to upgrade small parcels when fewer than *k* large doors are free).
-5. **"Scale to thousands of stations?"** — Stations are independent, so shard by station id; the network search uses a geo index (geohash or an R-tree) instead of sorting every station.
+5. **"Scale to thousands of stations?"** — Stations are independent, so shard by station id (sharding = splitting the data across several servers, each owning a slice; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)); the network search uses a geo index (an index for fast "what is near this point?" queries: a geohash turns a map cell into a short string, an R-tree is a tree of nested rectangles) instead of sorting every station.
 6. **"How would you store this in a database?"** — `compartment(id, station_id, size, state)`, `booking(id, parcel_id, compartment_id, status, hold_until, pickup_by, code_hash)`; reserve with `UPDATE compartment SET state='RESERVED' WHERE id=? AND state='FREE'` and check that one row changed.
 
 ### Real-world example

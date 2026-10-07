@@ -1,6 +1,6 @@
 # Chapter 5 — More Design Principles
 
-SOLID (Chapter 4) is only five of the rules good designers use. This chapter covers the rest of the everyday toolkit: short rules of thumb (DRY, KISS, YAGNI), rules about how objects talk to each other (Law of Demeter, Tell-Don't-Ask, loose coupling, the Hollywood Principle), the object-oriented principles that *Head First Design Patterns* and the Gang of Four book build every pattern on (encapsulate what varies, favour composition, program to an interface), rules about correctness (fail fast, immutability, Design by Contract) **GRASP** — nine guidelines for deciding *which class should do what* — and, finally, the essentials of **Domain-Driven Design**, which decides *which classes exist and where their boundaries are* by starting from the business.
+SOLID (Chapter 4) is only five of the rules good designers use. This chapter covers the rest of the everyday toolkit: short rules of thumb (DRY, KISS, YAGNI), rules about how objects talk to each other (Law of Demeter, Tell-Don't-Ask, loose coupling, the Hollywood Principle), the object-oriented principles that *Head First Design Patterns* and the Gang of Four book (*Design Patterns*, 1994, by Gamma, Helm, Johnson and Vlissides — "GoF" for short) build every pattern on (encapsulate what varies, favour composition, program to an interface), rules about correctness (fail fast, immutability, Design by Contract) **GRASP** — nine guidelines for deciding *which class should do what* — and, finally, the essentials of **Domain-Driven Design**, which decides *which classes exist and where their boundaries are* by starting from the business.
 
 **Key terms used throughout (defined once here):**
 
@@ -36,7 +36,7 @@ SOLID (Chapter 4) is only five of the rules good designers use. This chapter cov
 | 16 | GRASP (9 patterns) | Guidelines for assigning responsibilities | Craig Larman, *Applying UML and Patterns* (1st ed. 1997; today's nine from the 2nd ed. 2001) |
 | 17 | Domain-Driven Design essentials | Model the business: bounded contexts, entities vs value objects, aggregates, domain events, repositories | Eric Evans, *Domain-Driven Design* (2003); Vaughn Vernon, *Implementing Domain-Driven Design* (2013) |
 
-> **How to read each section.** Every principle follows the same path: what it is → the problem → how to apply it → a Java *before/after* program you can run → trade-offs → when not to use it → mistakes → real-world examples → interview answer → self-check → TL;DR. All code lives in `code/lld/ch05/<topic>/Main.java` and was compiled with `javac --release 21` and run; the output shown is the real output.
+> **How to read each section.** Every principle follows the same path: what it is → the problem → how to apply it → a Java *before/after* program you can run → trade-offs → when not to use it → mistakes → real-world examples → interview answer → self-check → TL;DR. All code lives in `code/lld/ch05/<topic>/Main.java` and was compiled with `javac --release 21` (`javac` is the Java compiler, which turns source code into runnable bytecode; `--release 21` targets Java 21) and run; the output shown is the real output.
 
 ---
 
@@ -53,14 +53,14 @@ Important: DRY is about **knowledge**, not about lines of text that happen to lo
 When a rule is copied into several places, the copies eventually **drift**: someone updates one copy and forgets the others. The system then gives two different answers to the same question — a bug that is hard to spot because each copy looks reasonable on its own. Duplication also multiplies the effort of every change.
 
 ### How it works
-1. Notice a rule that appears in more than one place (a regex, a tax rate, a status check, a SQL fragment).
+1. Notice a rule that appears in more than one place (a regex, a tax rate, a status check, a SQL fragment). A *regex* (regular expression) is a compact pattern that text must match, such as "something@something"; *SQL* is the standard language for querying relational databases.
 2. Ask: *"If this rule changes, must all copies change together?"* If yes, it is one piece of knowledge.
 3. Give it one home: a constant, a method, a value object, an enum, a config entry or a shared module.
 4. Replace every copy with a reference to that home.
-5. Apply the **Rule of Three** for code-level duplication (a heuristic credited to Don Roberts and popularised by Martin Fowler's *Refactoring*): the first time, just write it; the second time, notice the duplication but tolerate it; the third time, extract.
+5. Apply the **Rule of Three** for code-level duplication (a heuristic credited to Don Roberts and popularised by Martin Fowler's *Refactoring* — refactoring means improving code's structure without changing what it does, see Chapter 7): the first time, just write it; the second time, notice the duplication but tolerate it; the third time, extract.
 
 ### Java example — before/after
-The *before* has two services that each carry their own copy of "what a valid email is" and "what the tax is". The copies have already drifted. The *after* puts the email rule inside an `EmailAddress` value object (a small immutable type whose constructor validates its value) and the tax rule inside `TaxPolicy`.
+The *before* has two services that each carry their own copy of "what a valid email is" and "what the tax is". The copies have already drifted. The *after* puts the email rule inside an `EmailAddress` value object (a small immutable type — one whose value can never change after it is created — whose constructor validates its value) and the tax rule inside `TaxPolicy`.
 
 ```java
 // File: lld/ch05/dry/Main.java
@@ -161,7 +161,7 @@ price 100.00 with tax = 118.00
 
 **What each part does:**
 - `Before.SignupService` and `Before.ProfileService` each re-implement the email rule; the output shows them disagreeing about `bob@localhost`.
-- `After.EmailAddress` is a Java **record** (a compact, immutable data class). Its *compact constructor* runs the check, so an invalid email simply cannot exist as an `EmailAddress`.
+- `After.EmailAddress` is a Java **record** (a compact, immutable data class). Its *compact constructor* (a record constructor written without a parameter list, used only to check or normalise the incoming values) runs the check, so an invalid email simply cannot exist as an `EmailAddress`.
 - `After.TaxPolicy` holds the rate in one private constant; changing GST from 18% means editing one line.
 
 ### Trade-offs
@@ -174,7 +174,7 @@ price 100.00 with tax = 118.00
 
 ### When not to use it
 - When two snippets look alike **by coincidence** and will evolve separately (e.g. "max username length 30" and "max tag length 30"). Merging them creates false coupling.
-- Across service boundaries in microservices: sharing a domain library between independently deployed services can couple their release cycles. Some duplication is the lesser evil.
+- Across service boundaries in **microservices** (an architecture where one application is split into many small services, each deployed on its own and talking over the network): sharing a domain library between independently deployed services can couple their release cycles. Some duplication is the lesser evil.
 - In tests, a little repetition often makes each test easier to read on its own (this is sometimes called DAMP — "descriptive and meaningful phrases").
 
 ### Common mistakes
@@ -183,17 +183,17 @@ price 100.00 with tax = 118.00
 - Forgetting non-code duplication: the same rule in code *and* in a database constraint *and* in docs.
 
 ### Real-world examples
-- **Spring's `@Value` / `application.yml`**: configuration values live in one file and are injected wherever needed.
-- **Database normalisation** is DRY for data: a customer's address is stored once and referenced by key.
-- **Bean Validation (`jakarta.validation`) annotations** such as `@Email` on a field define the rule once and reuse it for REST input, forms and persistence.
-- **OpenAPI / Protobuf schemas** generate client and server code from one contract, so the message format is not hand-copied.
+- **Spring's `@Value` / `application.yml`** (Spring is the most widely used Java framework for server applications; `@Value` is an *annotation* — a `@`-prefixed tag on code that tools and frameworks read — and `application.yml` is its configuration file): configuration values live in one file and are injected wherever needed.
+- **Database normalisation** is DRY for data: a customer's address is stored once and referenced by key (a unique ID column that other tables point to).
+- **Bean Validation (`jakarta.validation`) annotations** such as `@Email` on a field define the rule once and reuse it for REST input (data arriving through a web API built on HTTP's standard verbs and URLs), forms and persistence (saving data so it outlives the program, usually in a database).
+- **OpenAPI / Protobuf schemas** (machine-readable descriptions of an API's messages — OpenAPI for HTTP APIs that exchange JSON, a plain-text key–value data format; Protobuf for Google's compact binary format) generate client and server code from one contract, so the message format is not hand-copied.
 
 ### In the interview
 **30-second answer:** "DRY means each piece of knowledge has one authoritative representation. It is about rules, not about identical-looking text. I extract a rule when copies must change together — for example, validation into a value object — and I use the Rule of Three so I don't abstract too early."
 
 **Follow-ups:**
 - *Q: Is duplicated code always a DRY violation?* A: No. If the two copies represent different rules that change for different reasons, merging them adds wrong coupling.
-- *Q: DRY vs. SRP?* A: They cooperate. DRY gives each rule one home; SRP makes sure that home has only one reason to change.
+- *Q: DRY vs. SRP?* A: They cooperate (SRP is the Single Responsibility Principle from Chapter 4: a class should have only one reason to change). DRY gives each rule one home; SRP makes sure that home has only one reason to change.
 - *Q: How do you spot duplication of knowledge?* A: Ask "if this business rule changes, how many files do I edit?" More than one is a smell.
 
 ### Self-check
@@ -214,7 +214,7 @@ One rule, one home. Extract when copies must change together; leave coincidental
 *Analogy:* to hang one picture you use a nail, not a motorised track system with remote control.
 
 ### The problem it solves
-Engineers love clever solutions: home-made frameworks, deep inheritance trees, generic engines configured by lambdas. Every extra moving part must be read, tested, debugged and explained to new team members. Accidental complexity (complexity we add, as opposed to complexity the problem truly has) is the biggest source of bugs and slow delivery.
+Engineers love clever solutions: home-made frameworks, deep inheritance trees, generic engines configured by lambdas (short unnamed functions written inline, e.g. `x -> x * 2`). Every extra moving part must be read, tested, debugged and explained to new team members. Accidental complexity (complexity we add, as opposed to complexity the problem truly has) is the biggest source of bugs and slow delivery.
 
 ### How it works
 1. State the actual requirement in one sentence.
@@ -224,7 +224,7 @@ Engineers love clever solutions: home-made frameworks, deep inheritance trees, g
 5. Delete cleverness that no longer earns its keep.
 
 ### Java example — before/after
-Three fixed customer tiers get three fixed discounts. The *before* builds a priority-sorted rule engine of predicates and functions. The *after* is a `switch` expression, which the compiler also checks for completeness: a `switch` *expression* over an enum with no `default` must cover every constant, so adding a new tier makes it fail to compile until you handle the new case. (Old-style `switch` *statements* are not checked this way.) Money is `BigDecimal`, never `double` (binary floating point cannot represent most decimal amounts exactly).
+Three fixed customer tiers get three fixed discounts. The *before* builds a priority-sorted rule engine of predicates and functions. The *after* is a `switch` expression, which the compiler also checks for completeness: a `switch` *expression* over an enum (a type with a fixed list of named constants) with no `default` must cover every constant, so adding a new tier makes it fail to compile until you handle the new case. (Old-style `switch` *statements* are not checked this way.) Money is `BigDecimal` (Java's exact decimal-number class), never `double` (binary floating point cannot represent most decimal amounts exactly).
 
 ```java
 // File: lld/ch05/kiss/Main.java
@@ -321,7 +321,7 @@ Both produce identical results, but the *after* has no ordering bugs to worry ab
 | Uses standard, well-known constructs | Custom mechanisms need docs and training |
 
 ### When not to use it
-KISS is never "wrong", but it is not an excuse to ignore the real complexity of the problem. A payment system *needs* idempotency, retries and auditing; leaving them out is not simplicity, it is incompleteness. Also, when a rule-engine really is the requirement (business users edit rules at runtime), build or buy one.
+KISS is never "wrong", but it is not an excuse to ignore the real complexity of the problem. A payment system *needs* idempotency (repeating the same request — say, after a timeout — has the same effect as doing it once, so nobody is charged twice; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), retries and auditing; leaving them out is not simplicity, it is incompleteness. Also, when a rule-engine really is the requirement (business users edit rules at runtime — while the program is running), build or buy one.
 
 ### Common mistakes
 - Confusing *simple* with *easy* or *short*: a one-line stream with five nested lambdas may be shorter but harder to read than a loop.
@@ -329,7 +329,7 @@ KISS is never "wrong", but it is not an excuse to ignore the real complexity of 
 - Copy-pasting instead of simplifying (that violates DRY).
 
 ### Real-world examples
-- **Unix philosophy** — small tools that do one thing and compose through pipes.
+- **Unix philosophy** — small tools that do one thing and compose through pipes (`|`, which feeds one program's output into the next program's input).
 - **Go language design** deliberately left out many features to keep the language simple.
 - **`java.util.Optional`** was intentionally kept small (no `Serializable`, not meant as a field type) to steer people toward its one purpose: return values that might be absent.
 
@@ -352,7 +352,7 @@ Solve the real problem in the plainest way; add machinery only when a real need 
 ## 3. YAGNI — You Aren't Gonna Need It
 
 ### What it is
-**YAGNI** says: do not build a capability until you actually need it. It comes from Extreme Programming (XP), the agile method created by Kent Beck in the late 1990s; the slogan is usually credited to XP co-founder Ron Jeffries. The opposite habit — building hooks, options and layers "just in case" — is called **speculative generality**, a code smell in Martin Fowler's *Refactoring*.
+**YAGNI** says: do not build a capability until you actually need it. It comes from Extreme Programming (XP), the agile method (a way of building software in short cycles with frequent feedback) created by Kent Beck in the late 1990s; the slogan is usually credited to XP co-founder Ron Jeffries. The opposite habit — building hooks, options and layers "just in case" — is called **speculative generality**, a **code smell** (a visible sign in the code that usually points to a deeper design problem) in Martin Fowler's *Refactoring*.
 
 *Analogy:* you don't buy a 7-seater car because you *might* have five children one day.
 
@@ -360,13 +360,13 @@ Solve the real problem in the plainest way; add machinery only when a real need 
 Features built early cost four times: the time to build them, the time to maintain and test them, the complexity they add to everything around them, and the cost of being wrong (the real future requirement usually looks different from the guess, so the speculative code must be rewritten anyway).
 
 ### How it works
-1. Implement the stories/requirements you have **now**.
+1. Implement the stories/requirements you have **now** (a *user story* is a short feature request written from the user's point of view: "As a shopper I can …").
 2. Keep the code clean (tested, well-factored) so that it is cheap to change later — YAGNI depends on refactoring being easy.
 3. When a new requirement actually arrives, extend the design then.
 4. Delete unused options, parameters and classes you discover.
 
 ### Java example — before/after
-The requirement: *export orders as CSV*. The *before* builds a universal exporter with five formats, encodings and compression — four formats and compression throw `UnsupportedOperationException`. The *after* is one method.
+The requirement: *export orders as CSV* (comma-separated values — a plain-text table with one row per line). The *before* builds a universal exporter with five formats, encodings and compression — four formats and compression throw `UnsupportedOperationException`. The *after* is one method.
 
 ```java
 // File: lld/ch05/yagni/Main.java
@@ -443,7 +443,7 @@ o1,asha,250.00
 o2,ravi,99.50
 ```
 
-Every caller of the *before* API must pass three meaningless arguments, and every reader wonders which formats really work.
+Every caller of the *before* API (Application Programming Interface — the methods and types that other code calls) must pass three meaningless arguments, and every reader wonders which formats really work.
 
 ### Trade-offs
 
@@ -454,25 +454,25 @@ Every caller of the *before* API must pass three meaningless arguments, and ever
 | Needs good tests + refactoring discipline | Leaves dead options that confuse readers |
 
 ### When not to use it
-- **Hard-to-change decisions** — public API formats, database schemas with huge data, security, data retention laws. Think ahead there because changing later is very expensive.
-- Architectural qualities that are known requirements (e.g. "must scale to 10k requests/s") are not speculation; they are requirements.
+- **Hard-to-change decisions** — public API formats, database schemas (the structure of tables and columns) with huge data, security, data retention laws. Think ahead there because changing later is very expensive.
+- Architectural qualities that are known requirements (e.g. "must scale to 10k requests/s" — a *throughput* target, i.e. how much work per second the system must handle) are not speculation; they are requirements.
 
 ### Common mistakes
 - Using YAGNI as an excuse for messy code ("we'll never need clean code").
 - Ignoring a requirement the interviewer *did* mention because "YAGNI".
-- Adding `interface` + `Impl` pairs for every class "in case we swap it" — only add the interface when there is a second implementation or a test seam need.
+- Adding `interface` + `Impl` pairs for every class "in case we swap it" — only add the interface when there is a second implementation or a test seam need (a *test seam* is a place where a test can swap in a fake collaborator).
 
 ### Real-world examples
 - **Minimum Viable Product (MVP)** thinking in startups is YAGNI at the product level.
-- **Feature flags** (e.g. LaunchDarkly, Unleash) let teams ship only what is needed now and turn on more later, rather than building every variant up front.
+- **Feature flags** (on/off switches in configuration that enable a code path without redeploying; e.g. LaunchDarkly, Unleash) let teams ship only what is needed now and turn on more later, rather than building every variant up front.
 - XP teams (and many agile teams) plan per iteration so that only near-term work is built.
 
 ### In the interview
-**30-second answer:** "YAGNI means I build what the requirements need today and keep the design easy to extend. In an LLD interview I'll mention an extension point — say a `PaymentStrategy` interface — only if the interviewer hinted at multiple variants; otherwise I note it verbally as a possible extension."
+**30-second answer:** "YAGNI means I build what the requirements need today and keep the design easy to extend. In an LLD (low-level design — designing the classes, interfaces and their interactions) interview I'll mention an extension point — say a `PaymentStrategy` interface — only if the interviewer hinted at multiple variants; otherwise I note it verbally as a possible extension."
 
 **Follow-ups:**
-- *Q: Doesn't YAGNI conflict with OCP?* A: Not really. OCP is applied where variation is known or likely; YAGNI stops you from inventing variation that isn't there.
-- *Q: What makes YAGNI safe?* A: A good test suite and clean code, so adding the feature later is cheap.
+- *Q: Doesn't YAGNI conflict with OCP?* A: Not really. OCP (the Open/Closed Principle from Chapter 4: open for extension, closed for modification) is applied where variation is known or likely; YAGNI stops you from inventing variation that isn't there.
+- *Q: What makes YAGNI safe?* A: A good test suite (the full set of automated tests for the code) and clean code, so adding the feature later is cheap.
 
 ### Self-check
 1. Q: Name the smell YAGNI prevents. → A: Speculative generality.
@@ -499,7 +499,7 @@ The famous slogan: **"use only one dot"** — e.g. `a.getB().getC().doIt()` is a
 *Analogy:* when a paperboy collects money, he asks the customer to pay. He doesn't reach into the customer's pocket, pull out the wallet and take the cash himself.
 
 ### The problem it solves
-A train wreck couples the caller to the **whole chain's structure**. In `customer.getWallet().getBalance()`, the paperboy now depends on `Customer` *and* `Wallet`. If the customer starts paying by UPI instead of a wallet, the paperboy breaks. Knowledge of internal structure leaks everywhere.
+A train wreck couples the caller to the **whole chain's structure**. In `customer.getWallet().getBalance()`, the paperboy now depends on `Customer` *and* `Wallet`. If the customer starts paying by UPI (India's instant bank-to-bank mobile payment system) instead of a wallet, the paperboy breaks. Knowledge of internal structure leaks everywhere.
 
 ### How it works
 1. Spot a chain that navigates through other objects' internals.
@@ -637,29 +637,29 @@ stream chain is fine: 2 long names
 | Following LoD | Ignoring LoD |
 |---|---|
 | Changes to internals stay local | Structural changes ripple to callers |
-| Easier mocking (one collaborator) | Tests must build whole object graphs |
+| Easier mocking (mock = fake object used in tests) — one collaborator | Tests must build whole object graphs |
 | May add small **wrapper/delegate methods** | No extra methods |
 | Too many wrappers can bloat the middle class | — |
 
 ### When not to use it
-- **Fluent interfaces and builders** (`StringBuilder.append(..).append(..)`, `stream().filter().map()`) return the same object or a sibling of the same abstraction — they are *not* violations.
-- **Data structures / DTOs** (plain data with no behaviour, see Chapter 6) are meant to expose their data; `order.shippingAddress().city()` on a record is fine.
+- **Fluent interfaces and builders** (APIs whose methods return an object so calls can be chained; a builder assembles an object step by step — `StringBuilder.append(..).append(..)`, `stream().filter().map()`) return the same object or a sibling of the same abstraction — they are *not* violations.
+- **Data structures / DTOs** (Data Transfer Objects — plain data with no behaviour, see Chapter 6) are meant to expose their data; `order.shippingAddress().city()` on a record is fine.
 - Don't mechanically add dozens of pass-through methods — that is the **Middle Man** smell. Rethink responsibilities instead.
 
 ### Common mistakes
 - Counting dots instead of thinking about *knowledge*: splitting a chain into temp variables (`var w = c.getWallet(); w.getBalance()`) still violates the law.
-- Adding getters for everything, which invites train wrecks.
+- Adding getters (methods like `getWallet()` that just return a field) for everything, which invites train wrecks.
 
 ### Real-world examples
-- *Head First Design Patterns* presents it as "talk only to your immediate friends" in the Facade chapter — a **Facade** reduces how many classes a client talks to.
-- **Spring Data** repositories: services call `orderRepository.findByCustomerId(id)` rather than navigating `entityManager.getSession().getConnection()...`.
+- *Head First Design Patterns* presents it as "talk only to your immediate friends" in the Facade chapter — a **Facade** (one simple class placed in front of a group of complex classes) reduces how many classes a client talks to.
+- **Spring Data** repositories (a *repository* is an object that loads and saves domain objects while hiding the database): services call `orderRepository.findByCustomerId(id)` rather than navigating `entityManager.getSession().getConnection()...`.
 - `java.nio.file.Files.readString(path)` hides channels, buffers and decoders behind a single call.
 
 ### In the interview
 **30-second answer:** "The Law of Demeter says a method should only call methods on itself, its parameters, objects it creates and its own fields. Long chains like `a.getB().getC()` couple the caller to internal structure. I fix them by adding a method that expresses intent — `customer.pay()` instead of reaching for the wallet."
 
 **Follow-ups:**
-- *Q: Is `list.stream().map(...).collect(...)` a violation?* A: No — each call returns a stream/collection abstraction meant for chaining; you're not navigating an object's internals.
+- *Q: Is `list.stream().map(...).collect(...)` a violation?* A: No — each call returns a stream/collection abstraction meant for chaining (a Java *stream* is a pipeline that processes a sequence of elements step by step); you're not navigating an object's internals.
 - *Q: What's the cost of following it strictly?* A: Wrapper methods can pile up (Middle Man). Balance by moving behaviour to where the data is (Tell-Don't-Ask).
 
 ### Self-check
@@ -675,7 +675,7 @@ Only talk to your friends. Replace `a.getB().getC().do()` with a method on `a` t
 ## 5. Tell, Don't Ask
 
 ### What it is
-**Tell, Don't Ask (TDA)** says: instead of *asking* an object for its data and then making a decision for it, *tell* the object what you want and let it decide using its own data. Behaviour should live with the data it needs. The idea was popularised by Andy Hunt and Dave Thomas (the Pragmatic Programmers), who built on Alec Sharp's observation in *Smalltalk by Example* (1997) that procedural code fetches data and then decides, while object-oriented code tells objects to act.
+**Tell, Don't Ask (TDA)** says: instead of *asking* an object for its data and then making a decision for it, *tell* the object what you want and let it decide using its own data. Behaviour should live with the data it needs. The idea was popularised by Andy Hunt and Dave Thomas (the Pragmatic Programmers), who built on Alec Sharp's observation in *Smalltalk by Example* (1997) that procedural code (code organised as functions acting on separate data) fetches data and then decides, while object-oriented code tells objects to act.
 
 *Analogy:* you tell a taxi driver "take me to the airport". You don't ask for the steering wheel angle and the speed every second and decide the turns yourself.
 
@@ -686,7 +686,7 @@ When callers ask-then-act (`if (acc.getBalance() >= x) acc.setBalance(acc.getBal
 1. Look for code that reads an object's fields, decides something, then writes back.
 2. Move that decision into a method on the object (`withdraw(amount)`).
 3. Make the object reject illegal requests (exceptions or result types).
-4. Remove setters that are no longer needed.
+4. Remove setters (methods like `setBalance(x)` that just overwrite a field) that are no longer needed.
 
 ### Java example — before/after
 ```java
@@ -787,7 +787,7 @@ In *before*, the ATM and the app each reimplement the rule and the app forgets `
 ### Real-world examples
 - `java.util.List.removeIf(predicate)` — you tell the list what to remove instead of iterating and removing yourself.
 - `Map.computeIfAbsent`, `Map.merge` — tell the map the update you want; it handles the check-then-act.
-- `AtomicInteger.incrementAndGet()` — the object performs the read-modify-write atomically; asking then setting would be a race condition.
+- `AtomicInteger.incrementAndGet()` — the object performs the read-modify-write atomically (as one indivisible step that no other thread can interrupt); asking then setting would be a **race condition** (a bug where the result depends on the unlucky timing of two *threads* — independent paths of execution running at the same time — touching the same data).
 
 ### In the interview
 **30-second answer:** "Tell, Don't Ask means sending commands to the object that owns the data, e.g. `account.withdraw(100)`, rather than reading its balance and setting a new one. It keeps invariants in one place and avoids anemic models."
@@ -815,7 +815,7 @@ Don't pull data out to make the object's decisions — tell the object what you 
 ### The problem it solves
 Inheritance is the tightest coupling in object-oriented programming:
 - **Fragile base class problem** — a subclass can break when the parent's *internal* implementation changes, even if the parent's public API is unchanged. The subclass depends on details like "does `addAll` call `add`?".
-- **Fixed at compile time** — you cannot change the parent at runtime.
+- **Fixed at compile time** (decided when the code is compiled, before it ever runs) — you cannot change the parent at runtime.
 - **Class explosion** — combining features by subclassing (`LoggingCachingBufferedStream`) multiplies classes.
 - It exposes all parent methods, even those that make no sense for the child.
 
@@ -917,7 +917,7 @@ AFTER : added 3 items, counter says 3
 AFTER over a TreeSet: [blue, green, red] attempts=3
 ```
 
-**Why the *before* prints 6:** `HashSet` does not override `addAll`; it inherits `AbstractCollection.addAll`, which loops and calls `add` for every element. Our `addAll` adds 3, then the parent's loop calls *our overridden* `add` three more times. We depended on an implementation detail ("self-use") that `HashSet` does not promise to keep — the fragile base class problem. The *after* wraps any `Set` and forwards; the inner set's internal calls never reach our counter. It also forwards `contains` and `remove`: `AbstractSet` would otherwise implement them by scanning the iterator (O(n)) instead of using the inner set's fast lookup. It also works with a `TreeSet` chosen at runtime.
+**Why the *before* prints 6:** `HashSet` does not override `addAll`; it inherits `AbstractCollection.addAll`, which loops and calls `add` for every element. Our `addAll` adds 3, then the parent's loop calls *our overridden* `add` three more times. We depended on an implementation detail ("self-use") that `HashSet` does not promise to keep — the fragile base class problem. The *after* wraps any `Set` and forwards; the inner set's internal calls never reach our counter. It also forwards `contains` and `remove`: `AbstractSet` would otherwise implement them by scanning the iterator (an object that walks through a collection one element at a time) — O(n), i.e. time grows in step with the number of elements *n* (*Big-O notation*) — instead of using the inner set's fast lookup. It also works with a `TreeSet` chosen at runtime.
 
 ### Trade-offs
 
@@ -927,11 +927,11 @@ AFTER over a TreeSet: [blue, green, red] attempts=3
 | Swap behaviour at runtime | Fixed at compile time |
 | Combine behaviours freely (decorators) | Class explosion for combinations |
 | More boilerplate (forwarding methods) | Free reuse of all parent methods |
-| No automatic polymorphism — need an interface | Subclass is automatically a subtype |
+| No automatic polymorphism (one variable working with many types) — need an interface | Subclass is automatically a subtype |
 
 ### When not to use it
 - True "is-a" hierarchies with a base class **designed for extension**: e.g. extending `AbstractList` (implement `get` and `size`) or a Template Method base (see Hollywood Principle below).
-- Sealed type hierarchies modelling a closed set of variants (`sealed interface Shape permits Circle, Square`).
+- Sealed type hierarchies (a `sealed` type lists exactly which subtypes may exist) modelling a closed set of variants (`sealed interface Shape permits Circle, Square`).
 - When you control both classes and they are in the same package and evolve together.
 
 ### Common mistakes
@@ -966,7 +966,7 @@ Reuse by holding and delegating ("has-a"); reserve "is-a" for real substitutable
 ## 7. Program to an Interface, Not an Implementation
 
 ### What it is
-Declare variables, fields, parameters and return types using the **most general supertype** that offers what you need (an interface or abstract class), not a concrete class. "Interface" here means *supertype*, not only the Java `interface` keyword.
+Declare variables, fields, parameters and return types using the **most general supertype** (a parent type higher up the hierarchy) that offers what you need (an interface or abstract class), not a concrete class. "Interface" here means *supertype*, not only the Java `interface` keyword.
 
 *Analogy:* a phone charger is designed for the USB-C *standard*, not for one specific phone model. Any USB-C phone works.
 
@@ -977,7 +977,7 @@ Code written against a concrete class (`ArrayList`, `MySqlUserStore`) can only e
 1. Identify the **role** a collaborator plays ("stores users", "a collection of names").
 2. Express the role as an interface with only the needed methods (`UserRepository.findById`).
 3. Type fields/parameters by that interface (`List<String>`, `Collection<String>`, `UserRepository`).
-4. Create concrete objects only at the edges — in `main`, a factory, or a DI container — and pass them in (**Dependency Injection**: giving an object its collaborators from outside instead of letting it `new` them).
+4. Create concrete objects only at the edges — in `main`, a factory (an object or method whose job is creating other objects), or a DI container (a framework component, such as Spring's, that builds objects and wires their dependencies automatically) — and pass them in (**Dependency Injection**: giving an object its collaborators from outside instead of letting it `new` them).
 5. For parameters, accept the widest type you can (`Collection` beats `List` beats `ArrayList`); for return types, return an interface but a specific enough one to be useful.
 
 ### Java example — before/after
@@ -1084,8 +1084,8 @@ The *before* service creates its own `MySqlUserStore`, so it cannot even run on 
 
 ### When not to use it
 - **Value types / data classes** (`String`, `LocalDate`, records) — no need for an interface.
-- A class with exactly one implementation and no testing seam need — creating `FooService` + `FooServiceImpl` for everything is ceremony (see YAGNI). Add the interface when the second implementation or test double appears.
-- When you truly need implementation-specific behaviour (e.g. `LinkedHashMap` access order for an LRU cache — then declare it as such).
+- A class with exactly one implementation and no testing seam need — creating `FooService` + `FooServiceImpl` for everything is ceremony (see YAGNI). Add the interface when the second implementation or test double (any stand-in object used in tests: fake, stub or mock) appears.
+- When you truly need implementation-specific behaviour (e.g. `LinkedHashMap` access order for an LRU cache (a *cache* keeps recently used data close at hand for fast reuse; LRU = evict the Least Recently Used entry when full) — then declare it as such).
 
 ### Common mistakes
 - Interfaces that mirror a class one-to-one with 30 methods (violates Interface Segregation, Chapter 4).
@@ -1094,9 +1094,9 @@ The *before* service creates its own `MySqlUserStore`, so it cannot even run on 
 
 ### Real-world examples
 - **Java Collections Framework**: code uses `List`, `Map`, `Set`; `Collections.sort(List)` works on any list.
-- **JDBC**: your code uses `java.sql.Connection`, `PreparedStatement`, `ResultSet` interfaces; the driver (MySQL, PostgreSQL) supplies the implementation.
-- **SLF4J**: code logs through the `org.slf4j.Logger` interface; Logback or Log4j2 is plugged in at deployment.
-- **Spring** injects beans by interface type (`@Autowired PaymentGateway gateway`).
+- **JDBC** (Java Database Connectivity — the standard Java API for talking to SQL databases): your code uses `java.sql.Connection`, `PreparedStatement`, `ResultSet` interfaces; the driver (MySQL, PostgreSQL) supplies the implementation.
+- **SLF4J** (a logging *facade*: one logging API in front of many logging libraries): code logs through the `org.slf4j.Logger` interface; Logback or Log4j2 is plugged in at deployment.
+- **Spring** injects beans (objects created and managed by the Spring container) by interface type (`@Autowired PaymentGateway gateway`).
 
 ### In the interview
 **30-second answer:** "I type dependencies by roles — interfaces — and inject concrete implementations from the outside. It lets me swap implementations, e.g. an in-memory repository for tests, and keeps callers stable when implementations change. It's the practical form of the Dependency Inversion Principle."
@@ -1126,11 +1126,11 @@ When a volatile rule (shipping prices, tax, discounts, file formats) is written 
 
 ### How it works
 1. Ask: "Which parts of this class changed in the last few releases, or differ per customer/region/type?"
-2. Extract that part behind an interface (or a functional interface / lambda).
+2. Extract that part behind an interface (or a functional interface — an interface with exactly one abstract method, which a lambda can implement).
 3. Give the stable class a field of that interface type and delegate to it.
 4. Add new variants as new implementations; the stable class does not change.
 
-Almost every design pattern is an application of this principle: Strategy (varying algorithm), State (varying state-dependent behaviour), Factory (varying creation), Observer (varying set of listeners), Template Method (varying steps).
+Almost every design pattern (a named, reusable solution to a recurring design problem; Chapters 8–11) is an application of this principle: Strategy (varying algorithm), State (varying state-dependent behaviour), Factory (varying creation), Observer (varying set of listeners), Template Method (varying steps).
 
 ```mermaid
 classDiagram
@@ -1278,7 +1278,7 @@ In a **tightly coupled** design, a class creates and calls many concrete collabo
 ### How it works
 1. Depend on **interfaces**, not concrete classes.
 2. **Inject** dependencies instead of creating them inside.
-3. Communicate through **events or messages** when the sender shouldn't know the receivers (Observer / publish-subscribe).
+3. Communicate through **events or messages** when the sender shouldn't know the receivers (Observer / publish-subscribe — senders publish events and any number of subscribers receive them without knowing each other).
 4. Keep interfaces **narrow** (a single method is ideal for listeners).
 5. Pass data as immutable values (records) rather than shared mutable objects.
 
@@ -1379,7 +1379,7 @@ placed o-2
   +30 loyalty points
 ```
 
-The *after* `OrderService` depends on one tiny interface. Adding "loyalty points" needed zero edits to it. A `CopyOnWriteArrayList` is used so listeners can subscribe safely even while notifications run on other threads.
+The *after* `OrderService` depends on one tiny interface. Adding "loyalty points" needed zero edits to it. A `CopyOnWriteArrayList` (a thread-safe list that copies its internal array on every write) is used so listeners can subscribe safely even while notifications run on other threads.
 
 ### Trade-offs
 
@@ -1392,17 +1392,17 @@ The *after* `OrderService` depends on one tiny interface. Adding "loyalty points
 
 ### When not to use it
 - Inside a small, cohesive module where classes always change together — decoupling them adds ceremony.
-- When the order and atomicity of steps is critical (e.g. debit then credit in a transfer) — explicit orchestration is clearer and safer than fire-and-forget events.
+- When the order and atomicity (all steps happen, or none do) of steps is critical (e.g. debit then credit in a transfer) — explicit orchestration is clearer and safer than fire-and-forget events.
 
 ### Common mistakes
-- "Decoupling" with a global event bus for everything, making the flow impossible to follow.
+- "Decoupling" with a global event bus (one shared channel that every component publishes to and listens on) for everything, making the flow impossible to follow.
 - Hidden coupling via shared mutable static state.
 - Listeners that throw and stop the other listeners from running (decide a policy: catch and log per listener).
 
 ### Real-world examples
 - **Swing / JavaFX / Android** event listeners (`ActionListener`, `OnClickListener`).
 - **Spring `ApplicationEventPublisher`** and `@EventListener`.
-- **Apache Kafka** — producers write to topics without knowing which consumer groups read them; an order service at an e-commerce company publishes `OrderPlaced`, and inventory, notifications and analytics each consume independently.
+- **Apache Kafka** (a distributed *message broker*: producers append messages to named *topics*, and *consumer groups* read them at their own pace; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) — producers write to topics without knowing which consumer groups read them; an order service at an e-commerce company publishes `OrderPlaced`, and inventory, notifications and analytics each consume independently.
 
 ### In the interview
 **30-second answer:** "Loose coupling means collaborators know only small interfaces about each other. I achieve it with interfaces, dependency injection and events. In the order example, the order service just publishes 'order placed' and new features subscribe without touching it."
@@ -1430,14 +1430,14 @@ Let interacting objects share only small interfaces; inject them and use events 
 **Library vs framework:** you call a library; a framework calls you. That is IoC.
 
 ### The problem it solves
-Without it, every component drives the whole process itself: it re-implements the algorithm's skeleton, decides the order of steps and calls shared services directly. You get duplicated control flow, forgotten steps (like closing a connection) and **dependency rot** — high-level and low-level components depending on each other in tangled ways.
+Without it, every component drives the whole process itself: it re-implements the algorithm's skeleton, decides the order of steps and calls shared services directly. You get duplicated control flow, forgotten steps (like closing a database connection — the open session a program holds with a database) and **dependency rot** — high-level and low-level components depending on each other in tangled ways.
 
 ### How it works
 There are several ways to invert control:
 1. **Template Method** — a base class defines a `final` algorithm and calls abstract "hook" methods that subclasses fill in.
 2. **Callbacks / listeners** — you register a function; the system calls it on an event (Observer).
 3. **Dependency Injection** — a container creates your objects and passes them their dependencies; your class never looks them up.
-4. **Lifecycle management** — a container starts/stops your components (`@PostConstruct`, servlet `init`/`destroy`).
+4. **Lifecycle management** — a container starts/stops your components (`@PostConstruct`, servlet `init`/`destroy`; a *servlet* is a Java class that handles web requests inside a server such as Tomcat).
 
 ```mermaid
 sequenceDiagram
@@ -1565,7 +1565,7 @@ Output:
   stop database
 ```
 
-The *before* importer drives the flow and forgot to close the connection. In *after*, `Importer.run` is `final`: subclasses only supply `split` and `parse`, and the framework guarantees the close. The tiny `Container` shows IoC for lifecycles: components never start themselves; the container starts them in order and stops them in reverse order (the same idea Spring uses when destroying singletons).
+The *before* importer drives the flow and forgot to close the connection. In *after*, `Importer.run` is `final`: subclasses only supply `split` and `parse`, and the framework guarantees the close. The tiny `Container` shows IoC for lifecycles: components never start themselves; the container starts them in order and stops them in reverse order (the same idea Spring uses when destroying singletons — objects of which only one instance exists in the application).
 
 ### Trade-offs
 
@@ -1585,8 +1585,8 @@ For small scripts or one-off logic where there is no repeated skeleton — a fra
 - Confusing IoC (the general idea) with DI (one specific form of it).
 
 ### Real-world examples
-- **JUnit** discovers and calls your `@Test` methods; you never call them.
-- **Servlets**: the container calls `doGet`/`doPost`; **Spring MVC** calls your `@GetMapping` methods.
+- **JUnit** (the standard Java unit-testing framework) discovers and calls your `@Test` methods; you never call them.
+- **Servlets**: the container calls `doGet`/`doPost` (handlers for HTTP GET and POST requests); **Spring MVC** calls your `@GetMapping` methods.
 - **Spring IoC container** creates beans, injects dependencies and calls `@PostConstruct`/`@PreDestroy`.
 - **Android** calls `Activity.onCreate`, `onResume`, `onDestroy`.
 - **`java.util.AbstractList`** — you implement `get` and `size`; the base class implements iteration, `indexOf`, `equals` by calling your methods.
@@ -1616,7 +1616,7 @@ A **concern** is one aspect of what a program does: reading input, business rule
 
 *Analogy:* in a restaurant the waiter takes orders, the chef cooks, the cashier bills. If one person did all three at once, every change (a new menu, a new payment method) would disrupt everything.
 
-SoC is the **big-picture** version of the Single Responsibility Principle: SRP is about one class; SoC applies at every level — functions, classes, layers (MVC, controller/service/repository), services and even languages (HTML for structure, CSS for style, JS for behaviour).
+SoC is the **big-picture** version of the Single Responsibility Principle: SRP is about one class; SoC applies at every level — functions, classes, layers (MVC — Model–View–Controller, which keeps data/rules, display and input handling apart; controller/service/repository — a common backend layering where the controller receives web requests, the service holds business rules and the repository talks to the database), services and even languages (HTML for structure, CSS for style, JS for behaviour).
 
 ### The problem it solves
 Mixed concerns create code where you can't change the HTML without risking the grading rule, can't test the rule without parsing strings, and can't switch storage without editing presentation. Everything is tangled — *spaghetti code*.
@@ -1626,7 +1626,7 @@ Mixed concerns create code where you can't change the HTML without risking the g
 2. Give each its own unit (function → class → layer), with clear inputs and outputs (typed objects, not raw strings).
 3. Let data flow in one direction: parse → apply rules → store → present.
 4. Make lower layers not know about higher ones (the service doesn't know about HTML).
-5. Handle **cross-cutting concerns** (logging, security, transactions) with dedicated mechanisms — filters, decorators, proxies or aspects — rather than sprinkling them everywhere (see Chapter 6, *Systems*).
+5. Handle **cross-cutting concerns** (logging, security, transactions — a *transaction* is a group of database changes that succeed or fail as one) with dedicated mechanisms — filters, decorators, proxies (stand-in objects that intercept calls to the real one) or aspects (AOP, aspect-oriented programming: write code such as logging once and have it applied around many methods automatically) — rather than sprinkling them everywhere (see Chapter 6, *Systems*).
 
 ```mermaid
 flowchart LR
@@ -1757,7 +1757,7 @@ Tiny throwaway scripts. Also avoid over-layering (five layers that just pass dat
 ### Real-world examples
 - **MVC** (Model–View–Controller) in Spring MVC, Rails, ASP.NET.
 - **HTML / CSS / JavaScript** separation on the web.
-- **TCP/IP network layers**: each layer handles one concern and talks only to its neighbours.
+- **TCP/IP network layers** (the stack of protocols the internet runs on, from physical links up through IP addressing, TCP's reliable delivery and HTTP): each layer handles one concern and talks only to its neighbours.
 - **Spring AOP / servlet filters** separate cross-cutting concerns (security, transactions, logging) from business code.
 
 ### In the interview
@@ -1784,14 +1784,14 @@ Also called the **Principle of Least Surprise**: a component should behave the w
 *Analogy:* a light switch that also locks the front door would be "correct" according to its designer, but it surprises everybody.
 
 ### The problem it solves
-Surprising code causes bugs even when it "works as designed", because callers use it based on expectations. Typical surprises: methods named like queries that change state, methods that mutate and return `this` so aliases change, inconsistent naming (`size()` vs `length()` vs `count()` in one API), 0-based vs 1-based confusion, and silently swallowed errors.
+Surprising code causes bugs even when it "works as designed", because callers use it based on expectations. Typical surprises: methods named like queries that change state, methods that mutate and return `this` so aliases (other variables pointing to the same object) change, inconsistent naming (`size()` vs `length()` vs `count()` in one API), 0-based vs 1-based confusion, and silently swallowed errors.
 
 ### How it works
 1. Make names tell the truth: `find` / `get` / `is` must not modify state; if it creates, say so (`getOrCreate`).
-2. Follow language and platform conventions (`equals`/`hashCode` contract, Java naming, `close()` via `AutoCloseable`).
+2. Follow language and platform conventions (the `equals`/`hashCode` contract — equal objects must return the same *hash code*, the number hash-based collections like `HashMap` use to locate them — Java naming, `close()` via `AutoCloseable`).
 3. Be consistent within your API — same word for same concept.
 4. Prefer immutable results and no hidden side effects.
-5. Signal "maybe absent" in the type (`Optional`), not with a surprise `null` or a magic value.
+5. Signal "maybe absent" in the type (`Optional`, a box that either holds a value or is empty), not with a surprise `null` or a magic value.
 6. Document any unavoidable surprise prominently.
 
 ### Java example — before/after
@@ -1900,7 +1900,7 @@ There's no case where surprising users is good. But don't twist a design to matc
 
 ### Real-world examples
 - **java.time** was designed to fix the surprises of `java.util.Date`/`Calendar` (mutable dates, months numbered 0–11).
-- `java.net.URL.equals` may perform DNS resolution (documented) — a notorious surprise; `java.net.URI` is usually preferred as a map key.
+- `java.net.URL.equals` may perform DNS resolution (a network lookup that turns a host name into an IP address) (documented) — a notorious surprise; `java.net.URI` is usually preferred as a map key.
 - **Unix `rm`** has no undo; tools like `trash` exist to reduce astonishment for new users.
 - UI design: "Save" always in the same place; "Cancel" never saves.
 
@@ -1928,11 +1928,11 @@ A **fail-fast** system detects an invalid state or input **immediately**, at the
 *Analogy:* a smoke alarm that beeps at the first smoke, not after the house is on fire.
 
 ### The problem it solves
-If a `null` endpoint or a negative retry count is accepted in a constructor, the crash happens hours later, deep in unrelated code, with a stack trace that points to the symptom, not the cause. Bad data may also be saved and corrupt other data before anyone notices. The longer the gap between cause and failure, the more expensive the bug.
+If a `null` endpoint (the URL of a service to call) or a negative retry count is accepted in a constructor, the crash happens hours later, deep in unrelated code, with a stack trace (the list of method calls that were active when the error happened) that points to the symptom, not the cause. Bad data may also be saved and corrupt other data before anyone notices. The longer the gap between cause and failure, the more expensive the bug.
 
 ### How it works
 1. **Validate at boundaries**: constructors, public method entry, API/controller input, configuration load at startup.
-2. Use **guard clauses** — `Objects.requireNonNull`, `if (bad) throw new IllegalArgumentException(...)` at the top of the method.
+2. Use **guard clauses** (checks at the top of a method that throw or return immediately on bad input) — `Objects.requireNonNull`, `if (bad) throw new IllegalArgumentException(...)` at the top of the method.
 3. Throw specific exceptions with a helpful message (what was wrong, what value, what was expected).
 4. Make invalid objects **unconstructable** (validation in constructor/factory + immutability).
 5. Fail at **startup** for misconfiguration rather than on the first request.
@@ -2035,7 +2035,7 @@ after removeIf: [c]
 | May stop a whole process for a minor issue | — |
 
 ### When not to use it
-Fail fast *inside* a component, but think about **resilience at system boundaries**: a UI shouldn't crash because one widget failed to load, and a batch job may skip and log a bad record rather than abort millions of good ones. The rule is: detect early, then decide deliberately how to handle (reject, retry, degrade) — never ignore.
+Fail fast *inside* a component, but think about **resilience at system boundaries**: a UI shouldn't crash because one widget failed to load, and a batch job (a program that processes a large set of records in one run, often on a schedule) may skip and log a bad record rather than abort millions of good ones. The rule is: detect early, then decide deliberately how to handle (reject, retry, degrade) — never ignore.
 
 ### Common mistakes
 - Catching and ignoring exceptions, or returning `null` / `-1` on error.
@@ -2044,10 +2044,10 @@ Fail fast *inside* a component, but think about **resilience at system boundarie
 
 ### Real-world examples
 - `Objects.requireNonNull`, `List.of(null)` throws `NullPointerException` immediately.
-- **Spring Boot** fails at startup if a required bean or property is missing, and `@Validated` configuration properties fail on bad values.
-- **Circuit breakers** (Resilience4j; earlier Netflix Hystrix, now in maintenance mode) fail fast: when a downstream service is unhealthy, calls are rejected immediately instead of waiting for timeouts.
+- **Spring Boot** (Spring's ready-made setup for quickly building runnable applications) fails at startup if a required bean or property is missing, and `@Validated` configuration properties fail on bad values.
+- **Circuit breakers** (a wrapper around remote calls that "trips" after repeated failures and rejects further calls for a while; libraries: Resilience4j; earlier Netflix Hystrix, now in maintenance mode) fail fast: when a downstream service (one your service depends on and calls) is unhealthy, calls are rejected immediately instead of waiting for timeouts.
 - **Erlang/OTP "let it crash"**: processes fail fast and supervisors restart them.
-- **CI pipelines** stop on the first failing stage.
+- **CI pipelines** (Continuous Integration: an automated build-and-test run on every code change) stop on the first failing stage.
 
 ### In the interview
 **30-second answer:** "Fail fast means validating at the boundary and throwing a clear error immediately, so the failure is close to its cause. In LLD I put guard clauses in constructors and public methods so invalid objects can't exist. At the system level, circuit breakers fail fast to avoid piling up on slow dependencies."
@@ -2076,7 +2076,7 @@ An **immutable object** cannot change its observable state after it is construct
 Mutable shared objects cause:
 - **Aliasing bugs** — two references to the same object; one changes it, the other is surprised.
 - **Broken invariants** — someone calls a setter and leaves the object half-valid.
-- **Thread-safety problems** — concurrent reads and writes need locks.
+- **Thread-safety problems** — concurrent reads and writes need locks (a mechanism that lets only one thread at a time run a protected piece of code).
 - **Hash-based collection bugs** — changing a field used by `hashCode` after putting the object in a `HashSet` makes it "disappear".
 
 Immutable objects are **inherently thread-safe** (can be shared freely without locks), can be cached and reused, are safe as map keys, and are easy to reason about.
@@ -2084,7 +2084,7 @@ Immutable objects are **inherently thread-safe** (can be shared freely without l
 ### How it works
 The five rules from *Effective Java*'s item "Minimize mutability" (Joshua Bloch):
 1. Don't provide methods that modify the object's state (no setters, no mutators).
-2. Ensure the class can't be extended (`final` class, or private constructors + static factories). Records are implicitly final.
+2. Ensure the class can't be extended (`final` class, or private constructors + static factories — `static` methods such as `of(...)` that create instances). Records are implicitly final.
 3. Make all fields `final`.
 4. Make all fields `private`.
 5. Ensure exclusive access to any mutable components: **defensively copy** mutable inputs in the constructor (`List.copyOf`) and never hand out references to mutable internals (return copies or unmodifiable views).
@@ -2180,13 +2180,13 @@ In *before*, `final List` only stops the *reference* from changing; outsiders bo
 |---|---|
 | Thread-safe, no locks | Needs synchronisation when shared |
 | Safe map keys, cacheable, easy reasoning | In-place updates, no allocation |
-| Allocation for every "change" (usually cheap on modern JVMs) | Aliasing and invariant bugs |
-| Large objects: copying cost (use builders or persistent data structures) | — |
+| Allocation for every "change" (usually cheap on modern JVMs — Java Virtual Machines, which run Java code) | Aliasing and invariant bugs |
+| Large objects: copying cost (use builders or persistent data structures, which share unchanged parts between versions) | — |
 
 ### When not to use it
 - Hot loops building big results — use a mutable builder locally (`StringBuilder`, then `toString()`), and expose the immutable result.
 - Entities whose identity persists while state changes (a `BankAccount` balance) — keep them mutable but encapsulated; make their *values* (Money, Address) immutable.
-- ORM entities (JPA) usually need no-arg constructors and setters.
+- ORM entities (ORM = Object-Relational Mapping, a library that maps classes to database tables; JPA is Java's standard ORM API) usually need no-arg constructors and setters.
 
 ### Common mistakes
 - Thinking `final` fields make an object immutable (not if the field refers to a mutable object).
@@ -2196,7 +2196,7 @@ In *before*, `final List` only stops the *reference* from changing; outsiders bo
 
 ### Real-world examples
 - `String`, wrapper types, `BigDecimal`, `java.time.*`, `List.of`, `Map.of`, records.
-- **Git commits** are immutable snapshots identified by hash.
+- **Git commits** (saved versions in Git, the version-control tool) are immutable snapshots identified by hash (a fingerprint-like ID computed from the content).
 - **Kafka log records** are immutable once appended.
 - **Redux / React state** is treated as immutable; updates produce new state objects so change detection is a cheap reference check.
 
@@ -2232,7 +2232,7 @@ No setters, final everything, copy mutable inputs and outputs; "changing" means 
 Without explicit contracts, each side guesses: the caller doesn't know what inputs are allowed; the method either checks everything defensively (duplicated checks everywhere) or checks nothing and silently corrupts state. Errors show up as ambiguous return values (`-1`) or lost data.
 
 ### How it works
-1. For each public method, write down the precondition, postcondition and the class invariant (in Javadoc at least).
+1. For each public method, write down the precondition, postcondition and the class invariant (in Javadoc — the structured `/** ... */` comments that generate Java API docs — at least).
 2. Check preconditions at entry and throw a clear exception when violated (`IllegalArgumentException`, `IllegalStateException`).
 3. Check postconditions and invariants during development/testing (assertions or internal checks).
 4. Give callers **query methods** to check preconditions themselves (`isEmpty()`, `isFull()`), so they can avoid violations.
@@ -2373,7 +2373,7 @@ State and enforce who promises what: preconditions (caller), postconditions (met
 ## 16. GRASP — General Responsibility Assignment Software Patterns
 
 ### What it is
-**GRASP** is a set of nine patterns (Larman calls them patterns; many people say principles or guidelines) by Craig Larman, from *Applying UML and Patterns*, for the most frequent question in object design: **"Which class should be responsible for this?"** A *responsibility* is either *knowing* something (data, related objects, derived values) or *doing* something (computing, creating, coordinating). GRASP is a thinking aid — a vocabulary for justifying design decisions — rather than a set of code templates.
+**GRASP** is a set of nine patterns (Larman calls them patterns; many people say principles or guidelines) by Craig Larman, from *Applying UML and Patterns* (UML, the Unified Modeling Language, is the standard diagram notation for classes and their interactions), for the most frequent question in object design: **"Which class should be responsible for this?"** A *responsibility* is either *knowing* something (data, related objects, derived values) or *doing* something (computing, creating, coordinating). GRASP is a thinking aid — a vocabulary for justifying design decisions — rather than a set of code templates.
 
 *History note:* GRASP first appeared in the book's 1st edition (1997), where the ninth item was "Don't Talk to Strangers" (the Law of Demeter). From the 2nd edition (2001) it was replaced by the more general **Protected Variations**, giving the nine listed below.
 
@@ -2381,7 +2381,7 @@ State and enforce who promises what: preconditions (caller), postconditions (met
 |---|---|---|---|
 | 1 | Information Expert | Who does this job? | The class that has the information needed |
 | 2 | Creator | Who creates an object A? | A class that contains, records, closely uses or has the data to initialise A |
-| 3 | Controller | Who first handles a system event from the UI? | A non-UI object representing the use case or the whole system |
+| 3 | Controller | Who first handles a system event from the UI? | A non-UI object representing the use case (one user goal, e.g. checkout) or the whole system |
 | 4 | Low Coupling | How do we reduce the impact of change? | Assign responsibilities to keep dependencies few |
 | 5 | High Cohesion | How do we keep classes focused and understandable? | Assign responsibilities so each class does related work |
 | 6 | Polymorphism | How do we handle behaviour that varies by type? | Give each type its own implementation of a shared operation |
@@ -2392,7 +2392,7 @@ State and enforce who promises what: preconditions (caller), postconditions (met
 *Analogy:* staffing a hospital. The person who has the patient's chart (Expert) writes the summary; the maternity ward registers newborns (Creator); the front desk routes every visitor to the right department (Controller); nobody needs to know everyone (Low Coupling); each department has a focused speciality (High Cohesion).
 
 ### The problem it solves
-Beginners often end up with one "god" class (the UI screen or a `Manager`) that knows everything, and many anemic data classes. Or they spread logic randomly so that no one knows where anything lives. GRASP gives repeatable reasons for placing each responsibility, which also makes your interview explanations concrete ("I put `total()` on `Sale` because it's the Information Expert").
+Beginners often end up with one "god" class (one class that knows and does far too much — often the UI screen or a `Manager`) that knows everything, and many anemic data classes. Or they spread logic randomly so that no one knows where anything lives. GRASP gives repeatable reasons for placing each responsibility, which also makes your interview explanations concrete ("I put `total()` on `Sale` because it's the Information Expert").
 
 ### How it works
 1. List the system events/use cases (e.g. `scan item`, `pay`).
@@ -2400,8 +2400,8 @@ Beginners often end up with one "god" class (the UI screen or a `Manager`) that 
 3. For each thing that must be *known* or *computed*, find the **Information Expert**.
 4. For each object that must be *created*, find the **Creator**.
 5. Check **Low Coupling** and **High Cohesion** as evaluative forces; if a choice hurts them, reconsider.
-6. Where behaviour varies by type, use **Polymorphism**; where an external or unstable thing touches you, use **Protected Variations** via **Indirection** (an interface or adapter).
-7. When no domain object is a good home (persistence, I/O), create a **Pure Fabrication**.
+6. Where behaviour varies by type, use **Polymorphism**; where an external or unstable thing touches you, use **Protected Variations** via **Indirection** (an interface or adapter — a class that converts one interface into the one your code expects).
+7. When no domain object is a good home (persistence, I/O — input/output such as files and network calls), create a **Pure Fabrication**.
 
 ### Java example — before/after (all nine in one checkout)
 The *before* is a UI `CheckoutScreen` that creates line items, reaches into them to total the sale, hard-codes tax rules and builds SQL. The *after* assigns each responsibility using GRASP; each class's Javadoc names the guideline it illustrates.
@@ -2696,7 +2696,7 @@ The container (or the one with the initial data) creates.
 ## 16.3 Controller
 
 ### What it is
-The first object **beyond the UI layer** that receives and coordinates a **system operation** (an event from an actor such as "scan item" or "pay"). Two kinds: a **facade controller** representing the whole system/device (e.g. `Register`, `ParkingLotSystem`) or a **use-case controller** for one scenario (e.g. `CheckoutController`, `BookTicketHandler`).
+The first object **beyond the UI layer** that receives and coordinates a **system operation** (an event from an actor — a person or external system using ours — such as "scan item" or "pay"). Two kinds: a **facade controller** representing the whole system/device (e.g. `Register`, `ParkingLotSystem`) or a **use-case controller** for one scenario (e.g. `CheckoutController`, `BookTicketHandler`).
 
 ### The problem it solves
 Keeps business logic out of UI classes, so the same logic works from a web page, a mobile app or a test, and the UI can change freely.
@@ -2716,7 +2716,7 @@ Very small programs where the UI and logic are trivial.
 Fat controllers containing pricing, validation and SQL. Controllers that are UI classes (e.g. a Swing `JFrame` computing totals).
 
 ### Real-world examples
-Spring `@RestController` → `@Service` (the service often plays GRASP Controller for a use case); `DispatcherServlet` is a front controller; in an Uber-like app a `TripService.requestRide()` handles the rider's "request ride" event.
+Spring `@RestController` → `@Service` (the service often plays GRASP Controller for a use case); `DispatcherServlet` is a front controller (a single entry point that receives every web request and routes it); in an Uber-like app a `TripService.requestRide()` handles the rider's "request ride" event.
 
 ### In the interview
 "`ParkingLotController.park(vehicle)` receives the system event and delegates to `ParkingFloor` and `SpotAllocator` — GRASP Controller, kept thin."
@@ -2754,7 +2754,7 @@ Circular dependencies between packages; UI knowing the database; everything depe
 Microservices communicating over well-defined APIs/events; JDBC drivers decoupled from application code by interfaces.
 
 ### In the interview
-"My service depends on `PaymentGateway`, not on Stripe's SDK, so switching provider touches one adapter."
+"My service depends on `PaymentGateway`, not on Stripe's SDK (Software Development Kit — the vendor's client library), so switching provider touches one adapter."
 *Follow-up: can coupling ever be zero?* No — objects must collaborate. Aim for few dependencies, pointing at stable abstractions, with no cycles.
 
 ### Self-check
@@ -2818,7 +2818,7 @@ Type-checking conditionals repeated across the code; adding a type means finding
 Easy to add new types; harder to add new operations across all types (you must touch each class — the Visitor pattern, Chapter 11, flips this trade-off).
 
 ### When not to use it
-For closed sets of types where you often add *operations*, a `switch` over a `sealed` hierarchy (Java 21 pattern matching) can be clearer.
+For closed sets of types where you often add *operations*, a `switch` over a `sealed` hierarchy (Java 21 pattern matching — a `switch` that tests an object's type and unpacks it in one step) can be clearer.
 
 ### Common mistakes
 Creating polymorphic classes for variation that doesn't exist (YAGNI); `instanceof` chains after introducing the interface.
@@ -2861,7 +2861,7 @@ When a real domain object is a natural home — prefer the Expert first.
 Moving domain logic (pricing, rules) into fabricated "Manager" services.
 
 ### Real-world examples
-DAOs/repositories, `ObjectMapper` (Jackson), `Clock` providers, Spring `@Service` classes for infrastructure, most GoF helper objects (Strategy, Adapter, Factory objects are fabrications).
+DAOs (Data Access Objects — classes that hide database queries)/repositories, `ObjectMapper` (Jackson, the common Java JSON library), `Clock` providers, Spring `@Service` classes for infrastructure, most GoF helper objects (Strategy, Adapter, Factory objects are fabrications).
 
 ### In the interview
 "`TicketRepository` isn't a domain thing — it's a pure fabrication that keeps persistence out of `Ticket`."
@@ -2884,7 +2884,7 @@ Assign a responsibility to an **intermediate object** that mediates between two 
 Direct dependencies on external or volatile components (vendor SDKs, hardware, other subsystems).
 
 ### How it works
-Introduce an interface plus an adapter, a facade, a mediator or a proxy; the two sides talk through it.
+Introduce an interface plus an adapter, a facade, a mediator (a hub that objects talk through instead of to each other) or a proxy; the two sides talk through it.
 
 ### Trade-offs
 Decoupling vs an extra hop (small performance cost and one more class to read). A famous saying, usually attributed to David Wheeler, is that any problem in computer science can be solved by another level of indirection; the usual retort is "except the problem of too many levels of indirection".
@@ -2896,7 +2896,7 @@ Between stable, cohesive classes that always change together.
 Layers that add nothing (pure pass-through), making navigation painful.
 
 ### Real-world examples
-Adapter/Facade/Mediator/Proxy patterns; JDBC's `DriverManager`; API gateways in microservices; message brokers between producers and consumers.
+Adapter/Facade/Mediator/Proxy patterns; JDBC's `DriverManager`; API gateways in microservices (a single front door that routes client calls to many services); message brokers between producers and consumers.
 
 ### In the interview
 "I don't call the SMS vendor directly — an `SmsSender` interface with a `TwilioSmsSender` adapter provides indirection."
@@ -2913,7 +2913,7 @@ Put a middleman between things that shouldn't know each other.
 ## 16.9 Protected Variations
 
 ### What it is
-Identify **points of predicted variation or instability** and wrap them with a **stable interface**, so variation doesn't ripple to other elements. `TaxCalculator` protects the checkout from tax-rule and vendor changes. Larman notes it is essentially David Parnas's *information hiding* and Meyer's Open/Closed Principle stated as a responsibility guideline (and close to "encapsulate what varies"); the Law of Demeter — GRASP's "Don't Talk to Strangers" in the 1st edition — is one mechanism for it.
+Identify **points of predicted variation or instability** and wrap them with a **stable interface**, so variation doesn't ripple to other elements. `TaxCalculator` protects the checkout from tax-rule and vendor changes. Larman notes it is essentially David Parnas's *information hiding* (keeping design decisions that may change hidden inside one module) and Meyer's Open/Closed Principle stated as a responsibility guideline (and close to "encapsulate what varies"); the Law of Demeter — GRASP's "Don't Talk to Strangers" in the 1st edition — is one mechanism for it.
 
 ### The problem it solves
 Changes in one place (a vendor, a regulation, a format) forcing edits throughout the system.
@@ -2984,7 +2984,7 @@ The principles earlier in this chapter tell you how to shape classes; DDD tells 
 | **Ubiquitous language** | The shared vocabulary that domain experts and developers both use — in conversation, in documents *and in the code*. If the business says "place an order", the method is `place()`, not `setStatus(2)`. |
 | **Bounded context** | A boundary inside which one model and one language apply consistently. The same word may mean something different in another context (a Sales "order" vs a Shipping "consignment"). Often one team and one service. |
 | **Context map** | A picture of the bounded contexts and how they relate (who depends on whom, who translates). |
-| **Anti-corruption layer (ACL)** | A translation layer at a context's border that converts another context's (or a legacy system's) model into yours, so theirs cannot leak in. |
+| **Anti-corruption layer (ACL)** | A translation layer at a context's border that converts another context's (or a legacy — old, still-running — system's) model into yours, so theirs cannot leak in. |
 | **Entity** | An object defined by its **identity**, which stays the same while its attributes change (an `Order` with id 1001 is the same order after items are added). Equality = same id. |
 | **Value object** | An object defined only by its **attributes**, with no identity; immutable; interchangeable when equal (`Money(₹350)`, an `Address`, a `DateRange`). Equality = same values. |
 | **Aggregate** | A cluster of entities and value objects treated as **one unit for changes**, with one entity as its **aggregate root** — the only object outsiders may hold or call. The root enforces the cluster's invariants. |
@@ -3008,21 +3008,21 @@ Big business systems fail less from bad algorithms than from **muddled models**:
 1. **Talk to domain experts and write down the language.** Nouns become candidate entities and value objects, verbs become methods, "when X happens" becomes a domain event.
 2. **Draw the bounded contexts.** Where the same word starts meaning different things, you have a boundary. In an e-commerce business: *Catalog* (product descriptions, images), *Sales* (orders, prices, promotions), *Payments*, *Shipping* (parcels, weights, carriers), *Support*.
 3. **Decide how contexts talk (the context map).** The common relationships: one side publishes events or an API and the other consumes it; a **shared kernel** (a small shared library both own — use sparingly); **conformist** (you simply accept the other model); and the **anti-corruption layer** (you translate the other model into yours — the safest choice against a legacy or third-party system).
-4. **Map contexts to teams and services.** A bounded context is the most natural boundary for a microservice; that is why DDD is the usual starting point for splitting a monolith (see the [Strangler Fig notes](../../../microservices-patterns/chapters/02-strangler-fig/README.md) for migrating piece by piece).
+4. **Map contexts to teams and services.** A bounded context is the most natural boundary for a microservice; that is why DDD is the usual starting point for splitting a monolith (an application built and deployed as one single unit) (see the [Strangler Fig notes](../../../microservices-patterns/chapters/02-strangler-fig/README.md) for migrating piece by piece).
 
 **Tactical design — the building blocks inside one context**
 
-- **Prefer value objects.** Wrap primitives that carry rules: `Money` (amount + currency, no negatives), `Email`, `Quantity`, `DateRange`. They are immutable (section 14), validate themselves (Fail fast, section 13) and make method signatures honest (`transfer(Money)` instead of `transfer(double)`).
+- **Prefer value objects.** Wrap primitives (raw built-in types such as `double` or `String`) that carry rules: `Money` (amount + currency, no negatives), `Email`, `Quantity`, `DateRange`. They are immutable (section 14), validate themselves (Fail fast, section 13) and make method signatures honest (`transfer(Money)` instead of `transfer(double)`).
 - **Entities have identity and a lifecycle.** Give them an id value object (`OrderId`), and methods named in the ubiquitous language that protect their invariants.
 - **Aggregate design rules** (from Vaughn Vernon's *Implementing Domain-Driven Design*, 2013):
   1. Protect **true invariants** inside the aggregate boundary — the things that must be consistent *immediately*.
   2. Keep aggregates **small** (often the root plus a few value objects or child entities).
   3. **Reference other aggregates by id**, not by object (`CustomerId`, not `Customer`).
-  4. **Change one aggregate per transaction**; keep other aggregates in step through domain events (**eventual consistency**).
+  4. **Change one aggregate per transaction**; keep other aggregates in step through domain events (**eventual consistency** — the other aggregates catch up shortly afterwards instead of instantly; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
 - **Domain events** are raised inside the aggregate when a state change happens, and published **after** the change is saved. In a database-backed system the reliable way is the **transactional outbox**: write the event to an outbox table in the same transaction as the aggregate, and let a relay publish it (see the [Saga notes](../../../microservices-patterns/chapters/10-saga/README.md) and [Event-Driven Architecture notes](../../../microservices-patterns/chapters/11-event-driven/README.md)).
 - **Repositories** exist only for aggregate roots (`OrderRepository`, never `OrderLineRepository`), because outsiders may only reach an `OrderLine` through its `Order`.
 - **Application services** (a thin layer above the domain) load an aggregate from its repository, call one domain method, save it — they orchestrate, the aggregate decides (GRASP Controller, section 16.3).
-- **Reads can use a different model.** When screens need data joined across aggregates, a separate read model fed by domain events is often simpler — that is **CQRS** (see the [CQRS notes](../../../microservices-patterns/chapters/12-cqrs/README.md)); storing the events themselves as the source of truth is **Event Sourcing** (Chapter 11, §11.7.6).
+- **Reads can use a different model.** When screens need data joined across aggregates, a separate read model fed by domain events is often simpler — that is **CQRS** (Command Query Responsibility Segregation — separate models for writing and reading; see the [CQRS notes](../../../microservices-patterns/chapters/12-cqrs/README.md)); storing the events themselves as the source of truth is **Event Sourcing** (Chapter 11, §11.7.6).
 
 ```mermaid
 flowchart LR
@@ -3252,7 +3252,7 @@ loaded from repository: PLACED
    event published: OrderCancelled
 ```
 
-*Before*, the order is a bag of public fields: `double` money prints `0.30000000000000004`, the status is a free-form string, and code outside the service added a line with quantity −5 *after* the order "shipped" — nothing could stop it. *After*, `Money` is a value object (paise in a `long`, never negative, equal by value), `Order` is the aggregate root that owns its `OrderLine` entities and refuses changes once placed or beyond 10 units per SKU, `place()` speaks the business language and records an `OrderPlaced` event, and the repository publishes events only after saving. The Shipping context never sees Sales' `Order`: its translator turns the event into a `Consignment` with Shipping's own concepts (weight, parcels), using Shipping's own weight catalog. Two `Order` objects with the same id are equal (entity), two `Money(100)` values are equal (value object).
+*Before*, the order is a bag of public fields: `double` money prints `0.30000000000000004`, the status is a free-form string, and code outside the service added a line with quantity −5 *after* the order "shipped" — nothing could stop it. *After*, `Money` is a value object (paise — 1/100 of a rupee — in a `long`, never negative, equal by value), `Order` is the aggregate root that owns its `OrderLine` entities and refuses changes once placed or beyond 10 units per SKU (Stock Keeping Unit — a product's unique code), `place()` speaks the business language and records an `OrderPlaced` event, and the repository publishes events only after saving. The Shipping context never sees Sales' `Order`: its translator turns the event into a `Consignment` with Shipping's own concepts (weight, parcels), using Shipping's own weight catalog. Two `Order` objects with the same id are equal (entity), two `Money(100)` values are equal (value object).
 
 ### Trade-offs
 
@@ -3262,10 +3262,10 @@ loaded from repository: PLACED
 | Clear boundaries for teams and services | More types (value objects, events, translators) |
 | Aggregates give a clear transaction and locking unit | Eventual consistency between aggregates must be designed and explained |
 | Models can change independently per context | Translation code at every context border |
-| Rich model is easy to unit-test without a database | ORMs sometimes fight rich models (private setters, value object mapping) |
+| Rich model is easy to unit-test (test one class in isolation) without a database | ORMs sometimes fight rich models (private setters, value object mapping) |
 
 ### When not to use it
-- **CRUD-shaped apps** (forms over tables, an admin panel) with few rules — a simple layered design is enough; tactical DDD would be ceremony (KISS, YAGNI).
+- **CRUD-shaped apps** (Create, Read, Update, Delete — apps that mostly store and show records: forms over tables, an admin panel) with few rules — a simple layered design is enough; tactical DDD would be ceremony (KISS, YAGNI).
 - **Small teams with one small model** — strategic splitting pays off when there are several teams or sub-domains.
 - **Technical problems** (a compiler, a video encoder) where the complexity is algorithmic, not in business rules.
 - Still worth borrowing even then: **value objects** and **ubiquitous naming** cost little and help everywhere.
@@ -3274,7 +3274,7 @@ loaded from repository: PLACED
 - **Anemic aggregates** — entities with public setters and "services" holding the rules. That is the *before* code with DDD names on it.
 - **Huge aggregates** ("Customer" containing all orders, addresses and payments) — every change locks everything; keep aggregates small and reference others by id.
 - **One repository per table** instead of per aggregate root.
-- **Publishing events before the transaction commits** — consumers react to changes that may be rolled back; use an outbox.
+- **Publishing events before the transaction commits** — consumers react to changes that may be rolled back (undone instead of committed, i.e. made permanent); use an outbox.
 - **Sharing one domain model across services** "to avoid duplication" — it couples the teams; duplicate the small bits each context needs (DRY applies *within* a context, not across).
 - **Treating DDD as folders** (`entities/`, `valueobjects/`) rather than as modelling with domain experts.
 - Using **primitives for domain concepts** (`String email`, `double price`) — "primitive obsession" (Chapter 7).
@@ -3283,7 +3283,7 @@ loaded from repository: PLACED
 - **Microservice boundaries** at many companies are drawn along bounded contexts (orders, payments, shipping, catalog) — the default advice in Sam Newman's *Building Microservices* and in Microsoft's .NET microservices architecture guide, which uses DDD aggregates and domain events in its reference application *eShopOnContainers*.
 - **Payments**: a `Payment` aggregate with an `Amount` value object and events such as `PaymentAuthorized`, `PaymentCaptured`, `PaymentRefunded`, consumed by ledger and notification contexts.
 - **Java libraries**: `java.time` types (`LocalDate`, `Duration`) and `BigDecimal` are value objects in all but name; frameworks such as Axon (used in the CQRS notes' example) are built around aggregates and events.
-- In this book: the grocery POS (Chapter 19) keeps `Money` and tenders as value types and a `Sale` that guards its own states; the shipping locker (Chapter 14, §14.7) separates `Compartment` (reusable door) from `Booking` (one parcel's lifecycle).
+- In this book: the grocery POS (point-of-sale checkout system, Chapter 19) keeps `Money` and tenders as value types and a `Sale` that guards its own states; the shipping locker (Chapter 14, §14.7) separates `Compartment` (reusable door) from `Booking` (one parcel's lifecycle).
 
 ### In the interview
 **30-second answer:** "DDD models the software on the business. Strategically, I split the domain into bounded contexts — each with its own model and ubiquitous language, like Sales and Shipping — and connect them through events or APIs, translating at the border with an anti-corruption layer. Tactically, inside a context I use entities for things with identity, immutable value objects for things like Money, and small aggregates whose root enforces the invariants; one aggregate changes per transaction, others follow through domain events, and each aggregate root has a repository."
@@ -3292,7 +3292,7 @@ loaded from repository: PLACED
 - *Q: Entity or value object — how do you decide?* A: Ask whether you track it over time by identity. An `Order` is (id 1001 stays 1001); an `Address` or `Money` is not — you replace it with a new value.
 - *Q: How big should an aggregate be?* A: As small as the invariants allow; reference other aggregates by id and use events for rules that can be eventually consistent.
 - *Q: How do bounded contexts relate to microservices?* A: A context is a good candidate boundary for a service (often one service per context), but a context can also be a module inside a monolith.
-- *Q: How do you keep two aggregates consistent?* A: Change one per transaction, publish a domain event via an outbox, let a handler (or a saga, for multi-step processes) update the other.
+- *Q: How do you keep two aggregates consistent?* A: Change one per transaction, publish a domain event via an outbox, let a handler (or a saga — a chain of local transactions with compensating "undo" steps — for multi-step processes) update the other.
 
 ### Self-check
 1. Q: Two `Money(₹100)` objects — equal? Two customers named "Asha Rao" — equal? → A: Money yes (value object); customers only if they have the same id (entities).
@@ -3339,7 +3339,7 @@ flowchart TD
 | Hollywood / IoC | Framework owns flow | Duplicated skeletons | Template Method, callbacks, DI |
 | Separation of Concerns | One concern per unit | Spaghetti code | Layers, MVC |
 | Least Astonishment | Predictability | Hidden side effects | Honest names, `Optional` |
-| Fail fast | Early, clear errors | Distant NPEs | Guard clauses, `requireNonNull` |
+| Fail fast | Early, clear errors | Distant NPEs (NullPointerExceptions) | Guard clauses, `requireNonNull` |
 | Immutability | Safe sharing | Aliasing, races | Records, `List.copyOf` |
 | Design by Contract | Clear obligations | Magic error values | Pre/postconditions, invariants |
 | GRASP | Place responsibilities | God classes | Expert, Creator, Controller, ... |

@@ -4,7 +4,7 @@
 >
 > **How to read it.** Part A is the map. Part B walks through each creational pattern with the same template: *what it is → the problem → how it works → Java code (with real output) → trade-offs → when not to use it → common mistakes → real-world examples → interview answers → self-check → TL;DR*. The chapter ends with one big comparison table.
 >
-> **Code.** Everything lives in `chapters/08-patterns-creational/code/lld/ch08/<pattern>/`. Each package has a `Main`. Compile and run all of them with:
+> **Code.** Everything lives in `chapters/08-patterns-creational/code/lld/ch08/<pattern>/`. Each package (a named folder of related Java classes that also acts as a namespace) has a `Main` (the class whose `main` method the program starts from). Compile and run all of them with:
 >
 > ```bash
 > cd chapters/08-patterns-creational/code
@@ -27,7 +27,7 @@ A **design pattern** is a named, reusable description of a good solution to a pr
 Two words you will see everywhere:
 
 - **Intent** — the one-sentence purpose of a pattern ("ensure a class has only one instance").
-- **Participants** — the roles (classes/interfaces) that take part in the pattern, such as *Creator*, *Product*, *Client*.
+- **Participants** — the roles (classes/interfaces — an **interface** is a type that lists method signatures without bodies, which classes then implement) that take part in the pattern, such as *Creator*, *Product*, *Client*.
 
 ### The problem it solves
 
@@ -39,7 +39,7 @@ Without patterns, every team solves the same recurring problems (how to create o
 | Avoid reinventing the wheel | Less time designing, fewer surprises. |
 | Readability and maintainability | Code that follows a known shape is easier for the next person to understand. |
 | Shared vocabulary | Saying "this is a Factory" or "use an Observer" replaces a paragraph of explanation. This is the biggest win in interviews. |
-| Best practices built in | Patterns embody good principles (loose coupling, open/closed), so code tends to be more testable. |
+| Best practices built in | Patterns embody good principles (loose coupling — parts know little about each other; open/closed — extend without editing), so code tends to be more testable. |
 | Adaptability and scalability | Many patterns exist precisely so code can absorb change later. |
 | Faster development | Tested paradigms speed up design decisions. |
 
@@ -56,7 +56,7 @@ You then **adapt** the template to your language and your problem. Two correct i
 
 ### When not to use it
 
-Patterns must be used with judgement. Not every problem needs one. Forcing a pattern where it is not needed adds classes, indirection and confusion — which is worse than having no pattern at all. We come back to this in [8.6 Anti-patterns](#86-anti-patterns-when-patterns-go-wrong).
+Patterns must be used with judgement. Not every problem needs one. Forcing a pattern where it is not needed adds classes, indirection (extra layers you must step through to reach the code that does the real work) and confusion — which is worse than having no pattern at all. We come back to this in [8.6 Anti-patterns](#86-anti-patterns-when-patterns-go-wrong).
 
 ### TL;DR
 
@@ -69,13 +69,13 @@ A design pattern = **name + problem + solution template + consequences**. It is 
 | Year | Event | Why it matters |
 |---|---|---|
 | 1977 | Architect **Christopher Alexander** publishes *A Pattern Language*, a catalogue of solutions for towns and buildings. | The idea of a "pattern" as a named, reusable solution comes from architecture, not software. |
-| 1987 | **Kent Beck** and **Ward Cunningham** experiment with applying pattern languages to programming (user-interface design in Smalltalk). | First bridge from architecture to software. |
+| 1987 | **Kent Beck** and **Ward Cunningham** experiment with applying pattern languages to programming (user-interface design in Smalltalk, an early object-oriented language). | First bridge from architecture to software. |
 | 1994 | **Erich Gamma, Richard Helm, Ralph Johnson and John Vlissides** publish *Design Patterns: Elements of Reusable Object-Oriented Software*. The four authors are nicknamed the **Gang of Four (GoF)**. | Catalogues **23 patterns** in three categories, with C++ and Smalltalk examples. This is the book people mean when they say "GoF patterns". |
 | 2004 | *Head First Design Patterns* (Freeman & Robson, with Sierra and Bates) teaches the same patterns in Java with pictures and stories (the pizza store for factories, the chocolate boiler for Singleton, the Starbuzz coffee shop for Decorator). | Made the GoF catalogue approachable, and put the **OO principles** behind patterns front and centre. |
 
 The GoF book states two principles that run through the whole catalogue:
 
-1. **Program to an interface, not an implementation.** Variables and parameters should be typed by abstractions, so callers do not care which concrete class they get.
+1. **Program to an interface, not an implementation.** Variables and parameters should be typed by abstractions (interfaces or abstract classes that say *what* something does, not *how*), so callers do not care which concrete class (an ordinary, fully implemented class you can create with `new`) they get.
 2. **Favour object composition over class inheritance.** Build behaviour by *holding* other objects ("has-a"), not only by extending classes ("is-a"). Composition is "black-box" reuse; inheritance exposes a parent's internals to its children.
 
 Creational patterns are what make principle 1 practical: if code must not name concrete classes, *someone* still has to create those objects — and creational patterns decide who and how.
@@ -96,8 +96,8 @@ The GoF grouped patterns by **purpose** — what problem family they address:
 
 The GoF also used a second axis, **scope**:
 
-- **Class patterns** use inheritance, fixed at compile time (Factory Method, class Adapter, Template Method, Interpreter).
-- **Object patterns** use composition, changeable at run time (almost everything else).
+- **Class patterns** use inheritance, fixed at compile time (when the compiler translates the source code, before the program runs) (Factory Method, class Adapter, Template Method, Interpreter).
+- **Object patterns** use composition, changeable at run time (while the program is running) (almost everything else).
 
 ### The full catalogue
 
@@ -120,7 +120,7 @@ The GoF also used a second axis, **scope**:
 | 15 | **Interpreter** | Behavioral | Represent a small language's grammar as classes and evaluate sentences in it. | 10/11 |
 | 16 | **Iterator** | Behavioral | Traverse a collection without exposing how it is stored. | 10/11 |
 | 17 | **Mediator** | Behavioral | Centralise complex communication between objects in one mediator object. | 10/11 |
-| 18 | **Memento** | Behavioral | Capture and restore an object's state without breaking encapsulation. | 10/11 |
+| 18 | **Memento** | Behavioral | Capture and restore an object's state without breaking encapsulation (keeping internals private). | 10/11 |
 | 19 | **Observer** | Behavioral | Notify many dependents automatically when one object changes. | 10/11 |
 | 20 | **State** | Behavioral | Let an object change behaviour when its internal state changes, as if it changed class. | 10/11 |
 | 21 | **Strategy** | Behavioral | Make a family of algorithms interchangeable behind one interface. | 10/11 |
@@ -129,7 +129,7 @@ The GoF also used a second axis, **scope**:
 
 **Count check:** 5 creational + 7 structural + 11 behavioral = **23**. (Some course lists show ten behavioral patterns and leave out Interpreter, which is rarely used in practice — it is still one of the 23.)
 
-**Not in the GoF 23 but you will meet them:** *Simple Factory* (an idiom), *Object Pool* (covered at the end of this chapter), *Dependency Injection*, *Null Object*, *Repository*, *MVC* (Head First calls it a "compound pattern" built from Observer, Strategy and Composite).
+**Not in the GoF 23 but you will meet them:** *Simple Factory* (an idiom), *Object Pool* (covered at the end of this chapter), *Dependency Injection* (handing an object the things it needs from outside instead of letting it create them), *Null Object*, *Repository*, *MVC* (Model–View–Controller, which splits an app into data, display and input handling; Head First calls it a "compound pattern" built from Observer, Strategy and Composite).
 
 ### Self-check
 
@@ -140,7 +140,7 @@ The GoF also used a second axis, **scope**:
 
 ## 8.4 The OO principles behind every pattern
 
-Patterns are not magic; they are principles applied to recurring situations. *Head First Design Patterns* collects these principles as it goes; together with SOLID (Chapter 4) they explain *why* each pattern is shaped the way it is.
+Patterns are not magic; they are principles applied to recurring situations. *Head First Design Patterns* collects these principles as it goes; together with SOLID (Chapter 4 — five object-oriented design rules: Single responsibility, Open–closed, Liskov substitution, Interface segregation, Dependency inversion) they explain *why* each pattern is shaped the way it is.
 
 | Principle (plain words) | What it means | Patterns that apply it (examples) |
 |---|---|---|
@@ -151,7 +151,7 @@ Patterns are not magic; they are principles applied to recurring situations. *He
 | **Open–Closed Principle** — open for extension, closed for modification | Add new behaviour by adding code, not by editing tested code. | Factory Method (new product = new subclass), Decorator |
 | **Dependency Inversion** — depend on abstractions, not concrete classes | High-level code and low-level code both depend on interfaces. | The core of all factory patterns: the client never calls `new ConcreteThing()` |
 | **Least Knowledge** ("only talk to your friends") | A method should call only its own object, its parameters, objects it creates and its fields. | Facade |
-| **Hollywood Principle** ("don't call us, we'll call you") | High-level components decide when low-level ones run. | Template Method, Factory Method (the base class calls the subclass's hook), frameworks/IoC |
+| **Hollywood Principle** ("don't call us, we'll call you") | High-level components decide when low-level ones run. | Template Method, Factory Method (the base class calls the subclass's hook), frameworks/IoC (inversion of control) |
 | **Single Responsibility** — one reason to change | Each class does one job. | Builder (construction separated from the product), Iterator |
 
 **Why creational patterns exist, in one sentence:** Dependency Inversion says "do not depend on concrete classes", but `new PdfDocument()` *is* a dependency on a concrete class — so creational patterns move that `new` somewhere controlled (a factory, a subclass, a builder, a prototype, a container).
@@ -169,7 +169,7 @@ Beginners often learn 23 patterns and then look for places to use them. That is 
 1. **Name the problem first**, in plain words: "the pricing rule will change", "there must be exactly one of these", "the constructor has ten arguments".
 2. **Decide the category**: is it about *creating*, *structuring*, or *communicating/behaving*?
 3. **Match the signal** to a pattern using the tables below.
-4. **Check the cost**: how many classes does it add? Is there a simpler option (an enum, a lambda, a constructor, a DI container)?
+4. **Check the cost**: how many classes does it add? Is there a simpler option (an enum — a type with a fixed list of named constants; a lambda — a short unnamed function; a constructor; a DI container — a framework that creates objects and hands them their dependencies)?
 5. **Say what you rejected and why.** In an interview this is worth as much as the pattern you picked.
 
 The flowchart below is a decision guide for the creational family plus the most common neighbours.
@@ -219,7 +219,7 @@ How each signal shows up in a parking-lot or library design:
 - **Factory.** At some point a string or enum value has to turn into a `Vehicle` object. If that conversion lives inside the entrance panel, the panel must know every vehicle type and changes whenever a type is added. Hand the job to a factory instead: it receives the type and gives back the right object, so the panel simply asks for "a vehicle". The factory becomes the single registration point for new types — the Open–Closed Principle in practice. Keep it lean: in a 45-minute round a creation method on a class you already have is normally enough; one factory class per vehicle type is more structure than the time allows.
 - **Observer.** When a spot is taken, every display board on that floor must refresh. The naive version has the floor recompute its counts and push them to its single board. With Observer the spot is the *subject*, and boards, entrance panels and floor portals *subscribe* to it; on each status change the spot notifies all subscribers without knowing what they are. Adding another board needs no change to the spot. Contrast the library: when a reserved book is returned, exactly one member must be told — a direct method call is enough, because a single listener does not justify Observer.
 - **State.** A parking ticket goes active → paid → closed; a book copy can be available, reserved, on loan or lost. Without the pattern every method opens with "if status is…", and the rules about which move is legal end up scattered through the class. State gives each status its own small class that knows the legal next steps, so an illegal move cannot even be written, rather than merely being absent. Be candid about the cost: with four states and three transitions, an `enum` plus one method with a guard reads more easily. Reach for State when the transition table is big, and explain why.
-- **Singleton.** A car park is one physical place, so the design has one `ParkingLot`; a private constructor plus one accessor enforce that. Interviewers nearly always probe two points, so raise them yourself: fetching the instance must be correct when several threads ask at once (use a lock, or create it eagerly), and a singleton is global state that makes tests harder — which is why many teams create one instance and pass it around instead. Stating that trade-off earns more credit than naming the pattern.
+- **Singleton.** A car park is one physical place, so the design has one `ParkingLot`; a private constructor plus one accessor enforce that. Interviewers nearly always probe two points, so raise them yourself: fetching the instance must be correct when several threads (independent paths of execution running at the same time inside one program) ask at once (use a lock — a guard that lets only one thread at a time run a piece of code — or create it eagerly), and a singleton is global state (data that any part of the program can read and change) that makes tests harder — which is why many teams create one instance and pass it around instead. Stating that trade-off earns more credit than naming the pattern.
 - **Builder.** A `BookItem` needs a barcode, price, format, purchase date, publication date and rack — an eight-argument constructor is easy to call wrongly, because two neighbouring `String` parameters can be exchanged and the compiler says nothing. A builder names every field and produces the finished object at the end. Bring it up once a constructor in your design passes about six arguments, then move on: it improves readability, it does not change the structure.
 
 **Rules of thumb for the interview:**
@@ -237,9 +237,9 @@ An **anti-pattern** is a common "solution" that looks reasonable but reliably ca
 
 | Anti-pattern | What it looks like | Why it hurts | The fix |
 |---|---|---|---|
-| **God Object** (God class, the Blob) | One class knows and does almost everything: `SystemManager` with 80 methods and 40 fields. | Violates Single Responsibility. Every change touches it, merge conflicts everywhere, impossible to test in isolation. | Split by responsibility (Extract Class — Chapter 7), push behaviour to the objects that own the data. |
+| **God Object** (God class, the Blob) | One class knows and does almost everything: `SystemManager` with 80 methods and 40 fields. | Violates Single Responsibility. Every change touches it, merge conflicts (clashing edits by different people to the same lines) everywhere, impossible to test in isolation. | Split by responsibility (Extract Class — Chapter 7), push behaviour to the objects that own the data. |
 | **Golden Hammer** | "When all you have is a hammer, everything looks like a nail." The team's favourite tool or pattern is applied to every problem. | The solution is forced onto problems it does not fit, e.g. every object is a Singleton, every `if` becomes a Strategy. | Start from the problem's signal (8.5), not from the tool. |
-| **Pattern overuse** ("patternitis") | Factories that create one class, interfaces with one implementation "just in case", five layers of indirection for a CRUD screen. | More classes, more hops to read, no benefit. Fowler calls the underlying smell **Speculative Generality**. | Apply YAGNI (Chapter 5): add the pattern when the *second* variant actually arrives. Refactor towards a pattern, do not start from one. |
+| **Pattern overuse** ("patternitis") | Factories that create one class, interfaces with one implementation "just in case", five layers of indirection for a CRUD (create, read, update, delete) screen. | More classes, more hops to read, no benefit. Fowler calls the underlying smell **Speculative Generality** (building for imagined future needs). | Apply YAGNI ("You Aren't Gonna Need It", Chapter 5): add the pattern when the *second* variant actually arrives. Refactor towards a pattern, do not start from one. |
 | **Singletonitis** | Singletons used as convenient global variables. | Hidden dependencies, order-dependent tests, hard to replace. | Dependency injection; pass the object in (8.8). |
 | **Cargo-cult patterns** | Copying a pattern's structure without understanding its intent (e.g. a "Builder" that only copies fields with no validation, a "Factory Method" that is really a switch). | Ceremony with none of the guarantees. | Know the *intent*: what property does the pattern give you? If you cannot name it, drop it. |
 
@@ -280,7 +280,7 @@ Using them lets a system:
 
 ### What it is
 
-The **Singleton** pattern restricts a class to **exactly one instance** (per process / per class loader) and gives every caller **one well-known way to reach it**.
+The **Singleton** pattern restricts a class to **exactly one instance** (per process — one running program — or, strictly, per class loader — the part of the JVM, the Java Virtual Machine that runs compiled Java code, which loads classes into memory) and gives every caller **one well-known way to reach it**.
 
 **Everyday analogy.** A country has one official government. Whoever needs "the government" — a citizen, a company, a foreign embassy — reaches the same one through a known channel. Nobody is allowed to set up a second one.
 
@@ -295,11 +295,11 @@ Terms used below:
 
 ### The problem it solves
 
-A few things in a program really are "one per process": the settings loaded from a file when the app starts, the pool of database connections, the registry that collects metrics. Let every module create its own and you end up with many copies of the settings, the same file parsed many times, and metrics split across registries whose totals no one can combine.
+A few things in a program really are "one per process": the settings loaded from a file when the app starts, the pool of database connections (a set of open connections kept ready for reuse), the registry that collects metrics (counters and timings the app records about itself). Let every module create its own and you end up with many copies of the settings, the same file parsed many times, and metrics split across registries whose totals no one can combine.
 
-Picture a `ConfigStore` filled from a settings file: the cloud region to talk to, the retry count, the timeout. The billing service reads it, so does the nightly reporting job, so does the mailer. If each of them builds a private copy, the file is parsed three times, and a value one service changes never reaches the other two.
+Picture a `ConfigStore` filled from a settings file: the cloud region to talk to, the retry count, the timeout (how long to wait before giving up). The billing service reads it, so does the nightly reporting job, so does the mailer. If each of them builds a private copy, the file is parsed three times, and a value one service changes never reaches the other two.
 
-A plain global variable looks like the easy fix, but it has two problems. Tests all share it, so a test's result can depend on which test happened to run before it. And *some* code has to assign it before anyone reads it — get the start-up order wrong and a caller finds `null`. Singleton moves both jobs into the class: **the class decides how many instances may exist and creates the one it allows**, on demand. Callers never assign anything, so there is no ordering mistake to make.
+A plain global variable looks like the easy fix, but it has two problems. Tests all share it, so a test's result can depend on which test happened to run before it. And *some* code has to assign it before anyone reads it — get the start-up order wrong and a caller finds `null` (Java's "no object here" value). Singleton moves both jobs into the class: **the class decides how many instances may exist and creates the one it allows**, on demand. Callers never assign anything, so there is no ordering mistake to make.
 
 ![Singleton Pattern - one ConfigStore, shared by every caller](../../assets/P-singleton-pattern-1.svg)
 *Figure — BillingService, ReportJob and EmailService all call getInstance() and receive the same ConfigStore, which was read from disk once (course diagram)*
@@ -308,7 +308,7 @@ In the figure, none of the three services constructs a `ConfigStore`; each one a
 
 ### How it works
 
-1. Make the **constructor `private`**, so code outside the class cannot write `new ConfigStore()`. That access modifier is the whole enforcement mechanism; make the constructor public and any caller can create a second one.
+1. Make the **constructor `private`**, so code outside the class cannot write `new ConfigStore()`. That access modifier (the `public` / `protected` / `private` keyword that says who may use a member) is the whole enforcement mechanism; make the constructor public and any caller can create a second one.
 2. Keep the single instance in a **`private static` field** — static because it is owned by the class itself, not by whichever object asks for it.
 3. Expose a **`public static getInstance()`** method. It has to be static: a caller has no instance yet (getting one is the whole point), so it can only call something on the class.
 4. Inside `getInstance()`, return the stored instance, creating it first if needed (and doing that creation safely when threads are involved).
@@ -362,6 +362,8 @@ classDiagram
 
 ### The six ways to write a Singleton in Java
 
+Two terms in the table: **serialization** turns an object into bytes so it can be saved or sent (and **deserialization** rebuilds an object from those bytes); **reflection** is Java's ability to inspect and call a class's members — even private ones — at run time. "Contention" means many threads competing for the same lock.
+
 | # | Variant | Lazy? | Thread-safe? | Cost on each call | Survives serialization / reflection? | Verdict |
 |---|---|---|---|---|---|---|
 | 1 | **Eager** `static final` field | No (built when the class is initialized) | Yes — the JVM initializes a class exactly once | None | No / No (needs defences) | Default choice when construction is cheap |
@@ -369,11 +371,11 @@ classDiagram
 | 3 | **`synchronized` getInstance()** | Yes | Yes | A lock on *every* call | No / No | Correct but slow under contention |
 | 4 | **Double-checked locking** + `volatile` | Yes | Yes (Java 5+) | One volatile read | No / No | When the instance depends on run-time input |
 | 5 | **Bill Pugh / holder idiom** | Yes | Yes — class-loading guarantee | None | No / No | Best lazy option in plain Java |
-| 6 | **`enum` with one constant** | No (created when the enum class initializes) | Yes | None | **Yes / Yes** (JVM guarantees) | Shortest and most robust; recommended by *Effective Java* |
+| 6 | **`enum` with one constant** | No (created when the enum class initializes) | Yes | None | **Yes / Yes** (JVM guarantees) | Shortest and most robust; recommended by *Effective Java* (Joshua Bloch's best-practice book) |
 
 Let us walk through each one.
 
-**1 — Eager.** The `static final` field is assigned while the class is being *initialized*. In Java that happens on the class's first active use — typically the first `getInstance()` call, but also the first access to any other static method or non-constant static field of the class — not at JVM start-up. The Java Language Specification (§12.4.2) guarantees that initialization runs exactly once, under an internal lock, even if many threads trigger it at the same moment, and that every thread afterwards sees the fully built object — so you get thread safety without writing any. The only cost: the object is built as soon as the class is touched for *any* reason, even if that code path never needs the instance. If the constructor opens a file or a socket, that may matter.
+**1 — Eager.** The `static final` field is assigned while the class is being *initialized*. In Java that happens on the class's first active use — typically the first `getInstance()` call, but also the first access to any other static method or non-constant static field of the class — not at JVM start-up. The Java Language Specification (§12.4.2) guarantees that initialization runs exactly once, under an internal lock, even if many threads trigger it at the same moment, and that every thread afterwards sees the fully built object — so you get thread safety without writing any. The only cost: the object is built as soon as the class is touched for *any* reason, even if that code path never needs the instance. If the constructor opens a file or a socket (an endpoint of a network connection), that may matter.
 
 **2 — Naive lazy (broken).** "Create on first use" is written as *check, then act*:
 
@@ -389,12 +391,12 @@ public static ConfigStore getInstance() {
 
 Nothing stops thread A and thread B from both reading `null` before either has stored its object. Each then constructs its own store, and whatever one caller writes into its copy never shows up in the other's. Run it in a single-threaded test and it behaves perfectly, which is exactly why the bug slips through review. Our demo starts eight threads at the same instant: the naive version built **more than one** object (eight in the run shown below).
 
-**3 — `synchronized` method.** Putting `synchronized` on `getInstance()` fixes the race — only one thread can be inside at a time. But the lock is taken on *every* call, forever, even though it is only needed for the first one.
+**3 — `synchronized` method.** Putting `synchronized` on `getInstance()` fixes the race (a **race condition**: a bug whose outcome depends on the unlucky timing of threads) — only one thread can be inside at a time. But the lock is taken on *every* call, forever, even though it is only needed for the first one.
 
 **4 — Double-checked locking (DCL).** Check *without* the lock first (fast path), and only if the instance is missing, take the lock and **check again** (another thread may have created it while you waited):
 
 - The second check is what prevents two constructions.
-- The field **must be `volatile`**. Creating an object is really three steps — allocate memory, run the constructor, store the reference. Without `volatile`, the Java Memory Model allows another thread to see the stored reference *before* the constructor's writes are visible, i.e. a half-built object. A `volatile` write/read creates a **happens-before** relationship: everything the constructor did is visible to any thread that reads the reference. (Before Java 5's memory model, DCL was broken even with `volatile`.)
+- The field **must be `volatile`** (a Java keyword that makes each write to the field immediately visible to every thread and forbids reordering around it). Creating an object is really three steps — allocate memory, run the constructor, store the reference. Without `volatile`, the Java Memory Model (the rules for when one thread's writes become visible to other threads) allows another thread to see the stored reference *before* the constructor's writes are visible, i.e. a half-built object. A `volatile` write/read creates a **happens-before** relationship: everything the constructor did is visible to any thread that reads the reference. (Before Java 5's memory model, DCL was broken even with `volatile`.)
 - Copying the field into a local variable (`local`) means the common path reads the volatile field only once — a small optimization shown in *Effective Java*.
 
 ```mermaid
@@ -414,7 +416,7 @@ sequenceDiagram
     Note over T1,T2: exactly one object, fully constructed, visible to both
 ```
 
-**5 — Bill Pugh / initialization-on-demand holder.** Put the instance in a private *nested* class. The JVM does not initialize `Holder` until `getInstance()` first touches `Holder.INSTANCE`, so creation is lazy; and class initialization is guaranteed to run once and be safely published, so it is thread-safe with **no locks and no `volatile`**. Named after Bill Pugh, who led the work on the Java memory model. This is the usual choice for a lazy singleton.
+**5 — Bill Pugh / initialization-on-demand holder.** Put the instance in a private *nested* class (a class declared inside another class). The JVM does not initialize `Holder` until `getInstance()` first touches `Holder.INSTANCE`, so creation is lazy; and class initialization is guaranteed to run once and be safely published (made visible to other threads only once fully built), so it is thread-safe with **no locks and no `volatile`**. Named after Bill Pugh, who led the work on the Java memory model. This is the usual choice for a lazy singleton.
 
 **6 — Enum.** `enum EnumConfigStore { INSTANCE; ... }`. The JVM guarantees each enum constant exists once; `Constructor.newInstance` refuses to create enum objects; and enum serialization is special-cased to return the existing constant. It is the shortest correct version. Limits: an enum cannot extend another class (it can implement interfaces), and it is created when the enum class initializes rather than truly on demand.
 
@@ -427,24 +429,24 @@ A `private` constructor is a *language* rule, not a JVM guarantee. There are thr
 | Attack | How it creates a second instance | Fix |
 |---|---|---|
 | **Reflection** | `getDeclaredConstructor().setAccessible(true).newInstance()` calls the private constructor. | Throw from the constructor if the instance already exists (reliable for eager/holder, racy for lazy). Or use an **enum** — the JVM refuses. |
-| **Serialization** | `ObjectInputStream.readObject()` builds a new object without calling your constructor. | Add `private Object readResolve() { return INSTANCE; }` — the deserialized copy is replaced by the real one. Mark instance fields `transient` if they should not travel. Or use an **enum**. |
+| **Serialization** | `ObjectInputStream.readObject()` builds a new object without calling your constructor. | Add `private Object readResolve() { return INSTANCE; }` — the deserialized copy is replaced by the real one. Mark instance fields `transient` (skipped by serialization) if they should not travel. Or use an **enum**. |
 | **Cloning** | If the class (or a parent) implements `Cloneable` and exposes `clone()`, `clone()` copies the object. | Override `clone()` to throw `CloneNotSupportedException` (or return `INSTANCE`). If no ancestor is `Cloneable`, `Object.clone()` is `protected` and this attack does not apply. |
 | **Multiple class loaders** | Each class loader loads its own copy of the class, so each has its own "single" instance (common in app servers and plugin systems). | Load the class from a shared parent loader, or let a container own the instance. |
-| **Multiple processes / servers** | A singleton is one per JVM. On four servers you have four. | Use an external coordinator (database, Redis, ZooKeeper) for anything that must be unique system-wide, e.g. ID generation or locks. |
+| **Multiple processes / servers** | A singleton is one per JVM. On four servers you have four. | Use an external coordinator (database, Redis — an in-memory data store, ZooKeeper — a coordination service) for anything that must be unique system-wide, e.g. ID generation or locks. |
 
 Our demo attacks an undefended singleton and a hardened one, then the enum (see output).
 
 ### Subclassing a Singleton
 
-The GoF book notes a singleton *can* be subclassed if its constructor is `protected` rather than `private`, and `getInstance()` decides **once, at run time**, which subclass becomes "the" instance. `AppLogger` below picks `PlainLogger` or `JsonLogger` from a system property. With a `private` constructor (the usual case) the class cannot be subclassed at all — so the flexibility is only there if you design for it.
+The GoF book notes a singleton *can* be subclassed if its constructor is `protected` rather than `private`, and `getInstance()` decides **once, at run time**, which subclass becomes "the" instance. `AppLogger` below picks `PlainLogger` or `JsonLogger` from a system property (a key=value setting passed to the JVM at launch, e.g. `-Dlog.format=json`). With a `private` constructor (the usual case) the class cannot be subclassed at all — so the flexibility is only there if you design for it.
 
 ### The dependency-injection alternative
 
 In modern code the best singleton is often **not a Singleton class at all**. Write a normal class with a public constructor, create **one** instance at start-up (the *composition root*), and **pass it in** through constructors. "One instance" becomes a wiring decision, not a property baked into the class.
 
 - Dependencies become visible in constructors (no hidden `getInstance()` calls).
-- Tests pass a fake (`new BillingService(testConfig)`) — no reset hooks needed.
-- Spring, Guice, Micronaut, Dagger, NestJS and friends do exactly this: in Spring every bean is **singleton-scoped by default**, meaning *one shared instance per bean definition per container* (`ApplicationContext`) — not one per JVM, and without any private constructor. Two contexts in one JVM hold two instances, and nothing stops other code calling `new` on the class. Spring's opposite, **`prototype` scope**, creates a fresh instance on every lookup.
+- Tests pass a fake (a simple stand-in object written for tests) (`new BillingService(testConfig)`) — no reset hooks needed.
+- Spring, Guice, Micronaut, Dagger, NestJS and friends (dependency-injection frameworks) do exactly this: in Spring every bean (an object that Spring creates and manages) is **singleton-scoped by default**, meaning *one shared instance per bean definition per container* (`ApplicationContext`) — not one per JVM, and without any private constructor. Two contexts in one JVM hold two instances, and nothing stops other code calling `new` on the class. Spring's opposite, **`prototype` scope**, creates a fresh instance on every lookup.
 
 ### Java implementation
 
@@ -868,11 +870,11 @@ Output:
 
 | Pros | Cons |
 |---|---|
-| **Controlled access** — the class guarantees a single instance and there is exactly one documented door to it. | **Global state** — in practice it tends to become shared mutable state that anything can change, with all the classic problems that brings. |
-| **You choose when it is built** — eagerly (simplest) or lazily on first request (cheaper start-up). | **Awkward to test** — replacing it with a fake needs a reset/injection hook, and that hook then ships in production code where someone may misuse it. |
+| **Controlled access** — the class guarantees a single instance and there is exactly one documented door to it. | **Global state** — in practice it tends to become shared mutable (changeable) state that anything can change, with all the classic problems that brings. |
+| **You choose when it is built** — eagerly (simplest) or lazily on first request (cheaper start-up). | **Awkward to test** — replacing it with a fake needs a reset/injection hook, and that hook then ships in production code (the code running the live system real users depend on) where someone may misuse it. |
 | **Right fit for a shared resource** — a pool, a cache or a device handle, where a second copy would be a bug. | **Invisible dependencies** — a class that calls `getInstance()` internally does not show that dependency in its constructor, so readers and tests cannot see it. |
 | **Setup cost paid once** — the expensive initialization runs once per process instead of once per caller. | **Uniqueness ends at the process** (strictly, the class loader) — it cannot coordinate anything across machines, which surprises people who try. |
-| **Subclassing is possible if designed in** — with a `protected` constructor, `getInstance()` can pick a subclass at run time (see `AppLogger`). With a `private` constructor, as in most examples, it cannot. | **Hard to undo** — by the time you want an ordinary class back, `getInstance()` calls are scattered everywhere. It also mixes two jobs (SRP): managing its own lifecycle *and* doing its real work. |
+| **Subclassing is possible if designed in** — with a `protected` constructor, `getInstance()` can pick a subclass at run time (see `AppLogger`). With a `private` constructor, as in most examples, it cannot. | **Hard to undo** — by the time you want an ordinary class back, `getInstance()` calls are scattered everywhere. It also mixes two jobs (SRP — Single Responsibility Principle): managing its own lifecycle *and* doing its real work. |
 
 **Often confused with:**
 
@@ -883,16 +885,16 @@ Output:
 | **DI container singleton scope** | Achieves the same "one shared instance" with a better mechanism: the container manages the lifecycle, classes still declare what they need in their constructors, and tests swap in replacements freely. |
 | **Multiton / registry** (`Logger.getLogger(name)`) | One instance *per key*, not one per class. |
 
-**In other languages:** in Python, a module's top-level code runs only once, so an object created at module level is already shared by every importer (the hand-written `__new__` version has the same check-then-act race as Java's naive lazy form and needs a `threading.Lock` with a double check). In JavaScript/TypeScript, exporting an object that is already constructed gives the same effect; because a single event loop never interleaves two synchronous blocks of code, no locking is needed — but each Web Worker has its own separate memory, so each gets its own copy. In Go, a package-level variable initialized through `sync.Once`. In C++, a function-local `static` (the "Meyers Singleton") is created on first call and the language standard guarantees that happens once even under concurrent calls. In Java, the single-element `enum` is the shortest thread-safe form and, unlike the field-based versions, survives serialization without extra code.
+**In other languages:** in Python, a module's top-level code runs only once, so an object created at module level is already shared by every importer (the hand-written `__new__` version has the same check-then-act race as Java's naive lazy form and needs a `threading.Lock` with a double check). In JavaScript/TypeScript, exporting an object that is already constructed gives the same effect; because a single event loop (the one loop that runs JavaScript tasks one after another) never interleaves two synchronous blocks of code, no locking is needed — but each Web Worker (a background thread in the browser) has its own separate memory, so each gets its own copy. In Go, a package-level variable initialized through `sync.Once`. In C++, a function-local `static` (the "Meyers Singleton") is created on first call and the language standard guarantees that happens once even under concurrent calls. In Java, the single-element `enum` is the shortest thread-safe form and, unlike the field-based versions, survives serialization without extra code.
 
 ### When not to use it
 
 No creational pattern is misapplied more often than this one.
 
 - **The real motive is convenience.** Wanting to reach an object from anywhere is not a design requirement — a constructor or method parameter delivers it just as well, and this motive explains most of the singletons that should never have existed.
-- **It holds mutable state that tests read or write.** All tests then share that state, and you get the maddening case of a test that passes in isolation but fails when the whole suite runs.
+- **It holds mutable state that tests read or write.** All tests then share that state, and you get the maddening case of a test that passes in isolation but fails when the whole suite (all the tests together) runs.
 - **A framework already manages lifecycles.** In Spring, Guice, NestJS and similar containers, declare the class with singleton scope and write no singleton code at all.
-- **More than one process is involved.** Each JVM has its own instance, so four servers means four "singletons". Relying on one for a distributed lock or for unique IDs is a **correctness bug**, not a matter of style.
+- **More than one process is involved.** Each JVM has its own instance, so four servers means four "singletons". Relying on one for a distributed lock (a lock shared by several machines) or for unique IDs is a **correctness bug**, not a matter of style.
 
 ### Common mistakes
 
@@ -905,10 +907,10 @@ No creational pattern is misapplied more often than this one.
 
 ### Real-world examples
 
-- **JDK:** `Runtime.getRuntime()` is the textbook case: `Runtime` has a private constructor and a single static instance for the whole JVM. `java.awt.Desktop.getDesktop()` also hands back one shared instance. `Collections.emptyList()` returns one shared immutable constant — singleton-*like* caching of an immutable value rather than the full pattern. `Logger.getLogger(name)` (java.util.logging) returns one shared logger per name — a registry (multiton), one instance per key.
+- **JDK** (Java Development Kit — Java's compiler, tools and standard library)**:** `Runtime.getRuntime()` is the textbook case: `Runtime` has a private constructor and a single static instance for the whole JVM. `java.awt.Desktop.getDesktop()` also hands back one shared instance. `Collections.emptyList()` returns one shared immutable (unchangeable after creation) constant — singleton-*like* caching of an immutable value rather than the full pattern. `Logger.getLogger(name)` (java.util.logging) returns one shared logger per name — a registry (multiton), one instance per key.
 - **Not singletons, despite the name `getInstance()`:** `Calendar.getInstance()`, `NumberFormat.getInstance()` and `Cipher.getInstance(...)` return a **new object on every call** — they are static factory methods (see 8.9). A method called `getInstance` proves nothing; what matters is whether only one instance can ever exist.
 - **Spring:** beans are singleton-scoped by default — one per bean definition per `ApplicationContext`, managed by the container rather than by a private constructor. This is the DI alternative in production; it is "one per container", not "one per JVM".
-- **Everyday infrastructure:** connection pools (HikariCP's pool is usually one per data source), metrics registries (Micrometer's global registry), feature-flag clients — each stands for something that truly exists once (one pool of sockets, one set of counters). Ask that question before choosing the pattern. The browser's `window` object is a singleton per page.
+- **Everyday infrastructure:** connection pools (HikariCP's pool is usually one per data source), metrics registries (Micrometer's global registry), feature-flag clients (switches that turn features on or off without redeploying) — each stands for something that truly exists once (one pool of sockets, one set of counters). Ask that question before choosing the pattern. The browser's `window` object is a singleton per page.
 - **Head First's example:** a chocolate factory's boiler controller — there is one physical boiler, so two controller objects could both try to fill it and overflow it. Their fix walks through the same lazy → synchronized → double-checked / eager progression you saw above.
 
 ### In the interview
@@ -921,9 +923,9 @@ No creational pattern is misapplied more often than this one.
 - *Q: Why does DCL need `volatile`?* — A: Without it the reference can be published before the constructor's writes are visible, so another thread might use a half-initialized object. `volatile` gives a happens-before edge between the write and later reads.
 - *Q: Why is the holder idiom thread-safe without locks?* — A: The JVM initializes a class once and publishes its static fields safely; the nested class is only initialized on first access.
 - *Q: How can a singleton be broken?* — A: Reflection, serialization, cloning, multiple class loaders. Fixes: constructor guard, `readResolve`, throwing `clone`, or just use an enum.
-- *Q: Singleton vs static class?* — A: A singleton is an object: it can implement interfaces, be passed around, be lazily created and be mocked. A static class can do none of that.
+- *Q: Singleton vs static class?* — A: A singleton is an object: it can implement interfaces, be passed around, be lazily created and be mocked (replaced in a test by a fake that records how it was called). A static class can do none of that.
 - *Q: Is Singleton an anti-pattern?* — A: It is often *used* as one (glorified global). It is fine for genuinely single resources; prefer DI to enforce "one instance" from outside.
-- *Q: How do you make a unique ID generator across 10 servers?* — A: Not with a Singleton — it is one per JVM. Use a database sequence, a Snowflake-style ID (timestamp + machine id + counter), or UUIDs.
+- *Q: How do you make a unique ID generator across 10 servers?* — A: Not with a Singleton — it is one per JVM. Use a database sequence (a database counter that hands out increasing numbers), a Snowflake-style ID (timestamp + machine id + counter), or UUIDs (128-bit randomly generated IDs that practically never repeat).
 
 ### Self-check
 
@@ -957,7 +959,7 @@ Important: it **centralizes** the decision; it does not **remove** it. Adding a 
 
 1. Define a product **interface** (`Notification`).
 2. Write the concrete classes (`EmailNotification`, `SmsNotification`, `PushNotification`).
-3. Write one `create(type)` method that maps the type to a concrete class — with an exhaustive `switch` over an enum, or with a `Map<String, Supplier<Notification>>` registry.
+3. Write one `create(type)` method that maps the type to a concrete class — with an exhaustive `switch` over an enum, or with a `Map<String, Supplier<Notification>>` registry (a lookup table from type names to `Supplier`s; a `Supplier` is Java's built-in "give me a new value" function type).
 4. Callers call `create(...)` and hold the result as the interface. They never write `new ConcreteClass()`.
 5. Reject unknown types loudly (`IllegalArgumentException`).
 
@@ -1074,8 +1076,8 @@ public class Main {
 ```
 
 - The enum `switch` has **no `default`**: the Java compiler checks that every `Channel` value is covered, so adding `WHATSAPP` to the enum without handling it is a compile error. That is a nice safety net.
-- The registry version maps lower-cased names to **constructor references** (`EmailNotification::new`). `register(...)` lets start-up code add a channel without touching the factory. Because `Notification` has one abstract method, a lambda can implement it.
-- `Locale.ROOT` avoids surprising lower-casing in some locales (the Turkish dotless "i" problem).
+- The registry version maps lower-cased names to **constructor references** (`EmailNotification::new` — shorthand for "call this constructor"). `register(...)` lets start-up code add a channel without touching the factory. Because `Notification` has one abstract method, a lambda can implement it (an interface with exactly one abstract method is called a *functional interface*).
+- `Locale.ROOT` avoids surprising lower-casing in some locales (language-and-region settings) (the Turkish dotless "i" problem).
 
 Output:
 
@@ -1121,8 +1123,8 @@ These are **static factory methods** (Joshua Bloch, *Effective Java* item 1): na
 - `NumberFormat.getInstance()` / `getCurrencyInstance(locale)` — also a fresh (locale-specific, usually `DecimalFormat`) object per call.
 - `EnumSet.noneOf(type)` — returns a `RegularEnumSet` (≤ 64 constants, one `long` bit-vector) or a `JumboEnumSet`; you never see either class.
 - `List.of(...)`, `Map.of(...)`, `Optional.of(...)`, `Integer.valueOf(...)`, `Path.of(...)`.
-- `Executors.newFixedThreadPool(n)`, `Executors.newVirtualThreadPerTaskExecutor()` — return configured `ExecutorService` implementations.
-- **Spring:** `@Bean` methods in a `@Configuration` class are factory methods the container calls to create beans.
+- `Executors.newFixedThreadPool(n)`, `Executors.newVirtualThreadPerTaskExecutor()` — return configured `ExecutorService` implementations (Java's thread-pool interface for running tasks on reusable threads).
+- **Spring:** `@Bean` methods (`@Bean` is an annotation — a `@` tag on code that a framework reads) in a `@Configuration` class are factory methods the container calls to create beans.
 
 ### In the interview
 
@@ -1159,7 +1161,7 @@ Terms:
 
 **GoF intent and participants.** Intent: declare an operation that creates an object, but leave the choice of concrete class to subclasses — the base class postpones instantiation to them. The four participants are **Product** (the interface of the objects created), **ConcreteProduct** (implements Product), **Creator** (declares the factory method returning a Product, may supply a default implementation, and — crucially — *calls* it from its own operations) and **ConcreteCreator** (overrides the factory method to return a ConcreteProduct).
 
-> **Factory Method is not a "static factory method".** The word "factory" is overloaded. A *static factory method* (`List.of`, `Integer.valueOf`, `Calendar.getInstance`) and a *Simple Factory* (`NotificationFactory.create(type)`, 8.9) are **one static method that decides** what to return. They cannot be overridden (static methods are not polymorphic), and there is no Creator hierarchy. The GoF **Factory Method** is an **instance method, overridden in subclasses**, that the base class itself calls. If there is no inheritance and no overriding, it is not this pattern.
+> **Factory Method is not a "static factory method".** The word "factory" is overloaded. A *static factory method* (`List.of`, `Integer.valueOf`, `Calendar.getInstance`) and a *Simple Factory* (`NotificationFactory.create(type)`, 8.9) are **one static method that decides** what to return. They cannot be overridden (static methods are not polymorphic — a call cannot be redirected to a subclass's version at run time), and there is no Creator hierarchy. The GoF **Factory Method** is an **instance method, overridden in subclasses**, that the base class itself calls. If there is no inheritance and no overriding, it is not this pattern.
 
 ### The problem it solves
 
@@ -1370,7 +1372,7 @@ All three generators print an identical "Collecting rows…" line, since that co
 |---|---|
 | **Extensible without edits** — supporting another product means writing another class; no existing class is reopened. | **More classes** — every product type needs its own creator subclass, which is a lot of files for a small feature. |
 | **Common procedure in one place** — everything around the creation step is written once in the base class. | **Indirection** — the concrete type is not visible where it is used; you have to find out which subclass you are holding. |
-| **Built-in test seam** — a test can subclass the creator and hand back a fake product. | **Relies on inheritance** — Java allows one superclass, and inheritance combines less flexibly than passing in a function. |
+| **Built-in test seam** (a spot where a test can plug in its own object) — a test can subclass the creator and hand back a fake product. | **Relies on inheritance** — Java allows one superclass, and inheritance combines less flexibly than passing in a function. |
 | **Nobody holds the full list of types** — no class has to know every format. | **Tempting too early** — with only one product type it is all cost and no benefit. |
 
 **Often confused with:**
@@ -1383,7 +1385,7 @@ All three generators print an identical "Collecting rows…" line, since that co
 | **Builder** | Factory Method chooses a type in a single call; Builder assembles one complex object across many calls. |
 | **"Static factory method"** (`List.of`) | A named static method used instead of a constructor, *Effective Java* style. It cannot be overridden, so it is not this pattern — only the word "factory" is shared. |
 
-**In other languages (and modern Java):** wherever functions are values, you can hand the creator a *creation function* instead of subclassing it. Python: `ReportGenerator(create_document=PdfDocument)` (a class is callable). JavaScript/TypeScript: pass `() => new PdfDocument()` into the constructor, and a test passes its own arrow function. Java: a `Supplier<Document>` field, as in `SupplierReportGenerator`. This is usually the better default because it needs no new class; keep the subclassing form for framework base classes that other teams extend — which is where the pattern was born.
+**In other languages (and modern Java):** wherever functions are values, you can hand the creator a *creation function* instead of subclassing it. Python: `ReportGenerator(create_document=PdfDocument)` (a class is callable). JavaScript/TypeScript: pass `() => new PdfDocument()` into the constructor, and a test passes its own arrow function (JavaScript's short `() => ...` function syntax). Java: a `Supplier<Document>` field, as in `SupplierReportGenerator`. This is usually the better default because it needs no new class; keep the subclassing form for framework base classes that other teams extend — which is where the pattern was born.
 
 ### When not to use it
 
@@ -1394,7 +1396,7 @@ All three generators print an identical "Collecting rows…" line, since that co
 
 ### Common mistakes
 
-- Making the factory method **public** — it becomes part of the API and callers bypass the shared procedure.
+- Making the factory method **public** — it becomes part of the API (Application Programming Interface — the methods others are meant to call) and callers bypass the shared procedure.
 - Calling the base class's factory method from its **constructor** — the subclass's fields are not initialized yet when the override runs.
 - Calling a switch-in-one-method a Factory Method. (A learner asked exactly this about a code sample: if one method decides with `if/switch`, it is a *simple factory*; if subclasses override a creation hook used by shared base-class logic, it is a *factory method*.)
 
@@ -1403,7 +1405,7 @@ All three generators print an identical "Collecting rows…" line, since that co
 - **JDK:** `Iterable.iterator()` / `Collection.iterator()` — the interface declares the creation method (Creator), and `ArrayList`, `LinkedList`, `HashSet`… (ConcreteCreators) each return their own `Iterator` implementation (ConcreteProduct); the enhanced `for` loop and every method written against `Iterator` (Product) never learn which one. `AbstractList` implements `iterator()` on top of its abstract `get(int)` — the template/factory mix in action.
 - **JDK XML (as a building block):** `DocumentBuilderFactory.newDocumentBuilder()` and `TransformerFactory.newTransformer()` are abstract methods that each parser implementation's factory subclass overrides — factory methods living inside what, as a whole, is an Abstract Factory (8.11). Note that `DocumentBuilderFactory.newInstance()` itself is a *static* factory method, not a Factory Method.
 - **Spring:** `FactoryBean<T>.getObject()` — a bean whose job is to create another object (e.g. proxies, `SqlSessionFactoryBean` in MyBatis-Spring). Spring's `AbstractApplicationContext` also exposes overridable creation hooks for subclasses.
-- **Frameworks:** Android's `Fragment.onCreateView()` — you override a `create…` hook the framework calls. JUnit/TestNG fixture base classes with overridable `create…` methods.
+- **Frameworks:** Android's `Fragment.onCreateView()` — you override a `create…` hook the framework calls. JUnit/TestNG (Java testing frameworks) fixture (shared test setup) base classes with overridable `create…` methods.
 
 ### In the interview
 
@@ -1432,11 +1434,11 @@ Base class = procedure + abstract `protected createX()`; subclasses decide the c
 
 **Abstract Factory** provides an interface for creating **families of related objects** that must be used together, without the client naming any concrete class. Choosing a family = choosing a factory; everything created afterwards automatically matches.
 
-**Everyday analogy.** Furniture showrooms sell matching sets. If you pick the "Victorian" catalogue, the chair, sofa and table you order all come in the Victorian style. You cannot accidentally get a modern chair with a Victorian sofa, because you ordered from one catalogue. (The course summary uses the GUI version: one factory per OS theme — Windows or macOS — producing buttons, checkboxes and scrollbars that belong together. *Head First* uses a pizza *ingredient* factory per region: New York dough, sauce and cheese vs Chicago dough, sauce and cheese.)
+**Everyday analogy.** Furniture showrooms sell matching sets. If you pick the "Victorian" catalogue, the chair, sofa and table you order all come in the Victorian style. You cannot accidentally get a modern chair with a Victorian sofa, because you ordered from one catalogue. (The course summary uses the GUI (graphical user interface) version: one factory per OS (operating system) theme — Windows or macOS — producing buttons, checkboxes and scrollbars that belong together. *Head First* uses a pizza *ingredient* factory per region: New York dough, sauce and cheese vs Chicago dough, sauce and cheese.)
 
 Terms:
 
-- **Family** — a set of products designed to work together (Postgres connection + Postgres query builder).
+- **Family** — a set of products designed to work together (Postgres connection + Postgres query builder; Postgres is short for PostgreSQL, a popular open-source database, and a query builder is an object that writes the SQL text for you).
 - **Abstract product** — an interface per product kind (`Connection`, `QueryBuilder`).
 - **Abstract factory** — an interface with one `create…` method per product kind (`StorageFactory`).
 - **Concrete factory** — implements *every* create method for one family (`PostgresFactory`).
@@ -1445,9 +1447,9 @@ Terms:
 
 ### The problem it solves
 
-Certain objects are only correct alongside partners from the same variant. A Postgres connection needs a Postgres-flavoured query builder: Postgres wraps identifiers in double quotes, MySQL in backticks. A macOS-styled button should sit next to a macOS-styled checkbox. A test run wants a fake payment client, a fake mailer *and* a fake clock — never a mixture of fake and real.
+Certain objects are only correct alongside partners from the same variant. A Postgres connection needs a Postgres-flavoured query builder: Postgres wraps identifiers (table and column names) in double quotes, MySQL in backticks. A macOS-styled button should sit next to a macOS-styled checkbox. A test run wants a fake payment client, a fake mailer *and* a fake clock — never a mixture of fake and real.
 
-When each of those objects is constructed independently, nothing prevents a bad combination. Pairing a `PostgresConnection` with a `MySqlQueryBuilder` compiles without a murmur; the mistake only surfaces later as an SQL syntax error from the server, with a stack trace that points nowhere near the two lines that made the wrong choice.
+When each of those objects is constructed independently, nothing prevents a bad combination. Pairing a `PostgresConnection` with a `MySqlQueryBuilder` compiles without a murmur; the mistake only surfaces later as an SQL (the standard language for querying relational databases) syntax error from the server, with a stack trace (the list of method calls that were active when the error happened) that points nowhere near the two lines that made the wrong choice.
 
 This is also what separates it from Factory Method: Factory Method varies **one** product, Abstract Factory varies a **set** of products that must stay consistent.
 
@@ -1462,7 +1464,7 @@ The upper half of the figure shows the failure — the code compiles and starts,
 
 1. Identify the **product kinds** in the family and give each an interface (`Connection`, `QueryBuilder`).
 2. Write the **abstract factory** interface with one creation method per product kind.
-3. For each variant, write the **concrete products** and a **concrete factory** that implements *every* method and returns only that family's products (Java's covariant return types let `PostgresFactory.createConnection()` declare `PostgresConnection`, documenting the family).
+3. For each variant, write the **concrete products** and a **concrete factory** that implements *every* method and returns only that family's products (Java's covariant return types (an override may declare a more specific return type than the method it overrides) let `PostgresFactory.createConnection()` declare `PostgresConnection`, documenting the family).
 4. The **client** receives a factory (composition, usually via its constructor) and only uses the abstract types.
 5. Choose the concrete factory **once**, at the **composition root** — the spot close to `main` where the application wires its concrete parts together — and pass it down.
 
@@ -1644,7 +1646,7 @@ public class Main {
 - `chooseFactory(...)` is the **composition root** and holds the program's only `switch` on the database. Had we put that `switch` inside `runReport`, it would merely have been relocated, and every other class that later needs a connection would sprout a duplicate of it.
 - `FakeStorageFactory` shows the most valuable use: swap the **whole environment** for tests with one line.
 
-Output (with no `DB` environment variable set):
+Output (with no `DB` environment variable set — an environment variable is a named setting the operating system passes to a program):
 
 ```text
 == Using postgres ==
@@ -1685,7 +1687,7 @@ Output (with no `DB` environment variable set):
 
 **Often confused with:** *Builder* (Abstract Factory returns several finished products immediately; Builder assembles one product step by step and hands it over at the end); a *DI container* (same outcome through a more general mechanism — Spring profiles or Guice modules bind a whole set of implementations as configuration; if you already have a container, prefer it); a *Facade* over several factories (a Facade simplifies an existing interface, whereas Abstract Factory guarantees consistency — similar shapes, unrelated purposes).
 
-**In other languages:** in Python or JavaScript, a plain dictionary/object of creation functions — `{"connection": PostgresConnection, "queries": PostgresQueryBuilder}` — already acts as a factory, no classes needed. In Java, a `record` with several `Supplier` fields (`record StorageKit(Supplier<Connection> connection, Supplier<QueryBuilder> queries)`) is often shorter than an interface plus one class per family. With a DI container, write the pattern by hand only when you are building the framework, not when using one.
+**In other languages:** in Python or JavaScript, a plain dictionary/object of creation functions — `{"connection": PostgresConnection, "queries": PostgresQueryBuilder}` — already acts as a factory, no classes needed. In Java, a `record` (Java's short syntax for an immutable data class) with several `Supplier` fields (`record StorageKit(Supplier<Connection> connection, Supplier<QueryBuilder> queries)`) is often shorter than an interface plus one class per family. With a DI container, write the pattern by hand only when you are building the framework, not when using one.
 
 ### When not to use it
 
@@ -1697,16 +1699,16 @@ Output (with no `DB` environment variable set):
 ### Common mistakes
 
 - A concrete factory that implements only some methods, or returns products from another family.
-- Choosing the factory deep in the call stack instead of once at the composition root.
+- Choosing the factory deep in the call stack (the chain of method calls that led to the current one) instead of once at the composition root.
 - Making the factory a Singleton by reflex — pass it in instead.
 
 ### Real-world examples
 
-- **JDK:** `javax.xml.parsers.DocumentBuilderFactory`, `javax.xml.transform.TransformerFactory`, `XPathFactory` — the abstract factory class is what client code holds; the static `newInstance()` locates one implementation (e.g. the JDK's built-in Xerces/Xalan-based ones, or Saxon if configured), and that concrete factory hands out objects belonging to the same implementation (`TransformerFactory` creates both `Transformer` and `Templates`). Swapping the implementation swaps the whole set. JDBC's `java.sql.Connection` acts as a factory for a driver-specific family: `createStatement()`, `prepareStatement()`, `prepareCall()`, `createBlob()` all return objects of the same driver.
+- **JDK:** `javax.xml.parsers.DocumentBuilderFactory`, `javax.xml.transform.TransformerFactory`, `XPathFactory` — the abstract factory class is what client code holds; the static `newInstance()` locates one implementation (e.g. the JDK's built-in Xerces/Xalan-based ones, or Saxon if configured), and that concrete factory hands out objects belonging to the same implementation (`TransformerFactory` creates both `Transformer` and `Templates`). Swapping the implementation swaps the whole set. JDBC's (Java Database Connectivity, Java's standard database API) `java.sql.Connection` acts as a factory for a driver-specific (a driver is the library that talks to one particular database) family: `createStatement()`, `prepareStatement()`, `prepareCall()`, `createBlob()` all return objects of the same driver.
 - **UI toolkits:** the original GoF example — a factory per look-and-feel producing matching widgets. Swing's pluggable look-and-feel follows the same idea.
-- **ORMs:** Hibernate's `Dialect` bundles database-specific SQL generation, type mapping and identifier quoting that must agree with each other.
+- **ORMs:** Hibernate's `Dialect` bundles database-specific SQL generation, type mapping and identifier quoting that must agree with each other. (An ORM — object-relational mapper — is a library that maps classes to database tables so you rarely write SQL by hand.)
 - **Spring:** `@Profile("test")` vs `@Profile("prod")` configurations swap a whole set of beans (fake mailer, fake payments, in-memory DB) together.
-- **Cloud SDKs:** switching between AWS and GCP clients in a multi-cloud abstraction (storage client + queue client + secrets client per provider).
+- **Cloud SDKs:** switching between AWS and GCP clients in a multi-cloud abstraction (SDK = software development kit, a provider's client library; AWS and GCP are Amazon's and Google's cloud platforms) (storage client + queue client + secrets client per provider).
 
 ### In the interview
 
@@ -1771,9 +1773,9 @@ The two usual "fixes" are both bad:
 | Approach | What goes wrong |
 |---|---|
 | **Telescoping constructors** — one overload per useful combination: `Pizza(size)`, `Pizza(size, crust)`, `Pizza(size, crust, cheese)`, … | The number of overloads explodes with every field; call sites are still positional and unreadable; two parameters of the same type are easy to swap. |
-| **JavaBeans style** — empty constructor + setters | The object exists in a **half-built** state; nothing stops use before it is ready; it **cannot be immutable**; no single place to validate rules that span several fields. |
+| **JavaBeans style** — empty constructor + setters (methods that each change one field) | The object exists in a **half-built** state; nothing stops use before it is ready; it **cannot be immutable**; no single place to validate rules that span several fields. |
 
-Builder fixes both: every value is **named** at the call site, optional fields have **defaults**, the product can be **immutable**, and `build()` is **one gate** that can refuse to create an invalid object. Our API adopts the rule "a GET must not carry a body" (HTTP gives a GET body no defined meaning — RFC 9110 §9.3.1 — and many servers and proxies reject or drop it). That rule involves two fields at once (`method` and `body`), so no single setter can enforce it; `build()` is the natural place for it.
+Builder fixes both: every value is **named** at the call site, optional fields have **defaults**, the product can be **immutable**, and `build()` is **one gate** that can refuse to create an invalid object. Our API adopts the rule "a GET must not carry a body" (HTTP — the request/response protocol of the web, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) — gives a GET, its "read this resource" request, no defined meaning for a body — RFC 9110 §9.3.1, the official HTTP standard — and many servers and proxies (middlemen that forward requests) reject or drop it). That rule involves two fields at once (`method` and `body`), so no single setter can enforce it; `build()` is the natural place for it.
 
 ![Builder Pattern - named steps, then one gate that validates](../../assets/P-builder-pattern-1.svg)
 *Figure — the unreadable positional constructor versus named builder steps that end in one build() gate which validates and returns an immutable HttpRequest or an error (course diagram)*
@@ -1863,9 +1865,9 @@ When some steps are required or must come in order, encode it in the **types**: 
 
 ### Lombok-style builders and records
 
-- **Lombok `@Builder`** generates all of this from an annotation: a static `builder()` method, a nested builder class with one method per field, and `build()`. `@Builder(toBuilder = true)` adds `toBuilder()` for copy-and-modify; `@Singular` generates `header(name, value)`-style methods that add to collections. Lombok's builder does **not** validate by default — you add validation in the constructor it calls.
-- **Java records** give you the immutable product for free. A record plus a static nested builder (like `Email`) is now a common shape. Put validation in the record's compact constructor so it runs however the record is created.
-- **Immutability checklist:** `final` class or private constructor, `final` fields, no setters, defensive copies of mutable inputs (`Map.copyOf`, `List.copyOf`), and getters that do not leak mutable internals.
+- **Lombok `@Builder`** (Lombok is a library that writes Java boilerplate for you at compile time) generates all of this from an annotation: a static `builder()` method, a nested builder class with one method per field, and `build()`. `@Builder(toBuilder = true)` adds `toBuilder()` for copy-and-modify; `@Singular` generates `header(name, value)`-style methods that add to collections. Lombok's builder does **not** validate by default — you add validation in the constructor it calls.
+- **Java records** give you the immutable product for free. A record plus a static nested builder (like `Email`) is now a common shape. Put validation in the record's compact constructor (a constructor with no parameter list that runs on every creation) so it runs however the record is created.
+- **Immutability checklist:** `final` class or private constructor, `final` fields, no setters, defensive copies (private copies, so outside code cannot change your internals) of mutable inputs (`Map.copyOf`, `List.copyOf`), and getters that do not leak mutable internals.
 
 ### Java implementation
 
@@ -2148,7 +2150,7 @@ Output:
 |---|---|
 | **Self-describing call sites** — each value is labelled where it is passed, so parameter order no longer matters. | **Duplicated fields** — the builder repeats every field of the product; a new field means two edits. |
 | **Immutable products** — all fields can be `final` because they are fixed before the object exists; safe to share between threads. | **Forgettable last step** — omit `build()` and you are holding a builder, not the object you wanted. |
-| **A home for validation** — rules that involve several fields are checked in `build()`. | **Easily overused** — for a value object with three fields it only adds noise. |
+| **A home for validation** — rules that involve several fields are checked in `build()`. | **Easily overused** — for a value object (a small object defined only by its values, like `Money`) with three fields it only adds noise. |
 | **Free optional fields** — defaults sit in the builder, callers mention only what they change. | **Reuse pitfall** — building twice from one builder can leave two products sharing one mutable collection unless it is copied. |
 | **Different representations** (GoF) — a Director can drive different ConcreteBuilders through the same steps. | One extra short-lived object per construction — almost never measurable. |
 
@@ -2181,7 +2183,7 @@ Output:
 ### Real-world examples
 
 - **JDK:** `StringBuilder` (append repeatedly, `toString()` once); `java.net.http.HttpClient.newBuilder()` and `HttpRequest.newBuilder()` (Java 11+); `Locale.Builder`; `Calendar.Builder` (Java 8+); `Stream.builder()`; `Thread.ofVirtual().name("w").start(task)` — the `Thread.Builder` API in Java 21; `ProcessBuilder`.
-- **Spring:** `UriComponentsBuilder`, `ResponseEntity.ok().header(...).body(...)`, `WebClient.builder()`, `MockMvcRequestBuilders.get("/x").param(...)`, Spring Security's `HttpSecurity` DSL.
+- **Spring:** `UriComponentsBuilder`, `ResponseEntity.ok().header(...).body(...)`, `WebClient.builder()`, `MockMvcRequestBuilders.get("/x").param(...)`, Spring Security's `HttpSecurity` DSL (domain-specific language — a mini-language built for one job).
 - **Libraries:** OkHttp `Request.Builder`; Protocol Buffers generated messages (immutable messages + generated builders); Guava `ImmutableList.builder()`; Lombok `@Builder`; test-data builders like `aUser().withEmail("x@y.com").build()`.
 
 ### In the interview
@@ -2234,7 +2236,7 @@ There are two versions of the problem:
 ![Prototype Pattern - shallow copies share, deep copies do not](../../assets/P-prototype-pattern-1.svg)
 *Figure — a shallow copy shares the channels list with the prototype, so adding "push" to the copy corrupts the prototype; a deep copy gets its own list (course diagram)*
 
-The figure highlights the one decision in this pattern that really needs thought: **how far down the object graph the copy reaches.** The structure itself is simple: two entrances to the class — an ordinary constructor that does the expensive work, and a copy path that does none of it.
+The figure highlights the one decision in this pattern that really needs thought: **how far down the object graph (every object reachable by following references from this one) the copy reaches.** The structure itself is simple: two entrances to the class — an ordinary constructor that does the expensive work, and a copy path that does none of it.
 
 ### How it works
 
@@ -2283,7 +2285,7 @@ classDiagram
 
 | | Shallow copy | Deep copy |
 |---|---|---|
-| Primitives, `String`, other immutables | Copied / safely shared | Copied / safely shared |
+| Primitives (`int`, `double`, `boolean`…), `String`, other immutables | Copied / safely shared | Copied / safely shared |
 | Mutable fields (lists, maps, objects) | **Shared** — both objects point to the same one | **Duplicated** — each has its own |
 | Cost | Cheap | Proportional to the size of the object graph |
 | Risk | Changing the copy silently changes the original | Cycles, copying things you meant to share (caches), copying resources |
@@ -2304,9 +2306,9 @@ Java's built-in version of Prototype is `Object.clone()` + the `Cloneable` inter
 - `Cloneable` is a **marker interface with no methods** — it does not declare `clone()`. It only changes the behaviour of `Object.clone()` (without it, `clone()` throws `CloneNotSupportedException`).
 - `Object.clone()` is **`protected`**, so you must override it as `public` to make it usable.
 - It makes a **shallow** field-by-field copy.
-- It **creates the object without running any constructor**, so constructor validation and invariants are skipped.
+- It **creates the object without running any constructor**, so constructor validation and invariants (rules that must always hold for the object) are skipped.
 - To deep-copy you must reassign fields after `super.clone()` — which is **impossible for `final` fields**.
-- It throws a **checked** exception you have to catch even when it cannot happen.
+- It throws a **checked** exception (one the compiler forces you to catch or declare) you have to catch even when it cannot happen.
 
 **Prefer a copy constructor or a static copy factory** (`static Foo copyOf(Foo other)`). It is ordinary code, runs your validation, works with `final` fields, and its behaviour is visible where you wrote it. The exception is arrays: `array.clone()` works well for primitive arrays.
 
@@ -2542,7 +2544,7 @@ Output:
 | **Costly setup is paid once** — the prototype does the parsing/loading; each copy is cheap. | **Every class carries copy code** — and it falls out of date as soon as someone adds a field and forgets the copy. |
 | **Create without naming a class** — the only option when all you hold is an interface. | **Shallow vs deep must be decided per field** — a wrong call makes two objects secretly share state. |
 | **New kinds at run time** — configured prototypes can be registered and copied without compiling a class for each (fewer subclasses). | **Cyclic graphs** need special care, or a naive deep copy recurses forever. |
-| **Saved starting points** — users can keep a template, a filter or a layout and begin new work from it. | **Hazardous for objects with identity** — primary keys, handles and connections must not be duplicated. |
+| **Saved starting points** — users can keep a template, a filter or a layout and begin new work from it. | **Hazardous for objects with identity** — primary keys (unique row IDs in a database), handles and connections must not be duplicated. |
 | | **Uneven language support** — some languages offer no built-in cloning, and Java's built-in one (`Cloneable`) is flawed, so you write the copy logic yourself. |
 
 **Often confused with:**
@@ -2610,13 +2612,13 @@ An **Object Pool** keeps a **bounded set of reusable objects**. Instead of creat
 
 ### The problem it solves
 
-Some objects are **expensive to create** (a database connection needs a TCP handshake, TLS, authentication) and/or **limited** (the database accepts only so many connections). Creating one per request is slow and can overwhelm the server. A pool pays the creation cost a few times and **caps** the total.
+Some objects are **expensive to create** (a database connection needs a TCP handshake — the back-and-forth that opens a network connection — then TLS, the encryption layer behind `https`, then authentication, proving who you are; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) and/or **limited** (the database accepts only so many connections). Creating one per request is slow and can overwhelm the server. A pool pays the creation cost a few times and **caps** the total.
 
 ### How it works
 
-1. Keep an **idle queue** of ready objects, a count of how many are alive, and a cap on how many may be lent out at once (here a `Semaphore` with one permit per object).
+1. Keep an **idle queue** (a first-in, first-out waiting line) of ready objects, a count of how many are alive, and a cap on how many may be lent out at once (here a `Semaphore` — a counter of permits that a thread must take before going on and hand back afterwards — with one permit per object).
 2. **acquire()**: wait (with a timeout) for a free slot; then take an idle object if there is one, otherwise create a new one. If no slot frees up before the timeout, fail.
-3. The client uses the object and **always releases it in a `finally` block** — a leaked object is gone from the pool forever.
+3. The client uses the object and **always releases it in a `finally` block** (code that always runs, even if an exception was thrown) — a leaked (never returned) object is gone from the pool forever.
 4. **release()**: **validate** the object (is the connection still alive?); if broken, discard it so a fresh one can be made later; otherwise **reset** its state (clear per-borrower data) and put it back. Either way, free the slot.
 5. Make all of this **thread-safe** — pools exist *because* many threads compete.
 
@@ -2825,19 +2827,19 @@ Output:
 | Pros | Cons |
 |---|---|
 | Avoids repeated expensive creation | Complexity: sizing, validation, timeouts, leak detection |
-| Caps resource usage (protects the DB) | Leaked (never released) objects shrink the pool until it deadlocks |
-| Predictable latency after warm-up | Stale state if reset is incomplete — one user's data leaks to the next |
-| | For cheap objects it is **slower** than `new` — modern JVM allocation and GC are very fast |
+| Caps resource usage (protects the DB) | Leaked (never released) objects shrink the pool until it deadlocks (everyone waits forever) |
+| Predictable latency (time per request) after warm-up | Stale state if reset is incomplete — one user's data leaks to the next |
+| | For cheap objects it is **slower** than `new` — modern JVM allocation and GC (garbage collection — the JVM's automatic memory clean-up) are very fast |
 
 ### When not to use it
 
 - For **cheap** objects (small value objects, `StringBuilder`s) — the JVM allocates them faster than a pool can hand them out.
-- For **virtual threads** (Java 21) — they are cheap by design; create one per task instead of pooling them.
+- For **virtual threads** (Java 21; lightweight threads managed by the JVM, cheap enough to create by the million) — they are cheap by design; create one per task instead of pooling them.
 - When a **well-tested library** exists — use HikariCP, Apache Commons Pool 2 or your framework's pool rather than writing your own in production.
 
 ### Common mistakes
 
-- Not releasing in `finally` (or not using try-with-resources wrappers).
+- Not releasing in `finally` (or not using try-with-resources (Java's `try (...)` form that closes things automatically) wrappers).
 - Not resetting borrower state.
 - Unbounded waits — always use a timeout.
 - Returning the same object twice (double release). In our teaching pool that would put one object in the idle queue twice *and* add an extra permit, silently raising the cap; production pools track which objects are currently borrowed and reject a second release.
@@ -2854,7 +2856,7 @@ Output:
 
 **30-second answer:** "An object pool reuses a bounded set of expensive objects like DB connections. acquire takes an idle one, creates one if under the cap, or waits with a timeout; release validates, resets and returns it. It must be thread-safe, and clients must release in finally. For cheap objects it's counter-productive, and in production I'd use HikariCP."
 
-- *Q: How do you size a pool?* — A: From measured concurrency and downstream limits; HikariCP's guidance is that small pools (roughly core-count scale) often beat big ones, because the database can only do so much in parallel.
+- *Q: How do you size a pool?* — A: From measured concurrency and downstream limits (the capacity of the services you call, e.g. the database); HikariCP's guidance is that small pools (roughly core-count scale) often beat big ones, because the database can only do so much in parallel.
 - *Q: How do you detect leaks?* — A: Record who borrowed each object and when; log if held longer than a threshold (HikariCP's `leakDetectionThreshold` does this).
 
 ### Self-check
@@ -2874,7 +2876,7 @@ Borrow → use → return (in `finally`). Bounded, thread-safe, validated, reset
 
 | Pattern | Distinctive feature | Use when | Course example | JDK / Spring example | Pros | Cons |
 |---|---|---|---|---|---|---|
-| **Singleton** | Only one instance of the class exists | One shared resource: configuration, pool, registry | One `ConfigStore` (or one DB connection pool) | `Runtime.getRuntime()`, Spring singleton-scoped beans | Global access; single initialization | Hurts unit testing; hidden dependencies; global state |
+| **Singleton** | Only one instance of the class exists | One shared resource: configuration, pool, registry | One `ConfigStore` (or one DB connection pool) | `Runtime.getRuntime()`, Spring singleton-scoped beans | Global access; single initialization | Hurts unit testing (testing one class on its own); hidden dependencies; global state |
 | **Simple Factory** *(idiom)* | One method maps a type value to a class | Small, stable set of types chosen by config | Notification by channel | `Calendar.getInstance()`, `EnumSet.noneOf`, `@Bean` methods | Short, centralizes the switch | Edit it for every new type |
 | **Factory Method** | Subclasses decide the created type via an overridable method | Shared procedure, varying product; others will add types | PDF / HTML report generator (documents of different types — PDF, Word, HTML…) | `Collection.iterator()`, Spring `FactoryBean` | Open–Closed; decouples creator from products | More classes; needs subclasses |
 | **Abstract Factory** | Creates *families* of related objects without concrete classes | Products must be compatible; swap a whole set at once | Postgres vs MySQL storage; Windows vs macOS widgets | `DocumentBuilderFactory`, JDBC `Connection`, Spring profiles | Guarantees compatibility; Open–Closed for families | Complex; adding a product kind edits every factory |
@@ -2897,7 +2899,7 @@ Borrow → use → return (in `finally`). Bounded, thread-safe, validated, reset
 ### How they combine
 
 - An **Abstract Factory** is often implemented with **Factory Methods**, may use **Prototypes** (a factory configured with prototype objects it copies), and is frequently a **Singleton** (one factory per family) — though passing it in is better.
-- A **Builder** can use a **Factory** to pick which parts to build, and a **Director** can be a Singleton-like stateless service.
+- A **Builder** can use a **Factory** to pick which parts to build, and a **Director** can be a Singleton-like stateless (keeps no data between calls) service.
 - Designs often *start* with Factory Method (simple, subclass-based) and *evolve* towards Abstract Factory, Prototype or Builder as more flexibility is needed.
 
 ---

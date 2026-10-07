@@ -1,6 +1,6 @@
 # Chapter 11 — Behavioral Design Patterns (Part 2) & Beyond GoF
 
-> **What you will learn.** The remaining five GoF behavioral patterns — **Observer, State, Strategy, Template Method, Visitor** — including the three that share one class diagram (Strategy, State, Bridge) and how to tell them apart. Then six widely used patterns that are *not* in the GoF book but come up constantly in interviews and real code: **Null Object, Dependency Injection, Repository, Specification, MVC** (the Head First "compound pattern") and **Event Sourcing (lite)**. The chapter ends with a "which behavioral pattern do I need?" decision table.
+> **What you will learn.** The remaining five **GoF** ("Gang of Four" — the four authors of the 1994 book *Design Patterns*, which catalogued 23 classic patterns) behavioral patterns — **Observer, State, Strategy, Template Method, Visitor** — including the three that share one class diagram (Strategy, State, Bridge) and how to tell them apart. Then six widely used patterns that are *not* in the GoF book but come up constantly in interviews and real code: **Null Object, Dependency Injection, Repository, Specification, MVC** (the Head First "compound pattern") and **Event Sourcing (lite)**. The chapter ends with a "which behavioral pattern do I need?" decision table.
 
 **How to run the code in this chapter**
 
@@ -50,7 +50,7 @@ void finish(int buildNumber, String result) {
 }
 ```
 
-This costs more than it looks: the build pipeline now **depends on a chat service**; a fifth reaction means editing the pipeline; a unit test must fake four services; and disabling deployment in staging needs an environment flag inside a class that ought to know nothing about environments.
+This costs more than it looks: the build pipeline now **depends on a chat service**; a fifth reaction means editing the pipeline; a **unit test** (an automated test that checks one class on its own) must fake four services; and disabling deployment in **staging** (the pre-production copy of the system used for final checks) needs an environment flag inside a class that ought to know nothing about environments.
 
 Observer replaces the four references with **one list of one interface**. Anything that cares subscribes. **The source only announces; every listener chooses its own reaction.** No one orchestrates them, and listeners are unaware of one another.
 
@@ -77,7 +77,7 @@ Observer replaces the four references with **one list of one interface**. Anythi
 ![Observer Pattern - Class Diagram](../../assets/P-observer-pattern-2.svg)
 *Figure — Class diagram: BuildPipeline holds a list of BuildListener; SlackNotifier, DashboardUpdater, MetricsRecorder and DeployTrigger implement it (course diagram)*
 
-In the diagram above all dependencies run in a single direction. Listeners never call the pipeline back, so one notification cannot set off another.
+In the diagram above (a **UML** class diagram — UML, the Unified Modeling Language, is the standard box-and-arrow notation for classes and how they relate) all dependencies run in a single direction. Listeners never call the pipeline back, so one notification cannot set off another.
 
 Our Java design:
 
@@ -120,10 +120,10 @@ sequenceDiagram
 
 `lld.ch11.observer` shows four things:
 
-1. **Build pipeline.** Listeners live in a `CopyOnWriteArrayList`, whose iterator works on a **snapshot** — so a listener that unsubscribes during notification cannot break the loop, and the list is thread-safe. `finish` **catches exceptions per listener**, so a broken dashboard does not stop metrics. `addListener` returns a `Runnable` that unsubscribes: whoever subscribes owns the matching unsubscribe.
+1. **Build pipeline.** Listeners live in a `CopyOnWriteArrayList` (a JDK list that copies its internal array on every write, so readers never see it change under them), whose iterator works on a **snapshot** — so a listener that unsubscribes during notification cannot break the loop, and the list is **thread-safe** (safe to use from several *threads* — independent paths of execution running at the same time — at once). `finish` **catches exceptions per listener**, so a broken dashboard does not stop metrics. `addListener` returns a `Runnable` (Java's built-in interface for "a piece of code to run later", with one method `run()`) that unsubscribes: whoever subscribes owns the matching unsubscribe.
 2. **Push vs pull** (`WeatherStation`): one display receives the whole `Reading`; the other receives the station and pulls only the temperature.
-3. **A tiny event bus** (`EventBus`): subscribers register for an event *type* (a class); publishers just publish objects. The returned `Subscription` is the unsubscribe handle. `Main` closes it in a `finally` block, so the refunds handler is removed even if publishing throws. (`Subscription` is also `AutoCloseable`, so `try (var s = bus.subscribe(...)) { ... }` works too. But if the body never uses `s`, `javac -Xlint` warns that the resource is never referenced. Java 22+ lets you write `try (var _ = ...)` to say "unused on purpose". On Java 21, `try`/`finally` is the warning-free form.) The bus's handler list is a `CopyOnWriteArrayList`, so subscribing and publishing from different threads is safe. Delivery is still **synchronous on the publisher's thread** and nothing is stored, so it is not a queue.
-4. **`java.beans.PropertyChangeSupport`** (the price is whole cents in an `int` — exact, never `double`), which the `Observable` Javadoc itself points to (the `java.beans` package) as the richer event model. Note it does **not** fire when the old and new values are both non-null and equal. (Since Java 9, `java.beans` lives in the `java.desktop` module; on the class path this needs nothing extra, but a modular app must `requires java.desktop`.)
+3. **A tiny event bus** (`EventBus`): subscribers register for an event *type* (a class); publishers just publish objects. The returned `Subscription` is the unsubscribe handle. `Main` closes it in a `finally` block, so the refunds handler is removed even if publishing throws. (`Subscription` is also `AutoCloseable` — an interface whose `close()` method is called automatically when a *try-with-resources* block ends — so `try (var s = bus.subscribe(...)) { ... }` works too. But if the body never uses `s`, `javac -Xlint` warns that the resource is never referenced. Java 22+ lets you write `try (var _ = ...)` to say "unused on purpose". On Java 21, `try`/`finally` is the warning-free form.) The bus's handler list is a `CopyOnWriteArrayList`, so subscribing and publishing from different threads is safe. Delivery is still **synchronous on the publisher's thread** (the publisher waits while each handler runs, one after another) and nothing is stored, so it is not a **queue** (a waiting line that stores items and hands them out later, in order).
+4. **`java.beans.PropertyChangeSupport`** (the price is whole cents in an `int` — exact, never `double`), which the `Observable` **Javadoc** (the official API documentation generated from comments in Java source code) itself points to (the `java.beans` package) as the richer event model. Note it does **not** fire when the old and new values are both non-null and equal. (Since Java 9, `java.beans` lives in the `java.desktop` module; on the class path (the list of folders and JAR files where Java looks for classes) this needs nothing extra, but a modular app (one that declares its dependencies in a `module-info.java` file) must `requires java.desktop`.)
 
 ```java
 // File: code/lld/ch11/observer/BuildListener.java
@@ -416,23 +416,23 @@ Build 103 finished: failed
 
 ### Why `java.util.Observer` / `Observable` were deprecated
 
-Since **Java 9**, `java.util.Observer` and `java.util.Observable` are deprecated (not removed). The official reasons (Javadoc): the event model is **quite limited**, the **order of notifications is unspecified**, and **state changes are not one-for-one with notifications**. Other well-known problems:
+Since **Java 9**, `java.util.Observer` and `java.util.Observable` are **deprecated** (officially marked "don't use in new code; may be removed one day") but not removed. The official reasons (Javadoc): the event model is **quite limited**, the **order of notifications is unspecified**, and **state changes are not one-for-one with notifications**. Other well-known problems:
 
-- `Observable` is a **class**, not an interface — your subject must *extend* it, using up Java's single inheritance.
+- `Observable` is a **class**, not an interface — your subject must *extend* it, using up Java's **single inheritance** (a Java class can extend only one parent class).
 - `setChanged()` is **protected**, so you cannot use `Observable` by composition (holding one as a field) without subclassing.
 - The `update(Observable, Object)` signature is untyped (`Object arg`), so observers must cast.
-- Its thread safety is only partial: its methods are `synchronized`, but `notifyObservers` calls observers outside the lock on a snapshot, so (as a comment in the JDK source admits) a newly added observer may miss a notification and a just-removed one may still get it.
+- Its thread safety is only partial: its methods are `synchronized` (only one thread at a time may run them, because each call first takes the object's **lock** — a token only one thread can hold), but `notifyObservers` calls observers outside the lock on a snapshot, so (as a comment in the **JDK** — Java Development Kit: the compiler, runtime and standard library — source admits) a newly added observer may miss a notification and a just-removed one may still get it.
 
-What to use instead (the Javadoc names the first, third and fourth): `java.beans.PropertyChangeSupport`/`PropertyChangeListener` for bean properties; your own typed listener interface (as in `BuildPipeline`); `java.util.concurrent` data structures (queues) for reliable, ordered hand-off between threads; the **`java.util.concurrent.Flow`** API (Java 9) for reactive streams with back-pressure.
+What to use instead (the Javadoc names the first, third and fourth): `java.beans.PropertyChangeSupport`/`PropertyChangeListener` for bean properties; your own typed listener interface (as in `BuildPipeline`); `java.util.concurrent` data structures (queues) for reliable, ordered hand-off between threads; the **`java.util.concurrent.Flow`** API (Java 9) for **reactive streams** (asynchronous streams of data items flowing from a producer to consumers) with **back-pressure** (the consumer tells the producer to slow down when it cannot keep up).
 
 ### Trade-offs
 
 | Pros | Cons |
 |---|---|
 | The source no longer depends on its reactions (a build pipeline no longer imports Slack). | Harder to trace: the call site gives no hint of which code will execute. |
-| Reactions are added/removed at run time; environments differ without flags. | **Memory leaks** if an observer is never removed (the subject holds them forever). |
+| Reactions are added/removed at run time; environments differ without flags. | **Memory leaks** (memory that is never freed) if an observer is never removed (the subject holds them forever). |
 | Each reaction is testable alone. | Stack traces start inside a loop over a list; debugging is harder. |
-| A new reaction = one class + one subscribe call (Open/Closed). | **No ordering or delivery guarantee**; a crash loses the reactions not yet called. |
+| A new reaction = one class + one subscribe call (Open/Closed: open to extension, closed to modification). | **No ordering or delivery guarantee**; a crash loses the reactions not yet called. |
 | | With synchronous observers, the subject takes as long as all its listeners combined. |
 
 ### Observer vs Mediator, Chain of Responsibility, callbacks
@@ -440,24 +440,24 @@ What to use instead (the Javadoc names the first, third and fourth): `java.beans
 | Looks like | The actual difference |
 |---|---|
 | **Mediator** | Observer carries only "this changed"; each observer decides for itself, one way, and no order between reactions can be expressed. A mediator receives the change **and decides what happens next**, calling specific components back (two-way), and explicit ordering is its reason to exist. |
-| **Publish-subscribe with a broker** | Same idea, but the broker contributes persistence, redelivery, ordering guarantees and a network hop — none of which in-process observers offer. |
+| **Publish-subscribe with a broker** (a server that stores and forwards messages) | Same idea, but the broker contributes persistence, redelivery, ordering guarantees and a network hop — none of which in-process observers offer. |
 | **Chain of Responsibility** | Observer informs **all** listeners, and no listener can prevent the rest from running. A chain ends as soon as one handler accepts the request. |
 | **A callback** | One callback is one observer. It becomes the Observer pattern when the number of listeners varies and they subscribe and unsubscribe at run time. |
 
-**Observer outside Java.** With first-class functions a listener is just a lambda (keep the handle, or you cannot unsubscribe). JavaScript has `EventTarget`/`EventEmitter`, and `AbortController` can unsubscribe by signal. Python often uses a plain list of callables, and `weakref.WeakSet` avoids the leak. C# has `event`, `IObservable<T>`, and `IDisposable` subscriptions. In every language, **weak references** fix the leak, at the cost of a listener disappearing when nothing else holds it.
+**Observer outside Java.** With **first-class functions** (functions that can be stored in variables and passed around like any other value) a listener is just a **lambda** (a short anonymous function, written `x -> ...` in Java) — keep the handle, or you cannot unsubscribe. JavaScript has `EventTarget`/`EventEmitter`, and `AbortController` can unsubscribe by signal. Python often uses a plain list of callables, and `weakref.WeakSet` avoids the leak. C# has `event`, `IObservable<T>`, and `IDisposable` subscriptions. In every language, **weak references** (references that do not keep their target alive, so the garbage collector may still free it) fix the leak, at the cost of a listener disappearing when nothing else holds it.
 
 ### When not to use it
 
 - **One listener, forever.** Call it directly.
-- **You need ordering or guaranteed delivery.** Use a queue or message broker (Kafka, RabbitMQ, SQS): same idea plus persistence, retries and a network — and very different failure modes.
-- **Reactions are slow.** Either notify asynchronously (executor/queue) or don't use in-process observers.
+- **You need ordering or guaranteed delivery.** Use a queue or message broker (Kafka, RabbitMQ, SQS — popular broker products): same idea plus persistence, retries and a network — and very different failure modes.
+- **Reactions are slow.** Either notify **asynchronously** (hand the work to another thread and return at once — e.g. via an *executor*, a pool of worker threads, or a queue) or don't use in-process observers.
 - **The whole flow must be auditable/traceable.** Explicit calls are kinder to readers.
 
 ### Common mistakes (the four classic ways observers go wrong, plus one)
 
-1. **No unsubscribe → memory leak.** The subject keeps a strong reference to the listener and everything it points to. In long-running apps this is a top cause of slow memory growth. Every `add` needs an owner for the matching `remove`. (Weak references are one fix, at the cost of listeners vanishing when nothing else holds them.)
+1. **No unsubscribe → memory leak.** The subject keeps a **strong reference** (an ordinary reference, which keeps the object alive in memory) to the listener and everything it points to. In long-running apps this is a top cause of slow memory growth. Every `add` needs an owner for the matching `remove`. (Weak references are one fix, at the cost of listeners vanishing when nothing else holds them.)
 2. **A throwing listener kills the loop.** Without a per-listener try/catch, listener 3 fails and 4 and 5 never run.
-3. **Changing the list during notification** → `ConcurrentModificationException` (or silently skipped listeners in some languages). Iterate over a copy, or use `CopyOnWriteArrayList`.
+3. **Changing the list during notification** → `ConcurrentModificationException` (the error Java throws when a collection is changed while it is being looped over) (or silently skipped listeners in some languages). Iterate over a copy, or use `CopyOnWriteArrayList`.
 4. **Listeners calling back into the subject** → cycles or endless recursion. Finish updating state before notifying, and never let a notification synchronously cause another one.
 5. **Notifying before the state is updated**, so pull-style observers read stale data.
 6. **Relying on notification order.** Listeners are called in the order they happened to subscribe, which is a side effect of start-up code rather than a decision anyone made. If "update the dashboard, then decide whether to deploy" matters, that is coordination, and it belongs in a Mediator.
@@ -466,11 +466,11 @@ What to use instead (the Javadoc names the first, third and fourth): `java.beans
 
 - **Every UI event handler**: Swing `ActionListener`, Android `OnClickListener`, DOM `addEventListener`.
 - **JDK**: `PropertyChangeListener`, `java.util.concurrent.Flow` (`Publisher`/`Subscriber`), servlet listeners such as `HttpSessionListener`.
-- **Spring**: `ApplicationEventPublisher` + `@EventListener` (in-process events, optionally `@Async` or `@TransactionalEventListener`).
-- **Guava `EventBus`**, **RxJava / Project Reactor / RxJS**, Kotlin `Flow`, and signals in front-end frameworks — observers with composable operators (map, filter, debounce) layered on top.
+- **Spring** (the most widely used Java application framework): `ApplicationEventPublisher` + `@EventListener` (in-process events, optionally `@Async` or `@TransactionalEventListener`).
+- **Guava `EventBus`**, **RxJava / Project Reactor / RxJS**, Kotlin `Flow`, and signals in front-end frameworks — observers with composable operators (map, filter, debounce — wait until events pause, then pass on only the latest) layered on top.
 - **Model–view separation**: a view registers with its model, which then updates freely with no idea that any screen is attached (see MVC in §11.7.5).
 - **Distributed publish–subscribe**: Kafka topics, Google Pub/Sub, AWS SNS. When an order is placed on an e-commerce site, the order service publishes one event and email, inventory, analytics and recommendation services each consume it independently — Observer at system scale, with durability added.
-- **Database triggers and change data capture** (Debezium) — observers at the storage layer.
+- **Database triggers and change data capture** (CDC: streaming every row change out of a database's internal log; Debezium is a popular tool) — observers at the storage layer.
 
 ### In the interview
 
@@ -627,9 +627,9 @@ stateDiagram-v2
 
 `lld.ch11.state` shows three styles:
 
-1. **Class per state** (`Subscription` + four `record` states). `SubscriptionState` is a **sealed** interface: the compiler knows the complete set of states. The states have no fields, so records with no components are a neat, immutable choice.
-2. **Enum-based state machine** (`TrafficLight`). Each enum constant overrides `next()`; shared behaviour is a default method. The **whole machine is readable in one file** — the idiomatic Java answer for simple machines.
-3. **Vending machine** (`VendingMachine` + `Idle`, `HasMoney`, `SoldOut`). The state interface uses **default methods that refuse**, so each state overrides only the actions it allows (`SoldOut` overrides nothing). Business actions (dispensing, returning change) live in the **context**; states only rule on whether an action is legal and which state follows. Money is kept as whole **cents in an `int`**, which is exact (unlike `double`); a real machine would use a `Money`/`BigDecimal` type, as the Strategy and Visitor examples do.
+1. **Class per state** (`Subscription` + four `record` states). `SubscriptionState` is a **sealed** interface (one that lists exactly which types may implement it): the compiler knows the complete set of states. The states have no fields, so **records** (Java's compact data classes whose fields are fixed at creation) with no components are a neat, **immutable** (cannot change after creation) choice.
+2. **Enum-based state machine** (`TrafficLight`). Each enum constant overrides `next()`; shared behaviour is a **default method** (an interface method with a body, inherited by implementers unless they override it). The **whole machine is readable in one file** — the idiomatic Java answer for simple machines.
+3. **Vending machine** (`VendingMachine` + `Idle`, `HasMoney`, `SoldOut`). The state interface uses **default methods that refuse**, so each state overrides only the actions it allows (`SoldOut` overrides nothing). Business actions (dispensing, returning change) live in the **context**; states only rule on whether an action is legal and which state follows. Money is kept as whole **cents in an `int`**, which is exact (unlike `double`); a real machine would use a `Money`/`BigDecimal` type (`BigDecimal` is Java's exact decimal-number class), as the Strategy and Visitor examples do.
 
 ```java
 // File: code/lld/ch11/state/SubscriptionState.java
@@ -1018,15 +1018,15 @@ Two more things State gets confused with:
 - **Kotlin / Scala:** `sealed` hierarchies with exhaustive `when` / `match`.
 - **Rust:** enums with data, matched exhaustively. With the **typestate** pattern each state is a separate *type*, so calling an action that is illegal in that state is a compile error.
 - **Python:** a dict mapping `(state, action)` to a handler is a compact transition table that shows every transition in one place.
-- **TypeScript:** a discriminated union plus a `switch` over its tag field, which the compiler can check for missing cases.
+- **TypeScript:** a **discriminated union** (a set of object types that each carry a fixed tag field saying which kind they are) plus a `switch` over its tag field, which the compiler can check for missing cases.
 
 ### Real-world examples
 
 - **Order lifecycles** in food-delivery and e-commerce apps: placed → accepted → preparing → out for delivery → delivered (or cancelled); which actions are legal depends on the status (you can cancel while "placed" but usually not once "out for delivery").
 - **Payment and subscription lifecycles** (Stripe subscription statuses such as `trialing`, `active`, `past_due`, `canceled`).
-- **TCP connections** — GoF's own example: `LISTEN`, `ESTABLISHED`, `CLOSED`, each responding differently to the same call.
+- **TCP connections** (TCP is the protocol under most internet traffic, giving ordered, reliable delivery; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) — GoF's own example: `LISTEN`, `ESTABLISHED`, `CLOSED`, each responding differently to the same call.
 - **Workflow/approval engines** (draft → in review → approved/rejected), **document editors' modes**, **game characters** (idle, running, jumping).
-- **Lexers/parsers**, **vending machines, ATMs, elevators, traffic lights** — favourite machine-coding questions (see the case-study chapters).
+- **Lexers/parsers** (programs that split text into tokens, then build a structure from them), **vending machines, ATMs, elevators, traffic lights** — favourite **machine-coding** questions (an interview round where you write working code for a small system in an hour or two) (see the case-study chapters).
 - **Libraries**: Spring Statemachine; in the JDK, `Thread.State` is an *enum of states* (the data), not the pattern itself.
 
 ### In the interview
@@ -1037,8 +1037,8 @@ Two more things State gets confused with:
 
 - *State vs Strategy?* Use the naming test and the "who chooses" test (table above).
 - *Where should transitions live?* In the states for small machines; in the context or a transition table when the machine grows, so the whole graph is visible in one place.
-- *How do you persist it?* Store the state's name (enum) in the DB; rebuild the state object through one factory/mapping.
-- *How do you handle concurrency?* Two requests (e.g. "cancel" and "deliver") can race: guard transitions with a lock or, in a DB, an optimistic `UPDATE ... WHERE status = 'PLACED'` and check the affected row count.
+- *How do you persist it?* Store the state's name (enum) in the DB (database); rebuild the state object through one factory/mapping.
+- *How do you handle concurrency?* Two requests (e.g. "cancel" and "deliver") can **race** (run at the same moment and interfere, so the result depends on timing): guard transitions with a lock or, in a DB, an **optimistic** (no lock held; the write simply fails if someone changed the row first) `UPDATE ... WHERE status = 'PLACED'` and check the affected row count.
 - *Design a vending machine.* States Idle, HasMoney, SoldOut (maybe Dispensing, Maintenance); context owns inventory and balance; states allow or refuse actions (as in our code).
 
 ### Self-check
@@ -1076,7 +1076,7 @@ Everyday analogy: getting to the airport. Car, train or taxi — same goal, diff
 
 ### The problem it solves
 
-Retrying a failed request can mean: no retry, a fixed delay, or exponential backoff. Written directly, the branch sits inside `ApiClient`:
+Retrying a failed request can mean: no retry, a fixed delay, or **exponential backoff** (doubling the wait after each failure — e.g. 100 ms, 200 ms, 400 ms). Written directly, the branch sits inside `ApiClient`:
 
 ```java
 if (policy == NONE)             { /* give up */ }
@@ -1086,14 +1086,14 @@ else if (policy == EXPONENTIAL) { /* double the wait after each failure */ }
 
 `ApiClient` now contains backoff arithmetic that has nothing to do with calling an API. A fourth policy means editing a working class; you cannot test the backoff maths without building a client and faking a server; and a different team has to edit your class just to contribute a policy.
 
-Strategy gives every algorithm a class of its own. `ApiClient` asks its `RetryPolicy` "how long before the next attempt?" and **never checks what kind of policy it holds**. The choice is made **outside** the client — from configuration, a feature toggle, or a customer-specific setting.
+Strategy gives every algorithm a class of its own. `ApiClient` asks its `RetryPolicy` "how long before the next attempt?" and **never checks what kind of policy it holds**. The choice is made **outside** the client — from configuration, a **feature toggle** (a setting that switches behaviour on or off without redeploying), or a customer-specific setting.
 
 ### How it works
 
 1. Define a **strategy interface** — small, ideally one question (`delayBeforeAttempt(attempt)`).
 2. Write one **concrete strategy** per algorithm; each holds only its own parameters.
 3. The **context** receives a strategy (constructor, setter or method parameter) and calls it.
-4. A **factory, configuration or DI container** decides which strategy to use — not every call site.
+4. A **factory, configuration or DI container** (a library that creates objects and hands them their dependencies — see §11.7.2) decides which strategy to use — not every call site.
 
 ### Structure (UML)
 
@@ -1270,7 +1270,7 @@ public class Main {
 }
 ```
 
-Extending it is cheap: a policy that adds random **jitter** to the delay, or one that honours a server's `Retry-After` header, is one more class (or lambda) plus one line where the policy is chosen. `ApiClient` does not change.
+Extending it is cheap: a policy that adds random **jitter** to the delay, or one that honours a server's `Retry-After` header (an **HTTP** response header in which the server says how long to wait; HTTP is the request/response protocol of the web), is one more class (or lambda) plus one line where the policy is chosen. `ApiClient` does not change.
 
 **Output:**
 
@@ -1304,7 +1304,7 @@ ExponentialBackoff(100, 4) against a server that is always down:
 
 ### Lambdas as strategies
 
-Of all the patterns, Strategy is the one a plain function replaces most often, and recognising that is part of understanding it. Since Java 8, any interface with a **single abstract method** (a *functional interface*) can be implemented by a lambda or method reference. So many strategies need **no class at all**: `Comparator<T>`, `Function`, `Predicate`, `Supplier`, or your own `RetryPolicy`. Keep a named class (or record) when the strategy has **configuration or state** (`FixedDelay(100, 4)`), needs a **name for logging**, or must be **discovered/registered** (e.g. Spring beans or `ServiceLoader`).
+Of all the patterns, Strategy is the one a plain function replaces most often, and recognising that is part of understanding it. Since Java 8, any interface with a **single abstract method** (a *functional interface*) can be implemented by a lambda or method reference. So many strategies need **no class at all**: `Comparator<T>`, `Function`, `Predicate`, `Supplier`, or your own `RetryPolicy`. Keep a named class (or record) when the strategy has **configuration or state** (`FixedDelay(100, 4)`), needs a **name for logging**, or must be **discovered/registered** (e.g. Spring beans — objects the Spring container creates and manages — or `ServiceLoader`, the JDK's built-in plug-in discovery mechanism).
 
 Other languages: Python passes a function (or `functools.partial` to bind its parameters), and a dict from name to function is a one-line registry. JavaScript/TypeScript pass a function argument, or an object whose properties are functions. Kotlin/Scala take a function-typed constructor parameter, often with a default. Go uses a one-method interface (satisfied implicitly) or a `func` field.
 
@@ -1336,11 +1336,11 @@ The registry in part 3 of the demo uses `BigDecimal` for prices. Money in domain
 ### Real-world examples
 
 - **`Comparator`** with `Collections.sort` / `List.sort` / `TreeMap` — the textbook example.
-- **`ThreadPoolExecutor`'s `RejectedExecutionHandler`**: `AbortPolicy`, `CallerRunsPolicy`, `DiscardPolicy`, `DiscardOldestPolicy` — pick what happens when the pool is full.
-- **Spring Security `PasswordEncoder`** (`BCryptPasswordEncoder`, `Argon2PasswordEncoder`, ...) chosen by configuration, so upgrading the hash does not touch login code.
-- **Resilience4j** retry `IntervalFunction` (fixed, exponential, randomized backoff) and **Polly** in .NET — exactly this lesson's retry policies.
+- **`ThreadPoolExecutor`'s** (the JDK's configurable thread pool) **`RejectedExecutionHandler`**: `AbortPolicy`, `CallerRunsPolicy`, `DiscardPolicy`, `DiscardOldestPolicy` — pick what happens when the pool is full.
+- **Spring Security `PasswordEncoder`** (`BCryptPasswordEncoder`, `Argon2PasswordEncoder`, ...) chosen by configuration, so upgrading the **hash** (a one-way scrambling of the password, so the stored value can't be turned back into it) does not touch login code.
+- **Resilience4j** (a Java fault-tolerance library) retry `IntervalFunction` (fixed, exponential, randomized backoff) and **Polly** in .NET — exactly this lesson's retry policies.
 - **AWT/Swing `LayoutManager`** (`FlowLayout`, `BorderLayout`, `GridLayout`) — a container delegates layout to a strategy.
-- **Payment method at checkout** (card, UPI, wallet, cash on delivery), **pricing/discount rules by customer tier**, **route planning modes** (drive, walk, transit) in map apps, **compression/serialization formats** chosen by a content-type header.
+- **Payment method at checkout** (card, UPI [India's instant bank-to-bank payment system], wallet, cash on delivery), **pricing/discount rules by customer tier**, **route planning modes** (drive, walk, transit) in map apps, **compression/serialization formats** (serialization = turning objects into bytes or text for storage or sending) chosen by a content-type header.
 
 ### In the interview
 
@@ -1349,7 +1349,7 @@ The registry in part 3 of the demo uses `BigDecimal` for prices. Money in domain
 **Follow-ups:**
 
 - *Strategy vs State?* Strategies are picked from outside and don't know each other; states pick their successors.
-- *Strategy vs Template Method?* Template Method swaps **one step** of an algorithm whose order is fixed, through **inheritance** (fixed once the object is created, by the subclass you instantiate). Strategy swaps **the complete algorithm** through **composition** (chosen at run time, can vary several axes at once). Prefer Strategy when both fit.
+- *Strategy vs Template Method?* Template Method swaps **one step** of an algorithm whose order is fixed, through **inheritance** (fixed once the object is created, by the subclass you instantiate). Strategy swaps **the complete algorithm** through **composition** (holding another object in a field and delegating to it) (chosen at run time, can vary several axes at once). Prefer Strategy when both fit.
 - *Strategy vs Bridge?* Same diagram again. Bridge splits off a dimension of the design that is fixed when the program is assembled; Strategy is a decision that is meant to change, even from one call to the next. If a reviewer cannot tell which you meant, little is lost — the code is identical. What matters more is not using any of the three for two branches that will never become three.
 - *Strategy vs Command?* Strategy is *how* to do something; Command is *what* to do, with its arguments, kept to run later or undo.
 - *How is the strategy selected?* Config + factory (`Map<String, Strategy>`), DI container (Spring can inject a `Map<String, PaymentStrategy>` of all beans), or per-request (header, customer tier).
@@ -1402,7 +1402,7 @@ Template Method writes the flow once, in a method subclasses **cannot override**
    - **Shared steps** — `private`, written once, not changeable.
 3. Each subclass implements only what differs.
 
-**The Hollywood Principle — "Don't call us, we'll call you."** (*Head First Design Patterns*.) The base class (high-level component) decides **when** the subclass's methods run; the subclass never calls the base class's flow itself. That inversion of control is the backbone of most frameworks: **the framework runs the sequence, and your class supplies only your own pieces.**
+**The Hollywood Principle — "Don't call us, we'll call you."** (*Head First Design Patterns*.) The base class (high-level component) decides **when** the subclass's methods run; the subclass never calls the base class's flow itself. That **inversion of control** is the backbone of most **frameworks** (libraries that own the program's flow and call your code at set points): **the framework runs the sequence, and your class supplies only your own pieces.**
 
 ### Structure (UML)
 
@@ -1661,13 +1661,13 @@ black coffee:
 | How many axes can vary | One (a class has one parent) | Several (hold several strategies) |
 | What one file shows | Just the varying pieces | The complete algorithm |
 
-Strategy is usually the more flexible choice. Template Method pays off when **most of the flow is common**, only small pieces differ, and you want the compiler to **enforce the sequence**. They combine well: the base class fixes the sequence, but each step is a **strategy object** (or lambda) handed in rather than inherited — so the order is still enforced, yet you are not limited to one parent. Spring's `JdbcTemplate` works like this: it owns the fixed flow (get connection, create statement, execute, handle exceptions, close resources) and takes your varying part as a **callback** (`RowMapper`, `PreparedStatementSetter`) rather than a subclass.
+Strategy is usually the more flexible choice. Template Method pays off when **most of the flow is common**, only small pieces differ, and you want the compiler to **enforce the sequence**. They combine well: the base class fixes the sequence, but each step is a **strategy object** (or lambda) handed in rather than inherited — so the order is still enforced, yet you are not limited to one parent. Spring's `JdbcTemplate` (a helper around **JDBC**, Java's standard API for talking to SQL databases) works like this: it owns the fixed flow (get connection, create statement, execute, handle exceptions, close resources) and takes your varying part as a **callback** (a function or object you hand over so the other code can call you back — here `RowMapper`, `PreparedStatementSetter`) rather than a subclass.
 
 ### Trade-offs
 
 | Pros | Cons |
 |---|---|
-| The shared flow is written once (DRY). | No single file tells the whole story: the parent holds the order, the child holds the pieces. |
+| The shared flow is written once (DRY: Don't Repeat Yourself). | No single file tells the whole story: the parent holds the order, the child holds the pieces. |
 | The order is guaranteed (`final`). | One parent only: two independent variations can't combine. |
 | New variants are small. | Parent and children are bound tightly; altering one step's signature forces every subclass to change. |
 | Abstract steps make the compiler report anything a subclass has not supplied. | Base classes tend to swell until they demand many abstract methods and nobody wants to extend them. |
@@ -1685,7 +1685,7 @@ Strategy is usually the more flexible choice. Template Method pays off when **mo
 2. **Calling an overridable step from the base constructor.** The base constructor runs **before** the subclass's fields are initialised, so in Java the step sees `null`/`0`/`false`. (In C++ it is different but still wrong: during the base constructor a virtual call is dispatched to the base version, never the subclass override.) Call steps from the template method, never the constructor.
 3. **Leaving out `final` on the template method** — then a subclass can reorder or skip steps; nothing is enforced any more and the pattern becomes a mere agreement. (C++: make it non-virtual. Python and JavaScript cannot enforce it at all, so it must be documented and checked in review.)
 4. **Making steps `public`** — callers could run step 3 without steps 1 and 2. Keep them `protected` (or move reusable steps into a separate object).
-5. **Violating Liskov** in overrides (a hook that throws, or a step that changes the contract).
+5. **Violating Liskov** (the Liskov Substitution Principle: a subclass must work anywhere its parent is expected) in overrides (a hook that throws, or a step that changes the contract).
 
 ### Template Method in other languages
 
@@ -1700,8 +1700,8 @@ Strategy is usually the more flexible choice. Template Method pays off when **mo
 - **`java.io.InputStream`**: `read(byte[], int, int)` is implemented in terms of the abstract `read()`; subclasses supply the single-byte read (and override the bulk method for speed).
 - **`java.util.AbstractList`**: implement `get(int)` and `size()`, and you inherit `iterator()`, `indexOf`, `contains`, `equals`, `hashCode`...
 - **`HttpServlet.service()`** (Jakarta/Java Servlet) dispatches to `doGet`/`doPost`/`doPut`... by HTTP method; you override the ones you support, and the ones you do not override reject the request (405 Method Not Allowed on HTTP/1.1).
-- **`AbstractQueuedSynchronizer`** (behind `ReentrantLock`, `Semaphore`, `CountDownLatch`): `acquire()` is the template; subclasses implement `tryAcquire`/`tryRelease`.
-- **Test frameworks**: JUnit (`@BeforeEach`/`@AfterEach`) and pytest (fixtures, `setup_method`/`teardown_method`) own the set-up → test → tear-down flow; your hooks never call each other. **Mobile lifecycles**: Android `Activity` (`onCreate`, `onStart`, `onResume`...) and iOS `UIViewController` (`viewDidLoad`, `viewWillAppear`...). **Maven/Gradle** build lifecycles (fixed phases, you plug in goals/tasks).
+- **`AbstractQueuedSynchronizer`** (AQS — the JDK's internal building block for locks; behind `ReentrantLock`, `Semaphore`, `CountDownLatch`): `acquire()` is the template; subclasses implement `tryAcquire`/`tryRelease`.
+- **Test frameworks**: JUnit (`@BeforeEach`/`@AfterEach`) and pytest (fixtures, `setup_method`/`teardown_method`) own the set-up → test → tear-down flow; your hooks never call each other. **Mobile lifecycles**: Android `Activity` (`onCreate`, `onStart`, `onResume`...) and iOS `UIViewController` (`viewDidLoad`, `viewWillAppear`...). **Maven/Gradle** (Java build tools) build lifecycles (fixed phases, you plug in goals/tasks).
 - **Sorting with a comparison**: `Arrays.sort` owns the algorithm and needs just one step from you, the comparison. Old designs had the elements supply it (`Comparable.compareTo`); modern APIs pass it in as a `Comparator` — the Strategy form of the same idea.
 - **Spring `JdbcTemplate`, `RestTemplate`, `TransactionTemplate`** — "template + callback" variants of the same idea.
 
@@ -1712,7 +1712,7 @@ Strategy is usually the more flexible choice. Template Method pays off when **mo
 **Follow-ups:**
 
 - *What is a hook?* A step with a default implementation that subclasses may override (e.g. `shouldValidate()`), giving optional control points.
-- *What is the Hollywood Principle?* "Don't call us, we'll call you": high-level components call low-level ones at the right time; low-level components plug in but don't call up. It prevents "dependency rot".
+- *What is the Hollywood Principle?* "Don't call us, we'll call you": high-level components call low-level ones at the right time; low-level components plug in but don't call up. It prevents "dependency rot" (dependencies tangled in every direction, so nothing can change safely).
 - *Why `final`?* It is the guarantee: without it a subclass could reorder or drop steps, and the pattern would be only a gentleman's agreement.
 - *Template Method vs Factory Method?* A factory method is often one step of a template method — the step whose job is to create an object (GoF notes that template methods frequently call factory methods). The course frames it more strongly — a factory method is a special template-method step whose subclass-supplied job is creation, while most template steps create nothing. Take that as "a factory method usually lives inside a template method", not as a strict rule: a factory method can also be called directly by clients.
 - *Template Method vs Decorator?* A decorator wraps an existing object at run time, and several can be layered; a template-method subclass is decided when the object is built and cannot be layered.
@@ -1767,7 +1767,7 @@ Visitor gives each operation its own class, and uses **double dispatch** to pick
 
 ### How it works — double dispatch
 
-Java chooses **which override** of a method runs based on the **run-time type of the receiver** (single dispatch), but chooses **which overload** (`visit(Server)` vs `visit(Database)`) at **compile time**, from the **static type** of the argument. If you hold a `Resource r`, `visitor.visit(r)` cannot compile to the right overload — the compiler only knows "Resource".
+Java chooses **which override** (a subclass's replacement of an inherited method) of a method runs based on the **run-time type of the receiver** — the object before the dot (single dispatch) — but chooses **which overload** (one of several same-named methods with different parameter types: `visit(Server)` vs `visit(Database)`) at **compile time**, from the **static type** (the type the compiler sees in the declaration) of the argument. If you hold a `Resource r`, `visitor.visit(r)` cannot compile to the right overload — the compiler only knows "Resource".
 
 Visitor makes **two calls**:
 
@@ -1852,8 +1852,8 @@ sequenceDiagram
 
 `lld.ch11.visitor` has **both** styles over the same domain:
 
-1. **Classic Visitor.** Elements are **records** (so visitors read data through accessors, not public fields). `ResourceGroup` is a **Composite**: its `accept` visits itself and then its children. (A tree is optional: Visitor only requires a stable set of element types, and it works just as well over a flat list. Composite is simply the most common route into Visitor.) Prices are `BigDecimal`, never `double`. `MonthlyCost` and `SecurityAudit` each keep all their rules in one file; neither touches a resource class. A new visitor instance is used per run because they accumulate results.
-2. **Java 21 alternative — sealed interface + pattern matching** (`ModernPlan`). `Infra` is `sealed ... permits Vm, Sql, Lb`. `monthlyCost` is a `switch` with **no `default`** — the compiler checks it is **exhaustive**, so adding a new permitted record breaks every switch that forgot it (the same safety net Visitor gave you). `audit` uses **record patterns** (deconstruction, `case Sql(String n, int gb, boolean enc)`) and **guards** (`when !enc`). A guarded case never counts toward exhaustiveness (the compiler cannot know the guard is sometimes true), which is why `audit` also needs the three unguarded `case Vm vm` / `Sql db` / `Lb lb` lines.
+1. **Classic Visitor.** Elements are **records** (so visitors read data through accessors, not public fields). `ResourceGroup` is a **Composite** (the pattern in which a group and a single item share one interface, so a tree can be handled uniformly): its `accept` visits itself and then its children. (A tree is optional: Visitor only requires a stable set of element types, and it works just as well over a flat list. Composite is simply the most common route into Visitor.) Prices are `BigDecimal`, never `double`. `MonthlyCost` and `SecurityAudit` each keep all their rules in one file; neither touches a resource class. A new visitor instance is used per run because they accumulate results.
+2. **Java 21 alternative — sealed interface + pattern matching** (`ModernPlan`). `Infra` is `sealed ... permits Vm, Sql, Lb`. `monthlyCost` is a `switch` with **no `default`** — the compiler checks it is **exhaustive** (covers every possible case), so adding a new permitted record breaks every switch that forgot it (the same safety net Visitor gave you). `audit` uses **record patterns** (deconstruction, `case Sql(String n, int gb, boolean enc)`) and **guards** (`when !enc`). A guarded case never counts toward exhaustiveness (the compiler cannot know the guard is sometimes true), which is why `audit` also needs the three unguarded `case Vm vm` / `Sql db` / `Lb lb` lines.
 
 ```java
 // File: code/lld/ch11/visitor/Resource.java
@@ -2086,7 +2086,7 @@ So ask: **which changes more often here — the types or the operations?** Settl
 
 **Open/Closed trade-off:** Visitor makes the element hierarchy **closed for modification but open for new operations** — at the price of being **closed to new element types** (each one forces edits to all visitors).
 
-**Sealed interfaces + pattern matching (Java 17/21) as the modern alternative:** sealed classes arrived in Java 17 (JEP 409); pattern matching for `switch` and record patterns were finalised in Java 21 (JEPs 441 and 440). Together they give the exhaustiveness check that was Visitor's main advantage, with far less code. The exact rules:
+**Sealed interfaces + pattern matching (Java 17/21) as the modern alternative:** sealed classes arrived in Java 17 (JEP 409 — a JEP, JDK Enhancement Proposal, is the numbered design document for a Java feature); pattern matching for `switch` and record patterns were finalised in Java 21 (JEPs 441 and 440). Together they give the exhaustiveness check that was Visitor's main advantage, with far less code. The exact rules:
 
 - A `switch` **expression** must always be exhaustive. A `switch` **statement** must be exhaustive too as soon as it uses patterns or `case null` (old-style statements over constants need not be).
 - Over a `sealed` type, covering every permitted subtype with an **unguarded** pattern makes the switch exhaustive with no `default`. Guarded cases (`when ...`) do not count.
@@ -2095,7 +2095,7 @@ So ask: **which changes more often here — the types or the operations?** Settl
 - **Dominance:** cases are tried top to bottom, and a case that can never match because an earlier one already covers it is a compile error. That is why the guarded `case Vm(...) when pub` must come **before** the unguarded `case Vm vm`, never after.
 - **`null`:** a pattern `switch` without a `case null` throws `NullPointerException` when the selector is `null`; `default` alone does not match `null`.
 
-Write a classic Visitor when the element hierarchy **is not and cannot be sealed** — typically because the element classes **belong to another team or library** and you cannot edit them — but already exposes `accept` (typical of libraries such as ASM or javac's tree API, which ship their own visitor interfaces), when you need a **walk with per-node callbacks** over a big tree, or when each operation should be a separately testable, injectable class.
+Write a classic Visitor when the element hierarchy **is not and cannot be sealed** — typically because the element classes **belong to another team or library** and you cannot edit them — but already exposes `accept` (typical of libraries such as ASM — a library for reading and rewriting Java **bytecode**, the compiled instructions the JVM (Java Virtual Machine) runs — or javac's tree API, which ship their own visitor interfaces), when you need a **walk with per-node callbacks** over a big tree, or when each operation should be a separately testable, injectable class.
 
 **Visitor outside Java.** Kotlin: a sealed class with an exhaustive `when`. Python: `match` with class patterns, or `functools.singledispatch` (dispatch on the argument type with no `accept`). C++: `std::variant` + `std::visit` — the pattern as a library feature. Rust and Swift: enums with associated values plus `match`/`switch`, where a missing case is a build error. Languages without overloading (Python, JavaScript) name the methods `visitServer`, `visitDatabase`, ... instead of overloading `visit`.
 
@@ -2126,10 +2126,10 @@ Write a classic Visitor when the element hierarchy **is not and cannot be sealed
 
 ### Real-world examples
 
-- **Compilers and linters**: an AST has a fixed set of node kinds and endless passes (type check, optimise, format, lint rules). The JDK's `com.sun.source.tree.TreeVisitor` (javac tree API) and `javax.lang.model.element.ElementVisitor` (annotation processing) are visitors; ANTLR generates visitor classes for your grammar.
+- **Compilers and linters** (tools that flag suspicious code): an **AST** (abstract syntax tree — the tree a compiler builds from source code) has a fixed set of node kinds and endless passes (type check, optimise, format, lint rules). The JDK's `com.sun.source.tree.TreeVisitor` (javac tree API) and `javax.lang.model.element.ElementVisitor` (annotation processing) are visitors; ANTLR (a parser generator) generates visitor classes for your grammar.
 - **Bytecode libraries**: ASM's `ClassVisitor` / `MethodVisitor`.
 - **`java.nio.file.FileVisitor`** with `Files.walkFileTree` — named after the pattern and often cited, but strictly it is a **tree-walk callback** interface (`preVisitDirectory`, `visitFile`, `visitFileFailed`, `postVisitDirectory`): there is no `accept` and no double dispatch over element classes. The *spirit* (operation kept outside the file-system objects) is Visitor's; the mechanism is closer to a Template Method walk calling your hooks.
-- **Document models**: a DOM has a fixed set of node kinds and ever more operations — serialise to HTML/PDF, pull out the plain text, collect all links; **infrastructure tools** computing cost, policy and diagrams over resource plans (this lesson's example); **query planners** (cost estimation, rewriting, EXPLAIN).
+- **Document models**: a **DOM** (Document Object Model — the tree of elements that makes up a web page or XML document) has a fixed set of node kinds and ever more operations — serialise to HTML/PDF, pull out the plain text, collect all links; **infrastructure tools** computing cost, policy and diagrams over resource plans (this lesson's example); **query planners** (the database component that decides how to run a SQL query: cost estimation, rewriting, EXPLAIN).
 
 ### In the interview
 
@@ -2165,11 +2165,11 @@ A single table with the key features, when to apply each pattern, an example, an
 
 | Pattern | Distinctive feature | Apply when | Example | Pros | Cons |
 |---|---|---|---|---|---|
-| Chain of Responsibility | Passes a request along a chain of handlers | Several objects may handle a request and the handler isn't known in advance | Help systems, HTTP middleware | Decouples sender and receiver | A request may go unhandled; long chains can be inefficient and slow to debug |
+| Chain of Responsibility | Passes a request along a chain of handlers | Several objects may handle a request and the handler isn't known in advance | Help systems, HTTP middleware (code run before/after each web request) | Decouples sender and receiver | A request may go unhandled; long chains can be inefficient and slow to debug |
 | Command | Wraps a request as an object | Actions must be queued, logged, retried or undone | GUI actions, job queues | Decouples invoker from receiver; undo/redo | Many small command classes |
-| Interpreter | One class per grammar rule | Evaluating sentences of a small language | Regex, rule DSLs | Easy to extend the grammar | Unmanageable for large grammars |
+| Interpreter | One class per grammar rule | Evaluating sentences of a small language | Regex, rule DSLs (small domain-specific languages) | Easy to extend the grammar | Unmanageable for large grammars |
 | Iterator | Sequential access without exposing representation | You need a standard way to traverse any collection | Browsing a playlist | Simple client code; hides the structure | Hidden costs; state handling in lazy iterators |
-| Mediator | Centralises communication between peers | Many objects interact in tangled ways | Chat application, air traffic control | Fewer dependencies; reusable components | The mediator can become a god object |
+| Mediator | Centralises communication between peers | Many objects interact in tangled ways | Chat application, air traffic control | Fewer dependencies; reusable components | The mediator can become a god object (one class that knows and does too much) |
 | Memento | Captures and externalises state without breaking encapsulation | Undo, checkpoints, rollback | Editor undo, save games | Preserves encapsulation; atomic restore | Memory-heavy for big/frequent snapshots |
 | Observer | Notifies dependents of state changes | A change in one object must reach others | Live stock/data feeds | Subject and observers are loosely coupled | Leaks, unexpected performance costs, no ordering |
 | State | Behaviour changes with internal state | An object's behaviour depends on a state that changes at run time | Game modes, order lifecycles | Localises state-specific behaviour | More classes; graph spread across files |
@@ -2181,7 +2181,7 @@ A single table with the key features, when to apply each pattern, an example, an
 
 ## 11.7 Beyond GoF: patterns every LLD interview expects
 
-The GoF book (1994) is not the whole story. The patterns below come from later sources — *Patterns of Enterprise Application Architecture* (Fowler, 2002), *Domain-Driven Design* (Evans, 2003), *Head First Design Patterns*, and decades of framework practice. You will use them in almost every case study in this book.
+The GoF book (1994) is not the whole story. The patterns below come from later sources — *Patterns of Enterprise Application Architecture* (Fowler, 2002), *Domain-Driven Design* (Evans, 2003 — DDD, an approach that shapes code around the business domain and its vocabulary), *Head First Design Patterns*, and decades of framework practice. You will use them in almost every case study in this book.
 
 ### 11.7.1 Null Object
 
@@ -2193,13 +2193,13 @@ Analogy: a "guest" badge at an office. Guests can walk through the lobby like an
 
 #### The problem it solves
 
-Returning `null` for "not found" forces **every caller** to remember a null check. One forgotten check → `NullPointerException` in production. The checks also clutter the business logic.
+Returning `null` for "not found" forces **every caller** to remember a null check. One forgotten check → `NullPointerException` (NPE — the error Java throws when you call a method on `null`) in production. The checks also clutter the business logic.
 
 #### How it works
 
 1. Define an interface (`Customer`).
 2. Implement the real class (`RegisteredCustomer`) and a **null class** (`GuestCustomer`) whose methods return neutral values (0% discount) or do nothing (`notify` is empty).
-3. Where you would return `null`, return the null object instead. Stateless null objects can be a **singleton** (an `enum` constant).
+3. Where you would return `null`, return the null object instead. Stateless null objects can be a **singleton** (a class with exactly one shared instance — here an `enum` constant).
 4. If some caller really must know, offer an `isGuest()`/`isNull()` query — sparingly.
 
 ```mermaid
@@ -2337,13 +2337,13 @@ public class Main {
 | Polymorphism instead of conditionals. | One more class per interface. |
 | Easy to test; a natural default. | Callers may not realise they got a "nothing" object. |
 
-- **Don't use it** when absence is an **error** (throw an exception) or when the caller must decide what absence means (return `Optional<T>`).
+- **Don't use it** when absence is an **error** (throw an exception) or when the caller must decide what absence means (return `Optional<T>` — a JDK container that either holds a value or is empty).
 - **Null Object vs `Optional`:** Null Object hides absence behind neutral behaviour; `Optional` makes absence **visible in the type** and lets each caller choose (`orElse`, `orElseThrow`). Use `Optional` for return values of lookups; use Null Object for **collaborators** that are legitimately optional (a logger, a listener, a discount policy).
 - **Common mistakes:** a null object with **side effects** or non-neutral values; a mutable null-object singleton; overusing `isNull()` checks (which brings the conditionals back).
 
 #### Real-world examples
 
-`Collections.emptyList()` / `emptyMap()` (empty, not null); `InputStream.nullInputStream()`, `OutputStream.nullOutputStream()`, `Reader.nullReader()`, `Writer.nullWriter()` (Java 11); SLF4J's `NOPLogger`; a "no-op" `MeterRegistry`/tracer in observability libraries.
+`Collections.emptyList()` / `emptyMap()` (empty, not null); `InputStream.nullInputStream()`, `OutputStream.nullOutputStream()`, `Reader.nullReader()`, `Writer.nullWriter()` (Java 11); SLF4J's (a common Java logging API) `NOPLogger`; a "no-op" (does nothing) `MeterRegistry`/tracer in **observability** libraries (metrics, logs and traces that show what a running system is doing).
 
 #### In the interview
 
@@ -2379,7 +2379,7 @@ This class can never send SMS, can't be unit-tested without really sending email
 
 1. The class declares dependencies as **constructor parameters** typed by **interfaces** (Dependency Inversion Principle, Chapter 4).
 2. A **composition root** (usually `main`, or a DI container at start-up) creates the concrete objects and passes them in.
-3. Tests pass **fakes** instead.
+3. Tests pass **fakes** (simple stand-in implementations used only in tests) instead.
 
 Three injection styles:
 
@@ -2387,7 +2387,7 @@ Three injection styles:
 |---|---|---|
 | **Constructor injection** | Dependencies are constructor parameters, stored in `final` fields | Required dependencies — the default choice |
 | **Setter injection** | `setX(...)` after construction | Optional dependencies or ones that can change |
-| **Field injection** | Framework writes directly into fields (`@Autowired` on a field) | Avoid: hides dependencies and makes testing harder |
+| **Field injection** | Framework writes directly into fields (`@Autowired` annotation on a field) | Avoid: hides dependencies and makes testing harder |
 
 ```mermaid
 classDiagram
@@ -2569,11 +2569,11 @@ public class Main {
 | Pros | Cons |
 |---|---|
 | Swap implementations without editing the class (OCP, DIP). | More indirection: "where does this come from?" |
-| Easy unit tests with fakes. | Containers add "magic" (reflection, proxies) and start-up cost. |
+| Easy unit tests with fakes. | Containers add "magic" (reflection — code inspecting classes at run time; proxies — generated wrapper objects) and start-up cost. |
 | Dependencies are explicit in the constructor. | Misconfiguration may only show at start-up (or run time). |
 
 - **Don't** inject value objects or simple data (`new Money(...)` is fine), or add interfaces with only one implementation "just for DI" when no test or variation needs them.
-- **Common mistakes:** the **Service Locator** anti-pattern (classes call `container.get(...)` themselves — dependencies hidden again); field injection; **constructor with 8+ dependencies** (a sign the class does too much — split it); circular dependencies.
+- **Common mistakes:** the **Service Locator** anti-pattern (classes call `container.get(...)` themselves — dependencies hidden again); field injection; **constructor with 8+ dependencies** (a sign the class does too much — split it); **circular dependencies** (A needs B while B needs A).
 
 #### Real-world examples
 
@@ -2581,7 +2581,7 @@ public class Main {
 
 #### In the interview
 
-**30-second answer:** "Dependency injection means a class receives its collaborators through its constructor, typed by interfaces, instead of creating them. It's how we apply Dependency Inversion and Inversion of Control: a composition root or a container like Spring wires the graph. The benefits are swappable implementations and easy testing with fakes — I even inject the Clock. I prefer constructor injection, avoid field injection and service locators, and treat a huge constructor as a design smell."
+**30-second answer:** "Dependency injection means a class receives its collaborators through its constructor, typed by interfaces, instead of creating them. It's how we apply Dependency Inversion and Inversion of Control: a composition root or a container like Spring wires the graph. The benefits are swappable implementations and easy testing with fakes — I even inject the Clock. I prefer constructor injection, avoid field injection and service locators, and treat a huge constructor as a **design smell** (a surface sign that something deeper is wrong)."
 
 *Follow-ups:* **DI vs IoC?** IoC is the general idea (the framework calls you / controls object creation); DI is one way to achieve it. **DI vs Service Locator?** With a locator the class asks for dependencies (hidden); with DI they're handed in (visible). **DI vs Factory?** A factory creates objects on request; DI supplies ready-made dependencies — containers use factories internally.
 
@@ -2595,7 +2595,7 @@ public class Main {
 
 #### What it is
 
-A **Repository** is a **collection-like interface for loading and saving domain objects**, written in the language of the domain (`findByEmail`, `findActive`), that **hides how and where data is stored** (SQL, NoSQL, files, memory). Described by Fowler (*PoEAA*) and central to Evans's *Domain-Driven Design*.
+A **Repository** is a **collection-like interface for loading and saving domain objects**, written in the language of the domain (`findByEmail`, `findActive`), that **hides how and where data is stored** (SQL — relational databases queried with the SQL language; NoSQL — non-relational stores such as key-value or document databases; files; memory). Described by Fowler (*PoEAA*) and central to Evans's *Domain-Driven Design*.
 
 Analogy: a library's front desk. You ask for "books by this author"; you don't need to know which shelf, basement or branch they come from.
 
@@ -2605,8 +2605,8 @@ When SQL, connection handling and mapping code are scattered through business cl
 
 #### How it works
 
-1. Define the interface in the **domain layer** (`UserRepository`: `save`, `findById`, `findByEmail`, ...). Return `Optional` for "maybe not found".
-2. Implement it in the **infrastructure layer**: `InMemoryUserRepository` for tests, a JDBC/JPA one for production.
+1. Define the interface in the **domain layer** (the code that holds business rules) (`UserRepository`: `save`, `findById`, `findByEmail`, ...). Return `Optional` for "maybe not found".
+2. Implement it in the **infrastructure layer** (code that talks to databases, networks and files): `InMemoryUserRepository` for tests, a JDBC/JPA one (JPA, the Java Persistence API, maps objects to tables) for production.
 3. Services depend on the **interface** (injected — see DI).
 
 ```mermaid
@@ -2751,14 +2751,14 @@ public class Main {
 
 | Pros | Cons |
 |---|---|
-| Business logic is storage-agnostic and testable in memory. | Another layer; trivial CRUD apps may not need it. |
-| One place for queries per aggregate. | Can leak storage concerns (lazy loading, transactions) anyway. |
+| Business logic is storage-agnostic and testable in memory. | Another layer; trivial CRUD (create, read, update, delete) apps may not need it. |
+| One place for queries per aggregate. | Can leak storage concerns (lazy loading — fetching data only when first touched; transactions — changes that succeed or fail together) anyway. |
 | Swap storage (SQL → NoSQL) behind the interface. | "Generic repository for everything" becomes a thin, useless wrapper. |
 
 - **Don't** create a repository per table; create one per **aggregate root** (DDD: the entry point object of a cluster, e.g. `Order` with its `OrderLine`s).
 - **Repository vs DAO:** a DAO (Data Access Object) is table/record-oriented and closer to the database; a repository is domain-oriented and behaves like a collection of aggregates. In small apps they often look the same.
 - **Common mistakes:** returning `null` instead of `Optional`; exposing SQL types (`ResultSet`) in the interface; putting business rules in the repository; dozens of `findByXAndYOrZ` methods — use **Specification** (next).
-- **Thread-safety note:** `InMemoryUserRepository` uses a `ConcurrentHashMap`, so each single call is safe, but `SignupService.signUp` is **check-then-act** (`findByEmail`, then `save`): two concurrent sign-ups with the same email can both pass the check. A real system enforces uniqueness with a database **unique constraint** (or an atomic `putIfAbsent` keyed by email in memory).
+- **Thread-safety note:** `InMemoryUserRepository` uses a `ConcurrentHashMap` (the JDK's thread-safe hash map), so each single call is safe, but `SignupService.signUp` is **check-then-act** (a race where the answer to the check can be stale by the time you act on it) (`findByEmail`, then `save`): two concurrent sign-ups with the same email can both pass the check. A real system enforces uniqueness with a database **unique constraint** (a rule that makes the database reject a duplicate value in a column) (or an atomic `putIfAbsent` keyed by email in memory).
 
 #### Real-world examples
 
@@ -2905,7 +2905,7 @@ public class Main {
 | Combining rules replaces a method explosion. | Overkill for one or two fixed filters. |
 | The same rule serves querying and validation. | Deeply nested combinations can be hard to debug. |
 
-- Java's own `Predicate<T>` (with `and`, `or`, `negate`) is already a specification; a named `Specification` type adds domain meaning and a place for SQL translation.
+- Java's own `Predicate<T>` (the JDK interface for a yes/no test on a value, with `and`, `or`, `negate`) is already a specification; a named `Specification` type adds domain meaning and a place for SQL translation.
 - **Common mistake:** filtering millions of rows in memory — push specifications down to the database.
 
 #### Real-world examples
@@ -3241,7 +3241,7 @@ public class Main {
 | Several views on one model (list, chart, widget). | Update flows via observers can be hard to trace. |
 | Swap controllers/views independently. | Controllers tend to get "fat" if business logic leaks into them. |
 
-- **Web MVC is different.** In **Spring MVC** (a "Model 2" design), a **front controller** (`DispatcherServlet`) routes each HTTP request to a `@Controller` method, which fills a model and returns a view name; the view renders once per request. The view does **not** observe the model — there is no long-lived observer link over HTTP.
+- **Web MVC is different.** In **Spring MVC** (a "Model 2" design), a **front controller** (`DispatcherServlet` — a *servlet* is a Java class that handles HTTP requests inside a web server) routes each HTTP request to a `@Controller` method, which fills a model and returns a view name; the view renders once per request. The view does **not** observe the model — there is no long-lived observer link over HTTP.
 - **Relatives:** **MVP** (Model–View–Presenter: a passive view, the presenter updates it) and **MVVM** (Model–View–ViewModel: the view binds to observable properties of a view-model — Android Jetpack `ViewModel` + `LiveData`/`StateFlow`, WPF). MVVM's view-model also plays a **mediator** role.
 - **Common mistakes:** business logic in controllers ("fat controller"); views changing the model directly; models that import UI classes.
 
@@ -3263,19 +3263,19 @@ Spring MVC, Ruby on Rails, Django (which calls it MTV), ASP.NET MVC, Swing (each
 
 #### What it is
 
-**Event Sourcing** stores **every change as an immutable event** ("ItemAdded", "ItemRemoved", "CheckedOut") in an **append-only log**, and derives the current state by **replaying** those events — instead of storing only the latest state and overwriting it. It is included here because it **borrows ideas from Command, Memento and Observer at system level** (events look like recorded commands, snapshots are mementos, projections observe the log), and it shows up in design interviews about carts, wallets, orders and audit trails.
+**Event Sourcing** stores **every change as an immutable event** ("ItemAdded", "ItemRemoved", "CheckedOut") in an **append-only log** (a log you can only add to at the end, never edit), and derives the current state by **replaying** those events — instead of storing only the latest state and overwriting it. It is included here because it **borrows ideas from Command, Memento and Observer at system level** (events look like recorded commands, snapshots are mementos, projections observe the log), and it shows up in design interviews about carts, wallets, orders and audit trails.
 
 Analogy: a bank passbook. The balance is not the source of truth; the list of transactions is. The balance can always be recomputed from it.
 
 #### The problem it solves
 
-With "update in place", history is lost: you can't answer "what did the cart look like before checkout?", audit who changed what, or rebuild a read model after a bug. With events, the full history is kept, and you can **time-travel**, **audit**, and **build new views** later by replaying.
+With "update in place", history is lost: you can't answer "what did the cart look like before checkout?", audit who changed what, or rebuild a **read model** (a copy of the data shaped for fast queries) after a bug. With events, the full history is kept, and you can **time-travel**, **audit**, and **build new views** later by replaying.
 
 #### How it works
 
 1. **Command side:** load the aggregate by replaying its events; **validate** the command against current state; if valid, **emit an event** (a fact, past tense).
 2. **Append** the event to the store — never update or delete events.
-3. **Apply**: a pure function updates state from an event (no validation, no side effects — events are facts).
+3. **Apply**: a **pure function** (its output depends only on its inputs, and it changes nothing else) updates state from an event (no validation, no side effects — events are facts).
 4. **Read side:** replay (all or the first *n* events) to get state at any point; publish events to **observers** that build read models (this split is **CQRS** — Command Query Responsibility Segregation).
 5. For long streams, save periodic **snapshots** (Memento!) and replay only newer events.
 
@@ -3434,14 +3434,14 @@ command rejected: cart already checked out
 |---|---|
 | Complete audit trail and time travel. | More complex than CRUD; a learning curve for the team. |
 | Rebuild or add read models at any time. | **Event schema evolution** (versioning old events) is hard. |
-| Natural fit with event-driven architectures. | Reads need projections; eventual consistency between write and read sides. |
+| Natural fit with event-driven architectures. | Reads need projections (read models built from events); eventual consistency (the read side catches up after a short delay) between write and read sides. |
 
 - **Don't use it** for simple CRUD without audit or history needs.
 - **Common mistakes:** putting validation in `apply` (replay of old facts may then fail); events named as commands (`RemoveItem` instead of `ItemRemoved`); mutable events; storing derived data inside events; no snapshots for very long streams; **appending without an expected-version check** — two commands decided on the same old state can both append. Real event stores take an `expectedVersion` on append and reject the second writer (optimistic concurrency). The toy `EventStore` here omits it.
 
 #### Real-world examples
 
-Bank ledgers and payment systems (balances derived from ledger entries); Git (history of commits); **Axon Framework** and **EventStoreDB**; Kafka used as an event log with long or unlimited retention (not *compacted* topics — compaction keeps only the latest record per key, which throws away the history event sourcing needs); shopping carts and order histories where "what happened when" matters.
+Bank ledgers and payment systems (balances derived from ledger entries); Git (the version-control system — its history of commits); **Axon Framework** and **EventStoreDB**; Kafka used as an event log with long or unlimited **retention** (how long stored messages are kept) (not *compacted* topics — compaction keeps only the latest record per key, which throws away the history event sourcing needs); shopping carts and order histories where "what happened when" matters.
 
 #### In the interview
 

@@ -14,9 +14,11 @@
 | 20.6 | Pub-Sub system | **Observer / Publish-Subscribe**, append-only log with offsets | New subscribers, replay, slow consumers |
 | 20.7 | Rate limiter | **Strategy** (algorithm), Simple Factory, Composite | A new algorithm, a new tier, combined limits |
 
-**How every case is laid out** (the case-study template used in Chapters 14–21): *Problem & clarifying questions → Requirements → Use cases → Core entities → Class diagram → Key flows → Design decisions & patterns used → Java implementation (+ real output) → Concurrency & edge cases → Extensions & follow-up questions → Real-world example → In the interview → Self-check → TL;DR.*
+> **Key terms — the patterns named above.** A **design pattern** is a named, reusable shape for solving a design problem that keeps coming back. In one line each: **Strategy** puts each interchangeable rule in its own class behind one interface (a list of methods with no code, which several classes implement in their own way); **Template Method** writes the fixed steps of an algorithm once in a parent class and lets subclasses fill in one or two steps; **Observer** lets objects sign up to be told when something happens; **Simple Factory** is one place that decides which class to create; **Builder** assembles an object with many optional settings step by step; **Decorator** wraps an object in another object of the same type to add behaviour; a **state machine** is a fixed set of states plus the allowed moves between them; **Chain of Responsibility** passes a request along a line of handlers; **Singleton** guarantees exactly one instance of a class; **Composite** lets a group of objects be used as if it were one; **Publish-Subscribe** sends messages through a middleman so senders and receivers never know each other. An **append-only log with offsets** is a list that is only ever added to at the end, where each entry is found by its position number (its offset).
 
-**Running the code.** All code is Java 21, standard library only, under `code/lld/ch20/<name>/`. Every package has a `Main`. From `chapters/20-case-components/code`:
+**How every case is laid out** (the case-study template used in Chapters 14–21): *Problem & clarifying questions → Requirements → Use cases → Core entities → Class diagram → Key flows → Design decisions & patterns used → Java implementation (+ real output) → Concurrency & edge cases → Extensions & follow-up questions → Real-world example → In the interview → Self-check → TL;DR.* (*Concurrency* means several threads running at the same time, which is where most subtle bugs hide.)
+
+**Running the code.** All code is Java 21, standard library only (only the classes that ship with Java itself, no extra downloads), under `code/lld/ch20/<name>/`. Every package (Java's folder-like grouping of related classes) has a `Main` (a class with the `main` method the program starts from). From `chapters/20-case-components/code`:
 
 ```text
 javac --release 21 -d /tmp/lld_20 $(find . -name '*.java')
@@ -24,14 +26,14 @@ java -cp /tmp/lld_20 lld.ch20.splitwise.Main      # also: notification, cache, l
                                                   # ridesharing, carpool, logging, pubsub, ratelimiter
 ```
 
-**Money is always `BigDecimal`.** A `double` cannot hold 0.1 exactly, so sums drift (`0.1 + 0.2` prints `0.30000000000000004`). `BigDecimal` stores decimal digits exactly. Two rules to remember: compare amounts with `compareTo` (not `equals`, because `equals` also compares the scale, so `2.0` and `2.00` are "different"), and always say how to round when you divide (`divide(x, 2, RoundingMode.HALF_EVEN)`), or Java throws an `ArithmeticException` for results like 1/3.
+**Money is always `BigDecimal`.** A `double` (Java's standard binary floating-point number type, fast but approximate for decimals) cannot hold 0.1 exactly, so sums drift (`0.1 + 0.2` prints `0.30000000000000004`). `BigDecimal` stores decimal digits exactly. Two rules to remember: compare amounts with `compareTo` (not `equals`, because `equals` also compares the scale (the number of digits after the decimal point), so `2.0` and `2.00` are "different"), and always say how to round when you divide (`divide(x, 2, RoundingMode.HALF_EVEN)`), or Java throws an `ArithmeticException` for results like 1/3. (An **exception** is Java's way of signalling an error: normal execution stops and the error travels up to whoever catches it.)
 
-**Reading the course diagrams.** The figures marked "(course diagram)" use one arrow legend throughout:
+**Reading the course diagrams.** The figures marked "(course diagram)" are UML diagrams (UML, the Unified Modeling Language, is the standard box-and-arrow notation for drawing classes and how they relate) and use one arrow legend throughout:
 
 ![UML conventions legend](../../assets/O-design-splitwise-4.svg)
 *Figure — UML conventions used in the course class diagrams: interface, class, realization (implements), generalization (inherits), dependency, association, one-way association, aggregation and composition (course diagram)*
 
-The mermaid diagrams are drawn from **this chapter's Java code**, so they match the code line by line.
+The mermaid diagrams (Mermaid is a text format that a renderer turns into pictures) are drawn from **this chapter's Java code**, so they match the code line by line.
 
 ---
 
@@ -44,7 +46,7 @@ The mermaid diagrams are drawn from **this chapter's Java code**, so they match 
 
 **What it is.** Splitwise is an app that remembers who paid for what when friends share costs, and tells everyone who owes whom. Everyday analogy: a weekend away with four friends. The hotel goes on Alice's card, Bob covers dinner, Carol gets the cab. By Sunday evening no one can reconstruct the totals. Splitwise is the shared notebook that does the maths.
 
-The hard part is **not** the UI. The real decision is *which class owns the money arithmetic*, so the books still balance after every single operation.
+The hard part is **not** the UI (user interface: the screens people tap). The real decision is *which class owns the money arithmetic*, so the books still balance after every single operation.
 
 Questions to ask the interviewer (with the answers we assume):
 
@@ -78,7 +80,7 @@ Questions to ask the interviewer (with the answers we assume):
 **Non-functional**
 - Correctness of money above everything (exact decimals, no drift).
 - Adding a new split type must not change existing classes (Open/Closed Principle).
-- Thread-safe: two people adding expenses at the same time must not corrupt the ledger.
+- Thread-safe: two people adding expenses at the same time must not corrupt the ledger. (A **thread** is one independent line of execution inside a running program; code is **thread-safe** when several threads can use it at the same moment without corrupting its data.)
 
 ### Use cases
 
@@ -109,6 +111,8 @@ In the figure above, "Add an expense" *includes* the three system steps. "Includ
 | `Payment` (record) | One suggested transfer (a suggestion, not a record of money moving). |
 | `Splitwise` | Facade: the one class the app talks to. Orders the steps, contains no arithmetic. |
 | `Money` | Tiny helper: 2-decimal `BigDecimal` values. |
+
+A few words from the table: a **record** is Java's short syntax for a class that only carries data, whose fields cannot change after creation; a **value object** is a small object defined only by its values (two shares with the same person and amount are interchangeable); a **mutator** is a method that changes an object's state; a **Facade** is one simple front class that hides several classes behind it; and a **greedy** algorithm makes the best-looking choice at each step without reconsidering earlier choices.
 
 **Why the group holds no money.** If each group kept its own balances, a person in two groups would have "what Bob owes Alice" stored in two places. Sooner or later the two copies disagree. One ledger, one number per pair, is the single source of truth.
 
@@ -252,27 +256,27 @@ sequenceDiagram
 
 How it works, step by step:
 1. For each member, compute the **net position** = (what others owe them) − (what they owe others). Positive = creditor, negative = debtor. The nets always sum to zero.
-2. Put creditors in one max-heap and debtors in another (by amount; ties by name, so the output is deterministic).
+2. Put creditors in one max-heap and debtors in another (by amount; ties by name, so the output is deterministic). A **max-heap** is a priority queue that always hands back its largest item first; **deterministic** means the same input always gives the same output.
 3. Pop the biggest creditor C and biggest debtor D. Let x = min(C, D). Suggest "D pays C x".
 4. Push back whichever side still has a remainder.
 5. Stop when a heap is empty (everyone is at zero).
 
-Each round brings at least one person to zero, and the final round brings two to zero, so there are **at most n − 1 payments** for n people. It is **not always the true minimum**: finding the minimum number of transfers is NP-hard (it is related to splitting people into as many zero-sum subgroups as possible). Say that before you are asked.
+Each round brings at least one person to zero, and the final round brings two to zero, so there are **at most n − 1 payments** for n people. It is **not always the true minimum**: finding the minimum number of transfers is NP-hard (no fast algorithm for it is known: the work needed explodes as the number of people grows; it is related to splitting people into as many zero-sum subgroups as possible). Say that before you are asked.
 
 ### Design decisions & patterns used
 
 | Decision | Why | Alternative rejected |
 |---|---|---|
 | **Strategy** for split rules (`SplitStrategy`) | The rule arrives from outside and is interchangeable. A fourth rule (by shares, by adjustment) is a new class. Every rule returns the same `List<Share>`, so nothing downstream knows which rule ran. | `if (type == EQUAL) ... else if (type == EXACT)` in the service: every new type edits old, tested code. |
-| Expense validates itself in a **static factory** (`Expense.create`) | Checked once, when created; after that every class can trust its shares. An invalid expense can never exist. | Checking in the ledger: re-checks on every read and still lets bad objects exist. |
+| Expense validates itself in a **static factory** (a static method that builds the object instead of `new`; here `Expense.create`) | Checked once, when created; after that every class can trust its shares. An invalid expense can never exist. | Checking in the ledger: re-checks on every read and still lets bad objects exist. |
 | `problem()` returns the **reason**, not a boolean | The user sees *why* ("shares add up to 15.00 but the total is 30.00"). | `boolean isValid()`: loses the reason. |
 | Ledger stores **one signed number per unordered pair** | A debt is never stored twice, so it can never disagree with itself. Money moving the other way cancels automatically. | Two maps "A owes B" and "B owes A": two places for the truth. |
 | Ledger has **one mutator** (`adjust`) | Expenses, settle-ups and simplification all go through it, so the cancel rule exists in exactly one place. | Separate `addDebt`, `settle`, `reduce` methods each with their own arithmetic. |
-| `DebtSimplifier` separate from `Ledger` | Single Responsibility: *keeping* balances and *planning* settlements change for different reasons. | Putting the algorithm inside the ledger. |
+| `DebtSimplifier` separate from `Ledger` | Single Responsibility (each class has one reason to change): *keeping* balances and *planning* settlements change for different reasons. | Putting the algorithm inside the ledger. |
 | `BigDecimal` with explicit rounding; spare cents handed out one at a time | 100.00 / 3 = 33.33 × 3 = 99.99 would lose a cent. Equal split gives the extra cent to the first people; percent split lets the last person absorb the remainder. | `double`: 0.1 + 0.2 ≠ 0.3. (The course keeps whole cents in a `long`; that is equally correct. We use `BigDecimal` as this book's standard.) |
 | `Splitwise` is a **Facade** | One entry point; it orders the steps and decides nothing. | UI code calling ledger and strategies directly. |
 
-**Only one named GoF pattern here (Strategy).** That is fine. Good designs do not collect patterns; they use the one that absorbs the change that is likely.
+**Only one named GoF pattern here (Strategy).** (GoF, the "Gang of Four", are the four authors of the 1994 book that catalogued 23 classic design patterns.) That is fine. Good designs do not collect patterns; they use the one that absorbs the change that is likely.
 
 ### Java implementation
 
@@ -822,14 +826,14 @@ Look at step 5 and step 6: four pairwise debts became three payments, and every 
 
 ### Related machine-coding problem: The Ledger Co. (Navi)
 
-Splitwise is not the only "ledger" question you will meet. The Geektrust / Navi machine-coding round **"Ledger Co."** also keeps money records, but for **bank loans** (simple interest, a fixed monthly instalment, lump-sum prepayments) rather than bills shared between friends. It is fully designed, coded and run in **Chapter 21, §21.6**, so it is not repeated here. The comparison is the useful part: both keep **one authoritative record** and compute every answer from it (Splitwise: one signed balance per pair of people; Ledger Co.: one loan per bank and borrower, holding its lump-sum payments), and both use `BigDecimal` with an explicitly named rounding mode. What differs is the rule set: Splitwise's rules are about *who owes whom*, Ledger Co.'s are about *how much has been repaid by a given month*.
+Splitwise is not the only "ledger" question you will meet. The Geektrust / Navi machine-coding round (an interview round where you write a complete, runnable program in one or two hours) **"Ledger Co."** also keeps money records, but for **bank loans** (simple interest — interest charged only on the original amount borrowed; a fixed monthly instalment; lump-sum prepayments — extra one-off payments made early) rather than bills shared between friends. It is fully designed, coded and run in **Chapter 21, §21.6**, so it is not repeated here. The comparison is the useful part: both keep **one authoritative record** and compute every answer from it (Splitwise: one signed balance per pair of people; Ledger Co.: one loan per bank and borrower, holding its lump-sum payments), and both use `BigDecimal` with an explicitly named rounding mode. What differs is the rule set: Splitwise's rules are about *who owes whom*, Ledger Co.'s are about *how much has been repaid by a given month*.
 
 ### Concurrency & edge cases
 
-- **Two expenses at once.** Every public method on `Splitwise` is `synchronized`, so "build → validate → adjust ledger" is atomic. Simple and correct for one process. At scale you would lock per group or per pair of users, or store balances in a database and update them in one transaction.
+- **Two expenses at once.** Every public method on `Splitwise` is `synchronized` (a Java keyword that lets only one thread at a time run such methods on the same object), so "build → validate → adjust ledger" is atomic (it happens as one indivisible step that no other thread can see half-done). Simple and correct for one process. At scale you would lock per group or per pair of users (a **lock** is an object only one thread can hold at a time; others wait for it), or store balances in a database and update them in one transaction (a group of database changes that either all succeed or all fail together).
 - **Rounding.** Covered by spare-cent distribution and "last person absorbs". Test: 100.00 / 3 must give 33.34 + 33.33 + 33.33.
 - **Payer not among the sharers** (Alice pays for Bob and Carol only, or for Bob alone): allowed. Every share becomes a debt to Alice. `Expense.problem` counts the payer as one of the "at least two people", so Alice buying Bob's lunch is a valid expense, while Dave paying only for Dave is refused.
-- **Payer's own share:** `adjust(alice, alice, …)` is a no-op by design.
+- **Payer's own share:** `adjust(alice, alice, …)` is a no-op (does nothing) by design.
 - **Overpaying on settle-up:** refused, so a debt can never flip direction by accident.
 - **Unknown user / not a group member:** refused before any computation.
 - **Duplicate person in the shares list, negative share, zero total:** refused by `Expense.problem`.
@@ -838,7 +842,7 @@ Splitwise is not the only "ledger" question you will meet. The Geektrust / Navi 
 ### Extensions & follow-up questions
 
 - **"Add a split by shares (e.g. 2:1:1)."** A new `ShareRatioSplit implements SplitStrategy`. Nothing else changes.
-- **"Delete or edit an expense."** Our ledger stores totals, not history, so undo means re-adding the inverse (`adjust(payer, sharer, amount)` for each share). Cleaner: make the ledger an **append-only list of entries** (like accounting journals / event sourcing) and compute balances on demand or in a cache. Then delete = append a reversing entry.
+- **"Delete or edit an expense."** Our ledger stores totals, not history, so undo means re-adding the inverse (`adjust(payer, sharer, amount)` for each share). Cleaner: make the ledger an **append-only list of entries** (like accounting journals / event sourcing — storing every change as an event and rebuilding the current state from them) and compute balances on demand or in a cache (a saved copy of computed results kept for quick reuse; see 20.3). Then delete = append a reversing entry.
 - **"Multiple currencies."** Add a `Currency` to every amount (a `Money(amount, currency)` value object) and keep one ledger per currency, or convert at the time of the expense and store the rate used.
 - **"Is the greedy always optimal?"** No. Counter-example: nets A −6, B −5, C +2, D +4, E +5. Greedy: A pays E 5, B pays D 4, then two more small payments to C = **4 payments**. Optimal: B pays E 5 (they cancel exactly), A pays D 4 and C 2 = **3 payments**. The optimum groups people into as many zero-sum subsets as possible, which needs an exponential search; greedy is the accepted interview answer.
 - **"Isn't `Splitwise` doing too much?"** A fair criticism: it holds users, groups, expenses *and* the ledger. At larger scale, give each of the four its own repository (store) and let `Splitwise` shrink to the part that orders the steps. Say this before the interviewer does.
@@ -898,7 +902,7 @@ Splitwise really does offer a "simplify debts" option for groups: when it is on,
 | Rate limits? | At most N notifications of one kind per user per hour. |
 | Failures? | Retry a channel up to a limit, then fall back to the next accepted channel; if all fail, record FAILED. |
 | Audit? | Every attempt recorded: SENT, FAILED or SUPPRESSED, and why. |
-| Sync or async? | The caller should not wait for a slow SMS gateway. |
+| Sync or async? (synchronous = caller waits; asynchronous = caller moves on) | The caller should not wait for a slow SMS gateway (the provider service that actually sends texts). |
 | Bulk sends / translations / open tracking / unsubscribe links? | Out of scope. |
 
 ### Requirements
@@ -917,7 +921,7 @@ Splitwise really does offer a "simplify debts" option for groups: when it is on,
 11. Every attempt is recorded with its outcome and reason.
 12. Adding a channel, **or** a new reason to hold a message back, requires no edit to the service class.
 
-**Non-functional:** the caller is not blocked by slow providers (async option); thread-safe under concurrent sends; testable without waiting for real time (injected clock); a broken listener must never break delivery.
+**Non-functional:** the caller is not blocked by slow providers (async option); thread-safe under concurrent sends; testable without waiting for real time (injected clock); a broken listener must never break delivery. An **injected** clock is one handed to the class from outside (instead of the class reading the system time itself), so a test can pass in a fake clock it moves by hand; a **listener** is an object that has asked to be told when something happens.
 
 ### Use cases
 
@@ -946,6 +950,8 @@ Actors: **Product code** (asks for a notification), **Person** (chooses channels
 | `DeliveryListener` (interface) | **Observer**: told every outcome. `LoggingListener`, `MetricsListener`. |
 | `TimeSource` | Where "now" comes from (a manual clock in tests). |
 | `NotificationService` | Thin coordinator: rules → preferences → render → channels in order → `finish()`. Decides nothing itself. |
+
+Terms from the table: **SMTP** is the protocol mail servers use to pass email along; a **fake** is a pretend version of a real dependency used in tests; an **abstract** class cannot be created on its own and exists to be extended; a `final` method cannot be overridden by subclasses; **backoff** means waiting a little longer before each new retry, so a struggling provider gets time to recover.
 
 **Why `User` and `Preferences` are separate classes.** Who you are rarely changes; what you are willing to receive changes often. Separate reasons to change → separate classes (Single Responsibility Principle).
 
@@ -1080,7 +1086,7 @@ sequenceDiagram
 | **Strategy** | `SendRule` | Every "reason not to send" is its own class. A new rule (e.g. "user unsubscribed", "duplicate within 5 minutes") is a new class plus one line in the wiring code. | `if (quiet) … if (tooMany) …` inside `send`. |
 | **Observer** | `DeliveryListener` | Logs, dashboards, alerts all want outcomes. The service announces; it doesn't know who listens. | Hard-coding logging/metrics in the service; it grows forever. |
 | **Simple Factory** | `ChannelFactory` | One place maps `ChannelType` → class; config can list channel names. | `new SmsChannel(...)` scattered through wiring code. |
-| **Adapter** (target interface) | `Gateway` | Each real provider SDK has its own API; an adapter per provider implements `Gateway`. Also lets tests use a fake. | Channels calling vendor SDKs directly. |
+| **Adapter** (target interface; an adapter converts one API into the shape your code expects) | `Gateway` | Each real provider SDK (the vendor's client library) has its own API (the set of calls a library or service offers to programs); an adapter per provider implements `Gateway`. Also lets tests use a fake. | Channels calling vendor SDKs directly. |
 | Rule returns **reason text**, not boolean | `SendRule.blocks` | The reason is recorded (requirement 11). | `boolean allowed()` loses why. |
 | Urgency handled **inside** the rule | `QuietHoursRule` | The service doesn't need to know which rules urgent messages ignore. | A special case in the service. |
 | Rate limit counts only **successful** sends | `onSent` hook | A suppressed/failed message shouldn't use up the user's hourly allowance. | Counting at check time. |
@@ -1572,12 +1578,14 @@ public class Main {
 
 **Walking through the code.**
 - `Preferences.isQuiet` handles the midnight wrap: if start ≤ end (09–17) it is a simple range; otherwise (22–07) it is "after start **or** before end".
-- `Template.render` uses a regex `\{(\w+)}` and `Matcher.appendReplacement` with `Matcher.quoteReplacement`, so a value containing `$` or `\` is inserted literally. A missing value is an error, not a silent `{name}` in a customer's inbox.
+- `Template.render` uses a regex (regular expression: a small pattern language for finding text) `\{(\w+)}` and `Matcher.appendReplacement` with `Matcher.quoteReplacement`, so a value containing `$` or `\` is inserted literally. A missing value is an error, not a silent `{name}` in a customer's inbox.
 - `NotificationChannel.deliver` is `final`: subclasses cannot break the retry loop. Backoff doubles after each failure (exponential backoff). The course's version retries immediately and names that as a weakness (three back-to-back tries against a server that is down are three quick failures); the waiting belongs in this one parent loop, which is exactly where we put it.
-- `RateLimitRule` keeps a deque of send times per (user, kind) and **prunes** old ones on every check, so one key's deque never holds more than `limit` entries (the course's version never discarded old timestamps and flagged that as a known leak). The *map of keys* still grows with every (user, kind) pair ever seen; a production version adds a periodic sweep that drops empty or stale deques, or uses a fixed-size window counter per key.
+- `RateLimitRule` keeps a deque (double-ended queue: items can be added or removed at either end) of send times per (user, kind) and **prunes** old ones on every check, so one key's deque never holds more than `limit` entries (the course's version never discarded old timestamps and flagged that as a known leak — a **memory leak** is memory a program keeps holding although it no longer needs it). The *map of keys* still grows with every (user, kind) pair ever seen; a production version adds a periodic sweep that drops empty or stale deques, or uses a fixed-size window counter per key.
 - `NotificationService.send` has one exit, `finish()`. Even a template with a missing value is caught and recorded as FAILED (step 7 of the output) instead of escaping as an exception that no listener would ever hear about. A listener that throws is caught so it cannot break delivery.
-- `NotificationRequest` copies its values into a `TreeMap`, so the values are always in the same order and the same request always renders the same text: handy when comparing test output.
-- `sendAsync` runs `send` on a worker pool and returns a `CompletableFuture`; in production a durable queue (Kafka, SQS) would sit here instead.
+- `NotificationRequest` copies its values into a `TreeMap` (a map that keeps its keys sorted), so the values are always in the same order and the same request always renders the same text: handy when comparing test output.
+- `sendAsync` runs `send` on a worker pool (a fixed set of threads that pick up tasks as they arrive) and returns a `CompletableFuture` (a handle to a result that will be ready later); in production a durable queue (Kafka, SQS) would sit here instead.
+
+> **Key term — message queue:** a queue is a waiting line for work. Producers put messages in at one end; workers take them out at the other, at their own pace. A **durable** queue stores its messages on disk, so they survive a crash or restart. **Kafka** (an open-source log-based messaging system) and **Amazon SQS** (a managed queue service in AWS, Amazon's cloud) are two widely used examples. See [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md) for queues in larger systems.
 
 **Output:**
 
@@ -1618,27 +1626,29 @@ Step 2 shows Template Method + fallback: 3 failed SMS attempts + 1 successful em
 
 ### Concurrency & edge cases
 
-- **Shared state is thread-safe:** users/preferences/templates in `ConcurrentHashMap`; listeners and history in `CopyOnWriteArrayList` (cheap reads, rare writes); the rate-limit deque is locked per key.
-- **Check-then-act gap in rate limiting.** Two concurrent sends for the same user and kind can both pass `blocks()` before either calls `onSent()`, so the limit can be exceeded by the number of concurrent sends. Fixes: reserve a slot atomically at check time and release it if the send fails, or serialize sends per user (a per-user queue, which also keeps their order).
-- **Retries block a worker thread.** With `Thread.sleep` backoff, a slow provider ties up threads. Real systems re-enqueue the message with a delay instead (a "retry topic" or delayed queue).
-- **Idempotency.** A retry after a timeout may deliver twice (the provider may have sent it but the reply was lost). Pass an idempotency key / message id to providers that support it, and make receivers tolerate duplicates.
+- **Shared state is thread-safe:** users/preferences/templates in `ConcurrentHashMap` (a map built for many threads to read and write at once); listeners and history in `CopyOnWriteArrayList` (a list that copies itself on every write, so reads need no lock: cheap reads, rare writes); the rate-limit deque is locked per key.
+- **Check-then-act gap in rate limiting.** (Check-then-act: code first checks a condition, then acts on it, and another thread can change things in between.) Two concurrent (running at the same time) sends for the same user and kind can both pass `blocks()` before either calls `onSent()`, so the limit can be exceeded by the number of concurrent sends. Fixes: reserve a slot atomically at check time and release it if the send fails, or serialize sends per user (run them strictly one after another, e.g. a per-user queue, which also keeps their order).
+- **Retries block a worker thread.** With `Thread.sleep` backoff, a slow provider ties up threads. Real systems re-enqueue the message with a delay instead (a "retry topic" — a topic is a named channel that messages are published to — or delayed queue, which hands a message out only after a set delay).
+- **Idempotency.** A retry after a timeout (giving up on waiting for a reply after a set time) may deliver twice (the provider may have sent it but the reply was lost). Pass an idempotency key / message id to providers that support it, and make receivers tolerate duplicates.
+
+> **Key term — idempotency:** an operation is **idempotent** when doing it twice has the same effect as doing it once ("set the balance to 10" is; "add 10 to the balance" is not). Retries are only safe on idempotent operations. An **idempotency key** is a unique id sent with a request, so the receiver can recognise a repeat and skip it. More in [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).
 - **Missing address** (user has no phone): the channel returns a failed attempt with 0 tries and the next channel is used.
 - **Unknown kind / no template:** FAILED with a reason; **no accepted channel:** SUPPRESSED.
-- **Time zones:** quiet hours should use the *user's* time zone; store a `ZoneId` in preferences and convert `Instant` → local hour.
+- **Time zones:** quiet hours should use the *user's* time zone; store a `ZoneId` (Java's type for a time zone) in preferences and convert `Instant` (an exact moment on the global timeline) → local hour.
 
 ### Extensions & follow-up questions
 
-- **"Add WhatsApp."** One `WhatsAppChannel extends NotificationChannel` (3 small methods), one enum value, one `Gateway` adapter. Nothing else changes.
+- **"Add WhatsApp."** One `WhatsAppChannel extends NotificationChannel` (3 small methods), one enum value (an enum is a type with a fixed list of named values), one `Gateway` adapter. Nothing else changes.
 - **"Someone is getting too many messages."** A new `SendRule` (e.g. a global daily cap, or "dedupe identical messages within 10 minutes"), not a new `if`.
-- **"Send to a million users (a campaign)."** Split into a fan-out stage that expands the audience into individual requests on a queue, and many workers that each run this `send`. Rate-limit per provider too (SMS gateways have throughput limits).
-- **"Priorities."** Separate queues per priority (OTP queue drained first), or a `PriorityBlockingQueue`.
-- **"Localization."** Key templates by (kind, locale) and store the user's locale in preferences.
-- **"Delivery receipts / opened tracking."** Providers call back via webhooks; record them as further events on the `DeliveryRecord`.
-- **"Circuit breaker."** If a provider fails repeatedly, stop calling it for a while (Resilience4j-style) and go straight to the next channel.
+- **"Send to a million users (a campaign)."** Split into a fan-out stage (fan-out: one input turned into many copies or tasks) that expands the audience into individual requests on a queue, and many workers that each run this `send`. Rate-limit per provider too (SMS gateways have throughput limits — **throughput** is how much work gets done per unit of time, e.g. messages per second).
+- **"Priorities."** Separate queues per priority (OTP — one-time password, the login-code kind — queue drained first), or a `PriorityBlockingQueue` (a thread-safe queue that always hands out the highest-priority item next).
+- **"Localization."** (Localization: adapting text to a user's language and region.) Key templates by (kind, locale — a language-plus-region code such as `fr-CA`) and store the user's locale in preferences.
+- **"Delivery receipts / opened tracking."** Providers call back via webhooks (an HTTP request — HTTP being the protocol web clients and servers talk — that the provider sends to a URL you registered, when something happens on their side); record them as further events on the `DeliveryRecord`.
+- **"Circuit breaker."** If a provider fails repeatedly, stop calling it for a while (Resilience4j-style; Resilience4j is a Java library of such fault-tolerance tools) and go straight to the next channel. Like an electrical breaker, it "trips" after too many failures and lets calls through again after a pause.
 
 ### Real-world example
 
-Push notifications on phones go through platform services: **Firebase Cloud Messaging (FCM)** for Android and **Apple Push Notification service (APNs)** for iOS; the app's server sends to a *device token*, exactly the `deviceToken` field above. Email is usually sent through providers such as Amazon SES or SendGrid, and SMS through gateways such as Twilio; each has its own API, which is why the `Gateway` adapter exists. **AWS SNS** is a managed pub-sub that fans one message out to email, SMS, mobile push and queues. LinkedIn's engineering blog describes **Air Traffic Controller (ATC)**, a central service that almost all LinkedIn notifications now pass through and that decides whether, when and how to notify each member, to stop excessive, repetitive notifications: the `SendRule` idea at company scale. And phone "Focus" / "Do Not Disturb" modes are quiet hours with an urgent-bypass list.
+Push notifications on phones go through platform services: **Firebase Cloud Messaging (FCM)** for Android and **Apple Push Notification service (APNs)** for iOS; the app's server sends to a *device token*, exactly the `deviceToken` field above. Email is usually sent through providers such as Amazon SES or SendGrid, and SMS through gateways such as Twilio; each has its own API, which is why the `Gateway` adapter exists. **AWS SNS** is a managed (run for you by the cloud provider) pub-sub that fans one message out to email, SMS, mobile push and queues. LinkedIn's engineering blog describes **Air Traffic Controller (ATC)**, a central service that almost all LinkedIn notifications now pass through and that decides whether, when and how to notify each member, to stop excessive, repetitive notifications: the `SendRule` idea at company scale. And phone "Focus" / "Do Not Disturb" modes are quiet hours with an urgent-bypass list.
 
 ### In the interview
 
@@ -1648,13 +1658,13 @@ Push notifications on phones go through platform services: **Firebase Cloud Mess
 
 **Follow-ups with answers:**
 - *"Add a new channel."* → One subclass + gateway adapter.
-- *"What about duplicate messages on retry?"* → Idempotency keys; at-least-once delivery means receivers must tolerate duplicates.
+- *"What about duplicate messages on retry?"* → Idempotency keys; at-least-once delivery (every message arrives, but some may arrive more than once) means receivers must tolerate duplicates.
 - *"Why not Strategy for channels?"* → Channels share an algorithm and vary in one step; that is Template Method. (Composition-based alternative: inject a `RetryPolicy` object and a `Sender` Strategy; also valid, mention it.)
 
 ### Self-check
 
 1. Which pattern puts the retry loop in one place? → Template Method (`final deliver()` in the abstract channel).
-2. Why does `SendRule.blocks` return `Optional<String>`? → So the reason for suppression is recorded.
+2. Why does `SendRule.blocks` return `Optional<String>` (Java's box that holds either one value or nothing)? → So the reason for suppression is recorded.
 3. Why should a suppressed notification not count against the rate limit? → The user never received it; counting it would block legitimate later messages.
 4. Quiet hours 22–07: is 06:00 quiet? Is 12:00? → Yes; no.
 5. Where would you put a queue to avoid blocking checkout? → Between product code and `NotificationService.send` (our `sendAsync` is the in-process version).
@@ -1674,19 +1684,19 @@ Push notifications on phones go through platform services: **Firebase Cloud Mess
 
 ### Problem & clarifying questions
 
-**What it is.** A cache is a small, fast store that keeps recently used values close at hand, so you don't have to fetch them again from a slow place (a database, another service, the disk). Everyday analogy: the few books on your desk. The library (database) has everything, but the desk (cache) holds the ones you are using. When the desk is full and you need a new book, one must go back to the shelf. **Which one goes back** is the eviction policy, and it is the rule most likely to change.
+**What it is.** A cache is a small, fast store that keeps recently used values close at hand, so you don't have to fetch them again from a slow place (a database, another service, the disk). (For where caches sit in bigger systems, see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md).) Everyday analogy: the few books on your desk. The library (database) has everything, but the desk (cache) holds the ones you are using. When the desk is full and you need a new book, one must go back to the shelf. **Which one goes back** is the eviction policy, and it is the rule most likely to change.
 
 Because the question is about **one component**, vague answers are exposed quickly. The interviewer will ask: *which data structure gives O(1) get and put?* (O(1), "constant time", means the time does not grow with the number of entries.)
 
 | Question | Assumed answer |
 |---|---|
 | Capacity measured in? | Number of entries (not bytes). |
-| Eviction rule? | LRU by default; must be swappable for FIFO or LFU without changing the cache. |
+| Eviction rule? | LRU (least recently used) by default; must be swappable for FIFO or LFU without changing the cache. |
 | Time limits? | Optional TTL (time to live) per entry. Reading an expired entry is a miss and removes it. |
 | Stats? | Hits, misses, evictions, expirations. |
 | Notifications? | Interested code can subscribe to removals and learn the cause. |
 | Thread-safe? | Yes (the course version left it out; we add it). |
-| Load from DB on miss / write-back? | Out of scope; discussed in extensions. |
+| Load from DB (database) on miss / write-back (save changes to the DB later)? | Out of scope; discussed in extensions. |
 
 ### Requirements
 
@@ -1704,7 +1714,7 @@ Because the question is about **one component**, vague answers are exposed quick
 11. Callers can invalidate a single key or empty the whole cache.
 12. Every entry leaves through **one** code path, whatever the reason.
 
-**Non-functional:** O(1) operations; thread-safe; testable TTL (injected clock); listeners must not slow down or deadlock the cache.
+**Non-functional:** O(1) operations; thread-safe; testable TTL (injected clock); listeners must not slow down or deadlock the cache (a **deadlock** is when two threads each wait forever for something the other one holds).
 
 ### Use cases
 
@@ -1724,10 +1734,12 @@ Actors: **Application** (reads, stores, removes keys), **Operator** (chooses the
 | `EvictionPolicies` + `PolicyType` | **Simple Factory**: enum → policy. |
 | `Cache<K,V>` | The map + policy + clock + stats + listeners. One lock. **One removal method.** |
 | `Cache.Builder` | **Builder**: capacity, policy, clock with defaults, validated once. |
-| `CacheStats` | Counters (`LongAdder`). |
+| `CacheStats` | Counters (`LongAdder`, a thread-safe counter). |
 | `RemovalReason` | EVICTED, EXPIRED, REMOVED, CLEARED. |
 | `EvictionListener<K,V>` | **Observer**: told key, value and reason. |
 | `ShardedCache<K,V>` | N independent caches picked by key hash, to reduce lock contention. |
+
+> **Key terms — hash map, linked list, hashing, contention.** A **hash map** (`HashMap`) stores key → value pairs; it turns each key into a number (its **hash**) that says which slot to look in, so finding a key takes about the same time however many entries there are. A **linked list** is a chain of nodes where each node points to the next one (a **doubly** linked list also points back to the previous one); inserting or unlinking a node you already hold is just a few pointer changes. **Lock contention** is threads queueing for the same lock; splitting data into **shards** (independent pieces, here chosen by key hash), each with its own lock, reduces it.
 
 **The core idea: two structures, each answering one question.**
 
@@ -1868,21 +1880,21 @@ sequenceDiagram
 | `onRemove` | unlink | unlink | unlink; drop the bucket if it emptied |
 | `victim()` | back of the list | back of the list | back of the **first** bucket in the chain (least recently used among the least frequent) |
 
-The FIFO policy is LRU with one empty method, which is good evidence that the interface boundaries are well chosen. The course's LFU scanned all entries (O(n)) and named a structure grouping entries by count as the fix; our `LfuPolicy` implements that fix. The buckets are themselves kept in a **doubly linked chain in increasing frequency order**, and a new bucket f+1 is always created right after bucket f, so the chain never needs sorting and the lowest bucket is always the first one. That makes `onInsert`, `onAccess`, `onRemove` and `victim()` all O(1), even after a manual removal or an expiry empties the lowest bucket (this is the O(1) LFU scheme of Shah, Mitra and Matani, 2010). Ties inside the lowest bucket are broken by recency (the back of the bucket), so two runs of the same test always evict the same key.
+The FIFO policy is LRU with one empty method, which is good evidence that the interface boundaries are well chosen. The course's LFU scanned all entries (O(n): the time grows in step with the number of entries) and named a structure grouping entries by count as the fix; our `LfuPolicy` implements that fix. The buckets are themselves kept in a **doubly linked chain in increasing frequency order**, and a new bucket f+1 is always created right after bucket f, so the chain never needs sorting and the lowest bucket is always the first one. That makes `onInsert`, `onAccess`, `onRemove` and `victim()` all O(1), even after a manual removal or an expiry empties the lowest bucket (this is the O(1) LFU scheme of Shah, Mitra and Matani, 2010). Ties inside the lowest bucket are broken by recency (the back of the bucket), so two runs of the same test always evict the same key.
 
 ### Design decisions & patterns used
 
 | Decision | Why | Alternative rejected |
 |---|---|---|
 | **Strategy** for eviction | "Who leaves" is the rule most likely to change. | A `switch (policyType)` inside `get`/`put`. |
-| **Observer** for removals | Logging, metrics, deleting a temp file on eviction — none belong inside the cache. The reason is passed so one listener can handle all cases. | Callbacks hard-coded per reason. |
+| **Observer** for removals | Logging, metrics, deleting a temp file on eviction — none belong inside the cache. The reason is passed so one listener can handle all cases. | Callbacks (methods handed over to be called later) hard-coded per reason. |
 | **One removal method** (`remove(node, reason)`) | Eviction, expiry, manual removal and clear all update map, policy, stats and listeners the same way; nothing can be forgotten on one path. | Four copies of the clean-up code. |
-| **Sentinel nodes** | Add and unlink are always the same four pointer writes; no special cases for empty list or ends. | Null checks everywhere (a classic source of bugs). |
-| **Injected clock** (`LongSupplier`) | TTL tests run instantly by moving a fake clock forward. | `System.currentTimeMillis()` inside the cache: tests must `sleep`. |
-| **Lazy expiry + optional sweeper** | Expired entries are dropped when read; `purgeExpired()` lets a background task reclaim memory. | Only lazy (memory held by dead entries) or a timer per entry (expensive). |
-| **One `ReentrantLock`**, listeners called **after unlock** | In LRU even `get` writes (moves a node), so a read-write lock would not help. Calling listeners outside the lock means a slow or re-entrant listener cannot block or deadlock the cache. | `synchronized` around listener calls. |
-| **Builder** | Optional settings with defaults; validation once in `build()`. | Telescoping constructors. |
-| **Sharding** (`ShardedCache`) | N locks instead of one: threads touching different shards never wait for each other. | One global lock (every reader waits for every writer). |
+| **Sentinel nodes** | Add and unlink are always the same four pointer writes (a **pointer** here is a reference from one node to another); no special cases for empty list or ends. | Null checks everywhere (a classic source of bugs). |
+| **Injected clock** (`LongSupplier`, a function that returns a `long`) | TTL tests run instantly by moving a fake clock forward. | `System.currentTimeMillis()` inside the cache: tests must `sleep`. |
+| **Lazy expiry + optional sweeper** | Lazy = checked only when needed: expired entries are dropped when read; `purgeExpired()` lets a background task reclaim memory. | Only lazy (memory held by dead entries) or a timer per entry (expensive). |
+| **One `ReentrantLock`** (Java's explicit lock object), listeners called **after unlock** | In LRU even `get` writes (moves a node), so a read-write lock (one that lets many readers in together but a writer only alone) would not help. Calling listeners outside the lock means a slow or re-entrant listener cannot block or deadlock the cache. | `synchronized` around listener calls. |
+| **Builder** | Optional settings with defaults; validation once in `build()`. | Telescoping constructors (many constructors, each taking one more parameter). |
+| **Sharding** (splitting data into independent pieces; `ShardedCache`) | N locks instead of one: threads touching different shards never wait for each other. | One global lock (every reader waits for every writer). |
 
 ### Java implementation
 
@@ -2326,9 +2338,9 @@ public class Main {
 **Walking through the code.**
 - `DoublyLinkedList` never touches `null` at the ends because `head` and `tail` are dummy nodes that are never removed.
 - In `Cache.get`, an expired entry counts as a miss **and** an expiration, and is removed through `remove()` — all three in one place, so the counters always add up.
-- Every public method collects `Removal` events while holding the lock and calls `notifyListeners` in `finally` **after** `unlock()`.
+- Every public method collects `Removal` events while holding the lock and calls `notifyListeners` in `finally` (a block that always runs, even when an exception is thrown) **after** `unlock()`.
 - `put` on an existing key replaces value and TTL and counts as an access (in LRU the key moves to the front).
-- `CacheStats` uses `LongAdder`, which is faster than `AtomicLong` when many threads increment.
+- `CacheStats` uses `LongAdder`, which is faster than `AtomicLong` (a `long` that threads can update safely without a lock) when many threads increment.
 
 **Output:**
 
@@ -2359,7 +2371,7 @@ With the same access pattern (b read 3 times, then c once, then a twice), the th
 
 ### LRU Cache from scratch (the classic interview question)
 
-Very often the interviewer skips the pluggable design and asks for exactly this: **"Implement an LRU cache with O(1) `get` and `put`"** (LeetCode 146). The answer is the same two structures, written inline:
+Very often the interviewer skips the pluggable design and asks for exactly this: **"Implement an LRU cache with O(1) `get` and `put`"** (LeetCode 146; LeetCode is a popular website of coding interview problems). The answer is the same two structures, written inline:
 
 1. A `HashMap<K, Node>` for lookup.
 2. A doubly linked list with `head`/`tail` sentinels; most recent right after `head`, least recent right before `tail`.
@@ -2497,30 +2509,30 @@ The printed values match LeetCode 146's expected answers for this sequence (1, m
 |---|---|---|---|
 | HashMap + own doubly linked list | O(1) / O(1) | Only with a lock (`synchronized` here) | Interviews; when you need custom behaviour |
 | `LinkedHashMap(accessOrder=true)` + `removeEldestEntry` | O(1) / O(1) | No (wrap with a lock) | Quick, small, single-threaded caches |
-| Caffeine / Guava cache | amortized O(1) | Yes, highly concurrent | Production Java |
+| Caffeine / Guava cache (widely used Java caching libraries) | amortized O(1) (O(1) on average over many calls) | Yes, highly concurrent | Production Java |
 
 ### Concurrency & edge cases
 
 - **Why a plain read lock is not enough:** an LRU `get` moves the node (several pointer writes). Two threads doing that at once corrupt the list. So `get` needs the exclusive lock.
 - **Contention:** one lock serializes everything. `ShardedCache` splits keys over 8 caches (8 locks); the demo hammers it from 8 threads and the size never exceeds the total capacity. Trade-off: eviction is per shard, so the global LRU order is approximate.
 - **Listeners:** called outside the lock; a listener that calls back into the cache cannot deadlock.
-- **Cache stampede** (many threads miss the same key at once and all hit the database): use a "loading" cache where the first thread computes and the others wait for its result (`ConcurrentHashMap.compute`/`computeIfAbsent`, or a `CompletableFuture` stored per key). Chapter 13 (§13.6) builds a TTL cache whose `getOrLoad` does this with `ConcurrentHashMap.compute`.
-- **TTL semantics, precisely.** An entry expires *at* its deadline (`now >= expiresAt`), so a 5-second TTL written at t=0 is already a miss at t=5.000 s. Expiry is **lazy**: a dead entry still occupies a slot until it is read, swept by `purgeExpired()`, or picked as the eviction victim (in which case it is reported as `EVICTED`, not `EXPIRED`, because it left to make room). `put(key, value)` without a TTL on an existing key **clears** the old TTL (the entry becomes permanent); pass the TTL again to keep one. A production cache would also let the sweeper run on a `ScheduledExecutorService`.
+- **Cache stampede** (many threads miss the same key at once and all hit the database): use a "loading" cache where the first thread computes and the others wait for its result (`ConcurrentHashMap.compute`/`computeIfAbsent` — `computeIfAbsent` creates and stores a value only if the key is missing, as one atomic step — or a `CompletableFuture` stored per key). Chapter 13 (§13.6) builds a TTL cache whose `getOrLoad` does this with `ConcurrentHashMap.compute`.
+- **TTL semantics, precisely.** An entry expires *at* its deadline (`now >= expiresAt`), so a 5-second TTL written at t=0 is already a miss at t=5.000 s. Expiry is **lazy**: a dead entry still occupies a slot until it is read, swept by `purgeExpired()`, or picked as the eviction victim (in which case it is reported as `EVICTED`, not `EXPIRED`, because it left to make room). `put(key, value)` without a TTL on an existing key **clears** the old TTL (the entry becomes permanent); pass the TTL again to keep one. A production cache would also let the sweeper run on a `ScheduledExecutorService` (Java's tool for running tasks on a timer).
 - **Capacity 0 or negative:** refused by the builder.
 - **Null keys/values:** not supported here; say so (Caffeine forbids nulls too).
-- **Clock going backwards:** use a monotonic clock (`System.nanoTime`) for TTL in production.
+- **Clock going backwards:** use a monotonic clock (one that only ever moves forward, unlike wall-clock time that can be adjusted; `System.nanoTime`) for TTL in production.
 
 ### Extensions & follow-up questions
 
 - **"Make it LFU."** One new policy class (done). Volunteer that the naive LFU (scan for the lowest count) is O(n) and the chained-bucket version is O(1).
 - **"Size in bytes, not entries."** Add a `Weigher<K,V>` strategy; evict until `totalWeight <= maxWeight`.
 - **"Load from the database on a miss."** *Read-through*: `get(key, loader)` calls the loader on a miss and stores the result. *Write-through*: writes go to cache and DB together. *Write-back (write-behind)*: writes go to cache and are flushed to DB later (faster, risk of loss). *Cache-aside*: the application does "check cache → on miss read DB → put in cache" itself.
-- **"Distributed cache."** Consistent hashing to spread keys over nodes (Redis Cluster, Memcached clients); that is high-level design.
-- **"Which policy is best?"** Depends on access patterns. Modern caches (Caffeine's *Window TinyLFU*) combine recency and frequency and beat pure LRU on many workloads.
+- **"Distributed cache."** Consistent hashing (a way to assign keys to servers so that adding or removing a server moves only a small share of the keys) to spread keys over nodes (Redis Cluster, Memcached clients — Redis and Memcached are in-memory key-value stores that run as separate servers); that is high-level design (HLD: designing services, databases and networks, as opposed to the classes inside one program).
+- **"Which policy is best?"** Depends on access patterns. Modern caches (Caffeine's *Window TinyLFU*) combine recency and frequency and beat pure LRU on many workloads (patterns of real requests).
 
 ### Real-world example
 
-`java.util.LinkedHashMap` with access order is the JDK's built-in LRU. **Guava's `CacheBuilder`** and **Caffeine** expose exactly this chapter's knobs: `maximumSize` (capacity), `expireAfterWrite`/`expireAfterAccess` (TTL), `removalListener` (Observer, with a cause such as `EXPIRED`, `SIZE`, `EXPLICIT`, `REPLACED`), and `recordStats()` (hit rate). **Redis** supports eviction policies selected by configuration (`maxmemory-policy`: `allkeys-lru`, `allkeys-lfu`, `volatile-ttl`, `noeviction` and others) — a Strategy chosen by config — and approximates LRU by sampling a few keys rather than keeping a full list, to save memory. Browsers, CDNs and operating-system page caches all use variants of LRU.
+`java.util.LinkedHashMap` with access order is the JDK's (Java Development Kit: Java's compiler plus standard library) built-in LRU. **Guava's `CacheBuilder`** and **Caffeine** expose exactly this chapter's knobs: `maximumSize` (capacity), `expireAfterWrite`/`expireAfterAccess` (TTL), `removalListener` (Observer, with a cause such as `EXPIRED`, `SIZE`, `EXPLICIT`, `REPLACED`), and `recordStats()` (hit rate: the share of reads answered from the cache). **Redis** supports eviction policies selected by configuration (`maxmemory-policy`: `allkeys-lru`, `allkeys-lfu`, `volatile-ttl`, `noeviction` and others) — a Strategy chosen by config — and approximates LRU by sampling a few keys rather than keeping a full list, to save memory. Browsers, CDNs (content delivery networks: servers spread around the world that keep copies of files close to users) and operating-system page caches (recently read disk data kept in memory) all use variants of LRU.
 
 ### In the interview
 
@@ -2570,7 +2582,7 @@ Two decisions are the whole question: **which driver is asked** (matching) and *
 | Surge? | A multiplier when the city is busy, applied to the same fare. |
 | Ratings? | Rider and driver rate each other once after a finished trip; accounts show the average. |
 | Payments? | Charge the rider's payment method (cash, wallet, card) at the end. |
-| Map? | A grid; distance measured along streets (Manhattan distance), which keeps all distances integral. Production systems query a routing engine that gives back road distance plus an estimated duration, and pricing would take both from it. |
+| Map? | A grid; distance measured along streets (Manhattan distance), which keeps all distances integral (whole numbers). Production systems query a routing engine (a service that works out the road route between two points) that gives back road distance plus an estimated duration, and pricing would take both from it. |
 | Pool/shared rides, scheduled rides, live tracking, payouts? | Out of scope. |
 
 ### Requirements
@@ -2609,9 +2621,9 @@ Actors: **Rider** (request, cancel, rate), **Driver** (go online, accept/decline
 | `Rider` | + payment method. |
 | `Driver` | + vehicle, location, online flag, **atomic busy flag** (`tryClaim`). |
 | `TripStatus` (enum) | The state machine: legal next states per state. |
-| `Trip` | One journey: rider, pickup, drop, type, **ranked candidate list + cursor**, status, driver, minutes, fare. Every action checks state first. |
+| `Trip` | One journey: rider, pickup, drop, type, **ranked candidate list + cursor** (a marker for the current position in the list), status, driver, minutes, fare. Every action checks state first. |
 | `PricingStrategy` | **Strategy**: fare for (type, km, minutes). |
-| `StandardPricing` + `RateCard` | Base + per km + per minute, with a floor, per vehicle type. |
+| `StandardPricing` + `RateCard` | Base + per km + per minute, with a floor (a minimum fare), per vehicle type. |
 | `SurgePricing` | **Decorator**: wraps any `PricingStrategy` and multiplies its answer. |
 | `MatchingStrategy` | **Strategy**: ranks drivers. `NearestDriverMatcher`, `BestRatedMatcher`. |
 | `PaymentMethod` | **Strategy**: `CashPayment`, `WalletPayment`. |
@@ -2795,11 +2807,11 @@ sequenceDiagram
 | Matcher returns a **ranked list**, stored on the trip | A decline just moves the cursor; no new city-wide search, and the system remembers who refused. | Returning one driver: every decline re-searches from scratch. |
 | **Strategy** for pricing, **Decorator** for surge | Surge wraps *any* pricing rule (even future ones). Turning it off = removing the wrapper, not editing an `if`. Decorators stack (surge + airport fee + discount). | A `surgeMultiplier` field and `if (surge)` in the pricing code. |
 | **State machine** via `TripStatus.canMoveTo` | One table says what is legal; every method checks it and returns `false` on an illegal move. No exceptions for normal refusals. | Scattered `if (status == …)` checks; or the full State pattern (one class per state). The State pattern is worth it when behaviour per state is large; here a transition table is enough. |
-| **Atomic claim** of a driver (`AtomicBoolean.compareAndSet`) | Two trips racing for the same driver: exactly one wins, the other treats it as a decline. | Checking `isAvailable()` then setting busy: a check-then-act race. |
+| **Atomic claim** of a driver (`AtomicBoolean.compareAndSet`: "set to true only if it is still false", in one indivisible step) | Two trips racing for the same driver: exactly one wins, the other treats it as a decline. | Checking `isAvailable()` then setting busy: a check-then-act race (a race condition: the result depends on which thread happens to run first). |
 | Driver **moved to the drop point** at trip end | Otherwise the next match uses where they were this morning. | Forgetting (a real bug class). |
-| **Observer** for trip events | Rider/driver apps, push notifications, analytics listen; the service doesn't know them. | Service calling the notification code directly. |
-| Deterministic tie-breaks (by driver id) | Same input → same ranking → reproducible tests. | Unordered ties: flaky tests. |
-| Money in **`BigDecimal`**, rounded `HALF_UP` to 2 places | Exact fares. (The course keeps money as whole cents and the surge multiplier as a whole-number percentage, 150 = ×1.5, so no floating point appears; `BigDecimal` is this book's equivalent.) | `double`. |
+| **Observer** for trip events | Rider/driver apps, push notifications, analytics (code that collects usage data for reports) listen; the service doesn't know them. | Service calling the notification code directly. |
+| Deterministic tie-breaks (by driver id) | Same input → same ranking → reproducible tests. | Unordered ties: flaky tests (tests that sometimes pass and sometimes fail with no code change). |
+| Money in **`BigDecimal`**, rounded `HALF_UP` (halves round up: 2.345 → 2.35) to 2 places | Exact fares. (The course keeps money as whole cents and the surge multiplier as a whole-number percentage, 150 = ×1.5, so no floating point (binary fractional numbers such as `double`) appears; `BigDecimal` is this book's equivalent.) | `double`. |
 
 ### Java implementation
 
@@ -3338,7 +3350,7 @@ public class Main {
 
 **Walking through the code.**
 - `TripStatus.NEXT` is the whole lifecycle in five lines; `Trip.move` refuses any move not in the table.
-- `Trip` methods are `synchronized`: rider cancel and driver accept on the same trip cannot interleave.
+- `Trip` methods are `synchronized`: rider cancel and driver accept on the same trip cannot interleave (have their steps mixed together).
 - `RideSharingService.respond`: only the *current* candidate may answer. Accept first **claims the driver atomically**; if the claim fails (another trip got them), it's treated as a decline and the next candidate is offered.
 - `endTrip` works in a fixed order: price, store the fare on the trip, charge the rider, relocate the driver to the drop-off point, and only then release them (so no matcher can see a free driver at the old position) — then it records history for both sides. The course lists the same steps; relocating the driver is the step most often skipped, and skipping it makes the next match use the driver's morning position.
 - Ratings are allowed once per side and only for ENDED trips (`markDriverRated` / `markRiderRated`).
@@ -3387,12 +3399,12 @@ Check the fares: trip 1 is 7 km and 12 min → 2.50 + 7 × 1.20 + 12 × 0.25 = *
 
 ### Machine-coding variant: carpool / "offer and select a ride"
 
-A different ride-sharing problem is popular in machine-coding rounds (it appears in the kumaransg/LLD collection as a Flipkart-style round). Here there is **no dispatcher**: users *offer* spare seats in their own vehicle on a route, and other users *select* a ride using a **selection strategy**.
+A different ride-sharing problem is popular in machine-coding rounds (it appears in the kumaransg/LLD collection — a public GitHub repository of low-level design (LLD: designing the classes inside one program) problems — as a Flipkart-style round). Here there is **no dispatcher**: users *offer* spare seats in their own vehicle on a route, and other users *select* a ride using a **selection strategy**.
 
 Requirements (from the problem statement, in brief):
 - `add_user`, `add_vehicle` (a user may own several vehicles).
 - `offer_ride(user, origin, seats, vehicle, destination)` — **fails if that vehicle already has an active offered ride**.
-- `select_ride(user, origin, destination, seats, strategy)` — seats is 1 or 2; strategy is **Most Vacant** (most free seats) or **Preferred Vehicle** (e.g. "Activa").
+- `select_ride(user, origin, destination, seats, strategy)` — seats is 1 or 2; strategy is **Most Vacant** (most free seats) or **Preferred Vehicle** (e.g. "Activa", a scooter model).
 - `end_ride(ride)` and `print_ride_stats()` — rides *taken* and *offered* per user, counting only **ended** rides (an offered ride counts even if nobody took it).
 
 Design: `Ride` with an atomic `book(user, seats)`; `RideSelectionStrategy` (Strategy) with `MostVacant` and `PreferredVehicle`; one `RideService` that filters active rides by route and seats, excludes the user's own offers, and lets the strategy choose. The demo replays the problem's sample test case and prints the expected answers (2(c), 2(b), none, 2(d), none; then the stats).
@@ -3607,14 +3619,14 @@ public class Main {
 - **"Rank by rating instead."** Swap `MatchingStrategy` (`BestRatedMatcher` is included) — one line at startup.
 - **"Airport fee, promo code, tolls."** More decorators around the pricing rule: `new PromoDiscount(new AirportFee(new SurgePricing(standard, 1.5)))`.
 - **"How is surge computed?"** From demand (open requests) vs supply (free drivers) per area and time window; the result feeds the multiplier. The pricing design doesn't change.
-- **"Find nearby drivers fast in a real city."** A geospatial index: split the map into cells (geohash, Google S2 or Uber's H3 hexagons) and keep a map cell → drivers; search the pickup cell and its neighbours instead of all drivers.
+- **"Find nearby drivers fast in a real city."** A geospatial index (a lookup structure for finding things by location): split the map into cells (geohash, Google S2 or Uber's H3 hexagons — three standard ways of dividing the globe into numbered cells) and keep a map cell → drivers; search the pickup cell and its neighbours instead of all drivers.
 - **"Shared rides (pool)."** Honest answer: this design assumes one rider per trip. The change starts at `Trip` (many riders, many stops) and a matcher that considers detours.
 - **"Live tracking."** Drivers send location updates every few seconds; store the latest per driver and publish to the rider (pub-sub, see 20.6).
-- **"Scheduled rides."** A request with a future time; a scheduler starts matching shortly before.
+- **"Scheduled rides."** A request with a future time; a scheduler (a component that runs jobs at chosen times) starts matching shortly before.
 
 ### Real-world example
 
-Uber really does show riders a surge ("dynamic pricing") multiplier when demand exceeds supply in an area, and it sends a request to a nearby driver who has a short time to accept before it goes to someone else — the ranked-list-with-cursor idea. Uber open-sourced **H3**, a hierarchical hexagonal grid that its engineering blog describes as built for optimizing ride pricing and dispatch (for example, bucketing supply and demand per hexagon); the same cell idea answers "which drivers are near this point" without scanning the whole city. Ola, Lyft and Grab follow the same request → match → accept → trip → rate lifecycle.
+Uber really does show riders a surge ("dynamic pricing") multiplier when demand exceeds supply in an area, and it sends a request to a nearby driver who has a short time to accept before it goes to someone else — the ranked-list-with-cursor idea. Uber open-sourced (published free for anyone to use) **H3**, a hierarchical (cells nest inside bigger cells) hexagonal grid that its engineering blog describes as built for optimizing ride pricing and dispatch (for example, bucketing supply and demand per hexagon); the same cell idea answers "which drivers are near this point" without scanning the whole city. Ola, Lyft and Grab follow the same request → match → accept → trip → rate lifecycle.
 
 ### In the interview
 
@@ -3654,18 +3666,18 @@ Uber really does show riders a surge ("dynamic pricing") multiplier when demand 
 
 **What it is.** A logging framework lets code write messages like "payment 991 authorised" with a **level** (how serious it is) and sends them to one or more **destinations** (console, file, a log server), in a chosen **format**. Everyday analogy: a company's internal mail room. Every department drops notes in; each note has an urgency stamp; the mail room decides, by department and urgency, which notes get copied to which inboxes and in what envelope.
 
-Think Log4j 2, Logback or `java.util.logging`: this question asks you to design a small version of them.
+Think Log4j 2, Logback or `java.util.logging` (the most widely used Java logging libraries): this question asks you to design a small version of them.
 
 | Question | Assumed answer |
 |---|---|
 | Levels? | TRACE < DEBUG < INFO < WARN < ERROR < FATAL (and OFF). |
 | Per-module configuration? | Yes: loggers are named `app.payment`, `app.orders`… and form a **hierarchy** by dots. A child inherits its level from the nearest ancestor that sets one. |
 | Destinations? | Console, file, in-memory (tests); pluggable. Each can have its own minimum level. |
-| Formats? | Plain pattern and JSON; pluggable. |
+| Formats? | Plain pattern and JSON (a text format of nested key-value pairs); pluggable. |
 | Propagation? | An event goes to the logger's own destinations and then **up** to its ancestors' destinations, unless that logger turns propagation (additivity) off. |
-| Async? | Yes, optional: the application thread must not wait for disk I/O. |
+| Async? | Yes, optional: the application thread must not wait for disk I/O (input/output: reading or writing the disk). |
 | Thread-safe? | Yes: many threads log at once. |
-| Config files, rolling files, remote shipping? | Out of scope (extensions). |
+| Config files, rolling files (a log file is closed and a new one started at a size or date limit), remote shipping (sending logs to another server)? | Out of scope (extensions). |
 
 ### Requirements
 
@@ -3684,7 +3696,7 @@ Think Log4j 2, Logback or `java.util.logging`: this question asks you to design 
 
 ### Use cases
 
-Actors: **Developer code** (logs messages), **Operator** (configures levels, appenders, formats at startup or runtime), **Framework** (filters, formats, routes, writes).
+Actors: **Developer code** (logs messages), **Operator** (configures levels, appenders, formats at startup or runtime — while the program is running), **Framework** (filters, formats, routes, writes).
 
 Main use cases: *Log a message*, *Get a logger by name*, *Set a level for a subtree*, *Add a destination*, *Choose a format*, *Switch to async writing*, *Stop propagation for a subtree*.
 
@@ -3693,7 +3705,7 @@ Main use cases: *Log a message*, *Get a logger by name*, *Set a level for a subt
 | Class | Responsibility |
 |---|---|
 | `LogLevel` (enum) | Ordered severities; `isAtLeast(threshold)`. |
-| `LogRecord` (record) | One immutable event: time, level, logger name, thread, message, error. |
+| `LogRecord` (record) | One immutable (cannot change after creation) event: time, level, logger name, thread, message, error. |
 | `Logger` | Named node in the hierarchy: parent, optional level, appenders, additivity; `log()` walks the chain upward. |
 | `LogManager` | **Singleton** registry; `getLogger(name)` creates parents first and returns one instance per name; holds the clock. |
 | `Appender` (interface) | A destination (sink). |
@@ -3827,12 +3839,12 @@ sequenceDiagram
 | Pattern / decision | Where | Why | Alternative rejected |
 |---|---|---|---|
 | **Chain of Responsibility** | `Logger.log` walks `this → parent → … → root`, stopping when `additive == false` | Configure destinations once near the root; subtrees can add or stop. | Every logger listing all its appenders explicitly. |
-| **Singleton** | `LogManager` (initialization-on-demand holder) | One registry per process, so `getLogger("x")` always returns the same object. Holder idiom = lazy + thread-safe with no locking (the JVM initializes the nested class once). | Public static mutable map; double-checked locking (easy to get wrong). |
+| **Singleton** | `LogManager` (initialization-on-demand holder) | One registry per process, so `getLogger("x")` always returns the same object. Holder idiom (a standard coding recipe) = lazy + thread-safe with no locking (the JVM — Java Virtual Machine, the program that runs Java code — initializes the nested class once). | Public static mutable (changeable) map; double-checked locking (check, lock, check again; easy to get wrong). |
 | **Static factory method** | `LogManager.getLogger(name)` | Hides creation, caches instances, creates parents first. | `new Logger(...)` by users (breaks the hierarchy). |
 | **Strategy** | `Formatter` | Format is independent of destination: any sink × any format. | `JsonFileAppender`, `PatternFileAppender`, … (class explosion). |
 | **Template Method** | `AbstractAppender.append` (final) → `write` | Threshold + formatting done once; sinks only write text. | Each sink re-implementing filtering. |
 | **Decorator** | `AsyncAppender` wraps any `Appender` | Async becomes an add-on, not a rewrite of every sink. | `AsyncFileAppender`, `AsyncConsoleAppender`, … |
-| Level check first; **lazy `Supplier<String>`** | `isEnabled`, `debug(Supplier)` | Disabled logging costs one comparison; expensive strings are never built. | Always building the message (a real performance bug). |
+| Level check first; **lazy `Supplier<String>`** (a function that builds the string only when called) | `isEnabled`, `debug(Supplier)` | Disabled logging costs one comparison; expensive strings are never built. | Always building the message (a real performance bug). |
 | Appender failures caught | `Logger.log` | Logging must never crash the app. | Letting exceptions escape. |
 | Parent resolved **outside** `computeIfAbsent` | `LogManager.loggerFor` | A `ConcurrentHashMap` mapping function must not modify the same map (the JDK may throw `IllegalStateException: Recursive update`). | Recursive `computeIfAbsent`. |
 
@@ -4216,7 +4228,7 @@ public class Main {
 - `Logger.effectiveLevel` walks up until a logger has a level; root always has one.
 - `Logger.log` creates the `LogRecord` **once** and hands the same immutable object to every appender in the chain (safe to share across threads because it is a record with final fields).
 - `AbstractAppender.append` is `final`; `ConsoleAppender` and `FileAppender` synchronize `write` so lines from different threads never interleave mid-line.
-- `AsyncAppender` uses a bounded `ArrayBlockingQueue` and `offer` (non-blocking): when full, it drops and counts instead of stalling the application. `close()` puts a "poison pill" record so the writer drains everything before stopping. The no-loss promise is precise: every record appended **before** `close()` is either written or counted in `dropped` (queue full); a record appended after `close()` is counted as dropped too, so `written + dropped` always equals the number of `append` calls. A delegate that throws is caught inside the writer loop, so one bad write cannot kill the writer thread (which would otherwise leave `close()` waiting forever on a full queue).
+- `AsyncAppender` uses a bounded `ArrayBlockingQueue` (a fixed-size, thread-safe queue) and `offer` (non-blocking: returns at once instead of waiting): when full, it drops and counts instead of stalling the application. `close()` puts a "poison pill" record (a special marker that means "stop after this") so the writer drains everything before stopping. The no-loss promise is precise: every record appended **before** `close()` is either written or counted in `dropped` (queue full); a record appended after `close()` is counted as dropped too, so `written + dropped` always equals the number of `append` calls. A delegate that throws is caught inside the writer loop, so one bad write cannot kill the writer thread (which would otherwise leave `close()` waiting forever on a full queue).
 - `LogManager` uses the holder idiom: `Holder.INSTANCE` is created the first time `getInstance()` runs, and the JVM guarantees that happens once.
 
 **Output:**
@@ -4243,26 +4255,26 @@ Step 4: with additivity off, the ERROR went only to the JSON audit sink (2 lines
 
 ### Concurrency & edge cases
 
-- **Many threads logging:** appenders list is `CopyOnWriteArrayList` (reads without locking, rare writes); level and additivity are `volatile` so a runtime change is seen by all threads.
+- **Many threads logging:** appenders list is `CopyOnWriteArrayList` (reads without locking, rare writes); level and additivity are `volatile` (a Java keyword that makes every thread see the latest written value) so a runtime change is seen by all threads.
 - **Interleaved output:** each sink's `write` is synchronized.
-- **Async queue full:** drop-and-count (never block). Alternatives: block (back-pressure, can stall the app) or drop only low levels. Logback's `AsyncAppender`, by default, starts discarding TRACE/DEBUG/INFO events when the queue is 80% full.
-- **Shutdown:** without `close()`, queued events are lost; register a JVM shutdown hook that closes appenders.
-- **Recursive logging** (an appender that logs while appending) can loop forever; guard with a thread-local "already inside" flag.
-- **Security:** never let log messages trigger lookups or code; Log4Shell (CVE-2021-44228, December 2021) came from Log4j 2 interpreting `${jndi:...}` inside logged strings. Treat messages as plain data.
+- **Async queue full:** drop-and-count (never block). Alternatives: block (back-pressure — slowing the producer down when the consumer cannot keep up — can stall the app) or drop only low levels. Logback's `AsyncAppender`, by default, starts discarding TRACE/DEBUG/INFO events when the queue is 80% full.
+- **Shutdown:** without `close()`, queued events are lost; register a JVM shutdown hook (code the JVM runs just before the program exits) that closes appenders.
+- **Recursive logging** (an appender that logs while appending) can loop forever; guard with a thread-local (each thread gets its own separate copy) "already inside" flag.
+- **Security:** never let log messages trigger lookups or code; Log4Shell (CVE-2021-44228, December 2021; a CVE is a public id for a known security flaw) came from Log4j 2 interpreting `${jndi:...}` (a lookup that could load code from a remote server) inside logged strings. Treat messages as plain data.
 - **Sensitive data:** mask card numbers, tokens and passwords before formatting.
 
 ### Extensions & follow-up questions
 
 - **"Rolling files."** A `RollingFileAppender` with a `RollingPolicy` (size- or time-based) Strategy: when triggered, close, rename to `app-2026-09-28.log`, open a new file.
-- **"Config file."** Parse XML/YAML/properties into calls on `LogManager` (set levels, attach appenders). Watching the file lets levels change at runtime.
+- **"Config file."** Parse XML/YAML/properties (common configuration-file text formats) into calls on `LogManager` (set levels, attach appenders). Watching the file lets levels change at runtime.
 - **"Filters."** A `Filter` chain per appender (e.g. only `app.payment`, only messages containing "refund") — another Chain of Responsibility.
 - **"MDC / request id."** A thread-local map (Mapped Diagnostic Context) copied into each `LogRecord`, so every line of one request carries the same id.
 - **"Ship logs to a server."** A network appender behind `AsyncAppender`, batching records.
-- **"Structured logging."** Key-value fields in `LogRecord` rendered by `JsonFormatter` for tools like Elasticsearch/Kibana.
+- **"Structured logging."** Key-value fields in `LogRecord` rendered by `JsonFormatter` for tools like Elasticsearch/Kibana (a search engine and its dashboard, often used to store and browse logs).
 
 ### Real-world example
 
-**SLF4J** is a facade (the API your code calls); **Logback** and **Log4j 2** are implementations with exactly this model: dot-named loggers in a hierarchy, inherited levels, appenders with layouts/encoders, and *additivity*. Log4j 2's async loggers use the LMAX Disruptor (a lock-free ring buffer) to hand events to a background thread. `java.util.logging` has the same shape with different names: `Logger`, `Handler` (appender), `Formatter`, `Level`, and `setUseParentHandlers(false)` (additivity off).
+**SLF4J** (Simple Logging Facade for Java) is a facade (the API your code calls); **Logback** and **Log4j 2** are implementations with exactly this model: dot-named loggers in a hierarchy, inherited levels, appenders with layouts/encoders, and *additivity*. Log4j 2's async loggers use the LMAX Disruptor (a lock-free ring buffer: a fixed-size circular array that threads share without taking locks) to hand events to a background thread. `java.util.logging` has the same shape with different names: `Logger`, `Handler` (appender), `Formatter`, `Level`, and `setUseParentHandlers(false)` (additivity off).
 
 ### In the interview
 
@@ -4299,7 +4311,7 @@ Step 4: with additivity off, the ERROR went only to the JSON audit sink (2 lines
 
 **What it is.** Publish-subscribe (pub-sub) is a way for parts of a system to talk **without knowing each other**. A *publisher* sends a message to a named *topic* ("orders"); every *subscriber* of that topic receives it. Everyday analogy: a newspaper. The newspaper prints once; every subscriber gets a copy; the newspaper doesn't know or care who reads it, and new readers can sign up any time.
 
-It is the **Observer pattern** turned into infrastructure: in Observer the subject calls its observers directly; in pub-sub a **broker** in the middle decouples them further (by topic, by time, and often by machine). We design a simplified, Kafka-like, in-process broker.
+It is the **Observer pattern** turned into infrastructure: in Observer the subject calls its observers directly; in pub-sub a **broker** in the middle decouples them further (makes each side depend less on the other: by topic, by time, and often by machine). We design a simplified, Kafka-like, in-process (living inside one running program) broker.
 
 | Question | Assumed answer |
 |---|---|
@@ -4308,9 +4320,9 @@ It is the **Observer pattern** turned into infrastructure: in Observer the subje
 | Guarantee? | **At-least-once**: a message is only acknowledged after the subscriber processes it; failures are retried; duplicates are possible. |
 | Slow subscriber? | Must not slow down the others or the publisher. |
 | Keep messages after delivery? | Yes: an append-only log with **offsets**, so late subscribers can start from the beginning and anyone can replay. |
-| Poison message (always fails)? | After N attempts, send to a dead-letter topic and move on. |
-| Push or pull? | Push to a callback, driven by one dispatcher per subscription. |
-| Partitions, consumer groups sharing work, persistence to disk, retention? | Out of scope (extensions). |
+| Poison message (always fails)? | After N attempts, send to a dead-letter topic (a side topic that holds messages that could not be processed) and move on. |
+| Push or pull? | Push to a callback, driven by one dispatcher (the loop that hands out messages) per subscription. |
+| Partitions, consumer groups sharing work, persistence to disk, retention? | Out of scope (extensions; each is explained there). |
 
 ### Requirements
 
@@ -4323,7 +4335,7 @@ It is the **Observer pattern** turned into infrastructure: in Observer the subje
 6. A subscription can **seek** to an offset to replay.
 7. Unsubscribe; shut down cleanly.
 
-**Non-functional:** thread-safe publish from many threads; subscribers isolated from each other; no busy-waiting (threads sleep until data arrives); ordering preserved.
+**Non-functional:** thread-safe publish from many threads; subscribers isolated from each other; no busy-waiting (a thread spinning in a loop checking "anything yet?" and burning CPU (processor) time; here threads sleep until data arrives); ordering preserved.
 
 ### Use cases
 
@@ -4334,13 +4346,13 @@ Actors: **Publisher** (publishes), **Subscriber** (subscribes, processes, fails 
 | Class | Responsibility |
 |---|---|
 | `Message` (record) | topic, offset, key, payload. Immutable. |
-| `Topic` | Append-only log (`List<Message>`), guarded by a `ReentrantLock` with a `Condition` "appended" to wake waiting dispatchers. |
-| `Subscriber` (interface) | Callback `onMessage(Message)`; throwing = negative acknowledgement. |
+| `Topic` | Append-only log (`List<Message>`), guarded by a `ReentrantLock` with a `Condition` (an object a thread can wait on until another thread signals it) "appended" to wake waiting dispatchers. |
+| `Subscriber` (interface) | Callback `onMessage(Message)`; throwing = negative acknowledgement ("I could not process this"). |
 | `Subscription` | One subscriber on one topic: committed offset (`AtomicLong`), its **own dispatcher thread**, retry and dead-letter logic, `seek`. |
 | `StartFrom` (enum) | EARLIEST / LATEST. |
 | `Broker` | Topic registry, `publish`, `subscribe`, `unsubscribe`, dead-letter topic, `awaitIdle` (tests), `close`. |
 
-**The key idea: messages are not removed when consumed.** Each subscription only remembers *how far it has read* (its offset). That gives, almost for free: late subscribers from the beginning, replay (`seek`), and independent progress per subscriber. This is Kafka's model. (Classic queues such as RabbitMQ instead delete a message once it is acknowledged.)
+**The key idea: messages are not removed when consumed.** Each subscription only remembers *how far it has read* (its offset). That gives, almost for free: late subscribers from the beginning, replay (`seek`), and independent progress per subscriber. This is Kafka's model. (Classic queues such as RabbitMQ, a popular open-source message broker, instead delete a message once it is acknowledged.)
 
 ### Class diagram
 
@@ -4450,9 +4462,9 @@ flowchart TD
 |---|---|---|
 | **Publish-Subscribe** (Observer via a broker) | Publishers and subscribers never reference each other; add a subscriber with zero publisher changes. | Publisher calling each consumer directly (tight coupling). |
 | **Append-only log + offsets** | Replay, late joiners and independent progress. Ordering is the log order. | Deleting on delivery: no replay; per-subscriber copies: wasteful. |
-| **One dispatcher thread per subscription** (virtual threads) | A slow subscriber only delays itself (see "analytics" in the output). Order within a subscription is kept because only one thread delivers for it. Virtual threads make one-thread-per-subscription cheap. | One shared thread delivering to all subscribers in turn (the slowest blocks everyone); a thread pool per message (loses ordering). |
-| `Lock` + `Condition` wait, with timeout | No busy-waiting; the timeout lets the loop notice `close()` and `seek()`. `while` loop guards against spurious wake-ups. | `Thread.sleep` polling (wastes CPU and adds latency). |
-| **Ack after processing** (commit after `onMessage`) | At-least-once: a crash mid-processing re-delivers. | Commit before processing = at-most-once (can lose messages). |
+| **One dispatcher thread per subscription** (virtual threads: Java 21's very cheap threads managed by the JVM rather than the operating system) | A slow subscriber only delays itself (see "analytics" in the output). Order within a subscription is kept because only one thread delivers for it. Virtual threads make one-thread-per-subscription cheap. | One shared thread delivering to all subscribers in turn (the slowest blocks everyone); a thread pool (a fixed set of reusable threads) per message (loses ordering). |
+| `Lock` + `Condition` wait, with timeout | No busy-waiting; the timeout lets the loop notice `close()` and `seek()`. `while` loop guards against spurious wake-ups (a waiting thread may wake up although nobody signalled it). | `Thread.sleep` polling (repeatedly checking; wastes CPU and adds latency — the delay before something is handled). |
+| **Ack after processing** (commit after `onMessage`) | At-least-once: a crash mid-processing re-delivers. | Commit before processing = at-most-once (each message is delivered once or not at all; can lose messages). |
 | **Dead-letter topic** | One poison message cannot block the subscription forever; operators can inspect and re-publish. | Infinite retries (the subscription is stuck). |
 | `compareAndSet` when committing | If `seek()` ran during delivery, the seek wins instead of being overwritten. | Plain `set`. |
 
@@ -4462,7 +4474,7 @@ flowchart TD
 |---|---|---|
 | At-most-once | Commit offset, then process | A crash loses the message |
 | **At-least-once** (ours) | Process, then commit | A crash or retry duplicates the message → make subscribers **idempotent** |
-| Exactly-once | At-least-once + deduplication / transactions that commit output and offset together | Complex; Kafka offers it within its own transactions |
+| Exactly-once | At-least-once + deduplication (spotting and dropping repeats) / transactions that commit output and offset together | Complex; Kafka offers it within its own transactions |
 
 ### Java implementation
 
@@ -4787,36 +4799,36 @@ public class Main {
   received 1000 messages, offsets strictly in order: true
 ```
 
-Points to notice: the slow "analytics" subscriber still got everything, and the other subscribers were not delayed; "inventory" retried offset 1 (a transient failure) and dead-lettered offset 2 (the poison message) while still receiving offset 3; after `seek(3)`, "live" saw order#4 twice — that is what at-least-once means. The 1000 messages from 4 concurrent publishers got unique offsets and arrived strictly in order.
+Points to notice: the slow "analytics" subscriber still got everything, and the other subscribers were not delayed; "inventory" retried offset 1 (a transient — temporary — failure) and dead-lettered offset 2 (the poison message) while still receiving offset 3; after `seek(3)`, "live" saw order#4 twice — that is what at-least-once means. The 1000 messages from 4 concurrent publishers got unique offsets and arrived strictly in order.
 
 ### Concurrency & edge cases
 
 - **Concurrent publishers:** `append` is under a lock, so offsets are unique and gap-free.
 - **Readers vs writers:** dispatchers only read under the same lock; messages are immutable records, safe to share.
-- **Unbounded memory:** the log grows forever; real brokers apply **retention** (delete segments older than N days or beyond N bytes).
+- **Unbounded memory:** the log grows forever; real brokers apply **retention** (delete segments — the chunks the log is stored in — older than N days or beyond N bytes).
 - **Slow subscriber falling far behind:** it is fine here (it just reads older offsets); with retention it may fall off the end — detect "offset out of range" and reset.
-- **Subscriber that blocks forever:** add a processing timeout. It stalls only its own subscription, because every subscription has its own dispatcher thread. (One Java 21 caveat: a virtual thread that blocks while inside a `synchronized` block *pins* its carrier platform thread; many such subscribers could exhaust the carriers. Prefer `ReentrantLock` in subscriber code, or use platform threads.)
+- **Subscriber that blocks forever:** add a processing timeout. It stalls only its own subscription, because every subscription has its own dispatcher thread. (One Java 21 caveat: a virtual thread that blocks while inside a `synchronized` block *pins* its carrier platform thread (the real operating-system thread it runs on); many such subscribers could exhaust the carriers. Prefer `ReentrantLock` in subscriber code, or use platform threads.)
 - **Duplicates:** at-least-once means subscribers must be idempotent (e.g. remember processed order ids).
-- **Shutdown:** `close()` flips `running` and joins each dispatcher; the 50 ms wait timeout bounds how long that takes.
+- **Shutdown:** `close()` flips `running` and joins each dispatcher (waits for its thread to finish); the 50 ms wait timeout bounds how long that takes.
 
 ### Extensions & follow-up questions
 
-- **"Consumer groups (share the work)."** Split a topic into **partitions** (several logs); messages with the same key go to the same partition (`hash(key) % n`), keeping per-key order. A group's members each own some partitions; the committed offset is per (group, partition). That is how Kafka scales consumers.
-- **"Persist to disk."** Append to segment files; keep an index from offset to file position; store committed offsets in a special topic (Kafka uses `__consumer_offsets`).
+- **"Consumer groups (share the work)."** Split a topic into **partitions** (several logs); messages with the same key go to the same partition (`hash(key) % n`), keeping per-key order. A **consumer group** is a set of consumers that split one topic's work between them; a group's members each own some partitions; the committed offset is per (group, partition). That is how Kafka scales consumers.
+- **"Persist to disk."** Append to segment files; keep an index (a lookup table) from offset to file position; store committed offsets in a special topic (Kafka uses `__consumer_offsets`).
 - **"Pull instead of push."** Expose `poll(subscriptionId, maxMessages)` returning messages from the committed offset and a `commit(offset)` call; the client controls its pace (back-pressure for free).
-- **"Message filtering."** Subscribe with a predicate (e.g. only `region = EU`); dispatcher skips non-matching messages but still commits them.
-- **"Wildcard topics."** Subscribe to `orders.*`; the broker matches topic names on creation.
+- **"Message filtering."** Subscribe with a predicate (a yes/no test, e.g. only `region = EU`); dispatcher skips non-matching messages but still commits them.
+- **"Wildcard topics."** Subscribe to `orders.*` (`*` is a wildcard that matches any name part); the broker matches topic names on creation.
 - **"Delayed messages / retry topics."** Re-publish failed messages to `orders.retry.5s` consumed after a delay, instead of blocking the dispatcher with sleeps.
 
 ### Real-world example
 
-**Apache Kafka** is exactly this model at scale: topics split into partitions, each an append-only log; consumers track offsets; consumer groups share partitions; ordering is per partition; messages are retained by time/size rather than deleted on read, so services can replay history. **Google Cloud Pub/Sub** and **AWS SNS + SQS** offer managed fan-out with acknowledgements and **dead-letter** topics/queues. In Java, Spring Kafka's `DeadLetterPublishingRecoverer` publishes a record that keeps failing to a dead-letter topic after the retries are used up — the same idea as our `__dead_letters`. Inside one JVM, Guava's `EventBus` and Spring's `ApplicationEventPublisher` are simple in-process pub-sub.
+**Apache Kafka** is exactly this model at scale: topics split into partitions, each an append-only log; consumers track offsets; consumer groups share partitions; ordering is per partition; messages are retained by time/size rather than deleted on read, so services can replay history. **Google Cloud Pub/Sub** and **AWS SNS + SQS** (Amazon's notification and queue services) offer managed fan-out with acknowledgements and **dead-letter** topics/queues. In Java, Spring Kafka's (Spring is the most popular Java application framework) `DeadLetterPublishingRecoverer` publishes a record that keeps failing to a dead-letter topic after the retries are used up — the same idea as our `__dead_letters`. Inside one JVM, Guava's `EventBus` and Spring's `ApplicationEventPublisher` are simple in-process pub-sub.
 
 ### In the interview
 
 **30-second answer:** "Each topic is an append-only log; publishing appends and returns an offset. Each subscription keeps a committed offset and has its own dispatcher thread that waits on a condition for new data, calls the subscriber, and commits only after success — at-least-once and in order. Failures retry with backoff, then go to a dead-letter topic. Because messages aren't deleted on read, late subscribers can start at the beginning and anyone can replay by seeking. To scale, split topics into partitions by key and let consumer groups share partitions."
 
-**Plan (35–40 min):** clarify guarantees (5) → topic log + offsets (6) → subscription + dispatcher + ack (8) → retries + DLQ (5) → thread safety and ordering (6) → partitions / consumer groups / persistence (5).
+**Plan (35–40 min):** clarify guarantees (5) → topic log + offsets (6) → subscription + dispatcher + ack (8) → retries + DLQ (dead-letter queue) (5) → thread safety and ordering (6) → partitions / consumer groups / persistence (5).
 
 **Follow-ups with answers:**
 - *"How do you keep a slow consumer from slowing others?"* → One dispatcher per subscription; the log is shared, progress is not.
@@ -4846,18 +4858,18 @@ Points to notice: the slow "analytics" subscriber still got everything, and the 
 
 ### Problem & clarifying questions
 
-**What it is.** A rate limiter decides whether a request is allowed right now, so one client can't overwhelm a service (by accident or on purpose). Everyday analogy: a turnstile that lets through at most 10 people per minute per ticket type. Over the limit, the answer is "come back in 6 seconds" — in HTTP, status **429 Too Many Requests** with a `Retry-After` header.
+**What it is.** A rate limiter decides whether a request is allowed right now, so one client can't overwhelm a service (by accident or on purpose). Everyday analogy: a turnstile that lets through at most 10 people per minute per ticket type. Over the limit, the answer is "come back in 6 seconds" — in HTTP, status **429 Too Many Requests** with a `Retry-After` header (a header is a named line of metadata sent with an HTTP response).
 
-**Chapter 13 (§13.11) already built the concurrency core**: a thread-safe token bucket with `synchronized` and a lock-free CAS version, and compared the algorithms. This section is about the **object-oriented design around it**: pluggable algorithms, rules per API and per user tier, a factory, combined limits, and a clean decision object.
+**Chapter 13 (§13.11) already built the concurrency core**: a thread-safe token bucket (a bucket of tokens refilled at a steady rate; each request spends one, and an empty bucket means "wait") with `synchronized` and a lock-free CAS version (CAS = compare-and-set: update a value only if it still holds what you last read, as one hardware-level step, so no lock is needed), and compared the algorithms. This section is about the **object-oriented design around it**: pluggable algorithms, rules per API and per user tier (a plan level such as free or paid), a factory, combined limits, and a clean decision object.
 
 | Question | Assumed answer |
 |---|---|
-| Limit by what? | Per (user, API). Could also be IP or API key — same design, different key. |
+| Limit by what? | Per (user, API). Could also be IP (the caller's network address) or API key (a secret string that identifies the calling app) — same design, different key. |
 | Different limits? | Yes: per API and per tier (FREE vs PREMIUM); a default for everything else. |
-| Algorithms? | Token bucket, fixed window, sliding window log, sliding window counter — swappable per rule. |
+| Algorithms? | Token bucket, fixed window, sliding window log, sliding window counter (all compared in the table under Key flows) — swappable per rule. |
 | Several limits at once? | Yes, e.g. "2 per 10 s **and** 3 per minute" on `/login`. |
 | Response? | Allowed / denied + remaining + retry-after. |
-| Single process or distributed? | Single process here; distributed in extensions. |
+| Single process or distributed (spread over several machines)? | Single process here; distributed in extensions. |
 
 ### Requirements
 
@@ -4872,7 +4884,7 @@ Points to notice: the slow "analytics" subscriber still got everything, and the 
 
 ### Use cases
 
-Actors: **Client** (sends requests), **API gateway / filter** (calls `check` before the handler), **Operator** (configures rules and tiers).
+Actors: **Client** (sends requests), **API gateway / filter** (the front door that every request passes through; calls `check` before the handler — the code that does the real work), **Operator** (configures rules and tiers).
 
 ### Core entities
 
@@ -4990,7 +5002,7 @@ sequenceDiagram
 | Fixed window counter | window start, count | **Up to 2N across a boundary** | Poor at edges | Simplest |
 | Sliding window log | one timestamp per allowed request | None beyond N | Exact | Memory O(N) per key |
 | Sliding window counter | 2 counters | Approximate | Good | Estimate = previous × overlap + current |
-| (Leaky bucket) | a queue | Smooths output to a constant rate | — | Traffic shaping; not implemented here |
+| (Leaky bucket) | a queue | Smooths output to a constant rate | — | Traffic shaping (evening out the flow); not implemented here |
 
 ### Design decisions & patterns used
 
@@ -5409,21 +5421,21 @@ Step 1: ann's burst of 3 is allowed, then 429 with "retry after 1000 ms"; a seco
 - **Atomicity:** each limiter's `tryAcquire` is `synchronized`; the service map is a `ConcurrentHashMap`. Contention is per key, so different users never block each other.
 - **Composite and denied requests.** The naive composite calls each child's `tryAcquire()` in turn. If child 1 allows (and consumes) and child 2 then denies, the request never runs but child 1 has been charged for it. Step 3 of the demo is built to expose that: with "3 per minute" first, the denied call at +2s would have used up the third per-minute slot, and the legitimate call at +11s would be refused for about 49 s. Our composite probes all children and commits only if all allow, so +11s is correctly allowed. (An alternative is *acquire, and refund on denial*, which needs a `release()` in every algorithm and is easy to get wrong when a window rolls over in between.)
 - **Memory growth:** one limiter per (user, api) forever. Evict idle limiters (e.g. store them in a cache with expire-after-access, like 20.3). Set the idle timeout to at least the longest window (or the full-refill time of a bucket): after that much idle time the old limiter would allow a full burst anyway, so replacing it with a fresh one changes nothing.
-- **Clock:** use a monotonic clock (`System.nanoTime`) — wall-clock time can jump backwards.
+- **Clock:** use a monotonic clock (`System.nanoTime`) — wall-clock time (the calendar time a person reads) can jump backwards.
 - **Rule changes at runtime:** existing limiters keep old settings; clear the map (or version the rules) when config changes.
 
 ### Extensions & follow-up questions
 
-- **"Distributed (many gateway servers)."** Keep counters in a shared store: Redis with an atomic Lua script (or `INCR` + `EXPIRE` for fixed windows). Trade-off: a network hop per request; mitigate with local pre-allocation of tokens. Or use sticky routing so each user always hits the same node.
-- **"Leaky bucket."** A bounded queue drained at a constant rate by a worker: smooths bursts into a steady output (good for protecting a fragile downstream).
+- **"Distributed (many gateway servers)."** Keep counters in a shared store: Redis with an atomic Lua script (Redis can run small Lua programs as one uninterrupted step) (or `INCR` + `EXPIRE` for fixed windows: Redis commands for "add one" and "delete after N seconds"). Trade-off: a network hop (one extra round trip to another machine) per request; mitigate with local pre-allocation of tokens. Or use sticky routing (the load balancer — the component that spreads requests over servers — always sends one user to the same server) so each user always hits the same node.
+- **"Leaky bucket."** A bounded queue drained at a constant rate by a worker: smooths bursts into a steady output (good for protecting a fragile downstream — a service that this one calls).
 - **"Different cost per request."** `tryAcquire(permits)`: an expensive export costs 10 tokens.
 - **"Soft limits / warnings."** Return `remaining` and warn the client at 80%.
 - **"Rate limit by IP when not logged in."** The key is just a string; the rule resolver decides which key to use.
-- **"Where does the limiter run?"** In an API gateway or a servlet filter / Spring `HandlerInterceptor` before the controller.
+- **"Where does the limiter run?"** In an API gateway or a servlet filter / Spring `HandlerInterceptor` (Java web hooks that run before every request) before the controller (the class that handles a given URL).
 
 ### Real-world example
 
-**Stripe** has written publicly about using several limiters together ("Scaling your API with rate limiters": a request-rate limiter based on the token bucket, a concurrent-requests limiter, and load shedders, implemented with Redis) — several independent checks on one request, the composite idea. **GitHub's API** returns `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers, which is our `Decision`. HTTP 429 is defined in RFC 6585. **NGINX** `limit_req` uses the leaky-bucket method. In Java, **Guava's `RateLimiter`**, **Resilience4j's `RateLimiter`** and **Bucket4j** (token bucket) are common libraries. Cloudflare has described using the sliding-window-counter approximation (weighting the previous window) to rate limit at the edge cheaply.
+**Stripe** has written publicly about using several limiters together ("Scaling your API with rate limiters": a request-rate limiter based on the token bucket, a concurrent-requests limiter, and load shedders — components that deliberately drop low-priority work when overloaded — implemented with Redis) — several independent checks on one request, the composite idea. **GitHub's API** returns `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers, which is our `Decision`. HTTP 429 is defined in RFC 6585 (RFCs are the official documents that define internet standards). **NGINX** (a widely used web server and reverse proxy) `limit_req` uses the leaky-bucket method. In Java, **Guava's `RateLimiter`**, **Resilience4j's `RateLimiter`** and **Bucket4j** (token bucket) are common libraries. Cloudflare has described using the sliding-window-counter approximation (weighting the previous window) to rate limit at the edge (its servers closest to users) cheaply.
 
 ### In the interview
 
@@ -5449,7 +5461,7 @@ Step 1: ann's burst of 3 is allowed, then 429 with "retry after 1000 ms"; a seco
 ### TL;DR
 
 - **Strategy** for algorithms, **Simple Factory** from rules, **Composite** for combined limits (probe all, then commit all), **Facade** service.
-- One limiter per (user, api) via `computeIfAbsent`; `Decision` → 200 or 429 + Retry-After.
+- One limiter per (user, api) via `computeIfAbsent`; `Decision` → 200 (HTTP "OK") or 429 + Retry-After.
 - Token bucket (bursty, O(1)), fixed window (2× edge burst), sliding log (exact, O(N)), sliding counter (approximate, O(1)).
 - Atomic refill-check-take (§13.11); Redis + Lua for distributed limits.
 

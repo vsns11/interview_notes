@@ -1,6 +1,6 @@
 # Chapter 13 — Classic Concurrency Problems
 
-> **Goal.** Chapter 12 gave you the toolbox. This chapter uses it on the concurrency problems that interviewers actually ask — from LeetCode's "Concurrency" section (FooBar, Zero-Even-Odd, FizzBuzz, H2O, Dining Philosophers) to "design a thread-safe X" machine-coding rounds (TTL cache, concurrent hash map, blocking queue, Bloom filter, parallel merge sort, rate limiter).
+> **Goal.** Chapter 12 gave you the toolbox. This chapter uses it on the concurrency problems that interviewers actually ask — from LeetCode's (a popular coding-practice website) "Concurrency" section (FooBar, Zero-Even-Odd, FizzBuzz, H2O, Dining Philosophers) to "design a thread-safe X" **machine-coding** rounds (interviews where you write working code for a small system in an hour or two): TTL cache, concurrent hash map, blocking queue, Bloom filter, parallel merge sort, **rate limiter** (a component that caps how many requests a client may make per second).
 
 **How each problem is laid out:** *Problem → Approach → Java solution (+ real output) → Why it's correct → Pitfalls → Real-world examples → In the interview → Self-check → TL;DR.*
 
@@ -13,6 +13,16 @@ java -cp /tmp/lld_13 lld.ch13.foobar.Main
 
 Where the real order of events can vary between runs, the demo *verifies* the result and prints `true/false`, so the output shown here is what you get every time.
 
+> **Key terms (all built in Chapter 12 — a one-line reminder each):**
+> - **Thread-safe** — behaves correctly however threads interleave. A **race** is a bug where the result depends on the timing of threads.
+> - **Lock / monitor** — a token only one thread can hold at a time. Every Java object has a built-in one (its *monitor*), taken by `synchronized`; `ReentrantLock` is the explicit version.
+> - **Semaphore** — a counter of permits: `acquire()` takes one (waiting if none are left), `release()` gives one back.
+> - **Condition variable** (`wait/notifyAll`, or `Condition` with a `ReentrantLock`) — lets a thread sleep, releasing its lock, until another thread changes the shared state and wakes it.
+> - **Barrier** (`CyclicBarrier`) — a meeting point where N threads wait until all N have arrived, then all continue.
+> - **Atomic / CAS** — an *atomic* step happens all at once or not at all; *compare-and-swap* updates a value only if it still equals what you read. CAS is the basis of **lock-free** code (no locks; a thread that loses simply retries).
+> - **Happens-before** — the Java Memory Model rule that guarantees one thread's writes are visible to another (e.g. through the same lock, a `volatile` field, or a semaphore release → acquire).
+> - **Deadlock / livelock / starvation** — threads wait on each other forever / keep retrying but nobody progresses / one thread never gets its turn.
+
 **Problem map — which tool solves what**
 
 | # | Problem | Core idea | Main tools |
@@ -23,7 +33,7 @@ Where the real order of events can vary between runs, the demo *verifies* the re
 | 13.4 | Building H2O | Group threads into sets of 2 H + 1 O | `Semaphore` (slots) + `CyclicBarrier` (group) |
 | 13.5 | Dining Philosophers | Avoid deadlock over shared forks | Lock ordering, or a "waiter" semaphore |
 | 13.6 | Thread-safe cache with TTL | Expiring entries, no stampede | `ConcurrentHashMap`, `compute`, scheduled sweeper |
-| 13.7 | Concurrent HashMap (simplified) | Lock striping | `ReentrantLock[]`, all-stripe resize |
+| 13.7 | Concurrent HashMap (simplified) | Lock striping (N locks, each guarding a slice of the data) | `ReentrantLock[]`, all-stripe resize |
 | 13.8 | Bounded Blocking Queue | Wait when full / empty | `wait/notifyAll` **and** `Lock` + 2 `Condition`s |
 | 13.9 | Concurrent Bloom Filter | Lock-free bit set | `AtomicLongArray` + atomic OR |
 | 13.10 | Multi-threaded Merge Sort | Divide and conquer on cores | `ForkJoinPool`, `RecursiveAction` |
@@ -34,7 +44,7 @@ Where the real order of events can vary between runs, the demo *verifies* the re
 2. What **ordering or invariant** must hold? ("foo before bar", "never more than 2 H in a molecule", "never more than capacity items")
 3. Who **waits**, for **what condition**, and who **signals** it?
 4. Pick the primitive: turn-taking → semaphores; "wait until predicate" → condition variable; groups → barrier; mutual exclusion → lock; single-variable update → atomic.
-5. Check **liveness**: can anyone wait forever? Does every thread exit at the end?
+5. Check **liveness** (the guarantee that every thread eventually makes progress): can anyone wait forever? Does every thread exit at the end?
 
 ---
 
@@ -175,10 +185,10 @@ both correct: true
 ### Pitfalls
 - Using one semaphore for both threads — a thread can re-acquire its own release and print twice.
 - The monitor version with `if` instead of `while`, or `notify()` in more complex variants.
-- Busy-waiting on a `volatile` flag works but burns a CPU core.
+- **Busy-waiting** (spinning in a loop that keeps re-checking a flag) on a `volatile` flag (a field whose writes are immediately visible to other threads) works but burns a CPU core.
 
 ### Real-world examples
-Strict two-party hand-offs: ping-pong protocols, request/acknowledge stages, double-buffering where a renderer and a producer alternate buffers.
+Strict two-party hand-offs: ping-pong protocols, request/acknowledge stages, **double-buffering** (one buffer is filled while the other is read, then they swap) where a renderer and a producer alternate buffers.
 
 ### In the interview
 **30-second answer:** "Two semaphores as a baton: foo's starts at 1, bar's at 0. Each thread acquires its own, prints, and releases the other's. The total permits are always one, so they alternate."
@@ -293,7 +303,7 @@ n=10 -> 010203040506070809010
 - Loop bounds that don't match the permits (e.g. even looping `n/2 + 1` times) → a thread waits forever and the program hangs.
 
 ### Real-world examples
-Dispatcher/worker designs where one coordinator routes each step to a specialised worker (e.g. an interpreter routing opcodes, a scheduler assigning alternating tasks).
+Dispatcher/worker designs where one coordinator routes each step to a specialised worker (e.g. an interpreter routing **opcodes** — the numeric codes of individual instructions — a scheduler assigning alternating tasks).
 
 ### In the interview
 **30-second answer:** "Three semaphores. Zero starts with one permit. After each 0 it releases odd or even depending on the index, and they release zero back. One permit total in the system, so the order is forced."
@@ -319,7 +329,7 @@ Keep one shared counter `current` guarded by the object's monitor. Each thread r
 2. If `current > n` → `notifyAll()` and exit.
 3. Print, `current++`, `notifyAll()` (the next number may belong to anyone).
 
-This is the **condition variable** pattern (12.13) with a different predicate per thread. The helper `runWhile(predicate, action)` avoids writing the loop four times (DRY).
+This is the **condition variable** pattern (12.13) with a different predicate per thread. The helper `runWhile(predicate, action)` avoids writing the loop four times (DRY: Don't Repeat Yourself).
 
 ### Java solution
 
@@ -418,7 +428,7 @@ Output:
 ### In the interview
 **30-second answer:** "One monitor, one shared counter. Each thread waits in a while loop until the counter matches its predicate or passes n, prints, increments and notifies all. The predicates partition the numbers, so exactly one thread acts per number."
 
-**Follow-up:** *Semaphore version?* Possible: the number thread acts as dispatcher and releases the fizz/buzz/fizzbuzz semaphore for the next value — more efficient (no thundering herd) but more code.
+**Follow-up:** *Semaphore version?* Possible: the number thread acts as dispatcher and releases the fizz/buzz/fizzbuzz semaphore for the next value — more efficient (no **thundering herd** — many threads woken at once when only one can proceed) but more code.
 
 ### Self-check
 - **Q:** Why `notifyAll`? **A:** Threads wait for *different* conditions on the same monitor; only waking all guarantees the right one wakes.
@@ -564,13 +574,13 @@ Slots (semaphores) decide *who* can join; the barrier decides *when* they leave;
 ## 13.5 Dining Philosophers (LeetCode 1226)
 
 ### Problem
-Five philosophers sit at a round table with one fork between each pair (5 forks). To eat, a philosopher needs **both** adjacent forks. If everyone picks up their left fork first, everyone may hold one fork and wait forever for the right one — **deadlock** (all four Coffman conditions hold, 12.17).
+Five philosophers sit at a round table with one fork between each pair (5 forks). To eat, a philosopher needs **both** adjacent forks. If everyone picks up their left fork first, everyone may hold one fork and wait forever for the right one — **deadlock** (all four **Coffman conditions** hold — mutual exclusion, hold-and-wait, no preemption and circular wait; 12.17).
 
 ### Approach
 Break a Coffman condition:
 1. **Resource ordering** (breaks circular wait): number the forks 0–4; always pick up the **lower-numbered** fork first. Philosopher 4 (forks 4 and 0) picks fork 0 first, so the cycle is impossible.
 2. **Waiter / limited seats** (also breaks circular wait): a semaphore lets at most **n − 1** philosophers try at once — with 4 people and 5 forks, at least one can get both forks. Make the semaphore **fair** to prevent starvation.
-3. (Other known solutions: `tryLock` both forks and put down on failure with random back-off; the Chandy–Misra algorithm for distributed settings.)
+3. (Other known solutions: `tryLock` both forks and put down on failure with random **back-off** (waiting a random short time before retrying); the Chandy–Misra algorithm for distributed settings.)
 
 ```mermaid
 flowchart LR
@@ -679,7 +689,7 @@ waiter (4 seats),  meals per philosopher: [10000, 10000, 10000, 10000, 10000]
 
 ### Why it's correct
 - **Ordering:** every philosopher acquires forks in increasing index order. A cycle of waiting would need someone to hold a higher fork while waiting for a lower one — impossible. No circular wait → no deadlock.
-- **Waiter:** with at most 4 philosophers competing for 5 forks, by the pigeonhole principle at least one of them can get both forks, eat, and release — so progress is always possible. The fair semaphore gives waiting philosophers seats in FIFO order.
+- **Waiter:** with at most 4 philosophers competing for 5 forks, by the **pigeonhole principle** (if there are more items than boxes, some box must get two) at least one of them can get both forks, eat, and release — so progress is always possible. The fair semaphore gives waiting philosophers seats in FIFO (first in, first out) order.
 - Forks are `ReentrantLock`s released in `finally`, so an exception can't leave a fork held.
 - 5 × 10,000 meals complete with each philosopher eating exactly 10,000 times.
 
@@ -709,14 +719,14 @@ Break circular wait: global fork order, or allow only n−1 diners.
 ## 13.6 Thread-safe cache with TTL
 
 ### Problem
-Design an in-memory key-value cache used by many threads where each entry expires after a **time-to-live** (TTL). Requirements: `put(k, v)` (with default or per-entry TTL), `get(k)` returns nothing for expired entries, `getOrLoad(k, loader)` loads on a miss without a **cache stampede** (many threads loading the same key at once), expired entries are eventually removed from memory, and it's testable without sleeping.
+Design an in-memory key-value **cache** (a fast store that keeps copies of data for quick reads; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) used by many threads where each entry expires after a **time-to-live** (TTL). Requirements: `put(k, v)` (with default or per-entry TTL), `get(k)` returns nothing for expired entries, `getOrLoad(k, loader)` loads on a miss without a **cache stampede** (many threads loading the same key at once), expired entries are eventually removed from memory, and it's testable without sleeping.
 
 ### Approach
 - Store `Entry(value, expiresAt)` records (immutable) in a `ConcurrentHashMap`.
 - **Lazy expiry**: `get` checks `expiresAt`; if expired, removes it with the **conditional** `remove(key, entry)` so it never deletes a fresher value another thread just put.
-- **Active expiry**: a daemon `ScheduledExecutorService` periodically calls `evictExpired()` so keys nobody reads again don't leak memory.
+- **Active expiry**: a **daemon** (background thread that does not keep the JVM — Java Virtual Machine — running) `ScheduledExecutorService` (a JDK thread pool that runs tasks on a timer) periodically calls `evictExpired()` so keys nobody reads again don't leak memory.
 - **No stampede**: `getOrLoad` uses `map.compute(...)`, which runs the function atomically per key; concurrent callers for the same key wait and the loader runs once.
-- **Testability**: time comes from an injected `Ticker` (a `FakeTicker` in tests) — a small application of Dependency Inversion.
+- **Testability**: time comes from an injected `Ticker` (a `FakeTicker` in tests) — a small application of **Dependency Inversion** (depending on an interface rather than a concrete class, so the real clock can be swapped for a fake one).
 
 ```mermaid
 classDiagram
@@ -914,34 +924,34 @@ real clock: size after 200 ms (sweeper ran)=0
 - All shared state is inside one `ConcurrentHashMap`; entries are immutable records, so a reader sees either the old or the new entry, never a half-written one.
 - `remove(key, e)` removes only if the mapping is still *that exact entry*. If another thread replaced it with a fresh one after our read, the fresh one survives.
 - `compute` executes the remapping function atomically for that key, so 16 simultaneous misses cause one load (the output shows `loader ran 1 time(s)`).
-- Expiry uses `now - expiresAt >= 0` rather than `now >= expiresAt`, which stays correct even if `System.nanoTime()` values overflow (the JDK recommends comparing nano times by subtraction).
+- Expiry uses `now - expiresAt >= 0` rather than `now >= expiresAt`, which stays correct even if `System.nanoTime()` values **overflow** (wrap around after passing the largest value a `long` can hold) (the JDK recommends comparing nano times by subtraction).
 - The sweeper is a **daemon** thread and is shut down in `close()`, so it never keeps the JVM alive.
-- The constructor hands `this::evictExpired` to the sweeper before it returns (`this` escapes). That is normally a bug (12.6), and it is safe here only because the fields the sweeper uses are already set and submitting to an executor creates a happens-before edge; a static factory method that starts the sweeper after construction is the cleaner production choice.
+- The constructor hands `this::evictExpired` to the sweeper before it returns (`this` escapes). That is normally a bug (12.6), and it is safe here only because the fields the sweeper uses are already set and submitting to an executor creates a happens-before edge; a **static factory method** (a static method that builds and returns the object) that starts the sweeper after construction is the cleaner production choice.
 
 ### Pitfalls
-- Using `System.currentTimeMillis()` for TTL: wall-clock time can jump (NTP adjustments). `System.nanoTime()` is monotonic for measuring durations.
-- A slow loader inside `compute` blocks other keys that share the same hash bin, and a loader that touches the same map can throw or deadlock. For slow loads, store a `CompletableFuture<V>` in the map instead (`computeIfAbsent(k, key -> supplyAsync(...))`) so the bin lock is held only briefly.
+- Using `System.currentTimeMillis()` for TTL: wall-clock time can jump (NTP adjustments — the Network Time Protocol corrects the system clock). `System.nanoTime()` is **monotonic** (it only ever moves forward) for measuring durations.
+- A slow loader inside `compute` blocks other keys that share the same hash bin, and a loader that touches the same map can throw or deadlock. For slow loads, store a `CompletableFuture<V>` (a JDK placeholder for a value that an asynchronous task will fill in later) in the map instead (`computeIfAbsent(k, key -> supplyAsync(...))`) so the bin lock is held only briefly.
 - Only lazy expiry → memory leak for keys never read again. Only active expiry → a `get` could return a stale value between sweeps. Use both.
-- No size limit: a real cache also needs a maximum size and an eviction policy (LRU/LFU).
+- No size limit: a real cache also needs a maximum size and an **eviction policy** (the rule for which entry to throw out when full: LRU = least recently used, LFU = least frequently used).
 
 ### Real-world examples
-- **Caffeine** (the de-facto Java cache) offers `expireAfterWrite`/`expireAfterAccess`, size-based eviction, and a loading cache that prevents stampedes — the production version of this design. Guava's `CacheBuilder` is its predecessor.
+- **Caffeine** (the de-facto Java caching library) offers `expireAfterWrite`/`expireAfterAccess`, size-based eviction, and a loading cache that prevents stampedes — the production version of this design. Guava's (Google's core Java library) `CacheBuilder` is its predecessor.
 - **Redis** `EXPIRE`/`SET … EX` uses the same combination: lazy expiry on access plus periodic active sampling of keys with TTLs.
-- Sessions, OTPs, DNS caches, and seat holds in booking systems (a hold is a TTL entry).
+- Sessions, OTPs (one-time passwords), DNS caches (DNS is the internet's lookup from names to IP addresses), and seat holds in booking systems (a hold is a TTL entry).
 
 ### In the interview
 **30-second answer:** "A ConcurrentHashMap of immutable entries holding value and expiry time. Get checks expiry lazily and removes with a conditional remove; a daemon scheduled sweeper removes expired keys nobody reads. getOrLoad uses compute so concurrent misses load once. Time is injected for testing."
 
 **Follow-ups (with answers):**
-- *Add max size with LRU?* Combine with an access-ordered `LinkedHashMap` under a lock, or a `ConcurrentHashMap` plus a concurrent linked deque of keys updated on access — or just use Caffeine (Window-TinyLFU).
+- *Add max size with LRU?* Combine with an access-ordered `LinkedHashMap` under a lock, or a `ConcurrentHashMap` plus a concurrent linked **deque** (double-ended queue) of keys updated on access — or just use Caffeine (Window-TinyLFU).
 - *Refresh without blocking readers?* "Refresh-ahead": serve the old value while one thread reloads asynchronously when the entry is close to expiring.
-- *Distributed?* Redis/Memcached with TTLs; keep a small local cache in front for hot keys.
+- *Distributed?* Redis/Memcached (in-memory cache servers shared by many machines) with TTLs; keep a small local cache in front for hot keys.
 
 ### Self-check
 - **Q:** Why `remove(key, e)` and not `remove(key)` on expiry? **A:** To avoid deleting a new value written between our read and our remove.
 
 ### TL;DR
-CHM + immutable (value, expiry) entries; lazy + scheduled expiry; `compute` for single-flight loads; injected clock.
+CHM (`ConcurrentHashMap`) + immutable (value, expiry) entries; lazy + scheduled expiry; `compute` for **single-flight** loads (one load per key, shared by every waiting caller); injected clock.
 
 ---
 
@@ -952,11 +962,11 @@ Implement a hash map that many threads can use at once with `get`, `put`, `remov
 
 ### Approach
 **Lock striping** (12.11):
-- Buckets: an array of linked lists (separate chaining).
+- Buckets: an array of linked lists (**separate chaining**: each bucket holds a list of all entries whose hash lands there).
 - Stripes: a fixed array of `S` locks (power of two). Key with hash *h* uses stripe `h & (S − 1)` and bucket `h & (tableLength − 1)`.
 - Because the stripe depends only on the hash — **not** on the table length — a key's stripe never changes after a resize.
 - Every operation locks only its stripe; threads on different stripes run in parallel.
-- **Resize** (when size > 0.75 × buckets): acquire **all** stripe locks in index order (a global order → no deadlock), re-check the condition, rehash into a table twice as big, publish via a `volatile` field, release in reverse.
+- **Resize** (when size > 0.75 × buckets): acquire **all** stripe locks in index order (a global order → no deadlock), re-check the condition, **rehash** (recompute every key's bucket) into a table twice as big, publish via a `volatile` field, release in reverse.
 - Size tracked with an `AtomicInteger`.
 
 ```mermaid
@@ -1179,7 +1189,7 @@ after concurrent removes size=0
 | Reads | Lock the stripe | Lock-free (volatile reads of nodes) |
 | Write locking | One of S stripe locks | CAS into empty bins; `synchronized` on the bin's first node otherwise |
 | Long chains | Linked list | Converted to a red-black tree beyond 8 nodes (when table ≥ 64) |
-| Resize | Stop-the-world (all locks) | Incremental: threads help transfer bins concurrently |
+| Resize | Stop-the-world (all locks; everything else pauses) | Incremental: threads help transfer bins concurrently |
 | Size | `AtomicInteger` | `LongAdder`-style counter cells |
 
 ### Real-world examples
@@ -1206,7 +1216,7 @@ N locks for M buckets, stripe by hash bits, resize under all locks in order, pub
 Implement a fixed-capacity FIFO queue for producer-consumer use: `put` blocks while full, `take` blocks while empty, plus `offer(item, timeout)` and `poll(timeout)` that give up after a timeout.
 
 ### Approach
-Storage: a **circular array** (`head`, `tail`, `count`). Two synchronisation designs:
+Storage: a **circular array** (an array whose end wraps around to the start; `head`, `tail`, `count`). Two synchronisation designs:
 
 | | Way 1: monitor | Way 2: `ReentrantLock` + 2 `Condition`s |
 |---|---|---|
@@ -1456,7 +1466,7 @@ Lock+Conditions : offer(30ms) on full -> false
 **30-second answer:** "A circular array with head, tail and count guarded by one lock. put waits while count == capacity, take waits while count == 0, both in while loops. With synchronized I must use notifyAll because both sides share one wait set; with ReentrantLock I use two Conditions, notFull and notEmpty, and signal just the right side."
 
 **Follow-ups:**
-- *Higher throughput?* Two-lock queue (linked list, separate put/take locks, atomic count) like `LinkedBlockingQueue`, or a lock-free ring buffer (LMAX Disruptor) for single producer/consumer.
+- *Higher throughput?* Two-lock queue (linked list, separate put/take locks, atomic count) like `LinkedBlockingQueue`, or a lock-free ring buffer (LMAX Disruptor, a high-performance Java messaging library) for single producer/consumer.
 - *Unbounded?* Remove the "full" condition — but then there's no back-pressure.
 
 ### Self-check
@@ -1483,7 +1493,7 @@ Design a thread-safe **Bloom filter** — a compact probabilistic set that answe
 - bits: *m* = ⌈ −n · ln p / (ln 2)² ⌉
 - hashes: *k* = round((m / n) · ln 2)
 
-For *n* = 80,000 and *p* = 1% → *m* ≈ 766,805 bits (≈ 93.6 KiB; the demo prints 93 because it uses integer division) and *k* = 7 — about 9.6 bits per item, whatever the item size.
+For *n* = 80,000 and *p* = 1% → *m* ≈ 766,805 bits (≈ 93.6 KiB — kibibytes of 1,024 bytes; the demo prints 93 because it uses integer division) and *k* = 7 — about 9.6 bits per item, whatever the item size.
 
 **Double hashing** (Kirsch–Mitzenmacher): compute two hashes *h1*, *h2* once and use positions *h1 + i·h2* for *i* = 0..k−1 — as good as *k* independent hashes in practice.
 
@@ -1608,12 +1618,12 @@ add("user-0-0") again changes bits? false
 
 ### Pitfalls
 - Non-atomic bit setting → false negatives (the one thing a Bloom filter must never produce).
-- Poor hash functions (e.g. using `String.hashCode()` directly with `i * 31` offsets) → clustered bits and much higher false-positive rates. Mix bits (here FNV-1a + MurmurHash3's finalizer).
+- Poor hash functions (e.g. using `String.hashCode()` directly with `i * 31` offsets) → clustered bits and much higher false-positive rates. Mix bits (here FNV-1a + MurmurHash3's finalizer — two fast, non-cryptographic hash functions).
 - Adding far more than *n* items → false-positive rate climbs quickly; resize by creating a larger filter (or a "scalable" chain of filters).
 - `Math.floorMod` on `long` to avoid negative indices.
 
 ### Real-world examples
-- **Apache Cassandra, HBase, RocksDB, LevelDB**: Bloom filters per SSTable/file to skip disk reads for keys that aren't there.
+- **Apache Cassandra, HBase, RocksDB, LevelDB** (databases and storage engines): Bloom filters per **SSTable** (Sorted String Table — an immutable sorted data file on disk)/file to skip disk reads for keys that aren't there.
 - **Google Guava** `BloomFilter` (its `put`/`mightContain` are thread-safe since Guava 23 using atomic long arrays).
 - **Redis** (RedisBloom module / Redis Stack) offers `BF.ADD`/`BF.EXISTS`.
 - Checking whether a username is already taken, or a URL already crawled, before hitting the database; Medium has described using Bloom filters to avoid recommending already-read articles.
@@ -1622,12 +1632,12 @@ add("user-0-0") again changes bits? false
 **30-second answer:** "A bit array of size m with k hash positions per item from double hashing; add sets k bits, query checks them — any zero means definitely absent. For concurrency I store bits in an AtomicLongArray and set them with an atomic OR; since bits only go from 0 to 1, reads need no lock. m and k come from n and the target false-positive rate."
 
 **Follow-ups:**
-- *Deletions?* Counting Bloom filter (small counters instead of bits, atomic increments/decrements) or a Cuckoo filter.
+- *Deletions?* Counting Bloom filter (small counters instead of bits, atomic increments/decrements) or a Cuckoo filter (a Bloom-filter alternative that supports deletion).
 - *Distributed?* Keep it in Redis (RedisBloom) or rebuild per node from a shared source.
 
 ### Self-check
 - **Q:** Can a Bloom filter say "absent" for an item that was added? **A:** No — no false negatives (assuming atomic, completed adds).
-- **Q:** Bits per element for 1% FPR? **A:** About 9.6.
+- **Q:** Bits per element for 1% FPR (false-positive rate)? **A:** About 9.6.
 
 ### TL;DR
 Bits + k hashes; "no" is certain, "yes" is probable. `AtomicLongArray` + atomic OR = lock-free and correct.
@@ -1741,21 +1751,21 @@ Arrays.parallelSort agrees        = true
 ### Why it's correct
 - The two subtasks work on **disjoint** ranges of both `a` and `buf` → no data race between them.
 - `invokeAll` returns only when both subtasks completed; Fork/Join's `join` establishes happens-before, so the parent's merge sees the children's writes.
-- The merge takes from the left run on ties (`<=`), so it's **stable** (matters for objects, not for ints).
+- The merge takes from the left run on ties (`<=`), so it's **stable** (equal elements keep their original order; matters for objects, not for ints).
 - The early exit `a[mid-1] <= a[mid]` skips merging already-ordered halves.
 - The result is compared with `Arrays.sort` on 4 million random ints (seeded, so reproducible).
 
 ### Pitfalls
 - No threshold → millions of tiny tasks; overhead dominates.
-- Allocating a new buffer in every merge → heavy GC; allocate once.
+- Allocating a new buffer in every merge → heavy GC (garbage collection — the JVM's automatic freeing of unused memory); allocate once.
 - Calling `fork()` on both halves and `join()`ing in the wrong order, or doing blocking I/O inside Fork/Join tasks (it's meant for CPU work).
 - `(lo + hi) / 2` can overflow for huge arrays; `>>> 1` avoids it.
-- Expecting speed-up on tiny arrays or on a single core (Amdahl's law — the final merge is sequential).
+- Expecting speed-up on tiny arrays or on a single core (Amdahl's law: the part that must run sequentially caps the total speed-up — here the final merge).
 
 ### Real-world examples
 - `Arrays.parallelSort` (Java 8+) splits the array, sorts the pieces in parallel on the common Fork/Join pool and merges them (the demo cross-checks against it).
 - Parallel streams (`list.parallelStream()`) run on `ForkJoinPool.commonPool()`.
-- Big-data sorts (Hadoop MapReduce's sort/shuffle, Spark's `sortBy`) apply the same divide-sort-merge idea across machines.
+- Big-data sorts (Hadoop MapReduce's — a model that maps over data in parallel, then combines the results — sort/shuffle, Spark's `sortBy`) apply the same divide-sort-merge idea across machines.
 
 ### In the interview
 **30-second answer:** "A RecursiveAction splits the range in half until it's below a threshold, sorts small pieces sequentially, then merges using one preallocated buffer. invokeAll runs both halves in parallel on the ForkJoinPool, whose work stealing keeps cores busy. Subtasks touch disjoint ranges, so no locks are needed."
@@ -1775,13 +1785,13 @@ Split until small, sort sequentially, merge; Fork/Join + work stealing; disjoint
 ## 13.11 Rate limiter — token bucket (thread-safe)
 
 ### Problem
-Limit how often clients may call an API: allow short **bursts** up to *B* requests, and a sustained rate of *R* requests per second. Must be correct under many concurrent requests, per client (user id / API key / IP).
+Limit how often clients may call an **API** (Application Programming Interface — here, a web service that clients send requests to): allow short **bursts** up to *B* requests, and a sustained rate of *R* requests per second. Must be correct under many concurrent requests, per client (user id / API key — a secret string that identifies the caller / IP address).
 
 ### Approach
 **Token bucket (first-time explanation):**
 1. A bucket holds up to *capacity* tokens (the allowed burst) and starts full.
 2. Tokens drip in at *refillRate* per second, never exceeding capacity.
-3. Each request takes one token. No token → reject (HTTP 429 "Too Many Requests").
+3. Each request takes one token. No token → reject (HTTP 429 "Too Many Requests"; HTTP is the web's request/response protocol — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)).
 4. Implement refill **lazily**: store `tokens` and `lastRefill`; on each request add `elapsed × rate` tokens. No background thread needed.
 
 **Thread safety:** "refill + check + take" must be **one atomic step** — otherwise two threads can both see 1 token and both take it.
@@ -1793,7 +1803,7 @@ Limit how often clients may call an API: allow short **bursts** up to *B* reques
 | Algorithm | Bursts | Memory | Notes |
 |---|---|---|---|
 | **Token bucket** | Allows up to capacity | 2 numbers | Most common for APIs |
-| Leaky bucket | Smooths to constant output rate | Queue | Good for shaping traffic |
+| Leaky bucket | Smooths to constant output rate | Queue | Good for shaping traffic (evening out bursts) |
 | Fixed window counter | Allows 2× burst at window edges | 1 counter | Simplest |
 | Sliding window log | Exact | One timestamp per request | Memory-heavy |
 | Sliding window counter | Approximate, smooth | 2 counters | Good compromise |
@@ -1990,18 +2000,18 @@ per-client (3 burst): alice YYYn, bob YY  (alice's spam doesn't hurt bob)
 - A background thread per bucket to add tokens → thousands of threads/timers; lazy refill needs none.
 - Using `currentTimeMillis()` (wall clock can jump) instead of `nanoTime()`.
 - An unbounded map of buckets → memory leak for one-off clients; evict idle buckets (e.g. with the TTL cache from 13.6).
-- In a multi-server deployment an in-memory limiter only limits per server. For a global limit, keep the bucket in **Redis** and update it atomically with a Lua script (or use a sliding-window counter in Redis).
+- In a multi-server deployment an in-memory limiter only limits per server. For a global limit, keep the bucket in **Redis** (an in-memory data store shared by all servers) and update it atomically with a Lua script (a small script that Redis runs as one uninterruptible step) (or use a sliding-window counter in Redis).
 
 ### Real-world examples
 - **Stripe** has described using token buckets (backed by Redis) for its API rate limits.
-- **Amazon API Gateway** throttling is configured with a *rate* and a *burst* — token-bucket parameters.
-- **Guava `RateLimiter`**, **Bucket4j** (token bucket for Java, with Redis/JCache back-ends), and **Resilience4j `RateLimiter`** are production Java libraries; NGINX's `limit_req` uses a leaky-bucket approach.
+- **Amazon API Gateway** (AWS's managed front door for APIs) **throttling** (deliberately rejecting or delaying excess requests) is configured with a *rate* and a *burst* — token-bucket parameters.
+- **Guava `RateLimiter`**, **Bucket4j** (token bucket for Java, with Redis/JCache — the standard Java caching API — back-ends), and **Resilience4j `RateLimiter`** are production Java libraries; NGINX's (a popular web server and reverse proxy) `limit_req` uses a leaky-bucket approach.
 
 ### In the interview
 **30-second answer:** "Token bucket: capacity for bursts, refill rate for the average. I refill lazily from elapsed nanoTime on each request, and make refill-check-take one atomic step — synchronized, or lock-free by CASing an immutable state record. A ConcurrentHashMap gives one bucket per client via computeIfAbsent; across servers I'd move the bucket into Redis with a Lua script."
 
 **Follow-ups (with answers):**
-- *How do you tell the client when to retry?* Compute `(1 − tokens) / rate` seconds and return it in a `Retry-After` header.
+- *How do you tell the client when to retry?* Compute `(1 − tokens) / rate` seconds and return it in a `Retry-After` header (a response header that tells the client how many seconds to wait).
 - *Different limits per plan (free vs paid)?* The factory creates buckets with capacity/rate from the client's plan (Strategy pattern).
 - *Blocking instead of rejecting?* Compute the wait time and sleep/park until a token will exist (Guava's `acquire()` does this).
 

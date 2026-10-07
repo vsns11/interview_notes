@@ -21,16 +21,22 @@ javac --release 21 -d /tmp/lld_19 $(find . -name '*.java')
 java -cp /tmp/lld_19 lld.ch19.amazon.Main          # or brokerage, stockexchange, auction, music, fooddelivery, foodkart, grocery
 ```
 
-All eight `Main` classes compile with Java 21 (standard library only) and run. The output under each implementation is the real output of that program. The stock-exchange `Main` also runs a small test suite (no JUnit needed).
+`javac` is the Java compiler (it turns `.java` files into runnable `.class` files); `-d` names the output folder, and `java -cp` runs a class, where the **classpath** (`-cp`) is the list of folders Java searches for compiled classes.
+
+All eight `Main` classes compile with Java 21 (standard library only — only the classes that ship with Java) and run. The output under each implementation is the real output of that program. The stock-exchange `Main` also runs a small test suite (a set of automatic checks that confirm the code behaves as expected; no JUnit — the usual Java testing library — needed).
 
 > **Code-style note.** To keep each case readable, one file sometimes holds several small package-private types (for example `Payments.java` holds `Payment`, its two subclasses and `Shipment`). That is legal Java. In production you would usually give each top-level type its own file.
 
+> **Key term — Java vocabulary used in this chapter:** A **package-private** type has no access keyword and is visible only inside its own package (folder of classes). A **top-level type** is a class, interface, enum or record not nested in another. An **interface** lists methods a class promises to provide. An **enum** is a type with a fixed list of named values. A **record** is a compact class that just carries data that never changes. A **sealed** type lists exactly which subclasses are allowed (the `permits` clause), so the compiler knows every possible kind. **`synchronized`** means only one thread at a time may run that code on the same object.
+
+> **Key term — the design patterns named in this chapter:** **Strategy** puts each interchangeable way of doing a job (each payment method, each play order) behind one interface so it can be swapped or added without editing the caller. **Observer** lets objects subscribe to events from another object and be called back automatically, so the publisher does not know who listens. **Facade** is one simple class that hides many classes behind a few easy methods. **Template Method** is a base-class method that fixes the outline of an algorithm and lets subclasses fill in one or two steps. **Specification** turns each business rule or search condition into a small yes/no object that can be combined with others.
+
 ### Four rules that apply to every design in this chapter
 
-1. **Money is `BigDecimal`, never `double`.** A `double` cannot store 0.1 exactly, so `0.1 + 0.2` prints `0.30000000000000004`. With `BigDecimal` you choose the scale (number of decimal places) and the rounding mode yourself. Two traps: build it from a `String` (`new BigDecimal("0.10")`), not from a `double`; and compare with `compareTo`, not `equals` — `new BigDecimal("2.0").equals(new BigDecimal("2.00"))` is `false` because the scales differ.
+1. **Money is `BigDecimal`, never `double`.** `double` is Java's floating-point number type: it stores numbers in binary, so most decimal fractions are only approximated. `BigDecimal` is Java's exact decimal-number class. A `double` cannot store 0.1 exactly, so `0.1 + 0.2` prints `0.30000000000000004`. With `BigDecimal` you choose the scale (number of decimal places) and the rounding mode yourself. Two traps: build it from a `String` (`new BigDecimal("0.10")`), not from a `double`; and compare with `compareTo`, not `equals` — `new BigDecimal("2.0").equals(new BigDecimal("2.00"))` is `false` because the scales differ.
 2. **Status changes follow a state machine.** A **state machine** is a fixed list of states plus the allowed moves between them. We put the allowed moves *inside the enum*, so an illegal move (for example "cancel a delivered order") throws immediately instead of silently corrupting data.
-3. **Check-then-act on shared stock must be atomic.** "Is there one left? Then take it" is two steps. If two threads run step 1 together, both see "yes" and both take it. The fix is to do both steps under one lock, or with one atomic compare-and-set (CAS: "set to B only if it is still A").
-4. **Copy prices into orders.** An order remembers the price that was paid. If the menu or catalog price changes later, old orders must not change.
+3. **Check-then-act on shared stock must be atomic.** "Is there one left? Then take it" is two steps. If two threads (independent paths of execution running at the same time inside one program) run step 1 together, both see "yes" and both take it — a **race condition**, where the result depends on which thread happens to get there first. The fix is to do both steps under one lock (a guard that only one thread can hold at a time; the others wait), or with one atomic compare-and-set (CAS: "set to B only if it is still A").
+4. **Copy prices into orders.** An order remembers the price that was paid, and is **immutable** (it cannot be changed after it is created). If the menu or catalog price changes later, old orders must not change.
 
 ---
 
@@ -45,7 +51,7 @@ Questions worth asking before you draw anything (with the answers we assume):
 | Question | Assumed answer |
 |---|---|
 | Can someone buy without an account? | No. Browsing and filling a cart are open to everyone; placing an order needs a **registered member** account. |
-| Who sells? | Members can list products for sale (a marketplace, not only first-party). |
+| Who sells? | Members can list products for sale (a marketplace, not only first-party — goods sold by the platform itself). |
 | How do people pay? | Credit card or electronic bank transfer. Cards clear at once, transfers clear later. |
 | Can an order be cancelled? | Yes, until it has shipped. |
 | Do we notify people? | Yes, on every order or shipping status change. |
@@ -71,8 +77,8 @@ Questions worth asking before you draw anything (with the answers we assume):
 
 - **Correctness of stock:** two buyers can never both get the last unit.
 - **Exact money:** totals are computed with `BigDecimal`.
-- **Auditability:** every order and shipment keeps a history of its states, not just the latest one.
-- **Extensibility:** adding a payment method or a notification channel must not change the checkout code.
+- **Auditability** (being able to prove later exactly what happened and when)**:** every order and shipment keeps a history of its states, not just the latest one.
+- **Extensibility** (how easily new features can be added without rewriting old code)**:** adding a payment method or a notification channel must not change the checkout code.
 
 ### Use cases
 
@@ -97,8 +103,8 @@ In the figure above, notice that "Checkout" *includes* "Make payment" and "Add s
 | `ProductCategory` | A named group such as Books or Electronics. Exists whether or not any product uses it. |
 | `Product` | The thing sold: price, seller, stock count. **Owns** its reviews and guards its own stock (`reserve` / `release`). |
 | `ProductReview` | Rating 1–5 plus text. Records the reviewer **by id**, so `Product` never depends on `Member`. |
-| `Search` / `Catalog` | Interface with two search methods. The catalog keeps one index per search (name words → products, category → products), so a lookup reads a map instead of scanning every product, and `addProduct` updates both indexes together so they cannot drift apart. The catalog only *points to* products; it never owns them. |
-| `ShoppingCart` | Mutable working area. **Owns** its items; clearing the cart destroys them. |
+| `Search` / `Catalog` | Interface with two search methods. The catalog keeps one index (a lookup map built in advance) per search (name words → products, category → products), so a lookup reads a map instead of scanning every product, and `addProduct` updates both indexes together so they cannot drift apart. The catalog only *points to* products; it never owns them. |
+| `ShoppingCart` | Mutable (changeable) working area. **Owns** its items; clearing the cart destroys them. |
 | `Item` | One line: product id, name, quantity, unit price (an immutable `record`). A pen is a *product*; ten pens in stock are ten product *items*. |
 | `Order` | Immutable **copy** of the cart lines + address + a status that moves only along legal edges. |
 | `OrderLog` | One entry per status change (unshipped, pending, complete, cancelled...). |
@@ -108,7 +114,7 @@ In the figure above, notice that "Checkout" *includes* "Make payment" and "Add s
 | `Account` | Login data, addresses, status (active, blocked, banned...). |
 | `Customer` → `Guest`, `Member` | `Customer` has only what *anyone* may do; ordering lives on `Member`. |
 | `Admin` | Adds categories, blocks and unblocks members. |
-| `OrderService` | Application service that turns a cart into an order and drives its state machine. |
+| `OrderService` | Application service (a class that coordinates domain objects to carry out one user action) that turns a cart into an order and drives its state machine. |
 
 ### Class diagram
 
@@ -260,8 +266,8 @@ Requirement 8 ("cancel only if not shipped") is now one line: `canCancel()` retu
 | **`Order` copies the cart lines** | An order documents a *finished purchase*; it must stay fixed even if the cart is edited later. | Sharing `Item` objects — cheaper, but editing the cart would silently rewrite a finished order. |
 | **Stock reserved at order time, not at payment time** | Prevents two shoppers from both getting the final unit. Cost: an abandoned order holds stock until cancelled; real systems release it on a timer. | Check stock, then pay, then decrement (a race window between check and decrement). |
 | **State machine inside `OrderStatus`** | One place owns the rules. `moveTo` rejects illegal edges. | `if` checks scattered over `cancel`, `ship`, `deliver`. |
-| **`Payment` is an abstract (sealed) class, one subclass per method** — a **Strategy** | The two methods *behave* differently (card clears now, transfer is pending). An **abstract class** cannot be instantiated itself — only its subclasses can — so every payment is a real card or transfer. Each subclass passes the substitution test (it can genuinely stand in for `Payment`: both really take money), and the same holds for the notification channels. A new method = a new subclass; checkout does not change (Open/Closed Principle). The course calls this out: it is why `Payment` is not an enum. | `enum PaymentType` + `switch` in checkout. |
-| **Payment passed in as `Function<BigDecimal, Payment>`** | Checkout knows the total only after building the order, so it asks the caller's factory for a payment of that amount. | Creating the payment before the total is known. |
+| **`Payment` is an abstract (sealed) class, one subclass per method** — a **Strategy** | The two methods *behave* differently (card clears now, transfer is pending). An **abstract class** cannot be instantiated itself — only its subclasses can — so every payment is a real card or transfer. Each subclass passes the substitution test (it can genuinely stand in for `Payment`: both really take money), and the same holds for the notification channels. A new method = a new subclass; checkout does not change (Open/Closed Principle: code should be open to extension but closed to modification). The course calls this out: it is why `Payment` is not an enum. | `enum PaymentType` + `switch` in checkout. |
+| **Payment passed in as `Function<BigDecimal, Payment>`** (a function object: give it an amount, get a `Payment` back) | Checkout knows the total only after building the order, so it asks the caller's factory (a piece of code whose job is to create objects) for a payment of that amount. | Creating the payment before the total is known. |
 | **Observer for notifications** | `OrderService` publishes events; `NotificationService` decides who to tell and how. Adding push notifications = a new `NotificationChannel`. | Calling email and SMS code directly inside `OrderService`. |
 | **`Shipment` keeps a log** | Requirement 11 = read the last entry; the whole history stays for support and disputes. | A single `status` field (history lost). |
 | **Reviews store `reviewerId`** | Avoids a two-way dependency `Product ↔ Member`; each class can be understood alone. | `ProductReview` holding a `Member` object. |
@@ -1056,7 +1062,7 @@ category 'books' -> [Clean Code ($32.50), Refactoring ($41.00), Design Patterns 
   winners=1 losers=9 stock left=0
 ```
 
-**Reading the output.** Step 1 answers both searches from indexes (a name search matches every query word, so `usb cable` finds "USB-C Cable"). Step 2 shows the guest's cart surviving registration. Step 3 prints two notifications (email + SMS) because both channels are registered. Step 5 walks the full cancel path `PENDING → UNSHIPPED → CANCELED → REFUND_APPLIED`, and the stock returns to 2. Step 6 proves the state machine refuses `REFUND_APPLIED → SHIPPED`. Step 9 starts ten threads at the same instant (a `CountDownLatch` releases them together) and exactly one wins the last copy.
+**Reading the output.** Step 1 answers both searches from indexes (a name search matches every query word, so `usb cable` finds "USB-C Cable"). Step 2 shows the guest's cart surviving registration. Step 3 prints two notifications (email + SMS) because both channels are registered. Step 5 walks the full cancel path `PENDING → UNSHIPPED → CANCELED → REFUND_APPLIED`, and the stock returns to 2. Step 6 proves the state machine refuses `REFUND_APPLIED → SHIPPED`. Step 9 starts ten threads at the same instant (a `CountDownLatch` — a gate that keeps threads waiting until a counter reaches zero — releases them together) and exactly one wins the last copy.
 
 ### Concurrency & edge cases
 
@@ -1069,21 +1075,21 @@ category 'books' -> [Clean Code ($32.50), Refactoring ($41.00), Design Patterns 
 | Bank transfer never clears | Stock held forever | Mention a timeout job that cancels `PENDING` orders after N hours. |
 | Price changes after adding to cart | Customer charged a price they never saw | `Item` stores the unit price at add time; production systems re-validate prices at checkout and show changes. |
 | Blocked member | Places orders anyway | `Member.canBuy()` checks `AccountStatus.ACTIVE` first (step 8). |
-| Deadlock | Two locks taken in different orders | Each lock (product, order, cart) is held briefly and never while waiting for another object's lock in the opposite order. |
+| Deadlock (two threads each waiting forever for a lock the other holds) | Two locks taken in different orders | Each lock (product, order, cart) is held briefly and never while waiting for another object's lock in the opposite order. |
 
 ### Real-world example
 
-On Amazon's "Your Orders" page, the *Cancel items* button is offered only while an order has not yet entered the shipping process — the same edge our state machine removes after `SHIPPED`. Amazon also treated the shopping cart as something that must *always* accept writes: its 2007 Dynamo paper (the key-value store behind services such as the cart) chose availability so that "add to cart" works even during failures, and merges conflicting cart versions later. Our in-memory design shows the object model; at Amazon's scale the cart, catalog and orders live in separate services.
+On Amazon's "Your Orders" page, the *Cancel items* button is offered only while an order has not yet entered the shipping process — the same edge our state machine removes after `SHIPPED`. Amazon also treated the shopping cart as something that must *always* accept writes: its 2007 Dynamo paper (the key-value store — a database that simply maps a key to a value — behind services such as the cart) chose **availability** (staying usable even when some machines fail; see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)) so that "add to cart" works even during failures, and merges conflicting cart versions later. Our in-memory design shows the object model; at Amazon's scale the cart, catalog and orders live in separate services.
 
 ### Extensions & follow-up questions
 
-- **"Add a new payment type, e.g. gift cards or UPI."** Add a `GiftCardPayment extends Payment` (and list it in `permits`). `OrderService` is untouched, because it only calls `process()`.
-- **"How do you prevent two shoppers from both buying the final unit?"** Reserve at order time inside a lock (`Product.reserve`). In a distributed system: a conditional database update (`UPDATE ... SET stock = stock - 1 WHERE id = ? AND stock >= 1`) or optimistic locking with a version column.
+- **"Add a new payment type, e.g. gift cards or UPI (India's instant bank-to-bank mobile payment system)."** Add a `GiftCardPayment extends Payment` (and list it in `permits`). `OrderService` is untouched, because it only calls `process()`.
+- **"How do you prevent two shoppers from both buying the final unit?"** Reserve at order time inside a lock (`Product.reserve`). In a distributed system (one spread over many machines): a conditional database update (`UPDATE ... SET stock = stock - 1 WHERE id = ? AND stock >= 1`) or **optimistic locking** with a version column (no lock is held; each row carries a version number, and an update succeeds only if the version is still the one you read — otherwise you retry).
 - **"Abandoned orders hold stock."** Give each reservation an expiry. A scheduled job cancels `PENDING` orders older than, say, 30 minutes and releases stock.
 - **"Returns after delivery."** Add `COMPLETED → RETURN_REQUESTED → RETURNED → REFUND_APPLIED` edges; the enum change is local.
 - **"Multiple warehouses."** Replace `Product.availableCount` with an `Inventory` per warehouse; checkout picks a warehouse per line (a Strategy: nearest, cheapest shipping).
 - **"Split shipments."** One `Order` owns many `Shipment`s, each with its own item subset and log.
-- **"Search at scale."** The in-memory `Catalog` becomes a search index (for example Elasticsearch/OpenSearch) fed by product change events; the `Search` interface stays.
+- **"Search at scale."** The in-memory `Catalog` becomes a search index (for example Elasticsearch/OpenSearch, popular search-engine servers) fed by product change events; the `Search` interface stays.
 - **"Seller payouts, recommendations, wish lists."** Separate modules listening to order events (Observer again).
 
 ### In the interview
@@ -1103,8 +1109,8 @@ On Amazon's "Your Orders" page, the *Cancel items* button is offered only while 
 
 - *Why is `Payment` abstract rather than an enum?* Because the methods behave differently (clears now vs pending). New methods are new classes — Open/Closed.
 - *Why does `Order` copy items?* So later cart edits or price changes cannot rewrite history.
-- *Where would you put tax and discounts?* A `PricingRule` chain (Chain of Responsibility or a list of Strategies) applied when building the order; the order stores the final line prices.
-- *How do you make checkout idempotent if the user double-clicks?* Accept a client-generated idempotency key; if an order with that key exists, return it instead of creating a second one.
+- *Where would you put tax and discounts?* A `PricingRule` chain (Chain of Responsibility — a pattern where a request is passed along a line of handlers, each doing its part — or a list of Strategies) applied when building the order; the order stores the final line prices.
+- *How do you make checkout idempotent (safe to repeat: doing it twice has the same effect as doing it once) if the user double-clicks?* Accept a client-generated idempotency key (a unique id the browser sends with the request); if an order with that key exists, return it instead of creating a second one.
 
 ### Self-check
 
@@ -1128,30 +1134,32 @@ On Amazon's "Your Orders" page, the *Cancel items* button is offered only while 
 This problem has two halves, and interviews ask both:
 
 - **Part A — the brokerage** (what the course designs): members, money in and out, watchlists, the four order types, lots and positions, statements.
-- **Part B — the exchange's matching engine** (a machine-coding problem originally from Geektrust, kept in kumaransg/LLD under a project named "Navi"; we call it "the Navi statement" below): an order book that matches buy and sell orders by **price-time priority**, implemented and tested.
+- **Part B — the exchange's matching engine** (a machine-coding problem — write a working program in about 90 minutes — originally from Geektrust, an Indian coding-assessment platform, kept in kumaransg/LLD under a project named "Navi"; we call it "the Navi statement" below): an **order book** (the list of all waiting buy and sell orders for one stock) that matches buy and sell orders by **price-time priority**, implemented and tested.
 
 A **broker** is the company you trade *through* (it holds your cash and shares and forwards your orders). An **exchange** is the market where buy and sell orders from all brokers *meet* and are matched. Keep the two apart in your head; the design keeps them apart in code.
 
 ### Problem & clarifying questions
 
-An online brokerage lets people buy and sell stocks without a human middleman. Members track and carry out their transactions, see charts of how the stocks they hold are performing, and get an alert when a stock moves by an amount they chose. The platform must keep those transactions secure. Because computers replace the phone call to a broker, each trade is quicker and cheaper, and members get fast access to real-time prices, market trends and stock reports.
+An online brokerage lets people buy and sell stocks without a human middleman. Members track and carry out their transactions, see charts of how the stocks they hold are performing, and get an alert when a stock moves by an amount they chose. The platform must keep those transactions secure. Because computers replace the phone call to a broker, each trade is quicker and cheaper, and members get fast access to real-time (updated the moment they change) prices, market trends and stock reports.
 
 | Question | Assumed answer |
 |---|---|
-| Which order types? | Market, limit, stop-loss, stop-limit. |
+| Which order types? | Market, limit, stop-loss, stop-limit (explained in the table under Key flows). |
 | Can one order fill at several prices? | Yes — an order can be filled in parts. |
 | Do we track separate purchases of the same stock? | Yes — each purchase is a **lot**, because tax depends on which lot you sell. |
-| How does money come in and out? | Check, wire, or electronic bank transfer, each with a per-transfer limit. |
+| How does money come in and out? | Check, wire (a direct bank-to-bank transfer), or electronic bank transfer, each with a per-transfer limit. |
 | Reports? | Quarterly statements and a yearly tax statement. |
 | Notifications? | When an order executes. |
 | Margin, short selling, options, dividends and stock splits, real-time streaming quotes, the settlement delay, the wash-sale tax rule? | Out of scope — a deliberate decision, say so. |
+
+For reference, those out-of-scope terms: **margin** is trading with money borrowed from the broker; **short selling** is selling borrowed shares, hoping to buy them back cheaper; **options** are contracts giving the right to buy or sell later at a fixed price; **dividends** are profits a company pays to its shareholders; a **stock split** turns each share into several cheaper ones; **settlement** is the actual swap of cash and shares, which happens a day or so after the trade; the **wash-sale rule** is a US tax rule that blocks claiming a loss if you rebuy the same stock within 30 days.
 
 ### Requirements
 
 **Functional (brokerage)**
 
 1. Any member can buy and sell stocks.
-2. A member can have **multiple watchlists**, each with multiple stock quotes.
+2. A member can have **multiple watchlists** (named lists of stocks to keep an eye on), each with multiple stock quotes (a quote is a stock's latest price).
 3. Orders can be **market, limit, stop-loss, stop-limit**.
 4. A member can hold **multiple lots** of the same stock; the system keeps them apart.
 5. The system generates **quarterly** updates and **yearly tax** statements.
@@ -1168,7 +1176,7 @@ An online brokerage lets people buy and sell stocks without a human middleman. M
 **Non-functional**
 
 - Money is never over-committed: ten $1,000 orders cannot all pass a $1,000 balance check.
-- Matching is deterministic: same input, same trades.
+- Matching is deterministic (no randomness or timing luck): same input, same trades.
 - The engine is safe under concurrent submissions and conserves quantity (shares bought = shares sold).
 
 ### Use cases
@@ -1190,15 +1198,15 @@ Top use cases: register / cancel membership; add, remove or edit a watchlist; se
 |---|---|
 | `MoneyTransfer` → `CheckTransfer`, `WireTransfer`, `ElectronicBankTransfer` | Move money in or out. They differ only in name and clearing days (5 / 1 / 3 in our code); the per-transfer limit (100,000) is a single rule, so it lives only in the base class. |
 | `Notifier` / `EmailNotifier` | Delivers "your order filled" messages. The course draws one base with two delivery ways (email and SMS); an `SmsNotifier` would be a second implementation. |
-| `Order` (abstract) | Shared by all order types: member, symbol, side, quantity, time-in-force, status, list of fills. Declares the **two questions**. |
+| `Order` (abstract) | Shared by all order types: member, symbol, side (buy or sell), quantity, time-in-force (how long the order stays live), status, list of fills. Declares the **two questions**. |
 | `MarketOrder`, `LimitOrder`, `StopLossOrder`, `StopLimitOrder` | Each answers "may I trade now?" and "what is my worst price?". `StopLimitOrder extends StopLossOrder`. |
 | `OrderPart` | One fill: quantity, price, day. A 100-share order might be filled as 70 @ 10.00 plus 30 @ 10.05. |
-| `Stock`, `StockInventory` | Symbol + latest price; the inventory is the **single source of truth** for prices. |
+| `Stock`, `StockInventory` | Symbol + latest price; the inventory is the **single source of truth** (the one place whose value counts if copies disagree) for prices. |
 | `StockExchange` | Holds open orders; on each new order or price tick tries to fill them; calls back through `OrderListener`. |
 | `OrderListener` | Interface the exchange calls (`onFill`, `onCancelled`). The exchange never learns what a member is. |
 | `StockLot` | One purchase at one price. |
-| `StockPosition` | All lots of one symbol; sells from the oldest lot first (FIFO) unless a lot is named. Returns a `LotSale` per lot touched. |
-| `LotSale` | Shares taken from one lot, buy price, sell price → realised gain. |
+| `StockPosition` | All lots of one symbol; sells from the oldest lot first (FIFO — first in, first out) unless a lot is named. Returns a `LotSale` per lot touched. |
+| `LotSale` | Shares taken from one lot, buy price, sell price → realised gain (profit actually locked in by selling). |
 | `Watchlist` | A named set of **symbols** (not `Stock` objects, so it never goes stale). |
 | `Trade` | One fill as the member sees it (sells carry their `LotSale`s). |
 | `Statement` → `QuarterlyStatement`, `TaxStatement` | Base class filters trades by day range; subclasses write their own lines. |
@@ -1349,7 +1357,7 @@ sequenceDiagram
     Note over X: later - tick(symbol, price) re-checks open orders, stops trigger here
 ```
 
-**Matching engine: price-time priority.** Each symbol has an `OrderBook` with two sides. Each side is a `TreeMap` from price to a FIFO queue (`ArrayDeque`). Bids are sorted highest-first, asks lowest-first. For an incoming order:
+**Matching engine: price-time priority.** Each symbol has an `OrderBook` with two sides. Each side is a `TreeMap` (a map that keeps its keys sorted) from price to a FIFO queue (`ArrayDeque`, Java's fast double-ended queue). **Bids** (buy orders) are sorted highest-first, **asks** (sell orders) lowest-first. For an incoming order:
 
 1. Look at the best price on the opposite side.
 2. If it does not **cross** (buy price < best ask, or sell price > best bid), stop.
@@ -1386,7 +1394,7 @@ flowchart TD
 
 | Decision | Why | Alternative rejected |
 |---|---|---|
-| **One abstract `Order` + two abstract questions** | The four types differ only in "may I trade?" and "worst price?". Each subclass is a few lines. The course stresses this is just a type hierarchy (plain polymorphism), not a named pattern: every subclass answers for itself whether the current price lets it trade, and no order ever turns into another kind — so it is not the State pattern either. (The only named patterns the course lists are Observer and Singleton; the Template Method and Strategy labels in this table are our additions.) | Four unrelated classes with copied fields; or one class with a `type` field and `switch`es. |
+| **One abstract `Order` + two abstract questions** | The four types differ only in "may I trade?" and "worst price?". Each subclass is a few lines. The course stresses this is just a type hierarchy (plain polymorphism — calling the same method on different subclasses and each running its own version), not a named pattern: every subclass answers for itself whether the current price lets it trade, and no order ever turns into another kind — so it is not the State pattern either. (The only named patterns the course lists are Observer and Singleton — a class that allows exactly one instance; the Template Method and Strategy labels in this table are our additions.) | Four unrelated classes with copied fields; or one class with a `type` field and `switch`es. |
 | **`StopLimitOrder extends StopLossOrder`** | A stop-limit is a stop that becomes a *limit* instead of a *market* order: it inherits the trigger, overrides only `limitPrice()`. | Duplicating the trigger logic. |
 | **`OrderPart` per fill** | One order can fill at several prices/days; each fill needs its own price and quantity (and becomes its own lot). | Storing only an average price (loses tax information). |
 | **Observer: `OrderListener`** | The exchange tells whoever placed the order; it does not import `Member`. Exchange and account code change independently. | The exchange updating member balances directly. |
@@ -1394,9 +1402,9 @@ flowchart TD
 | **Lots, FIFO by default** | Tax depends on *which* shares you sold; each `LotSale` records it. | Merging all purchases into one average-cost position. |
 | **Template Method: `Statement`** | Filtering by day range is shared; only the lines differ. `render` is `final`; subclasses fill in `body`. | Two statement classes each re-implementing the filter. |
 | **`MoneyTransfer` base class holds the limit rule** | One rule, three delivery methods. | Copying the limit check into each subclass. |
-| **Singleton?** | The course makes `StockExchange` a Singleton (one gateway to the real exchange). We pass one instance into `Member` instead (**dependency injection**) — same "only one" in practice, but testable with a fake exchange. | A global `getInstance()` that tests cannot replace. |
-| **Engine: `TreeMap<price, ArrayDeque>` per side** | Best price in O(log n); FIFO inside a level gives time priority for free. | One `PriorityQueue` sorted by (price, time) — works, but cancel is O(n) and levels are not visible. |
-| **Engine: lock per symbol** | Orders for different symbols match in parallel; same-symbol orders are strictly serialised, so "time priority" is well defined. | One global lock (slower) or no lock (corrupt book). |
+| **Singleton?** | The course makes `StockExchange` a Singleton (one gateway to the real exchange). We pass one instance into `Member` instead (**dependency injection**: an object is handed the things it needs from outside rather than creating or looking them up itself) — same "only one" in practice, but testable with a fake exchange. | A global `getInstance()` that tests cannot replace. |
+| **Engine: `TreeMap<price, ArrayDeque>` per side** | Best price in O(log n) (Big-O notation: how the work grows with n items — here, very slowly); FIFO inside a level gives time priority for free. | One `PriorityQueue` (a structure that always hands back the smallest item first) sorted by (price, time) — works, but cancel is O(n) (time grows in step with the number of orders) and levels are not visible. |
+| **Engine: lock per symbol** | Orders for different symbols match in parallel; same-symbol orders are strictly serialised (handled one at a time, in order), so "time priority" is well defined. | One global lock (slower) or no lock (corrupt book). |
 | **Engine: `ExecutionPricePolicy` (Strategy)** | The Navi statement prices trades at the **sell** order's price; real continuous-trading exchanges use the **resting** (already-in-book) order's price. Both are one-line policies. | Hard-coding one rule. |
 
 ### Java implementation
@@ -2608,7 +2616,7 @@ book after: BAC bids=[237.80x20] asks=[240.12x100]
 
 ### Real-world example
 
-Indian brokers such as Zerodha offer the same stop order types to retail users: **SL** (stop-loss *limit*) and **SL-M** (stop-loss *market*) — our `StopLimitOrder` and `StopLossOrder`. (Which segments allow SL-M has changed over time, so check the broker's current rules.) Their orders go to exchanges such as NSE, whose continuous-trading order book matches on price-time priority, like our `OrderBook`. At the extreme end of performance, the LMAX exchange (described in Martin Fowler's article "The LMAX Architecture") runs its business logic, including matching, on a **single thread** that reads input events from a ring buffer (the Disruptor) — the same idea as our "one lock per symbol, strictly serialised", taken to its logical end. On the tax side, US rules treat shares as sold first-in-first-out unless you identify specific lots, and FIFO is a common broker default — the reason `StockPosition.sell` takes an optional lot id.
+Indian brokers such as Zerodha offer the same stop order types to retail users (individual investors): **SL** (stop-loss *limit*) and **SL-M** (stop-loss *market*) — our `StopLimitOrder` and `StopLossOrder`. (Which segments allow SL-M has changed over time, so check the broker's current rules.) Their orders go to exchanges such as NSE (National Stock Exchange of India), whose continuous-trading order book matches on price-time priority, like our `OrderBook`. At the extreme end of performance, the LMAX exchange (described in Martin Fowler's article "The LMAX Architecture") runs its business logic, including matching, on a **single thread** that reads input events from a ring buffer (a fixed-size array used as a circular queue; LMAX's version is called the Disruptor) — the same idea as our "one lock per symbol, strictly serialised", taken to its logical end. On the tax side, US rules treat shares as sold first-in-first-out unless you identify specific lots, and FIFO is a common broker default — the reason `StockPosition.sell` takes an optional lot id.
 
 ### Extensions & follow-up questions
 
@@ -2616,9 +2624,9 @@ Indian brokers such as Zerodha offer the same stop order types to retail users: 
 - **"Implement IOC and FOK."** IOC: after the fill loop, cancel any remainder. FOK: before filling, sum the quantity available at acceptable prices; if short, cancel without filling.
 - **"Price alerts (the 'notify when a stock moves by X%' feature)."** A `PriceAlert` observer registered on `StockInventory`/`tick`; fires once when the move crosses the threshold.
 - **"Modify an order."** On many exchanges, reducing quantity keeps time priority, but changing price (or increasing quantity) loses it — implement as cancel + new order.
-- **"Make the engine faster."** Single writer thread per symbol fed by a queue (no locks on the hot path), pre-allocated objects, prices as `long` ticks instead of `BigDecimal`.
+- **"Make the engine faster."** Single writer thread per symbol fed by a queue (no locks on the hot path — the code that runs for every single order), pre-allocated objects, prices as `long` ticks instead of `BigDecimal`.
 - **"Market orders in the engine."** Treat as a limit at +∞ (buy) or 0 (sell); never rest the remainder — cancel it.
-- **"Settlement."** Trades settle later (for example T+1); add `unsettledCash` to the member so sale proceeds are not withdrawable immediately.
+- **"Settlement."** Trades settle later (for example T+1: one business day after the trade); add `unsettledCash` to the member so sale proceeds are not withdrawable immediately.
 
 ### In the interview
 
@@ -2632,13 +2640,13 @@ Indian brokers such as Zerodha offer the same stop order types to retail users: 
 6. Code `canTradeAt` / `limitPrice` for the four types and `StockPosition.sell` (10 min).
 7. Observer callback, statements, extensions (5 min).
 
-**Machine-coding (Navi) plan, 90 minutes:** parse lines → `Order`; `OrderBook` with two `TreeMap`s of `ArrayDeque`; `add()` matching loop; print trades; then tests for the sample, price priority, time priority, partial fill and cancel. Get the sample passing first, then refactor.
+**Machine-coding (Navi) plan, 90 minutes:** parse lines → `Order`; `OrderBook` with two `TreeMap`s of `ArrayDeque`; `add()` matching loop; print trades; then tests for the sample, price priority, time priority, partial fill and cancel. Get the sample passing first, then refactor (restructure the code without changing what it does).
 
 **Follow-ups with answers**
 
 - *Why not four unrelated order classes?* They share member, symbol, quantity, side, status and fills; duplicating that invites bugs. The hierarchy isolates the two real differences.
 - *Why is `StockInventory` separate from `StockExchange`?* One place to read prices, so no two components disagree about a price.
-- *What data structure for the book, and the complexity?* `TreeMap` of price levels (a red-black tree): finding the best level with `firstEntry` and inserting a new level are both O(log L) for L price levels; FIFO queue per level: append O(1), match O(1) per fill. Cancel: O(log L) to find the level + O(k) in that level (use a linked structure with a handle for O(1)).
+- *What data structure for the book, and the complexity?* `TreeMap` of price levels (a red-black tree — a self-balancing sorted tree): finding the best level with `firstEntry` and inserting a new level are both O(log L) for L price levels; FIFO queue per level: append O(1), match O(1) per fill. Cancel: O(log L) to find the level + O(k) in that level (use a linked structure with a handle for O(1)).
 - *At what price does a trade execute?* In the Navi statement: the sell order's price. In real continuous trading: the resting order's price — the incoming order may get a better price than it asked for ("price improvement").
 
 ### Self-check
@@ -2669,13 +2677,13 @@ An online auction (think eBay auctions) lets a **seller** list an item with a st
 | Can the seller bid? Can the leader outbid themselves? | No and no. |
 | When does an auction end? | At its end time. A late bid is refused even if the closing job has not run yet. |
 | Who is told what? | The outbid bidder immediately; the winner and seller at close; the seller if unsold. |
-| Proxy (automatic) bidding, anti-sniping, payments? | Extensions — mention them. |
+| Proxy (automatic) bidding, anti-sniping (stopping last-second bids from stealing a win), payments? | Extensions — mention them. |
 
 ### Requirements
 
 **Functional**
 
-1. Users register and log in. (We model registration; login itself is the usual authentication service and is not coded here.)
+1. Users register and log in. (We model registration; login itself is the usual authentication (checking who a user is) service and is not coded here.)
 2. Users create listings with item name, description, starting price and duration.
 3. Users browse and search listings by name, category and price range.
 4. Users place bids on **active** listings.
@@ -2705,10 +2713,10 @@ An online auction (think eBay auctions) lets a **seller** list an item with a st
 | `AuctionListing` | Item details, seller, prices, times, bid history, highest bid. **Owns the bidding rules** and guards them with its own lock. |
 | `BidOutcome` / `BidResult` | Why a bid was accepted or refused, the next minimum bid, the accepted bid, who was outbid. |
 | `CloseResult` | Listing, winning bid (if any), whether the reserve was met. |
-| `AuctionQuery` | Fluent search criteria; each criterion is a `Predicate` (Specification pattern). |
+| `AuctionQuery` | Fluent (calls chained one after another) search criteria; each criterion is a `Predicate` (a function that answers true/false; Specification pattern). |
 | `AuctionListener` / `ConsoleNotifier` | Observer: new high bid, outbid, won, unsold. |
 | `AuctionService` | Facade: register, create, search, bid, close expired. Calls listeners **outside** listing locks. |
-| `ManualClock` | An `InstantSource` we can move forward in demos and tests. |
+| `ManualClock` | An `InstantSource` (Java's "what time is it now?" interface) we can move forward in demos and tests. |
 
 ### Class diagram
 
@@ -2767,9 +2775,9 @@ stateDiagram-v2
     CANCELLED --> [*]
 ```
 
-`SCHEDULED → ACTIVE` happens **lazily**: every method first calls `refresh(now)`. No background thread is needed just to flip the state.
+`SCHEDULED → ACTIVE` happens **lazily** (only when someone next touches the listing, not at the exact moment): every method first calls `refresh(now)`. No background thread is needed just to flip the state.
 
-**Placing a bid (the critical section)**
+**Placing a bid (the critical section)** — a **critical section** is a piece of code that only one thread may run at a time because it reads and changes shared data.
 
 ```mermaid
 sequenceDiagram
@@ -2789,15 +2797,15 @@ sequenceDiagram
     S-->>B: result
 ```
 
-**Closing.** A scheduler (in production a `ScheduledExecutorService` running every few seconds) calls `closeExpired()`. Each listing's `closeIfDue(now)` atomically moves `ACTIVE → CLOSED` and returns the winner only if the reserve is met. Notifications go out after all locks are released.
+**Closing.** A scheduler (in production a `ScheduledExecutorService` — Java's built-in timer that runs a task repeatedly — running every few seconds) calls `closeExpired()`. Each listing's `closeIfDue(now)` atomically moves `ACTIVE → CLOSED` and returns the winner only if the reserve is met. Notifications go out after all locks are released.
 
 ### Design decisions & patterns used
 
 | Decision | Why | Alternative rejected |
 |---|---|---|
-| **Bid rules live inside `AuctionListing` and run under its lock** (a *monitor*: an object whose methods are all `synchronized`) | "Read highest, compare, replace" must be one atomic step. The lock is per listing, so bids on different auctions never wait for each other. | A global lock in the service (all auctions serialised); or `AtomicReference<Bid>` + CAS loop — valid, but the rule set (seller, leader, end time, increment) is easier to get right under one lock. |
-| **Refusals are returned (`BidOutcome`), not thrown** | A too-low bid is normal business, not an exceptional error. The caller also gets the next minimum to show in the UI. | Throwing an exception for every low bid. |
-| **Observer for notifications, called outside the lock** | Slow email or push calls must not block other bidders. `BidResult` carries a **snapshot** of the accepted bid taken inside the lock, so listeners never read a newer, unrelated value. | Notifying inside `synchronized` (slow, and risks deadlock if a listener calls back). |
+| **Bid rules live inside `AuctionListing` and run under its lock** (a *monitor*: an object whose methods are all `synchronized`) | "Read highest, compare, replace" must be one atomic step. The lock is per listing, so bids on different auctions never wait for each other. | A global lock in the service (all auctions serialised); or `AtomicReference<Bid>` (a reference that can be swapped atomically) + CAS loop (retry compare-and-set until it succeeds) — valid, but the rule set (seller, leader, end time, increment) is easier to get right under one lock. |
+| **Refusals are returned (`BidOutcome`), not thrown** | A too-low bid is normal business, not an exceptional error (an **exception** is Java's way of aborting a method to signal that something went wrong). The caller also gets the next minimum to show in the UI. | Throwing an exception for every low bid. |
+| **Observer for notifications, called outside the lock** | Slow email or push calls must not block other bidders. `BidResult` carries a **snapshot** (a copy frozen at one moment) of the accepted bid taken inside the lock, so listeners never read a newer, unrelated value. | Notifying inside `synchronized` (slow, and risks deadlock if a listener calls back). |
 | **Minimum increment** | Stops 1-cent "wars" and makes the next minimum predictable. | Any higher amount accepted. |
 | **Reserve price** | Lets a seller refuse to sell too cheaply; checked only at close. | Rejecting bids below the reserve (would reveal it). |
 | **`InstantSource` injected** | Time-dependent code becomes testable: the demo moves a `ManualClock` forward instead of sleeping. | Calling `Instant.now()` everywhere. |
@@ -3183,7 +3191,7 @@ Output:
   status CLOSED, final price 650.00
 ```
 
-**Reading the output.** Step 3 exercises every rule: below start, leader re-bidding, below increment, seller bidding. The outbid notices print *before* the bidder's own result line because the service notifies before returning. Step 4 closes the watch as unsold because 60 < the 500 reserve. Step 5 fires 50 concurrent bids: how many are accepted depends on thread timing (a bid that arrives after a higher one is refused as too low), but the final highest is always the maximum, 650.00, and the history is always strictly increasing by at least the increment — the invariant the lock protects. Step 6 refuses a bid after the end time even though the closing job has not yet run.
+**Reading the output.** Step 3 exercises every rule: below start, leader re-bidding, below increment, seller bidding. The outbid notices print *before* the bidder's own result line because the service notifies before returning. Step 4 closes the watch as unsold because 60 < the 500 reserve. Step 5 fires 50 concurrent bids: how many are accepted depends on thread timing (a bid that arrives after a higher one is refused as too low), but the final highest is always the maximum, 650.00, and the history is always strictly increasing by at least the increment — the invariant (a rule that must always be true) the lock protects. Step 6 refuses a bid after the end time even though the closing job has not yet run.
 
 ### Concurrency & edge cases
 
@@ -3196,7 +3204,7 @@ Output:
 | Notification listener is slow or throws | Called outside the lock; in production, publish to a queue so failures are retried without affecting bidding. |
 | Seller cancels after bids | Refused (`cancel()` returns false) — protects bidders. |
 | Money precision | Amounts normalised to scale 2 with `BigDecimal`; compared with `compareTo`. |
-| Very hot auction (thousands of bids per second) | One lock per listing is fine for one JVM; distributed: a single-writer per auction (partition bids by auction id, e.g. a Kafka partition), or a conditional update `UPDATE ... SET high = ? WHERE id = ? AND high < ?`. |
+| Very hot auction (thousands of bids per second) | One lock per listing is fine for one JVM (Java Virtual Machine — one running Java process); distributed: a single-writer per auction (partition bids by auction id — split them into separate streams so all bids for one auction go to the same place, e.g. a Kafka partition, Kafka being a widely used event-streaming system), or a conditional update `UPDATE ... SET high = ? WHERE id = ? AND high < ?`. |
 
 ### Real-world example
 
@@ -3207,7 +3215,7 @@ eBay auctions use **proxy bidding**: you enter the most you are willing to pay, 
 - **"Add proxy (automatic) bidding."** Each bidder may register a `maxAmount`. After any accepted bid, inside the same lock, let the strongest proxy respond with `min(its max, competitor + increment)`. Ties go to the earlier proxy (use `Bid.seq`).
 - **"Stop sniping."** Soft close: in `placeBid`, if an accepted bid arrives within the last N minutes, set `endsAt = endsAt + N` (make `endsAt` non-final, change under the same lock).
 - **"Buy It Now."** A fixed price that closes the auction immediately if paid before the first bid.
-- **"Dutch / sealed-bid / Vickrey auctions."** Extract an `AuctionRules` strategy: `validate(bid)`, `winner(bids)`, `price(bids)`. Vickrey (second-price sealed bid): highest bidder wins but pays the second-highest bid.
+- **"Dutch / sealed-bid / Vickrey auctions."** (Dutch: the price starts high and drops until someone accepts; sealed-bid: bidders cannot see each other's bids.) Extract an `AuctionRules` strategy: `validate(bid)`, `winner(bids)`, `price(bids)`. Vickrey (second-price sealed bid): highest bidder wins but pays the second-highest bid.
 - **"Payment after winning."** Winner has 48 hours to pay (new state `AWAITING_PAYMENT`); if not, offer to the second-highest bidder.
 - **"Scale the close job."** Keep a priority queue (or a sorted index) by `endsAt` so the scheduler only touches auctions that are due.
 
@@ -3227,7 +3235,7 @@ eBay auctions use **proxy bidding**: you enter the most you are willing to pay, 
 
 - *Why not `AtomicReference` + CAS?* Possible for the amount alone, but the rule also checks seller, leader and time. A tiny critical section under one lock is simpler and still fast because the lock is per listing.
 - *How do you close auctions on time across servers?* A scheduler that owns a time-ordered index of end times; the close itself is idempotent (`closeIfDue` returns empty the second time), so running it twice is harmless.
-- *How do you show a live price to thousands of viewers?* Push `onNewHighBid` events to a pub/sub channel and WebSockets; viewers read a cache, not the lock-holding object.
+- *How do you show a live price to thousands of viewers?* Push `onNewHighBid` events to a pub/sub channel (publish/subscribe: senders post messages to a topic and every subscriber receives them) and WebSockets (a connection the browser keeps open so the server can push data at any time); viewers read a cache (a fast saved copy of data — see [System Design Fundamentals](../../../system-design-patterns/modules/00-system-design-fundamentals/README.md)), not the lock-holding object.
 
 ### Self-check
 
@@ -3256,8 +3264,8 @@ A music streaming service lets users search a huge catalog, build playlists, and
 | Playlists? | Users create, reorder and edit their own playlists. |
 | Playback controls? | Play, pause, resume, skip, previous, seek; shuffle on/off; repeat off / all / one. |
 | Plans? | FREE (ads, limited skips per hour, no downloads) and PREMIUM (no ads, unlimited skips, offline). |
-| Recommendations? | A stub based on listening history; real ones are an ML system. |
-| Actual audio streaming, DRM, CDNs? | Out of scope for LLD — the player models *what* plays, not the bytes. |
+| Recommendations? | A stub (a simple placeholder) based on listening history; real ones are an ML (machine learning — software that learns patterns from data) system. |
+| Actual audio streaming, DRM (copy protection), CDNs (content delivery networks — servers near users that hold copies of files)? | Out of scope for LLD (low-level design: classes and their code) — the player models *what* plays, not the bytes. |
 
 ### Requirements
 
@@ -3272,7 +3280,7 @@ A music streaming service lets users search a huge catalog, build playlists, and
 
 **Non-functional**
 
-7. Many users stream at once; the shared catalog is read-mostly and thread-safe.
+7. Many users stream at once; the shared catalog is read-mostly and thread-safe (works correctly when many threads use it at once).
 8. Scales to a large catalog and user base (indexes, not scans, in production).
 9. Extensible: social sharing, offline mode, new play orders, new recommenders.
 
@@ -3282,7 +3290,7 @@ A music streaming service lets users search a huge catalog, build playlists, and
 |---|---|
 | Listener | Search, play/pause/skip/seek, shuffle/repeat, create and edit playlists, upgrade plan |
 | Artist / label (content admin) | Add songs and albums to the catalog |
-| System | Record plays (history, royalties), insert ads for free users, recommend songs |
+| System | Record plays (history, royalties — money owed to artists per play), insert ads for free users, recommend songs |
 
 ### Core entities
 
@@ -3293,9 +3301,9 @@ A music streaming service lets users search a huge catalog, build playlists, and
 | `SubscriptionPlan` | Enum that **carries the rules**: monthly price, skips per hour, ads, offline downloads. |
 | `User` | Name, current plan, playlists, listening history. |
 | `Playlist` | Ordered, user-owned song list: add, remove, move. |
-| `PlaybackOrder` → `SequentialOrder`, `ShuffleOrder` | Strategy: produces the play order (a permutation) starting from the current song. |
+| `PlaybackOrder` → `SequentialOrder`, `ShuffleOrder` | Strategy: produces the play order (a permutation — every song exactly once, in some order) starting from the current song. |
 | `RepeatMode`, `PlayerState` | `OFF / ALL / ONE`; `STOPPED / PLAYING / PAUSED`. |
-| `MusicPlayer` | One user's session: queue, play order, cursor, position, state, skip window, ad counter. |
+| `MusicPlayer` | One user's session: queue, play order, cursor (where we are in the play order), position, state, skip window, ad counter. |
 | `PlaybackListener` | Observer on "song started" (history, royalties, recommendations). |
 | `Recommender` → `GenreRecommender` | Strategy: suggest unplayed songs from the user's favourite genres. |
 
@@ -3383,7 +3391,7 @@ flowchart TD
     D -- no --> S["STOPPED - end of queue"]
 ```
 
-Skip first checks the plan's rolling one-hour limit (a deque of skip timestamps; drop those older than an hour, compare the size with `skipsPerHour`). Pressing Next on repeat-ONE moves on — like real players, repeat-one only affects songs that end naturally.
+Skip first checks the plan's rolling (always the last 60 minutes, not a fixed clock hour) one-hour limit (a deque — a queue you can add to or remove from at both ends — of skip timestamps; drop those older than an hour, compare the size with `skipsPerHour`). Pressing Next on repeat-ONE moves on — like real players, repeat-one only affects songs that end naturally.
 
 **Shuffle keeps the current song.** Turning shuffle on builds a new permutation whose first element is the song playing now, and shuffles the rest with `Collections.shuffle(list, random)`. Turning it off rebuilds the sequential order starting from the current song. The queue itself never changes — only the **order** of indexes into it — so switching back and forth loses nothing.
 
@@ -3396,9 +3404,9 @@ Skip first checks the plan's rolling one-hour limit (a deque of skip timestamps;
 | **Seeded `Random`** | Repeatable demos and tests. Production uses an unseeded (or per-session) seed. | `Math.random()` (not testable). |
 | **Plan rules inside `SubscriptionPlan` enum** | `user.plan().skipsPerHour` and `.ads` — no `if (plan == FREE)` scattered around; a new plan is one enum constant (or a class if rules get complex). | Boolean flags on `User`. |
 | **Observer for plays** (`PlaybackListener`) | History, royalty counting and recommendation features all react to "song started" without the player knowing them. | Player calling each subsystem directly. |
-| **Strategy for recommendations** | `Recommender` can be genre-based today, collaborative filtering tomorrow. | Hard-coding one algorithm in `User`. |
+| **Strategy for recommendations** | `Recommender` can be genre-based today, collaborative filtering ("people who liked what you like also liked…") tomorrow. | Hard-coding one algorithm in `User`. |
 | **One `MusicPlayer` per user session, all methods `synchronized`** | Commands can arrive from two devices (phone + desktop "connect"). The shared `MusicLibrary` uses concurrent maps. | A single shared player object. |
-| **State as an enum, not the State pattern** | Three states with trivial behaviour; the GoF State pattern (one class per state) pays off only when each state has substantial, different behaviour. | Three state classes for four one-line methods. |
+| **State as an enum, not the State pattern** | Three states with trivial behaviour; the GoF ("Gang of Four", the authors of the classic 1994 *Design Patterns* book) State pattern (one class per state) pays off only when each state has substantial, different behaviour. | Three state classes for four one-line methods. |
 | **Singletons?** | awesome-low-level-design makes `MusicLibrary`, `UserManager` and `MusicRecommender` Singletons. We inject single instances instead — same sharing, easier tests. | Global `getInstance()`. |
 
 ### Java implementation
@@ -3832,12 +3840,12 @@ Output:
 | Case | Handling |
 |---|---|
 | Two devices send "next" at the same instant | Player methods are `synchronized`; the two skips apply one after the other. |
-| Catalog updated while users search | `ConcurrentHashMap` for songs/albums/artists; search iterates a weakly consistent view. |
+| Catalog updated while users search | `ConcurrentHashMap` (a thread-safe hash map) for songs/albums/artists; search iterates a weakly consistent view (it may or may not show changes made during the loop, but never breaks). |
 | Playlist edited while it is playing | `load` copies the playlist (`List.copyOf`), so the running queue is a snapshot; a real app would sync edits into "up next". |
 | Seek past the end or before 0 | Clamped to `[0, duration]`. |
 | Previous after 3 seconds | Restarts the current song (common player behaviour); within 3 seconds goes back one song. |
 | Skip when stopped | Refused (and does not count against the limit). |
-| Plan changes mid-session | `plan` is `volatile`; the next skip or ad check sees it. |
+| Plan changes mid-session | `plan` is `volatile` (a Java keyword that makes every thread see the latest written value); the next skip or ad check sees it. |
 | Empty queue | `play()` throws `IllegalStateException`. |
 
 ### Real-world example
@@ -3851,7 +3859,7 @@ Spotify's free tier has historically limited skips (for example, six per hour on
 - **"Social sharing / collaborative playlists."** Playlist gets a collaborator set and an edit log; listeners (Observer) push changes to other users.
 - **"Crossfade, gapless playback."** Player behaviour around `trackFinished`; a `TransitionStrategy`.
 - **"Royalties."** A `PlaybackListener` that records a play once the user has listened for a threshold time.
-- **"Search at scale."** Inverted index / search service with prefix (typeahead) and fuzzy matching; the `MusicLibrary` interface stays.
+- **"Search at scale."** Inverted index (a map from each word to the items containing it) / search service with prefix (typeahead — suggestions as you type) and fuzzy matching (tolerating typos); the `MusicLibrary` interface stays.
 - **"Smart shuffle."** New `PlaybackOrder` that spaces out songs by the same artist.
 
 ### In the interview
@@ -3892,7 +3900,7 @@ Spotify's free tier has historically limited skips (for example, six per hour on
 This problem also comes in two shapes:
 
 - **Part A — Swiggy-style delivery platform** (the awesome-low-level-design problem): restaurants with menus, a cart, orders with tracking states, payments, and **assigning a delivery rider** by a pluggable strategy. We add **kitchen capacity** (a restaurant can only cook so many items at once), the key twist in a commonly reported Flipkart food-ordering variant (it is not part of the FoodKart statement below).
-- **Part B — FoodKart** (Flipkart machine-coding round, from kumaransg/LLD): a smaller, command-driven problem — users and pincodes, one-dish restaurants, ratings, `show_restaurant` sorted by rating or price, `place_order` — plus a **restaurant selection strategy** (highest rating / lowest price) filtered by remaining capacity.
+- **Part B — FoodKart** (Flipkart machine-coding round, from kumaransg/LLD): a smaller, command-driven problem — users and pincodes (Indian postal codes), one-dish restaurants, ratings, `show_restaurant` sorted by rating or price, `place_order` — plus a **restaurant selection strategy** (highest rating / lowest price) filtered by remaining capacity.
 
 ### Problem & clarifying questions
 
@@ -3905,7 +3913,7 @@ This problem also comes in two shapes:
 | What if no rider is free? | The order waits in a queue; the next freed rider takes the oldest waiting order. |
 | Can a customer cancel? | Only before the kitchen starts cooking (PENDING or CONFIRMED). |
 | Payment types? | UPI, card, cash on delivery (COD: nothing to refund). |
-| Live GPS, ETA prediction, batching two orders per rider, surge fees? | Extensions. |
+| Live GPS, ETA (estimated time of arrival) prediction, batching two orders per rider, surge fees (higher fees at busy times)? | Extensions. |
 
 ### Requirements
 
@@ -3933,7 +3941,7 @@ This problem also comes in two shapes:
 
 - Handle many concurrent orders without double-booking kitchen capacity or riders.
 - Keep data consistent (no negative stock, no rider on two orders).
-- In-memory only for the machine-coding round; demoable driver; graceful failures.
+- In-memory only for the machine-coding round; demoable driver (a small `Main` program that feeds in commands and prints results); graceful failures.
 
 ### Use cases
 
@@ -3957,7 +3965,7 @@ This problem also comes in two shapes:
 | `OrderStatus` | State machine: PENDING → CONFIRMED → PREPARING → READY_FOR_PICKUP → OUT_FOR_DELIVERY → DELIVERED, or CANCELLED. |
 | `Order` | Customer, restaurant, items, delivery fee, payment, status history, assigned agent. |
 | `PaymentMethod` → `UpiPayment`, `CardPayment`, `CashOnDelivery` | Sealed interface; COD is not paid upfront. |
-| `DeliveryAgent` | Location, `AtomicBoolean available`, deliveries today; `tryClaim()` is a CAS. |
+| `DeliveryAgent` | Location, `AtomicBoolean available` (a true/false flag that can be checked-and-changed atomically), deliveries today; `tryClaim()` is a CAS. |
 | `DeliveryAssignmentStrategy` → `NearestAgentStrategy`, `FairShareStrategy` | Ranks free riders for an order. |
 | `OrderListener` / `Notifier` | Observer for status changes. |
 | `FoodDeliveryService` | Facade: browse, place, accept, prepare, ready, deliver, cancel; the waiting-for-rider queue. |
@@ -4120,7 +4128,7 @@ sequenceDiagram
 | **Sealed `PaymentMethod` + records** | A closed, known set; COD overrides `paidUpfront()` so refunds skip it. | `String paymentType`. |
 | **Observer (`OrderListener`)** | Customer app, restaurant tablet and rider app all react to the same events. | The service printing/sending messages itself. |
 | **One restaurant per cart** | Matches real apps; a single kitchen, single pickup, single fee. | Multi-restaurant carts (needs split orders). |
-| **FoodKart: `SortBy` enum holds its comparator** | `show_restaurant(rating|price)` becomes `sorted(sortBy.comparator)`; both descending as the statement says; name as tie-breaker for stable output. | `if (sort.equals("rating"))`. |
+| **FoodKart: `SortBy` enum holds its comparator** (an object that decides which of two items comes first) | `show_restaurant(rating|price)` becomes `sorted(sortBy.comparator)`; both descending as the statement says; name as tie-breaker for stable output. | `if (sort.equals("rating"))`. |
 | **FoodKart: owner recorded at registration** | The statement says restaurants are registered "in the context of the logged-in user"; only that owner may update quantity or location. | Anyone updating any restaurant. |
 | **FoodKart: `Restaurant.take(q)` synchronized** | "Check quantity then subtract" is atomic — two users cannot both take the last plates. | Separate `getQuantity()` + `setQuantity()`. |
 
@@ -4980,7 +4988,7 @@ lowest price  : Cannot place order  (no one has 4 left)
 | COD cancelled | No refund (nothing was paid). |
 | FoodKart: no user logged in | `requireLogin()` throws a clear `IllegalStateException`. |
 | FoodKart: duplicate phone / restaurant name | Rejected with `putIfAbsent`. |
-| FoodKart: rating outside 1–5 | The `Review` record's compact constructor rejects it. |
+| FoodKart: rating outside 1–5 | The `Review` record's compact constructor (a record's short validation block that runs on creation) rejects it. |
 | FoodKart: strategy picks a restaurant whose capacity was just taken | `take()` fails; that restaurant is dropped and the strategy asked again (bounded retries). |
 
 ### Real-world example
@@ -4990,7 +4998,7 @@ In Swiggy and Zomato the order screen walks through the same states — order pl
 ### Extensions & follow-up questions
 
 - **"Batch two orders for one rider."** A strategy that accepts a rider already carrying one order if the second pickup is on the way; the agent then has a list of orders and a capacity (e.g. 2).
-- **"ETA."** An `EtaEstimator` strategy: prep time (per restaurant load) + travel time (distance / speed, or a maps API).
+- **"ETA."** An `EtaEstimator` strategy: prep time (per restaurant load) + travel time (distance / speed, or a maps API — an online service other programs call).
 - **"Surge / distance-based fees."** Extract `DeliveryFeePolicy` (Strategy): base + per-km today, add surge when waiting orders exceed free riders.
 - **"Rider rejects an assignment."** Put the rider back to available, add the order back to the head of the queue, and exclude that rider for this order.
 - **"Multiple dishes per restaurant in FoodKart."** Replace `foodItem/price/quantity` with a `Map<String, MenuItem>`; `take` becomes per item and all-or-nothing for multi-item orders.
@@ -5009,7 +5017,7 @@ In Swiggy and Zomato the order screen walks through the same states — order pl
 
 - *Why release kitchen capacity on "ready" and not on "delivered"?* The kitchen is free once the food leaves it; delivery time is the rider's constraint, not the kitchen's.
 - *Why does the strategy return a list?* Because between ranking and claiming, the top rider may be claimed by someone else (another dispatcher or the rider's own app); the list lets us fall through without re-ranking.
-- *How would you scale assignment across cities?* Partition by city/zone; each zone has its own dispatcher (single writer), so there is no cross-zone contention.
+- *How would you scale assignment across cities?* Partition by city/zone; each zone has its own dispatcher (single writer), so there is no cross-zone contention (threads or servers fighting over the same lock or data).
 
 ### Self-check
 
@@ -5043,7 +5051,7 @@ Money in this section is Indian rupees (₹; written `Rs` in the program output)
 | Question | Assumed answer |
 |---|---|
 | Who uses it? | Cashiers at several registers (lanes) in one store; a supervisor for voids and refunds. Self-checkout uses the same register API. |
-| How are items identified? | Packaged goods by **barcode** (EAN-13); loose produce by a 4-digit **PLU** (price look-up) code plus the scale's weight. |
+| How are items identified? | Packaged goods by **barcode** (EAN-13, the standard 13-digit product barcode); loose produce by a 4-digit **PLU** (price look-up) code plus the scale's weight. |
 | Are shelf prices tax-inclusive? | Yes (as in India, the UK and the EU): the receipt shows how much tax the price *contains*. A US-style store adds sales tax at the till — the design must support both. |
 | Which offers? | Buy X get Y free, multi-buy ("3 for ₹80"), percent off a department, and a basket coupon ("₹50 off when you spend ₹500"). |
 | Can offers stack? | Each product gets at most **one** item offer — the best for the customer. A basket coupon applies on top, to what is still owed. |
@@ -5067,9 +5075,9 @@ Money in this section is Indian rupees (₹; written `Rs` in the program output)
 
 **Non-functional**
 
-- **Exact money**: `BigDecimal`, 2 decimal places, `HALF_UP` rounding, and parts (per-product discounts, refunds) that always add up to the total.
+- **Exact money**: `BigDecimal`, 2 decimal places, `HALF_UP` rounding (a 5 or more rounds up), and parts (per-product discounts, refunds) that always add up to the total.
 - **Several registers at once** share the catalog, the stock and the receipts safely.
-- **Deterministic pricing**: the same basket always prices the same way (a pure function) — needed for audits and for returns.
+- **Deterministic pricing**: the same basket always prices the same way (a **pure function**: its result depends only on its inputs, and it changes nothing outside itself) — needed for audits and for returns.
 - **Auditable**: voids stay on the receipt; prices are copied into lines at scan time.
 
 ### Use cases
@@ -5086,7 +5094,7 @@ Money in this section is Indian rupees (₹; written `Rs` in the program output)
 
 | Class | Kind | Responsibility |
 |---|---|---|
-| `Product` | record | SKU, barcode/PLU, name, department, `PricingUnit` (EACH or PER_KG), unit price, `TaxCategory`. |
+| `Product` | record | SKU (stock-keeping unit — the store's id for one distinct product), barcode/PLU, name, department, `PricingUnit` (EACH or PER_KG), unit price, `TaxCategory`. |
 | `Catalog` | class | Lookup by code; `reprice` replaces the record (old sales keep old prices). |
 | `LineItem` | record | One scan: product copy, quantity (count or kg), gross amount, voided flag. |
 | `Sale` + `SaleStatus` | class + enum | OPEN → TENDERING → COMPLETED, or → CANCELLED; lines, coupons, payments, frozen price breakdown. |
@@ -5095,9 +5103,9 @@ Money in this section is Indian rupees (₹; written `Rs` in the program output)
 | `TaxPolicy` + `TaxInclusive`, `TaxExclusive` | interface + classes | **Strategy** for how tax relates to the shelf price. |
 | `PricingEngine` → `PriceBreakdown` | class → record | Pure function: lines + coupons → discounts, net per SKU, tax per category, total. |
 | `Tender` (sealed) `Cash`, `Card`, `Upi`; `Payment` | records | How the customer pays; the part applied to the bill. |
-| `PaymentGateway` | interface | Port to the card / UPI networks (authorise, refund). |
+| `PaymentGateway` | interface | Port (an interface through which the core code talks to an outside system) to the card / UPI networks (authorise, refund). |
 | `Receipt`, `ReceiptStore` | record, class | Immutable proof of purchase; returns ledger per receipt and SKU. |
-| `Inventory`, `StockListener` | class, interface | Shared stock; **Observer** for edge-triggered alerts. |
+| `Inventory`, `StockListener` | class, interface | Shared stock; **Observer** for edge-triggered alerts (fired once when a line is crossed, not on every sale below it). |
 | `Register` | class | **Facade** for one lane: the only API the till UI calls. |
 
 ### Class diagram
@@ -5242,7 +5250,7 @@ sequenceDiagram
 |---|---|---|---|
 | Each offer is a small class behind `ItemPromotion` / `BasketPromotion` | **Strategy** | Marketing adds offers weekly; a new offer is one new class, the engine does not change | A `switch` over offer types inside the pricing code |
 | **Best offer per SKU wins**; basket coupon after item offers | Explicit stacking policy | Stacking rules are business decisions that must be written down once; "best for the customer" is simple to explain at the till | Applying every offer in list order (results depend on the order; can go below zero) |
-| `PricingEngine` is a **pure function** of lines and coupons | Stateless service | Same basket → same price; one engine shared by all registers; easy to test | Mutating discounts into the line items as they are scanned |
+| `PricingEngine` is a **pure function** of lines and coupons | Stateless service | Same basket → same price; one engine shared by all registers (stateless: it keeps no data between calls); easy to test | Mutating discounts into the line items as they are scanned |
 | Prices **frozen** when payment starts | Snapshot | A price change or an offer expiring mid-payment must not change the amount due | Re-pricing on every payment |
 | Coupon **spread over SKUs**, remainder to the largest | Allocation with exact rounding | Tax is per category and returns refund per item, so every rupee of discount must belong to some item — and the parts must add up exactly | Keeping the coupon as one unallocated number |
 | Tax as a `TaxPolicy` | **Strategy** | Inclusive (India/EU) vs exclusive (US) is a store-level choice | Two versions of the engine |
@@ -5250,7 +5258,7 @@ sequenceDiagram
 | `Register` as the only API the UI calls | **Facade** | The UI does not need to know about engines, stores and gateways | UI code calling each part directly |
 | Sale status in an enum with `canMoveTo` | Enum state machine | "Scan after payment started" and "pay a cancelled sale" fail loudly | Boolean flags (`isPaying`, `isDone`) |
 | Stock may go **negative**, alerts are **edge-triggered** | **Observer** | The shelf is the truth; negative stock is a signal for a recount. Each crossing alerts once | Refusing the sale; alerting on every sale below the line |
-| Voided lines are kept and printed | Audit trail | Voids are a common way to hide theft; supervisors review them | Deleting the line |
+| Voided lines are kept and printed | Audit trail (a permanent record of every action) | Voids are a common way to hide theft; supervisors review them | Deleting the line |
 
 ### Java implementation
 
@@ -5985,11 +5993,11 @@ public class Main {
 
 **How the code works, part by part**
 
-- **Scanning.** `Register.scan` checks the EAN-13 check digit first (a misread barcode is caught before lookup), then refuses weighed products; `weigh` converts grams to kilograms with `movePointLeft(3)` so 1245 g becomes exactly `1.245`. `Sale.add` copies the product — and therefore its price — into the new `LineItem`.
+- **Scanning.** `Register.scan` checks the EAN-13 check digit (a last digit computed from the others, so a misread code fails the sum) first (a misread barcode is caught before lookup), then refuses weighed products; `weigh` converts grams to kilograms with `movePointLeft(3)` so 1245 g becomes exactly `1.245`. `Sale.add` copies the product — and therefore its price — into the new `LineItem`.
 - **Pricing.** `PricingEngine.price` skips voided lines, groups by SKU, asks every item offer for a discount and keeps the largest (capped at the gross), applies the best basket coupon to what is left, spreads that coupon across SKUs, and computes tax per category on the discounted amounts. With `TaxInclusive`, tax = amount × r ÷ (100 + r); with `TaxExclusive`, tax = amount × r ÷ 100 and is added to the total.
 - **Paying.** `beginTender` freezes the breakdown. `pay` treats cash specially: if it is more than the amount due, the extra becomes change. Card and UPI may not exceed the amount due and must be authorised; a declined authorisation throws before anything is recorded. When the amount due reaches zero, the sale completes and the register writes the receipt and reduces stock.
 - **Returns.** `ReceiptStore.claimReturn` uses `ConcurrentHashMap.compute` so "check how many were already returned, then add" is atomic. The refund for a return is `share(after) − share(before)`, where `share(k)` is the net paid for the first *k* units; that way three separate one-item returns add up to exactly what was paid.
-- **Stock.** `Inventory.adjust` uses `merge`, which is atomic per key; it compares the value before and after *this* change, so each crossing of the reorder point (or of zero) alerts exactly once, however many registers sell at the same time.
+- **Stock.** `Inventory.adjust` uses `merge`, which is atomic per key; it compares the value before and after *this* change, so each crossing of the reorder point — the stock level at which more should be ordered — (or of zero) alerts exactly once, however many registers sell at the same time.
 
 **Output:**
 
@@ -6069,7 +6077,7 @@ Reading the output: the misread barcode (wrong check digit), an unknown code and
 
 ### Real-world example
 
-Supermarket tills identify loose produce by **PLU codes** — 4011 is the standard code for yellow bananas, and tomatoes have their own codes in the 4000 range — and read the weight from an integrated scale, exactly like `weigh(plu, grams)`. Packaged goods carry EAN-13 barcodes whose last digit is a check digit, which is why a smudged barcode is rejected rather than misread as another product. Receipts in tax-inclusive countries (for example GST invoices in India or VAT receipts in the UK) print how much tax the total *contains*, while US receipts add sales tax below the subtotal — our two `TaxPolicy` strategies. Retailers also run periodic "cycle counts" to fix the kind of negative stock our `Inventory` reports.
+Supermarket tills identify loose produce by **PLU codes** — 4011 is the standard code for yellow bananas, and tomatoes have their own codes in the 4000 range — and read the weight from an integrated scale, exactly like `weigh(plu, grams)`. Packaged goods carry EAN-13 barcodes whose last digit is a check digit, which is why a smudged barcode is rejected rather than misread as another product. Receipts in tax-inclusive countries (for example GST — Goods and Services Tax — invoices in India or VAT — value-added tax — receipts in the UK) print how much tax the total *contains*, while US receipts add sales tax below the subtotal — our two `TaxPolicy` strategies. Retailers also run periodic "cycle counts" to fix the kind of negative stock our `Inventory` reports.
 
 ### Extensions & follow-up questions
 
@@ -6077,8 +6085,8 @@ Supermarket tills identify loose produce by **PLU codes** — 4011 is the standa
 - **"Weighed items with a pre-packed label."** In-store printed barcodes that encode the price or weight in the digits (a variable-measure barcode); the scanner decodes them into a `LineItem` directly.
 - **"Offers that span products (buy pasta + sauce, save ₹20)."** A `BundlePromotion` that looks at several SKUs; the "one offer per unit" rule then needs a small optimiser (try the combinations, keep the best) instead of best-per-SKU.
 - **"Refund to the original payment method."** Store tender splits on the receipt; refund card/UPI parts through the gateway first, then cash.
-- **"The network is down."** Offline mode: queue card authorisations (with a floor limit), keep selling, reconcile later; the catalog and offers are cached locally in each register.
-- **"End-of-day."** A `Shift` per cashier: opening float, cash counted at close, expected cash = float + cash sales − change − cash refunds.
+- **"The network is down."** Offline mode: queue card authorisations (with a floor limit — a maximum amount accepted without online approval), keep selling, reconcile (match up the records) later; the catalog and offers are cached locally in each register.
+- **"End-of-day."** A `Shift` per cashier: opening float (the cash put in the drawer at the start), cash counted at close, expected cash = float + cash sales − change − cash refunds.
 - **"Self-checkout."** The same `Register` facade with a weight-check step at the bagging area (weight mismatch → assistance needed).
 
 ### In the interview
