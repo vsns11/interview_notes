@@ -3,6 +3,8 @@
 **Category:** Communication
 **One-liner:** A registry that lets services find each other by *name* at runtime, instead of hardcoding network addresses that change constantly.
 
+(A **registry** is a central list of what exists and where; **runtime** means while the program is running, as opposed to when it is written or built; **hardcoding** means writing a value directly into the source code so it can't change without editing and redeploying.)
+
 ---
 
 ## Part 0 — Concepts you need first
@@ -24,20 +26,20 @@ bigger.
 
 ### What is a container, and why does it make addresses unstable?
 A **container** packages an application with everything it needs to run, so it starts anywhere in
-seconds. **Kubernetes** is the standard system for running containers across a fleet of machines.
+seconds. **Kubernetes** is the standard system for running containers across a fleet of machines — a group of machines managed together this way is called a **cluster**.
 
 The key consequence: containers are **disposable**. Kubernetes starts them, stops them, moves them
 between machines, and replaces them during deployments. **Each new one typically gets a new IP
 address.** An address you looked up ten minutes ago may now point at nothing.
 
 ### What is auto-scaling?
-Automatically adding instances when load rises and removing them when it falls. AWS auto-scaling
+Automatically adding instances when load rises and removing them when it falls. **AWS** (Amazon Web Services, Amazon's cloud platform) auto-scaling
 groups do this. It saves money — but it means **the number of instances and their addresses change
 throughout the day without anyone touching anything**.
 
 ### What is load balancing?
 Distributing incoming requests across multiple instances so no single one is overwhelmed. If you have
-five instances and one hundred requests, ideally each handles about twenty.
+five instances and one hundred requests, ideally each handles about twenty. (Covered in more depth in [System Design Fundamentals](../01-system-design-fundamentals/README.md).)
 
 ### What is DNS?
 The **Domain Name System** translates names into IP addresses — you type `example.com`, DNS returns
@@ -48,19 +50,19 @@ the address. It's the internet's original name-to-address lookup, and some servi
 
 ## Part 1 — The problem
 
-In a **monolith**, components are tightly integrated and deployed as one unit. Component A calling
-component B is just a **method call inside the same process** — no network, no address, nothing to
+In a **monolith** (one application built and deployed as a single unit), components are tightly integrated and deployed as one unit. Component A calling
+component B is just a **method call inside the same process** (the same running program, sharing memory) — no network, no address, nothing to
 discover. Service discovery is a non-problem.
 
-In **microservices**, services are loosely coupled and deployed independently. They may live on
+In **microservices** (an architecture of many small, independently deployed services), services are **loosely coupled** (each knows as little as possible about the others' internals) and deployed independently. They may live on
 different servers, in different data centres, even on different continents. Now every call is a
 network call to an address that must be known.
 
 Three forces make hardcoded addresses unworkable.
 
 ### 1. Dynamic infrastructure
-Modern deployments — virtual machines, containers, Kubernetes — give services **no fixed IPs or
-hosts**. Instances come and go, scale up and down, and get replaced during deployments.
+Modern deployments — **virtual machines** (software-simulated computers, many of which can share one physical server), containers, Kubernetes — give services **no fixed IPs or
+hosts** (a **host** is the machine a program runs on). Instances come and go, scale up and down, and get replaced during deployments.
 
 The course's example: an AWS auto-scaling group launches new instances of a service or terminates
 them based on load, **each time with new IP addresses**. Keeping track of these moving targets is a
@@ -77,7 +79,7 @@ call?**
 ### 3. Coupling
 A goal of microservices is that teams deploy and scale independently. But if every client must know
 every service's exact address, you have **tight coupling**. A location change means updating
-configuration in **every client that calls it**.
+**configuration** (settings supplied to a program from outside its code) in **every client that calls it**.
 
 Deployment details leak into client configuration, and the agility you adopted microservices for
 disappears.
@@ -144,21 +146,21 @@ effectively a phone book for your system.
 Three responsibilities:
 
 **1. Service Registration.** When a service comes online it registers itself, providing its name, IP
-address, port, and potentially metadata such as service version or health endpoint.
+address, port, and potentially **metadata** (extra descriptive data) such as service version or **health endpoint** (a URL that answers "am I working?").
 
 **2. Service Deregistration.** Removing a service — either when it shuts down gracefully, or when the
 registry detects it's no longer available.
 
-**3. Health Checking.** The registry periodically pings services or their health endpoints to check
+**3. Health Checking.** The registry periodically **pings** services (sends a tiny test request to see if they answer) or their health endpoints to check
 they're still running. If a service doesn't respond within a certain timeframe, it's considered
 failed and removed.
 
 > *Why health checking is essential:* graceful deregistration only covers graceful shutdown. If an
-> instance **crashes**, loses power, or gets partitioned off the network, it never gets the chance to
+> instance **crashes**, loses power, or gets **partitioned** off the network (cut off from the other machines by a network failure), it never gets the chance to
 > say goodbye. Without health checks the registry would hand out dead addresses forever.
 
 The payoff: the system **adapts dynamically**. A service moves or scales → the registry updates →
-others still find it. A service dies → it's removed → others can apply fallback strategies.
+others still find it. A service dies → it's removed → others can apply **fallback** strategies (a backup plan, such as a default answer).
 
 ---
 
@@ -172,17 +174,17 @@ single most likely thing you'll be asked about in an interview.
 **The workflow:**
 
 1. **Service Registration** — each instance registers with the registry at startup, providing its
-   address and perhaps a health heartbeat; it unregisters on shutdown.
+   address and perhaps a health **heartbeat** (a small "I'm still alive" message sent at regular intervals); it unregisters on shutdown.
 2. **Service Lookup** — when a client needs to call a service, it **queries the registry directly** for
    a list of active instances.
 3. **Client-side Load Balancing** — the client (or a library on the client side) selects one of the
-   instances, often using round-robin or consistent hashing.
+   instances, often using **round-robin** (take turns: 1, 2, 3, 1, 2, 3…) or **consistent hashing** (a hash-based scheme that keeps sending the same key to the same instance, and moves only a few keys when instances are added or removed).
 4. **Request Invocation** — the client makes the request **directly to the chosen instance**. Subsequent
-   requests may repeat the lookup or use a cached result.
+   requests may repeat the lookup or use a **cached** result (a saved copy of an earlier answer).
 
 The client is **"smart"**: it contains logic to query the registry and balance load.
 
-**The classic stack:** Netflix **Eureka** as the registry, combined with a client load-balancer
+**The classic stack:** Netflix **Eureka** (an open-source service registry written by Netflix) as the registry, combined with a client load-balancer
 library such as **Ribbon** or **Spring Cloud LoadBalancer**. The client knows the Eureka location,
 uses it to find instances, then calls one directly.
 
@@ -191,11 +193,11 @@ uses it to find instances, then calls one directly.
 - **Intelligent decisions** — because the client knows all instances, it can implement sophisticated,
   application-specific load balancing (e.g. choose an instance based on request content)
 - **Fewer moving parts at runtime** — aside from the registry, no additional routing layer is needed
-- **Slightly lower latency** — no intermediate proxy
+- **Slightly lower latency** (time per request) — no intermediate **proxy** (a middleman that forwards requests)
 
 **Disadvantages:**
 - **Every client needs the discovery logic and library**, increasing complexity
-- **Painful in polyglot environments** — with services in multiple languages you need a compatible
+- **Painful in polyglot environments** (where services are written in many programming languages) — with services in multiple languages you need a compatible
   discovery client for each, or a standardized approach. This is a real barrier
 - **Two network calls per request** — one to the registry, then the actual request (though caching
   usually eliminates the first)
@@ -211,7 +213,7 @@ uses it to find instances, then calls one directly.
 
 1. **Service Registration** — identical; instances register at startup, deregister on shutdown.
 2. **Request to Load Balancer** — the client sends its request to a **known, fixed endpoint** — a load
-   balancer, gateway, DNS name, or virtual IP. **The client never queries the registry.**
+   balancer, gateway, DNS name, or **virtual IP** (a stable IP address that isn't tied to one machine and is forwarded to whichever instances are current). **The client never queries the registry.**
 3. **Service Discovery & Routing** — the load balancer receives the request and queries the registry
    for healthy instances.
 4. **Load Balancing** — the load balancer selects an instance using its own algorithm.
@@ -222,7 +224,7 @@ The intermediary is "smart" and the client is simple.
 
 **Advantages:**
 - **Much simpler clients** — one call to a fixed address, no discovery code, no special libraries
-- **Language-agnostic** — any client that can make a normal HTTP request works, because discovery
+- **Language-agnostic** — any client that can make a normal **HTTP** request (the standard protocol web browsers and APIs use) works, because discovery
   happens in the network infrastructure. This is the decisive advantage in a polyglot estate
 - **One network call per request** — no separate lookup
 - **Abstraction** — where services actually run can change without impacting clients
@@ -247,13 +249,13 @@ The intermediary is "smart" and the client is simple.
 | Typical stack | Eureka + Ribbon (Spring Cloud) | Kubernetes Services, cloud LBs |
 
 **Practical guidance:**
-- In the **Spring Cloud / Netflix OSS** world, client-side (Eureka + Ribbon) is straightforward
+- In the **Spring Cloud / Netflix OSS** world (Spring Cloud is a set of Java libraries for microservices; Netflix OSS is Netflix's open-source tooling), client-side (Eureka + Ribbon) is straightforward
 - On **Kubernetes**, the platform's built-in discovery via DNS means you lean server-side — you simply
   call `http://my-service` and Kubernetes routes it
 - **They're not mutually exclusive** — you might use client-side for internal service-to-service calls
   while having an API gateway (server-side style) for external traffic
 
-In modern systems — Kubernetes, service meshes — **server-side discovery is the norm**, because the
+In modern systems — Kubernetes, **service meshes** (a layer of proxies next to every service that handles traffic between services) — **server-side discovery is the norm**, because the
 platform abstracts discovery behind DNS or a gateway.
 
 ---
@@ -309,9 +311,9 @@ public class ServiceRegistry {
 **Reading it:** keys are service names, values are addresses. `register` adds a service; `discover`
 retrieves an address by name.
 
-**Why `ConcurrentHashMap`?** Registration and lookup happen from many threads simultaneously — many
-services registering while many clients look things up. A plain `HashMap` would corrupt under
-concurrent modification. `ConcurrentHashMap` is designed for exactly this.
+**Why `ConcurrentHashMap`?** Registration and lookup happen from many **threads** (independent paths of execution inside one program) simultaneously — many
+services registering while many clients look things up. A plain `HashMap` (Java's standard key-to-value lookup table) would corrupt under
+concurrent modification (being changed by several threads at once). `ConcurrentHashMap` is designed for exactly this.
 
 ### A service registering itself
 
@@ -356,7 +358,7 @@ If found, it proceeds with the request.
 The course is explicit that real implementations are more complex. Specifically:
 
 - **Health checks** — services must regularly report in to keep their registration current
-- **A distributed registry** — to handle high traffic and provide redundancy
+- **A distributed registry** — to handle high traffic and provide **redundancy** (spare copies so one failure isn't fatal)
 - **Failure handling in `callService`** — retrying the request, or falling back to a backup service
 - **A *list* of instances, not one address** — `Map<String, String>` stores exactly one address per
   service name, so this design **cannot load balance at all**. A real registry stores
@@ -372,49 +374,50 @@ something usable.
 ### 1. Latency overhead
 Every registry lookup is an extra step. In client-side discovery this is usually small because
 clients **cache** — fetching the instance list once and reusing it for many requests, refreshing
-every ~30 seconds or on a cache miss. The lookup is normally a fast local network call taking
+every ~30 seconds or on a **cache miss** (when the wanted entry isn't in the cache). The lookup is normally a fast local network call taking
 milliseconds.
 
 To minimise latency:
 - Cache and reuse discovery information for a short duration rather than querying per request
-- Design the registry to respond quickly (in-memory indexes)
-- Use asynchronous discovery updates — pushed updates or long-polling
+- Design the registry to respond quickly (in-memory **indexes** — lookup structures kept in RAM so entries are found without scanning)
+- Use **asynchronous** discovery updates (delivered in the background without the caller waiting) — pushed updates or **long-polling** (the client asks, and the server holds the request open until there's news)
 - In high-performance scenarios, bake a small local endpoint cache into each instance at startup to
   avoid even the initial lookup delay
 
 ### 2. Scalability of the registry
 It must handle registrations from potentially thousands of instances plus frequent lookups. It can
-become a bottleneck.
+become a **bottleneck** (the slowest point that limits the whole system).
 
-- **Clustering** — run the registry as a cluster of multiple nodes (e.g. three instances of Eureka or
-  Consul) sharing load and providing redundancy. Configure clients with multiple registry URLs
-- **Sharding** — partition registries by service domain. Uncommon; one cluster usually suffices for a
+- **Clustering** — run the registry as a cluster of multiple **nodes** (individual machines or instances in the group) (e.g. three instances of Eureka or
+  **Consul**, HashiCorp's registry and configuration tool) sharing load and providing redundancy. Configure clients with multiple registry URLs
+- **Sharding** (splitting data across several independent servers, each holding a part) — partition registries by service domain. Uncommon; one cluster usually suffices for a
   large organisation
 - **Efficient heartbeats** — thousands of instances heartbeating every 30 seconds is genuine load.
   Eureka lets you tune the heartbeat interval and use **self-preservation mode** to avoid
-  overwhelming the network during an outage or partition
-- **Lightweight protocols** — Consul uses an efficient **gossip** mechanism for health; Zookeeper uses
-  an event-driven model with persistent connections
+  overwhelming the network during an **outage** (a period when something is down) or partition
+- **Lightweight protocols** — Consul uses an efficient **gossip** mechanism for health (each node regularly swaps news with a few random others, so information spreads like a rumour); **Zookeeper** (Apache's coordination service) uses
+  an event-driven model with **persistent connections** (network connections kept open for reuse)
 
 ### 3. Fault tolerance and high availability
+(**Fault tolerance** is continuing to work when parts fail; **high availability** is being up nearly all the time.)
 If the registry is down, services may be unable to find each other — especially with client-side
 discovery.
 
 - **Run multiple registry instances** — at least two or three in production. Keep data in sync via
-  consensus (Consul, Zookeeper) or peer-to-peer sync (Eureka)
+  **consensus** (an algorithm that makes several nodes agree on one value even if some fail) (Consul, Zookeeper) or **peer-to-peer** sync (each node copies directly from the others, with no leader) (Eureka)
 - **Client-side caching for resilience** — many clients continue using the last known good
   information if the registry becomes unreachable. Spring's Eureka client does this by default,
   allowing the system to keep functioning assuming topology hasn't changed drastically
-- **Failover of registry nodes** — configure clients with multiple registry addresses so they try the
+- **Failover of registry nodes** (**failover** = automatically switching to a backup when the primary fails) — configure clients with multiple registry addresses so they try the
   next when one fails
 - **Monitor the registry itself**, not just the services it tracks
-- **Data persistence** — Consul, etcd, and Zookeeper persist to disk and recover state after restart.
+- **Data persistence** — Consul, **etcd** (a distributed key-value store used by Kubernetes), and Zookeeper persist to disk (save data so it survives restarts) and recover state after restart.
   Eureka keeps state in memory and relies on clients re-registering. Persistence helps recovery if
   all nodes reboot, but may be overkill if services simply re-register on startup
 
 #### Consistency vs. availability — the CAP trade-off
 
-> *Beginner note — CAP theorem:* in a distributed system, when a network partition splits your nodes
+> *Beginner note — CAP theorem:* (see also [System Design Fundamentals](../01-system-design-fundamentals/README.md)) in a **distributed system** (many machines cooperating over a network), when a network partition splits your nodes
 > apart, you must choose between **consistency** (never serve wrong data, even if that means serving
 > nothing) and **availability** (always answer, even if the answer may be stale). You cannot have
 > both during a partition.
@@ -441,26 +444,26 @@ small setups to get quicker removal of dead instances.
   balancing *actual* load. Requires more sophisticated tracking; usually done in server-side LBs or
   service meshes
 - **Hashing (sticky sessions)** — consistently send the same client to the same instance, for caching
-  or session affinity. E.g. hash of user ID modulo instance count
-- **Geographic / AZ affinity** — in multi-datacenter or multi-availability-zone deployments, prefer an
+  or **session affinity** (keeping a user's requests on the server that holds their session data). E.g. hash of user ID modulo instance count
+- **Geographic / AZ affinity** (an **AZ**, availability zone, is a separate data centre within one cloud region) — in multi-datacenter or multi-availability-zone deployments, prefer an
   instance in the client's zone for lower latency. Discovery metadata carries the zone
 
-Ribbon defaults to round-robin on the client side; a cloud ELB might do round-robin or least
+Ribbon defaults to round-robin on the client side; a cloud **ELB** (AWS Elastic Load Balancer) might do round-robin or least
 connections by configuration.
 
 ### 5. Failover handling
 What happens when a call to an instance fails? With discovery you have multiple instances, so try
 another.
 
-- **Client retry** — on timeout or error, query the registry again (or use the cached list), pick
+- **Client retry** — on **timeout** (giving up after waiting a set time) or error, query the registry again (or use the cached list), pick
   another instance, and retry. Ribbon and Spring Cloud LoadBalancer have retry mechanisms
-- **Circuit breakers** — Hystrix or Resilience4j can trip if a service fails repeatedly and stop
+- **Circuit breakers** (components that stop calling a failing service for a while) — **Hystrix** (Netflix's older library) or **Resilience4j** (its modern Java replacement) can trip if a service fails repeatedly and stop
   calling it for a cooldown. Combined with discovery this can be **per-instance**: if instance X of
   Service A is failing, stop sending to X while continuing with Y and Z. Discovery is what ensures Y
   and Z are available *(see [Circuit Breaker](../06-circuit-breaker/README.md))*
 - **Health-based removal** — the registry should promptly mark failing instances unhealthy so lookups
   stop returning them. Proactive, and better than reacting at request time
-- **Timeout tuning** — keep timeouts short. Fail fast and try another instance; that's viable
+- **Timeout tuning** — keep timeouts short. **Fail fast** (give up quickly rather than hang) and try another instance; that's viable
   precisely because you have a discovered pool
 
 ### 6. Consistency of data
@@ -472,18 +475,18 @@ instance that just died. To minimise impact:
 - **Client pre-flight health check** before critical requests — adds overhead, rarely done
 - **Tolerate the failed attempt and retry another instance** — usually the right answer
 - In strongly consistent systems like Zookeeper, watchers are notified almost immediately when a
-  client disconnects. But under high churn, an AP approach like Eureka may give better overall
+  client disconnects. But under high **churn** (instances constantly starting and stopping), an AP approach like Eureka may give better overall
   availability
 
 ### 7. Data volume and registry size
 In very large deployments — hundreds of services, thousands of instances — the registry holds a large
 dataset. Most registries **index by service name** so lookups by name are fast. Ensure adequate
-RAM/CPU. Some registries support **tagging and filtering** — asking for instances of a service with a
-tag like `version: v2`, which is useful during rolling deployments of new versions.
+RAM/CPU (memory and processing power). Some registries support **tagging and filtering** — asking for instances of a service with a
+tag like `version: v2`, which is useful during **rolling deployments** (replacing instances with the new version a few at a time) of new versions.
 
 ### 8. Transactional consistency — subtle but important
 If a service registers itself **before it is fully ready to serve traffic**, a client may discover and
-call it while it's still warming up — loading caches, opening connection pools, JIT-compiling.
+call it while it's still warming up — loading caches, opening **connection pools** (sets of ready-made database or network connections reused across requests), **JIT-compiling** (the Java runtime compiling frequently used code to fast machine code just in time, while running).
 
 > **Best practice:** register only once fully initialised, and **de-register immediately when shutting
 > down, before actually going offline.** Design your startup and shutdown sequences with this in
@@ -500,30 +503,30 @@ compromised, an attacker can misroute traffic or map your entire topology.
 pretending to be a legitimate service. Other services then discover and communicate with it, letting
 it **intercept or manipulate data**.
 *Mitigation:* authentication and authorization for registration — the registry verifies a registering
-service is allowed to register under that name. Consul provides **ACLs and tokens**; Eureka can be
-secured with **HTTP basic authentication or mutual TLS**.
+service is allowed to register under that name. Consul provides **ACLs and tokens** (**access control lists** — rules saying who may do what — checked against a secret token); Eureka can be
+secured with **HTTP basic authentication or mutual TLS** (basic auth sends a username and password with each request; **mutual TLS**, or **mTLS**, means both sides present encryption certificates to prove their identity).
 
 **Unauthorized registry access.** The registry holds sensitive information — internal service
 addresses, health status. An attacker who can query it freely gets **a map of all your services**.
 *Mitigation:* restrict access. Don't expose Eureka publicly; run it on an internal network. Require
-authentication on its API and UI. Consul ACLs can require a token to read. Kubernetes DNS is
-naturally cluster-isolated, and RBAC can further limit which services read which resources.
+authentication on its API and **UI** (user interface — here, its web dashboard). Consul ACLs can require a token to read. Kubernetes DNS is
+naturally cluster-isolated, and **RBAC** (role-based access control — permissions granted to roles rather than individuals) can further limit which services read which resources.
 
 **Communication security.** Traffic between services and the discovery service may cross untrusted
 networks.
-*Mitigation:* **TLS** for all registry traffic, especially in multi-datacenter setups. If using an API
+*Mitigation:* **TLS** (Transport Layer Security, the encryption behind HTTPS) for all registry traffic, especially in multi-datacenter setups. If using an API
 gateway for server-side discovery, secure gateway-to-service and client-to-gateway calls too.
 
 **Least privilege.** Not every service needs to know about every other service.
 *Mitigation:* segment the registry or use ACL policies so a given service discovers only what it
 needs. A "frontend" service might need `accounts` and `orders` but should not see internal services.
 
-**Audit and monitoring.** Enable logging or audit trails. Watch for unusual patterns — a service
+**Audit and monitoring.** Enable logging or **audit trails** (tamper-resistant records of who did what, when). Watch for unusual patterns — a service
 registering from an unknown IP, or a spike in failed authentication against the registry.
 
-**DDoS and abuse.** A discovery service flooded with registration requests or queries may slow or
+**DDoS and abuse.** (A **DDoS**, distributed denial-of-service attack, floods a system with traffic from many machines to knock it over.) A discovery service flooded with registration requests or queries may slow or
 crash.
-*Mitigation:* capacity planning, and rate limiting on discovery operations.
+*Mitigation:* **capacity planning** (estimating and provisioning the resources you'll need), and **rate limiting** (capping requests per caller per second) on discovery operations.
 
 **Securing server-side components.** If you use server-side discovery, the gateway or load balancer
 accepts client requests *and* talks to the registry — harden it accordingly.
@@ -540,28 +543,28 @@ and down and move them across data centres without clients knowing the details. 
 scale.
 
 **Kubernetes — the most widespread use today.** Kubernetes has a **Service**: a stable virtual IP and
-DNS name for a set of pods. When new pods come up or old ones die, Kubernetes updates its internal
-endpoints list, and through kube-proxy ensures traffic to the Service is load-balanced to current
+DNS name for a set of **pods** (a pod is Kubernetes' smallest unit: one or more containers running together). When new pods come up or old ones die, Kubernetes updates its internal
+endpoints list, and through **kube-proxy** (a network component on every Kubernetes machine that forwards Service traffic to pods) ensures traffic to the Service is load-balanced to current
 pods. Any pod can simply look up `http://service-x` and reach it. Under the hood, Kubernetes
-maintains an **etcd**-based registry and a cluster DNS service (**CoreDNS**) answering queries from
+maintains an **etcd**-based registry and a cluster DNS service (**CoreDNS**, the DNS server inside Kubernetes) answering queries from
 current registry data.
 
 > This is why "we're on Kubernetes" is usually a complete answer to service discovery. You already
 > have it, and building a second layer on top is usually a mistake.
 
-**Airbnb — SmartStack.** Before Kubernetes was popular, Airbnb built SmartStack: **HAProxy** on every
-host plus **ZooKeeper** as the registry. Each service registered via a local agent, and the local
+**Airbnb — SmartStack.** Before Kubernetes was popular, Airbnb built SmartStack: **HAProxy** (a widely used open-source load balancer) on every
+host plus **ZooKeeper** as the registry. Each service registered via a local **agent** (a small helper program running on the same machine), and the local
 HAProxy updated its configuration to route accordingly — effectively giving every application a local
 load balancer for other services. They built it because manually tracking service pools had become
 untenable.
 
 **Consul (Stripe, PagerDuty).** HashiCorp Consul provides DNS-based discovery plus an HTTP API. Its
 ability to work across multiple data centres makes it popular in enterprises where Kubernetes isn't
-the orchestrator, or where a platform-agnostic solution is needed.
+the **orchestrator** (the system that decides where containers run and keeps them running), or where a platform-agnostic solution is needed.
 
 **Service meshes — Lyft's Envoy.** Envoy was built at Lyft to solve discovery, routing, and
-observability. Instead of each application doing discovery, **Envoy sidecars receive updates from a
-central control plane** about where every service is. When Service A calls Service B, it actually
+observability. Instead of each application doing discovery, **Envoy sidecars** (Envoy is a high-performance proxy; a **sidecar** is a helper process deployed next to each service) **receive updates from a
+central control plane** (the management component that tells all the proxies how to route) about where every service is. When Service A calls Service B, it actually
 calls its local Envoy, which knows all instances of B and routes intelligently. **Discovery logic
 leaves application code entirely and moves into infrastructure.**
 *(See [Sidecar](../09-sidecar/README.md).)*
@@ -591,7 +594,7 @@ and go, and callers always get a valid one.
 instances exist*; load balancing decides *which one to use*. Client-side discovery bundles both into
 the client; server-side puts both in the router.
 
-**"The registry is a single point of failure, so the pattern is bad."** It is a SPOF, which is why you
+**"The registry is a single point of failure, so the pattern is bad."** It is a **SPOF** (single point of failure — one component whose failure stops everything), which is why you
 run it as a cluster *and* cache on clients. A registry outage should degrade you (stale data), not
 stop you.
 
@@ -601,8 +604,8 @@ via DNS. Adding another registry usually creates two competing sources of truth.
 **"Registering at startup is enough."** Registration must be paired with health checking and prompt
 deregistration, or you accumulate dead entries.
 
-**"DNS alone solves this."** DNS has caching and TTL semantics that were designed for a world where
-addresses changed rarely. Clients (and language runtimes) cache DNS aggressively, sometimes forever.
+**"DNS alone solves this."** DNS has caching and **TTL** (time-to-live: how long a cached answer may be reused before it must be refreshed) semantics that were designed for a world where
+addresses changed rarely. Clients (and language **runtimes** — the engine that runs a language's programs, such as the Java Virtual Machine) cache DNS aggressively, sometimes forever.
 That's why Kubernetes pairs DNS with a stable virtual IP rather than returning raw pod addresses.
 
 ---
@@ -736,7 +739,7 @@ spec:
 ```
 
 Any pod can now call `http://order-service` and CoreDNS resolves it, with kube-proxy load balancing
-across healthy pods. **Readiness probes are the health check** — this is the piece people skip:
+across healthy pods. **Readiness probes are the health check** — this is the piece people skip. (A **probe** is a periodic check Kubernetes runs against a container; `/actuator/health` is the health URL provided by Spring Boot Actuator, Spring's built-in monitoring module.)
 
 ```yaml
 readinessProbe:                  # "am I ready to receive traffic?"
@@ -750,7 +753,7 @@ livenessProbe:                   # "am I alive, or should I be restarted?"
 > **Readiness is what enforces the Part 7.8 rule**: a pod that isn't ready is removed from the Service
 > endpoints, so no traffic reaches it while it's still warming up.
 
-**Spring Cloud + Eureka** (client-side, when you're not on Kubernetes):
+**Spring Cloud + Eureka** (client-side, when you're not on Kubernetes). A **lease** here is a registration that expires unless renewed by heartbeats; `RestTemplate` is Spring's classic HTTP client, and `@Bean` tells Spring to create and manage that object:
 
 ```yaml
 eureka:
@@ -793,11 +796,11 @@ after deploys. Use a **readiness probe**, not a liveness probe, to gate traffic.
 a single point of failure that stops everything. With it, an outage is an inconvenience.
 
 **4. Heartbeat TTL too long.** A 90-second TTL means up to 90 seconds of traffic routed to a dead
-instance. Too short and you evict healthy instances during a GC pause or network blip. 10s heartbeat
+instance. Too short and you evict healthy instances during a **GC pause** (the moment Java's garbage collector briefly halts the program to reclaim unused memory) or network blip. 10s heartbeat
 / 30s expiry is a reasonable starting point.
 
 **5. Not deregistering on shutdown.** Without graceful shutdown, every deploy leaves a window where
-clients get connection-refused errors from instances that have already stopped.
+clients get **connection-refused** errors (the target machine is reachable but nothing is listening on that port) from instances that have already stopped.
 
 **6. Adding a registry when you're on Kubernetes.** Running Eureka inside Kubernetes gives you two
 competing sources of truth that disagree during rollouts. Use the platform's discovery.

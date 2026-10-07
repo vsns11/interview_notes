@@ -11,6 +11,8 @@
 **Transient** means temporary — it goes away on its own without anyone fixing anything. The opposite
 is **permanent**: it will fail identically no matter how many times you try.
 
+In the table below, a **packet** is one small chunk of data sent over a network, the **request body** is the data sent with a request (e.g. a JSON order), a **load balancer** spreads requests across several **instances** (running copies) of a service, and **CPU** is the processor.
+
 The distinction is the single most important idea in this chapter, because **retrying a transient
 failure is useful and retrying a permanent one is pure waste**.
 
@@ -25,7 +27,7 @@ failure is useful and retrying a permanent one is pure waste**.
 Waiting between retry attempts instead of retrying instantly. **Exponential backoff** means each wait
 is longer than the last — typically doubling: 1s, 2s, 4s, 8s.
 
-Why wait at all? Because retrying instantly against a struggling service adds load at the worst
+Why wait at all? Because retrying instantly against a struggling service adds **load** (the amount of work hitting it) at the worst
 possible moment, and gives it no time to recover.
 
 ### What is "jitter"?
@@ -42,7 +44,7 @@ Four seconds later, **all ten thousand retry simultaneously**. The service, whic
 is hit by a synchronised wall of traffic and falls over again. Now they all back off 8 seconds, and
 the same thing happens again, harder.
 
-The clients have accidentally organised themselves into a denial-of-service attack. **Jitter breaks
+The clients have accidentally organised themselves into a **denial-of-service attack** (flooding a service with so many requests that it can't serve anyone). **Jitter breaks
 the synchronisation** by spreading those retries across a window.
 
 ### What does "idempotent" mean?
@@ -53,19 +55,19 @@ once.
 - `add 100 to balance` — **not idempotent**. Do it five times, you've added 500.
 
 This matters enormously for retries, because a retry might be the *second* execution of something
-that already succeeded.
+that already succeeded. (Idempotency is also covered in [System Design Fundamentals](../01-system-design-fundamentals/README.md).)
 
 ---
 
 ## Part 1 — The problem
 
-In a distributed microservices architecture, **failures are inevitable**. Services constantly
+In a **distributed microservices architecture** (an application split into many small services running on different machines and talking over a network), **failures are inevitable**. Services constantly
 communicate over networks and depend on numerous components, any of which can malfunction. Failures
-stem from unreliable networks, transient server outages, overloaded load balancers, software bugs,
+stem from unreliable networks, transient server **outages** (periods when a server is unavailable), overloaded load balancers, software bugs,
 even operator mistakes.
 
 No matter how well you design, **it's virtually impossible to build a system that never fails**.
-Instead you design for resilience, ensuring a small hiccup doesn't snowball into a major outage.
+Instead you design for **resilience** (the ability to keep working when parts fail), ensuring a small hiccup doesn't snowball into a major outage.
 
 ### Transient failures specifically
 
@@ -73,16 +75,16 @@ These are short-lived errors that resolve on their own given a bit of time. A br
 momentary loss of connectivity, a temporary service unavailability. Often these issues are
 **ephemeral** — try again after a short delay and it succeeds.
 
-**The classic example:** a database connection failure caused by a spike in concurrent users. At the
+**The classic example:** a database connection failure caused by a spike in **concurrent** users (users active at the same moment). At the
 peak moment the connection is refused. **A few seconds later, after some connections close, a retry
 goes straight through.** Nothing was fixed; the condition passed.
 
-Other common cases: network timeouts, transient HTTP 5xx errors, temporary resource exhaustion.
+Other common cases: network **timeouts** (giving up after waiting a set time), transient **HTTP 5xx** errors (status codes 500–599, meaning "the server failed"; 4xx codes mean "the request was wrong"), temporary resource exhaustion.
 
 ### Why this needs solving
 
 Without a strategy for such hiccups, microservices **propagate errors to end-users or upstream systems
-unnecessarily**. A tiny blip in connectivity could trigger a user-facing error — or require manual
+unnecessarily** (an **upstream** system is one that called you and is waiting on your answer). A tiny blip in connectivity could trigger a user-facing error — or require manual
 intervention — even though **the system might have recovered milliseconds later**.
 
 That's the frustration the pattern removes: the failure was real, but it was over before the user
@@ -106,10 +108,10 @@ The effect: retries **mask sporadic failures**, increasing the reliability the u
 
 ### Why it works
 
-Retries assume the failure was transient or non-deterministic. Network blips clear up, threads get
+Retries assume the failure was transient or **non-deterministic** (not guaranteed to happen the same way every time). Network blips clear up, **threads** (independent lines of execution in a program) get
 freed, services restart — so a subsequent attempt has a good chance of succeeding where the first
 failed. This dramatically reduces the error rate seen by higher-level services and end users. Instead
-of giving up immediately when a downstream call fails, a service can retry and often complete the
+of giving up immediately when a **downstream** call (a call to a service you depend on) fails, a service can retry and often complete the
 operation **without any manual fix**.
 
 ---
@@ -119,20 +121,20 @@ operation **without any manual fix**.
 Retry should only engage for errors **likely to be temporary**.
 
 **Worth retrying:** network timeouts · HTTP 5xx server errors · 502 Bad Gateway from a load balancer ·
-database deadlocks · connection refused · throttling / rate-limit errors
+database **deadlocks** (two transactions each waiting for a lock the other holds; the database kills one) · connection refused (nothing is accepting connections right now) · **throttling** / **rate-limit** errors (the service is deliberately refusing because you're sending too much)
 
-**Not worth retrying:** HTTP 400 (input validation failure) · HTTP 401 (authentication error) ·
-business logic errors · configuration errors · fatal exceptions
+**Not worth retrying:** HTTP 400 (input validation failure) · HTTP 401 (**authentication** error — the caller couldn't prove who they are) ·
+**business logic** errors (the request breaks a domain rule, e.g. insufficient funds) · configuration errors · fatal **exceptions** (errors thrown by code that can't be recovered from)
 
 > **No amount of retrying will fix a bad request or invalid credentials.** Those errors are permanent
 > *for that request*. Retrying them just repeats the failure and potentially worsens system load.
 
 Therefore a well-designed retry mechanism **checks the error type or exception type**, retrying only
-transient conditions while letting permanent errors fail fast.
+transient conditions while letting permanent errors **fail fast** (return an error immediately rather than waiting).
 
 ### Retry vs. fail-fast
 
-An alternative strategy is **fail-fast**, typically managed via a [Circuit Breaker](../06-circuit-breaker/README.md).
+An alternative strategy is **fail-fast**, typically managed via a [Circuit Breaker](../06-circuit-breaker/README.md) (a component that stops calling a service after repeated failures, for a cooling-off period).
 
 | | Retry | Fail-fast (Circuit Breaker) |
 |---|---|---|
@@ -143,7 +145,7 @@ An alternative strategy is **fail-fast**, typically managed via a [Circuit Break
 
 For transient faults, retries are ideal — there's a high chance the next attempt succeeds. For a
 service that will be down for hours, **blindly retrying wastes time and resources**, and circuit
-breakers or graceful degradation (serving defaults or cached data) are more appropriate.
+breakers or **graceful degradation** (serving defaults or **cached** data — saved copies of earlier answers) are more appropriate.
 
 **Use retries for hiccups; fall back or fail fast for lasting errors.** They're complements, not
 competitors.
@@ -169,12 +171,12 @@ types."*
 The mechanism that executes the operation and applies the policy. It calls the operation, catches any
 failure, checks whether a retry should happen per the policy, waits the specified delay, then calls
 again. This continues until either the operation succeeds or max retries is reached. If it never
-succeeds, the invoker **propagates the final failure**, often after logging it as a persistent error.
+succeeds, the invoker **propagates the final failure** (passes the error up to its own caller), often after logging it as a persistent error.
 
 ### Backoff strategy
 
 To avoid hammering the failing resource, incorporate a wait between attempts rather than retrying in a
-tight loop.
+**tight loop** (a loop that repeats as fast as the CPU allows, with no pause).
 
 | Strategy | Behaviour | When |
 |---|---|---|
@@ -202,7 +204,7 @@ There are several implementations — **full jitter**, **equal jitter**, **decor
 core idea is identical: introduce randomness so retries are **de-synchronized across clients**.
 
 > It seems counter-intuitive to add randomness to a system deliberately, but it has been shown to
-> significantly reduce contention and improve recovery times. This is one of those cases where the
+> significantly reduce **contention** (many clients competing for the same resource at once) and improve recovery times. This is one of those cases where the
 > unintuitive answer is simply correct.
 
 ### Circuit breaker integration
@@ -212,40 +214,40 @@ an unresponsive service after a threshold. In practice a breaker **prevents a re
 endlessly hitting a downed service**.
 
 For example, if a service has been failing for the last 50 calls, the breaker opens and further calls
-fail immediately without even trying — giving the service time to recover. After a cooldown, a
-half-open state allows a test call, and success closes the circuit again.
+fail immediately without even trying — giving the service time to recover. After a **cooldown** (a fixed waiting period), a
+**half-open** state (the breaker's trial mode) allows a test call, and success closes the circuit again.
 
 **The balance:** allow 3 quick retries on a request, but if multiple requests in a row all fail —
 signalling a likely bigger problem — open the circuit to stop further traffic for a short period.
 
 ### Idempotency and side effects
 
-A critical design consideration. If an operation has side effects — **charging a credit card, sending
+A critical design consideration. If an operation has **side effects** (changes it makes in the world beyond returning a value) — **charging a credit card, sending
 an email, incrementing a counter** — retrying could inadvertently perform the action **multiple
 times** unless you design against it.
 
-Ideally, retried operations should be **idempotent**. Many APIs already are: deleting a resource, or
-performing a `GET`. For non-idempotent actions — creating an order, making a payment — you must take
+Ideally, retried operations should be **idempotent**. Many **APIs** (interfaces that programs call) already are: deleting a resource, or
+performing a `GET` (the HTTP method for reading data). For non-idempotent actions — creating an order, making a payment — you must take
 special care.
 
-**The technique:** use **unique transaction identifiers or tokens** (idempotency keys) so the server
+**The technique:** use **unique transaction identifiers or tokens** (**idempotency keys** — a unique ID the client attaches to an operation and reuses on every retry of it) so the server
 can recognise a duplicate attempt and not process the action twice.
 
 > The failure mode to picture: your payment call succeeds on the server, but the response is lost on
 > the way back. Your client sees a timeout — indistinguishable from "it never happened" — and retries.
 > **Without an idempotency key, the customer is charged twice.** The client genuinely cannot tell the
 > difference between "lost request" and "lost response," which is why the server must be the one to
-> deduplicate.
+> **deduplicate** (detect and ignore repeats).
 
 ### Placement in the architecture
 
 Where should retries happen?
 
 **Client-side of a service-to-service call** — the caller handles retrying. Service A calls Service B;
-A's client library or HTTP client implements the retry policy. B remains stateless and unaware of
+A's client library or **HTTP client** (code that sends web requests) implements the retry policy. B remains **stateless** (keeps no memory between requests) and unaware of
 retries; it just sees repeated incoming requests.
 
-**API gateway or service mesh** — infrastructure automatically retries failed requests between
+**API gateway or service mesh** (a single entry point that routes outside requests, or a layer of proxies beside every service that routes internal traffic) — infrastructure automatically retries failed requests between
 services.
 
 ⚠️ **The key rule: avoid duplicating retries at multiple layers.**
@@ -255,7 +257,7 @@ services.
 > twenty-seven. Good practice is to **centralize or delegate retries to one layer** — only at the edge
 > service, or only at the immediate caller — to prevent cascading retry explosions. In practice this
 > means disabling internal retries in lower-level clients and handling it once at a higher layer, or
-> using a coordinated approach like a **token bucket** to limit overall retry rates.
+> using a coordinated approach like a **token bucket** to limit overall retry rates (a bucket refills with tokens at a fixed rate and each retry must spend one, so retries can never exceed that rate).
 
 ---
 
@@ -335,7 +337,7 @@ there's no point sleeping before giving up.
 **`Math.pow(backoffFactor, attempt - 1)`** — on attempt 1 that's `factor^0 = 1`, so you wait
 `baseDelay`. On attempt 2 it's `factor^1`, so double. And so on.
 
-**The `InterruptedException` handling is correct and worth copying.** When a thread is interrupted,
+**The `InterruptedException` handling is correct and worth copying.** When a thread is **interrupted** (another thread politely asks it to stop what it's doing),
 catching the exception clears the interrupt flag. `Thread.currentThread().interrupt()` restores it so
 code higher up still knows the thread was asked to stop. Forgetting this is a classic Java bug that
 makes applications refuse to shut down.
@@ -373,7 +375,7 @@ The course is explicit about these:
 And one deliberate simplification you should not carry into production:
 
 - **It catches broad `Exception`**, treating *any* failure as retryable. In a real scenario you should
-  catch **only specific transient exceptions** — `IOException`, timeouts — and let others bubble up
+  catch **only specific transient exceptions** — `IOException` (Java's input/output and network error), timeouts — and let others bubble up
   without retry. **Your error-filtering logic belongs here**, and without it you'll cheerfully retry
   validation errors three times.
 
@@ -381,7 +383,7 @@ And one deliberate simplification you should not carry into production:
 partially defeats the purpose of backing off. Many production implementations randomise between
 **50% and 100%** of the delay instead, keeping a meaningful minimum gap.
 
-**Worth adding:** logging each retry attempt, metrics, and a circuit-breaker check that aborts
+**Worth adding:** logging each retry attempt, **metrics** (numeric measurements such as a retry counter), and a circuit-breaker check that aborts
 retrying if a higher-level circuit is already open.
 
 ---
@@ -398,7 +400,7 @@ requests. In the worst case, many clients retrying a struggling service create a
 amplifies load exponentially**, potentially overwhelming it completely.
 
 This is precisely why **backoff is crucial** (breathing room between attempts) and **limited attempts**
-matter — and why circuit breakers or throttling should be layered on for protection.
+matter — and why circuit breakers or throttling (deliberately limiting request rates) should be layered on for protection.
 
 ### Increased latency for end users
 Retrying lengthens overall response time. A single failed attempt might add a few seconds of delay.
@@ -408,16 +410,16 @@ overdone it degrades experience, and chained retries across a call chain accumul
 
 The countermeasure: **set an overall timeout for the operation** alongside retries. For example decide
 that an API call should either succeed **within 5 seconds including all retries**, or not at all, to
-maintain a responsive SLA. Without this, retry policies silently blow past your latency budget.
+maintain a responsive **SLA** (service-level agreement — a promised level of speed or uptime). Without this, retry policies silently blow past your **latency budget** (the maximum time a request is allowed to take; **latency** is the time a request takes from start to finish).
 
 ### Wasted work and resource consumption
-Every retry that ultimately fails was wasted effort — CPU, bandwidth, memory that produced no result.
+Every retry that ultimately fails was wasted effort — CPU, **bandwidth** (network capacity), memory that produced no result.
 If the underlying issue isn't transient, **all retries fail and all that work is for nothing**, plus
 it strains the system.
 
 Hence: detect non-transient failures quickly. If a response says "permission denied" or "invalid
 request," a retry won't help. Your retry logic should inspect error codes and keep a **blacklist of
-non-retryable errors**.
+non-retryable errors** (a list of errors that must never be retried).
 
 A subtler point worth remembering: **if the first attempt already took a long time** — nearly hitting
 the client timeout — starting another attempt that will likely also time out is counterproductive.
@@ -431,7 +433,7 @@ load on both B and C.
 Avoid uncoordinated retries at every layer. Decide **which layer retries** and let others fail fast.
 A common practice: the edge or client-facing service handles retries, while intermediate services
 propagate errors. Monitoring should detect when excessive retries occur, since it often indicates a
-downstream incident.
+downstream **incident** (a production problem needing attention).
 
 ### Retry storms and thundering herd
 If a popular service glitches, many instances of many services may all start retrying at once. Backoff
@@ -444,7 +446,7 @@ Other mitigations: **retry budgets** (allowing a certain number of retries per s
 ### Idempotency revisited
 Beyond correctness, duplicate side effects have a performance cost too — sending the same email twice
 uses twice the email-sending resource. **Do not retry non-idempotent operations blindly** unless you
-have deduplication keys or check-pointing to guard against repeated side effects.
+have deduplication keys or **check-pointing** (recording progress so a repeat can skip steps already done) to guard against repeated side effects.
 
 ### The mitigation checklist
 - Implement **exponential backoff** — don't hammer rapidly
@@ -473,7 +475,7 @@ Many database operations are inherently uncertain — network issues, concurrenc
 unavailability.
 
 The clearest example: you try to save a record while **another user is updating the same record**.
-Rather than throwing an error, retry after a short delay. This allows the conflicting transaction to
+Rather than throwing an error, retry after a short delay. This allows the conflicting **transaction** (a group of database changes applied all-or-nothing) to
 complete and **paves the way for your operation to succeed**.
 
 ### Microservice architectures
@@ -485,7 +487,7 @@ temporary hiccup doesn't become a full-blown outage.
 
 ## Part 8 — Real-world examples
 
-**Cloud service SDKs (AWS, Google Cloud).** Cloud providers build retry strategies into their client
+**Cloud service SDKs (AWS, Google Cloud).** (An **SDK**, software development kit, is the official library for calling a platform from your code; **AWS** is Amazon Web Services.) Cloud providers build retry strategies into their client
 libraries. AWS SDKs automatically retry failed requests — a transient 5xx from a service, or a
 throttling error — using **exponential backoff and jitter**. This matters because network calls to
 cloud APIs occasionally time out or hit rate limits. Google Cloud's libraries have built-in retries
@@ -494,7 +496,7 @@ battle-tested to balance retries and backoff, so **developers benefit from the p
 realising it**.
 
 **Netflix.** As part of their overall resilience engineering, Netflix's internal libraries retry calls
-to microservices or data stores if a request fails or a host is unresponsive. If one instance fails to
+to microservices or **data stores** (databases, caches and the like) if a request fails or a **host** (the machine a service runs on) is unresponsive. If one instance fails to
 respond, the client quickly **retries on another instance** — perhaps after a brief backoff — instead
 of erroring out immediately. Combined with circuit breakers, this ensures sporadic failures don't
 disrupt the viewing experience.
@@ -506,32 +508,32 @@ transaction and upsetting a customer, payment systems retry behind the scenes.
 Critically, they **encourage the use of idempotency keys** on API requests. If a network issue occurs,
 the client can safely retry with the same key, and the server **knows not to duplicate the charge**.
 This design **explicitly embraces the Retry Pattern — it assumes clients will retry on failure.** The
-result: a temporary glitch between merchant and gateway doesn't lose the order; the merchant's system
+result: a temporary glitch between **merchant** (the shop) and **gateway** (the payment provider's service) doesn't lose the order; the merchant's system
 retries automatically and payment goes through **without double-charging**.
 
-**Message queues and event processing.** In systems built on RabbitMQ or Kafka, retry appears as
-**requeueing messages** or using **dead-letter queues**. If a consumer fails to process a message due
-to a temporary error — say it can't reach a database — it doesn't acknowledge the message, so the
+**Message queues and event processing.** In systems built on **RabbitMQ** or **Kafka** (popular message brokers — software that stores messages from producers until consumers read them), retry appears as
+**requeueing messages** (putting a message back to be read again) or using **dead-letter queues** (a separate queue where messages that keep failing are parked for inspection). If a **consumer** (the program reading messages) fails to process a message due
+to a temporary error — say it can't reach a database — it doesn't **acknowledge** the message (tell the broker it was handled), so the
 message returns to the queue to be tried again after a delay. This is the Retry Pattern in an
-**asynchronous** context.
+**asynchronous** context (where the sender doesn't wait for the work to be done).
 
 A real example: in order processing, if an attempt to reserve inventory fails due to a **lock
-timeout**, the message can be retried a minute later, by which time the lock may be free. Many large
-e-commerce platforms rely on this in their event-driven architectures to ensure eventually consistent
-outcomes.
+timeout** (it waited too long for another transaction to release a database lock — a guard that lets only one writer touch a row at a time), the message can be retried a minute later, by which time the lock may be free. Many large
+e-commerce platforms rely on this in their **event-driven architectures** (systems where services react to messages about things that happened) to ensure **eventually consistent**
+outcomes (all copies of the data agree once processing catches up).
 
 ---
 
 ## Part 9 — System design examples
 
 **E-commerce checkout.** The user has filled their cart and clicks Buy. The system must charge their
-credit card. But the **payment gateway is temporarily unavailable**. Do you tell the user their
+credit card. But the **payment gateway** (the third-party service that actually charges cards) **is temporarily unavailable**. Do you tell the user their
 purchase failed? Or retry, hoping the gateway returns shortly?
 
 With the Retry Pattern you choose the latter, handling the temporary glitch gracefully. *(And this is
 precisely where idempotency keys are non-negotiable — the double-charge scenario above.)*
 
-**IoT device data collection.** A system collects data from IoT devices and stores it in a database.
+**IoT device data collection.** A system collects data from **IoT** (Internet of Things — sensors and gadgets connected to the internet) devices and stores it in a database.
 Devices send data periodically. But the **database is temporarily unavailable** due to a network glitch
 or scheduled maintenance. Should the system discard the data?
 
@@ -545,11 +547,11 @@ Retry provides a resilient solution: handle the temporary issue and **ensure no 
   delays the inevitable
 - The downstream service is **known to be down for an extended period** (a planned outage). A retry
   loop only burns resources; a circuit breaker or fallback response is preferable
-- **Strict latency requirements** — real-time systems may prefer to fail fast rather than retry and
+- **Strict latency requirements** — **real-time** systems (ones that must respond within a guaranteed, very short time) may prefer to fail fast rather than retry and
   violate their latency SLA
 - The operation is **extremely expensive**, or has **side effects that can't be repeated** safely
 
-In such cases, prefer alternatives: **manual compensation**, **eventual reconciliation** for
+In such cases, prefer alternatives: **manual compensation** (a person or process undoing the effects), **eventual reconciliation** (comparing records later and fixing mismatches) for
 asynchronous processes, or simply **alerting a human**.
 
 > **Use retries where they make sense — transient, recoverable errors — and avoid them where they
@@ -569,7 +571,7 @@ handles the blip; the breaker handles the outage. Use both.
 self-inflicted outage at scale. At ten thousand clients it's essential, not decorative.
 
 **"My operation is a GET, so idempotency doesn't matter."** True for that call — but check the whole
-path. A GET that triggers a server-side counter increment or audit write is not as idempotent as it
+path. A GET that triggers a server-side counter increment or **audit write** (recording who accessed what) is not as idempotent as it
 looks.
 
 **"Retries are free if they usually succeed."** They're free when failures are rare. They're most
@@ -781,6 +783,8 @@ bucket holds about a fifth of that. Same number of retries, spread over time ins
 
 ### C. Production — Resilience4j Retry
 
+(**Resilience4j** is the standard Java library for resilience patterns; this config is YAML, an indentation-based settings format.)
+
 ```yaml
 resilience4j:
   retry:
@@ -808,7 +812,7 @@ public Inventory check(String sku) {
 }
 ```
 
-**Spring's own `@Retryable`** is an alternative if you're not using Resilience4j:
+**Spring's own `@Retryable`** (an **annotation** — a label on a method — from Spring, the main Java web framework) is an alternative if you're not using Resilience4j:
 ```java
 @Retryable(
     retryFor = { IOException.class },
@@ -824,7 +828,7 @@ public Inventory recover(IOException e, String sku) { return Inventory.unknown(s
 ### D. Implementing idempotency keys
 
 The most important production concern, and the part usually missing from tutorials. The client sends
-a stable key; the server guarantees one execution per key.
+a stable key (usually a **UUID** — a randomly generated, practically unique 128-bit ID — sent in an HTTP **header**, a key-value field alongside the request); the server guarantees one execution per key.
 
 **Client:**
 ```java
@@ -861,7 +865,7 @@ public ResponseEntity<PaymentResult> pay(
 }
 ```
 
-Store keys in Redis with a TTL, or a table with a unique index on the key. The unique constraint is
+Store keys in **Redis** (a fast in-memory key-value database) with a **TTL** (time-to-live — an expiry after which the entry is deleted), or a table with a **unique index** on the key (a database rule that rejects a second row with the same value). The **unique constraint** is
 what makes it safe under concurrent duplicate requests.
 
 ### E. Implementation pitfalls
@@ -878,7 +882,7 @@ mechanism.
 **4. No cap on exponential backoff.** Base 1s with multiplier 2 and 10 attempts ends at a **17-minute**
 wait. Always set a maximum.
 
-**5. No overall deadline.** Individual timeouts plus retries multiply: a 5s timeout with 3 attempts
+**5. No overall deadline** (one time limit for the whole operation, all attempts included). Individual timeouts plus retries multiply: a 5s timeout with 3 attempts
 plus backoff is potentially 20 seconds. Set a budget for the whole operation:
 ```java
 resilience4j.timelimiter.instances.inventoryService.timeoutDuration: 3s

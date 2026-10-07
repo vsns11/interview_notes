@@ -1,7 +1,7 @@
 # Event-Driven Architecture (EDA) Pattern
 
 **Category:** Data / messaging
-**One-liner:** Components communicate by publishing and reacting to events rather than calling each other directly — giving loose coupling, asynchrony, independent scaling, and real-time responsiveness.
+**One-liner:** Components communicate by publishing and reacting to events rather than calling each other directly — giving loose coupling, asynchrony, independent scaling, and **real-time** responsiveness (reacting within moments of something happening).
 
 ---
 
@@ -24,16 +24,16 @@ phone call: both parties are engaged for the duration.
 **Asynchronous** — you send a message and **carry on immediately**, handling the response whenever it
 arrives. Like email: you send it and get on with your day.
 
-The practical difference for a server: in a synchronous call, the calling thread is **blocked and
+The practical difference for a server: in a synchronous call, the calling **thread** (one line of execution inside the server, which handles one task at a time) is **blocked and
 useless** for the whole wait. In an asynchronous one, it's free immediately.
 
 ### What is a message queue / event bus?
-Middleware that accepts messages from senders and delivers them to receivers. **Kafka** and
-**RabbitMQ** are the common ones.
+**Middleware** (software that sits between other programs to connect them) that accepts messages from senders and delivers them to receivers. **Kafka** (a distributed, durable event log) and
+**RabbitMQ** (a classic message broker) are the common ones. See [System Design Fundamentals](../01-system-design-fundamentals/README.md) for queues in general.
 
 The important properties:
 - The **sender doesn't need to know who receives** — it publishes to the bus
-- Messages are usually **persisted**, so if a receiver is down, the message waits
+- Messages are usually **persisted** (saved to disk), so if a receiver is down, the message waits
 - **Many receivers** can consume the same message independently
 
 ### What is publish-subscribe?
@@ -48,7 +48,7 @@ requires no change to the publisher — which is the entire source of EDA's flex
 How much one component depends on knowledge of another.
 
 **Tight coupling:** Service A calls `serviceB.doThing()`. A must know B exists, where it lives, its
-API, and its response format. Change B and you may break A.
+**API** (the operations it offers and how to call them), and its response format. Change B and you may break A.
 
 **Loose coupling:** A publishes `ThingHappened`. It doesn't know whether anyone is listening. B may
 consume it, or five services may, or none. **A is unaffected either way.**
@@ -57,7 +57,7 @@ consume it, or five services may, or none. **A is unaffected either way.**
 
 ## Part 1 — The problem
 
-As applications grew, developers adopted distributed systems for scalability and resilience. But that
+As applications grew, developers adopted **distributed systems** (many programs on different machines cooperating over a network) for **scalability** (handling more load by adding resources) and **resilience** (staying up when parts fail). But that
 shift brought challenges.
 
 ### Managing complex interactions
@@ -71,7 +71,7 @@ efficiently handling complex interactions.
 
 ### The call for asynchronous communication
 In a synchronous system, a component makes a request and waits for the response before proceeding.
-This works for small, simple systems, but **quickly becomes a bottleneck** as the system grows.
+This works for small, simple systems, but **quickly becomes a bottleneck** (the narrow point that limits everything) as the system grows.
 
 > The question that makes it click: *what happens when you have thousands or even millions of
 > components all waiting for responses?* Every waiting component is holding resources and doing
@@ -92,7 +92,7 @@ Designing a system that manages complex interactions between components **and do
 is no small feat.
 
 ### Data consistency
-With multiple components potentially reading and writing data concurrently, how do you ensure
+With multiple components potentially reading and writing data **concurrently** (at the same time), how do you ensure
 consistency? If one component updates a piece of data, how do others become aware of the change?
 
 *The example:* an online banking system. When you make a transaction it's critical your balance
@@ -138,18 +138,18 @@ triggered by one event.
 
 ### Asynchrony
 The producer simply produces the event and **carries on with its operations without waiting** for
-consumers to process it. This non-blocking operation greatly enhances the system's overall
-responsiveness and throughput.
+consumers to process it. This **non-blocking** operation (the caller never sits idle waiting) greatly enhances the system's overall
+responsiveness and **throughput** (how much work gets done per second).
 
 ### Scalability
 Since producers and consumers are decoupled, they can be **scaled independently** based on their
-workload. A surge of events from producers? Increase the number of consumer instances to handle the
-load — and vice versa.
+workload. A surge of events from producers? Increase the number of consumer **instances** (running copies) to handle the
+**load** (volume of incoming work) — and vice versa.
 
 ### Real-time processing
 As soon as an event is produced, it can be **immediately handled** by the consumer. This is
 particularly useful where instant action is required — **fraud detection in banking transactions**, or
-real-time analytics.
+real-time **analytics** (computing statistics and reports from data).
 
 ---
 
@@ -181,7 +181,7 @@ handling.
 A **central mediator** takes charge of event handling.
 
 Producers send their events to the mediator. The mediator — **aware of all producers and consumers** —
-determines where to route them. It performs **event aggregation, filtering, and transformation**, then
+determines where to route them. It performs **event aggregation, filtering, and transformation** (combining several events into one, dropping irrelevant ones, and reshaping their content), then
 delivers the processed events to the appropriate consumers.
 
 - **Advantage:** control. It allows complex routing and transformation logic, giving a high degree of
@@ -226,13 +226,13 @@ nature, ensuring the right events reach the right consumers.
 ### Event processing and state change
 Once an event reaches its consumer, it is processed. The consumer takes the event data and performs
 actions based on it, **leading to a change in system state** — anything from changing a value in a
-database to triggering a physical action in an IoT device.
+database to triggering a physical action in an **IoT** device (Internet of Things — a sensor or gadget connected to the network).
 
 ### How consumers know when to act
 Event consumers are **always listening** — monitoring their subscribed channels on the bus, waiting.
 When an event arrives, they act.
 
-This listening mechanism is usually implemented using the **Observer** or **Publish-Subscribe**
+This listening mechanism is usually implemented using the **Observer** (objects register with a subject and get called back whenever it changes) or **Publish-Subscribe**
 patterns.
 
 ### Real-time illustration — traffic management
@@ -248,8 +248,8 @@ Throughout, the system reacts in real time.
 Two significant related concepts:
 
 **Event Sourcing** means changes to application state are stored as a **sequence of events**, not just
-as a snapshot of the current state. This allows:
-- **Full auditability** — every change is recorded
+as a **snapshot** (a single picture) of the current state. This allows:
+- **Full auditability** (being able to prove what happened and when) — every change is recorded
 - **Versioning**
 - The ability to **"time-travel"** — see the system's state at any past point
 
@@ -284,7 +284,7 @@ public class VehicleEvent {
 
 This represents a vehicle's action — such as 'entering' or 'leaving' a zone.
 
-**Note the `final` fields and absence of setters — the event is immutable.** That's deliberate and
+**Note the `final` fields and absence of setters — the event is immutable** (it cannot be changed after creation; a **setter** is a method that changes a field, and `final` in Java forbids reassigning one). That's deliberate and
 correct. An event describes something that **already happened**; allowing a consumer to modify it
 would be meaningless (you can't change the past) and dangerous (other consumers would see the
 altered version).
@@ -379,11 +379,11 @@ The traffic light reacts to vehicle events by adjusting its timings.
 
 The structure is right; the mechanics are not production-shaped:
 
-- **It's entirely synchronous and in-process.** `publish` calls consumers **directly on the caller's
+- **It's entirely synchronous and in-process** (everything runs inside one program). `publish` calls consumers **directly on the caller's
   thread**. The sensor doesn't return until every traffic light has finished processing — which
   destroys the asynchrony that is the pattern's main benefit. A real EDA uses Kafka or RabbitMQ, with
-  consumers running in **separate processes** and the producer returning immediately.
-- **No persistence.** If the process dies, in-flight events are gone. Real buses persist events so
+  consumers running in **separate processes** (separately running programs) and the producer returning immediately.
+- **No persistence.** If the process dies, **in-flight** events (published but not yet processed) are gone. Real buses persist events so
   they survive restarts and can be replayed.
 - **No error handling.** If one consumer throws, the loop breaks and later consumers never see the
   event.
@@ -406,7 +406,7 @@ consideration.**
 EDA commonly boosts performance because of its asynchronous nature — producers continue producing
 without waiting for consumers.
 
-**The flip side is latency.** As the system scales and event volume increases, **the time from an event
+**The flip side is latency** (the delay between something happening and it being handled). As the system scales and event volume increases, **the time from an event
 being produced to it being processed can grow**, delaying responses. Overall speed is also affected by
 the choice of event channel — synchronous or asynchronous.
 
@@ -426,22 +426,22 @@ challenging** due to the asynchronous and distributed nature of the system. **Sp
 practices** may be needed to monitor and debug effectively. Designing a system where every component
 understands the format and meaning of events is itself complex.
 
-> ⚠️ **This is the cost beginners most underestimate.** In a synchronous system, a stack trace tells
+> ⚠️ **This is the cost beginners most underestimate.** In a synchronous system, a **stack trace** (the error report listing the chain of method calls that led to a failure) tells
 > you the whole story of what called what. In EDA, causation is spread across services *and across
 > time* — the event that caused today's bug was published twenty minutes ago by a service you weren't
 > looking at. You need **correlation IDs** (a shared identifier threaded through every event in a
-> causal chain) and **distributed tracing** from day one, not bolted on after your first incident.
+> causal chain) and **distributed tracing** (recording a request's journey across every service it touches) from day one, not bolted on after your first **incident** (a production problem).
 
 ### Event schemas and backward compatibility
 Since all communication is via events, **all components must understand the events' structure**. This
-means events should follow a **well-defined schema**.
+means events should follow a **well-defined schema** (a formal description of the fields, their types and which are required).
 
 If the schema changes — new fields added, existing ones removed or altered — you must ensure
-**backward compatibility** so consumers expecting the old schema don't break.
+**backward compatibility** (new versions still work with things built for the old one) so consumers expecting the old schema don't break.
 
 > Practical rule: **adding an optional field is safe; removing or renaming one is not.** Old consumers
-> ignore fields they don't know about, but break when a field they depend on vanishes. Schema
-> registries exist to enforce this.
+> ignore fields they don't know about, but break when a field they depend on vanishes. **Schema
+> registries** (services that store every schema version and reject incompatible changes) exist to enforce this.
 
 ### Order of events
 In a system where order of operations matters, EDA presents a challenge. Events are **asynchronous by
@@ -450,11 +450,11 @@ you'll need a way to maintain the required order — which introduces further co
 
 > Concretely: if `AccountCreated` and `AccountDeleted` arrive out of order, a consumer might delete an
 > account that doesn't exist yet and then create one that should be gone. Kafka guarantees ordering
-> *within a partition*, which is why choosing a partition key (like account ID) matters.
+> *within a partition* (a topic is split into several **partitions**, each an ordered log that can be processed in parallel), which is why choosing a **partition key** (the value that decides which partition an event goes to, like account ID) matters.
 
 ### Testing
-How do you test an event-driven system? **Unit testing individual components isn't enough** — it won't
-cover the interactions between parts. You'll need comprehensive **integration and end-to-end tests**,
+How do you test an event-driven system? **Unit testing individual components isn't enough** (a **unit test** checks one small piece in isolation) — it won't
+cover the interactions between parts. You'll need comprehensive **integration and end-to-end tests** (tests that run several real components together, or the whole system from the user's side),
 which ensure the system works as a whole but bring added complexity in writing and maintaining them.
 
 **None of these should deter you** — they're a guide to navigating the challenges. Every architecture
@@ -483,7 +483,7 @@ shipping handles delivery. With EDA these operations are carried out **asynchron
 efficiently**.
 
 ### Microservices architecture
-Services need to communicate. **Instead of direct communication — which leads to tightly coupled
+Services need to communicate. (**Microservices** are small, independently deployable services.) **Instead of direct communication — which leads to tightly coupled
 systems — services emit events that other services consume.** This keeps services loosely coupled and
 able to **evolve independently over time**.
 
@@ -522,17 +522,17 @@ nothing.
 authorized?" — a synchronous call is right. EDA is for notification and reaction, not for queries.
 
 **"The event bus makes my system reliable."** It makes it *decoupled*. Reliability requires
-persistence, retries, dead-letter queues, and idempotent consumers on top.
+persistence, retries, **dead-letter queues** (holding areas for messages that keep failing), and **idempotent** consumers (handling the same event twice has the same effect as once) on top.
 
-**"If I publish an event, it definitely gets processed."** Only with durable messaging and
-acknowledgements. Fire-and-forget over an in-memory bus loses events on restart.
+**"If I publish an event, it definitely gets processed."** Only with **durable** messaging (stored safely until processed) and
+**acknowledgements** (the consumer confirming to the broker that it finished a message). Fire-and-forget over an in-memory bus loses events on restart.
 
 **"Consumers can assume they see each event exactly once."** Most systems guarantee *at-least-once*
-delivery, meaning **duplicates happen**. Consumers should be idempotent.
+delivery (every message arrives, but possibly more than once), meaning **duplicates happen**. Consumers should be idempotent.
 *(See [Retry](../08-retry/README.md).)*
 
 **"Ordering is guaranteed."** Generally not across the whole system — only within a partition or
-channel, if your broker offers even that.
+channel, if your **broker** (the messaging server) offers even that.
 
 ---
 
@@ -639,6 +639,8 @@ edited**.
 
 ### C. Production — Kafka
 
+(In this config, `bootstrap-servers` are the first Kafka machines a client contacts; `acks: all` makes the producer wait until every **replica** — a copy of the data on another broker — has the message; an **offset** is a consumer's position in a partition, and **committing** it records how far the consumer has read.)
+
 ```yaml
 spring:
   kafka:
@@ -656,7 +658,7 @@ spring:
       isolation-level: read_committed
 ```
 
-**Producer** — the partition key is the important decision:
+**Producer** — the partition key is the important decision (`UUID` generates a unique ID; `MDC` is the logging library's per-request context, used here to carry the correlation ID):
 ```java
 @Service
 public class PhotoEventPublisher {
@@ -694,7 +696,7 @@ public void onPhotoUploaded(PhotoUploaded event, Acknowledgment ack) {
 }
 ```
 
-**Dead-letter topic** — where messages go after retries are exhausted:
+**Dead-letter topic** (DLT) — where messages go after retries are exhausted:
 ```java
 @Bean
 public DefaultErrorHandler errorHandler(KafkaTemplate<Object, Object> template) {
@@ -705,7 +707,7 @@ public DefaultErrorHandler errorHandler(KafkaTemplate<Object, Object> template) 
 }
 ```
 
-**Schema evolution** — register schemas so a breaking change is rejected at build time, not
+**Schema evolution** — register schemas so a **breaking change** (one that would make existing consumers fail) is rejected at build time, not
 discovered in production:
 ```yaml
 spring.kafka.properties:
@@ -725,11 +727,11 @@ Always commit manually after success.
 guaranteed, not hypothetical. Store processed event IDs.
 
 **3. No partition key, then expecting ordering.** Kafka orders **within a partition only**. Without a
-key, events for the same entity scatter across partitions and arrive out of order. Key by entity ID.
+key, events for the same **entity** (one business object, such as a specific account) scatter across partitions and arrive out of order. Key by entity ID.
 
 **4. Publishing before committing the database transaction.** Classic bug: you write to the DB, then
 publish, and crash in between — the state changed but nobody was told. Use the **Transactional
-Outbox** *(see [Saga](../10-saga/README.md) Part 13D)*.
+Outbox** (save the event in an outbox table in the same database transaction, then publish it separately) *(see [Saga](../10-saga/README.md) Part 13D)*.
 
 **5. Events carrying too much or too little.** Too little and every consumer must call back to the
 producer, recreating coupling. Too much and the event becomes a schema everyone depends on. Carry

@@ -1,7 +1,7 @@
 # Circuit Breaker Pattern
 
 **Category:** Resilience
-**One-liner:** Wrap calls to a remote dependency in a component that stops calling it once it's clearly failing — failing instantly instead of hanging, and probing periodically to see whether it recovered.
+**One-liner:** Wrap calls to a **remote dependency** (another service, database or API your code calls over the network) in a component that stops calling it once it's clearly failing — failing instantly instead of hanging, and probing periodically to see whether it recovered.
 
 **Origin:** Popularised by **Michael Nygard** in his book *Release It!*
 
@@ -10,7 +10,7 @@
 ## Part 0 — Concepts you need first
 
 ### What is a thread, and why do we care?
-A **thread** is one line of execution inside a program. A typical web server keeps a **thread pool** —
+A **thread** is one line of execution inside a program. A typical **web server** (the program that accepts HTTP requests and sends back responses) keeps a **thread pool** —
 a fixed set of threads, say 200 — and assigns one to each incoming request. When the request
 finishes, the thread returns to the pool for reuse.
 
@@ -63,10 +63,10 @@ and degrade gracefully** rather than grinding to a halt.
 
 ## Part 2 — The problem
 
-Distributed applications constantly call remote things — other microservices, databases, external
-APIs. Every such call risks failure or a slow response. And if a service becomes unresponsive while
+**Distributed applications** (ones spread across many machines that talk over a network) constantly call remote things — other **microservices** (small, independently deployed services), databases, external
+**APIs** (interfaces other systems offer for programs to call). Every such call risks failure or a slow response. And if a service becomes unresponsive while
 the application keeps calling it, the results are disastrous: **requests pile up, threads hang, and
-the failure cascades into a wider outage.**
+the failure cascades into a wider outage.** (An **outage** is a period when a system, or part of it, is unavailable.)
 
 ### Cascading failures, step by step
 
@@ -93,7 +93,7 @@ slow service at the bottom can take down everything above it.
 
 **Waiting on slow services** with long timeouts means users experience delays and threads stay blocked.
 
-**Blindly retrying a known-failing operation** wastes CPU cycles and **overloads the failing service
+**Blindly retrying a known-failing operation** wastes **CPU cycles** (processor time) and **overloads the failing service
 even more**. The course's example: if dozens of components keep retrying against a database that's
 already struggling, it just makes things worse.
 
@@ -156,8 +156,8 @@ The circuit is closed, so traffic flows to the service as usual. The breaker **m
 recent failures**. If failures exceed a configured **failure threshold** within a certain time window,
 it transitions to Open.
 
-While closed, **successful calls generally reset the failure counter**, so an occasional transient
-error won't trip the breaker immediately. This matters: you want to distinguish "one blip" from "this
+While closed, **successful calls generally reset the failure counter**, so an occasional **transient**
+error (a short-lived glitch that goes away by itself) won't trip the breaker immediately. This matters: you want to distinguish "one blip" from "this
 service is genuinely broken."
 
 ### OPEN — tripped
@@ -189,7 +189,7 @@ Every call through the breaker performs a quick state check:
 
 - **Closed** → attempt the call and record the outcome
 - **Open** → skip the call and immediately return a failure or fallback
-- **Half-Open** → allow the call (perhaps limiting concurrency), then adjust state based on the result
+- **Half-Open** → allow the call (perhaps limiting **concurrency** — how many calls may be in progress at once), then adjust state based on the result
 
 The breaker acts as a **safety valve**: it ensures a failing component doesn't drag down the rest.
 
@@ -296,12 +296,12 @@ public class CircuitBreaker {
 and the timeout hasn't elapsed, it throws immediately — **the remote service is never contacted**.
 That's the whole point: no network call, no thread blocked, microseconds instead of seconds.
 
-**`Callable<T>` makes it generic.** `Callable` is a Java interface for "some operation that returns a
-value and may throw." Accepting one means this breaker can wrap *any* operation — an HTTP call, a
-database query, anything — rather than being tied to one specific service.
+**`Callable<T>` makes it generic.** `Callable` is a Java **interface** (a type that declares methods without implementing them) for "some operation that returns a
+value and may throw." Accepting one means this breaker can wrap *any* operation — an **HTTP** call (a web request), a
+database **query** (a request to read or change data), anything — rather than being tied to one specific service.
 
 **`synchronized` handles concurrency.** Many threads may call this simultaneously. Without
-synchronization two threads could both read `failureCount` as 2, both increment it, and you'd lose a
+**synchronization** (making threads take turns on shared data) two threads could both read `failureCount` as 2, both increment it, and you'd lose a
 count. *(This is also the example's main performance weakness — see below.)*
 
 **Success resets everything.** Note that success sets `state = CLOSED` unconditionally. From
@@ -338,10 +338,10 @@ The course notes production breakers are more sophisticated. Specifically:
   happen — even three failures spread across an hour of otherwise perfect traffic. Real
   implementations use a **rolling time window** ("more than 50% of calls in the last 10 seconds
   failed"), which is far more meaningful.
-- **`synchronized` serialises every call.** Every request through this breaker acquires the same lock,
-  so it becomes a bottleneck under load. Production libraries use **atomic operations and
-  non-blocking synchronization** instead.
-- **All exceptions count as failures.** A validation error from the remote service would trip the
+- **`synchronized` serialises every call.** Every request through this breaker acquires the same **lock** (a guard that only one thread can hold at a time),
+  so it becomes a **bottleneck** (the one narrow point that limits everything) under **load** (the volume of work arriving). Production libraries use **atomic operations and
+  non-blocking synchronization** instead (**atomic** operations complete as one indivisible step, so no lock is needed).
+- **All exceptions count as failures.** (An **exception** is Java's way of signalling an error by "throwing" it to the caller.) A **validation error** (a rejection because the input was invalid) from the remote service would trip the
   breaker even though the service is perfectly healthy. Real breakers distinguish which exceptions
   indicate the *service* is unwell.
 - **No fallback built in.** The breaker throws and the caller handles it. Most frameworks let you
@@ -359,7 +359,7 @@ seconds** until timeout. With one, the failure is handled in **milliseconds**.
 
 > A tiny check is a small price to pay for avoiding a meltdown.
 
-For extremely performance-sensitive scenarios there are options like asynchronous calls or optimised
+For extremely performance-sensitive scenarios there are options like **asynchronous** calls (made in the background without blocking the caller's thread) or optimised
 breaker logic, but generally the benefits far outweigh the overhead.
 
 ### Tuning the failure threshold
@@ -384,8 +384,8 @@ The timeout should roughly correspond to **how long you expect the service might
 ### Finding the right values
 
 This requires monitoring and tweaking. Good practice: monitor **how often the breaker opens, how long
-it stays open, and whether it's tripping too frequently.** Metrics like failure counts, open events,
-and half-open trial outcomes should feed dashboards. With that data you adjust.
+it stays open, and whether it's tripping too frequently.** **Metrics** (numeric measurements collected over time) like failure counts, open events,
+and half-open trial outcomes should feed **dashboards** (live screens of graphs). With that data you adjust.
 
 In a high-traffic system, consider a **percentage-based threshold** rather than an absolute count, so
 occasional spikes don't trip it.
@@ -399,15 +399,15 @@ cached data, a default value, or redirecting to a simpler alternative. This is w
 **degrade gracefully instead of failing completely**. Many frameworks let you specify a fallback
 function to execute when open.
 
-**Combine with retries and timeouts.** The Circuit Breaker doesn't replace other resilience patterns —
+**Combine with retries and timeouts.** The Circuit Breaker doesn't replace other **resilience** patterns (techniques for staying up when parts fail) —
 it works alongside them. You still implement **timeouts** for calls, and may **retry** a few times on
 certain failures before counting one as a failure. They work in tandem: retry a couple of times in
 case it's a transient network glitch, but let the breaker stop you trying after repeated failures
-that indicate a real outage. **[Bulkheads](../07-bulkhead/README.md)** and rate limiting complement both.
+that indicate a real outage. **[Bulkheads](../07-bulkhead/README.md)** and **rate limiting** (capping requests per caller per second) complement both.
 
-**Monitoring and alerts.** A tripped breaker usually means something is wrong with a downstream
-service, so **set up alerts**. Have the breaker log or emit an event whenever it opens or closes; your
-monitoring can catch these and alert on-call engineers or trigger automated recovery.
+**Monitoring and alerts.** A tripped breaker usually means something is wrong with a **downstream**
+service (one that your service calls), so **set up alerts**. Have the breaker log or emit an event whenever it opens or closes; your
+monitoring can catch these and alert **on-call** engineers (the people currently responsible for responding to incidents) or trigger automated recovery.
 
 > Without this, the pattern has a hidden danger: the system quietly protects itself, users see a
 > degraded feature, and **nobody realises anything is broken** because there's no flood of errors.
@@ -419,10 +419,10 @@ transitions **must be thread-safe** — you don't want two threads concurrently 
 High-performance libraries use non-blocking synchronization and atomic operations to minimise
 overhead.
 
-**Avoiding misuse.** Apply breakers to calls that are **potentially unreliable or high-latency**, like
+**Avoiding misuse.** Apply breakers to calls that are **potentially unreliable or high-latency** (**latency** = time a request takes; see [System Design Fundamentals](../01-system-design-fundamentals/README.md)), like
 network calls. There's **no benefit** on in-memory operations that are very unlikely to fail. Be
 cautious in systems where failures are very localised or quickly self-correcting — **an aggressive
-breaker constantly tripping on ephemeral errors does more harm than good.** The pattern must be tuned
+breaker constantly tripping on **ephemeral** (very short-lived) errors does more harm than good.** The pattern must be tuned
 to your system's reliability needs.
 
 ---
@@ -453,18 +453,18 @@ Database issues — network problems, resource contention, server failures — c
 errors.
 
 - **Reads:** in a read-heavy system, a breaker monitors database health. On detecting an increasing
-  error rate or latency, it trips and **redirects reads to a read replica or a cache**, keeping the
+  error rate or latency, it trips and **redirects reads to a read replica or a cache** (a **read replica** is a copy of the database kept in sync and used only for reads; a **cache** is a fast store of recently used data), keeping the
   service available
 - **Writes:** the same can apply, but **with more caution**. On increased errors the breaker could trip
-  and temporarily **buffer write operations** — but this must be handled carefully, as **data
-  consistency is at risk** and the buffer itself could become a bottleneck
+  and temporarily **buffer write operations** (hold them in a temporary queue to apply later) — but this must be handled carefully, as **data
+  consistency is at risk** (different copies of the data may disagree) and the buffer itself could become a bottleneck
 
 ---
 
 ## Part 11 — Real-world examples
 
-**Netflix and Hystrix.** Netflix famously implemented this pattern through their open-source library
-**Hystrix**. In their microservices web, if a backend service becomes slow or fails, Hystrix isolates
+**Netflix and Hystrix.** Netflix famously implemented this pattern through their **open-source** (publicly available, free-to-use code) library
+**Hystrix**. In their microservices web, if a **backend** service (a server-side service) becomes slow or fails, Hystrix isolates
 that failing endpoint, stopping the failure cascading and returning fallback responses so the user
 experience is only minimally affected.
 
@@ -482,19 +482,19 @@ strategies apply to payment gateways and shipping calculators: if the dependency
 quickly ("Sorry, we can't process payments right now") instead of making users wait and wonder.
 
 **Cloud and service meshes.** Many cloud architectures incorporate breakers to improve stability when
-calling remote services, and service mesh technologies provide breaker mechanisms **at the
+calling remote services, and **service mesh** technologies (a layer of proxies beside every service that handles service-to-service traffic) provide breaker mechanisms **at the
 infrastructure level**, automatically preventing one overloaded microservice from overloading others.
-In an **API Gateway** you might configure breaker rules per backend route, so an erroring backend gets
+In an **API Gateway** (the single entry point that routes outside requests to services) you might configure breaker rules per backend route, so an erroring backend gets
 rejected for a short period — protecting the backend and freeing the gateway for other routes.
 
 **Enterprise integration.** Even outside microservices, any integration with an external system — a
-SOAP or REST API, a database, a messaging system — benefits. A middleware system calling a slow legacy
+**SOAP** or **REST** API (two styles of web API: SOAP sends XML messages with a strict contract; REST uses plain HTTP methods on URLs), a database, a messaging system — benefits. A **middleware** system (software that sits between other systems to connect them) calling a slow **legacy** (old but still essential)
 SOAP service uses a breaker to **avoid tying up all its worker threads** on that one slow dependency.
-The pattern also appears in reactive programming and stream processing for **backpressure**: if a
-downstream consumer is too slow or failing, the upstream producer trips a breaker and stops feeding
+The pattern also appears in **reactive programming** (code built around streams of events handled as they arrive) and **stream processing** (handling continuous flows of data record by record) for **backpressure** (a slow receiver signalling the sender to slow down): if a
+downstream consumer is too slow or failing, the **upstream** producer (the one sending the data) trips a breaker and stops feeding
 it until it recovers.
 
-**Libraries:** Hystrix (Java, now in maintenance mode), **Resilience4j** (Java), **Polly** (.NET), plus
+**Libraries:** Hystrix (Java, now in maintenance mode), **Resilience4j** (Java), **Polly** (.NET — Microsoft's application platform), plus
 built-in support in cloud platforms and service meshes.
 
 ---
@@ -502,7 +502,7 @@ built-in support in cloud platforms and service meshes.
 ## Part 12 — System design example: distributed social media platform
 
 Services: **User Management**, **Post Management**, **Feed Generation**, and more — each running on
-multiple nodes for high availability and load balancing.
+multiple **nodes** (machines or instances) for **high availability** (staying up nearly all the time) and **load balancing** (spreading requests across instances).
 
 Breakers apply in several places:
 
@@ -519,7 +519,7 @@ prevents the notification feature from impacting the rest of the system.
 ### Distributed breaker state
 
 An interesting design consideration: use a **shared circuit breaker per service, stored in a
-distributed cache**. This maintains consistency across all nodes — if a breaker trips on one node, it
+distributed cache** (a cache spread across several servers that all nodes can read and write, e.g. Redis). This maintains consistency across all nodes — if a breaker trips on one node, it
 trips on all of them.
 
 This must be **balanced against the additional complexity and potential performance impact** of
@@ -609,6 +609,8 @@ combination with other patterns.
 ## Part 16 — Implementation
 
 ### A. Runnable demo — watch the state machine work
+
+(A **state machine** is something that is always in exactly one of a fixed set of states and moves between them on defined events — exactly what the breaker is. In the code, `AtomicInteger` is a thread-safe counter and `volatile` makes a field's latest value visible to all threads. `./gradlew` runs **Gradle**, the Java build tool used for the demos.)
 
 Full source: **[`demos/chapters/06-circuit-breaker/CircuitBreakerDemo.java`](../../../demos/chapters/06-circuit-breaker/CircuitBreakerDemo.java)**
 
@@ -764,7 +766,7 @@ and the sick service got left alone.
 Nobody hand-writes breakers in production. **Resilience4j** is the current standard for Java (Hystrix
 is in maintenance mode).
 
-**Dependency (Maven):**
+**Dependency (Maven):** (Maven is a Java build tool; this snippet adds the library to the project. **Spring Boot** is a framework for building Java services quickly, and **AOP** — aspect-oriented programming — is what lets an annotation like `@CircuitBreaker` wrap a method with extra behaviour.)
 ```xml
 <dependency>
   <groupId>io.github.resilience4j</groupId>
@@ -777,7 +779,7 @@ is in maintenance mode).
 </dependency>
 ```
 
-**Configuration (`application.yml`)** — this is where the real learning is:
+**Configuration (`application.yml`)** — this is where the real learning is (YAML is an indentation-based config format; the `400` in the last comment is the **HTTP status code** for "bad request"):
 
 ```yaml
 resilience4j:
@@ -830,7 +832,7 @@ management:
   endpoints.web.exposure.include: health,circuitbreakers,prometheus
   health.circuitbreakers.enabled: true
 ```
-Then alert on the Prometheus metric `resilience4j_circuitbreaker_state`.
+Then alert on the **Prometheus** metric `resilience4j_circuitbreaker_state` (Prometheus is a popular open-source system that collects metrics and fires alerts).
 
 ### D. Implementation pitfalls
 
@@ -843,12 +845,12 @@ open the circuit.
 bad, not the *service*. Put those in `ignoreExceptions` or you'll trip the breaker on a client bug
 and take down a healthy dependency.
 
-**3. Forgetting `slowCallDurationThreshold`.** A service returning 200 OK after 30 seconds never
+**3. Forgetting `slowCallDurationThreshold`.** A service returning `200 OK` (the HTTP status code for success) after 30 seconds never
 "fails," so a failure-only breaker never opens — while your threads are consumed exactly as badly as
 if it were down. Slow-call detection is what catches the most dangerous case.
 
 **4. No timeout on the underlying call.** The breaker can only react to a call that *returns*. Always
-set connect and read timeouts on your HTTP client; otherwise a hung socket blocks forever and the
+set connect and read timeouts on your HTTP client; otherwise a hung **socket** (the operating-system endpoint of a network connection) blocks forever and the
 breaker never sees a failure to count.
 
 **5. One breaker shared across dependencies.** Name breakers per downstream service. A shared instance

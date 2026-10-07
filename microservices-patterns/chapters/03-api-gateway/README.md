@@ -17,7 +17,7 @@ everything behind it is somebody else's problem.
 
 ### What the pattern actually is
 
-In a microservice architecture you have many services each doing their own thing. The API Gateway
+In a **microservice architecture** (an application split into many small services, each running separately and owning one business capability) you have many services each doing their own thing. The API Gateway
 Pattern is about having **a single entry point for external consumers** to reach all of them.
 
 Three things follow from that single entry point, and it's worth separating them because they're
@@ -30,9 +30,9 @@ independent benefits:
 
 ### Why the pattern exists
 
-The dominant architectural trend of recent years has been the shift from monolithic structures to
+The dominant architectural trend of recent years has been the shift from **monolithic** structures (one big application built and deployed as a single unit) to
 microservices. The course compares it to the shift from landlines to smartphones in
-telecommunications — a genuine step change that brought enhanced scalability, increased flexibility,
+telecommunications — a genuine step change that brought enhanced **scalability** (the ability to handle more work by adding resources), increased flexibility,
 and more. But as with any technological advance, it introduced its own problems.
 
 The biggest of those problems is communication:
@@ -52,13 +52,13 @@ of those pieces.
 Now consider the two possible designs:
 
 - **Without a gateway:** your TV app calls each microservice separately. It must know that there *is*
-  a preferences service, where it lives, how to authenticate to it, and what shape its response
+  a preferences service, where it lives, how to **authenticate** to it (prove who you are, e.g. with a password or token), and what shape its response
   takes — and repeat all of that for every other service.
 - **With a gateway:** your TV app makes one call to the Netflix API Gateway, which then talks to
   whichever microservices are needed.
 
 The second is dramatically simpler for the TV app. And note *which* app benefits most — a TV app or a
-mobile app is something you cannot force users to update. Every piece of service topology you bake
+mobile app is something you cannot force users to update. Every piece of **service topology** (which services exist, where they run and how they connect) you bake
 into it is frozen in the field for years.
 
 ### The master orchestrator
@@ -82,9 +82,9 @@ other. You make a request; the gateway handles the rest.
 The introduction gives four, which the next lesson expands considerably:
 
 - **Simplified client** — clients interact with one gateway instead of many services.
-- **Security** — authentication and authorization can be added at the gateway level.
-- **Performance** — you can add caching, compress responses, and manage load balancing.
-- **Cross-cutting concerns** — logging, analytics, and similar concerns are handled in one place.
+- **Security** — **authentication** (checking who the caller is) and **authorization** (checking what that caller is allowed to do) can be added at the gateway level.
+- **Performance** — you can add **caching** (keeping copies of recent answers so repeat requests are served without redoing the work), compress responses (shrink them so they travel faster), and manage **load balancing** (spreading requests across several copies of a service). See [System Design Fundamentals](../01-system-design-fundamentals/README.md) for both.
+- **Cross-cutting concerns** (needs that every service shares, rather than belonging to one feature) — **logging** (writing a record of what happened), **analytics** (collecting usage data), and similar concerns are handled in one place.
 
 ---
 
@@ -108,10 +108,10 @@ fast.
 and the gateway talks to other services — collapsing a mesh of connections into a hub.
 
 ### 2. Inconsistency in service calls
-**Problem:** Different services may require different interaction styles and have different data
-formats. A client ends up implementing several dialects of your own API.
+**Problem:** Different services may require different interaction styles and have different **data
+formats** (ways of encoding data, e.g. JSON, XML or binary). A client ends up implementing several dialects of your own API.
 **Solution:** The gateway provides one consistent way to interact with everything. It can **translate
-calls and data formats**, so the client sees uniformity even where the backend has none.
+calls and data formats**, so the client sees uniformity even where the **backend** (the server-side services behind the gateway) has none.
 
 ### 3. Security and authentication
 **Problem:** Handling security for each service individually is a nightmare. Every service must be
@@ -137,7 +137,7 @@ and improving performance.
 **Solution:** Handle them centrally at the gateway, removing that duplication.
 
 ### 7. Managing legacy systems
-**Problem:** You may have old services that must be accessed in specific, awkward ways.
+**Problem:** You may have old **legacy** services (old systems still running because the business depends on them) that must be accessed in specific, awkward ways.
 **Solution:** The gateway can interact with legacy services while **presenting a modern interface** to
 clients — the awkwardness stops at the gateway boundary.
 
@@ -159,10 +159,10 @@ consolidated response**.
 transformations needed along the way.
 
 ### 11. Handling partial failures
-**Problem:** In a distributed system some services fail while others keep working. Handling these
+**Problem:** In a **distributed system** (one made of many programs on different machines that cooperate over a network) some services fail while others keep working. Handling these
 **partial** failures gracefully is genuinely difficult.
 **Solution:** The gateway detects failures and either **reroutes** requests or provides **fallback
-responses**, so the system stays robust rather than failing wholesale.
+responses** (a safe default answer used when the real one can't be obtained), so the system stays robust rather than failing wholesale.
 
 ### 12. Request transformation
 **Problem:** Different services expect requests formatted in different ways.
@@ -178,12 +178,12 @@ conclusion, this becomes [BFF](../04-bff/README.md) — one gateway per client t
 **Problem:** Collecting logs and monitoring data from every service in a distributed system is
 challenging.
 **Solution:** The gateway collects logs and monitoring data, giving you **one point for
-observability**.
+observability** (the ability to understand what a running system is doing from its logs, metrics and traces).
 
 ### 15. Handling asynchronous operations
 **Problem:** Some operations take a long time and should not block the client.
-**Solution:** The gateway manages those asynchronous operations, giving clients a way to **check
-progress or receive a callback** on completion.
+**Solution:** The gateway manages those **asynchronous** operations (work that continues in the background while the caller moves on), giving clients a way to **check
+progress or receive a callback** on completion (a **callback** is a call made back to the client when the work finishes).
 
 Taken together, these create a smoother, more reliable interaction layer for clients — the course
 describes it as a super-efficient helper that takes care of the nitty-gritty details so you get a
@@ -203,7 +203,7 @@ Each service corresponds to a distinct area of the library's functionality:
 - **UserService** manages user profiles
 - **InventoryService** keeps track of book stock levels
 
-In the Java implementation each would be an interface with methods matching potential client
+In the Java implementation each would be an **interface** (a Java type that lists method signatures without implementing them) with methods matching potential client
 requests — `CatalogueService`, for instance, might expose `searchByTitle(String title)` and
 `searchByAuthor(String author)`.
 
@@ -247,9 +247,9 @@ Walking it through: `ApiGateway` receives a request for user details and passes 
 The same applies to a book title search, which is routed to `CatalogueService`.
 
 **What to take from the shape, not the detail:** gateway methods *delegate*, they never *implement*.
-The moment a gateway method starts containing business rules rather than forwarding, you are on the
-road to the distributed monolith described below. Real gateways would wrap each delegation with auth,
-timeouts, retries, and caching — but the delegation shape stays the same.
+The moment a gateway method starts containing **business rules** (logic about the domain itself, e.g. "members may borrow 5 books") rather than forwarding, you are on the
+road to the **distributed monolith** described below (a system split into services that are still so tangled they must change and deploy together). Real gateways would wrap each delegation with auth,
+**timeouts** (a maximum wait before giving up), **retries** (trying a failed call again), and caching — but the delegation shape stays the same.
 
 ---
 
@@ -261,12 +261,13 @@ becomes a liability of its own. Five problems, each with its mitigation.
 ### 1. Single point of failure
 **Problem:** If the API Gateway goes down, **nothing can communicate**. You have concentrated all
 traffic through one component, so its availability is now your system's availability.
-**Solution:** Implement high availability and redundancy for the gateway, and **monitor it
+**Solution:** Implement **high availability** (staying up nearly all the time) and **redundancy** (running spare copies so one failure isn't fatal) for the gateway, and **monitor it
 diligently**.
 
 ### 2. Potential bottleneck
+(A **bottleneck** is the one narrow point that limits how fast everything else can go.)
 **Problem:** All requests pass through the gateway, which could cause delays.
-**Solution:** Ensure the gateway is highly performant, **scale it horizontally**, and optimise its
+**Solution:** Ensure the gateway is highly performant, **scale it horizontally** (add more machines running copies, rather than a bigger machine), and optimise its
 code.
 
 ### 3. Complexity in the gateway
@@ -277,19 +278,19 @@ gateways** if necessary — per client type, or per functionality.
 
 > This is the failure mode worth naming explicitly: the gateway is where business logic goes to hide.
 > Once teams start putting domain rules in it, every team needs to change it, and it becomes the
-> deployment bottleneck microservices were supposed to eliminate. Keep it about **transport**, not
-> **domain**.
+> deployment bottleneck microservices were supposed to eliminate. Keep it about **transport** (moving requests to the right place), not
+> **domain** (the business problem the software models).
 
 ### 4. Maintenance overhead
 **Problem:** As services evolve, maintaining the gateway's routes and rules becomes challenging — the
 gateway's configuration drifts away from reality.
-**Solution:** **Automate as much as possible.** Use CI/CD to ease maintenance.
+**Solution:** **Automate as much as possible.** Use **CI/CD** (Continuous Integration / Continuous Delivery — automatically building, testing and releasing every code change) to ease maintenance.
 
 ### 5. Security risk
 **Problem:** Being the entry point makes it a **prime target for attacks**. The same concentration
 that makes it useful makes it valuable to an attacker.
 **Solution:** Implement robust security practices, keep the gateway updated, and monitor for
-vulnerabilities.
+**vulnerabilities** (weaknesses an attacker could exploit).
 
 ---
 
@@ -298,7 +299,7 @@ vulnerabilities.
 Distinct from the problems above: these are the costs the gateway imposes on every request.
 
 ### 1. Latency
-**Implication:** The gateway introduces an **additional network hop**.
+**Implication:** The gateway introduces an **additional network hop** (one more trip between machines), which adds **latency** — the time a request takes from start to finish.
 **Solution:** Optimise its performance using techniques like **caching and response compression**.
 
 ### 2. Resource utilization
@@ -311,14 +312,20 @@ Distinct from the problems above: these are the costs the gateway imposes on eve
 prevent blocking.
 
 ### 4. Rate limiting challenges
-**Implication:** Implementing rate limiting at the gateway is complex, **especially in distributed
-deployments** — several gateway instances must share a view of each client's usage.
+**Implication:** Implementing **rate limiting** (capping how many requests a client may make per time window) at the gateway is complex, **especially in distributed
+deployments** — several gateway **instances** (running copies of the same program) must share a view of each client's usage.
 **Solution:** Use advanced algorithms built for this, such as **token bucket** or **leaky bucket**,
 which handle distributed scenarios.
 
+> **Key term — token bucket / leaky bucket:** In a **token bucket**, each client has a bucket that
+> refills with tokens at a steady rate; each request spends one token, and when the bucket is empty
+> requests are rejected. A full bucket allows a short burst. A **leaky bucket** instead queues
+> requests and lets them out at a fixed rate, smoothing bursts away. Both are explained further in
+> [System Design Fundamentals](../01-system-design-fundamentals/README.md).
+
 ### 5. Load balancing overhead
-**Implication:** The gateway must distribute requests efficiently to prevent hotspots.
-**Solution:** Implement smart load balancing algorithms; **consider a service mesh** for more granular
+**Implication:** The gateway must distribute requests efficiently to prevent **hotspots** (single instances that get far more traffic than the rest).
+**Solution:** Implement smart load balancing algorithms; **consider a service mesh** (a layer of small proxies beside every service that handles service-to-service traffic) for more granular
 control. *(See [Sidecar](../09-sidecar/README.md).)*
 
 ### 6. Handling asynchronous operations
@@ -390,8 +397,8 @@ Upload is a single routed call. Feed is a **scatter-gather**: one client request
 parallel service calls and comes back as one merged response.
 
 That fan-out is where the gateway earns its latency cost. Doing the same thing client-side would
-mean several sequential round trips over a mobile network — far slower than one round trip plus
-parallel calls inside the data centre, where latency between services is a fraction of the latency to
+mean several sequential **round trips** (a request going out and its response coming back) over a mobile network — far slower than one round trip plus
+parallel calls inside the **data centre** (the building of servers where the services run), where latency between services is a fraction of the latency to
 the phone.
 
 The result: Instagram gets a consistent, efficient, and secure way to handle all the interactions
@@ -411,7 +418,7 @@ scale as it grows.
 | Client-specific logic | Pollutes it | Belongs there |
 | Risk | Becomes a bottleneck / distributed monolith | Duplication and drift across BFFs |
 
-Not mutually exclusive — a common setup is a thin shared gateway (TLS, coarse auth, rate limiting)
+Not mutually exclusive — a common setup is a thin shared gateway (TLS — the encryption behind HTTPS; coarse auth; rate limiting)
 with BFFs behind it.
 
 ### When to use
@@ -435,7 +442,7 @@ with BFFs behind it.
 > any topology you bake into them is frozen in the field for years. The classic example is
 > Instagram's feed: one request fans out in parallel to the feed and notification services and comes
 > back as one response, which beats several sequential round trips from the phone. The trade-offs
-> are that it's a single point of failure needing HA and redundancy, it adds a network hop, rate
+> are that it's a single point of failure needing HA (high availability) and redundancy, it adds a network hop, rate
 > limiting across distributed gateway instances needs token or leaky bucket algorithms, and it tends
 > to accumulate business logic until it becomes a distributed monolith — so keep it about transport,
 > not domain, and split it per client type or per domain if it gets too big. If each client type
@@ -470,8 +477,8 @@ private String get(Future<String> f, String fallback) {
 }
 ```
 
-All three calls are **submitted before any result is read** — that's what makes them parallel. Reading
-`fFeed` before submitting the others would serialise them.
+Here `pool` is a **thread pool** (a set of reusable worker threads that run tasks), and each `Future` is a placeholder for a result that will arrive later. All three calls are **submitted before any result is read** — that's what makes them parallel. Reading
+`fFeed` before submitting the others would **serialise** them (force them to run one after another).
 
 ### B. What you should see
 
@@ -497,11 +504,15 @@ All three calls are **submitted before any result is read** — that's what make
   429 Too Many Requests after 5 requests
 ```
 
+(The numbers `401` and `429` are **HTTP status codes** — standard three-digit codes in every web response; 401 means "not authenticated", 429 means "too many requests".)
+
 **Compare 2 and 3: 279ms → 129ms.** Parallel aggregation costs the *slowest* service, not the sum.
 And note **section 4** — an unauthenticated request touched **zero** backend services, which is the
 security argument for a gateway stated as an observable fact.
 
 ### C. Production — Spring Cloud Gateway
+
+**Spring Cloud Gateway** is a ready-made gateway built on **Spring**, the most widely used Java framework. The XML below is the **Maven dependency** that adds it to a project (Maven is a Java build tool that downloads libraries). In the YAML config, `lb://` means "look the service up via **service discovery**" (a registry of where each service is running — see [Service Discovery](../05-service-discovery/README.md)), **predicates** decide which requests a route matches, and **filters** modify or guard the request on its way through. `GET` is the HTTP method for reading data; a request is **idempotent** if repeating it has the same effect as doing it once.
 
 ```xml
 <dependency>
@@ -542,7 +553,7 @@ spring:
             - Header=X-API-Version, v2                   # route by version
 ```
 
-Global cross-cutting filter — auth applied to every route:
+Global cross-cutting filter — auth applied to every route. (`Mono` is a **reactive** type: a promise of one value delivered later without blocking a thread.)
 ```java
 @Component
 public class AuthFilter implements GlobalFilter, Ordered {
@@ -559,14 +570,14 @@ public class AuthFilter implements GlobalFilter, Ordered {
 }
 ```
 
-**Kubernetes-native alternative** — an Ingress or Gateway API resource does routing, TLS, and rate
+**Kubernetes-native alternative** — (**Kubernetes** is a platform that runs and manages **containers** — packaged, isolated applications — across a cluster of machines.) An **Ingress** or **Gateway API** resource (Kubernetes objects describing how outside traffic enters the cluster) does routing, TLS, and rate
 limiting without you writing or operating a gateway application at all. Prefer this when your needs
 are routing-shaped rather than aggregation-shaped.
 
 ### D. Implementation pitfalls
 
 **1. Sequential calls that should be parallel.** The most common performance bug in gateways. If you
-`.get()` on each future as you create it, you've written sequential code that looks concurrent.
+`.get()` on each future as you create it, you've written sequential code that looks **concurrent** (several tasks in progress at the same time).
 
 **2. No per-call timeout in aggregation.** One slow service makes the whole aggregated response slow.
 Always bound each future — `f.get(1, TimeUnit.SECONDS)` in the demo — so the slowest dependency can't
@@ -576,19 +587,19 @@ dictate your latency.
 every team must change it and it becomes the deployment bottleneck. Keep it to transport concerns:
 routing, auth, rate limiting, aggregation, observability.
 
-**4. In-memory rate limiting behind multiple gateway instances.** Three replicas each allowing 100
-req/s means the real limit is 300. Use a **shared store (Redis)**, which is why the config above uses
+**4. In-memory rate limiting behind multiple gateway instances.** Three **replicas** (identical running copies) each allowing 100
+req/s (requests per second) means the real limit is 300. Use a **shared store (Redis)** — Redis is a very fast in-memory key-value database often used for counters and caches — which is why the config above uses
 `redis-rate-limiter`.
 
 **5. Retrying non-idempotent requests.** The `methods: GET` line above is deliberate. A gateway
-retrying a POST can create duplicate orders. *(See [Retry](../08-retry/README.md).)*
+retrying a **POST** (the HTTP method for creating something) can create duplicate orders. *(See [Retry](../08-retry/README.md).)*
 
 **6. Running the gateway as a single instance.** It's a single point of failure by design — so run at
-least two replicas behind a load balancer, and treat its resource limits and monitoring as seriously
+least two replicas behind a **load balancer** (a component that spreads incoming requests across several servers), and treat its resource limits and monitoring as seriously
 as any critical service.
 
-**7. Losing trace context.** The gateway is the ideal place to generate a correlation ID and propagate
-it downstream. Skip it and you lose the ability to trace a request across services.
+**7. Losing trace context.** The gateway is the ideal place to generate a **correlation ID** (a unique ID attached to a request and passed along to every service it touches, so its logs can be joined up) and propagate
+it **downstream** (to the services it calls). Skip it and you lose the ability to trace a request across services.
 
 ---
 
@@ -598,4 +609,4 @@ it downstream. Skip it and you lose the ability to trace a request across servic
 - **[Circuit Breaker](../06-circuit-breaker/README.md)** — the gateway is a natural place to configure breaker rules per backend route
 - **[Service Discovery](../05-service-discovery/README.md)** — how the gateway finds service instances; the gateway is the classic server-side discovery router
 - **[Strangler Fig](../02-strangler-fig/README.md)** — the migration facade is often literally an API Gateway
-- **[Sidecar](../09-sidecar/README.md)** — gateway handles north-south (external) traffic; a mesh of sidecars handles east-west (internal)
+- **[Sidecar](../09-sidecar/README.md)** — gateway handles north-south (external, in and out of the system) traffic; a mesh of sidecars handles east-west (internal, service-to-service)

@@ -13,10 +13,11 @@ All 93 lessons across 14 chapters were read; the 12 patterns are written up belo
 
 ---
 
-## The twelve patterns
+## Chapters: the fundamentals primer and the twelve patterns
 
 | # | Pattern | What it solves | Notes |
 |---|---------|----------------|-------|
+| 1 | **System Design Fundamentals** | Start here if you are new: every basic concept defined from zero (latency, load balancers, DNS, HTTP, caching, databases, replication, sharding, queues, CAP, consensus, security) plus a 300-term glossary | [01-system-design-fundamentals](chapters/01-system-design-fundamentals/README.md) |
 | 2 | **Strangler Fig** | Gradually replace a monolith without a big-bang rewrite | [02-strangler-fig](chapters/02-strangler-fig/README.md) |
 | 3 | **API Gateway** | Single entry point; clients stop knowing your service topology | [03-api-gateway](chapters/03-api-gateway/README.md) |
 | 4 | **Backends for Frontends** | One tailored backend per client type; stop over-fetching | [04-bff](chapters/04-bff/README.md) |

@@ -10,29 +10,29 @@
 ### What is a "cross-cutting concern"?
 Functionality needed by **many parts of a system** but not part of any one part's core purpose.
 
-Your Order Service exists to manage orders. That's its business logic. But it also needs to: log what
-it does, emit metrics, authenticate callers, encrypt traffic, retry failed calls, and report traces.
+Your Order Service exists to manage orders. That's its **business logic** (the code that implements what the business actually does). But it also needs to: log what
+it does, emit **metrics** (numeric measurements like request counts and response times), **authenticate** callers (verify who they are), **encrypt** traffic (scramble it so only the intended receiver can read it), retry failed calls, and report **traces** (records of a request's path through every service it touched).
 **Every service needs those**, and none of them is about orders.
 
 Cross-cutting concerns are a problem because the obvious solutions are both bad:
 - **Copy the code into every service** → duplication, and changes require touching everything
-- **Put it in a shared library** → better, but see the polyglot problem below
+- **Put it in a shared library** (a reusable code package every service imports) → better, but see the polyglot problem below
 
 ### What is a process?
 A running program with its own memory space. Two processes are genuinely separate — one crashing
 doesn't corrupt the other's memory.
 
 ### What is a container?
-A package containing an application plus everything it needs to run — libraries, configuration, the
+A package containing an application plus everything it needs to run — libraries, **configuration** (settings supplied from outside the code), the
 lot. It runs isolated from other containers on the same machine. **Docker** is the common tool for
 building them.
 
 ### What is a Kubernetes Pod?
-The smallest deployable unit in Kubernetes. Crucially, **a Pod can contain more than one container**,
+The smallest deployable unit in **Kubernetes** (the standard platform for running containers across a cluster of machines). Crucially, **a Pod can contain more than one container**,
 and containers in the same Pod:
-- Are always **scheduled onto the same machine** together
-- Share a **network namespace** — they can talk to each other over `localhost`
-- Can share **storage volumes**
+- Are always **scheduled onto the same machine** together (**scheduling** = Kubernetes choosing which machine runs something)
+- Share a **network namespace** (one private, isolated set of network addresses and ports) — they can talk to each other over `localhost` (the special address meaning "this same machine")
+- Can share **storage volumes** (directories of files mounted into the containers)
 - Are **created and destroyed together**
 
 **This is the mechanism that makes the Sidecar pattern practical.** Without co-scheduling and shared
@@ -44,17 +44,17 @@ without the application knowing it exists — which is exactly how production si
 
 ### What is a service mesh?
 An infrastructure layer handling all service-to-service communication. Concretely, it's **a sidecar
-proxy deployed next to every service**, plus a central **control plane** that configures them all.
-**Istio** (using **Envoy** as the proxy) is the best-known example.
+proxy deployed next to every service**, plus a central **control plane** (the management component that pushes settings to every proxy) that configures them all.
+**Istio** (using **Envoy**, a high-performance open-source proxy) is the best-known example.
 
 ### The polyglot problem — why shared libraries aren't enough
-Suppose you write an excellent library handling retries, metrics, and mTLS. Now your company has
+**Polyglot** means using many programming languages. Suppose you write an excellent library handling retries, metrics, and **mTLS** (mutual TLS — both sides of a connection present certificates to prove their identity, and the traffic is encrypted). Now your company has
 services in Java, Go, Python, and Node.
 
 You must write and maintain **four versions**. They will drift. A bug fixed in the Java one lingers in
 Python for months. Adding a fifth language means a fifth implementation before that team can ship.
 
-**A sidecar solves this because it's a separate process speaking network protocols.** It doesn't care
+**A sidecar solves this because it's a separate process speaking network protocols** (standard rules for exchanging data, such as HTTP). It doesn't care
 what language the service beside it is written in.
 
 ---
@@ -66,7 +66,7 @@ sharing the journey but remaining a distinct unit. The course also offers Batman
 Sherlock Holmes and Dr Watson — an aide that handles specific tasks, operates autonomously, and yet is
 part of a single larger entity.
 
-The pattern encapsulates **modularity and separation of concerns**: deploy components of an
+The pattern encapsulates **modularity and separation of concerns** (building a system from independent pieces, each responsible for one job): deploy components of an
 application as **separate processes running alongside the main application**. Each sidecar is
 dedicated to a specific function and provides its service to the main application.
 
@@ -103,9 +103,9 @@ Everything else below holds.
 ## Part 3 — The problem: monolithic application management
 
 ### Lack of isolation
-In a monolith all components are closely intertwined, so **a failure in one component can bring down
+In a **monolith** (an application built and deployed as one single unit) all components are closely intertwined, so **a failure in one component can bring down
 the entire application**. The course's image: all your eggs in one basket — if the basket falls, all
-the eggs break. This lack of fault isolation makes monoliths vulnerable and risky.
+the eggs break. This lack of **fault isolation** (containing a failure so it can't spread) makes monoliths vulnerable and risky.
 
 ### Scalability — moving the mountain
 Scaling a monolith is like moving a mountain. **You cannot scale a particular component or
@@ -113,12 +113,12 @@ functionality; you must scale the entire application**, even if only one compone
 leads to unnecessary resource consumption and inefficient scaling.
 
 ### Complexity — a tangled web
-As a monolith grows, so does its complexity. More features mean the codebase becomes a tangled web
+As a monolith grows, so does its complexity. More features mean the **codebase** (all the source code of the application) becomes a tangled web
 that's increasingly difficult to understand, manage, or modify. Maintenance becomes a nightmare and
 development slows significantly.
 
 ### Technology constraint — one size does not fit all
-With a monolith you're largely **stuck with the technology stack chosen at the beginning**. Want to
+With a monolith you're largely **stuck with the technology stack chosen at the beginning** (the **stack** is the set of languages, frameworks and databases used). Want to
 integrate a new technology or switch to a more efficient one? That's a mammoth task. This lack of
 flexibility is a significant constraint given how rapidly technology evolves.
 
@@ -133,7 +133,7 @@ self-contained module that's easy to manage and scale.
 **Flexibility.** By separating the main service from its secondary functions, it becomes easier to
 update, modify, or replace individual components without affecting the others. To change a specific
 piece of functionality, you **update the relevant sidecar and leave the rest of the application
-untouched** — no full redeploy.
+untouched** — no full **redeploy** (rebuilding and releasing the whole application).
 
 **Enhanced scalability.** Since each sidecar is a separate entity, you can scale each independently.
 Surge in user logins? Scale up the **authentication sidecar**. High load on data processing? Scale up
@@ -173,10 +173,10 @@ This is the most important architectural role, and the one that makes service me
 The sidecar **intercepts all incoming and outgoing network traffic** from the main application,
 effectively acting as a **proxy**. This means it can handle:
 
-- **Load balancing**
-- **Circuit breaking** *(see [Circuit Breaker](../06-circuit-breaker/README.md))*
+- **Load balancing** (spreading requests across several instances of a service — see [System Design Fundamentals](../01-system-design-fundamentals/README.md))
+- **Circuit breaking** (stopping calls to a service that keeps failing) *(see [Circuit Breaker](../06-circuit-breaker/README.md))*
 - **Security** — including mutual TLS
-- **Service discovery** *(see [Service Discovery](../05-service-discovery/README.md))*
+- **Service discovery** (finding where other services are currently running) *(see [Service Discovery](../05-service-discovery/README.md))*
 
 ...leaving the main application **free to focus on delivering the primary service**.
 
@@ -192,8 +192,8 @@ effectively acting as a **proxy**. This means it can handle:
 ```
 
 > **Why "intercepts" is the key word.** The application doesn't call the sidecar and doesn't know it
-> exists. It makes what it thinks is a normal HTTP call; traffic is transparently routed through the
-> sidecar. That's what allows you to add mTLS, retries, and tracing to an application **without
+> exists. It makes what it thinks is a normal **HTTP** call (an ordinary web request); traffic is transparently routed through the
+> sidecar. That's what allows you to add mTLS, retries, and **tracing** (recording each request's path across services) to an application **without
 > changing a line of its code** — even for an application whose source you can't easily modify.
 
 ### Shared lifespan
@@ -209,6 +209,8 @@ application would need to handle its absence — reintroducing exactly the compl
 ## Part 6 — Worked example
 
 ### The main application — a Spring Boot REST service
+
+(**Spring Boot** is a popular Java framework for building web services quickly; a **REST** service answers plain HTTP requests on URLs such as `/api`.)
 
 ```java
 @SpringBootApplication
@@ -226,7 +228,7 @@ public class MainApplication {
 }
 ```
 
-A simple web service returning a string whenever `/api` is hit.
+A simple web service returning a string whenever `/api` is hit (each such URL is an **endpoint**).
 
 ### The sidecar — a logging helper
 
@@ -271,7 +273,7 @@ service discovery to find its sidecar; it's always right there at a known local 
 
 > ⚠️ **This example is pedagogically useful but architecturally backwards.** The main application
 > *explicitly calling* the sidecar defeats the central benefit — the application now knows about the
-> sidecar, contains code coupling it to the sidecar, and would break if the sidecar changed. Real
+> sidecar, contains code **coupling** it to the sidecar (making it depend on the sidecar's details), and would break if the sidecar changed. Real
 > sidecars are **transparent**, intercepting traffic without the application's knowledge (as Istio
 > and Envoy do below). Read this as "how two co-located processes communicate," not as the intended
 > usage pattern.
@@ -281,7 +283,7 @@ service discovery to find its sidecar; it's always right there at a known local 
 The course is explicit that the Java example doesn't cover deployment. In production you would:
 
 - Use a container platform like **Docker** to package the main application and sidecar
-- Use **Kubernetes** to orchestrate deployment and scaling
+- Use **Kubernetes** to **orchestrate** deployment and scaling (automatically start, place, restart and scale the containers)
 
 Kubernetes has **built-in support for sidecar containers**, making it the natural platform for
 implementing this pattern.
@@ -295,7 +297,7 @@ worth understanding rather than dismissing.
 
 ### Resource cost
 Each sidecar is an **additional process** running alongside your main application. That means more
-CPU, more memory, more network bandwidth.
+**CPU** (processor time), more memory, more network **bandwidth** (data-transfer capacity).
 
 Individually, the sidecar's resource usage may not be substantial. **But multiply that by the number
 of instances of your application.** With hundreds or thousands of instances each carrying its own
@@ -306,10 +308,10 @@ sidecar, **cumulative resource usage becomes significant**.
 > objection to adopting a service mesh.
 
 ### Latency
-Having a sidecar introduces an **additional network hop**, since requests may go through the sidecar
+Having a sidecar introduces an **additional network hop** (one more trip between two programs over the network), adding **latency** (delay per request), since requests may go through the sidecar
 before reaching the main application or an external service.
 
-The latency introduced is **usually negligible** — it's a loopback connection within the same Pod, not
+The latency introduced is **usually negligible** — it's a **loopback** connection (traffic that never leaves the machine) within the same Pod, not
 a real network traversal. But in **high-performance, low-latency systems this could become an issue**,
 and it's worth measuring rather than assuming.
 
@@ -325,22 +327,22 @@ You need to balance these trade-offs for your situation.
 ### 1. Sidecar and main application versioning
 Versioning becomes more complex. You must manage versions of **both** the main application and the
 sidecar. What if a new sidecar version is **incompatible with an older application version**, or vice
-versa? How do you roll out updates across a fleet? These questions need answering before you adopt the
+versa? How do you **roll out** updates (release them gradually) across a **fleet** (all the running instances)? These questions need answering before you adopt the
 pattern, not after.
 
 ### 2. Shared resources
 Sidecars share resources with the main application — **network and disk**. It's important the sidecar
 **doesn't hog these resources**, leaving nothing for the main application. Manage this using
-**resource limits and quotas at the container level**.
+**resource limits and quotas at the container level** (hard caps on the CPU and memory each container may use).
 
-> Without limits, a misbehaving sidecar — say, one buffering logs during an outage of the log
+> Without limits, a misbehaving sidecar — say, one **buffering** logs (holding them in memory to send later) during an **outage** (period of unavailability) of the log
 > collector — can starve the very application it's meant to support.
 
 ### 3. Security
 Sidecars often need **similar security permissions to the main application** to perform their tasks.
-This **increases the attack surface** and needs careful consideration when designing your sidecar.
+This **increases the attack surface** (the total set of places an attacker could try to break in) and needs careful consideration when designing your sidecar.
 
-A sidecar handling mTLS holds private keys. A sidecar collecting logs can read application output.
+A sidecar handling mTLS holds **private keys** (the secret half of an encryption key pair; whoever has it can impersonate the service). A sidecar collecting logs can read application output.
 Compromising the sidecar can be as valuable to an attacker as compromising the application.
 
 ### 4. Complexity
@@ -372,7 +374,7 @@ update** — you patch one sidecar image rather than auditing dozens of services
 
 ### Networking features
 Networking is complex. A sidecar can handle **service discovery, connection pooling, circuit-breaking,
-intelligent routing**, and more, letting your application focus on business logic without worrying
+intelligent routing** (**connection pooling** = keeping open connections ready for reuse instead of opening a new one per request), and more, letting your application focus on business logic without worrying
 about networking intricacies.
 
 > The unifying test: **is this concern identical across all your services, and unrelated to what any
@@ -383,7 +385,7 @@ about networking intricacies.
 ## Part 10 — System design examples
 
 ### Microservices architecture
-Each microservice, as a main application, can have a sidecar providing ancillary services such as
+Each microservice, as a main application, can have a sidecar providing **ancillary** (supporting, secondary) services such as
 logging, monitoring, and service discovery.
 
 > Picture a fleet of ships, each ship a microservice. The sidecars are little boats accompanying each
@@ -397,13 +399,13 @@ logging, monitoring, and service discovery.
 
 - Handle **all network communication**
 - **Enforce policies**
-- **Collect telemetry data**
+- **Collect telemetry data** (metrics, logs and traces sent automatically from running software)
 
 > Picture a busy highway system where each car (service) has a dedicated assistant (the Envoy sidecar)
 > for navigation, communication, and safety — enabling the driver to concentrate on driving.
 
 This is the pattern at its purest. The application code contains **zero** networking, retry, mTLS, or
-observability logic; all of it lives in infrastructure, configured centrally and applied uniformly.
+**observability** logic (code that makes the system's internal behaviour visible to operators); all of it lives in infrastructure, configured centrally and applied uniformly.
 
 ---
 
@@ -433,11 +435,11 @@ everything, the sidecar earns its overhead.
 **"The app calls the sidecar."** In the course's toy example, yes. In real deployments, no — the
 sidecar transparently intercepts traffic. That transparency is the whole value.
 
-**"A sidecar is a microservice."** No. A microservice serves many clients and owns a domain. A sidecar
+**"A sidecar is a microservice."** No. A **microservice** (a small, independently deployed service) serves many clients and owns a **domain** (an area of the business, such as orders or payments). A sidecar
 serves exactly **one** application instance and owns no domain — its lifecycle is bound to its host.
 
-**"Sidecars are only for service meshes."** Meshes are the most famous use, but log shippers, metrics
-agents, config reloaders, and secret-fetchers are all sidecars.
+**"Sidecars are only for service meshes."** Meshes are the most famous use, but **log shippers** (programs that forward log files to a central store), metrics
+**agents** (small background collectors), config reloaders, and **secret-fetchers** (programs that fetch passwords and keys from a vault) are all sidecars.
 
 **"It's free because it's just localhost."** It costs one process worth of CPU and memory **per
 instance**, which at scale is the main reason teams hesitate.
@@ -553,7 +555,7 @@ String handleInbound(String rawRequest, String clientCert) {
       5,000 pods x 100MB sidecar = 500,000 MB (488.3 GB) of RAM
 ```
 
-**Section 4 is the pattern in one line:** the upstream was called three times; the application asked
+**Section 4 is the pattern in one line:** the **upstream** (the service being called) was called three times; the application asked
 once. Retry, backoff, and failure handling happened entirely outside the code you wrote.
 
 **Section 7 is the honest counterweight** — at a thousand pods you're spending ~98 GB of RAM on
@@ -562,12 +564,12 @@ worth it.
 
 ### C. Production — Istio
 
-**Injection** — label the namespace and every pod gets an Envoy sidecar automatically:
+**Injection** — label the **namespace** (here a Kubernetes namespace: a named group of resources within a cluster) and every pod gets an Envoy sidecar automatically. `kubectl` is the Kubernetes command-line tool:
 ```bash
 kubectl label namespace production istio-injection=enabled
 ```
 
-Your Deployment is unchanged; the sidecar appears at admission time:
+Your **Deployment** (the Kubernetes object that describes which containers to run and how many copies) is unchanged; the sidecar appears at **admission time** (the moment Kubernetes accepts the object, when it can modify it):
 ```yaml
 spec:
   containers:
@@ -576,7 +578,7 @@ spec:
     # - name: istio-proxy          # injected automatically, you did NOT write this
 ```
 
-**mTLS across the whole mesh** — no application code, no certificate handling:
+**mTLS across the whole mesh** — no application code, no **certificate** handling (a certificate is a signed file proving an identity):
 ```yaml
 apiVersion: security.istio.io/v1beta1
 kind: PeerAuthentication
@@ -588,7 +590,7 @@ spec:
     mode: STRICT       # every service-to-service call is encrypted and authenticated
 ```
 
-**Retries, timeouts, and circuit breaking as configuration:**
+**Retries, timeouts, and circuit breaking as configuration:** (A `VirtualService` sets routing rules; a `DestinationRule` sets traffic policy for a destination. **Outlier detection** temporarily *ejects* — stops routing to — instances that keep returning errors.)
 ```yaml
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
@@ -624,9 +626,9 @@ spec:
 
 > Read that last block carefully: **you just configured [Bulkhead](../07-bulkhead/README.md), [Retry](../08-retry/README.md),
 > and [Circuit Breaker](../06-circuit-breaker/README.md) in YAML, for every service, in every language, without
-> touching application code.** That is the argument for a service mesh in a single manifest.
+> touching application code.** That is the argument for a service mesh in a single **manifest** (a YAML file describing desired Kubernetes resources).
 
-**Non-mesh sidecars** you'll meet just as often:
+**Non-mesh sidecars** you'll meet just as often (**Fluent Bit** is a lightweight log shipper; the Cloud SQL proxy opens a secure **tunnel** — an encrypted pass-through connection — to a Google Cloud database):
 ```yaml
 containers:
   - name: app
@@ -642,7 +644,7 @@ volumes:
     emptyDir: {}                            # shared between the two containers
 ```
 
-**Kubernetes native sidecars (1.29+)** — solves the classic startup/shutdown ordering problem:
+**Kubernetes native sidecars (1.29+)** — solves the classic startup/shutdown ordering problem (an **initContainer** normally runs to completion before the app starts; `restartPolicy: Always` turns it into a long-running sidecar):
 ```yaml
 initContainers:
   - name: istio-proxy
@@ -656,11 +658,11 @@ initContainers:
 outbound call, the proxy isn't up, and it fails at startup. Use native sidecars (`restartPolicy:
 Always` on an initContainer), or `holdApplicationUntilProxyStarts: true` in Istio.
 
-**2. The sidecar stopping before the app finishes.** The mirror image at shutdown — in-flight requests
+**2. The sidecar stopping before the app finishes.** The mirror image at shutdown — **in-flight** requests (ones already started but not finished)
 fail because the proxy died first. Native sidecars fix this too.
 
 **3. No resource limits on the sidecar.** An unbounded proxy can starve the application it exists to
-serve. Always set them:
+serve. Always set them (`100m` = one tenth of a CPU core; `128Mi` = 128 mebibytes of memory):
 ```yaml
 annotations:
   sidecar.istio.io/proxyCPU: "100m"
@@ -671,14 +673,14 @@ annotations:
 fixed costs. Below roughly a dozen services in one or two languages, a shared library is cheaper and
 simpler. Be able to justify the mesh.
 
-**5. Forgetting the sidecar is in the network path when debugging.** A 503 may come from Envoy, not
+**5. Forgetting the sidecar is in the network path when debugging.** A 503 (the HTTP status code for "service unavailable") may come from Envoy, not
 your service. Learn to read the proxy's logs and its response flags before blaming application code.
 
 **6. Duplicating retries in app and mesh.** If your HTTP client retries 3× and the mesh retries 3×,
 you get 9 requests. Pick one layer — usually the mesh — and disable the other.
 
 **7. Assuming mTLS means you're done with authorization.** mTLS proves *who* is calling. It does not
-say *what they may do*. You still need `AuthorizationPolicy` resources.
+say *what they may do* — that's **authorization**. You still need `AuthorizationPolicy` resources.
 
 ---
 
@@ -686,5 +688,5 @@ say *what they may do*. You still need `AuthorizationPolicy` resources.
 
 - **[Service Discovery](../05-service-discovery/README.md)** — meshes absorb discovery into the sidecar entirely
 - **[Circuit Breaker](../06-circuit-breaker/README.md)**, **[Retry](../08-retry/README.md)**, **[Bulkhead](../07-bulkhead/README.md)** — all commonly enforced in the sidecar rather than in application code
-- **[API Gateway](../03-api-gateway/README.md)** — the gateway handles north-south (external) traffic; the mesh of sidecars handles east-west (internal)
+- **[API Gateway](../03-api-gateway/README.md)** — the gateway handles north-south (external, into and out of the system) traffic; the mesh of sidecars handles east-west (internal, service-to-service)
 - **[Config Externalization](../13-config-externalization/README.md)** — a sidecar can fetch config and expose it locally to the app

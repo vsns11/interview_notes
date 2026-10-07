@@ -11,8 +11,9 @@ If these are already familiar, skip to Part 1.
 
 ### What is a monolith?
 A **monolith** is an application built and deployed as one single unit. All the code — user accounts,
-payments, reporting, email — lives in one codebase, compiles into one artifact, and runs as one
-process. Changing one line in the reporting module means rebuilding and redeploying *everything*,
+payments, reporting, email — lives in one **codebase** (the full set of source files for a program), compiles into one **artifact** (the
+finished, runnable package the build produces, such as a `.jar` file), and runs as one
+**process** (a single running program instance on a machine, with its own memory). Changing one line in the reporting module means rebuilding and **redeploying** (putting a new version into the live environment) *everything*,
 including payments.
 
 Monoliths are not evil. For a small application a monolith is usually the *right* choice — it's
@@ -80,7 +81,7 @@ Two things in that image matter for software:
    fig.
 
 Applied to software: your new system grows *around* the legacy system, which continues serving real
-production traffic the entire time it's being displaced.
+**production** traffic (requests from real users hitting the live system, as opposed to test environments) the entire time it's being displaced.
 
 The course extends the metaphor: picture an ancient, enormous tree in a dense forest. That's your
 legacy system — rooted deeply in the organisation's architecture, its many branches representing all
@@ -100,16 +101,16 @@ codebase where no one is confident what a change will affect.
 > fast today but charges interest later in the form of slower future changes. Some debt is a
 > reasonable trade; the problem is debt that's never repaid.
 
-**Obsolete technology.** The stack is no longer current. Concretely, this means you can't hire people
-who know it (or must pay a large premium), the vendor no longer issues support or patches, and the
-libraries you depend on have unfixed bugs forever.
+**Obsolete technology.** The **stack** (the set of languages, frameworks, databases and servers the system is built on) is no longer current. Concretely, this means you can't hire people
+who know it (or must pay a large premium), the vendor no longer issues support or **patches** (small updates that fix bugs or security holes), and the
+**libraries** (reusable code packages written by others that your program calls into) you depend on have unfixed bugs forever.
 
 **Integration issues.** Modern tools and services don't integrate easily with older systems. The
 practical consequence is **silos of information** — data trapped in a system that nothing else can
 conveniently read, so it gets manually exported, copied, and duplicated.
 
-**Scalability concerns.** The system was designed for the load and deployment model of its era. It may
-assume a single server, or a fixed number of them. It's typically **not cloud-ready**, meaning it
+**Scalability concerns.** (**Scalability** is a system's ability to handle more work by adding resources; **load** is the amount of work — requests, users, data — hitting it.) The system was designed for the load and deployment model of its era. It may
+assume a single server, or a fixed number of them. It's typically **not cloud-ready** (the **cloud** being rented, on-demand servers from providers such as AWS, Azure or Google Cloud), meaning it
 can't simply be run as more copies when traffic grows.
 
 **Costly maintenance.** As the system ages, maintenance gets more expensive in both time and
@@ -117,7 +118,7 @@ resources. Every change takes longer because the code is tangled and the people 
 fewer.
 
 **Security vulnerabilities.** It was designed before current security practices existed. It may store
-passwords insecurely, lack protection against now-standard attacks, or run on an OS that no longer
+passwords insecurely, lack protection against now-standard attacks, or run on an **OS** (operating system — e.g. Windows or Linux, the base software that runs the machine) that no longer
 receives patches.
 
 ### Why legacy systems are painful to replace
@@ -127,8 +128,8 @@ Any disruption has significant impact — this is not "the site is slow," it's "
 today."
 
 **Migration risks.** Moving data from the old system to the new risks **data loss or corruption**. Old
-schemas usually contain years of accumulated irregularity: records that violate current rules,
-fields reused for different purposes, encoding inconsistencies.
+**schemas** (the defined structure of a database: its tables, columns and their types) usually contain years of accumulated irregularity: records that violate current rules,
+fields reused for different purposes, **encoding** inconsistencies (text stored using different rules for turning characters into bytes, so accents or symbols come out garbled).
 
 **Training and adoption.** Staff know the old system. A new one requires training and often meets
 genuine resistance — people who were fast and confident are suddenly slow and uncertain.
@@ -164,8 +165,8 @@ seconds.
 **Flexible prioritisation.** You migrate by **urgency or business need**, not by the dependency order
 a rewrite would force. If the payment module is the most painful, do it first.
 
-**No big-bang releases.** Continuous delivery and gradual replacement instead of one catastrophic
-cutover date. Less potential for massive failures.
+**No big-bang releases.** **Continuous delivery** (keeping software always releasable and shipping small changes frequently) and gradual replacement instead of one catastrophic
+**cutover** date (the moment traffic is switched from the old system to the new). Less potential for massive failures.
 
 **Smooth transition.** Done well, users may not notice a shift happened at all — it's gradual and each
 piece is tested before it carries real traffic.
@@ -205,7 +206,7 @@ The course's analogy: **a traffic controller at an intersection**, guiding cars 
 correct road.
 
 The critical property: **clients are unaware there are two systems at all.** They see one address,
-one API, one system. That's what makes the migration invisible.
+one **API** (Application Programming Interface — the set of requests a system accepts and the responses it returns), one system. That's what makes the migration invisible.
 
 > *Beginner note — why "facade"?* A facade is the front of a building. In software, the Facade
 > pattern means putting a simple, unified front over something complicated behind it. Here the
@@ -227,8 +228,8 @@ system replaced by the new one. The migration happens step by step, never all at
 That gradual shift of responsibility from old to new is the crux of the pattern.
 
 **Step 1 is the hard one, and beginners underestimate it.** "Cleanly isolated" means the feature
-doesn't share mutable state with everything else. In practice most legacy systems have one giant
-shared database where everything touches everything, so finding a genuinely separable seam is the
+doesn't share **mutable state** (data that can be changed while the program runs) with everything else. In practice most legacy systems have one giant
+shared database where everything touches everything, so finding a genuinely separable **seam** (a boundary where one part can be cut away from the rest with few connections across it) is the
 real work. Look for capabilities that read a lot and write little, or that own a table nothing else
 writes to.
 
@@ -242,7 +243,7 @@ writes to.
    service, based on what's been migrated so far.
 3. **Incrementally build and replace** — develop the new services and slowly displace old
    functionality.
-4. **Retire the old** — once all functionality has been taken over, safely decommission the old system.
+4. **Retire the old** — once all functionality has been taken over, safely **decommission** (permanently shut down and remove) the old system.
 
 ---
 
@@ -268,15 +269,20 @@ class UserServiceRouter:
 
 - `UserServiceRouter` is the facade. **Callers use this class, not the two services directly** — that's
   what makes the switch invisible to them.
-- `get_user_details` has the same signature as the underlying services. The router is a
-  drop-in replacement for whatever callers used before.
+- `get_user_details` has the same **signature** (the method's name, parameters and return type) as the underlying services. The router is a
+  **drop-in replacement** (something callers can swap in without changing their own code) for whatever callers used before.
 - `use_new_service` is the **decision function** — the entire migration policy lives in this one
   method.
 - `user_id % 2 == 0` means "even user IDs." This sends roughly 50% of users to the new service.
 
 ### Why the even-ID trick is smarter than it looks
 
-This isn't just a toy. It gives you a **percentage rollout dial**. You're not choosing "old or new" —
+This isn't just a toy. It gives you a **percentage rollout dial**.
+
+> **Key term — hash function:** A **hash function** turns an input (like a user ID) into a number in a
+> scrambled but repeatable way: the same input always produces the same output, and different inputs
+> spread fairly evenly across the possible outputs. Taking `hash(user_id) % 100` (the remainder after
+> dividing by 100) therefore puts each user in a fixed "bucket" from 0 to 99. You're not choosing "old or new" —
 you're choosing *how much* new:
 
 ```python
@@ -289,7 +295,7 @@ And it's **consistent per user**: user 42 always gets the same implementation. T
 — if users flipped between implementations randomly on each request, any difference in behaviour
 would look like a bizarre intermittent bug, and you'd never reproduce it.
 
-As confidence grows, widen the condition until the old path is dead code — then delete it.
+As confidence grows, widen the condition until the old path is **dead code** (code that still exists but can never run) — then delete it.
 
 ---
 
@@ -390,13 +396,13 @@ The router/proxy is the heart of the pattern, and it needs to be genuinely robus
 critical path for **every single request**. The course lists three kinds of routing logic:
 
 **Feature flags.** Turn new functionality on and off to test it. The operational superpower here is
-**instant rollback** — no deploy, no rebuild, just a config change.
+**instant rollback** (returning to the previous, known-good behaviour) — no deploy, no rebuild, just a config change.
 
-**User segmentation.** Route certain users to new services for **A/B testing or phased rollouts**.
+**User segmentation.** Route certain users to new services for **A/B testing or phased rollouts** (A/B testing shows two versions to different user groups and compares results; a phased rollout releases to a growing share of users step by step).
 Common progressions: internal employees first, then 1% of users, then 10%, then everyone. Or by
 geography: a small market first, so problems affect fewer customers.
 
-**API versioning.** Direct requests based on version headers or paths — for example `/v1/orders` to
+**API versioning.** Direct requests based on version **headers** (key-value metadata sent alongside an HTTP request, such as `Accept-Version: 2`) or **paths** (the part of the URL after the domain) — for example `/v1/orders` to
 legacy and `/v2/orders` to the new service.
 
 ---
@@ -404,15 +410,15 @@ legacy and `/v2/orders` to the new service.
 ## Part 9 — Trade-offs and what actually goes wrong
 
 **Running two systems at once.** You operate, monitor, and pay for both throughout the migration —
-which can last years. Two deployment pipelines, two on-call rotations, two sets of dashboards.
+which can last years. Two **deployment pipelines** (automated sequences that build, test and release code), two **on-call rotations** (schedules of engineers who respond to production incidents), two sets of **dashboards** (screens of live graphs showing system health).
 
-**The facade is a single point of failure.** Everything flows through it. It needs high availability
-and a carefully considered latency budget, because whatever time it adds is added to every request.
+**The facade is a single point of failure** (one component whose failure takes the whole system down). Everything flows through it. It needs **high availability** (staying up nearly all the time, usually via redundant copies)
+and a carefully considered **latency budget** (the maximum delay each component is allowed to add; **latency** is the time a request takes from start to finish — see [System Design Fundamentals](../01-system-design-fundamentals/README.md)), because whatever time it adds is added to every request.
 
-**An extra hop.** The routing layer adds network latency to every request, however small.
+**An extra hop.** (A **hop** is one network trip between two machines.) The routing layer adds network latency to every request, however small.
 
 **Data consistency — the hard part the pattern doesn't solve.** If old and new systems share or split
-data, you need a strategy: a shared database, synchronisation, or dual writes. This is genuinely the
+data, you need a strategy: a shared database, synchronisation, or **dual writes** (the application writing the same change to two databases). This is genuinely the
 hardest part of most real migrations, and the pattern gives you no help with it.
 
 > *Concrete example of why:* suppose you migrate "create account" to the new system but leave "check
@@ -434,7 +440,7 @@ Change the rule and you must change both, or they diverge.
 
 ## Part 10 — Common beginner misconceptions
 
-**"The new system must be microservices."** No. Strangler Fig is about *how* you migrate, not what you
+**"The new system must be microservices."** (**Microservices** means building an application as many small, independently deployable services, each owning one business capability.) No. Strangler Fig is about *how* you migrate, not what you
 migrate *to*. You can strangle one monolith into a better monolith.
 
 **"You migrate the database first."** Usually the opposite. Data migration is the riskiest part, so
@@ -497,6 +503,8 @@ Full source: **[`demos/StranglerFigDemo.java`](../../../demos/chapters/02-strang
 cd demos && ./gradlew runCh02
 ```
 
+(`./gradlew` is the **Gradle wrapper** — a script that downloads and runs **Gradle**, a build tool that compiles Java code and runs tasks such as this demo.)
+
 The core is the flag check that makes rollout **consistent per user**:
 
 ```java
@@ -509,7 +517,7 @@ boolean useNewSystem(String capability, String userId) {
 }
 ```
 
-`Math.floorMod` (not `%`) because `hashCode()` can be negative and `%` would then yield a negative
+`Math.floorMod` (not `%`) because `hashCode()` (Java's built-in hash function for an object) can be negative and `%` would then yield a negative
 bucket that never matches.
 
 ### B. What you should see
@@ -535,13 +543,13 @@ bucket that never matches.
 Two things worth noting from the real output. **Step 3** proves consistency — user-7 gets the same
 system every time, so a behavioural difference can never look like an intermittent bug. And the
 percentages aren't exact (5% gave 44/1000, not 50) because **hash distribution is only approximately
-uniform** at these sample sizes. That's expected and fine; you're canarying, not metering.
+uniform** at these sample sizes. That's expected and fine; you're **canarying** (sending a small slice of real traffic to the new version first, like a canary in a coal mine that warns of danger early), not metering.
 
 ### C. Production — routing at the proxy
 
 In reality the facade is usually infrastructure, not application code.
 
-**Nginx — route by path:**
+**Nginx — route by path:** (**Nginx** is a popular web server and **reverse proxy** — a proxy that sits in front of servers and forwards client requests to them. An `upstream` block names a group of backend servers.)
 ```nginx
 upstream legacy_system { server legacy.internal:8080; }
 upstream new_system    { server orders-v2.internal:8080; }
@@ -553,7 +561,7 @@ server {
 }
 ```
 
-**Istio — percentage rollout without touching application code:**
+**Istio — percentage rollout without touching application code:** (**Istio** is a **service mesh** — infrastructure that routes and secures traffic between services through proxies placed next to each one; it is configured with **YAML**, a plain-text, indentation-based config format. See [Sidecar](../09-sidecar/README.md).)
 ```yaml
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
@@ -576,7 +584,7 @@ spec:
           weight: 5
 ```
 
-**Feature flags in application code** — LaunchDarkly, Unleash, or a table in your config store:
+**Feature flags in application code** — LaunchDarkly (a hosted feature-flag service), Unleash (an open-source equivalent), or a table in your **config store** (a central place where configuration values are kept):
 ```java
 if (flags.isEnabled("orders-v2", userContext)) {
     return newOrderService.create(order);
@@ -592,11 +600,11 @@ The hardest real-world problem. Three strategies, in increasing order of difficu
 all — the new service simply uses the old schema. Split the data later as a separate migration.
 
 **2. Dual writes.** The new system writes to both databases during transition. Simple to describe,
-genuinely hard to get right: if the second write fails you have divergence, and there's no transaction
+genuinely hard to get right: if the second write fails you have divergence, and there's no **transaction** (a group of database changes that either all succeed or all fail together)
 spanning both.
 
-**3. Change Data Capture (CDC).** Stream changes from the legacy database into the new one using
-Debezium reading the transaction log. The new system's data is eventually consistent with legacy, and
+**3. Change Data Capture (CDC).** (CDC means watching a database for every insert, update and delete and publishing each change as an event.) Stream changes from the legacy database into the new one using
+**Debezium** (an open-source CDC tool) reading the **transaction log** (the database's own append-only record of every change it commits). The new system's data is **eventually consistent** with legacy (it may lag briefly, but catches up if no new changes arrive), and
 crucially **the legacy system needs no modification**:
 
 ```yaml
@@ -609,7 +617,7 @@ plugin.name: pgoutput
 
 ### E. Implementation pitfalls
 
-**1. Random rather than consistent routing.** `Math.random() < 0.05` sends the *same user* to
+**1. Random rather than consistent routing.** (The comment in the Debezium config above mentions **Postgres** — PostgreSQL, a popular open-source relational database — and **Kafka**, a distributed log that stores and streams events; see [Event-Driven](../11-event-driven/README.md).) `Math.random() < 0.05` sends the *same user* to
 different systems on consecutive requests. Any behavioural difference becomes an unreproducible bug
 report. Always hash a stable identifier.
 
@@ -621,7 +629,7 @@ unreachable but intact until the flag has been at 100% for a full business cycle
 
 **4. No comparison stage.** Before flipping traffic, run **shadow mode** — send the request to both
 systems, return the legacy response, and log any differences. This is how you find undocumented
-behaviour *before* it reaches users:
+behaviour *before* it reaches users. The code runs the new system **asynchronously** (in the background on another thread, so the user's request doesn't wait for it) and records **metrics** (numeric counters and measurements used for monitoring):
 ```java
 Result legacyResult = legacy.process(request);
 executor.submit(() -> {                            // async, never blocks the user
@@ -636,7 +644,7 @@ executor.submit(() -> {                            // async, never blocks the us
 return legacyResult;                               // user always gets the proven answer
 ```
 
-**5. Flags that outlive the migration.** Every completed migration leaves a dead conditional. Schedule
+**5. Flags that outlive the migration.** Every completed migration leaves a dead **conditional** (an `if` statement whose other branch can never be taken). Schedule
 flag removal as part of "done," or the codebase fills with permanent forks.
 
 **6. No decommission date.** The organisational failure mode from Part 9. Put it in the plan.

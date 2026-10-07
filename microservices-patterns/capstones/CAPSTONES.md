@@ -7456,3 +7456,531 @@ class PlatformHttpAutoConfiguration {
 
 Package every pattern in this book as a versioned starter, a thin template and a deployment path, so the right way to build a microservice is also the fastest.
 
+
+## Appendix: Concepts you need
+
+This appendix lists, in alphabetical order, every technical term, acronym, library and tool used in the 40 briefs above, each explained in plain English in a sentence or two. Terms that come from general system design — latency, caching, load balancing, replication, consistency and the like — are explained in depth in [System Design Fundamentals](../chapters/01-system-design-fundamentals/README.md). Where a chapter of this book teaches a concept, the entry links to it, and "Used in projects" tells you which briefs rely on it.
+
+### A
+
+- **A/B test** — Showing two versions of a feature to different groups of users and comparing a metric to see which works better. Used in project 21. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Abort condition** — A rule in a chaos experiment or rollout that stops it automatically when a metric gets too bad. Used in projects 22, 37.
+- **Access log** — A log line written for every request, recording method, path, status and duration. Used in project 2. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **ACID** — The guarantees of a classic database transaction: Atomic (all or nothing), Consistent (rules hold), Isolated (concurrent transactions don't see each other's half-done work) and Durable (committed data survives crashes). Used in project 11. ([Ch 10](../chapters/10-saga/README.md))
+- **Active-active / active-passive** — Active-active runs live traffic in several regions at once; active-passive keeps a standby region that only takes over when the main one fails. Used in project 32. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Activity (workflow)** — In a workflow engine such as Temporal, one step that does real work (calls a service, writes a database). Activities may run more than once, so they must be idempotent. Used in project 33. ([Ch 10](../chapters/10-saga/README.md))
+- **Actuator** — Spring Boot's built-in module that exposes health, metrics and management endpoints such as `/actuator/health`. Used in projects 5, 6, 8, 18. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Adapter / ambassador sidecar** — Two sidecar roles: an adapter converts the app's output into a standard form (for example metrics format); an ambassador handles outbound calls on the app's behalf. Used in project 7. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Adaptive concurrency limit** — A limit on in-flight requests that adjusts itself from measured latency (for example with AIMD or a gradient algorithm) instead of being fixed by hand. Used in project 35. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **Aggregate** — A cluster of objects treated as one unit for changes, with one identity and its own consistency rules — for example one wallet or one order. Used in projects 13, 24, 29. ([Ch 12](../chapters/12-cqrs/README.md))
+- **Aggregation (request aggregation)** — One endpoint that calls several services and merges their answers into a single response. Used in projects 2, 3, 15, 19, 20, 28. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **AIMD** — Additive Increase, Multiplicative Decrease — raise a limit slowly while things are healthy and cut it sharply when they are not (the same idea TCP uses). Used in project 35.
+- **Alertmanager** — The Prometheus component that groups, routes and sends alerts (email, chat, pager). Used in project 34.
+- **Ambient mode** — An Istio mode that moves the mesh proxy out of each pod into shared per-node and per-namespace proxies, so there is no sidecar per pod. Used in project 27. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Anti-corruption layer** — A translation layer that converts between an old system's model and a new one, so the old design doesn't leak into the new service. Used in project 23. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **API** — Application Programming Interface — the set of requests a service accepts and the responses it returns. Used in projects 1, 2, 3, 5, 8, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 33, 34, 35, 36, 38, 39, 40. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **API gateway** — The single front door that clients call instead of calling each service directly; it routes requests and handles cross-cutting concerns like auth and rate limiting. Used in projects 1, 2, 3, 19, 25, 26, 28, 35, 39. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **API key** — A secret string a client sends (often in a header) to identify itself to an API. Used in projects 2, 8, 19. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **Apicurio Registry** — An open-source schema registry, an alternative to Confluent Schema Registry. Used in project 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Argo CD** — A GitOps tool that keeps a Kubernetes cluster in sync with manifests stored in Git. ApplicationSets let it deploy the same app to many clusters or cells. Used in projects 37, 39, 40.
+- **Argo Rollouts / AnalysisTemplate** — A Kubernetes controller for canary and blue-green releases; an AnalysisTemplate defines the metric queries that decide whether a rollout continues. Used in project 37.
+- **Asynchronous** — Work where the caller does not wait for the result; it sends a message or starts a task and carries on. Used in projects 16, 26, 28, 32, 36, 39. ([Ch 11](../chapters/11-event-driven/README.md))
+- **At-least-once delivery** — A messaging guarantee where every message arrives, but some may arrive more than once, so consumers must handle duplicates. Used in projects 9, 13. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Atomic operation / check-and-decrement** — An atomic operation happens as one indivisible step that no other request can interleave with — for example checking a stock counter and decreasing it only if it is still positive, so two buyers can't take the last item. Used in projects 4, 11, 15, 19, 23, 30, 36.
+- **Audience (`aud`)** — The JWT claim naming which service a token is meant for. A service must reject tokens addressed to someone else. Used in project 25.
+- **Audit log / audit trail** — A permanent, tamper-resistant record of who did what and when. Used in projects 8, 14, 21, 24, 25, 26, 31, 37.
+- **Authentication / authorization** — Authentication checks who the caller is; authorization checks what that caller is allowed to do. Used in projects 2, 11, 25, 27, 29, 31, 35. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **Authorization code flow with PKCE** — The standard OAuth 2.0 login flow for browser and mobile apps: the app gets a short-lived code and swaps it for tokens, and PKCE (a one-time secret) stops a stolen code being used. Used in project 25.
+- **AuthorizationPolicy** — An Istio resource that says which services may call which others, checked using mTLS identities. Used in project 27. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Auto-configuration** — Spring Boot's mechanism for creating beans automatically when a library is on the classpath, unless the application defines its own. Used in project 40. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Automated canary analysis** — Comparing a canary's metrics against the baseline with statistics and deciding automatically whether to promote or roll back. Used in projects 37, 39.
+- **Avro / Protobuf** — Compact binary formats for messages, each with a schema that defines the fields; used with a schema registry to evolve events safely. Used in projects 9, 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **AWS** — Amazon Web Services, Amazon's cloud platform. Used in projects 1, 5, 14, 22, 28, 32, 35, 36, 39.
+- **Axon Framework** — A Java framework for CQRS and event sourcing, with command handlers, aggregates and projections. Used in project 24. ([Ch 12](../chapters/12-cqrs/README.md))
+
+### B
+
+- **Backend for Frontend (BFF)** — A small server owned by one client team that calls shared services and returns exactly the shape that client needs. Used in projects 2, 3, 17, 20, 25, 29, 40. ([Ch 4](../chapters/04-bff/README.md))
+- **Backoff (exponential)** — Waiting longer between each retry — typically doubling the delay — so a struggling service gets room to recover. Used in projects 5, 11, 14, 21, 22, 33, 35, 40. ([Ch 8](../chapters/08-retry/README.md))
+- **Backpressure** — A slow consumer signalling (or forcing) a fast producer to slow down instead of being overwhelmed. Used in project 30. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Backstage** — An open-source developer portal (from Spotify) with a service catalogue and software templates for creating new services. Used in project 40.
+- **Backward / forward compatibility** — A backward-compatible change lets new code read old data; a forward-compatible change lets old code read new data. Both matter when evolving event schemas. Used in projects 17, 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Baseline** — The reference measurement or version you compare against — for example the old version's metrics during a canary, or performance before a change. Used in projects 6, 9, 14, 18, 22, 27, 28, 35, 36, 37.
+- **Batch endpoint / batch loader** — An endpoint or loader that fetches many items in one call instead of one call per item, the standard fix for the N+1 problem. Used in projects 3, 13, 15, 16, 19, 20, 21, 23, 29, 30, 31, 40. ([Ch 4](../chapters/04-bff/README.md))
+- **Bean** — An object that Spring creates and manages for you, injecting it wherever it's needed. Used in projects 8, 14, 19, 40.
+- **Bean Validation** — The Java standard for declaring input rules on fields (`@NotNull`, `@Size`) that are checked automatically. Used in project 8.
+- **Big-bang rewrite** — Replacing a whole system in one cut-over instead of gradually. Used in projects 1, 37. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Blast radius** — How much of the system (or how many users) one failure or bad change can affect. Used in projects 22, 37, 39. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **Blocking vs non-blocking** — A blocking call holds its thread until the result comes back; a non-blocking call frees the thread to do other work meanwhile. Used in projects 2, 3, 5, 13, 14, 16, 19, 26. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **Border (halo) handling** — When searching a map grid, also checking the neighbouring cells around the target cell, so nearby drivers just across a cell border aren't missed. Used in project 30.
+- **Bottleneck** — The one part of a system that limits overall throughput — speeding up anything else doesn't help. Used in projects 1, 2, 3, 7, 11, 12, 20. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Broker** — A server that stores messages from producers and hands them to consumers, such as a Kafka broker. Used in projects 9, 12, 13, 17. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Bucket4j** — A Java rate-limiting library based on the token-bucket algorithm. Used in project 19.
+- **Bulk indexing** — Sending many documents to a search engine in one request, which is far faster than one request per document. Used in project 15.
+- **Bulkhead** — Isolating resources (thread pools, connection limits) per dependency so one slow dependency can't use up everything. Used in projects 2, 5, 6, 19, 22, 26, 27, 28, 30, 35, 36, 39, 40. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **Burn rate** — How fast a service is using up its error budget compared with the allowed pace; a burn rate of 1 uses exactly the budget over the SLO window. Used in project 34. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Business logic / business rules** — Code that implements the domain itself (pricing, eligibility, stock rules), as opposed to plumbing such as routing or logging. Used in projects 1, 2, 3, 10, 11, 17, 39. ([Ch 3](../chapters/03-api-gateway/README.md))
+
+### C
+
+- **Cache** — A fast store of recently used data so repeated requests skip the slow work. Used in projects 2, 3, 4, 5, 8, 10, 18, 19, 20, 21, 24, 25, 27, 29, 30, 33, 36, 37, 38, 39. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Cadence / Conductor** — Workflow engines similar to Temporal (Cadence is Temporal's predecessor at Uber; Conductor came from Netflix). Used in project 33.
+- **Canary release** — Releasing a new version to a small share of traffic first and widening it only if its metrics stay healthy. Used in projects 27, 37, 39, 40. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Cardinality** — The number of distinct values a label or field can take. High-cardinality metric labels (like user id) explode storage costs. Used in projects 7, 16, 34.
+- **CDN** — Content Delivery Network — servers around the world that cache content close to users. Used in projects 20, 36. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Cell / cell-based architecture** — Splitting a system into many identical, independent copies (cells), each serving a fixed set of customers, so one failure only hits one cell. Used in projects 30, 39.
+- **Cell router** — The thin routing layer that sends each request to the cell that owns its customer. Used in project 39. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **cert-manager / CA** — A certificate authority (CA) signs certificates that prove identities; cert-manager is a Kubernetes tool that issues and renews certificates automatically. Used in project 25.
+- **Change data capture (CDC)** — Reading a database's change log and publishing every insert, update and delete as an event, without changing the application. Used in projects 1, 13, 23, 26, 28, 39. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Chaos engineering** — Deliberately injecting failures (latency, errors, crashed instances) in a controlled experiment to check the system copes as expected. Used in projects 4, 11, 22, 27, 29, 31, 36. ([Ch 6](../chapters/06-circuit-breaker/README.md))
+- **Chaos Monkey / Chaos Mesh** — Chaos-engineering tools: Netflix's Chaos Monkey randomly kills instances; Chaos Mesh injects faults into Kubernetes workloads. Used in project 22.
+- **Choreography** — A saga style where services react to each other's events and no central coordinator exists. Used in projects 11, 12, 33. ([Ch 10](../chapters/10-saga/README.md))
+- **CI/CD** — Continuous Integration / Continuous Delivery — automatically building and testing every change, and releasing it through a pipeline. Used in projects 14, 16, 17, 22, 27, 28, 33, 34, 37, 38, 39, 40.
+- **{cipher} values** — Encrypted property values in a Spring Cloud Config repository, prefixed with `{cipher}`, that the config server decrypts before handing them out. Used in project 8. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Circuit breaker** — A wrapper that stops calling a dependency after repeated failures, fails fast for a while, then lets a few trial calls through to check recovery. Used in projects 1, 2, 5, 6, 14, 20, 22, 27, 29, 31, 32, 34, 35, 40. ([Ch 6](../chapters/06-circuit-breaker/README.md))
+- **CLI** — Command-line interface — a tool you run by typing commands in a terminal. Used in project 40.
+- **Client cache (discovery)** — A copy of the registry's answer kept in each client, so calls continue if the registry is briefly down. Used in projects 4, 39. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Client-side vs server-side discovery** — In client-side discovery the caller asks the registry and picks an instance itself; in server-side discovery a load balancer or platform (like a Kubernetes Service) does it. Used in projects 4, 18. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Cluster** — A group of machines (or Kubernetes nodes) managed together as one system. Used in projects 4, 6, 18, 27, 28, 32, 37, 39, 40.
+- **CNCF** — Cloud Native Computing Foundation — the body that hosts Kubernetes, OpenTelemetry and many related projects. Used in project 21.
+- **CNI** — Container Network Interface — the plug-in layer that gives Kubernetes pods their network. Used in project 18.
+- **Command** — A request to change state, named as an instruction (`PlaceOrder`). In CQRS, commands go to the write side. Used in projects 10, 11, 12, 15, 19, 23, 24, 29, 30, 33, 36, 38, 40. ([Ch 12](../chapters/12-cqrs/README.md))
+- **Command/reply messaging** — An orchestrator sends a command message to a participant and waits for a reply message on another topic, instead of making an HTTP call. Used in project 11. ([Ch 10](../chapters/10-saga/README.md))
+- **Compacted topic / log compaction** — A Kafka topic setting that keeps only the latest message per key, so the topic acts like a table of current values. Used in projects 15, 23, 30. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Compensating transaction** — A new action that undoes the business effect of an earlier saga step, such as a refund for a charge. It is not a rollback: both records remain. Used in projects 11, 12, 24, 29, 31, 33, 36. ([Ch 10](../chapters/10-saga/README.md))
+- **Concurrency limit** — A cap on how many requests may be in progress at once. Used in projects 19, 28, 35. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **Conditional beans** — Spring beans created only when a condition holds (`@ConditionalOnMissingBean`), so a starter's defaults can be overridden by the application. Used in project 40.
+- **Conditional state transition** — Changing a record's state only if it is currently in the expected state (`UPDATE … WHERE status = 'HELD'`), so two racing requests can't both win. Used in project 36.
+- **Conditional update / optimistic locking** — Updating a row only if it still has the version (or value) you read, so a concurrent change makes your update fail instead of silently overwriting it. Used in projects 11, 24, 30, 31, 33, 36. ([Ch 12](../chapters/12-cqrs/README.md))
+- **Config server (Spring Cloud Config Server)** — A service that hands configuration to other services at startup or on refresh, usually backed by a Git repository. Used in projects 1, 8, 18, 19, 32, 40. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **ConfigMap** — A Kubernetes object that holds configuration as key-value pairs or files, mounted into pods. Used in projects 8, 18. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Connection pool** — A set of open connections (to a database or service) reused across requests instead of opening a new one each time. Used in projects 2, 6, 8, 18, 22, 27, 28, 36. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **Consumer / producer** — A producer writes messages to a topic or queue; a consumer reads and processes them. Used in projects 6, 9, 12, 13, 14, 15, 16, 17, 23, 24, 28, 29, 30, 31, 37, 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Consumer group** — A set of Kafka consumers that share a topic's partitions, so each message is processed by one member of the group. Used in projects 9, 12, 30, 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Consumer lag** — How far a consumer is behind the newest message in a partition — a key health metric for event-driven systems. Used in projects 9, 10, 13, 14, 15, 16, 23, 26, 29, 32, 36, 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Consumer-driven contract testing** — The consumer of an API writes down what it expects as a contract; the provider's build verifies it still meets every consumer's contract. Used in projects 17, 38. ([Ch 4](../chapters/04-bff/README.md))
+- **Consumer-group assignment as discovery** — Using Kafka's partition assignment to decide which instance owns which data (for example which region), instead of a separate registry. Used in project 30. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Container** — A packaged application plus everything it needs, running isolated from other software on the same machine. Used in projects 1, 2, 4, 7, 18, 27, 35. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Context propagation** — Passing request context (trace id, tenant, user, deadline) from one service to the next, across HTTP calls, messages and threads. Used in projects 2, 16, 18, 22, 28, 40.
+- **Continue-as-new** — A Temporal feature that ends a long-running workflow and starts a fresh one with the same id, to keep its history from growing forever. Used in project 33.
+- **Contract parity** — A replacement service returning exactly the same responses (fields, status codes, nulls) as the old one. Used in project 1. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Control plane vs data plane** — The data plane carries the actual traffic (proxies, cells); the control plane configures it (decides routes, pushes settings). Used in projects 27, 28, 39. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Correcting event** — A new event that fixes the effect of an earlier wrong one, since stored events are never edited. Used in project 24. ([Ch 12](../chapters/12-cqrs/README.md))
+- **Correlation id / request id** — A unique id attached to a request at the edge and passed to every service and log line, so one request can be followed end to end. Used in projects 2, 16, 26, 34, 40. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **CORS** — Cross-Origin Resource Sharing — browser rules about which other websites may call your API from JavaScript. Used in project 2. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **CPU** — The processor; CPU time is how much processing a task consumes. Used in projects 2, 7, 16, 25, 27, 34, 35.
+- **CQRS** — Command Query Responsibility Segregation — handling writes (commands) and reads (queries) with separate models, often with separate stores. Used in projects 10, 12, 15, 23, 24, 29, 30, 36, 38, 40. ([Ch 12](../chapters/12-cqrs/README.md))
+- **CRDT and tombstones** — A CRDT (conflict-free replicated data type) is a data structure that merges concurrent changes from several regions automatically and always the same way. A tombstone is a marker that records a deletion so it isn't undone by a late update. Used in projects 15, 32.
+- **Critical vs optional dependency** — A critical dependency must answer for the request to succeed; an optional one can fail and the response is just degraded. Used in project 6. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **Cross-cutting concern** — Something every service needs but that isn't any one service's job — authentication, logging, metrics, rate limiting. Used in projects 2, 3. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **CRUD** — Create, Read, Update, Delete — the four basic data operations. Used in projects 3, 10, 24. ([Ch 12](../chapters/12-cqrs/README.md))
+- **Crypto-shredding** — Encrypting each person's personal data with their own key and deleting the key to "erase" it — the way to forget data in an immutable event log. Used in project 24.
+- **CSRF** — Cross-Site Request Forgery — an attack where another website tricks a logged-in browser into sending requests to your app. Used in project 25.
+- **curl** — A command-line tool for sending HTTP requests, handy for testing APIs. Used in projects 1, 2, 27.
+- **Customer migration (cells)** — Moving one customer's data and traffic from one cell to another without downtime. Used in project 39.
+- **Cut-over** — The moment traffic or ownership switches from the old system to the new one. Used in project 1. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Cyclic dependency** — Services that depend on each other in a loop (A reacts to B, B to C, C to A), which makes failures and changes hard to reason about. Used in project 12. ([Ch 10](../chapters/10-saga/README.md))
+
+### D
+
+- **DaemonSet (node-level agent)** — A Kubernetes object that runs one copy of a pod on every node — the usual way to run a log or metrics agent per machine instead of per pod. Used in projects 7, 34. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Dapper** — Google's internal tracing system, whose paper inspired today's distributed tracing tools. Used in project 16.
+- **Dashboard** — A screen of live graphs showing a system's health. Used in projects 5, 6, 10, 11, 13, 22, 26, 28, 29, 34, 37, 39, 40.
+- **DataLoader** — A batching helper (originally from GraphQL) that collects the individual lookups made while resolving one request and sends them as a single batch call. Used in projects 3, 20. ([Ch 4](../chapters/04-bff/README.md))
+- **Dead-letter queue / topic (DLQ / DLT)** — Where messages that keep failing are parked after retries run out, so they don't block the rest and a person can inspect and replay them. Used in project 14. ([Ch 8](../chapters/08-retry/README.md))
+- **Deadline propagation** — Passing the time remaining for a request to every downstream call, so later hops don't keep working after the caller has given up. Used in projects 11, 22, 29, 35. ([Ch 8](../chapters/08-retry/README.md))
+- **Debezium** — An open-source change-data-capture tool that reads a database's change log and publishes the changes to Kafka. Its outbox event router turns outbox rows into proper events. Used in projects 13, 23, 26. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Decommissioning** — Permanently switching off and removing an old system or code path once nothing uses it. Used in project 26. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Deployment (Kubernetes)** — The Kubernetes object that says which container image to run, how many replicas, and how to roll out new versions. Used in projects 18, 28, 32, 37, 39, 40.
+- **Depth and complexity limits** — GraphQL safeguards that reject queries nested too deeply or estimated to be too expensive, so one client can't overload the server. Used in project 20.
+- **DestinationRule / VirtualService** — Istio resources: a VirtualService defines routing rules (timeouts, retries, traffic splits); a DestinationRule defines policies for a destination (connection pools, outlier detection, mTLS). Used in project 27. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Determinism** — Producing exactly the same decisions every time from the same inputs — required of workflow code so it can be replayed from history. Used in projects 32, 33.
+- **Diff / diff normalisation** — Comparing two outputs field by field; normalisation first removes harmless differences (timestamps, ordering) so only real mismatches are reported. Used in projects 1, 10, 15, 26. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **DNS** — Domain Name System — turns names like `orders.default.svc` into IP addresses. Used in projects 4, 18, 32. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Docker / Docker Compose** — Docker packages and runs applications as containers; Docker Compose starts several containers together from one YAML file. Used in projects 1, 2, 3, 7, 8, 17, 18, 32, 40.
+- **Domain event** — An event describing a business fact in past tense, such as `OrderPlaced`. Used in projects 10, 12. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Double-entry ledger** — An accounting record where every money movement is written as equal debit and credit entries, so the books always balance and errors show up. Used in projects 9, 11, 31.
+- **Downstream / upstream** — Downstream services are the ones you call; upstream services are the ones that call you. Used in projects 2, 3, 6, 18, 22, 25, 33.
+- **Downtime** — Time when a system is unavailable to users. Used in projects 15, 18, 23, 25, 26, 39. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Dry-run write** — Running a write path in the new system without committing it, just to compare the result with the old system. Used in projects 18, 26. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **DTO (data transfer object)** — A plain class shaped for sending over the wire, with no business logic. Used in projects 3, 5. ([Ch 4](../chapters/04-bff/README.md))
+- **Dual write** — Writing the same change to a database and to a message broker (or two databases) as two separate steps — if one fails, they disagree. The outbox pattern fixes this. Used in projects 9, 13, 23, 37, 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Durable execution / durable timer** — A workflow engine saves every step's result so a workflow resumes exactly where it was after a crash; a durable timer is a wait (even of days) that survives restarts. Used in projects 11, 29, 30, 33, 36. ([Ch 10](../chapters/10-saga/README.md))
+
+### E
+
+- **Elasticsearch / OpenSearch** — Search engines that index documents for fast full-text search, filtering and facets. OpenSearch is the open-source fork of Elasticsearch. Used in project 15. ([Ch 12](../chapters/12-cqrs/README.md))
+- **EndpointSlice** — The Kubernetes object that lists the current IP addresses of the ready pods behind a Service. Used in project 18. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Envoy** — A high-performance proxy used as the sidecar in Istio and as an edge or cell router. Used in projects 6, 7, 27, 32, 39. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Error budget** — The amount of failure an SLO allows over a window (for 99.9%, 0.1% of requests). When it's used up, teams slow releases. Used in project 34. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **ETA** — Estimated time of arrival. Used in projects 29, 30.
+- **Eureka** — Netflix's open-source service registry, used through Spring Cloud Netflix for client-side discovery. Used in projects 4, 18. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Evaluation context** — The facts about a request (user id, country, plan) that a feature-flag rule is evaluated against. Used in project 21. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Event** — A record that something happened, named in the past tense. It can't be refused, only reacted to. Used in projects 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 21, 23, 24, 26, 28, 29, 30, 31, 32, 33, 34, 36, 38, 40. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Event catalogue** — A browsable list of every event type, its schema, owner, producers and consumers. Used in projects 12, 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Event interception** — Capturing the events or calls a legacy system makes so a new system can process them too, during a migration. Used in project 26. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Event sourcing** — Storing an entity as the full sequence of events that changed it, and rebuilding its state by replaying them. Used in projects 10, 24. ([Ch 12](../chapters/12-cqrs/README.md))
+- **Event store / event stream** — An event store is an append-only database of events; each entity's events form its own ordered stream with sequence numbers. Used in projects 12, 15, 24, 30. ([Ch 12](../chapters/12-cqrs/README.md))
+- **Event-driven architecture (EDA)** — Services communicate by publishing and reacting to events instead of calling each other directly. Used in projects 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 23, 24, 26, 28, 29, 30, 31, 32, 33, 36, 38, 40. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Eventual consistency** — Copies of data may disagree briefly after a change but converge once updates propagate. Used in projects 9, 10, 11, 15, 18, 24, 29, 32. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Eviction** — Removing an entry automatically — for example a registry dropping an instance whose heartbeats stopped. Used in project 4. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Exactly-once** — Processing each message exactly one time. True exactly-once across systems is very hard; in practice you get at-least-once delivery plus idempotent handling. Used in projects 9, 13. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Exit criterion** — The measurable condition that must be met before a migration step is considered done. Used in project 26. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Expand and contract** — Changing a schema in safe steps: add the new form, migrate readers and writers, then remove the old form — so old and new versions can run side by side. Used in project 37.
+- **Externalized configuration** — Keeping configuration outside the deployable artifact (config server, ConfigMap, environment) so it can change without a rebuild. Used in projects 7, 8, 18, 19, 21, 26, 28, 32, 37, 40. ([Ch 13](../chapters/13-config-externalization/README.md))
+
+### F
+
+- **Facade** — A front component that hides one or more systems behind a single interface — in a migration, the router in front of old and new. Used in projects 1, 21, 23, 26. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Facets** — Counts of results per filter value ("Brand: Acme (12)") shown next to search results. Used in project 15.
+- **Fail fast** — Returning an error immediately rather than waiting, when success is unlikely. Used in projects 5, 6. ([Ch 6](../chapters/06-circuit-breaker/README.md))
+- **Fail open vs fail closed** — When a protective component (rate limiter, auth check) breaks, fail open lets traffic through; fail closed blocks it. Used in project 19.
+- **Failover** — Automatically switching to a backup (instance, provider or region) when the primary fails. Used in projects 27, 30, 31, 32, 36. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Fallback** — The safe answer used when the real call fails or is blocked — cached data, a default, or a degraded response. Used in projects 1, 5, 6, 8, 19, 26, 27. ([Ch 6](../chapters/06-circuit-breaker/README.md))
+- **Fan-out** — Sending one request to several services in parallel and merging the results. Used in projects 2, 3, 6, 12, 16, 20, 33. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **Fault injection / Toxiproxy** — Deliberately adding latency, errors or dropped connections to test resilience. Toxiproxy is a TCP proxy whose "toxics" inject such faults. Used in projects 5, 22, 27, 32, 34. ([Ch 6](../chapters/06-circuit-breaker/README.md))
+- **Feature flag** — A configuration switch that turns behaviour on or off (or for some users) without deploying code. Used in projects 1, 2, 3, 5, 8, 11, 12, 13, 16, 21, 23, 26, 28, 37, 38. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Federation (GraphQL)** — Combining several teams' GraphQL schemas into one graph served through a single gateway. Used in project 20. ([Ch 4](../chapters/04-bff/README.md))
+- **Filter (gateway)** — A step in a gateway's request chain that changes or checks a request or response (adds a header, checks a key, logs). Used in projects 1, 2, 14, 15, 19, 25, 26, 28, 35. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **Fixed window vs sliding window** — Two ways to count requests for rate limiting: a fixed window resets every minute; a sliding window always looks back the last N seconds, avoiding bursts at window edges. Used in projects 5, 19, 30. ([Ch 8](../chapters/08-retry/README.md))
+- **Flag debt** — Old feature flags left in the code after their rollout finished, adding dead branches and confusion. Used in project 21. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Flag types** — Kinds of feature flags with different lifetimes: release toggles, experiments, operational kill switches and permission flags. Used in project 21. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Flagger** — A Kubernetes tool for automated canary releases using a service mesh's traffic splitting. Used in project 37.
+- **Fleet** — All the running instances, services or clusters you operate; a fleet-wide change touches every one of them. Used in project 40.
+- **Fluent Bit** — A lightweight log shipper that tails log files and forwards them to a log store. Used in project 7. ([Ch 9](../chapters/09-sidecar/README.md))
+
+### G
+
+- **Gatling / Fortio** — Load-testing tools (Gatling for JVM-based HTTP tests, Fortio from the Istio project) used like k6 to generate traffic. Used in projects 6, 27.
+- **Geospatial index / H3** — A structure for finding things near a location fast. H3 is Uber's library that divides the map into hexagonal cells with ids. Used in project 30.
+- **Git / GitHub Actions / Gitea** — Git is the version-control system; GitHub Actions is GitHub's CI service; Gitea is a small self-hosted Git server. Used in projects 4, 8, 17, 19, 26, 37, 40. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **GitOps** — Managing deployments by committing the desired state to Git and letting a tool (like Argo CD) make the cluster match it. Used in projects 37, 40.
+- **Golden path** — The paved, supported way to build and run a service — templates, libraries and pipelines that make the right way the easy way. Used in project 40.
+- **Goodput** — The rate of requests that succeed within their deadline — useful work, as opposed to raw throughput. Used in projects 35, 36. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Graceful degradation** — Returning a useful but reduced response when a non-critical part fails, rather than an error. Used in projects 3, 6, 35. ([Ch 6](../chapters/06-circuit-breaker/README.md))
+- **Graceful shutdown / preStop hook** — Stopping a service cleanly: stop taking new requests, finish in-flight ones, then exit. A Kubernetes preStop hook runs just before the container is told to stop, giving routing time to update. Used in projects 4, 18, 40. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Gradle** — A build tool for Java projects; the demos use it to compile and run. Used in project 38.
+- **Grafana** — A dashboard tool for graphing metrics, logs and traces. Loki stores logs and Tempo stores traces in the same family. Used in projects 5, 6, 7, 16, 22, 34.
+- **GraphQL** — A query language for APIs where the client names exactly the fields it wants from one endpoint. Used in projects 3, 20. ([Ch 4](../chapters/04-bff/README.md))
+
+### H
+
+- **Half-open state** — The circuit-breaker state that lets a few trial calls through after a cooldown to see if the dependency has recovered. Used in project 5. ([Ch 6](../chapters/06-circuit-breaker/README.md))
+- **Hash / hashing** — Turning a value into a repeatable, evenly spread number — used for sticky bucketing, partitioning and sharding. Used in projects 1, 19, 20, 21, 23, 24, 31, 33, 34. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Head sampling vs tail-based sampling** — Head sampling decides at the start of a request whether to keep its trace; tail-based sampling waits until the trace is complete, so it can keep all slow or failed ones. Used in projects 7, 16, 34, 35, 37, 38.
+- **Header (HTTP)** — A key-value field sent alongside an HTTP request or response, such as `Authorization` or `X-Request-Id`. Used in projects 1, 2, 11, 12, 14, 16, 19, 21, 22, 27, 28, 31, 35, 37, 38. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **Headless Service** — A Kubernetes Service with no virtual IP, whose DNS name returns the individual pod IPs, used for client-side load balancing. Used in project 18. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Health check** — A periodic "are you alive and ready?" probe; failing instances are taken out of rotation. Used in projects 2, 4, 16, 32, 34, 39. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Heartbeat** — A small "I'm still alive" message an instance sends at a fixed interval. Used in project 4. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Helm / Kustomize** — Tools for producing Kubernetes manifests: Helm uses templated charts, Kustomize layers patches over a base. Used in projects 18, 28, 29, 39, 40.
+- **High availability (HA)** — Designing a system to stay up nearly all the time, usually with redundant instances and automatic failover. Used in projects 1, 4, 8, 11, 25. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Home region** — The region that owns a given customer's or record's writes in a multi-region system. Used in project 32.
+- **Horizontal scaling** — Handling more load by adding more instances, rather than a bigger machine. Used in projects 1, 2, 3, 16, 29, 34. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Hot key / hot row** — One key or database row that receives a large share of traffic (a viral product, the last items in a sale), creating contention. Used in projects 19, 36. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Hot vs cold data** — Hot data is recent and accessed often (keep it fast); cold data is old and rarely used (move it to cheaper storage). Used in project 29.
+- **HTTP / REST** — HTTP is the request/response protocol of the web; a REST API exposes resources at URLs and uses HTTP methods (GET reads, POST creates, PUT/PATCH update, DELETE removes). Used in projects 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 27, 28, 31, 33, 36, 40. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **HTTP status codes** — Three-digit result codes: 2xx success, 4xx client error (401 unauthenticated, 403 forbidden, 409 conflict, 429 too many requests), 5xx server error (503 unavailable, 504 gateway timeout). Used in projects 2, 5, 6, 14, 19, 20, 25, 27, 31, 34, 35. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **HttpOnly / SameSite cookies** — Cookie settings: HttpOnly hides the cookie from JavaScript (limiting token theft); SameSite limits sending it on cross-site requests (limiting CSRF). Used in project 25.
+- **Hybrid logical clock (HLC)** — A timestamp that combines wall-clock time with a counter, so events across regions get an order that respects causality even when clocks drift. Used in project 32.
+- **Hypothesis (chaos)** — The prediction a chaos experiment tests, such as "if payments adds 2 s of latency, checkout error rate stays under 1%". Used in project 22.
+- **Hystrix / Zuul** — Netflix's older Java libraries: Hystrix for circuit breaking (now in maintenance) and Zuul for an edge gateway. Used in projects 2, 5. ([Ch 6](../chapters/06-circuit-breaker/README.md))
+
+### I
+
+- **Idempotency key** — A unique id the client sends with an operation and reuses on every retry, so the server can recognise duplicates and return the first result. Used in projects 5, 11, 27, 31, 33. ([Ch 8](../chapters/08-retry/README.md))
+- **Idempotent** — An operation is idempotent if doing it twice has the same effect as doing it once — essential wherever retries or at-least-once delivery happen. Used in projects 5, 9, 10, 11, 12, 13, 14, 18, 23, 27, 29, 31, 33, 40. ([Ch 8](../chapters/08-retry/README.md))
+- **In-memory state built from streams** — Keeping the current state (for example driver positions) in application memory, rebuilt by reading a compacted topic at startup. Used in project 30.
+- **Inbox (processed-event table)** — A table where a consumer records the ids of messages it has handled, so duplicates are detected and skipped. Used in projects 12, 13, 40. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Index alias** — A pointer name for a search index; you build a new index in the background and switch the alias to it in one step, with no downtime. Used in project 15.
+- **Ingress / ingress gateway** — The entry point that brings outside traffic into a Kubernetes cluster or service mesh. Used in projects 27, 37. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **Initial snapshot** — The first full copy of existing table data that a CDC tool takes before it starts streaming changes. Used in project 23. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Instance** — One running copy of a service. Used in projects 1, 2, 4, 5, 6, 7, 8, 9, 11, 13, 15, 18, 19, 21, 22, 28, 29, 30, 32, 35, 36. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Integration / end-to-end test** — An integration test checks a component together with real dependencies (database, broker); an end-to-end test runs the whole system the way a user would. Used in projects 1, 4, 6, 8, 10, 12, 13, 14, 15, 16, 17, 19, 21, 23, 25, 29, 38.
+- **IP address** — The numeric network address of a machine or pod. Used in projects 4, 18. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Istio / istiod** — A service mesh for Kubernetes; istiod is its control plane, and Envoy proxies are its data plane. Used in projects 25, 27, 37, 40. ([Ch 9](../chapters/09-sidecar/README.md))
+
+### J
+
+- **Jaeger / Tempo** — Trace storage and viewing tools: you send spans to them and look at a request's whole timeline. Used in projects 11, 16, 24, 27, 33, 34.
+- **Java records / sealed interfaces** — Modern Java features: records are compact immutable data classes; a sealed interface lists all its allowed implementations, so the compiler knows every case. Used in projects 1, 7, 11, 14, 15, 17, 22, 23, 24, 31, 33, 36, 37.
+- **Jitter** — Random variation added to retry delays so many clients don't all retry at the same instant. Used in projects 5, 14, 22, 35, 40. ([Ch 8](../chapters/08-retry/README.md))
+- **JMH** — Java Microbenchmark Harness — a tool for accurately measuring small pieces of Java code. Used in project 21.
+- **JSON** — JavaScript Object Notation, the common text format for API data. Used in projects 1, 2, 3, 7, 9, 12, 13, 17, 22, 25, 26, 38.
+- **JSON Patch** — A standard format for describing the differences between two JSON documents as a list of operations. Used in project 26.
+- **JUnit** — The standard Java unit-testing framework. Used in project 17.
+- **JVM / JDK** — The Java Virtual Machine runs Java programs; the Java Development Kit is the toolset (compiler, runtime) for building them. Used in projects 17, 18.
+- **JWKS and key rotation** — A JWKS (JSON Web Key Set) endpoint publishes the public keys used to verify tokens; key rotation means switching to new signing keys regularly without breaking verification. Used in project 25.
+- **JWT** — JSON Web Token — a signed token carrying claims (who the user is, which audience and scopes) that a service can verify without calling the issuer. Used in projects 2, 25. ([Ch 3](../chapters/03-api-gateway/README.md))
+
+### K
+
+- **k6** — A load-testing tool where you script virtual users or arrival rates in JavaScript. Used in projects 6, 18, 19, 20, 22, 27, 34, 35, 36.
+- **Kafka** — Apache Kafka — a distributed, durable event log. Producers write messages to topics split into partitions; consumers read them at their own pace. Used in projects 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 21, 23, 24, 26, 28, 29, 30, 31, 32, 36, 37, 38, 39, 40. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Kafka Connect / MirrorMaker 2** — Kafka Connect runs connectors (like Debezium) that move data between Kafka and other systems; MirrorMaker 2 copies topics between Kafka clusters, for example across regions. Used in projects 13, 23, 32. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Kafka Streams** — A Java library for processing Kafka topics as streams (joins, aggregations, windows) inside your own application. Used in projects 29, 30, 40. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Keycloak / Spring Authorization Server** — Identity servers that log users in and issue OAuth 2.0 / OpenID Connect tokens. Used in project 25.
+- **Kiali** — A dashboard that visualises an Istio mesh's traffic and health. Used in project 27. ([Ch 9](../chapters/09-sidecar/README.md))
+- **kind / k3d** — Tools that run a small Kubernetes cluster inside Docker containers on a laptop. Used in projects 7, 18, 27, 28, 29, 31, 32, 33, 40.
+- **KRaft / ZooKeeper** — KRaft is Kafka's built-in way of storing cluster metadata; it replaced the older external ZooKeeper coordination service. Used in project 9.
+- **Kubernetes** — The standard platform for running containers across a cluster of machines: it schedules pods, restarts failed ones and routes traffic to them. Used in projects 4, 7, 8, 18, 22, 27, 28, 29, 34, 37, 39, 40. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Kubernetes Service** — A stable name and virtual IP in Kubernetes that load-balances to the ready pods matching a label — server-side discovery built in. Used in projects 4, 18. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **KurrentDB (EventStoreDB)** — A database built specifically for event sourcing, storing streams of events. Used in project 24. ([Ch 12](../chapters/12-cqrs/README.md))
+
+### L
+
+- **L4 / L7** — Network layers: L4 load balancing works on TCP connections; L7 understands HTTP (paths, headers) and can route per request. Used in project 27.
+- **Last-writer-wins (LWW)** — A conflict rule where the update with the latest timestamp wins; simple, but silently drops the other change. Used in project 32.
+- **Latency / p95 / p99** — Latency is the time one request takes. p95 is the value 95% of requests beat (p99: 99%), which shows the slow tail that averages hide. Used in projects 1, 2, 3, 5, 6, 7, 10, 11, 13, 15, 16, 19, 20, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32, 34, 35, 36, 37, 39. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Lease** — A registration or lock that expires unless renewed, so a crashed holder is cleaned up automatically. Used in project 4. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Linkerd** — A lightweight service mesh, an alternative to Istio. Used in project 27. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Little's law** — Requests in flight = arrival rate × time each spends in the system. Used to size thread pools, bulkheads and concurrency limits. Used in projects 6, 35. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Liveness vs readiness probe** — Kubernetes checks: a liveness probe failing makes Kubernetes restart the container; a readiness probe failing just removes the pod from traffic. Used in projects 4, 18. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Load balancer** — A component that spreads incoming requests across several instances. Used in projects 1, 2, 4, 18, 19, 21, 27, 32, 34. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Load shedding** — Deliberately rejecting some requests early when overloaded, so the rest are still served well. Used in projects 19, 35, 36. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **Load test / open vs closed load model** — A load test generates traffic to measure behaviour. In a closed model a fixed number of users wait for each response; in an open model requests arrive at a set rate no matter how slow the system is, which is how real overload looks. Used in projects 6, 18, 20, 27, 28, 29, 34, 35. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Local evaluation** — Evaluating feature flags inside the application from a cached rule set, instead of calling the flag server for every check. Used in project 21. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Log correlation** — Putting the trace id in every log line so logs and traces for one request can be joined. Used in projects 16, 40.
+- **Log rotation** — Closing a log file when it gets big or old and starting a new one; a log shipper must track offsets so it doesn't lose or repeat lines. Used in project 7. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Logback / MDC** — Logback is a Java logging library; MDC (mapped diagnostic context) holds per-request values like the trace id that are added to every log line. Used in projects 16, 28.
+- **Loki** — Grafana's log store, which indexes labels rather than full text. Used in projects 7, 16, 34.
+- **Lost isolation (saga)** — Because saga steps commit separately, other requests can see half-finished saga state; semantic locks and careful ordering limit the damage. Used in project 11. ([Ch 10](../chapters/10-saga/README.md))
+- **Lua script (Redis)** — A small script Redis runs atomically, so a read-check-write sequence can't be interrupted by another client. Used in projects 19, 36.
+
+### M
+
+- **MailHog** — A fake email server for tests that catches outgoing mail so you can inspect it. Used in project 9.
+- **Matchers (contract testing)** — Rules in a contract that check the shape or type of a field rather than an exact value, so contracts don't break on harmless data changes. Used in project 17.
+- **Message contract** — A contract describing the events a provider publishes (topic, fields, types), tested like an HTTP contract. Used in project 17. ([Ch 4](../chapters/04-bff/README.md))
+- **Message key** — The value attached to a Kafka message that decides its partition; messages with the same key stay in order. Used in projects 5, 9, 12, 13, 15, 23, 30, 34. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Metrics** — Numeric measurements collected over time — request counts, error rates, latency histograms. Used in projects 5, 6, 7, 9, 13, 16, 20, 21, 22, 27, 30, 34, 35, 37, 40.
+- **Micrometer** — The metrics (and tracing) facade used by Spring Boot; it exports to Prometheus and other backends. Used in projects 5, 7, 16, 22.
+- **Microservices** — An architecture where an application is built from small services that are deployed independently and each own their data. Used in projects 10, 12, 25, 29, 30, 31, 39, 40. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Monolith** — An application built and deployed as a single unit. Used in projects 1, 2, 3, 23, 26, 40. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Monotonic state machine** — A state machine that only ever moves forward (never back to an earlier state), so late or duplicate messages can't undo progress. Used in project 31.
+- **mTLS** — Mutual TLS — both sides of a connection present certificates, so each proves its identity and the traffic is encrypted. Used in projects 25, 27. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Multi-tenant / tenant** — A tenant is one customer organisation; a multi-tenant system serves many tenants from shared infrastructure while keeping their data apart. Used in projects 6, 16, 28, 34, 35, 40. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **Multi-window alert** — A burn-rate alert that fires only when both a long and a short window are burning fast, catching real problems quickly without noisy pages. Used in project 34.
+
+### N
+
+- **N+1 problem** — Making one call to get a list and then one more call per item. The fix is batching. Used in projects 3, 20. ([Ch 4](../chapters/04-bff/README.md))
+- **Namespace (Kubernetes)** — A named group of resources inside a Kubernetes cluster, used to separate teams, tenants or cells. Used in projects 7, 27, 28, 39.
+- **Native sidecar container** — A Kubernetes feature (init container with `restartPolicy: Always`) that starts a sidecar before the app and stops it after, fixing ordering problems. Used in projects 7, 27. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Noisy neighbour** — A tenant or workload that uses so much shared capacity that others slow down. Used in projects 16, 26, 28, 34, 35, 37, 39. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **North-south vs east-west traffic** — North-south traffic enters or leaves the system (clients to gateway); east-west traffic flows between internal services. Used in project 27. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Nullability** — Whether a field may be empty (null). In GraphQL, nullable fields let one failing part return null while the rest of the response still succeeds. Used in projects 1, 15, 20.
+
+### O
+
+- **OAuth 2.0 / OpenID Connect (OIDC)** — OAuth 2.0 is the standard for issuing access tokens that let a client call APIs on a user's behalf; OpenID Connect adds a login layer on top that says who the user is. Used in project 25.
+- **Observability** — Being able to understand what a running system is doing from its metrics, logs and traces. Used in projects 12, 16, 22, 26, 27, 34, 40.
+- **Offer with timeout** — Offering a ride to one driver and moving on to the next if they don't accept within a set time. Used in project 30.
+- **Offset** — A message's position number in a Kafka partition; a consumer commits its offset to record how far it has read. Used in projects 7, 9, 12, 14, 15, 23, 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Onboarding** — Bringing a new tenant, customer or team onto the platform. Used in project 28.
+- **Open Policy Agent** — A general policy engine that evaluates authorization rules written in its Rego language. Used in project 25.
+- **OpenAPI** — A standard format for describing HTTP APIs (paths, parameters, schemas), used for docs and code generation. Used in project 17.
+- **OpenFeature** — A vendor-neutral standard API for feature flags, so application code doesn't depend on one flag vendor. Used in projects 21, 26. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **OpenTelemetry (OTel) / OTLP / Collector** — The open standard for producing traces, metrics and logs. OTLP is its wire protocol, and the Collector is a service that receives, processes (for example samples) and exports that data. Used in projects 16, 26, 28, 34, 40. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Optimistic concurrency** — Letting writers proceed without locks and rejecting a write if the data changed since it was read (for example by checking an expected version number). Used in projects 11, 24, 30, 33. ([Ch 12](../chapters/12-cqrs/README.md))
+- **Orchestration / orchestrator** — A saga style where one central coordinator tells each participant what to do next and handles failures. Used in projects 3, 11, 12, 29, 33, 36, 39. ([Ch 10](../chapters/10-saga/README.md))
+- **Outbox (transactional outbox)** — Writing an event into an outbox table in the same database transaction as the business change, then publishing it separately, so the two can never disagree. Used in projects 9, 11, 13, 15, 24, 26, 29, 31, 32, 36, 38, 40. ([Ch 10](../chapters/10-saga/README.md))
+- **Outlier detection** — A proxy feature that temporarily ejects an instance from load balancing after repeated errors — a circuit breaker per instance. Used in project 27. ([Ch 6](../chapters/06-circuit-breaker/README.md))
+- **Over-fetching / under-fetching** — Receiving more data than a screen needs, or needing several calls to get enough. Used in project 3. ([Ch 4](../chapters/04-bff/README.md))
+- **Overselling** — Selling more items than exist in stock, usually because two requests both saw the last unit as available. Used in project 36.
+
+### P
+
+- **Pact / Pact Broker** — Pact is a consumer-driven contract-testing tool; the Pact Broker stores contracts and verification results and answers "can I deploy?" (`can-i-deploy`). Used in project 17. ([Ch 4](../chapters/04-bff/README.md))
+- **Parallel run** — Running the old and new implementations side by side on real traffic and comparing results before switching. Used in projects 1, 26. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Partial failure** — Some parts of a request or system fail while others work; the design must decide what to return. Used in projects 2, 20, 27. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **Partition (Kafka)** — One ordered slice of a topic. Partitions let consumers work in parallel; order is only guaranteed within one partition. Used in projects 6, 9, 11, 12, 13, 14, 15, 23, 24, 29, 30, 31, 32, 35, 37, 39. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Partition key** — The value used to choose a partition (for example order id), so all events for one entity stay in order. Used in projects 5, 9, 12, 13, 15, 23, 30, 34. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Partition pause** — Temporarily stopping consumption from one partition (for example while a message waits for its retry time) without stopping the whole consumer. Used in project 14.
+- **Payload** — The actual data carried in a request, response or message. Used in projects 3, 12, 13, 14, 17, 33.
+- **Payload budget** — A measured limit on response size, enforced by a test. Used in project 3. ([Ch 4](../chapters/04-bff/README.md))
+- **PeerAuthentication** — The Istio resource that sets mTLS mode; STRICT means only mTLS traffic is accepted. Used in project 27. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Per-source versioning** — Storing the last applied version from each source service in a read-model document, so late or out-of-order events are ignored. Used in project 15. ([Ch 12](../chapters/12-cqrs/README.md))
+- **Persisted queries** — GraphQL queries registered in advance and called by id, so clients can't send arbitrary expensive queries and requests are smaller. Used in project 20.
+- **PII** — Personally identifiable information — data such as names, emails or addresses that identifies a person and needs careful handling. Used in projects 21, 24, 38.
+- **Pivot transaction** — The saga step after which the saga commits to finishing: steps before it can be compensated, steps after it must be retried until they succeed. Used in project 11. ([Ch 10](../chapters/10-saga/README.md))
+- **Platform as a product** — Running an internal platform like a product: users (developers), adoption metrics, feedback and a roadmap. Used in project 40.
+- **Platform starter / service template** — A versioned library that bundles a company's standard configuration (a Spring Boot starter), and a template that generates a new service already wired to use it. Used in projects 2, 13, 16, 37, 39, 40.
+- **Pod** — Kubernetes' smallest unit: one or more containers that run together on the same machine and share a network address. Used in projects 7, 18, 22, 25, 27, 34, 37, 40. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Poison pill** — A message that fails every time it's processed (for example malformed data) and would block its partition forever if not moved aside. Used in projects 14, 39. ([Ch 8](../chapters/08-retry/README.md))
+- **Polling relay / `SKIP LOCKED`** — An outbox relay that repeatedly queries for unpublished rows; `SELECT … FOR UPDATE SKIP LOCKED` lets several relay workers grab different rows without waiting on each other. Used in projects 4, 13, 21, 33, 36. ([Ch 10](../chapters/10-saga/README.md))
+- **Pool, bridge, silo** — Multi-tenancy models: pool shares everything (rows tagged by tenant), bridge shares compute but separates data (schema per tenant), silo gives a tenant its own stack. Used in project 28.
+- **PostgreSQL** — A popular open-source relational database. Used in projects 1, 3, 9, 10, 11, 13, 14, 21, 23, 24, 28, 29, 30, 31, 32, 33, 36, 39, 40.
+- **Predicate (gateway)** — A condition that decides whether a route matches a request, such as `Path=/api/users/**`. Used in projects 1, 2. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **Priority classes** — Labels that rank requests (critical, normal, sheddable) so overload protection drops the least important first. Used in projects 21, 26, 34, 35. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **Profile (Spring)** — A named set of configuration (dev, prod, a region) that is applied on top of the defaults. Used in projects 8, 16, 32. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Progressive delivery** — Releasing in steps — canary, percentage rollouts, automated checks — and rolling back automatically when metrics degrade. Used in project 37.
+- **Projection / projector / read model** — A read model is data reshaped for queries; a projector is the code that builds and updates it by applying events. Used in projects 10, 12, 15, 23, 24, 29, 30, 36, 38. ([Ch 12](../chapters/12-cqrs/README.md))
+- **Prometheus / PromQL** — Prometheus is an open-source system that scrapes and stores metrics and evaluates alert rules; PromQL is its query language. Used in projects 6, 7, 22, 27, 34, 37.
+- **Provider state / provider verification** — In contract testing, the provider re-runs every consumer's contract against itself (verification), first setting up the data each interaction assumes (provider state). Used in project 17. ([Ch 4](../chapters/04-bff/README.md))
+- **Proxy / reverse proxy** — A proxy is a middleman that forwards traffic. A reverse proxy sits in front of servers and forwards client requests to them. Used in projects 1, 5, 6, 7, 16, 18, 21, 22, 26, 27. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **PSP (payment service provider)** — A company such as Stripe or Adyen that actually charges cards on a merchant's behalf. Used in project 31.
+
+### Q
+
+- **Query** — A request to read data that changes nothing. In CQRS, queries go to the read side. Used in projects 7, 10, 13, 15, 16, 17, 20, 22, 23, 24, 28, 30, 31, 33, 37. ([Ch 12](../chapters/12-cqrs/README.md))
+
+### R
+
+- **Rate limiting / rate limiter** — Capping how many requests a client may make in a time window, rejecting the excess (HTTP 429). Used in projects 2, 3, 14, 19, 28, 31, 35, 36. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **Read replica** — A database copy kept in sync with the primary and used only for reads. Used in projects 10, 28. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Read-your-own-writes** — A guarantee that a user who just changed something sees their change on the next read, even if read models lag. Used in project 10. ([Ch 12](../chapters/12-cqrs/README.md))
+- **Rebalance** — Kafka reassigning partitions among the consumers in a group when one joins or leaves; processing pauses briefly. Used in project 9. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Reconciliation** — Comparing two records of the same facts (your ledger against a PSP's report, old database against new) and fixing differences, called breaks. Used in projects 23, 26, 28, 29, 31, 36. ([Ch 10](../chapters/10-saga/README.md))
+- **Redis** — A very fast in-memory key-value store, often used for caches, counters and rate limits. Used in projects 2, 5, 19, 28, 29, 30, 36.
+- **@RefreshScope** — A Spring annotation that rebuilds a bean when configuration is refreshed, so new values take effect without a restart. Used in project 8. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Region / region evacuation** — A region is a geographic group of data centres; evacuation moves all traffic out of a region on purpose, for example during an outage or drill. Used in projects 30, 32, 39.
+- **Relay** — The process that reads events from an outbox (by polling or CDC) and publishes them to the broker. Used in projects 9, 11, 13, 24, 25. ([Ch 10](../chapters/10-saga/README.md))
+- **Replay** — Re-processing past messages or events — for example to rebuild a read model or to re-run a workflow's history. Used in projects 9, 11, 14, 15, 17, 24, 25, 26, 32, 33, 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Replica** — An identical running copy of a pod or a copy of data on another server. Used in projects 6, 10, 18, 23, 26, 28, 36.
+- **Replication / asynchronous replication** — Replication keeps copies of data on several machines or regions. Asynchronous replication copies writes after they commit locally, so writes stay fast but the copy can lag and the newest writes can be lost in a disaster. Used in projects 4, 13, 19, 23, 27, 32, 36, 38. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Replication slot** — A PostgreSQL feature that keeps change-log data until a CDC reader has consumed it; an abandoned slot makes the disk fill up. Used in projects 13, 23. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Request hash** — A hash of an API request's body stored with its idempotency key, so a retry with the same key but different content is rejected. Used in project 31. ([Ch 8](../chapters/08-retry/README.md))
+- **Reservation with TTL** — Holding an item for a buyer for a limited time; if the purchase isn't completed before the time-to-live runs out, the hold expires. Used in projects 4, 11, 15, 36. ([Ch 10](../chapters/10-saga/README.md))
+- **Resilience4j** — The standard Java library for resilience patterns: circuit breaker, retry, bulkhead, rate limiter and time limiter. Used in projects 5, 6, 11, 20, 22, 27, 31, 40. ([Ch 6](../chapters/06-circuit-breaker/README.md))
+- **Resolver** — A component that works out one value for a request — in GraphQL, the function that fetches the data for one field; elsewhere, for example, a tenant resolver that decides which tenant a request belongs to, or a key resolver that picks the rate-limit key. Used in projects 19, 20, 28, 31. ([Ch 4](../chapters/04-bff/README.md))
+- **Resource exhaustion** — Running out of a limited resource (threads, connections, memory) so nothing else can proceed. Used in projects 6, 14, 24. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **RestClient** — Spring's modern synchronous HTTP client. Used in projects 2, 3, 5, 20, 40.
+- **Retry** — Automatically trying a failed operation again, ideally only for transient errors and with backoff. Used in projects 4, 5, 9, 11, 13, 14, 16, 18, 19, 22, 24, 26, 27, 29, 31, 33, 35, 36, 40. ([Ch 8](../chapters/08-retry/README.md))
+- **Retry amplification / retry budget / retry storm** — When several layers each retry, one failure becomes many requests (amplification); a retry storm is many clients retrying at once. A retry budget caps retries to a small share of traffic. Used in projects 5, 14, 22, 35. ([Ch 8](../chapters/08-retry/README.md))
+- **Retry topic** — A Kafka topic where a failed message waits before being retried, so the main topic keeps flowing (non-blocking retry). Used in project 14. ([Ch 8](../chapters/08-retry/README.md))
+- **Retry-After / RateLimit headers** — HTTP response headers that tell a client how long to wait before retrying (`Retry-After`) and how much of its quota is left (`RateLimit-*`). Used in projects 5, 19, 35. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **@RetryableTopic** — A Spring Kafka annotation that sets up retry topics and a dead-letter topic for a listener automatically. Used in project 14. ([Ch 8](../chapters/08-retry/README.md))
+- **Reverse sync** — During a database migration, copying changes from the new database back to the old one so the old system stays correct while it still runs. Used in project 23. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **RLS (row-level security)** — A PostgreSQL feature that filters rows automatically by a policy (for example by tenant id), so one tenant's query can never return another's data. Used in project 28.
+- **Rollback** — Returning to the previous version or state — in a database by undoing a transaction, in a release by redeploying or rerouting to the old version. Used in projects 1, 11, 13, 21, 23, 26, 27, 37, 39. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Rolling update / surge** — Replacing pods with a new version a few at a time; surge is how many extra pods may run during the swap. Used in projects 18, 29, 30.
+- **Round trip** — A request going out and its response coming back. Used in projects 3, 19. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **Round-robin** — Sending each new request to the next instance in turn. Used in project 4. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Route** — A rule that maps matching requests to a backend. Used in projects 1, 2, 4, 13, 17, 18, 19, 23, 26, 27, 28, 30, 31, 34, 35, 37, 39, 40. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **RPO / RTO** — Recovery Point Objective (how much recent data you may lose in a disaster) and Recovery Time Objective (how long recovery may take). Used in project 32.
+
+### S
+
+- **SaaS** — Software as a Service — software sold as a hosted subscription rather than installed by the customer. Used in projects 28, 39.
+- **Saga** — A business transaction split into local transactions across services, each with a compensating action that undoes it if a later step fails. Used in projects 11, 12, 13, 24, 29, 31, 33, 36, 40. ([Ch 10](../chapters/10-saga/README.md))
+- **Schema** — The defined structure of data — database tables and columns, or the fields and types of an event or API. Used in projects 9, 12, 13, 15, 17, 20, 23, 24, 26, 28, 37, 38.
+- **Schema id in each message** — A small number at the start of each serialized message saying which registered schema to use to decode it. Used in project 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Schema registry / subject** — A service that stores versions of message schemas and rejects incompatible changes; a subject is the name schemas are versioned under (often one per topic). Used in projects 9, 25, 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Scientist** — GitHub's library for running old and new code side by side and comparing the results (a parallel run in code). Used in project 26.
+- **Scope (OAuth)** — A permission string in a token (such as `orders:read`) limiting what the token may be used for. Used in projects 25, 27, 39.
+- **Scorecard** — A per-service report showing whether it meets platform standards (latest starter, SLOs defined, alerts set). Used in projects 37, 40.
+- **SDK** — Software development kit — a library for calling a service or platform from code. Used in projects 16, 21, 33.
+- **Secrets manager / Vault** — A service built to store and hand out secrets (passwords, keys) securely, with rotation and audit. HashiCorp Vault is the best-known. Used in projects 8, 18. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Self-preservation (Eureka)** — Eureka's mode where, if many heartbeats stop at once, it assumes a network problem and stops evicting instances. Used in project 4. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Semantic change** — A change in what a field means (cents instead of pounds) without a change to its type — schema checks can't catch it. Used in project 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Semantic lock** — A flag on a record (such as `PENDING`) that tells other requests a saga is in progress on it. Used in project 11. ([Ch 10](../chapters/10-saga/README.md))
+- **Semaphore bulkhead / thread-pool bulkhead** — Two ways to cap concurrent calls: a semaphore counts permits on the caller's thread; a thread pool runs calls on a separate, fixed set of threads. Used in project 6. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **Serializable isolation** — The strictest transaction isolation level: transactions behave as if run one after another, at the cost of retries on conflict. Used in project 31.
+- **Server-Sent Events (SSE)** — A simple HTTP mechanism where the server keeps a connection open and pushes a stream of updates to the browser. Used in projects 21, 29, 36.
+- **Service catalogue** — A directory of every service with its owner, docs, dependencies and health. Used in projects 18, 40.
+- **Service discovery** — Finding where other services are currently running, by name, at runtime. Used in projects 4, 18, 27, 30, 32, 39, 40. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Service mesh** — A layer of proxies beside every service, managed by a control plane, that handles service-to-service traffic: mTLS, retries, timeouts, routing and telemetry. Used in projects 6, 18, 25, 27, 37. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Service registry** — The list of running service instances and their addresses that service discovery looks up. Used in projects 4, 5, 9, 13, 16, 18, 28, 38, 39, 40. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Shadow traffic** — Copying real requests to a new system and comparing its answers without returning them to users. Used in projects 1, 26. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Sharded counter** — Splitting one hot counter (such as stock for a sale) into several shards so updates don't all fight over one row. Used in projects 19, 28, 33, 36, 39. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Shared fate** — When components share infrastructure, they fail together; cells reduce shared fate. Used in project 39.
+- **Shuffle sharding** — Giving each customer a random small combination of cells or nodes, so two customers rarely share all of theirs and one bad customer can't take down everyone. Used in project 39.
+- **Sidecar** — A helper container deployed next to each service instance (same pod) to handle concerns like logging, metrics or networking. Used in projects 7, 16, 25, 27, 34, 37, 40. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Sidecar injection** — Istio automatically adding its proxy container to pods in labelled namespaces. Used in project 27. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Signal / query (workflow)** — Ways to talk to a running Temporal workflow: a signal sends it data or an event; a query reads its current state. Used in project 33.
+- **Single point of failure (SPOF)** — One component whose failure takes the whole system down. Used in projects 1, 2, 4, 12, 39. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Single writer** — Only one system may write a given record at a time, which avoids conflicts during migrations and replication. Used in project 23. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **SLI / SLO / SLA** — A service level indicator is a measured metric (share of requests under 300 ms); an objective is the target for it (99.9% over 30 days); an agreement is a contractual promise with penalties. Used in projects 34, 37, 39, 40. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Snapshot (event sourcing)** — A saved copy of an aggregate's state at some event number, so rebuilding starts there instead of replaying everything. Used in projects 15, 21, 23, 24. ([Ch 12](../chapters/12-cqrs/README.md))
+- **Source of truth** — The one system whose copy of a piece of data is authoritative when copies disagree. Used in projects 1, 24, 26, 36.
+- **Span / trace / span link** — A trace is the record of one request across all services; it is made of spans, each timing one operation. A span link connects a span to another trace, for example a message consumer to its producer. Used in projects 7, 12, 16, 21, 25, 26, 27, 28, 34, 40. ([Ch 9](../chapters/09-sidecar/README.md))
+- **Span metrics** — Metrics (rates, errors, durations) computed from all spans before sampling, so dashboards stay accurate even if most traces are dropped. Used in project 34.
+- **SPIFFE** — A standard for giving workloads cryptographic identities (used by Istio's mTLS certificates). Used in project 25.
+- **Spring Boot / Spring Cloud** — Spring Boot is a Java framework for building production-ready services quickly; Spring Cloud adds microservice tools (gateway, config, discovery, circuit breakers). Used in projects 1, 2, 3, 4, 5, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 23, 25, 26, 27, 28, 29, 31, 33, 35, 36, 38, 39, 40.
+- **Spring Cloud Bus** — Links service instances over a message broker so one refresh event updates configuration on all of them. Used in project 8. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Spring Cloud Contract** — Spring's contract-testing tool, which generates provider tests and consumer stubs from contracts. Used in projects 17, 38. ([Ch 4](../chapters/04-bff/README.md))
+- **Spring Cloud Gateway** — Spring's API gateway, with routes, predicates and filters; comes in Web MVC (servlet) and WebFlux (reactive) variants. Used in projects 1, 2, 19, 25, 26, 28, 35, 39. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **Spring Cloud Kubernetes** — Spring Cloud integration that reads ConfigMaps and discovers Kubernetes Services. Used in projects 8, 18. ([Ch 5](../chapters/05-service-discovery/README.md))
+- **Spring Data JDBC / JDBC** — JDBC is Java's standard API for talking to relational databases; Spring Data JDBC builds simple repositories on top of it. Used in projects 13, 16.
+- **Spring for Apache Kafka / Spring Cloud Stream** — Spring libraries for producing and consuming Kafka messages (`@KafkaListener`, `KafkaTemplate`); Cloud Stream abstracts over several brokers. Used in projects 9, 11, 12, 14, 15, 23, 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Spring Modulith** — A Spring project for structuring a monolith into well-separated modules that can later become services. Used in project 13.
+- **Spring MVC / WebFlux** — Spring's two web stacks: MVC is the classic servlet (blocking) model; WebFlux is reactive (non-blocking). Used in projects 1, 2, 19, 21.
+- **Spring Security / resource server** — Spring's security framework; a resource server is a service that accepts and validates OAuth 2.0 access tokens. Used in project 25.
+- **spring.config.import** — The Spring Boot property that tells an application where to load extra configuration from, such as a config server. Used in project 8. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **SQL** — Structured Query Language, used to read and write relational databases. Used in projects 13, 16, 23.
+- **SRE** — Site Reliability Engineering — running operations with software-engineering practices such as SLOs and error budgets. Used in projects 34, 35.
+- **State machine** — A model where something is always in exactly one of a fixed set of states (for example an order: placed, paid, preparing, delivered, cancelled) and only defined events move it between them. Used in projects 5, 11, 29, 30, 31. ([Ch 10](../chapters/10-saga/README.md))
+- **Stateless** — A service that keeps no per-client data between requests, so any instance can serve any request and you can add or remove instances freely. Used in projects 1, 2, 3, 29, 30, 39. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Steady state** — The measurable normal behaviour of a system (error rate, latency) that a chaos experiment checks is preserved. Used in project 22.
+- **Sticky routing / sticky bucketing** — Sending the same user to the same backend or flag variant every time, usually by hashing their id into a fixed bucket. Used in projects 1, 21, 37. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Strangler facade with route modes** — A migration facade where each route has a mode — legacy, shadow, parallel or new — so a capability moves through the stages safely. Used in project 26. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Strangler fig pattern** — Replacing a legacy system one capability at a time behind a facade, until the old system can be switched off. Used in projects 1, 18, 21, 23, 26, 37, 38, 39, 40. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Sync loop** — Two replications feeding each other's changes back and forth forever; must be broken by tagging changes with their origin. Used in projects 23, 32.
+- **Synchronous** — The caller waits for the response before continuing. Used in projects 3, 9, 31, 32, 39. ([Ch 11](../chapters/11-event-driven/README.md))
+
+### T
+
+- **Targeting rule** — A feature-flag rule that decides who gets a variant ("country = UK and plan = pro", or 20% of users). Used in project 21. ([Ch 13](../chapters/13-config-externalization/README.md))
+- **Task queue** — In Temporal, a named queue from which workers pick up workflow and activity tasks. Used in project 33.
+- **TCP** — Transmission Control Protocol — the reliable connection layer that HTTP runs on. Used in projects 22, 27, 35. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Team ownership** — One team owns a service end to end (code, deploys, on-call), so it can change it without waiting on others. Used in projects 3, 11, 12. ([Ch 4](../chapters/04-bff/README.md))
+- **Temporal** — An open-source durable-execution workflow engine: you write a workflow as ordinary code and it survives crashes by replaying recorded history. Used in projects 11, 24, 33. ([Ch 10](../chapters/10-saga/README.md))
+- **Tenant context propagation** — Carrying the current tenant id through every call, message, log line and database query (for example via baggage headers). Used in projects 16, 28, 40.
+- **Testcontainers** — A library that starts throwaway Docker containers (PostgreSQL, Kafka, Redis) for integration tests. Used in projects 1, 9, 11, 12, 13, 14, 15, 19, 23.
+- **The long middle** — The long, risky phase of a migration where old and new systems both run; it's where most migrations stall. Used in project 26. ([Ch 2](../chapters/02-strangler-fig/README.md))
+- **Thread / thread pool** — A thread is one line of execution in a program; a thread pool is a fixed set of reusable threads that run tasks. Used in projects 2, 3, 4, 5, 6, 14, 16, 20, 21, 22, 24, 28, 30, 33. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **Throughput** — How many requests or messages a system completes per second. Used in projects 4, 6, 9, 11, 12, 18, 19, 22, 23, 28, 29, 30, 33, 34, 35, 36. ([Ch 1](../chapters/01-system-design-fundamentals/README.md))
+- **Tier migration** — Moving a tenant between pool, bridge and silo isolation as their needs change. Used in project 28.
+- **Timeline projector** — A read model that collects every event of one saga in time order, so you can see where a choreographed flow is. Used in project 12. ([Ch 10](../chapters/10-saga/README.md))
+- **Timeout / time limiter** — The maximum time to wait for a call before giving up; Resilience4j's time limiter enforces it. Used in projects 2, 3, 4, 5, 6, 11, 12, 14, 18, 20, 22, 27, 29, 30, 31, 33, 40. ([Ch 6](../chapters/06-circuit-breaker/README.md))
+- **Timeout budget** — The total time a request may take, divided across its hops so inner calls time out before outer ones. Used in project 22. ([Ch 8](../chapters/08-retry/README.md))
+- **Timeout watcher** — A component that notices sagas stuck in a step past their deadline and triggers compensation. Used in projects 11, 12, 29. ([Ch 10](../chapters/10-saga/README.md))
+- **TLS** — Transport Layer Security — the encryption behind HTTPS. Used in projects 7, 25, 27.
+- **Token bucket** — A rate-limiting algorithm: a bucket refills with tokens at a steady rate, each request spends one, and an empty bucket means reject. A full bucket allows short bursts. Used in projects 19, 28. ([Ch 3](../chapters/03-api-gateway/README.md))
+- **Token exchange (RFC 8693)** — A standard way for a service to trade the token it received for a new token meant for the next service, with a narrower audience and scopes. Used in project 25.
+- **Token relay** — A gateway passing the user's access token on to downstream services with each call. Used in project 25.
+- **Topic** — A named stream of messages in Kafka that producers write to and consumers read from. Used in projects 9, 11, 12, 13, 14, 15, 16, 23, 29, 30, 32, 36, 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Topic versioning** — Publishing a breaking schema change to a new topic (`orders.v2`) and running both versions until consumers have moved. Used in project 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Transaction** — A group of database changes that succeed or fail together. Used in projects 9, 10, 11, 12, 13, 23, 24, 28, 31, 33. ([Ch 10](../chapters/10-saga/README.md))
+- **@TransactionalEventListener** — A Spring annotation for a method that runs only after the surrounding database transaction commits (or rolls back). Used in project 10.
+- **Transient vs permanent error** — A transient error goes away by itself (timeout, 503), so retrying helps; a permanent error (400, invalid data) will fail every time. Used in projects 5, 11, 14, 21. ([Ch 8](../chapters/08-retry/README.md))
+- **tsvector** — PostgreSQL's full-text search type; an index on it allows fast word searches. Used in project 10.
+- **TTL (time-to-live)** — How long an entry, lock or reservation lasts before it expires automatically. Used in projects 2, 19, 36.
+- **Two-phase commit (2PC)** — A protocol that makes several databases commit one transaction together: a coordinator first asks everyone to prepare, then tells everyone to commit. It blocks if the coordinator fails, which is why microservices prefer sagas. Used in project 11. ([Ch 10](../chapters/10-saga/README.md))
+
+### U
+
+- **UI** — User interface. Used in projects 6, 9, 10, 11, 14, 15, 21, 33.
+- **Unit test** — A test that checks one small piece of code in isolation. Used in projects 1, 3, 4, 10, 15, 17, 19, 21, 24, 25, 26, 30, 34, 35, 40.
+- **UNKNOWN state** — A payment status meaning "we don't know if it went through" (for example after a timeout); it must be resolved by asking the provider, never by retrying blindly. Used in project 31.
+- **Upcaster** — Code that converts an old version of a stored event into the current shape as it is read, so old events never have to be rewritten. Used in projects 24, 38. ([Ch 11](../chapters/11-event-driven/README.md))
+- **Upgrade bot** — An automated tool that opens pull requests on every repository to bump a shared library or starter. Used in project 40.
+- **URL** — A web address. Used in projects 3, 8, 20.
+- **Usage metering** — Recording how much of a product each tenant uses, for billing and limits. Used in project 28.
+- **UUID** — A randomly generated 128-bit identifier that is practically unique. Used in project 2.
+
+### V
+
+- **Versioned mapping** — A customer-to-cell routing table with a version number, so routers and migrations agree on which copy is current. Used in project 39.
+- **Virtual threads** — Lightweight Java threads (Java 21+) that make blocking calls cheap, so simple blocking code can handle high concurrency. Used in projects 2, 3, 5, 6, 16, 20, 21, 30, 33. ([Ch 7](../chapters/07-bulkhead/README.md))
+- **Virtual waiting room** — A queue page that admits users to a busy sale at a controlled rate, so the backend only sees the load it can handle. Used in project 36. ([Ch 7](../chapters/07-bulkhead/README.md))
+
+### W
+
+- **W3C Trace Context** — The standard HTTP headers (`traceparent`) for passing trace ids between services. Used in project 16.
+- **Wave deployment** — Rolling a change out to cells or regions in waves — one small cell first, then larger groups — so a bad change hits few customers. Used in project 39.
+- **Webhook** — An HTTP call a provider makes to your system to report an event (such as "payment captured"); it may arrive late or more than once. Used in projects 8, 17, 31.
+- **WebSocket** — A connection type that keeps a two-way channel open between browser and server for real-time messages. Used in projects 20, 21.
+- **WireMock** — A test tool that runs a fake HTTP server returning canned responses, delays or errors in place of a real service. Used in projects 2, 3, 5, 6, 14, 20, 31.
+- **Workflow versioning** — Changing workflow code safely while old workflow runs are still in progress, so their replay still matches their history. Used in project 33.
+- **Workflow vs activity** — In Temporal, the workflow is the deterministic orchestration code; activities are the steps that do real (non-deterministic) work. Used in projects 17, 24, 29, 31, 33, 38. ([Ch 10](../chapters/10-saga/README.md))
+- **Write-ahead log (WAL) and LSN** — The WAL is PostgreSQL's log of every change, written before the data files; an LSN (log sequence number) is a position in it. CDC tools read the WAL. Used in projects 13, 23. ([Ch 2](../chapters/02-strangler-fig/README.md))
+
+### Y
+
+- **YAML** — An indentation-based text format for configuration files. Used in projects 2, 5, 6, 8, 22, 38.
+
+### Z
+
+- **Zero trust** — A security model where no caller is trusted because of its network location; every request is authenticated and authorized. Used in project 25.
+- **Zero-downtime** — Making a change (deploy, rebuild, migration) without any period where users see errors. Used in projects 15, 18.
